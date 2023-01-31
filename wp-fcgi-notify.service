@@ -12,8 +12,8 @@ Restart=on-failure
 RestartSec=5s
 StandardOutput=append:/var/log/fastcgi_ops.log
 StandardError=append:/var/log/fastcgi_ops.log
-ExecStart=/bin/bash /home/php-fpm-user/scripts/fastcgi_ops.sh --wp-inotify-start
-ExecStop=/bin/bash /home/php-fpm-user/scripts/fastcgi_ops.sh --wp-inotify-stop
+ExecStart=/bin/bash /root/scripts/fastcgi_ops.sh --wp-inotify-start
+ExecStop=/bin/bash /root/scripts/fastcgi_ops.sh --wp-inotify-stop
 
 [Install]
 WantedBy=multi-user.target
