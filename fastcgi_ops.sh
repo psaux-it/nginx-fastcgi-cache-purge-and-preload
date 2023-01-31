@@ -17,19 +17,27 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# set nginx & fastcgi-cache settings
-#####################################################################################
-fdomain="yourdomain.com"                                   # preload URL
-fpath="/path/to/fastcgi-cache"                             # your fast-cgi cache path
-website_user="php-fpm-user"                                # your website user
-#####################################################################################
+# Prevent cron errors if you use this script in crontab
+# However I recommend systemd service file that I provided in github repo
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+declare -A fcgi
+
+# MULTISITE SETTINGS
+####################
+fcgi[websiteuser1]="/home/websiteuser1/fastcgi-cache"
+fcgi[websiteuser2]="/home/websiteuser2/fastcgi-cache"
+fcgi[websiteuser3]="/home/websiteuser3/fastcgi-cache"
+
+# INSTANCE SETTINGS
+###################
+fdomain="websiteuser1.com"                                         # fastcgi-cache preload URL for instance
+fpath="/home/websiteuser1.com/fastcgi-cache"                       # fastcgi-cache path for instance
 
 # Set mail options
-#####################################################################################
-mail_to="system@yourdomain.com"                            # send mail to
-mail_from="From: System Automations<root@yourdomain.com>"  # mail from
-mail_subject="FastCGI Purge & Preload Operations"          # mail subject
-#####################################################################################
+mail_to="support@websiteuser1.com"                                 # send mail to
+mail_from="From: System Automations<fcgi@websiteuser1.com>"        # mail from
+mail_subject="FastCGI-Cache Purge,Preload Ops"                     # mail subject
 
 # discover script path
 this_script_full_path="${BASH_SOURCE[0]}"
@@ -56,7 +64,7 @@ shopt -s extglob
 this_script_path="${this_script_path%%+(/)}"
 
 # define PID
-PIDFILE="${this_script_path}/fastcgi_ops.pid"
+PIDFILE="${this_script_path}/fastcgi_ops_${fdomain%%.*}.pid"
 
 # Check folder has subfolders
 hasDirs() {
@@ -66,7 +74,7 @@ hasDirs() {
 
 # cache purge helper function
 purge_helper() {
-  if hasDirs "${fpath}"/ >/dev/null 2>&1; then
+  if hasDirs "${fpath:?}"/ >/dev/null 2>&1; then
     rm -rf "${fpath:?}"/* || { echo "Cannot purge FastCGI cache!"; exit 1; }
   fi
   if [[ -d "${this_script_path}/www.${fdomain}" ]]; then
@@ -169,6 +177,7 @@ preload() {
 # purge fastcgi-cache
 purge() {
   find_pid
+
   # stop ongoing preload process if exist
   if [[ -n "${PIDS}" ]]; then
     for pid in $PIDS
@@ -220,7 +229,7 @@ admin() {
 inotify-start() {
   # check permission
   if [[ ! $SUDO_USER && $EUID -ne 0 ]]; then
-    echo "You need to run script with this argument under root or via sudo privileged user!"
+    echo "You need to run script with this argument under root or sudo privileged user!"
     exit 1
   fi
 
@@ -247,32 +256,41 @@ inotify-start() {
   fi
 
   # check FastCGI cache path is created
-  if ! [[ -d "${fpath}" ]]; then
-    echo "Your FastCGI cache folder (${fpath}) is not created yet. Please manually create it and change ownership to the web server user(nginx or ww-data) or restart nginx to force creating the cache folder!"
-    exit 1
-  fi
+  for path in "${!fcgi[@]}"
+  do
+    if ! [[ -d "${fcgi[$path]}" ]]; then
+      echo "Your FastCGI cache folder (${fpath}) is not created yet. Please manually create it and change ownership to the web server user(nginx or ww-data) or restart nginx to force creating the cache folder!"
+      exit 1
+    fi
+  done
 
   # start to listen fastcgi cache folder events
   # give write permission to website user for further purge ops
-  while :
+  for user in "${!fcgi[@]}"
   do
-    inotifywait -e modify,create -r "${fpath}" && \
-    setfacl -R -m u:"${website_user}":rwX "${fpath}"/
-  done >/dev/null 2>&1 &
+    while :
+    do
+      inotifywait -e modify,create -r "${fcgi[$user]}" && \
+      setfacl -R -m u:"${user}":rwX "${fcgi[$user]}"/
+    done >/dev/null 2>&1 &
+  done
 
   # check process is alive
-  if ps -aux | grep -v grep | grep -wE "inotifywait.*${fpath}" >/dev/null 2>&1; then
-    echo "All done! Started to listen FastCGI cache folder (${fpath}) events."
-  else
-    echo "Unknown error occurred during cache listen event."
-  fi
+  for path in "${!fcgi[@]}"
+  do
+    if ps -aux | grep -v grep | grep -wE "inotifywait.*${fcgi[$path]}" >/dev/null 2>&1; then
+      echo "All done! Started to listen FastCGI cache folder (${fcgi[$path]}) events."
+    else
+      echo "Unknown error occurred during cache listen event."
+    fi
+  done
 }
 
 # stop listening cache create events
 inotify-stop() {
   # check permission
   if [[ ! $SUDO_USER && $EUID -ne 0 ]]; then
-    echo "You need to run script with this argument under root or via sudo privileged user!"
+    echo "You need to run script with this argument under root or sudo privileged user!"
     exit 1
   fi
 
@@ -282,9 +300,12 @@ inotify-stop() {
   fi
 
   # kill inotifywait process
-  if ps -aux | grep -v grep | grep -wE "inotifywait.*${fpath}" >/dev/null 2>&1; then
-    kill -9 $(ps -aux | grep -v grep | grep -wE "inotifywait.*${fpath}" | awk '{print $2}') && echo "inotifywait is killed !"
-  fi
+  for user in "${!fcgi[@]}"
+  do
+    if ps -aux | grep -v grep | grep -wE "inotifywait.*${fcgi[$user]}" >/dev/null 2>&1; then
+      kill -9 $(ps -aux | grep -v grep | grep -wE "inotifywait.*${fcgi[$user]}" | awk '{print $2}') && echo "inotifywait is killed !"
+    fi
+  done
 }
 
 # set script arguments
