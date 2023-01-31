@@ -68,7 +68,7 @@ systemctl enable wp-fcgi-notify.service
 
 If you completed first time setup without any error, adding new website to fastcgi-cache website pool is easy.
 
-1) open **/root/scripts/fastcgi_ops.sh** and register your new website under MULTISITE SETTINGS. Here **websiteuser1** is website user(php-fpm-user) of **websiteuser1.com** and uses **/home/websiteuser1/fastcgi-cache** as a fastcgi-cache path. You have to use exact format when adding new website to pool.
+1) open **/root/scripts/fastcgi_ops.sh** and register your new website under MULTISITE SETTINGS. Here **websiteuser1** is website user(php-fpm-user) you created for new **websiteuser1.com** and uses **/home/websiteuser1/fastcgi-cache** as a fastcgi-cache path. You have to use exact format when adding new website to pool.
 
 ```
 MULTISITE SETTINGS
@@ -83,11 +83,16 @@ Because of strict permissions adding PHP-FPM-USER to WEBSERVER-GROUP not solve t
 
 #### INSTANCE SETTINGS
 
-Every new website you want to add is a new instance. So when you want to add new website repeat the below steps. For further version I will automate this manual workflow. In this example I assume you are adding **newwebsite1.com** to fastcgi-cache pool and you created newwebsite1 system user as a website user (php-fpm-user)
+Every new website you want to add is a new instance. So when you want to add new website repeat the below steps. Don't forget to add new website to MULTISITE SETTINGS that mentioned before. In this example I assume you are adding **newwebsite1.com** to fastcgi-cache website pool and you created **newwebsite1** system user as a website user (php-fpm-user) that uses **/home/websiteuser1/fastcgi-cache** as a fastcgi-cache path.
 
 1) copy **fastcgi_ops.sh** to new website user's home. e.g. **/home/newwebsite1/scripts** (avoid to web root directory)<br/>
 2) change ownership of the script to the newly created **website user** via **chown -R newwebsite1:newwebsite1 /home/newwebsite1/scripts**<br/>
 3) make script executable via **chmod +x /home/newwebsite1/scripts/fastcgi_ops.sh**<br/>
 4) change your instance settings { fastcgi cache path [fpath], preload domain [fdomain] } in copied **fastcgi_ops.sh** under INSTANCE SETTINGS<br/>
+```
+INSTANCE SETTINGS
+fdomain="websiteuser1.com"
+fpath="/home/websiteuser1.com/fastcgi-cache"
+```
 5) open **functions.php** and set new script path e.g. **/home/newwebsite1/scripts/fastcgi_ops.sh**<br/>
 6) get modified functions.php codes and add to your new **child theme's functions.php**<br/>
