@@ -1,7 +1,7 @@
 <?php
 
 /* set fastcgi_ops.sh path here*/
-$wpfcgi = "/home/php-fpm-user/scripts/fastcgi_ops.sh";
+$wpfcgi = "/home/websiteuser1.com/scripts/fastcgi_ops.sh";
 
 add_action('admin_bar_menu', 'add_item', 100);
 function add_item( $admin_bar ){
