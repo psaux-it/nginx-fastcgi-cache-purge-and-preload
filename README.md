@@ -47,20 +47,47 @@ Before starting make sure the ACL enabled on your environment. Check **/etc/fsta
 /dev/sda3 / ext4 noatime,errors=remount-ro,acl 0 1
 ```
 
-1) put **fastcgi_ops.sh** to website user's home. e.g. **/home/php-fpm-user/scripts** (avoid to web root directory)<br/>
-2) change ownership of the script to the **website user** via **chown php-fpm-user:php-fpm-group fastcgi_ops.sh**<br/>
-3) make script executable via **chmod +x fastcgi_ops.sh**<br/>
-4) set your fastcgi cache path, preload domain, website user and mail options on **fastcgi_ops.sh**<br/>
-5) open systemd service file (**wp-fcgi-notify.service**) and set execstart & stop script path e.g. **/home/php-fpm-user/scripts/fastcgi_ops.sh** (keep the script arguments **--wp-inotify-start** and **--wp-inotify-stop**)<br/>
-6) open **functions.php** and set script path e.g. **/home/php-fpm-user/scripts/fastcgi_ops.sh**<br/>
-7) get functions.php codes and add to your **child theme's functions.php**<br/>
-8) move **wp-fcgi-notify.service** to **/etc/systemd/system/** and start service **under root**. Check service is started without any error.
+#### MULTISITE SETTINGS
+
+Evertime you want to add new website you need to register it to fastcgi-cache website pool first. Then continue with the setting up new INSTANCE. Because we have multiple fastcgi-cache path we need to listen all of them for **create** events via inotifywait & setfacl. This process on going under root so we keep one of the copy of main script under root that we will use it in systemd service for running on boot. 
+
+##### First Time Setup
+
+1) copy **fastcgi_ops.sh** under root e.g. **/root/scripts/fastcgi_ops.sh**
+2) open systemd service file (**wp-fcgi-notify.service**) and set execstart & stop script path e.g. **/root/scripts/fastcgi_ops.sh** (keep the script arguments **--wp-inotify-start** and **--wp-inotify-stop**)<br/>
+3) move **wp-fcgi-notify.service** to **/etc/systemd/system/** and start service **under root**. Check service is started without any error.
+
 ```
 cp wp-fcgi-notify.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl start wp-fcgi-notify.service
 systemctl enable wp-fcgi-notify.service
 ```
+
+##### Add new website to fastcgi-cache website pool
+
+If you completed first time setup without any error, adding new website to fastcgi-cache website pool is easy.
+
+1) open **/root/scripts/fastcgi_ops.sh** and register your new website under MULTISITE SETTINGS. Here **websiteuser1** is website user(php-fpm-user) of **websiteuser1.com** and uses **/home/websiteuser1/fastcgi-cache** as a fastcgi-cache path. You have to use exact format when adding new website to pool.
+
+```
+MULTISITE SETTINGS
+fcgi[websiteuser1]="/home/websiteuser1/fastcgi-cache"
+fcgi[websiteuser2]="/home/websiteuser2/fastcgi-cache"
+fcgi[websiteuser3]="/home/websiteuser3/fastcgi-cache"
+```
+
 > ##### Why we need systemd service under root?
 > Things get a little messy here. We have two user, WEBSERVER-USER and PHP-FPM-USER and cache purge operations will be done by the PHP-FPM-USER but nginx always creates the cache folder&files with the WEBSERVER-USER (with very strict permissions).
 Because of strict permissions adding PHP-FPM-USER to WEBSERVER-GROUP not solve the permission problems. The thing is even you set recursive default setfacl for cache folder, Nginx always override it, surprisingly Nginx cache isn't following ACLs also. Executing scripts with sudo privilege is not possible because PHP-FPM-USER is not sudoer. (it shouldn't be). So how we will purge nginx cache with PHP-FPM-USER? Combining **inotifywait** with **setfacl** under root is only solution that I found. **wp-fcgi-notify.service** listens fastcgi cache folder for **create** events with help of **fastcgi_ops.sh** and give write permission recursively to PHP-FPM-USER for further cache purge operations.
+
+#### INSTANCE SETTINGS
+
+Every new website you want to add is a new instance. So when you want to add new website repeat the below steps. For further version I will automate this manual workflow. In this example I assume you are adding **newwebsite1.com** to fastcgi-cache pool and you created newwebsite1 system user as a website user (php-fpm-user)
+
+1) copy **fastcgi_ops.sh** to new website user's home. e.g. **/home/newwebsite1/scripts** (avoid to web root directory)<br/>
+2) change ownership of the script to the newly created **website user** via **chown -R newwebsite1:newwebsite1 /home/newwebsite1/scripts**<br/>
+3) make script executable via **chmod +x /home/newwebsite1/scripts/fastcgi_ops.sh**<br/>
+4) change your instance settings { fastcgi cache path [fpath], preload domain [fdomain] } in copied **fastcgi_ops.sh** under INSTANCE SETTINGS<br/>
+5) open **functions.php** and set new script path e.g. **/home/newwebsite1/scripts/fastcgi_ops.sh**<br/>
+6) get modified functions.php codes and add to your new **child theme's functions.php**<br/>
