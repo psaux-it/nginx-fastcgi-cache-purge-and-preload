@@ -6,7 +6,7 @@
 ![ouoıuy](https://user-images.githubusercontent.com/25556606/202265347-cf901dd7-65d2-4e23-b1d3-ba46ae1ddbcb.png)
 -------
 
-Pluginless Nginx cache management solution for wordpress. If you have ngx_cache_purge or nginx_cache_purge modules then some wordpress plugins are available. Check Nginx Helper or Cache Sniper for Nginx. On my side none of them worked as expected so I decided to make my own solution.
+Pluginless Nginx cache management solution for MULTISITE wordpress. If you have ngx_cache_purge or nginx_cache_purge modules then some wordpress plugins are available. Check Nginx Helper or Cache Sniper for Nginx. On our side none of them worked as expected so we do our best.
 
 ## Integration is pretty simple if you are native linux user and managing your own server. Here is the short explanation of proper php-fpm nginx setup --<br/>
 
