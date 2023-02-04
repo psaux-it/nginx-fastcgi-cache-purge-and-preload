@@ -8,8 +8,10 @@
 
 Pluginless Nginx cache management solution for MULTISITE wordpress. If you have ngx_cache_purge or nginx_cache_purge modules then some wordpress plugins are available. Check Nginx Helper or Cache Sniper for Nginx. On our side none of them worked as expected so we do our best.
 
-## Integration is pretty simple if you are native linux user and managing your own server. Here is the short explanation of proper php-fpm nginx setup --<br/>
+> #### Integration is **NOT** straightforward if you are not native linux user and managing your own server. Ask for help! <br/> 
+---
 
+### Here is the short explanation of proper php-fpm nginx setup<br/>
 #### PHP-FPM-USER (as known as the website user)
 The PHP-FPM user should be a special user that you create for running your website, whether it is Magento, WordPress, or anything.
 
@@ -49,18 +51,20 @@ Before starting make sure the ACL enabled on your environment. Check **/etc/fsta
 
 #### MULTISITE SETTINGS
 
-Evertime you want to add new website you need to register it to fastcgi-cache website pool first. Then continue with the setting up new INSTANCE. Because we have multiple fastcgi-cache path we need to listen all of them for **create** events via inotifywait & setfacl. This process on going under root so we keep one of the copy of main script under root that we will use it in systemd service for running on boot. 
+Evertime you want to add new website you need to register it to fastcgi-cache website pool first. Then continue with the setting up new INSTANCE. Because we have multiple fastcgi-cache path we need to listen all of them for **create** events via inotifywait & setfacl. This process on going under root (explained below) so it is best to keep one of the copy of main script under root. This way it is more manageable. We will use this copy for systemd service for running on boot. 
 
 ##### First Time Setup
 
 1) copy **fastcgi_ops.sh** under root e.g. **/root/scripts/fastcgi_ops.sh**
-2) open systemd service file (**wp-fcgi-notify.service**) and set execstart & stop script path e.g. **/root/scripts/fastcgi_ops.sh** (keep the script arguments **--wp-inotify-start** and **--wp-inotify-stop**)<br/>
-3) move **wp-fcgi-notify.service** to **/etc/systemd/system/** and start service **under root**. Check service is started without any error.
+2) edit script and register your existed websites to fastcgi-cache website pool under MULTISITE SETTINGS
+3) open systemd service file (**wp-fcgi-notify.service**) and set execstart & stop script path e.g. **/root/scripts/fastcgi_ops.sh** (keep the script arguments **--wp-inotify-start** and **--wp-inotify-stop**)<br/>
+4) move **wp-fcgi-notify.service** to **/etc/systemd/system/** and start service. Check service is started without any error.
 
 ```
 cp wp-fcgi-notify.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl start wp-fcgi-notify.service
+systemctl status wp-fcgi-notify.service
 systemctl enable wp-fcgi-notify.service
 ```
 
