@@ -8,7 +8,7 @@
 
 Pluginless Nginx cache management solution for MULTISITE wordpress. If you have ngx_cache_purge or nginx_cache_purge modules then some wordpress plugins are available. Check Nginx Helper or Cache Sniper for Nginx. On our side none of them worked as expected so we do our best.
 
-> #### Integration is **NOT** straightforward if you are not native linux user and managing your own server. Ask for help! <br/> 
+#### Integration is **NOT** straightforward if you are not native linux user and managing your own server. Ask for help! <br/> 
 ---
 
 ### Here is the short explanation of proper php-fpm nginx setup<br/>
