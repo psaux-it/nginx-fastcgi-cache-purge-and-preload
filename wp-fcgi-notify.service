@@ -1,6 +1,6 @@
 [Unit]
 Description=FastCGI Operations Service
-After=network.target nginx.service
+After=network.target nginx.service local-fs.target
 Wants=nginx.service
 
 [Service]
