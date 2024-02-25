@@ -23,21 +23,54 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 declare -A fcgi
 
-# MULTISITE SETTINGS
+# MULTISITE SETTINGS - (nedded by wp-fcgi-notify.service under root)
 ####################
+# A one copy of this script must be under root for
+# inotify/setfacl operations triggered by wp-fcgi-notify.service
+# In this example we are hosting total 3 website
+# websiteuser1.com websiteuser2.com websiteuser3.com
+# when you start wp-fcgi-notify.service under root
+# inotify will start listening to all fastcgi paths
+# and setfacl will give necessary permissions to cached files.
+# If you want to host new website you need to add
+# this website's PHP-FPM-USER and fastcgi cache path below.
+# You should make this edit in the script which copied under root.
+
+#################################################################################################################
 fcgi[websiteuser1]="/home/websiteuser1/fastcgi-cache"
 fcgi[websiteuser2]="/home/websiteuser2/fastcgi-cache"
 fcgi[websiteuser3]="/home/websiteuser3/fastcgi-cache"
+#################################################################################################################
 
-# INSTANCE SETTINGS
-###################
-fdomain="websiteuser1.com"                                         # fastcgi-cache preload URL for instance
-fpath="/home/websiteuser1.com/fastcgi-cache"                       # fastcgi-cache path for instance
+# INSTANCE SETTINGS - (needed by per instance you hosting) 
+####################
+# Apart from the root copy, you must re-copy this script for each instance.
+# In this example this copied script responsible for websiteuser1.com
+# copied to e.g. /home/websiteuser1/scripts/fastcgi_ops.sh
+# and adjusted below settings for preloaad url and fastcgi cache path.
+
+# INSTANCE SETTINGS STEPS
+#########################
+# 1) simply replicate this script to websiteuser1 (PHP-FPM-USER) 
+#    user's $HOME directory e.g. /home/websiteuser1/scripts/fastcgi_ops.sh
+# 2) chmod +x /home/websiteuser1/scripts/fastcgi_ops.sh
+#    chown -R websiteuser1:websiteuser1 /home/websiteuser1/scripts
+# 3) copy functions.php to websiteuser1.com child theme's functions.php
+# 4) change new script path in function.php
+#    $wpfcgi = "/home/websiteuser1/scripts/fastcgi_ops.sh";
+# 5) set preload url and your fastcgi cache path for websiteuser1.com below
+
+###################################################################################################################
+fdomain="websiteuser1.com"                                    # fastcgi-cache preload URL for websiteuser1 instance
+fpath="/home/websiteuser1.com/fastcgi-cache"                  # fastcgi-cache path for websiteuser1 instance
+###################################################################################################################
 
 # Set mail options
-mail_to="support@websiteuser1.com"                                 # send mail to
-mail_from="From: System Automations<fcgi@websiteuser1.com>"        # mail from
-mail_subject="FastCGI-Cache Purge,Preload Ops"                     # mail subject
+###################################################################################################################
+mail_to="support@websiteuser1.com"                            # send mail to
+mail_from="From: System Automations<fcgi@websiteuser1.com>"   # mail from
+mail_subject="FastCGI-Cache Purge,Preload Ops"                # mail subject
+###################################################################################################################
 
 # discover script path
 this_script_full_path="${BASH_SOURCE[0]}"
@@ -66,25 +99,33 @@ this_script_path="${this_script_path%%+(/)}"
 # define PID
 PIDFILE="${this_script_path}/fastcgi_ops_${fdomain%%.*}.pid"
 
-# Check folder has subfolders
-hasDirs() {
-  declare $targetDir="$1"
-  ls -ld ${targetDir}*/
-}
+# Check pgrep is exist
+if ! command -v pgrep >/dev/null 2>&1; then
+  exit 1
+fi
 
 # cache purge helper function
 purge_helper() {
-  if hasDirs "${fpath:?}"/ >/dev/null 2>&1; then
-    rm -rf "${fpath:?}"/* || { echo "Cannot purge FastCGI cache!"; exit 1; }
-  fi
+  rm -rf --preserve-root "${fpath:?}"/* || return 1
+  # Check if the directory exists and remove it if so
   if [[ -d "${this_script_path}/www.${fdomain}" ]]; then
-    rm -rf "${this_script_path:?}/www.${fdomain:?}" || { echo "Cannot delete obsolete website content!"; exit 1; }
+    rm -rf "${this_script_path:?}/www.${fdomain:?}"
+  fi
+  return 0
+}
+
+# check inotify/setfacl is working
+inotify-helper() {
+  # first check inotify/setfacl is working
+  if ! pgrep -f "inotifywait.*${fpath}" >/dev/null 2>&1; then
+    echo "Please start inotify service via 'systemctl start wp-fcgi-notify'"
+    exit 1
   fi
 }
 
 # find preload process pids
 find_pid() {
-  PIDS="$(ps -aux | grep -v grep | grep -wE "wget.*${this_script_path}" | awk '{print $2}')"
+  PIDS=$(pgrep -a -f "wget.*-q -m -p -E -k -P ${this_script_path}" | grep -v "cpulimit" | awk '{print $1}')
 }
 
 # Display script controls
@@ -107,6 +148,8 @@ help() {
 
 # preload fastcgi-cache
 preload() {
+  inotify-helper
+
   # create PID before long running process
   # allow only one instance running at the same time
   if [[ -f "${PIDFILE}" ]]; then
@@ -119,9 +162,12 @@ preload() {
     touch "${PIDFILE}"
   fi
 
-  # early quit if wget not exist
+  # Check if wget or cpulimit commands are available
   if ! command -v wget >/dev/null 2>&1; then
-    echo "wget command not found!"
+    echo "wget is not installed. Please install cpulimit."
+    exit 1
+  elif ! command -v cpulimit >/dev/null 2>&1; then
+    echo "cpulimit is not installed. Please install wget."
     exit 1
   fi
 
@@ -130,66 +176,74 @@ preload() {
   # wget will create cache folder with website user instead of web server user
   # and web server user(nginx,ww-data e.g.) can't write here anymore
   if ! [[ -d "${fpath}" ]]; then
-    echo "Your FastCGI cache folder (${fpath}) is not created yet. Please manually create it and change ownership to the web server user(nginx or ww-data) or restart nginx to force creating the cache folder!"
+    echo "Your FastCGI cache folder (${fpath}) not found. Please set fcgi cache path for this vhosts in relevant nginx .conf file and restart nginx.service to create it"
     exit 1
   fi
 
+  reject_regex='--reject-regex "/wp-admin/|/wp-includes/|/wp-json/|/xmlrpc.php|/wp-login.php"'
+  reject_regex+='|/wp-register.php|/wp-content/|/cart/|/checkout/|/my-account/|/wc-api/"'
+
   # purge cache & obsolete website content before preload
-  purge_helper
+  if purge_helper; then
+    # check GNU time command exist
+    if [[ -f "/usr/bin/time" ]]; then
+      # start fastcgi cache preload on background and measure elapsed time
+      /usr/bin/time -f'%E' -o "${this_script_path}/preload_elapsed.txt" \
+      cpulimit -l 20 -- wget --limit-rate=1280k -q -m -p -E -k -P "${this_script_path}" \
+      ${reject_regex} "https://www.${fdomain}" &>/dev/null &
+    else
+      # start fastcgi cache preload on background without time measure
+      # bash built-in time command is problematic (wrong PID always with bg processing)
+      cpulimit -l 20 -- wget \
+      --limit-rate=1280k \
+      -q -m -p -E -k -P "${this_script_path}" \
+      ${reject_regex} \
+      "https://www.${fdomain}" &>/dev/null &
+    fi
 
-  # check GNU time command exist
-  if [[ -f "/usr/bin/time" ]]; then
-    # start fastcgi cache preload on background and measure elapsed time
-    /usr/bin/time -f'%E' -o "${this_script_path}"/preload_elapsed.txt wget -q -m -p -E -k -P "${this_script_path}" https://www."${fdomain}"/ &>/dev/null &
+    # find pid
+    sleep 3
+    find_pid
+
+    # keep PID in /run
+    echo "${PIDS}" > "${PIDFILE}" || { echo "Cannot create PID!"; exit 1; }
+
+    # early test that process is alive after 3 second
+    if ps -p "$(< "${PIDFILE}")" >/dev/null 2>&1; then
+      echo "FastCGI cache preloading started on background. You will be informed when completed."
+    else
+      echo "Cannot preload FastCGI cache!"
+      exit 1
+    fi
   else
-    # start fastcgi cache preload on background without time measure
-    # bash built-in time command is problematic (wrong PID always with bg processing)
-    wget -q -m -p -E -k -P "${this_script_path}" https://www."${fdomain}"/ &>/dev/null &
-  fi
-
-  # get the PID of the background preload process
-  my_pid=$!
-
-  # keep PID in /run
-  echo "${my_pid}" > "${PIDFILE}" || { echo "Cannot create PID!"; exit 1; }
-
-  # Be nice on production wget cpu usage is high
-  find_pid
-  if [[ -n "${PIDS}" ]]; then
-    for pid in $PIDS
-    do
-      renice 19 $pid >/dev/null 2>&1 || echo "Cannot renice preload process"
-    done
-  fi
-
-  # little hackish
-  sleep 3
-
-  # early test that process is alive after 3 second
-  if ps -p "$(< "${PIDFILE}")" >/dev/null 2>&1; then
-    echo "FastCGI cache preloading started on background. You will be informed when completed."
-  else
-    echo "Cannot preload FastCGI cache!"
+    echo "PERMISSION ISSUE! Cannot Purge FastCGI cache before Preload. Cache Integrity is broken. Please restart wp-fcgi-notify.service"
     exit 1
   fi
 }
 
 # purge fastcgi-cache
 purge() {
+  inotify-helper
   find_pid
 
   # stop ongoing preload process if exist
   if [[ -n "${PIDS}" ]]; then
     for pid in $PIDS
     do
-      kill -9 $pid
+      if ps -p "${pid}" >/dev/null 2>&1; then
+        kill -9 $pid
+      fi
     done
+
     [[ -f "${PIDFILE}" ]] && rm -f "${PIDFILE:?}"
-    purge_helper
-    echo "FastCGI cache preloading is stopped, purge FastCGI cache is completed."
+
+    (purge_helper) && \
+    echo "FastCGI cache preloading is stopped, Purge FastCGI cache is completed." || \
+    echo "FastCGI cache preloading is stopped, Purge FastCGI cache CANNOT completed."
   else
-    purge_helper
-    echo "Purge FastCGI cache is completed."
+    (purge_helper) && \
+    echo "Purge FastCGI cache is completed." || \
+    echo "Purge FastCGI cache CANNOT completed."
   fi
 }
 
@@ -211,13 +265,15 @@ admin() {
       echo "${elapsed}"
     fi
 
-    # send mail
-    if command -v mail >/dev/null 2>&1; then
+    # send mail if mail command is available
+    command -v mail >/dev/null 2>&1 && {
       tfile=$(mktemp)
-      [[ -n "${elapsed}" ]] && echo "FastCGI cache preloading is completed in ${elapsed}!" > "${tfile}" || echo "FastCGI cache preloading is completed!" > "${tfile}"
+      message="FastCGI cache preloading is completed"
+      [[ -n "${elapsed}" ]] && message+=" in ${elapsed}!"
+      echo "$message" > "${tfile}"
       cat "${tfile}" | mail -s "$mail_subject" -a "$mail_from" "$mail_to"
       rm -f "${tfile:?}"
-    fi
+    }
 
     # trigger wordpress admin message
     exit 0
@@ -227,39 +283,28 @@ admin() {
 # listens fastcgi cache folder for create events and
 # give write permission to PHP-FPM-USER for further purge operations.
 inotify-start() {
-  # check permission
+  # Check permissions and required packages
   if [[ ! $SUDO_USER && $EUID -ne 0 ]]; then
-    echo "You need to run script with this argument under root or sudo privileged user!"
+    echo "You need to run this script as root or with sudo privileges!"
     exit 1
-  fi
-
-  # Check env. has inotify-tools linux package
-  if ! command -v inotifywait >/dev/null 2>&1; then
-    echo "You need inotify-tools linux package!"
-    exit 1
-  fi
-
-  # Check env has tune2fs linux package
-  if ! command -v tune2fs >/dev/null 2>&1; then
-    echo "You need tune2fs linux package!"
+  elif ! command -v inotifywait >/dev/null 2>&1 || \
+    ! command -v tune2fs >/dev/null 2>&1 || \
+    ! command -v setfacl >/dev/null 2>&1; then
+    echo "You need the 'inotify-tools', 'tune2fs', and 'acl' packages installed!"
     exit 1
   fi
 
   # Check ACL configured properly
-  fs="$(df "${fpath}" | tail -1 | awk '{ print $1 }')"
-  if ! tune2fs -l "${fs}" | grep "Default mount options:" | grep "acl" >/dev/null 2>&1; then
+  fs="$(df / | awk 'NR==2 {print $1}')"
+  if ! tune2fs -l "${fs}" | grep -q "Default mount options:.*acl"; then
     echo "Filesystem not mounted with the acl!"
-    exit 1
-  elif ! command -v setfacl >/dev/null 2>&1; then
-    echo "You need acl linux package!"
     exit 1
   fi
 
-  # check FastCGI cache path is created
-  for path in "${!fcgi[@]}"
-  do
+  # re-check fcgi cache existence after service restart
+  for path in "${!fcgi[@]}"; do
     if ! [[ -d "${fcgi[$path]}" ]]; then
-      echo "Your FastCGI cache folder (${fpath}) is not created yet. Please manually create it and change ownership to the web server user(nginx or ww-data) or restart nginx to force creating the cache folder!"
+      echo "Your FastCGI cache folder (${fcgi[$path]}) not found. Please set fcgi cache path for this vhosts in relevant nginx .conf file and restart nginx.service"
       exit 1
     fi
   done
@@ -275,10 +320,9 @@ inotify-start() {
     done >/dev/null 2>&1 &
   done
 
-  # check process is alive
-  for path in "${!fcgi[@]}"
-  do
-    if ps -aux | grep -v grep | grep -wE "inotifywait.*${fcgi[$path]}" >/dev/null 2>&1; then
+  # Check if inotifywait processes are alive
+  for path in "${!fcgi[@]}"; do
+    if pgrep -f "inotifywait.*${fcgi[$path]}" >/dev/null 2>&1; then
       echo "All done! Started to listen FastCGI cache folder (${fcgi[$path]}) events."
     else
       echo "Unknown error occurred during cache listen event."
@@ -294,22 +338,41 @@ inotify-stop() {
     exit 1
   fi
 
-  # kill script
-  if ps -aux | grep -v grep | grep -wE "wp-inotify-start" >/dev/null 2>&1; then
-    kill -9 $(ps -aux | grep -v grep | grep -wE "wp-inotify-start" | awk '{print $2}') && echo "${this_script_name} is killed !"
-  fi
-
-  # kill inotifywait process
-  for user in "${!fcgi[@]}"
-  do
-    if ps -aux | grep -v grep | grep -wE "inotifywait.*${fcgi[$user]}" >/dev/null 2>&1; then
-      kill -9 $(ps -aux | grep -v grep | grep -wE "inotifywait.*${fcgi[$user]}" | awk '{print $2}') && echo "inotifywait is killed !"
+  # Kill on-going preload process for all websites first
+  for load in "${!fcgi[@]}"; do
+    pid=$(pgrep -a -f "wget.*-q -m -p -E -k -P ${fcgi[$load]}" | grep -v "cpulimit" | awk '{print $1}')
+    if [[ -n "$pid" ]]; then
+      kill -9 $pid && echo "Preloading process for website $load is stopped!"
+    else
+      echo "No preloading process found for website $load."
     fi
   done
+
+  # Then purge fcgi cache for all websites to keep cache integrity clean
+  # That means on every system reboot (systemctl reboot) all fcgi cache will cleaned for all vhosts
+  # This is somehow drawback but keeping cache integrity is more important
+  for cache in "${!fcgi[@]}"; do
+    if [[ -d "${fcgi[$cache]}" ]]; then
+      rm -rf --preserve-root "${fcgi[$cache]:?}"/*
+      echo "FastCGI cache purged for website: $cache"
+    else
+      echo "FastCGI cache directory not found for website: $cache to clear cache"
+    fi
+  done
+
+  # kill inotifywait processes
+  for listen in "${!fcgi[@]}"; do
+    pid=$(pgrep -f "inotifywait.*${fcgi[$listen]}")
+    if [[ -n "$pid" ]]; then
+      kill -9 "$pid" && echo "inotifywait process for ${listen} is killed!"
+    fi
+  done
+
+  sleep 3
 }
 
 # set script arguments
-case "$@" in
+case "$1" in
   --purge            ) purge         ;;
   --preload          ) preload       ;;
   --admin            ) admin         ;;
