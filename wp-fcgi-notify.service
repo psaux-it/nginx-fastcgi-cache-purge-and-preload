@@ -12,7 +12,6 @@ StandardOutput=append:/var/log/fastcgi_ops.log
 StandardError=append:/var/log/fastcgi_ops.log
 ExecStart=/bin/bash /root/scripts/fastcgi_ops.sh --wp-inotify-start
 ExecStop=/bin/bash /root/scripts/fastcgi_ops.sh --wp-inotify-stop
-ExecStopPost=/bin/bash /root/scripts/fastcgi.ops.sh --wp-inotify-stop
 
 [Install]
 WantedBy=multi-user.target
