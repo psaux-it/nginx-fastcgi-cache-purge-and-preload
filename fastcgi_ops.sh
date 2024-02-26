@@ -49,8 +49,9 @@ fcgi[websiteuser3]="/home/websiteuser3/fastcgi-cache"
 # copied to e.g. /home/websiteuser1/scripts/fastcgi_ops.sh
 # and adjusted below settings for preloaad url and fastcgi cache path.
 
-# INSTANCE SETTINGS STEPS
-#########################
+# INSTANCE SETTINGS
+# STEPS
+####################
 # 1) simply replicate this script to websiteuser1 (PHP-FPM-USER) 
 #    user's $HOME directory e.g. /home/websiteuser1/scripts/fastcgi_ops.sh
 # 2) chmod +x /home/websiteuser1/scripts/fastcgi_ops.sh
@@ -60,12 +61,40 @@ fcgi[websiteuser3]="/home/websiteuser3/fastcgi-cache"
 #    $wpfcgi = "/home/websiteuser1/scripts/fastcgi_ops.sh";
 # 5) set preload url and your fastcgi cache path for websiteuser1.com below
 
+# PHP-FPM POOL
+# SETTINGS
+#####################
+# ../fpm-php/fpm.d/websiteuser1.conf
+#
+# [websiteuser1.com]
+# user = websiteuser1
+# group = websiteuser1
+# listen.owner = nginx
+# listen.group = nginx
+# listen.mode = 0755
+# listen = /var/run/php-fcgi-websiteuser1.sock
+# ..
+
+# VALIDATE SETUP
+####################
+# getfacl /home/websiteuser1/fastcgi-cache/0/32/ab6eb4df9b94858c10a283200daa1320
+###################################################################################################################
+# getfacl:  Removing leading '/' from absolute path names
+## file:     /home/websiteuser1/fastcgi-cache/0/32/ab6eb4df9b94858c10a283200daa1320
+## owner:    nginx             --> Web-Server User (Default Owner)
+## group:    nginx             --> Web-Server Group (Default Group)
+# user:      :rw-              --> Web-Server User Permissons
+# user:      websiteuser1:rw-  --> Web-Site User and Permission (ACL) ****KEY*****
+# group:     :---
+# mask:      :rw-
+# other:     :---
+
 ###################################################################################################################
 fdomain="websiteuser1.com"                                    # fastcgi-cache preload URL for websiteuser1 instance
 fpath="/home/websiteuser1.com/fastcgi-cache"                  # fastcgi-cache path for websiteuser1 instance
 ###################################################################################################################
 
-# Set mail options
+# MAIL OPTIONS
 ###################################################################################################################
 mail_to="support@websiteuser1.com"                            # send mail to
 mail_from="From: System Automations<fcgi@websiteuser1.com>"   # mail from
@@ -164,10 +193,10 @@ preload() {
 
   # Check if wget or cpulimit commands are available
   if ! command -v wget >/dev/null 2>&1; then
-    echo "wget is not installed. Please install cpulimit."
+    echo "wget is not installed. Please install wget."
     exit 1
   elif ! command -v cpulimit >/dev/null 2>&1; then
-    echo "cpulimit is not installed. Please install wget."
+    echo "cpulimit is not installed. Please install cpulimit."
     exit 1
   fi
 
@@ -216,7 +245,7 @@ preload() {
       exit 1
     fi
   else
-    echo "PERMISSION ISSUE! Cannot Purge FastCGI cache before Preload. Cache Integrity is broken. Please restart wp-fcgi-notify.service"
+    echo "PERMISSION ISSUE! Cannot Purge FastCGI cache before Preload. Please restart wp-fcgi-notify.service"
     exit 1
   fi
 }
@@ -281,7 +310,7 @@ admin() {
 }
 
 # listens fastcgi cache folder for create events and
-# give write permission to PHP-FPM-USER for further purge operations.
+# give write permission to website user for further purge operations.
 inotify-start() {
   # Check permissions and required packages
   if [[ ! $SUDO_USER && $EUID -ne 0 ]]; then
@@ -301,7 +330,9 @@ inotify-start() {
     exit 1
   fi
 
-  # re-check fcgi cache existence after service restart
+  # if nginx has not yet created the cache path,
+  # wget will create cache folder with website user instead of web server user
+  # and web server user(nginx,ww-data e.g.) can't write here anymore
   for path in "${!fcgi[@]}"; do
     if ! [[ -d "${fcgi[$path]}" ]]; then
       echo "Your FastCGI cache folder (${fcgi[$path]}) not found. Please set fcgi cache path for this vhosts in relevant nginx .conf file and restart nginx.service"
