@@ -240,7 +240,7 @@ preload() {
     find_pid
 
     # keep PID in /run
-    echo "${PIDS[*]}" > "${PIDFILE}" || { log_with_timestamp "Cannot create PID!"; exit 1; }
+    echo "${PIDS[@]}" > "${PIDFILE}" || { log_with_timestamp "Cannot create PID!"; exit 1; }
 
     # early test that process is alive after 3 second
     for pid in "${PIDS[@]}"; do
@@ -260,12 +260,12 @@ preload() {
 
 # purge fastcgi-cache
 purge() {
-  inotify-helper
+  #inotify-helper #todo: check any dependency to inotify ops.
   find_pid
 
   # stop ongoing preload process if exist
-  if [[ -n "${PIDS}" ]]; then
-    for pid in $PIDS
+  if (( "${#PIDS[@]}" )); then
+    for pid in "${PIDS[@]}"
     do
       if ps -p "${pid}" >/dev/null 2>&1; then
         kill -9 $pid
@@ -404,11 +404,17 @@ inotify-stop() {
 
   # Kill on-going preload process for all websites first
   for load in "${!fcgi[@]}"; do
-    pid=$(pgrep -a -f "wget.*-q -m -p -E -k -P ${fcgi[$load]}" | grep -v "cpulimit" | awk '{print $1}')
-    if [[ -n "$pid" ]]; then
-      kill -9 $pid && log_with_timestamp "Preloading process for website $load is stopped!"
+    read -r -a PIDS <<< "$(pgrep -a -f "wget.*-q -m -p -E -k -P ${fcgi[$load]}" | grep -v "cpulimit" | awk '{print $1}')"
+    if (( "${#PIDS[@]}" )); then
+      for pid in "${PIDS[@]}"; do
+        if ps -p "${pid}" >/dev/null 2>&1; then
+          kill -9 $pid && log_with_timestamp "Cache preload process $pid for website $load is killed!"
+        else
+          log_with_timestamp "No cache preload process found for website $load - last running process was $pid"
+        fi
+      done
     else
-      log_with_timestamp "No preloading process found for website $load."
+      log_with_timestamp "No cache preload process found for website $load"
     fi
   done
 
@@ -426,13 +432,19 @@ inotify-stop() {
 
   # kill inotifywait processes
   for listen in "${!fcgi[@]}"; do
-    pid=$(pgrep -f "inotifywait.*${fcgi[$listen]}")
-    if [[ -n "$pid" ]]; then
-      kill -9 "$pid" && log_with_timestamp "inotifywait process for ${listen} is killed!"
+    read -r -a PIDS <<< "$(pgrep -f "inotifywait.*${fcgi[$listen]}")"
+    if (( "${#PIDS[@]}" )); then
+      for pid in "${PIDS[@]}"; do
+        if ps -p "${pid}" >/dev/null 2>&1; then
+          kill -9 $pid && log_with_timestamp "inotifywait process $pid for website ${listen} is killed!"
+        else
+          log_with_timestamp "No inotify process found for website $listen - last running process was $pid"
+        fi
+      done
+    else
+      log_with_timestamp "No inotify process found for website $listen"
     fi
   done
-
-  sleep 3
 }
 
 # set script arguments
