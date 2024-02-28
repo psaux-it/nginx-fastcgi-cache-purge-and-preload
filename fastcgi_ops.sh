@@ -237,24 +237,29 @@ preload() {
       "https://www.${fdomain}" &>/dev/null &
     fi
 
+    sleep 2
     find_pid
 
-    # keep PID in /run
-    echo "${PIDS[@]}" > "${PIDFILE}" || { log_with_timestamp "Cannot create PID!"; exit 1; }
+    if (( "${#PIDS[@]}" )); then
+      # keep PID in /run
+      echo "${PIDS[@]}" > "${PIDFILE}" || { log_with_timestamp "PERMISSION: Cannot create cache preload PID!"; exit 1; }
 
-    # early test that process is alive after 3 second
-    for pid in "${PIDS[@]}"; do
-      if ps -p "${pid}" >/dev/null 2>&1; then
-        log_with_timestamp "FastCGI cache preloading started on background. You will be informed when completed."
-        break
-      else
-        log_with_timestamp "Cannot preload FastCGI cache!"
-        exit 1
-      fi
-    done
+      # is process alive
+      for pid in "${PIDS[@]}"; do
+        if ps -p "${pid}" >/dev/null 2>&1; then
+          log_with_timestamp "FastCGI cache preloading started on background. You will be informed when completed."
+          break
+        else
+          log_with_timestamp "ZOMBIE PROCESS: Cannot preload FastCGI cache!"
+          exit 1
+        fi
+      done
+    else
+      log_with_timestamp "Cannot start FastCGI cache preload!"
+      exit 1
+    fi
   else
-    log_with_timestamp "PERMISSION ISSUE! Cannot Purge FastCGI cache before Preload. Please restart wp-fcgi-notify.service"
-    exit 1
+    log_with_timestamp "PERMISSION: Cannot Purge FastCGI cache before Preloading. Please restart wp-fcgi-notify.service"
   fi
 }
 
@@ -284,7 +289,7 @@ purge() {
   fi
 }
 
-# wordpress admin message
+# wordpress admin notice
 admin() {
   # check previous preload process completed
   [[ -f "${PIDFILE}" ]] && PID="$(< "${PIDFILE}")" || exit 1
@@ -436,7 +441,7 @@ inotify-stop() {
     if (( "${#PIDS[@]}" )); then
       for pid in "${PIDS[@]}"; do
         if ps -p "${pid}" >/dev/null 2>&1; then
-          kill -9 $pid && log_with_timestamp "inotifywait process $pid for website ${listen} is killed!"
+          kill -9 $pid && log_with_timestamp "inotifywait process $pid for website $listen is killed!"
         else
           log_with_timestamp "No inotify process found for website $listen - last running process was $pid"
         fi
