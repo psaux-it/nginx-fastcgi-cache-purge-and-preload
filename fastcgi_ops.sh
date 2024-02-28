@@ -101,6 +101,14 @@ mail_from="From: System Automations<fcgi@websiteuser1.com>"   # mail from
 mail_subject="FastCGI-Cache Purge,Preload Ops"                # mail subject
 ###################################################################################################################
 
+# get current timestamp
+timestamp=$(date +"%Y-%m-%d %T")
+
+# log messages with timestamps
+log_with_timestamp() {
+    echo "[${timestamp}] $1"
+}
+
 # discover script path
 this_script_full_path="${BASH_SOURCE[0]}"
 if command -v dirname >/dev/null 2>&1 && command -v readlink >/dev/null 2>&1 && command -v basename >/dev/null 2>&1; then
@@ -128,15 +136,7 @@ this_script_path="${this_script_path%%+(/)}"
 # define PID
 PIDFILE="${this_script_path}/fastcgi_ops_${fdomain%%.*}.pid"
 
-# Get current timestamp
-timestamp=$(date +"%Y-%m-%d %T")
-
-# Define a function to log messages with timestamps
-log_with_timestamp() {
-    echo "[${timestamp}] $1"
-}
-
-# Check pgrep is exist
+# check pgrep is exist
 if ! command -v pgrep >/dev/null 2>&1; then
   exit 1
 fi
