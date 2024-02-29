@@ -143,7 +143,7 @@ fi
 
 # cache purge helper function
 purge_helper() {
-  rm -rf --preserve-root "${fpath:?}"/* || return 1
+  rm -rf --preserve-root "${fpath:?}"/* >/dev/null 2>&1 || return 1
   # Check if the directory exists and remove it if so
   if [[ -d "${this_script_path}/www.${fdomain}" ]]; then
     rm -rf "${this_script_path:?}/www.${fdomain:?}"
@@ -285,7 +285,7 @@ purge() {
   else
     (purge_helper) && \
     log_with_timestamp "Purge FastCGI cache is completed." || \
-    log_with_timestamp "Purge FastCGI cache CANNOT completed."
+    log_with_timestamp "PERMISSION: Purge FastCGI cache CANNOT completed. Please restart wp-fcgi-notify.service"
   fi
 }
 
