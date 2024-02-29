@@ -289,37 +289,13 @@ purge() {
   fi
 }
 
-# wordpress admin notice
-admin() {
-  # check previous preload process completed
-  [[ -f "${PIDFILE}" ]] && PID="$(< "${PIDFILE}")" || exit 1
-
-  # check current preload process is completed
-  if ps -p "${PID}" > /dev/null 2>&1; then
-    exit 1
-  else
-    # remove PID
-    rm -f "${PIDFILE:?}"
-
-    # check GNU time command exist
-    if [[ -f "/usr/bin/time" ]]; then
-      elapsed="$(tail -n 1 "${this_script_path}"/preload_elapsed.txt)"
-      echo "${elapsed}"
-    fi
-
-    # send mail if mail command is available
-    command -v mail >/dev/null 2>&1 && {
-      tfile=$(mktemp)
-      message="FastCGI cache preloading is completed"
-      [[ -n "${elapsed}" ]] && message+=" in ${elapsed}!"
-      echo "$message" > "${tfile}"
-      cat "${tfile}" | mail -s "$mail_subject" -a "$mail_from" "$mail_to"
-      rm -f "${tfile:?}"
+# send mail
+mail() {
+    # send mail
+    command -v mail >/dev/null 2>&1 && { 
+    message="FastCGI cache preloading is completed"; 
+    echo "$message" | mail -s "$mail_subject" -a "$mail_from" "$mail_to"; 
     }
-
-    # trigger wordpress admin message
-    exit 0
-  fi
 }
 
 # listens fastcgi cache folder for create events and
@@ -456,7 +432,7 @@ inotify-stop() {
 case "$1" in
   --purge            ) purge         ;;
   --preload          ) preload       ;;
-  --admin            ) admin         ;;
+  --mail             ) mail          ;;
   --wp-inotify-start ) inotify-start ;;
   --wp-inotify-stop  ) inotify-stop  ;;
   *                  ) help          ;;
