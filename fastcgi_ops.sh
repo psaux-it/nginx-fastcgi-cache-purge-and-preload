@@ -194,8 +194,6 @@ help() {
 
 # preload fastcgi-cache
 preload() {
-  inotify-helper
-
   # check any ongoing preload process
   if [[ -s "${PIDFILE}" ]]; then
     readarray -t PID < "${PIDFILE}"
@@ -221,6 +219,7 @@ preload() {
 
   # purge cache & obsolete website content before preload
   if purge_helper; then
+     inotify-helper
     # check GNU time command exist
     if [[ -f "/usr/bin/time" ]]; then
       # start fastcgi cache preload on background and measure elapsed time
@@ -237,7 +236,6 @@ preload() {
       "https://www.${fdomain}" &>/dev/null &
     fi
 
-    sleep 2
     find_pid
 
     if (( "${#PIDS[@]}" )); then
