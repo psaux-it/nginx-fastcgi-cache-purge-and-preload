@@ -126,7 +126,7 @@ if command -v dirname >/dev/null 2>&1 && command -v readlink >/dev/null 2>&1 && 
   this_script_path="$( cd -P "$( dirname "${this_script_full_path}" )" >/dev/null 2>&1 && pwd )"
   this_script_name="$(basename "${this_script_full_path}")"
 else
-  log_with_timestamp "cannot find script path!"
+  log_with_timestamp "ERROR PATH: cannot find script path!"
   exit 1
 fi
 
@@ -140,16 +140,23 @@ PIDFILE="${this_script_path}/fastcgi_ops_${fdomain%%.*}.pid"
 
 # check pgrep is exist
 if ! command -v pgrep >/dev/null 2>&1; then
+  log_with_timestamp "ERROR COMMAND: pgrep is not installed. Please install pgrep."
   exit 1
 fi
 
 # cache purge helper function
 purge_helper() {
-  rm -rf --preserve-root "${fpath:?}"/* >/dev/null 2>&1 || return 1
+  if [[ -d "${fpath}" ]]; then
+    rm -rf --preserve-root "${fpath:?}"/* >/dev/null 2>&1 || return 1
+  else
+    log_with_timestamp "Cache directory '${fpath}' does not exist, cannot purge cache"
+  fi
+
   # Check if the directory exists and remove it if so
   if [[ -d "${this_script_path}/www.${fdomain}" ]]; then
     rm -rf "${this_script_path:?}/www.${fdomain:?}"
   fi
+
   return 0
 }
 
@@ -157,7 +164,7 @@ purge_helper() {
 inotify-helper() {
   # first check inotify/setfacl is working
   if ! pgrep -f "inotifywait.*${fpath}" >/dev/null 2>&1; then
-    log_with_timestamp "Please start inotify service via 'systemctl start wp-fcgi-notify'"
+    log_with_timestamp "ERROR INOTIFY: Please start inotify service via 'systemctl start wp-fcgi-notify' first"
     exit 1
   fi
 }
@@ -194,7 +201,7 @@ preload() {
     readarray -t PID < "${PIDFILE}"
     for pid in "${PID[@]}"; do
       if ps -p "${pid}" >/dev/null 2>&1; then
-        log_with_timestamp "FastCGI cache is already preloading, If you want stop it now use FCGI Cache Purge"
+        log_with_timestamp "INFO PRELOAD: FastCGI cache is already preloading, If you want stop it now use FCGI Cache Purge"
         exit 1
       fi
     done
@@ -202,10 +209,10 @@ preload() {
 
   # Check if wget or cpulimit commands are available
   if ! command -v wget >/dev/null 2>&1; then
-    log_with_timestamp "wget is not installed. Please install wget."
+    log_with_timestamp "ERROR COMMAND: wget is not installed. Please install wget."
     exit 1
   elif ! command -v cpulimit >/dev/null 2>&1; then
-    log_with_timestamp "cpulimit is not installed. Please install cpulimit."
+    log_with_timestamp "ERROR COMMAND: cpulimit is not installed. Please install cpulimit."
     exit 1
   fi
 
@@ -243,7 +250,7 @@ preload() {
 
     if (( "${#PIDS[@]}" )); then
       # keep PID in /run
-      echo "${PIDS[@]}" > "${PIDFILE}" || { log_with_timestamp "PERMISSION: Cannot create cache preload PID!"; exit 1; }
+      echo "${PIDS[@]}" > "${PIDFILE}" || { log_with_timestamp "ERROR PERMISSION: Cannot create cache preload PID!"; exit 1; }
 
       # is process alive
       for pid in "${PIDS[@]}"; do
@@ -251,16 +258,16 @@ preload() {
           log_with_timestamp "FastCGI cache preloading started on background. You will be informed when completed."
           break
         else
-          log_with_timestamp "ZOMBIE PROCESS: Cannot preload FastCGI cache!"
+          log_with_timestamp "ERROR ZOMBIE PROCESS: Cannot start FastCGI cache preload!"
           exit 1
         fi
       done
     else
-      log_with_timestamp "Cannot start FastCGI cache preload!"
+      log_with_timestamp "ERROR UNKNOWN: Cannot start FastCGI cache preload!"
       exit 1
     fi
   else
-    log_with_timestamp "PERMISSION: Cannot Purge FastCGI cache before Preloading. Please restart wp-fcgi-notify.service"
+    log_with_timestamp "ERROR PERMISSION: Cannot Purge FastCGI cache to start cache preloading. Please restart wp-fcgi-notify.service"
   fi
 }
 
@@ -281,21 +288,21 @@ purge() {
     [[ -f "${PIDFILE}" ]] && rm -f "${PIDFILE:?}"
 
     (purge_helper) && \
-    log_with_timestamp "FastCGI cache preloading is stopped, Purge FastCGI cache is completed." || \
-    log_with_timestamp "FastCGI cache preloading is stopped, Purge FastCGI cache CANNOT completed."
+    log_with_timestamp "FastCGI cache preloading is stopped. Purge FastCGI cache is completed." || \
+    log_with_timestamp "ERROR PERMISSION: FastCGI cache preloading is stopped. Purge FastCGI cache cannot completed. Please restart wp-fcgi-notify.service"
   else
     (purge_helper) && \
     log_with_timestamp "Purge FastCGI cache is completed." || \
-    log_with_timestamp "PERMISSION: Purge FastCGI cache CANNOT completed. Please restart wp-fcgi-notify.service"
+    log_with_timestamp "ERROR PERMISSION: Purge FastCGI cache cannot completed. Please restart wp-fcgi-notify.service"
   fi
 }
 
 # send mail
 mail() {
     # send mail
-    command -v mail >/dev/null 2>&1 && { 
-    message="FastCGI cache preloading is completed"; 
-    echo "$message" | mail -s "$mail_subject" -a "$mail_from" "$mail_to"; 
+    command -v mail >/dev/null 2>&1 && {
+    message="FastCGI cache preloading is completed";
+    echo "$message" | mail -s "$mail_subject" -a "$mail_from" "$mail_to";
     }
 }
 
