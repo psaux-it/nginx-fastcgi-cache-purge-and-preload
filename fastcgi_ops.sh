@@ -17,10 +17,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-# Prevent cron errors if you use this script in crontab
-# However I recommend systemd service file that I provided in github repo
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
 declare -A fcgi
 
 # MULTISITE SETTINGS - (nedded by wp-fcgi-notify.service under root)
@@ -41,53 +37,6 @@ fcgi[websiteuser1]="/home/websiteuser1/fastcgi-cache"
 fcgi[websiteuser2]="/home/websiteuser2/fastcgi-cache"
 fcgi[websiteuser3]="/home/websiteuser3/fastcgi-cache"
 #################################################################################################################
-
-# INSTANCE SETTINGS - (needed by per instance you hosting) 
-####################
-# Apart from the root copy, you must re-copy this script for each instance.
-# In this example this copied script responsible for websiteuser1.com
-# copied to e.g. /home/websiteuser1/scripts/fastcgi_ops.sh
-# and adjusted below settings for preloaad url and fastcgi cache path.
-
-# INSTANCE SETTINGS
-# STEPS
-####################
-# 1) simply replicate this script to websiteuser1 (PHP-FPM-USER) 
-#    user's $HOME directory e.g. /home/websiteuser1/scripts/fastcgi_ops.sh
-# 2) chmod +x /home/websiteuser1/scripts/fastcgi_ops.sh
-#    chown -R websiteuser1:websiteuser1 /home/websiteuser1/scripts
-# 3) copy functions.php to websiteuser1.com child theme's functions.php
-# 4) change new script path in function.php
-#    $wpfcgi = "/home/websiteuser1/scripts/fastcgi_ops.sh";
-# 5) set preload url and your fastcgi cache path for websiteuser1.com below
-
-# PHP-FPM POOL
-# SETTINGS
-#####################
-# ../fpm-php/fpm.d/websiteuser1.conf
-#
-# [websiteuser1.com]
-# user = websiteuser1
-# group = websiteuser1
-# listen.owner = nginx
-# listen.group = nginx
-# listen.mode = 0755
-# listen = /var/run/php-fcgi-websiteuser1.sock
-# ..
-
-# VALIDATE SETUP
-####################
-# getfacl /home/websiteuser1/fastcgi-cache/0/32/ab6eb4df9b94858c10a283200daa1320
-###################################################################################################################
-# getfacl:  Removing leading '/' from absolute path names
-## file:     /home/websiteuser1/fastcgi-cache/0/32/ab6eb4df9b94858c10a283200daa1320
-## owner:    nginx             --> Web-Server User (Default Owner)
-## group:    nginx             --> Web-Server Group (Default Group)
-# user:      :rw-              --> Web-Server User Permissons
-# user:      websiteuser1:rw-  --> Web-Site User and Permission (ACL) ****KEY*****
-# group:     :---
-# mask:      :rw-
-# other:     :---
 
 ###################################################################################################################
 # fastcgi-cache preload URL for websiteuser1 instance
