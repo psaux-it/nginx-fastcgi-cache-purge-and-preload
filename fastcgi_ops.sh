@@ -260,10 +260,13 @@ preload() {
     fi
   elif [[ $? -eq 1 ]]; then
     log_with_timestamp "ERROR PERMISSION: Cannot Purge FastCGI cache to start cache preloading. Please restart wp-fcgi-notify.service"
+    exit 1
   elif [[ $? -eq 2 ]]; then
     log_with_timestamp "ERROR PATH: Your FastCGI cache PATH (${fpath}) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings 3) restart nginx.service to re-create it"
+    exit 1
   else
     log_with_timestamp "ERROR UNKNOWN: Cannot Purge FastCGI cache to start cache preloading."
+    exit 1
   fi
 }
 
@@ -287,19 +290,25 @@ purge() {
       log_with_timestamp "FastCGI cache preloading is stopped. Purge FastCGI cache is completed."
     elif [[ $? -eq 1 ]]; then 
       log_with_timestamp "ERROR PERMISSION: FastCGI cache preloading is stopped but Purge FastCGI cache cannot completed. Please restart wp-fcgi-notify.service"
+      exit 1
     elif [[ $? -eq 2 ]]; then
       log_with_timestamp "ERROR PATH: Your FastCGI cache PATH (${fpath}) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service to re-create it"
+      exit 1
     else
       log_with_timestamp "ERROR UNKNOWN: Cannot Purge FastCGI cache."
+      exit 1
     fi
   elif purge_helper; then
     log_with_timestamp "Purge FastCGI cache is completed."
   elif [[ $? -eq 1 ]]; then
     log_with_timestamp "ERROR PERMISSION: Purge FastCGI cache cannot completed. Please restart wp-fcgi-notify.service"
+    exit 1
   elif [[ $? -eq 2 ]]; then
     log_with_timestamp "ERROR PATH: Your FastCGI cache PATH (${fpath}) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service to re-create it"
+    exit 1
   else
     log_with_timestamp "ERROR UNKNOWN: Cannot Purge FastCGI cache."
+    exit 1
   fi
 }
 
