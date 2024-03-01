@@ -111,22 +111,22 @@ log_with_timestamp() {
     echo "[${timestamp}] $1"
 }
 
-# discover script path
-this_script_full_path="${BASH_SOURCE[0]}"
-if command -v dirname >/dev/null 2>&1 && command -v readlink >/dev/null 2>&1 && command -v basename >/dev/null 2>&1; then
-  # Symlinks
-  while [[ -h "${this_script_full_path}" ]]; do
-    this_script_path="$( cd -P "$( dirname "${this_script_full_path}" )" >/dev/null 2>&1 && pwd )"
-    this_script_full_path="$(readlink "${this_script_full_path}")"
-    # Resolve
-    if [[ "${this_script_full_path}" != /* ]] ; then
-      this_script_full_path="${this_script_path}/${this_script_full_path}"
-    fi
-  done
-  this_script_path="$( cd -P "$( dirname "${this_script_full_path}" )" >/dev/null 2>&1 && pwd )"
-  this_script_name="$(basename "${this_script_full_path}")"
-else
-  log_with_timestamp "ERROR PATH: cannot find script path!"
+# Check if required path finder commands are available
+if ! command -v realpath >/dev/null 2>&1 || \
+   ! command -v dirname >/dev/null 2>&1 || \
+   ! command -v basename >/dev/null 2>&1; then
+  log_with_timestamp "ERROR: Required path finder commands not found!"
+  exit 1
+fi
+
+# Discover script path
+this_script_full_path=$(realpath "${BASH_SOURCE[0]}")
+this_script_path=$(dirname "${this_script_full_path}")
+this_script_name=$(basename "${this_script_full_path}")
+
+# Ensure script path is resolved
+if [[ -z "${this_script_path}" ]]; then
+  log_with_timestamp "ERROR: Cannot find script path!"
   exit 1
 fi
 
