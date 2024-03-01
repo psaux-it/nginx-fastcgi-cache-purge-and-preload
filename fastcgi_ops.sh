@@ -149,7 +149,8 @@ purge_helper() {
   if [[ -d "${fpath}" ]]; then
     rm -rf --preserve-root "${fpath:?}"/* >/dev/null 2>&1 || return 1
   else
-    log_with_timestamp "Cache directory '${fpath}' does not exist, cannot purge cache"
+    log_with_timestamp "Your FastCGI cache folder (${fpath}) not found. Please set fcgi cache path for this vhosts in relevant nginx .conf file and restart nginx.service to create it"
+    return 2
   fi
 
   # Check if the directory exists and remove it if so
@@ -216,15 +217,7 @@ preload() {
     exit 1
   fi
 
-  # check fastcgi cache path is created before preload
-  # if nginx has not yet created the cache path,
-  # wget will create cache folder with website user instead of web server user
-  # and web server user(nginx,ww-data e.g.) can't write here anymore
-  if ! [[ -d "${fpath}" ]]; then
-    log_with_timestamp "Your FastCGI cache folder (${fpath}) not found. Please set fcgi cache path for this vhosts in relevant nginx .conf file and restart nginx.service to create it"
-    exit 1
-  fi
-
+  # Exlude from preload
   reject_regex='--reject-regex "/wp-admin/|/wp-includes/|/wp-json/|/xmlrpc.php|/wp-login.php|/wp-register.php|/wp-content/|/cart/|/checkout/|/my-account/|/wc-api/"'
 
   # purge cache & obsolete website content before preload
@@ -266,8 +259,12 @@ preload() {
       log_with_timestamp "ERROR UNKNOWN: Cannot start FastCGI cache preload!"
       exit 1
     fi
-  else
+  elif [[ $? -eq 1 ]]; then
     log_with_timestamp "ERROR PERMISSION: Cannot Purge FastCGI cache to start cache preloading. Please restart wp-fcgi-notify.service"
+  elif [[ $? -eq 2 ]]; then
+    log_with_timestamp "ERROR PATH: Your FastCGI cache PATH (${fpath}) not found. 1) Check plugin settings to fix it 2) Check nginx .conf settings to fix it 3) restart nginx.service to re-create it"
+  else
+    log_with_timestamp "ERROR UNKNOWN: Cannot Purge FastCGI cache to start cache preloading."
   fi
 }
 
