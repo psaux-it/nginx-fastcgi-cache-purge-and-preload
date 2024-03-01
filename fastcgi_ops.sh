@@ -90,15 +90,17 @@ fcgi[websiteuser3]="/home/websiteuser3/fastcgi-cache"
 # other:     :---
 
 ###################################################################################################################
-fdomain="websiteuser1.com"                                    # fastcgi-cache preload URL for websiteuser1 instance
-fpath="/home/websiteuser1.com/fastcgi-cache"                  # fastcgi-cache path for websiteuser1 instance
+# fastcgi-cache preload URL for websiteuser1 instance
+fdomain="websiteuser1.com"
+# fastcgi-cache path for websiteuser1 instance
+fpath="/home/websiteuser1.com/fastcgi-cache"
 ###################################################################################################################
 
 # MAIL OPTIONS
 ###################################################################################################################
-mail_to="support@websiteuser1.com"                            # send mail to
-mail_from="From: System Automations<fcgi@websiteuser1.com>"   # mail from
-mail_subject="FastCGI-Cache Purge,Preload Ops"                # mail subject
+mail_to="support@websiteuser1.com"
+mail_from="From: System Automations<fcgi@websiteuser1.com>"
+mail_subject="FastCGI-Cache Purge,Preload Ops"
 ###################################################################################################################
 
 # get current timestamp
@@ -216,8 +218,7 @@ preload() {
     exit 1
   fi
 
-  reject_regex='--reject-regex "/wp-admin/|/wp-includes/|/wp-json/|/xmlrpc.php|/wp-login.php"'
-  reject_regex+='|/wp-register.php|/wp-content/|/cart/|/checkout/|/my-account/|/wc-api/"'
+  reject_regex='--reject-regex "/wp-admin/|/wp-includes/|/wp-json/|/xmlrpc.php|/wp-login.php|/wp-register.php|/wp-content/|/cart/|/checkout/|/my-account/|/wc-api/"'
 
   # purge cache & obsolete website content before preload
   if purge_helper; then
