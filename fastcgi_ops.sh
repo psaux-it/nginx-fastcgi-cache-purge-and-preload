@@ -52,19 +52,12 @@ mail_from="From: System Automations<fcgi@websiteuser1.com>"
 mail_subject="FastCGI-Cache Purge,Preload Ops"
 ###################################################################################################################
 
-# get current timestamp
-timestamp=$(date +"%Y-%m-%d %T")
-
-# log messages with timestamps
-log_with_timestamp() {
-    echo "[${timestamp}] $1"
-}
-
-# Check if required path finder commands are available
+# Check if required commands are available
 if ! command -v realpath >/dev/null 2>&1 || \
    ! command -v dirname >/dev/null 2>&1 || \
+   ! command -v pgrep >/dev/null 2>&1 || \
    ! command -v basename >/dev/null 2>&1; then
-  log_with_timestamp "ERROR: Required path finder commands not found!"
+  echo "ERROR COMMAND: Required commands not found!"
   exit 1
 fi
 
@@ -75,7 +68,7 @@ this_script_name=$(basename "${this_script_full_path}")
 
 # Ensure script path is resolved
 if [[ -z "${this_script_path}" ]]; then
-  log_with_timestamp "ERROR: Cannot find script path!"
+  echo "ERROR PATH: Cannot find script path!"
   exit 1
 fi
 
@@ -87,11 +80,16 @@ this_script_path="${this_script_path%%+(/)}"
 # define PID
 PIDFILE="${this_script_path}/fastcgi_ops_${fdomain%%.*}.pid"
 
-# check pgrep is exist
-if ! command -v pgrep >/dev/null 2>&1; then
-  log_with_timestamp "ERROR COMMAND: pgrep is not installed. Please install pgrep."
-  exit 1
-fi
+# define LOG
+LOGFILE="${this_script_path}/fastcgi_ops_${fdomain%%.*}.log"
+
+# get current timestamp
+timestamp=$(date +"%Y-%m-%d %T")
+
+# log messages with timestamps to both terminal and file
+log_with_timestamp() {
+    echo "[${timestamp}] $1" | tee -a "$LOGFILE"
+}
 
 # cache purge helper function
 purge_helper() {
@@ -109,7 +107,7 @@ purge_helper() {
   return 0
 }
 
-# check inotify/setfacl is working
+# check inotify/setfacl is alive
 inotify-helper() {
   if ! pgrep -f "inotifywait.*${fpath}" >/dev/null 2>&1; then
       return 1
