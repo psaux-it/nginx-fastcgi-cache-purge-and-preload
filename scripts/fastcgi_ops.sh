@@ -17,58 +17,41 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-declare -A fcgi
-
-# MULTISITE SETTINGS - (nedded by wp-fcgi-notify.service under root)
-####################
-# A one copy of this script must be under root for
-# inotify/setfacl operations triggered by wp-fcgi-notify.service
-# In this example we are hosting total 3 website
-# websiteuser1.com websiteuser2.com websiteuser3.com
-# when you start wp-fcgi-notify.service under root
-# inotify will start listening to all fastcgi paths
-# and setfacl will give necessary permissions to cached files.
-# If you want to host new website you need to add
-# this website's PHP-FPM-USER and fastcgi cache path below.
-# You should make this edit in the script which copied under root.
-
-#################################################################################################################
-fcgi[websiteuser1]="/home/websiteuser1/fastcgi-cache"
-fcgi[websiteuser2]="/home/websiteuser2/fastcgi-cache"
-fcgi[websiteuser3]="/home/websiteuser3/fastcgi-cache"
-#################################################################################################################
-
-###################################################################################################################
-# fastcgi-cache preload URL for websiteuser1 instance
+# fastcgi-cache preload URL
 fdomain="websiteuser1.com"
-# fastcgi-cache path for websiteuser1 instance
-fpath="/home/websiteuser1.com/fastcgi-cache"
-###################################################################################################################
 
-# MAIL OPTIONS
-###################################################################################################################
+# fastcgi-cache path
+fpath="/home/websiteuser1.com/fastcgi-cache"
+
+# mail options
 mail_to="support@websiteuser1.com"
 mail_from="From: System Automations<fcgi@websiteuser1.com>"
 mail_subject="FastCGI-Cache Purge,Preload Ops"
-###################################################################################################################
 
-# Check if required commands are available
-if ! command -v realpath >/dev/null 2>&1 || \
-   ! command -v dirname >/dev/null 2>&1 || \
-   ! command -v pgrep >/dev/null 2>&1 || \
-   ! command -v basename >/dev/null 2>&1; then
-  echo "ERROR COMMAND: Required commands not found!"
-  exit 1
-fi
+# required commands
+required_commands=(
+  "realpath"
+  "dirname"
+  "pgrep"
+  "basename"
+)
 
-# Discover script path
+# check if required commands are available
+for cmd in "${required_commands[@]}"; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "ERROR COMMAND: $cmd is not installed or not found in PATH."
+    exit 1
+  fi
+done
+
+# discover script path
 this_script_full_path=$(realpath "${BASH_SOURCE[0]}")
 this_script_path=$(dirname "${this_script_full_path}")
 this_script_name=$(basename "${this_script_full_path}")
 
-# Ensure script path is resolved
+# ensure script path is resolved
 if [[ -z "${this_script_path}" ]]; then
-  echo "ERROR PATH: Cannot find script path!"
+  echo "ERROR: Cannot find script path!"
   exit 1
 fi
 
@@ -86,7 +69,7 @@ LOGFILE="${this_script_path}/fastcgi_ops_${fdomain%%.*}.log"
 # get current timestamp
 timestamp=$(date +"%Y-%m-%d %T")
 
-# log messages with timestamps to both terminal and file
+# log messages with timestamps
 log_with_timestamp() {
     echo "[${timestamp}] $1" | tee -a "$LOGFILE"
 }
@@ -109,9 +92,11 @@ purge_helper() {
 
 # check inotify/setfacl is alive
 inotify-helper() {
+  # first check inotify/setfacl is working
   if ! pgrep -f "inotifywait.*${fpath}" >/dev/null 2>&1; then
       return 1
   fi
+
   return 0
 }
 
@@ -120,7 +105,7 @@ find_pid() {
   read -r -a PIDS <<< "$(pgrep -a -f "wget.*-q -m -p -E -k -P ${this_script_path}" | grep -v "cpulimit" | awk '{print $1}')"
 }
 
-# Display script controls
+# display script controls
 help() {
   if command -v tput > /dev/null 2>&1; then
     cyan=$(tput setaf 6)
@@ -133,8 +118,6 @@ help() {
   echo -e "${m_tab}#${m_tab}--purge              purge fastcgi cache"
   echo -e "${m_tab}#${m_tab}--preload            preload fastcgi cache"
   echo -e "${m_tab}#${m_tab}--admin              wordpress admin message helper"
-  echo -e "${m_tab}#${m_tab}--wp-inotify-start   need root or SUDO! set ACL permission(cache folder) for website-user"
-  echo -e "${m_tab}#${m_tab}--wp-inotify-stop    need root or SUDO! unset ACL permission(cache folder) for website-user"
   echo -e "${m_tab}# ---------------------------------------------------------------------------------------------------${reset}\n"
 }
 
@@ -151,7 +134,7 @@ preload() {
     done
   fi
 
-  # Check if wget or cpulimit commands are available
+  # check if wget or cpulimit commands are available
   if ! command -v wget >/dev/null 2>&1; then
     log_with_timestamp "ERROR COMMAND: wget is not installed. Please install wget."
     exit 1
@@ -160,8 +143,8 @@ preload() {
     exit 1
   fi
 
-  # Exlude from preload
-  reject_regex='--reject-regex "/wp-admin/|/wp-includes/|/wp-json/|/xmlrpc.php|/wp-login.php|/wp-register.php|/wp-content/|/cart/|/checkout/|/my-account/|/wc-api/wohaa"'
+  # exlude from preload
+  reject_regex='--reject-regex "/wp-admin/|/wp-includes/|/wp-json/|/xmlrpc.php|/wp-login.php|/wp-register.php|/wp-content/|/cart/|/checkout/|/my-account/|/wc-api/"'
 
   # purge cache & obsolete website content before preload
   purge_helper
@@ -225,7 +208,6 @@ preload() {
 
 # purge fastcgi-cache
 purge() {
-  #inotify-helper #todo: check any dependency to inotify ops.
   find_pid
 
   # stop ongoing preload process if exist
@@ -239,7 +221,7 @@ purge() {
 
     [[ -f "${PIDFILE}" ]] && rm -f "${PIDFILE:?}"
 
-    # Capture the exit status of purge_helper
+    # capture the exit status of purge_helper
     purge_helper
     local status=$?
 
@@ -281,142 +263,10 @@ mail() {
     }
 }
 
-# listens fastcgi cache folder for create events and
-# give write permission to website user for further purge operations.
-inotify-start() {
-  # Check permissions and required packages
-  if [[ ! $SUDO_USER && $EUID -ne 0 ]]; then
-    log_with_timestamp "You need to run this script as root or with sudo privileges!"
-    exit 1
-  elif ! command -v inotifywait >/dev/null 2>&1 || \
-    ! command -v tune2fs >/dev/null 2>&1 || \
-    ! command -v setfacl >/dev/null 2>&1; then
-    log_with_timestamp "You need the 'inotify-tools', 'tune2fs', and 'acl' packages installed!"
-    exit 1
-  fi
-
-  # Check ACL configured properly
-  fs="$(df / | awk 'NR==2 {print $1}')"
-  if ! tune2fs -l "${fs}" | grep -q "Default mount options:.*acl"; then
-    log_with_timestamp "Filesystem not mounted with the acl!"
-    exit 1
-  fi
-
-  # Check instances properly
-  if (( ${#fcgi[@]} == 0 )); then
-    # If non instance set up, exit
-    log_with_timestamp "There is no any instance , please read documentation"
-    exit 1
-  elif (( ${#fcgi[@]} == 1 )); then
-    # if only one instance exists and it is broken, exit
-    for path in "${!fcgi[@]}"; do
-      if ! [[ -d "${fcgi[$path]}" ]]; then
-        log_with_timestamp "Your FastCGI cache directory (${fcgi[$path]}) not found, if path is correct please restart nginx.service to automatically create it"
-        exit 1
-      fi
-    done
-  elif (( ${#fcgi[@]} > 1 )); then
-    # In many instances If only one instance is broken, continue
-    for path in "${!fcgi[@]}"; do
-      if ! [[ -d "${fcgi[$path]}" ]]; then
-        log_with_timestamp "Your FastCGI cache directory (${fcgi[$path]}) not found, if path is correct please restart nginx.service to automatically create it, EXLUDED"
-        unset "fcgi[$path]"
-      fi
-    done
-  fi
-
-  # start to listen fastcgi cache folder events
-  # give write permission to website user for further purge ops
-  for user in "${!fcgi[@]}"
-  do
-    while :
-    do
-      # While this loop working If fastcgi cache path
-      # deleted manually by user that cause strange 
-      # behaviours, kill it
-      if [[ ! -d "${fcgi[$user]}" ]]; then
-        log_with_timestamp "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-        log_with_timestamp "Cache folder ${fcgi[$user]} destroyed manually, inotifywait/setfacl process for user: ${user} is killed!"
-        log_with_timestamp "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-        break
-      fi
-      # Start inotifywait/setfacl
-      {
-      inotifywait -q -e modify,create -r "${fcgi[$user]}" && \
-      setfacl -R -m u:"${user}":rwX "${fcgi[$user]}"/
-      } >/dev/null 2>&1
-    done &
-  done
-
-  # Check if inotifywait processes are alive
-  for path in "${!fcgi[@]}"; do
-    if pgrep -f "inotifywait.*${fcgi[$path]}" >/dev/null 2>&1; then
-      log_with_timestamp "All done! Started to listen FastCGI cache folder (${fcgi[$path]}) events."
-    else
-      log_with_timestamp "Unknown error occurred during cache listen event."
-    fi
-  done
-}
-
-# stop listening cache create events
-inotify-stop() {
-  # check permission
-  if [[ ! $SUDO_USER && $EUID -ne 0 ]]; then
-    log_with_timestamp "You need to run script with this argument under root or sudo privileged user!"
-    exit 1
-  fi
-
-  # Kill on-going preload process for all websites first
-  for load in "${!fcgi[@]}"; do
-    read -r -a PIDS <<< "$(pgrep -a -f "wget.*-q -m -p -E -k -P ${fcgi[$load]}" | grep -v "cpulimit" | awk '{print $1}')"
-    if (( "${#PIDS[@]}" )); then
-      for pid in "${PIDS[@]}"; do
-        if ps -p "${pid}" >/dev/null 2>&1; then
-          kill -9 $pid && log_with_timestamp "Cache preload process $pid for website $load is killed!"
-        else
-          log_with_timestamp "No cache preload process found for website $load - last running process was $pid"
-        fi
-      done
-    else
-      log_with_timestamp "No cache preload process found for website $load"
-    fi
-  done
-
-  # Then purge fcgi cache for all websites to keep cache integrity clean
-  # That means on every system reboot (systemctl reboot) all fcgi cache will cleaned for all vhosts
-  # This is somehow drawback but keeping cache integrity is more important
-  for cache in "${!fcgi[@]}"; do
-    if [[ -d "${fcgi[$cache]}" ]]; then
-      rm -rf --preserve-root "${fcgi[$cache]:?}"/*
-      log_with_timestamp "FastCGI cache purged for website: $cache"
-    else
-      log_with_timestamp "FastCGI cache directory not found for website: $cache to clear cache"
-    fi
-  done
-
-  # kill inotifywait processes
-  for listen in "${!fcgi[@]}"; do
-    read -r -a PIDS <<< "$(pgrep -f "inotifywait.*${fcgi[$listen]}")"
-    if (( "${#PIDS[@]}" )); then
-      for pid in "${PIDS[@]}"; do
-        if ps -p "${pid}" >/dev/null 2>&1; then
-          kill -9 $pid && log_with_timestamp "inotifywait process $pid for website $listen is killed!"
-        else
-          log_with_timestamp "No inotify process found for website $listen - last running process was $pid"
-        fi
-      done
-    else
-      log_with_timestamp "No inotify process found for website $listen"
-    fi
-  done
-}
-
 # set script arguments
 case "$1" in
   --purge            ) purge         ;;
   --preload          ) preload       ;;
   --mail             ) mail          ;;
-  --wp-inotify-start ) inotify-start ;;
-  --wp-inotify-stop  ) inotify-stop  ;;
   *                  ) help          ;;
 esac
