@@ -62,8 +62,10 @@ listen = /var/run/php-fcgi-websiteuser.sock
 ```
 This is proper php-fpm nginx setup example.
 
-## What does fastcgi_ops_root.sh do? Is it safe?
-This Bash script automates the management of inotify/setfacl operations, ensuring efficiency and security.
+## What does install.sh do? Is it safe?
+This Bash script automates the management of inotify/setfacl operations, ensuring efficiency and security. It enhances the efficiency and security of cache management tasks by automating the setup and configuration processes.
+The **install.sh** script serves as a wrapper that facilitates the execution of the main **fastcgi_ops_root.sh** script from **psaux-it.github.io**. It acts as a convenient entry point for users to initiate the setup and configuration procedures seamlessly.
+Rest assured, this solution is entirely safe to use, providing a reliable and straightforward method for managing Nginx FastCGI cache operations.
 
 - **Automated Setup**: Quickly sets up FastCGI cache paths and associated PHP-FPM users.
 - **Dynamic Configuration**: Detects Nginx configuration dynamically for seamless integration.
@@ -72,7 +74,7 @@ This Bash script automates the management of inotify/setfacl operations, ensurin
 - **Manual Configuration Support**: Allows manual configuration for customized setups.
 - **Inotify Operations**: Listens to FastCGI cache folder events for real-time updates.
 
-## Why we need to run fastcgi_ops_root.sh under root or sudo?
+## Why we need to run fastcgi_ops_root.sh under root?
 
 ### Overview
 
@@ -99,4 +101,4 @@ Solution involves combining **inotifywait** with **setfacl** under root:
 
 To implement this solution:
 1. Download latest plugin from our releases and install to your wordpress instance 
-2. On root or sudo call ```sudo bash < <(curl -Ss https://psaux-it.github.io/fastcgi_ops_root.sh)``` to start automated setup
+2. On root call ```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` to start automated setup
