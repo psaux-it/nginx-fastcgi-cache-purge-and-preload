@@ -1,12 +1,17 @@
-# Nginx FastCGI Cache Purge & Preload for Wordpress
-![cache_preload](https://user-images.githubusercontent.com/25556606/202007501-8d9e5ab6-3330-452f-b967-6615e703a486.png)<br/>
+# Nginx FastCGI Cache Purge & Preload Plugin for Wordpress
+##### QUICK START - ONE LINER's
+
+To obtain the plugin from releases and install it on your instance, simply execute the following one-liner command at the root level to finalize the setup.
+
+```sudo bash < <(curl -Ss https://psaux-it.github.io/fastcgi_ops_root.sh)```  
+```sudo bash < <(wget -q -O - https://psaux-it.github.io/fastcgi_ops_root.sh)```
+
 ------
-![ıuoyuı](https://user-images.githubusercontent.com/25556606/202256497-15f46225-b06b-4e37-a3b6-1b2c1ff0259b.png)<br/>
-![oıu](https://user-images.githubusercontent.com/25556606/202257768-e36986ff-6bfa-4646-befe-60ed3518835a.png)<br/>
-![ouoıuy](https://user-images.githubusercontent.com/25556606/202265347-cf901dd7-65d2-4e23-b1d3-ba46ae1ddbcb.png)
+![cache_preload](https://user-images.githubusercontent.com/25556606/202007501-8d9e5ab6-3330-452f-b967-6615e703a486.png)<br/>
+![nginx](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/assets/25556606/6f288539-9c73-4eeb-a970-ad18a88b434d)
 -------
 
-Pluginless Nginx cache management solution for MULTISITE wordpress. If you have ngx_cache_purge or nginx_cache_purge modules then some wordpress plugins are available. Check Nginx Helper or Cache Sniper for Nginx. On our side none of them worked as expected so we do our best.
+Nginx cache management solution for MULTISITE wordpress.
 
 #### Integration is **NOT** straightforward if you are not native linux user and managing your own server. Ask for help! <br/> 
 ---
@@ -22,10 +27,7 @@ NGINX must run with it own unprivileged user, which is **nginx** (RHEL-based sys
 We must connect things up so that WEBSERVER-USER can read files that belong to the PHP-FPM-GROUP
 This will allow us to control what WEBSERVER-USER can read or not, via group chmod permission bit.
 ##### IMPORTANT:
-Granting additional group permissions to the "nginx/www-data" user can potentially introduce security risks
-due to the principle of least privilege. Your PHP-FPM-USER never ever be a sudo privileged. Even not in sudoer list
-still has some security drawbacks. Cause of that we will set website content's group permisson g=rX
-so "nginx/www-data" can read all files and traverse all directories, but not write.
+Granting additional group permissions to the "nginx/www-data" user can potentially introduce security risks due to the principle of least privilege. Your PHP-FPM-USER should never have sudo privileges, even if it's not listed in the sudoer list, as this can still pose security drawbacks. Therefore, we will set the website content's group permission to "g=rX" so that "nginx/www-data" can read all files and traverse all directories, but not write to them.
 
 ```
 usermod -a -G PHP-FPM-GROUP WEBSERVER-USER
@@ -33,12 +35,12 @@ usermod -a -G PHP-FPM-GROUP WEBSERVER-USER
 This reads as: add WEBSERVER-USER (nginx/www-data) to PHP-FPM-GROUP (websiteuser group).<br/>
 
 ```
-chown -R PHP-FPM-USER:PHP-FPM-GROUP /path/to/website/files
+chown -R PHP-FPM-USER:PHP-FPM-GROUP /home/websiteuser/websitefiles
 ```
 Here is a simple rule: all the files should be owned by the PHP-FPM-USER and the PHP-FPM-GROUP:
 
 ```
-chmod -R u=rwX,g=rX,o= /path/to/website/files
+chmod -R u=rwX,g=rX,o= /home/websiteuser/websitefiles
 ```
 This translates to the following:
 
@@ -47,10 +49,10 @@ This translates to the following:
 - All other users cannot read or write anything
 
 #### PHP-FPM POOL SETTINGS
-```../fpm-php/fpm.d/websiteuser1.conf```
+```../fpm-php/fpm.d/websiteuser.conf```
 
 ```
-[websiteuser1.com]
+[websiteuser.com]
 user = PHP-FPM-USER
 group = PHP-FPM-GROUP
 listen.owner = WEBSERVER-USER
@@ -58,69 +60,43 @@ listen.group = WEBSERVER-GROUP
 listen.mode = 0660
 listen = /var/run/php-fcgi-websiteuser.sock
 ```
+This is proper php-fpm nginx setup example.
 
-This is proper php-fpm nginx setup example. With this short explanation, I think you understand better which user will be owner of the **fastcgi_ops.sh** --> PHP-FPM user (website user) -- NOT nginx or www-data !
+## What does fastcgi_ops_root.sh do? Is it safe?
+This Bash script automates the management of inotify/setfacl operations, ensuring efficiency and security.
 
-### Let's Integrate
-Before starting make sure the ACL enabled on your environment. Check **/etc/fstab** and make sure acl is exist. If you don't see **acl** flag ask to google how to enable ACL on linux.
+- **Automated Setup**: Quickly sets up FastCGI cache paths and associated PHP-FPM users.
+- **Dynamic Configuration**: Detects Nginx configuration dynamically for seamless integration.
+- **ACL Verification**: Ensures filesystem ACL configuration for proper functionality.
+- **Systemd Integration**: Generates and enables systemd service for continuous operation.
+- **Manual Configuration Support**: Allows manual configuration for customized setups.
+- **Inotify Operations**: Listens to FastCGI cache folder events for real-time updates.
 
-```
-/dev/sda3 / ext4 noatime,errors=remount-ro,acl 0 1
-```
+## Why we need to run fastcgi_ops_root.sh under root or sudo?
 
-#### MULTISITE SETTINGS
+### Overview
 
-Evertime you want to add new website you need to register it to fastcgi-cache website pool first. Then continue with the setting up new INSTANCE. Because we have multiple fastcgi-cache path we need to listen all of them for **create** events via inotifywait & setfacl. This process on going under root (explained below) so it is best to keep one of the copy of main script under root. This way it is more manageable. We will use this copy for systemd service for running on boot. 
+This project addresses the challenge of automating Nginx FastCGI cache purging in Nginx environments where two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, are involved. 
 
-##### First Time Setup
+### Problem Statement
 
-1) copy **fastcgi_ops.sh** under root e.g. **/root/scripts/fastcgi_ops.sh**
-2) edit script and register your existed websites to fastcgi-cache website pool under MULTISITE SETTINGS
-3) open systemd service file (**wp-fcgi-notify.service**) and set execstart & stop script path e.g. **/root/scripts/fastcgi_ops.sh** (keep the script arguments **--wp-inotify-start** and **--wp-inotify-stop**)<br/>
-4) move **wp-fcgi-notify.service** to **/etc/systemd/system/** and start service. Check service is started without any error.
+- **WEBSERVER-USER**: Responsible for creating cache folders and files with strict permissions.
+- **PHP-FPM-USER**: Handles cache purge operations but lacks **privileges**
 
-```
-cp wp-fcgi-notify.service /etc/systemd/system/
-systemctl daemon-reload
-systemctl start wp-fcgi-notify.service
-systemctl status wp-fcgi-notify.service
-systemctl enable wp-fcgi-notify.service
-```
+### Challenges
 
-##### Add new website to fastcgi-cache website pool
+- **Permission Issues**: Adding **PHP-FPM-USER** to the **WEBSERVER-GROUP** doesn't resolve permission conflicts.
+- **Nginx Overrides**: Nginx overrides default setfacl settings, ignoring ACLs. Nginx creates cache folders and files with strict permissions.
 
-If you completed first time setup without any error, adding new website to fastcgi-cache website pool is easy.
+Surprisingly, Nginx cache doesn't adhere to ACLs. ` setfacl -R -m d:u:websiteuser:rwX /home/websiteuser/fastcgi-cache` ??
 
-1) open **/root/scripts/fastcgi_ops.sh** and register your new website under MULTISITE SETTINGS. Here **websiteuser1** is website user(php-fpm-user) you created for new **websiteuser1.com** and uses **/home/websiteuser1/fastcgi-cache** as a fastcgi-cache path. You have to use exact format when adding new website to pool.
+### Solution
 
-```
-MULTISITE SETTINGS
-fcgi[websiteuser1]="/home/websiteuser1/fastcgi-cache"
-fcgi[websiteuser2]="/home/websiteuser2/fastcgi-cache"
-fcgi[websiteuser3]="/home/websiteuser3/fastcgi-cache"
-fcgi[newwebsite1]="/home/newwebsite1/fastcgi-cache"   # Our new website registered to pool, check INSTANCE SETTINGS below
-```
+Solution involves combining **inotifywait** with **setfacl** under root:
+- **fastcgi_ops_root.sh** grants **PHP-FPM-USER** write permissions recursively for cache purge operations for multi instances.
 
-> ##### Why we need systemd service under root?
-` setfacl -R -m d:u:websiteuser:rwX /home/websiteuser/fastcgi-cache` ==NOT WORKING!==
-> Things get a little messy here. We have two user, WEBSERVER-USER and PHP-FPM-USER and cache purge operations will be done by the PHP-FPM-USER but nginx always creates the cache folder&files with the WEBSERVER-USER (with very strict permissions).
-Because of strict permissions adding PHP-FPM-USER to WEBSERVER-GROUP not solve the permission problems. The thing is even you set recursive default setfacl for cache folder, Nginx always override it, surprisingly Nginx cache isn't following ACLs also. Executing scripts with sudo privilege is not possible because PHP-FPM-USER is not sudoer. (it shouldn't be). So how we will purge nginx cache with PHP-FPM-USER? Combining **inotifywait** with **setfacl** under root is only solution that we found. **wp-fcgi-notify.service** listens **MULTIPLE** fastcgi cache folder for **create** events with help of **fastcgi_ops.sh** and give write permission recursively to PHP-FPM-USER for further cache purge operations.
+## Implementation
 
-#### INSTANCE SETTINGS
-
-Every new website you want to add is also a new instance. So when you want to add new website repeat the below steps. Don't forget to register new website to pool via MULTISITE SETTINGS that mentioned before. In this example I assume you registered new **newwebsite1.com** to fastcgi-cache website pool via MULTISITE SETTINGS and you created **newwebsite1** system user as a website user (php-fpm-user) that uses **/home/newwebsite1/fastcgi-cache** as a fastcgi-cache path.
-
-1) copy **fastcgi_ops.sh** to under new website user's home. e.g. **/home/newwebsite1/scripts/** (avoid to web root directory)<br/>
-2) change ownership of the script to the newly created **newwebsite1** via **chown -R newwebsite1:newwebsite1 /home/newwebsite1/scripts**<br/>
-3) make script executable via **chmod +x /home/newwebsite1/scripts/fastcgi_ops.sh**<br/>
-4) change your instance settings { fastcgi cache path [fpath], fastcgi cache preload domain [fdomain] } in copied **fastcgi_ops.sh** under INSTANCE SETTINGS<br/>
-```
-INSTANCE SETTINGS
-fdomain="newwebsite1.com"
-fpath="/home/newwebsite1/fastcgi-cache"
-```
-5) open **functions.php** and set new script path e.g. **/home/newwebsite1/scripts/fastcgi_ops.sh**<br/>
-```
-$wpfcgi = "/home/newwebsite1/scripts/fastcgi_ops.sh";
-```
-6) get modified functions.php codes and add to your new **child theme's functions.php**<br/>
+To implement this solution:
+1. Download latest plugin from our releases and install to your wordpress instance 
+2. On root or sudo call ```sudo bash < <(curl -Ss https://psaux-it.github.io/fastcgi_ops_root.sh)``` to start automated setup
