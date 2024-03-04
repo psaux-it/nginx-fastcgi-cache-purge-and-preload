@@ -1,10 +1,10 @@
 # Nginx FastCGI Cache Purge & Preload Plugin for Wordpress
 ##### QUICK START - ONE LINER's
 
-To obtain the plugin from releases and install it on your instance, simply execute the following one-liner command at the root level to finalize the setup.
+To obtain the plugin from releases and install it on your instance, simply execute the following one-liner command at the ROOT level.
 
-```sudo bash < <(curl -Ss https://psaux-it.github.io/fastcgi_ops_root.sh)```  
-```sudo bash < <(wget -q -O - https://psaux-it.github.io/fastcgi_ops_root.sh)```
+```bash <(curl -Ss https://psaux-it.github.io/install.sh)```  
+```bash <(wget -qO- https://psaux-it.github.io/install.sh)```
 
 ------
 ![cache_preload](https://user-images.githubusercontent.com/25556606/202007501-8d9e5ab6-3330-452f-b967-6615e703a486.png)<br/>
