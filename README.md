@@ -88,7 +88,7 @@ This project addresses the challenge of automating Nginx FastCGI cache purging i
 - **Permission Issues**: Adding **PHP-FPM-USER** to the **WEBSERVER-GROUP** doesn't resolve permission conflicts.
 - **Nginx Overrides**: Nginx overrides default setfacl settings, ignoring ACLs. Nginx creates cache folders and files with strict permissions.
 
-Surprisingly, Nginx cache doesn't adhere to ACLs. ` setfacl -R -m d:u:websiteuser:rwX /home/websiteuser/fastcgi-cache` ??
+Surprisingly, Nginx cache doesn't adhere to DEFAULT ACLs. ` setfacl -R -m d:u:websiteuser:rwX /home/websiteuser/fastcgi-cache` ??
 
 ### Solution
 
