@@ -66,16 +66,19 @@ if ! tune2fs -l "${fs}" | grep -q "Default mount options:.*acl"; then
   exit 1
 fi
 
-# Discover script path
-this_script_full_path=$(realpath "${BASH_SOURCE[0]}")
-this_script_path=$(dirname "${this_script_full_path}")
-this_script_name=$(basename "${this_script_full_path}")
+# Symlinks
+this_script_full_path="${BASH_SOURCE[0]}"
+while [[ -h "${this_script_full_path}" ]]; do
+  this_script_path="$( cd -P "$( dirname "${this_script_full_path}" )" >/dev/null 2>&1 && pwd )"
+  this_script_full_path="$(readlink "${this_script_full_path}")"
+	# Resolve
+	if [[ "${this_script_full_path}" != /* ]] ; then
+	  this_script_full_path="${this_script_path}/${this_script_full_path}"
+	fi
+done
 
-# Ensure script path is resolved
-if [[ -z "${this_script_path}" ]]; then
-  echo "ERROR PATH: Cannot find script path!"
-  exit 1
-fi
+this_script_path="$( cd -P "$( dirname "${this_script_full_path}" )" >/dev/null 2>&1 && pwd )"
+this_script_name="$(basename "${this_script_full_path}")"
 
 # Enable extglob
 # Remove trailing / (removes / and //) from script path
