@@ -1,7 +1,7 @@
 # Nginx FastCGI Cache Purge & Preload Plugin for Wordpress
 ##### QUICK START - ONE LINER's
 
-To obtain the plugin from releases and install it on your instance, simply execute the following one-liner command at the ROOT level.
+To obtain the plugin from releases and install it on your wordpress instance, simply execute the following one-liner command at the **ROOT** level.
 
 ```bash <(curl -Ss https://psaux-it.github.io/install.sh)```  
 ```bash <(wget -qO- https://psaux-it.github.io/install.sh)```
@@ -9,13 +9,13 @@ To obtain the plugin from releases and install it on your instance, simply execu
 ------
 ![cache_preload](https://user-images.githubusercontent.com/25556606/202007501-8d9e5ab6-3330-452f-b967-6615e703a486.png)<br/>
 ![nginx](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/assets/25556606/6f288539-9c73-4eeb-a970-ad18a88b434d)
--------
 
 Nginx cache management solution for MULTISITE wordpress.
-
-#### Integration is **NOT** straightforward if you are not native linux user and managing your own server. Ask for help! <br/> 
+#### Integration is straightforward if you are not native linux user and managing your own server. Ask for help! <br/>
 ---
-
+<details>
+  <summary>Here is the short explanation of proper php-fpm nginx setup</summary>
+  
 ### Here is the short explanation of proper php-fpm nginx setup<br/>
 #### PHP-FPM-USER (as known as the website user)
 The PHP-FPM user should be a special user that you create for running your website, whether it is Magento, WordPress, or anything.
@@ -61,6 +61,8 @@ listen.mode = 0660
 listen = /var/run/php-fcgi-websiteuser.sock
 ```
 This is proper php-fpm nginx setup example.
+
+</details>
 
 ## What does install.sh do? Is it safe?
 This Bash script automates the management of inotify/setfacl operations, ensuring efficiency and security. It enhances the efficiency and security of cache management tasks by automating the setup and configuration processes.
