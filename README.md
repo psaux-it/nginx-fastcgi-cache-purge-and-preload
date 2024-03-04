@@ -65,6 +65,8 @@ This is proper php-fpm nginx setup example.
 </details>
 
 ## What does install.sh do? Is it safe?
+![Screenshot 2024-03-04 193017](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/assets/25556606/c9062e6d-4c47-4938-9abe-c0ec43ae9428)<br/>
+
 This Bash script automates the management of inotify/setfacl operations, ensuring efficiency and security. It enhances the efficiency and security of cache management tasks by automating the setup and configuration processes.
 The **install.sh** script serves as a wrapper that facilitates the execution of the main **fastcgi_ops_root.sh** script from **psaux-it.github.io**. It acts as a convenient entry point for users to initiate the setup and configuration procedures seamlessly.
 Rest assured, this solution is entirely safe to use, providing a reliable and straightforward method for managing Nginx FastCGI cache operations.
