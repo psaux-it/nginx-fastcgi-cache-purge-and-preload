@@ -105,19 +105,27 @@ detect_nginx_conf() {
 
 # Function to extract FastCGI cache paths from NGINX configuration files
 extract_fastcgi_cache_paths() {
-  # Extract paths from nginx.conf
-  grep -E "^\s*fastcgi_cache_path\s+" "$NGINX_CONF" | awk '{print $2}'
+  {
+    # Extract paths from directly nginx.conf
+    grep -E "^\s*fastcgi_cache_path\s+" "$NGINX_CONF" | awk '{print $2}'
 
-  # Extract paths from vhost configuration files included in nginx.conf
-  while IFS= read -r include_line; do
-    include_path=$(echo "$include_line" | awk '{print $2}' | sed 's/;//')
-    # Handle wildcard (*) in the include path
-    if [[ -n "$include_path" && "$include_path" != *\** ]]; then
-      if [[ -f "$include_path" ]]; then
-        grep -E "^\s*fastcgi_cache_path\s+" "$include_path" 2>/dev/null | awk '{print $2}'
+    # Also get included paths to nginx.conf and extract fastcgi cache paths
+    while IFS= read -r include_line; do
+      include_path=$(echo "$include_line" | awk '{print $2}')
+      # Check wildcard for multiple files
+      if [[ "${include_path}" == *"*"* ]]; then
+        # Remove wildcard, slash, get the exact path
+        target_dir=$(echo "$include_path" | sed 's/\*.*//' | sed 's/\/$//')
+      else
+        # This is a directly included single file
+        grep -E "^\s*fastcgi_cache_path\s+" "${include_path}" | awk '{print $2}'
       fi
-    fi
-  done < <(grep -E "^\s*include\s+" "$NGINX_CONF" | grep -v "^\s*#" | awk '{print $2}' | sed 's/;//')
+      # Search for fastcgi_cache_path in the target directory recursively
+      if [ -d "${target_dir}" ]; then
+        find -L "${target_dir}" -type f -exec grep -H "fastcgi_cache_path" {} + | awk -F: '{print $2":"$3}' | sed '/^\s*#/d' | awk '{print $2}'
+      fi
+    done < <(grep -E "^\s*include\s+" "${NGINX_CONF}" | grep -v "^\s*#" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/;//')
+  } | sort | uniq
 }
 
 # Detect nginx.conf
