@@ -6,8 +6,11 @@ Author URI: https://www.psauxit.com
 License: GPL2
 */
 
-// Function to crawl the website and retrieve links
-function crawl_website($url) {
+// Include the reject_regex
+require_once plugin_dir_path( __FILE__ ) . 'includes/reject_regex.php';
+
+// Function to crawl the website and retrieve links, excluding certain endpoints
+function crawl_website($url, $reject_regex) {
     $response = wp_remote_get($url);
     if (is_wp_error($response)) {
         return [];
@@ -20,6 +23,10 @@ function crawl_website($url) {
 
     foreach ($dom->getElementsByTagName('a') as $a) {
         $href = $a->getAttribute('href');
+        // Check if the link matches any rejected endpoint
+        if (preg_match($reject_regex, $href)) {
+            continue; // Skip crawling this link
+        }
         if (!empty($href) && strpos($href, '#') !== 0) {
             $links[] = $href;
         }
@@ -28,20 +35,8 @@ function crawl_website($url) {
     return $links;
 }
 
-// Function to preload cache for given URLs
-function preload_cache($urls) {
-    foreach ($urls as $url) {
-        $response = wp_remote_get($url);
-        // Optionally, you can check the response status code or body content here
-        // For example, wp_remote_retrieve_response_code($response) will give you the HTTP status code
-
-        // You may also want to add some delay between requests to avoid overwhelming the server
-        usleep(100000); // Sleep for 100 milliseconds (adjust as needed)
-    }
-}
-
-// Function to crawl and preload cache for the website
-function crawl_and_preload() {
+// Function to crawl and preload cache for the website, considering exclusion regex
+function crawl_and_preload($reject_regex) {
     // Get the home URL of the WordPress site
     $start_url = home_url();
 
@@ -49,13 +44,13 @@ function crawl_and_preload() {
     $visited_urls = [];
 
     // Crawl the website starting from the home URL
-    crawl_and_preload_recursive($start_url, $visited_urls);
+    crawl_and_preload_recursive($start_url, $visited_urls, $reject_regex);
 }
 
-// Recursive function to crawl the website and preload cache
-function crawl_and_preload_recursive($url, &$visited_urls) {
-    // Retrieve links from the current URL
-    $links = crawl_website($url);
+// Recursive function to crawl the website and preload cache, considering exclusion regex
+function crawl_and_preload_recursive($url, &$visited_urls, $reject_regex) {
+    // Retrieve links from the current URL, excluding rejected URLs
+    $links = crawl_website($url, $reject_regex);
 
     // Preload cache for the current URL
     preload_cache([$url]);
@@ -71,7 +66,7 @@ function crawl_and_preload_recursive($url, &$visited_urls) {
             // Add URL to visited URLs array
             $visited_urls[] = $link;
             // Crawl and preload cache for the current URL recursively
-            crawl_and_preload_recursive($link, $visited_urls);
+            crawl_and_preload_recursive($link, $visited_urls, $reject_regex);
         }
     }
 }
