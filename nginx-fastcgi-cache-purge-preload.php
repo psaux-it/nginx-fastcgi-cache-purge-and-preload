@@ -249,11 +249,6 @@ function nginx_cache_logs_callback() {
         $cleaned_lines = array_map(function($line) {
             return trim($line);
         }, $latest_lines);
-
-        // Find the length of the longest line
-        //$max_length = max(array_map('strlen', $cleaned_lines));
-        // Set the width of the logs container based on the length of the longest line
-        //$container_style = 'width: ' . ($max_length * 8) . 'px;'; // Assuming average character width of 8px
         ?>
         <div class="logs-container">
             <?php
