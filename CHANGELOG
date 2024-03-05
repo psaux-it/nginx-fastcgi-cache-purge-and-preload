@@ -1,0 +1,17 @@
+#v2.0.0
+1) Write all admin notices also to log file
+2) Set default width for Logs field instead of auto line lenght
+3) Cpu Limit can't be under %10
+4) Add hook to reset plugin settings on deactivation
+5) Fixed: Options not updating the script accordingly
+          via 1) Set default values for options
+          via 2) Automatically update the bash script
+                 with default values when the plugin
+                 is activated or reactivated.
+6) Added cache_preloader.php to replicate same wget
+   functionality with Wordpress HTTP API and DOMDocument
+   for preloading ops for further development. Aiming to
+   make plugin not depend any external bash script.
+
+#v1.0.0
+first release
