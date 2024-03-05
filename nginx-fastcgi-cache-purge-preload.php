@@ -10,7 +10,7 @@ License: GPL2
 */
 
 // Include the cache preloader file
-require_once(plugin_dir_path(__FILE__) . 'cache_preloader.php');
+require_once plugin_dir_path( __FILE__ ) . 'includes/cache_preloader.php';
 
 // Add buttons to WordPress admin bar
 function add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
