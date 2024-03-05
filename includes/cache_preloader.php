@@ -7,7 +7,7 @@ License: GPL2
 */
 
 // Include the reject_regex
-require_once plugin_dir_path( __FILE__ ) . 'includes/reject_regex.php';
+require_once plugin_dir_path( __FILE__ ) . 'reject_regex.php';
 
 // Function to crawl the website and retrieve links, excluding certain endpoints
 function crawl_website($url, $reject_regex) {
