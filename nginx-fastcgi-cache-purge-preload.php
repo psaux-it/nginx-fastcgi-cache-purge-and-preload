@@ -9,6 +9,9 @@ Author URI: https://www.psauxit.com
 License: GPL2
 */
 
+// Include the cache preloader file
+require_once(plugin_dir_path(__FILE__) . 'cache_preloader.php');
+
 // Add buttons to WordPress admin bar
 function add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     // Check if the user has permissions to manage options
@@ -80,6 +83,13 @@ add_action('admin_init', 'handle_fastcgi_cache_actions_admin_bar');
 // Display admin notices
 function display_admin_notice($type, $message) {
     echo '<div class="notice notice-' . $type . '"><p>' . esc_html($message) . '</p></div>';
+
+    // Write to the log file
+    $log_file_path = find_log_file(); // Get the path to the log file
+    if (!empty($log_file_path)) {
+        $log_message = '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL;
+        file_put_contents($log_file_path, $log_message, FILE_APPEND);
+    }
 }
 
 // Function to find the path to the bash script
@@ -163,6 +173,7 @@ function nginx_cache_settings_page() {
             overflow-x: auto;
             max-height: 300px;
             overflow-y: auto;
+            width: 800px;
         }
         .error-line {
             color: #FF5252;
@@ -220,10 +231,9 @@ function nginx_cache_cpu_limit_callback() {
 
 // Callback function to display the Reject Regex field
 function nginx_cache_reject_regex_callback() {
-    $options = get_option('nginx_cache_settings');
     $default_reject_regex = fetch_default_reject_regex_from_bash_script(); // Fetch default value
+    $options = get_option('nginx_cache_settings');
     echo "<textarea id='nginx_cache_reject_regex' name='nginx_cache_settings[nginx_cache_reject_regex]' rows='5' cols='50'>" . esc_textarea($options['nginx_cache_reject_regex'] ?? $default_reject_regex) . "</textarea>";
-    //echo "<input type='text' id='nginx_cache_reject_regex' name='nginx_cache_settings[nginx_cache_reject_regex]' value='" . esc_attr($options['nginx_cache_reject_regex'] ?? $default_reject_regex) . "' />";
 }
 
 // Callback function to display the Logs field
@@ -241,11 +251,11 @@ function nginx_cache_logs_callback() {
         }, $latest_lines);
 
         // Find the length of the longest line
-        $max_length = max(array_map('strlen', $cleaned_lines));
+        //$max_length = max(array_map('strlen', $cleaned_lines));
         // Set the width of the logs container based on the length of the longest line
-        $container_style = 'width: ' . ($max_length * 8) . 'px;'; // Assuming average character width of 8px
+        //$container_style = 'width: ' . ($max_length * 8) . 'px;'; // Assuming average character width of 8px
         ?>
-        <div class="logs-container" style="<?php echo $container_style; ?>">
+        <div class="logs-container">
             <?php
             // Output the latest 10 lines
             foreach ($cleaned_lines as $line) {
@@ -326,14 +336,14 @@ function nginx_cache_settings_sanitize($input) {
     if (isset($input['nginx_cache_cpu_limit'])) {
         // Validate CPU limit
         $cpu_limit = intval($input['nginx_cache_cpu_limit']);
-        if ($cpu_limit >= 0 && $cpu_limit <= 100) {
+        if ($cpu_limit >= 10 && $cpu_limit <= 100) {
             $sanitized_input['nginx_cache_cpu_limit'] = $cpu_limit;
         } else {
             // CPU limit is not within range, add error message
             add_settings_error(
                 'nginx_cache_settings_group',
                 'invalid-cpu-limit',
-                'Please enter a CPU limit between 0 and 100.',
+                'Please enter a CPU limit between 10 and 100.',
                 'error'
             );
         }
@@ -378,6 +388,12 @@ add_action('admin_menu', function () {
 
 // Initialize settings
 add_action('admin_init', 'nginx_cache_settings_init');
+
+// Function to reset plugin settings on deactivation
+function reset_plugin_settings_on_deactivation() {
+    delete_option('nginx_cache_settings');
+}
+register_deactivation_hook(__FILE__, 'reset_plugin_settings_on_deactivation');
 
 // Function to prepare fastcgi_ops.sh by setting file permissions and converting line endings when the plugin is activated
 function prepare_fastcgi_script() {
@@ -455,12 +471,33 @@ function update_bash_script_with_user_options() {
 }
 add_action('update_option_nginx_cache_settings', 'update_bash_script_with_user_options');
 
+// Function to find the user's home folder
 function find_user_home_folder() {
-    // Check if the $_SERVER['HOME'] variable is set
+    // Use $_SERVER['HOME'] if available
     if (isset($_SERVER['HOME'])) {
         return $_SERVER['HOME'];
-    } else {
-        // Fall back to using the current user's directory as a fallback
-        return get_current_user();
     }
+    // Use $_SERVER['HOMEDRIVE'] and $_SERVER['HOMEPATH'] if available
+    if (isset($_SERVER['HOMEDRIVE']) && isset($_SERVER['HOMEPATH'])) {
+        return $_SERVER['HOMEDRIVE'] . $_SERVER['HOMEPATH'];
+    }
+    // Fallback to a default directory
+    return '/home/your-php-fpm-user';
 }
+
+// Automatically update the bash script with default values when the plugin is activated or reactivated
+function update_bash_script_on_plugin_activation() {
+    // Extract the domain from the WordPress site URL
+    $domain = str_replace('www.', '', parse_url(get_site_url(), PHP_URL_HOST));
+
+    // Define default options
+    $default_options = array(
+        'nginx_cache_path' => find_user_home_folder() . '/change-me-84',
+        'nginx_cache_email' => 'your-email@' . $domain,
+        'nginx_cache_cpu_limit' => 50,
+        'nginx_cache_reject_regex' => fetch_default_reject_regex_from_bash_script(),
+    );
+    update_option('nginx_cache_settings', $default_options);
+    update_bash_script_with_user_options(); // Update bash script with default values
+}
+register_activation_hook(__FILE__, 'update_bash_script_on_plugin_activation');
