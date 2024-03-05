@@ -83,13 +83,6 @@ add_action('admin_init', 'handle_fastcgi_cache_actions_admin_bar');
 // Display admin notices
 function display_admin_notice($type, $message) {
     echo '<div class="notice notice-' . $type . '"><p>' . esc_html($message) . '</p></div>';
-
-    // Write to the log file
-    $log_file_path = find_log_file(); // Get the path to the log file
-    if (!empty($log_file_path)) {
-        $log_message = '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL;
-        file_put_contents($log_file_path, $log_message, FILE_APPEND);
-    }
 }
 
 // Function to find the path to the bash script
