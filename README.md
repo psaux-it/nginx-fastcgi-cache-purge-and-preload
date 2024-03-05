@@ -99,11 +99,11 @@ Surprisingly, Nginx cache doesn't adhere to DEFAULT ACLs.<br/>
 
 ### Solution
 
-Solution involves combining **inotifywait** with **setfacl** under root:
+Solution involves combining **inotifywait** with **setfacl** under **root**:
 - **fastcgi_ops_root.sh** grants **PHP-FPM-USER** write permissions recursively for cache purge operations for multi instances.
 
 ## Implementation
 
 To implement this solution:
-1. Download latest plugin from our releases and install to your wordpress instance 
-2. On root call ```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` to start automated setup
+1. Download latest [plugin](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/releases/tag/v1.0.0) from our releases and install to your wordpress instance 
+2. On **root** call ```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` to start automated setup
