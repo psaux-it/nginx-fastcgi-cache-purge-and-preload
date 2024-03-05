@@ -82,7 +82,7 @@ Rest assured, this solution is entirely safe to use, providing a reliable and st
 
 ### Overview
 
-This project addresses the challenge of automating Nginx FastCGI cache purging in Nginx environments where two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, are involved. 
+This project addresses the challenge of automating Nginx FastCGI cache purging and preloading in Nginx environments where two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, are involved. 
 
 ### Problem Statement
 
