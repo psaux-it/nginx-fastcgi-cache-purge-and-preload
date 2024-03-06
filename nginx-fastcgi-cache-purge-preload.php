@@ -346,18 +346,12 @@ function nginx_cache_settings_sanitize($input) {
 
 // Validate the fastcgi cache path format
 function validate_path($path) {
-    // Get the user's home directory
-    $user_home_folder = find_user_home_folder();
-
-    // Check if the path starts with the user's home directory
-    if (strpos($path, $user_home_folder) !== 0) {
+    // Check if the path is empty, starts with /, and is not just a single slash or /root/
+    if (empty($path) || $path[0] !== '/' || $path === '/' || $path === '/root/') {
         return false;
     }
 
-    // Check if the path is the same as the user's home directory followed by a slash
-    if ($path === $user_home_folder . '/') {
-        return false;
-    }
+    // Check for any additional validation if needed
 
     return true;
 }
