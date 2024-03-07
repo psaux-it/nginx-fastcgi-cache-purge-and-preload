@@ -94,18 +94,22 @@ function check_processes_status() {
         return;
     } elseif (get_option(CRAWL_AND_VISIT_OPTION) === 'completed') {
         // Retrieve the Nginx Cache Email setting value
-        $nginx_cache_email = get_option('nginx_cache_settings')['nginx_cache_email'];
+        $options = get_option('nginx_cache_settings');
+        // Retrieve the Nginx Cache Email setting value
+        $nginx_cache_email = isset($options['nginx_cache_email']) ? $options['nginx_cache_email'] : '';
+        // Check if Send Mail is checked
+        $send_mail = isset($options['nginx_cache_send_mail']) && $options['nginx_cache_send_mail'] === 'yes';
         // Only send if user customized email address and send mail enabled
         $default_email = 'your-email@example.com';
-        if (!empty($nginx_cache_email) && $nginx_cache_email !== $default_email) {     
+        if ($send_mail && !empty($nginx_cache_email) && $nginx_cache_email !== $default_email) {
             // Extract the domain from the WordPress site URL
             $domain = str_replace('www.', '', parse_url(get_site_url(), PHP_URL_HOST));
-            // Define mail_from address with correct domain
-            $mail_from = "From: Nginx FastCGI Cache Purge Preload Wordpress<fcgi@$domain>";
+            // Set mail_from address with user domain
+            $mail_from = "From: Nginx FastCGI Cache Purge Preload Wordpress<fcgi-cache@$domain>";
             // Mail subject
-            $mail_subject = "FastCGI-Cache Purge, Preload Ops";
+            $mail_subject = "$domain-NGINX FastCGI Cache Preload";
             // Mail message
-            $mail_message = "The FastCGI cache preload operation has been completed.";
+            $mail_message = "The NGINX FastCGI Preload operation has been completed for $domain.";
             // Send email
             wp_mail($nginx_cache_email, $mail_subject, $mail_message, $mail_from);
         }
@@ -177,6 +181,7 @@ function nginx_cache_settings_init() {
     add_settings_field('nginx_cache_email', 'Email Address', 'nginx_cache_email_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
     add_settings_field('nginx_cache_cpu_limit', 'CPU Usage Limit for Cache Preloading (0-100)', 'nginx_cache_cpu_limit_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
     add_settings_field('nginx_cache_reject_regex', 'Excluded endpoints from cache preloading', 'nginx_cache_reject_regex_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
+    add_settings_field('nginx_cache_send_mail', 'Send Mail', 'nginx_cache_send_mail_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
     add_settings_field('nginx_cache_logs', 'Logs', 'nginx_cache_logs_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
 }
 
@@ -200,6 +205,13 @@ function nginx_cache_cpu_limit_callback() {
     $options = get_option('nginx_cache_settings');
     $default_cpu_limit = 50; // Default CPU limit value
     echo "<input type='number' id='nginx_cache_cpu_limit' name='nginx_cache_settings[nginx_cache_cpu_limit]' min='10' max='100' value='" . esc_attr($options['nginx_cache_cpu_limit'] ?? $default_cpu_limit) . "' />";
+}
+
+// Callback function to display the Send Mail field
+function nginx_cache_send_mail_callback() {
+    $options = get_option('nginx_cache_settings');
+    $send_mail_checked = isset($options['nginx_cache_send_mail']) ? checked($options['nginx_cache_send_mail'], 'yes', false) : ''; // Check if the option is set and set 'checked' attribute accordingly
+    echo "<input type='checkbox' id='nginx_cache_send_mail' name='nginx_cache_settings[nginx_cache_send_mail]' value='yes' $send_mail_checked />";
 }
 
 // Callback function to display the Reject Regex field
