@@ -55,21 +55,19 @@ add_action('admin_bar_menu', 'add_fastcgi_cache_buttons_admin_bar', 100);
 function handle_fastcgi_cache_actions_admin_bar() {
     // Check if the buttons are clicked
     if (isset($_GET['purge_cache']) || isset($_GET['preload_cache'])) {
-        $fastcgi_script_path = find_fastcgi_script_path(); // Find the path to the bash script
-        // Check if the bash script path is set
-        if (empty($fastcgi_script_path)) {
-            display_admin_notice('error', 'FastCGI operations script path is not configured!');
-            return;
-        }
-
         // Determine action based on button click
-        $action = isset($_GET['purge_cache']) ? '--purge' : '--preload';
+        $action = isset($_GET['purge_cache']) ? 'purge' : 'preload';
 
-        // Call the bash script with the determined action
-        $output = shell_exec($fastcgi_script_path . ' ' . escapeshellarg($action));
+        // Retrieve the Nginx FastCGI Cache Path setting value
+        $nginx_cache_path = get_option('nginx_cache_path');
 
-        // Remove timestamp from output
-        $output = preg_replace('/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]/', '', $output);
+        // Call the appropriate function based on the action and pass the cache path
+        $output = '';
+        if ($action === 'purge') {
+            $output = purge($nginx_cache_path);
+        } elseif ($action === 'preload') {
+            $output = crawl_and_visit();
+        }
 
         // Determine notice type based on the presence of error keywords
         $notice_type = stripos($output, 'ERROR') !== false ? 'error' : 'success';
@@ -85,63 +83,23 @@ function display_admin_notice($type, $message) {
     echo '<div class="notice notice-' . $type . '"><p>' . esc_html($message) . '</p></div>';
 }
 
-// Function to find the path to the bash script
-function find_fastcgi_script_path() {
-    $plugin_dir = plugin_dir_path(__FILE__);
-    $bash_script_path = $plugin_dir . 'scripts/fastcgi_ops.sh';
-    if (file_exists($bash_script_path)) {
-        return $bash_script_path;
-    }
-    return '';
-}
-
 // Function to check preload process status
 function check_processes_status() {
-    $fastcgi_script_path = find_fastcgi_script_path(); // Find the path to the bash script
-    // Check if the bash script path is set and not empty
-    if (empty($fastcgi_script_path)) {
-        $fastcgi_script_path = find_fastcgi_script_path(); // Find the path to the bash script
-        if (empty($fastcgi_script_path)) {
-            return;
-        }
-    }
+    // If the process is running, display admin notice for preload in progress
+    if (get_option(CRAWL_AND_VISIT_OPTION) === 'in_progress') {
+        display_admin_notice('info', 'FastCGI cache preload is in progress...');
+        return;
+    } elseif (get_option(CRAWL_AND_VISIT_OPTION) === 'completed') {
+        // Display admin notice for completed preload
+        $notice_message = 'FastCGI cache preload is completed!';
+        display_admin_notice('success', $notice_message);
 
-    // Extract directory from the script path
-    $script_directory = dirname($fastcgi_script_path);
+        // Write to the log file
+        $log_file_path = find_log_file(); // Get the path to the log file
+        !empty($log_file_path) ? file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $notice_message . PHP_EOL, FILE_APPEND) : die("Log file not found!");
 
-    // Find the PID file with the name 'fastcgi_ops_*' in the script directory
-    $pid_files = glob("$script_directory/fastcgi_ops_*.pid");
-
-    // Check if there's a PID file
-    if (!empty($pid_files)) {
-        // Get the first PID file
-        $pid_file = $pid_files[0];
-
-        // Check if the PID file exists
-        if (file_exists($pid_file)) {
-            // Read the PID file
-            $pids = file($pid_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-
-            // Check if the process is running
-            $process_running = posix_kill($pids[0], 0);
-
-            // If the process is running, display admin notice for preload in progress
-            if ($process_running) {
-                display_admin_notice('info', 'FastCGI cache preload is in progress...');
-                return;
-            } else {
-                // Display admin notice for completed preload
-                $notice_message = 'FastCGI cache preload is completed!';
-                display_admin_notice('success', $notice_message);
-
-                // Write to the log file
-                $log_file_path = find_log_file(); // Get the path to the log file
-                !empty($log_file_path) ? file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $notice_message . PHP_EOL, FILE_APPEND) : die("Log file not found!");
-
-                // If the process is not running, delete the PID file
-                unlink($pid_file);
-            }
-        }
+        // If the process is not running, delete the PID file
+        delete_option(CRAWL_AND_VISIT_OPTION);
     }
 }
 add_action('admin_init', 'check_processes_status');
@@ -224,7 +182,7 @@ function nginx_cache_cpu_limit_callback() {
 
 // Callback function to display the Reject Regex field
 function nginx_cache_reject_regex_callback() {
-    $default_reject_regex = fetch_default_reject_regex_from_bash_script(); // Fetch default value
+    $default_reject_regex = fetch_default_reject_regex_from_php_file(); // Fetch default value
     $options = get_option('nginx_cache_settings');
     echo "<textarea id='nginx_cache_reject_regex' name='nginx_cache_settings[nginx_cache_reject_regex]' rows='5' cols='50'>" . esc_textarea($options['nginx_cache_reject_regex'] ?? $default_reject_regex) . "</textarea>";
 }
@@ -277,17 +235,17 @@ function find_log_file() {
     return '';
 }
 
-// Function to fetch default Reject Regex from bash script
-function fetch_default_reject_regex_from_bash_script() {
-    $bash_script_path = find_fastcgi_script_path(); // Function to find bash script path
-    if (!empty($bash_script_path)) {
-        $script_content = file_get_contents($bash_script_path);
-        $regex_match = preg_match('/reject_regex=\'(.+?)\'/i', $script_content, $matches);
+// Function to fetch default Reject Regex from PHP file
+function fetch_default_reject_regex_from_php_file() {
+    $php_file_path = plugin_dir_path(__FILE__) . 'includes/reject_regex.php'; // Path to the PHP file
+    if (file_exists($php_file_path)) {
+        $file_content = file_get_contents($php_file_path);
+        $regex_match = preg_match('/\$reject_regex\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
         if ($regex_match && isset($matches[1])) {
             return $matches[1];
         }
     }
-    return ''; // Default value if not found or script path is empty
+    return ''; // Default value if not found or file doesn't exist
 }
 
 function nginx_cache_settings_sanitize($input) {
@@ -377,82 +335,6 @@ function reset_plugin_settings_on_deactivation() {
 }
 register_deactivation_hook(__FILE__, 'reset_plugin_settings_on_deactivation');
 
-// Function to prepare fastcgi_ops.sh by setting file permissions and converting line endings when the plugin is activated
-function prepare_fastcgi_script() {
-    $fastcgi_script_path = find_fastcgi_script_path(); // Find the path to the bash script
-    if (empty($fastcgi_script_path)) {
-        display_admin_notice('error', 'FastCGI script path not found.');
-        return; // Cannot prepare script if path is not found
-    }
-
-    // Read the contents of the file
-    $scriptContent = file_get_contents($fastcgi_script_path);
-    if ($scriptContent === false) {
-        display_admin_notice('error', 'Failed to read the content of the file: ' . $fastcgi_script_path);
-        return;
-    }
-
-    // Convert line endings from DOS to Unix format
-    $unixContent = str_replace("\r\n", "\n", $scriptContent);
-
-    // Write the modified content back to the file
-    $writeResult = file_put_contents($fastcgi_script_path, $unixContent);
-    if ($writeResult === false) {
-        display_admin_notice('error', 'Failed to write modified content to the file: ' . $fastcgi_script_path);
-        return;
-    }
-
-    // Set file permissions using chmod()
-    $chmodResult = chmod($fastcgi_script_path, 0755);
-    if (!$chmodResult) {
-        display_admin_notice('error', 'Failed to set file permissions for: ' . $fastcgi_script_path);
-        return;
-    }
-}
-register_activation_hook(__FILE__, 'prepare_fastcgi_script');
-
-// Update the function to edit the bash script with user options
-function update_bash_script_with_user_options() {
-    $options = get_option('nginx_cache_settings');
-    if ($options && isset($options['nginx_cache_path']) && isset($options['nginx_cache_email']) && isset($options['nginx_cache_cpu_limit'])) {
-        $fastcgi_script_path = find_fastcgi_script_path(); // Find the path to the bash script
-        if (empty($fastcgi_script_path)) {
-            return; // Cannot update script if path is not found
-        }
-
-        // Determine the user's home folder for default cache path
-        $default_cache_path = find_user_home_folder() . '/change-me-84';
-
-        // Extract the domain from the WordPress site URL
-        $domain = str_replace('www.', '', parse_url(get_site_url(), PHP_URL_HOST));
-
-        // Read the current content of the bash script
-        $content = file_get_contents($fastcgi_script_path);
-
-        // Replace the specified variables with the new values
-        $reject_regex = escapeshellarg($options['nginx_cache_reject_regex']);
-        $reject_regex = str_replace("'", "", $reject_regex);
-        $email = escapeshellarg($options['nginx_cache_email']);
-        $email = str_replace("'", "", $email);
-        $cache_path = escapeshellarg($options['nginx_cache_path'] ?? $default_cache_path);
-        $cache_path = str_replace("'", "", $cache_path);
-        $cpu_limit = intval($options['nginx_cache_cpu_limit']);
-        $cpu_limit = str_replace("'", "", $cpu_limit);
-
-        // Replace variables in the bash script content
-        $content = preg_replace('/reject_regex=\'[^\']*\'/', "reject_regex='$reject_regex'", $content);
-        $content = preg_replace('/fpath=\s*["\']([^"\']*)["\']/', "fpath=\"$cache_path\"", $content);
-        $content = preg_replace('/mail_to=\s*["\']([^"\']*)["\']/', "mail_to=\"$email\"", $content);
-        $content = preg_replace('/fdomain=\s*["\']([^"\']*)["\']/', "fdomain=\"$domain\"", $content);
-        $content = preg_replace('/mail_from="From: System Automations<fcgi@[^"]*"/', "mail_from=\"From: System Automations<fcgi@$domain>\"", $content);
-        $content = preg_replace('/cpulimit -l \d+/', "cpulimit -l $cpu_limit", $content);
-
-        // Write the updated content back to the bash script
-        file_put_contents($fastcgi_script_path, $content);
-    }
-}
-add_action('update_option_nginx_cache_settings', 'update_bash_script_with_user_options');
-
 // Function to find the user's home folder
 function find_user_home_folder() {
     // Use $_SERVER['HOME'] if available
@@ -464,22 +346,21 @@ function find_user_home_folder() {
         return $_SERVER['HOMEDRIVE'] . $_SERVER['HOMEPATH'];
     }
     // Fallback to a default directory
-    return '/home/your-php-fpm-user';
+    return '/some/path';
 }
 
 // Automatically update the bash script with default values when the plugin is activated or reactivated
-function update_bash_script_on_plugin_activation() {
+function update_default_options_on_plugin_activation() {
     // Extract the domain from the WordPress site URL
     $domain = str_replace('www.', '', parse_url(get_site_url(), PHP_URL_HOST));
 
     // Define default options
     $default_options = array(
-        'nginx_cache_path' => find_user_home_folder() . '/change-me-84',
+        'nginx_cache_path' => find_user_home_folder() . '/change-me-nginx',
         'nginx_cache_email' => 'your-email@' . $domain,
         'nginx_cache_cpu_limit' => 50,
-        'nginx_cache_reject_regex' => fetch_default_reject_regex_from_bash_script(),
+        'nginx_cache_reject_regex' => fetch_default_reject_regex_from_php_file(),
     );
     update_option('nginx_cache_settings', $default_options);
-    update_bash_script_with_user_options(); // Update bash script with default values
 }
-register_activation_hook(__FILE__, 'update_bash_script_on_plugin_activation');
+register_activation_hook(__FILE__, 'update_default_options_on_plugin_activation');
