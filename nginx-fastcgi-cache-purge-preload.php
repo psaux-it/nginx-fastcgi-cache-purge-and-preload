@@ -169,18 +169,20 @@ function nginx_cache_settings_section_callback() {
 
 function nginx_cache_path_callback() {
     $options = get_option('nginx_cache_settings');
-    $default_cache_path = find_user_home_folder() . '/change-me-84';
+    $default_cache_path = find_user_home_folder() . '/change-me-now';
     echo "<input type='text' id='nginx_cache_path' name='nginx_cache_settings[nginx_cache_path]' value='" . esc_attr($options['nginx_cache_path'] ?? $default_cache_path) . "' />";
 }
 
 function nginx_cache_email_callback() {
     $options = get_option('nginx_cache_settings');
-    echo "<input type='text' id='nginx_cache_email' name='nginx_cache_settings[nginx_cache_email]' value='" . esc_attr($options['nginx_cache_email']) . "' />";
+    $default_email = 'your-email@example.com'; // Default email value
+    echo "<input type='text' id='nginx_cache_email' name='nginx_cache_settings[nginx_cache_email]' value='" . esc_attr($options['nginx_cache_email'] ?? $default_email) . "' />";
 }
 
 function nginx_cache_cpu_limit_callback() {
     $options = get_option('nginx_cache_settings');
-    echo "<input type='number' id='nginx_cache_cpu_limit' name='nginx_cache_settings[nginx_cache_cpu_limit]' min='0' max='100' value='" . esc_attr($options['nginx_cache_cpu_limit']) . "' />";
+    $default_cpu_limit = 50; // Default CPU limit value
+    echo "<input type='number' id='nginx_cache_cpu_limit' name='nginx_cache_settings[nginx_cache_cpu_limit]' min='10' max='100' value='" . esc_attr($options['nginx_cache_cpu_limit'] ?? $default_cpu_limit) . "' />";
 }
 
 // Callback function to display the Reject Regex field
