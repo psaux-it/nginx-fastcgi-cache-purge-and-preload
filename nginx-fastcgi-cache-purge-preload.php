@@ -69,7 +69,7 @@ function handle_fastcgi_cache_actions_admin_bar() {
         if ($action === 'purge') {
             $output = purge($nginx_cache_path);
         } elseif ($action === 'preload') {
-            $output = crawl_and_visit();
+            $output = crawl_and_visit($nginx_cache_path);
         }
 
         // Determine notice type based on the presence of error keywords
