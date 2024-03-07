@@ -6,12 +6,6 @@ Author URI: https://www.psauxit.com
 License: GPL2
 */
 
-// Include the reject_regex
-require_once plugin_dir_path( __FILE__ ) . 'reject_regex.php';
-
-// Include purge operations
-require_once plugin_dir_path( __FILE__ ) . 'cache_purger.php';
-
 // Define user agent constant
 define('PLUGIN_USER_AGENT', 'MyNginxCachePreloaderBot/1.0');
 
