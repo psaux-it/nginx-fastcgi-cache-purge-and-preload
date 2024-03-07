@@ -15,9 +15,6 @@ require_once plugin_dir_path( __FILE__ ) . 'cache_purger.php';
 // Define user agent constant
 define('PLUGIN_USER_AGENT', 'MyNginxCachePreloaderBot/1.0');
 
-// Define a constant for the option key
-define('CRAWL_AND_VISIT_OPTION', 'crawl_and_visit_status');
-
 // Function to crawl the website and retrieve links, excluding certain endpoints
 function crawl_website($url, $reject_regex) {
     $args = ['user-agent' => PLUGIN_USER_AGENT];
