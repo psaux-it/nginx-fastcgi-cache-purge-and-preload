@@ -9,6 +9,9 @@ License: GPL2
 // Include the reject_regex
 require_once plugin_dir_path( __FILE__ ) . 'reject_regex.php';
 
+// Include purge operations
+require_once plugin_dir_path( __FILE__ ) . 'cache_purger.php';
+
 // Define user agent constant
 define('PLUGIN_USER_AGENT', 'MyNginxCachePreloaderBot/1.0');
 
@@ -102,7 +105,7 @@ function crawl_and_visit($reject_regex) {
         update_option(CRAWL_AND_VISIT_OPTION, 'completed');
     } else {
         // Notify the user that the operation is already in progress
-        echo "Crawl and visit operation is already in progress. Please wait until it completes.";
+        echo "INFO PRELOAD: FastCGI cache is already preloading, If you want stop it now use FCGI Cache Purge";
     }
 }
 
