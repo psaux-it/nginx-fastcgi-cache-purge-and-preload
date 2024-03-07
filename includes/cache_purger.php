@@ -1,6 +1,6 @@
 <?php
 /*
-Description: Automatically purge  Nginx cache
+Description: Automatically purge Nginx cache
 Author: Hasan ÇALIŞIR | hasan.calisir@psauxit.com
 Author URI: https://www.psauxit.com
 License: GPL2
@@ -9,15 +9,17 @@ License: GPL2
 // FastCGI Cache path
 $fpath = "/home/websiteuser1.com/fastcgi-cache";
 
-// Function to find process IDs related to the preload process
-function find_pid() {
-    global $PIDS;
-    $PIDS = array();
-
-    exec("pgrep -a -f 'wget.*-q -m -p -E -k -P' .dirname(__FILE__).'/preload.php' | grep -v 'cpulimit' | awk '{print $1}'", $output);
-
-    foreach ($output as $pid) {
-        $PIDS[] = $pid;
+// Stop preload process before purge
+function stop_crawl_and_visit() {
+    // Check if the crawl and visit operation is in progress
+    if (get_option(CRAWL_AND_VISIT_OPTION) === 'in_progress') {
+        // Delete the option to stop the ongoing process
+        delete_option(CRAWL_AND_VISIT_OPTION);
+        // Return true to indicate success
+        return true;
+    } else {
+        // Return false to indicate failure
+        return false;
     }
 }
 
@@ -29,13 +31,21 @@ function purge_helper() {
     if (is_dir($fpath)) {
         // Remove all files and subdirectories
         $files = glob($fpath . "/*");
+        
         foreach ($files as $file) {
             if (is_dir($file)) {
                 // Remove directory recursively
-                array_map('unlink', glob("$file/*.*"));
-                rmdir($file);
+                $result = array_map('unlink', glob("$file/*.*"));
+                if (in_array(false, $result, true)) {
+                    return 1;
+                }
+                if (!rmdir($file)) {
+                    return 1;
+                }
             } else {
-                unlink($file);
+                if (!unlink($file)) {
+                    return 1;
+                }
             }
         }
 
@@ -66,28 +76,8 @@ function display_admin_notice($message, $type = 'info') {
 function purge() {
     global $fpath;
 
-    // Call find_pid() to find preload process IDs
-    find_pid();
-
     // Stop ongoing preload process if exist
-    global $PIDS;
-    if (!empty($PIDS)) {
-        foreach ($PIDS as $pid) {
-            // Check if the process is running
-            $output = array();
-            exec("ps -p $pid", $output);
-            if (!empty($output)) {
-                // If running, kill the process
-                exec("kill -9 $pid");
-            }
-        }
-
-        // Remove PID file if exists
-        $pidfile = dirname(__FILE__) . "/fastcgi_ops_" . substr(strstr(basename(__FILE__), "."), 1) . ".pid";
-        if (file_exists($pidfile)) {
-            unlink($pidfile);
-        }
-
+    if (stop_crawl_and_visit()) {
         // Call purge_helper() to purge cache
         $status = purge_helper();
 
