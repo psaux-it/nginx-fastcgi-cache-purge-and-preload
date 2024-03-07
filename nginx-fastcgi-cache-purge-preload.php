@@ -315,7 +315,7 @@ function validate_path($path) {
 }
 
 // Add settings page
-add_action('admin_menu', function () {
+function add_nginx_cache_settings_page() {
     add_submenu_page(
         'options-general.php',
         'Nginx Cache Settings',
@@ -324,7 +324,8 @@ add_action('admin_menu', function () {
         'nginx_cache_settings',
         'nginx_cache_settings_page'
     );
-});
+}
+add_action('admin_menu', 'add_nginx_cache_settings_page');
 
 // Initialize settings
 add_action('admin_init', 'nginx_cache_settings_init');
