@@ -349,7 +349,7 @@ function find_user_home_folder() {
     return '/some/path';
 }
 
-// Automatically update the bash script with default values when the plugin is activated or reactivated
+// Automatically update the default options when the plugin is activated or reactivated
 function update_default_options_on_plugin_activation() {
     // Extract the domain from the WordPress site URL
     $domain = str_replace('www.', '', parse_url(get_site_url(), PHP_URL_HOST));
