@@ -24,22 +24,24 @@ function stop_crawl_and_visit() {
 function purge_helper($nginx_cache_path) {
     // Check if the cache directory exists
     if (is_dir($nginx_cache_path)) {
-        // Remove all files and subdirectories
-        $files = glob($nginx_cache_path . "/*");
+        // Get all files and directories in the cache directory
+        $files = scandir($nginx_cache_path);
         
+        // Remove . and .. from the list of files
+        $files = array_diff($files, array('.', '..'));
+
         foreach ($files as $file) {
-            if (is_dir($file)) {
-                // Remove directory recursively
-                $result = array_map('unlink', glob("$file/*.*"));
-                if (in_array(false, $result, true)) {
-                    return 1;
-                }
-                if (!rmdir($file)) {
-                    return 1;
+            $file_path = $nginx_cache_path . '/' . $file;
+            if (is_dir($file_path)) {
+                // Recursively remove directory
+                $success = remove_directory($file_path);
+                if (!$success) {
+                    return 1; // Error occurred while deleting directory
                 }
             } else {
-                if (!unlink($file)) {
-                    return 1;
+                // Remove file
+                if (!unlink($file_path)) {
+                    return 1; // Error occurred while deleting file
                 }
             }
         }
@@ -49,16 +51,6 @@ function purge_helper($nginx_cache_path) {
         return 2; // Error: Cache directory not found
     }
 }
-
-// Function to display admin notices
-//function display_admin_notice($message, $type = 'info') {
-//    $types = array('info', 'success', 'error');
-//    if (!in_array($type, $types)) {
-//        $type = 'info'; // Default to info if invalid type
-//    }
-//    $class = ($type === 'error') ? 'error' : 'updated';
-//    echo "<div class='$class notice'><p>$message</p></div>";
-// }
 
 // Function to purge FastCGI cache
 function purge($nginx_cache_path) {
