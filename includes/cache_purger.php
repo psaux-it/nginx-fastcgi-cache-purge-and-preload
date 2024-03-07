@@ -26,7 +26,7 @@ function purge_helper($nginx_cache_path) {
     if (is_dir($nginx_cache_path)) {
         // Get all files and directories in the cache directory
         $files = scandir($nginx_cache_path);
-        
+
         // Remove . and .. from the list of files
         $files = array_diff($files, array('.', '..'));
 
@@ -71,7 +71,7 @@ function purge($nginx_cache_path) {
         } else {
             display_admin_notice("ERROR UNKNOWN: Cannot Purge FastCGI cache.", 'error');
             exit(1);
-        }   
+        }
     } else {
         // If preload process is not ongoing, call purge_helper() and handle the status accordingly
         $status = purge_helper($nginx_cache_path);
