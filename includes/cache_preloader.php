@@ -12,6 +12,9 @@ require_once plugin_dir_path( __FILE__ ) . 'reject_regex.php';
 // Define user agent constant
 define('PLUGIN_USER_AGENT', 'MyNginxCachePreloaderBot/1.0');
 
+// Define a constant for the option key
+define('CRAWL_AND_VISIT_OPTION', 'crawl_and_visit_status');
+
 // Function to crawl the website and retrieve links, excluding certain endpoints
 function crawl_website($url, $reject_regex) {
     $args = ['user-agent' => PLUGIN_USER_AGENT];
@@ -78,17 +81,29 @@ function parse_robots_txt() {
 
 // Function to crawl and visit website links, respecting exclusion regex and robots.txt rules, and checking for broken links
 function crawl_and_visit($reject_regex) {
-    // Get the home URL of the WordPress site
-    $start_url = home_url();
+    // Check if the crawl and visit operation is in progress
+    if (get_option(CRAWL_AND_VISIT_OPTION) !== 'in_progress') {
+        // Set the option to indicate that the operation is in progress
+        update_option(CRAWL_AND_VISIT_OPTION, 'in_progress');
 
-    // Keep track of visited URLs to avoid crawling the same page multiple times
-    $visited_urls = [];
+        // Get the home URL of the WordPress site
+        $start_url = home_url();
 
-    // Parse robots.txt
-    $robots_rules = parse_robots_txt();
+        // Keep track of visited URLs to avoid crawling the same page multiple times
+        $visited_urls = [];
 
-    // Crawl the website starting from the home URL
-    crawl_and_visit_recursive($start_url, $visited_urls, $reject_regex, $robots_rules);
+        // Parse robots.txt
+        $robots_rules = parse_robots_txt();
+
+        // Crawl the website starting from the home URL
+        crawl_and_visit_recursive($start_url, $visited_urls, $reject_regex, $robots_rules);
+
+        // Set the option to indicate that the operation has finished
+        update_option(CRAWL_AND_VISIT_OPTION, 'completed');
+    } else {
+        // Notify the user that the operation is already in progress
+        echo "Crawl and visit operation is already in progress. Please wait until it completes.";
+    }
 }
 
 // Recursive function to crawl the website and visit links, considering exclusion regex and robots.txt rules, and checking for broken links
