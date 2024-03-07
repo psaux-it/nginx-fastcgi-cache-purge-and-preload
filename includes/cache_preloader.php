@@ -82,12 +82,9 @@ function parse_robots_txt() {
     return $rules;
 }
 
-function inotify_helper() {
-    // Access the global variable $fpath
-    global $fpath;
-    
+function inotify_helper($nginx_cache_path) {
     // Execute pgrep command to search for inotifywait process
-    $output = shell_exec("pgrep -f 'inotifywait.*$fpath'");
+    $output = shell_exec("pgrep -f 'inotifywait.*$nginx_cache_path'");
 
     // Check if output is not empty (indicating process found)
     if (!empty($output)) {
@@ -98,16 +95,16 @@ function inotify_helper() {
 }
 
 // Function to crawl and visit website links, respecting exclusion regex and robots.txt rules, and checking for broken links
-function crawl_and_visit($reject_regex) {
+function crawl_and_visit($reject_regex, $nginx_cache_path) {
     // Check if the crawl and visit operation is in progress
     if (get_option(CRAWL_AND_VISIT_OPTION) !== 'in_progress') {
         // Call purge_helper() to purge cache before preload
-        $status = purge_helper();
+        $status = purge_helper($nginx_cache_path);
 
         // Check the status returned by purge_helper()
         if ($status === 0) {
             # Check inotify/setfacl operations started on root
-            if (!inotify_helper()) {
+            if (!inotify_helper($nginx_cache_path)) {
                 echo "ERROR INOTIFY: Please start inotify service via 'systemctl start wp-fcgi-notify' first";
                 exit(1);
             }
@@ -133,7 +130,7 @@ function crawl_and_visit($reject_regex) {
             echo "ERROR PERMISSION: Cannot Purge FastCGI cache to start cache preloading. Please restart wp-fcgi-notify.service";
             exit(1);
         } elseif ($status === 2) {
-            echo "ERROR PATH: Your FastCGI cache PATH ($fpath) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service 3) Restart wp-fcgi-notify.service";
+            echo "ERROR PATH: Your FastCGI cache PATH ($nginx_cache_path) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service 3) Restart wp-fcgi-notify.service";
             exit(1);
         } else {
             echo "ERROR UNKNOWN: Cannot Purge FastCGI cache to start cache preloading.";
@@ -222,6 +219,3 @@ function is_url_allowed_by_robots($url, $robots_rules) {
     // If no Disallow rule matches, the URL is allowed
     return true;
 }
-
-// Call the preload function
-// crawl_and_visit();
