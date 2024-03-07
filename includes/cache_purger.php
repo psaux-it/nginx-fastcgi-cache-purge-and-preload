@@ -44,13 +44,6 @@ function purge_helper($nginx_cache_path) {
             }
         }
 
-        // Check if www.fdomain directory exists and remove it
-        $www_domain_dir = dirname(__FILE__) . "/www." . strstr(basename(__FILE__), ".", true);
-        if (is_dir($www_domain_dir)) {
-            array_map('unlink', glob("$www_domain_dir/*.*"));
-            rmdir($www_domain_dir);
-        }
-
         return 0; // Success
     } else {
         return 2; // Error: Cache directory not found
@@ -58,14 +51,14 @@ function purge_helper($nginx_cache_path) {
 }
 
 // Function to display admin notices
-function display_admin_notice($message, $type = 'info') {
-    $types = array('info', 'success', 'error');
-    if (!in_array($type, $types)) {
-        $type = 'info'; // Default to info if invalid type
-    }
-    $class = ($type === 'error') ? 'error' : 'updated';
-    echo "<div class='$class notice'><p>$message</p></div>";
-}
+//function display_admin_notice($message, $type = 'info') {
+//    $types = array('info', 'success', 'error');
+//    if (!in_array($type, $types)) {
+//        $type = 'info'; // Default to info if invalid type
+//    }
+//    $class = ($type === 'error') ? 'error' : 'updated';
+//    echo "<div class='$class notice'><p>$message</p></div>";
+// }
 
 // Function to purge FastCGI cache
 function purge($nginx_cache_path) {
@@ -86,12 +79,13 @@ function purge($nginx_cache_path) {
         } else {
             display_admin_notice("ERROR UNKNOWN: Cannot Purge FastCGI cache.", 'error');
             exit(1);
-        }
-    } elseif (purge_helper($nginx_cache_path)) {
-        display_admin_notice("Purge FastCGI cache is completed.", 'success');
+        }   
     } else {
+        // If preload process is not ongoing, call purge_helper() and handle the status accordingly
         $status = purge_helper($nginx_cache_path);
-        if ($status === 1) {
+        if ($status === 0) {
+            display_admin_notice("Purge FastCGI cache is completed.", 'success');
+        } elseif ($status === 1) {
             display_admin_notice("ERROR PERMISSION: Purge FastCGI cache cannot be completed. Please restart wp-fcgi-notify.service", 'error');
             exit(1);
         } elseif ($status === 2) {
