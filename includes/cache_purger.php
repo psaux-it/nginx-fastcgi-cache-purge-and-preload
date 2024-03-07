@@ -7,6 +7,7 @@ License: GPL2
 */
 
 // FastCGI Cache path
+global $fpath;
 $fpath = "/home/websiteuser1.com/fastcgi-cache";
 
 // Stop preload process before purge
