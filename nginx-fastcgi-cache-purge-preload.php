@@ -93,6 +93,23 @@ function check_processes_status() {
         display_admin_notice('info', 'FastCGI cache preload is in progress...');
         return;
     } elseif (get_option(CRAWL_AND_VISIT_OPTION) === 'completed') {
+        // Retrieve the Nginx Cache Email setting value
+        $nginx_cache_email = get_option('nginx_cache_settings')['nginx_cache_email'];
+        // Only send if user customized email address and send mail enabled
+        $default_email = 'your-email@example.com';
+        if (!empty($nginx_cache_email) && $nginx_cache_email !== $default_email) {     
+            // Extract the domain from the WordPress site URL
+            $domain = str_replace('www.', '', parse_url(get_site_url(), PHP_URL_HOST));
+            // Define mail_from address with correct domain
+            $mail_from = "From: Nginx FastCGI Cache Purge Preload Wordpress<fcgi@$domain>";
+            // Mail subject
+            $mail_subject = "FastCGI-Cache Purge, Preload Ops";
+            // Mail message
+            $mail_message = "The FastCGI cache preload operation has been completed.";
+            // Send email
+            wp_mail($nginx_cache_email, $mail_subject, $mail_message, $mail_from);
+        }
+            
         // Display admin notice for completed preload
         $notice_message = 'FastCGI cache preload is completed!';
         display_admin_notice('success', $notice_message);
@@ -343,13 +360,10 @@ function find_user_home_folder() {
 
 // Automatically update the default options when the plugin is activated or reactivated
 function update_default_options_on_plugin_activation() {
-    // Extract the domain from the WordPress site URL
-    $domain = str_replace('www.', '', parse_url(get_site_url(), PHP_URL_HOST));
-
     // Define default options
     $default_options = array(
         'nginx_cache_path' => find_user_home_folder() . '/change-me-nginx',
-        'nginx_cache_email' => 'your-email@' . $domain,
+        'nginx_cache_email' => 'your-email@example.com',
         'nginx_cache_cpu_limit' => 50,
         'nginx_cache_reject_regex' => fetch_default_reject_regex_from_php_file(),
     );
