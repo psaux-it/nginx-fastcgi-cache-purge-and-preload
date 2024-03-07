@@ -163,3 +163,6 @@ function is_url_allowed_by_robots($url, $robots_rules) {
     // If no Disallow rule matches, the URL is allowed
     return true;
 }
+
+// Call the preload function
+// crawl_and_visit();
