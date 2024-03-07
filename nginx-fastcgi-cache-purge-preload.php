@@ -9,8 +9,15 @@ Author URI: https://www.psauxit.com
 License: GPL2
 */
 
+// Define a constant for the option key if not already defined
+// Required for both preload and purge ops
+if (!defined('CRAWL_AND_VISIT_OPTION')) {
+    define('CRAWL_AND_VISIT_OPTION', 'crawl_and_visit_status');
+}
+
 // Include the purge & preload
 require_once plugin_dir_path( __FILE__ ) . 'includes/cache_preloader.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/cache_purger.php';
 
 // Define a constant for the log file path
 define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
@@ -64,12 +71,15 @@ function handle_fastcgi_cache_actions_admin_bar() {
         // Retrieve the Nginx FastCGI Cache Path setting value
         $nginx_cache_path = get_option('nginx_cache_path');
 
+        // Retrieve the reject regex from the included file
+        $reject_regex = fetch_default_reject_regex_from_php_file();
+
         // Call the appropriate function based on the action and pass the cache path
         $output = '';
         if ($action === 'purge') {
             $output = purge($nginx_cache_path);
         } elseif ($action === 'preload') {
-            $output = crawl_and_visit($nginx_cache_path);
+            $output = crawl_and_visit($reject_regex, $nginx_cache_path);
         }
 
         // Determine notice type based on the presence of error keywords
