@@ -106,8 +106,12 @@ function crawl_and_visit($reject_regex) {
     }
 }
 
-// Recursive function to crawl the website and visit links, considering exclusion regex and robots.txt rules, and checking for broken links
 function crawl_and_visit_recursive($url, &$visited_urls, $reject_regex, $robots_rules) {
+    // Control preload process
+    if (get_option(CRAWL_AND_VISIT_OPTION) !== 'in_progress') {
+        return; // Stop crawling if the option is no longer in progress
+    }
+
     // Check if the URL is allowed by robots.txt rules
     if (!is_url_allowed_by_robots($url, $robots_rules)) {
         return; // Skip crawling this URL if disallowed by robots.txt
