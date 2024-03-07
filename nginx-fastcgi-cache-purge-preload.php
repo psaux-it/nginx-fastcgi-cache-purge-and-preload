@@ -12,6 +12,9 @@ License: GPL2
 // Include the purge & preload
 require_once plugin_dir_path( __FILE__ ) . 'includes/cache_preloader.php';
 
+// Define a constant for the log file path
+define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
+
 // Add buttons to WordPress admin bar
 function add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     // Check if the user has permissions to manage options
@@ -95,7 +98,7 @@ function check_processes_status() {
         display_admin_notice('success', $notice_message);
 
         // Write to the log file
-        $log_file_path = find_log_file(); // Get the path to the log file
+        $log_file_path = NGINX_CACHE_LOG_FILE; // path to the log file
         !empty($log_file_path) ? file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $notice_message . PHP_EOL, FILE_APPEND) : die("Log file not found!");
 
         // If the process is not running, delete the PID file
@@ -189,7 +192,7 @@ function nginx_cache_reject_regex_callback() {
 
 // Callback function to display the Logs field
 function nginx_cache_logs_callback() {
-    $log_file_path = find_log_file();
+    $log_file_path = NGINX_CACHE_LOG_FILE;
     if (!empty($log_file_path)) {
         // Read the log file into an array of lines
         $lines = file($log_file_path);
@@ -221,18 +224,6 @@ function nginx_cache_logs_callback() {
     } else {
         echo '<div class="logs-container">Log file not found.</div>';
     }
-}
-
-// Function to find the log file
-function find_log_file() {
-    $plugin_dir = plugin_dir_path(__FILE__);
-    $log_files = glob($plugin_dir . 'scripts/fastcgi_ops_*.log');
-    if (!empty($log_files)) {
-        // Find the latest log file based on modification time
-        $latest_log_file = max($log_files);
-        return $latest_log_file;
-    }
-    return '';
 }
 
 // Function to fetch default Reject Regex from PHP file
@@ -308,9 +299,7 @@ function validate_path($path) {
     if (empty($path) || $path[0] !== '/' || $path === '/' || $path === '/root/') {
         return false;
     }
-
     // Check for any additional validation if needed
-
     return true;
 }
 
