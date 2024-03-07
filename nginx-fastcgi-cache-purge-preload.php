@@ -371,7 +371,7 @@ function find_user_home_folder() {
 }
 
 // Automatically update the default options when the plugin is activated or reactivated
-function update_default_options_on_plugin_activation() {
+function defaults_on_plugin_activation() {
     // Define default options
     $default_options = array(
         'nginx_cache_path' => find_user_home_folder() . '/change-me-nginx',
@@ -380,5 +380,15 @@ function update_default_options_on_plugin_activation() {
         'nginx_cache_reject_regex' => fetch_default_reject_regex_from_php_file(),
     );
     update_option('nginx_cache_settings', $default_options);
+
+    // Create the log file if it doesn't exist
+    $log_file_path = NGINX_CACHE_LOG_FILE;
+    if (!file_exists($log_file_path)) {
+        $log_file_created = touch($log_file_path);
+        if (!$log_file_created) {
+            // Log file creation failed, handle error accordingly
+            error_log('Failed to create log file: ' . $log_file_path);
+        }
+    }
 }
-register_activation_hook(__FILE__, 'update_default_options_on_plugin_activation');
+register_activation_hook(__FILE__, 'defaults_on_plugin_activation');
