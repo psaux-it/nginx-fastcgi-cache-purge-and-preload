@@ -82,37 +82,74 @@ function parse_robots_txt() {
     return $rules;
 }
 
+function inotify_helper() {
+    // Access the global variable $fpath
+    global $fpath;
+    
+    // Execute pgrep command to search for inotifywait process
+    $output = shell_exec("pgrep -f 'inotifywait.*$fpath'");
+
+    // Check if output is not empty (indicating process found)
+    if (!empty($output)) {
+        return true; // Return true indicating process is alive
+    } else {
+        return false; // Return false indicating process is not alive
+    }
+}
+
 // Function to crawl and visit website links, respecting exclusion regex and robots.txt rules, and checking for broken links
 function crawl_and_visit($reject_regex) {
     // Check if the crawl and visit operation is in progress
     if (get_option(CRAWL_AND_VISIT_OPTION) !== 'in_progress') {
-        // Set the option to indicate that the operation is in progress
-        update_option(CRAWL_AND_VISIT_OPTION, 'in_progress');
+        // Call purge_helper() to purge cache before preload
+        $status = purge_helper();
 
-        // Get the home URL of the WordPress site
-        $start_url = home_url();
+        // Check the status returned by purge_helper()
+        if ($status === 0) {
+            # Check inotify/setfacl operations started on root
+            if (!inotify_helper()) {
+                echo "ERROR INOTIFY: Please start inotify service via 'systemctl start wp-fcgi-notify' first";
+                exit(1);
+            }
+            
+            // Set the option to indicate that the operation is in progress
+            update_option(CRAWL_AND_VISIT_OPTION, 'in_progress');
 
-        // Keep track of visited URLs to avoid crawling the same page multiple times
-        $visited_urls = [];
+            // Get the home URL of the WordPress site
+            $start_url = home_url();
 
-        // Parse robots.txt
-        $robots_rules = parse_robots_txt();
+            // Keep track of visited URLs to avoid crawling the same page multiple times
+            $visited_urls = [];
 
-        // Crawl the website starting from the home URL
-        crawl_and_visit_recursive($start_url, $visited_urls, $reject_regex, $robots_rules);
+            // Parse robots.txt
+            $robots_rules = parse_robots_txt();
 
-        // Set the option to indicate that the operation has finished
-        update_option(CRAWL_AND_VISIT_OPTION, 'completed');
+            // Crawl the website starting from the home URL
+            crawl_and_visit_recursive($start_url, $visited_urls, $reject_regex, $robots_rules);
+
+            // Set the option to indicate that the operation has finished
+            update_option(CRAWL_AND_VISIT_OPTION, 'completed');
+        } elseif ($status === 1) {
+            echo "ERROR PERMISSION: Cannot Purge FastCGI cache to start cache preloading. Please restart wp-fcgi-notify.service";
+            exit(1);
+        } elseif ($status === 2) {
+            echo "ERROR PATH: Your FastCGI cache PATH ($fpath) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service 3) Restart wp-fcgi-notify.service";
+            exit(1);
+        } else {
+            echo "ERROR UNKNOWN: Cannot Purge FastCGI cache to start cache preloading.";
+            exit(1);
+        }
     } else {
         // Notify the user that the operation is already in progress
         echo "INFO PRELOAD: FastCGI cache is already preloading, If you want stop it now use FCGI Cache Purge";
+        exit(1);
     }
 }
 
 function crawl_and_visit_recursive($url, &$visited_urls, $reject_regex, $robots_rules) {
     // Control preload process
     if (get_option(CRAWL_AND_VISIT_OPTION) !== 'in_progress') {
-        return; // Stop crawling if the option is no longer in progress
+        exit(1); // Stop crawling if the option is no longer in progress
     }
 
     // Check if the URL is allowed by robots.txt rules
