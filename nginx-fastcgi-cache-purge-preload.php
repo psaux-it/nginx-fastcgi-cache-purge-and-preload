@@ -75,18 +75,11 @@ function handle_fastcgi_cache_actions_admin_bar() {
         $reject_regex = fetch_default_reject_regex_from_php_file();
 
         // Call the appropriate function based on the action and pass the cache path
-        $output = '';
         if ($action === 'purge') {
-            $output = purge($nginx_cache_path);
+            purge($nginx_cache_path);
         } elseif ($action === 'preload') {
-            $output = crawl_and_visit($reject_regex, $nginx_cache_path);
+            crawl_and_visit($reject_regex, $nginx_cache_path);
         }
-
-        // Determine notice type based on the presence of error keywords
-        $notice_type = stripos($output, 'ERROR') !== false ? 'error' : 'success';
-
-        // Display admin notice
-        display_admin_notice($notice_type, $output);
     }
 }
 add_action('admin_init', 'handle_fastcgi_cache_actions_admin_bar');
@@ -94,13 +87,16 @@ add_action('admin_init', 'handle_fastcgi_cache_actions_admin_bar');
 // Display admin notices
 function display_admin_notice($type, $message) {
     echo '<div class="notice notice-' . $type . '"><p>' . esc_html($message) . '</p></div>';
+    // Write to the log file
+    $log_file_path = NGINX_CACHE_LOG_FILE; // path to the log file
+    !empty($log_file_path) ? file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $notice_message . PHP_EOL, FILE_APPEND) : die("Log file not found!");
 }
 
 // Function to check preload process status
 function check_processes_status() {
     // If the process is running, display admin notice for preload in progress
     if (get_option(CRAWL_AND_VISIT_OPTION) === 'in_progress') {
-        display_admin_notice('info', 'FastCGI cache preload is in progress...');
+        display_admin_notice('info', 'INFO: FastCGI cache preload is in progress...');
         return;
     } elseif (get_option(CRAWL_AND_VISIT_OPTION) === 'completed') {
         // Retrieve the Nginx Cache Email setting value
@@ -125,12 +121,7 @@ function check_processes_status() {
         }
             
         // Display admin notice for completed preload
-        $notice_message = 'FastCGI cache preload is completed!';
-        display_admin_notice('success', $notice_message);
-
-        // Write to the log file
-        $log_file_path = NGINX_CACHE_LOG_FILE; // path to the log file
-        !empty($log_file_path) ? file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $notice_message . PHP_EOL, FILE_APPEND) : die("Log file not found!");
+        display_admin_notice('success', 'SUCCESS: FastCGI cache preload is completed!');
 
         // If the process is not running, delete the PID file
         delete_option(CRAWL_AND_VISIT_OPTION);
@@ -237,7 +228,7 @@ function nginx_cache_logs_callback() {
     if (!empty($log_file_path)) {
         // Read the log file into an array of lines
         $lines = file($log_file_path);
-        // Get the latest 10 lines
+        // Get the latest 5 lines
         $latest_lines = array_slice($lines, -5);
 
         // Remove leading tab spaces and spaces from each line
@@ -247,7 +238,7 @@ function nginx_cache_logs_callback() {
         ?>
         <div class="logs-container">
             <?php
-            // Output the latest 10 lines
+            // Output the latest 5 lines
             foreach ($cleaned_lines as $line) {
                 // Determine if the line is an error line
                 $is_error = strpos($line, 'ERROR') !== false;
@@ -262,8 +253,6 @@ function nginx_cache_logs_callback() {
             ?>
         </div>
         <?php
-    } else {
-        echo '<div class="logs-container">Log file not found.</div>';
     }
 }
 
