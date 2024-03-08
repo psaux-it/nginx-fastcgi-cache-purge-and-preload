@@ -69,7 +69,7 @@ function handle_fastcgi_cache_actions_admin_bar() {
         $action = isset($_GET['purge_cache']) ? 'purge' : 'preload';
 
         // Retrieve the Nginx FastCGI Cache Path setting value
-        $nginx_cache_path = get_option('nginx_cache_path');
+        $nginx_cache_path = get_option('nginx_cache_settings')['nginx_cache_path'];
 
         // Retrieve the reject regex from the included file
         $reject_regex = fetch_default_reject_regex_from_php_file();
