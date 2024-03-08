@@ -97,7 +97,6 @@ function crawl_and_visit($reject_regex, $nginx_cache_path) {
             # Check inotify/setfacl operations started on root
             if (!inotify_helper($nginx_cache_path)) {
                 display_admin_notice('error', 'ERROR INOTIFY: Please start inotify service via 'systemctl start wp-fcgi-notify' first !');
-                exit(1);
             }
             
             // Set the option to indicate that the operation is in progress
