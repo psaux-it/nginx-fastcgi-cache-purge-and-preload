@@ -96,7 +96,7 @@ function crawl_and_visit($reject_regex, $nginx_cache_path) {
         if ($status === 0) {
             # Check inotify/setfacl operations started on root
             if (!inotify_helper($nginx_cache_path)) {
-                echo "ERROR INOTIFY: Please start inotify service via 'systemctl start wp-fcgi-notify' first";
+                display_admin_notice('error', 'ERROR INOTIFY: Please start inotify service via 'systemctl start wp-fcgi-notify' first !');
                 exit(1);
             }
             
@@ -118,19 +118,15 @@ function crawl_and_visit($reject_regex, $nginx_cache_path) {
             // Set the option to indicate that the operation has finished
             update_option(CRAWL_AND_VISIT_OPTION, 'completed');
         } elseif ($status === 1) {
-            echo "ERROR PERMISSION: Cannot Purge FastCGI cache to start cache preloading. Please restart wp-fcgi-notify.service";
-            exit(1);
+            display_admin_notice('error', 'ERROR PERMISSION: Cannot Purge FastCGI cache to start cache preloading. Please restart wp-fcgi-notify.service !');
         } elseif ($status === 2) {
-            echo "ERROR PATH: Your FastCGI cache PATH ($nginx_cache_path) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service 3) Restart wp-fcgi-notify.service";
-            exit(1);
+            display_admin_notice('error', 'ERROR PATH: Your FastCGI cache PATH ($nginx_cache_path) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service 3) Restart wp-fcgi-notify.service');
         } else {
-            echo "ERROR UNKNOWN: Cannot Purge FastCGI cache to start cache preloading.";
-            exit(1);
+            display_admin_notice('error', 'ERROR UNKNOWN: Cannot Purge FastCGI cache to start cache preloading !');
         }
     } else {
         // Notify the user that the operation is already in progress
-        echo "INFO PRELOAD: FastCGI cache is already preloading, If you want stop it now use FCGI Cache Purge";
-        exit(1);
+        display_admin_notice('info', 'INFO PRELOAD: FastCGI cache is already preloading... If you want stop it now use FCGI Cache Purge');
     }
 }
 
