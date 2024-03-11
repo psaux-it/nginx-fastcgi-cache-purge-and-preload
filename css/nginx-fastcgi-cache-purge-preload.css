@@ -1,9 +1,59 @@
-/*
-Plugin Name: Nginx FastCGI Cache and Preload For Wordpress
-Plugin URI: https://www.psauxit.com
-Description: This plugin allows you to manage Nginx FastCGI cache and preload operations directly from your WordPress admin dashboard.
-Version: 1.0
-Author: Hasan ÇALIŞIR | hasan.calisir@psauxit.com
-Author URI: https://www.psauxit.com
-License: GPL2
-*/
+.logs-container {
+  background-color: #000000;
+  border: 1px solid #ddd;
+  padding: 10px;
+  border-radius: 5px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.logs-container div {
+  margin-bottom: 5px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.error-line {
+  color: #ff5252;
+}
+
+.normal-line {
+  color: #bdbdbd;
+}
+
+.info-line {
+  color: #bdbdbd;
+}
+
+.success-line {
+  color: #64dd17;
+}
+
+.logs-container .timestamp {
+  color: white;
+}
+
+.cursor {
+  color: #FFFFFF;
+  animation: blink-animation 1s infinite;
+}
+
+@keyframes blink-animation {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media screen and (max-width: 782px) {
+  .form-table th,
+  .form-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .form-table th {
+    margin-top: 20px;
+  }
+}
