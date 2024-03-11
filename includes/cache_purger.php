@@ -65,25 +65,25 @@ function purge($nginx_cache_path) {
 
         // Check the status returned by purge_helper()
         if ($status === 0) {
-            display_admin_notice('success', 'FastCGI cache preloading is stopped. Purge FastCGI cache is completed');
+            display_admin_notice('success', "FastCGI cache preloading is stopped. Purge FastCGI cache is completed");
         } elseif ($status === 1) {
-            display_admin_notice('error', 'ERROR PERMISSION: FastCGI cache preloading is stopped but Purge FastCGI cache cannot be completed. Please restart wp-fcgi-notify.service !');
+            display_admin_notice('error', "ERROR PERMISSION: FastCGI cache preloading is stopped but Purge FastCGI cache cannot be completed. Please restart wp-fcgi-notify.service");
         } elseif ($status === 2) {
-            display_admin_notice('error', 'ERROR PATH: Your FastCGI cache PATH ($nginx_cache_path) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service 3) Restart wp-fcgi-notify.service !');
+            display_admin_notice('error', 'ERROR PATH: Your FastCGI cache PATH ( ' . $nginx_cache_path . ' ) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service 3) Restart wp-fcgi-notify.service');
         } else {
-            display_admin_notice('error', 'ERROR UNKNOWN: Cannot Purge FastCGI cache !');
+            display_admin_notice('error', "ERROR UNKNOWN: Cannot Purge FastCGI cache");
         }
     } else {
         // If preload process is not ongoing, call purge_helper() and handle the status accordingly
         $status = purge_helper($nginx_cache_path);
         if ($status === 0) {
-            display_admin_notice('success', 'Purge FastCGI cache is completed...');
+            display_admin_notice('success', "Purge FastCGI cache is completed");
         } elseif ($status === 1) {
-            display_admin_notice('error', 'ERROR PERMISSION: Purge FastCGI cache cannot be completed. Please restart wp-fcgi-notify.service !');
+            display_admin_notice('error', "ERROR PERMISSION: Purge FastCGI cache cannot be completed. Please restart wp-fcgi-notify.service");
         } elseif ($status === 2) {
-            display_admin_notice('error', 'ERROR PATH: Your FastCGI cache PATH ($nginx_cache_path) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service 3) Restart wp-fcgi-notify.service !');
+            display_admin_notice('error', 'ERROR PATH: Your FastCGI cache PATH ( ' . $nginx_cache_path . ' ) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service 3) Restart wp-fcgi-notify.service');
         } else {
-            display_admin_notice('error', 'ERROR UNKNOWN: Cannot Purge FastCGI cache !');
+            display_admin_notice('error', "ERROR UNKNOWN: Cannot Purge FastCGI cache");
         }
     }
 }
