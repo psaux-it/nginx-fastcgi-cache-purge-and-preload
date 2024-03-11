@@ -69,7 +69,9 @@ function handle_fastcgi_cache_actions_admin_bar() {
         $action = isset($_GET['purge_cache']) ? 'purge' : 'preload';
 
         // Retrieve the Nginx FastCGI Cache Path setting value
-        $nginx_cache_path = get_option('nginx_cache_settings')['nginx_cache_path'];
+        $nginx_cache_settings = get_option('nginx_cache_settings');
+        $default_cache_path = find_user_home_folder() . '/change-me-nginx';
+        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
         // Retrieve the reject regex from the included file
         $reject_regex = fetch_default_reject_regex_from_php_file();
@@ -119,7 +121,7 @@ function check_processes_status() {
             // Send email
             wp_mail($nginx_cache_email, $mail_subject, $mail_message, $mail_from);
         }
-            
+
         // Display admin notice for completed preload
         display_admin_notice('success', 'SUCCESS: FastCGI cache preload is completed!');
 
@@ -135,43 +137,6 @@ function enqueue_nginx_fastcgi_cache_purge_preload_css() {
 }
 add_action('admin_enqueue_scripts', 'enqueue_nginx_fastcgi_cache_purge_preload_css');
 
-// Add settings page
-function nginx_cache_settings_page() {
-    ?>
-    <style>
-        .logs-container {
-            background-color: black;
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            font-family: monospace;
-            font-size: 0.9em;
-            overflow-x: auto;
-            max-height: 300px;
-            overflow-y: auto;
-            width: 800px;
-        }
-        .error-line {
-            color: #FF5252;
-        }
-        .normal-line {
-            color: #4CAF50;
-        }
-        .info-line {
-            color: #BDBDBD;
-        }
-    </style>
-    <div class="wrap">
-        <h2><img src="<?php echo plugins_url( 'images/logo.png', __FILE__ ); ?>" alt="Logo" style="vertical-align: middle; margin-right: 10px; width: 90px;">Nginx Cache Settings</h2>
-        <form method="post" action="options.php">
-            <?php settings_fields('nginx_cache_settings_group'); ?>
-            <?php do_settings_sections('nginx_cache_settings_group'); ?>
-            <?php submit_button('Save Changes'); ?>
-        </form>
-    </div>
-    <?php
-}
-
 function nginx_cache_settings_init() {
     // Register settings
     register_setting('nginx_cache_settings_group', 'nginx_cache_settings', 'nginx_cache_settings_sanitize');
@@ -185,6 +150,223 @@ function nginx_cache_settings_init() {
     add_settings_field('nginx_cache_send_mail', 'Send Mail', 'nginx_cache_send_mail_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
     add_settings_field('nginx_cache_logs', 'Logs', 'nginx_cache_logs_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
 }
+// Initialize settings
+add_action('admin_init', 'nginx_cache_settings_init');
+
+// Add settings page
+function add_nginx_cache_settings_page() {
+    add_submenu_page(
+        'options-general.php',
+        'Nginx Cache Settings',
+        'Nginx Cache Settings',
+        'manage_options',
+        'nginx_cache_settings',
+        'nginx_cache_settings_page'
+    );
+}
+add_action('admin_menu', 'add_nginx_cache_settings_page');
+
+// Add the option name to the allowed options list
+function add_nginx_cache_settings_to_allowed_options($options) {
+    $options['nginx_cache_settings'] = 'nginx_cache_settings';
+    return $options;
+}
+add_filter('whitelist_options', 'add_nginx_cache_settings_to_allowed_options');
+
+function nginx_cache_settings_page() {
+    // Check if the form has been submitted
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
+        // Verify nonce
+        if (isset($_POST['nginx_cache_settings_nonce']) && wp_verify_nonce($_POST['nginx_cache_settings_nonce'], 'nginx_cache_settings_nonce')) {
+            // Sanitize and validate the submitted values
+            $new_settings = nginx_cache_settings_sanitize($_POST['nginx_cache_settings']);
+
+            // Check if there are any settings errors
+            $errors = get_settings_errors('nginx_cache_settings_group');
+
+            // If there are no sanitize errors, proceed to update the settings
+            if (empty($errors)) {
+                // Update the settings with the new values
+                update_option('nginx_cache_settings', $new_settings);
+
+                // Show success message
+                echo '<div class="updated"><p>Settings saved successfully!</p></div>';
+            } else {
+                // Display settings errors
+                foreach ($errors as $error) {
+                    echo '<div class="error"><p>' . $error['message'] . '</p></div>';
+                }
+            }
+        }
+    }
+
+    // Display the settings form
+    ?>
+    <style>
+        .logs-container {
+            background-color: #000000;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .logs-container div {
+            margin-bottom: 5px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .error-line {
+            color: #ff5252;
+        }
+        .normal-line {
+            color: #bdbdbd;
+        }
+        .info-line {
+            color: #bdbdbd;
+        }
+        .success-line {
+            color: #64dd17;
+        }
+        .logs-container .timestamp {
+             color: white;
+        }
+        .cursor {
+            color: #FFFFFF;
+            animation: blink-animation 1s infinite;
+        }
+        @keyframes blink-animation {
+            50% {
+                opacity: 0;
+            }
+        }
+    </style>
+    <div class="wrap">
+        <h2><img src="<?php echo plugins_url( 'images/logo.png', __FILE__ ); ?>" alt="Logo" style="vertical-align: middle; margin-right: 10px; width: 90px;">Nginx Cache Settings</h2>
+        <form method="post" action="">
+            <?php
+            // Add nonce field
+            wp_nonce_field('nginx_cache_settings_nonce', 'nginx_cache_settings_nonce');
+            ?>
+            <table class="form-table">
+                <tr valign="top">
+                    <th scope="row">Nginx Cache Directory</th>
+                    <td>
+                        <?php nginx_cache_path_callback(); ?>
+                        <p class="description">Enter the path to your Nginx cache directory. Ensure it is outside of publicly accessible directories and not in root.</p>
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Email Address</th>
+                    <td>
+                        <?php nginx_cache_email_callback(); ?>
+                        <p class="description">Enter an email address for notifications or configurations related to Nginx cache.</p>
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">CPU Usage Limit (%)</th>
+                    <td>
+                        <?php nginx_cache_cpu_limit_callback(); ?>
+                        <p class="description">Enter the CPU usage limit for cache operations (10-100%).</p>
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Exclude Endpoints</th>
+                    <td>
+                        <?php nginx_cache_reject_regex_callback(); ?>
+                        <p class="description">Enter a regex pattern to exclude certain requests from being cached.</p>
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Send Email Notification</th>
+                    <td>
+                        <?php nginx_cache_send_mail_callback(); ?>
+                        <p class="description">Check this box to receive email notifications.</p>
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Logs</th>
+                    <td>
+                        <?php nginx_cache_logs_callback(); ?>
+                        <button id="clear-logs-button" class="button">Clear Logs</button>
+                        <p class="description">Click the button to clear logs.</p>
+                    </td>
+                </tr>
+            </table>
+            <p class="submit">
+                <input type="submit" name="submit" class="button-primary" value="Save Changes">
+            </p>
+        </form> <!-- Closing form tag here -->
+    </div>
+    <script>
+        // JavaScript to handle clearing logs
+        document.getElementById('clear-logs-button').addEventListener('click', function() {
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    document.getElementById('nginx-cache-logs-container').innerHTML = xhr.responseText;
+
+                }
+            };
+            xhr.open('GET', '<?php echo admin_url('admin-ajax.php?action=clear_nginx_cache_logs&_wpnonce=' . wp_create_nonce('clear-nginx-cache-logs')); ?>', true);
+            xhr.send();
+        });
+    </script>
+    <?php
+}
+
+// AJAX callback function to clear logs
+add_action('wp_ajax_clear_nginx_cache_logs', 'clear_nginx_cache_logs');
+function clear_nginx_cache_logs() {
+    check_ajax_referer('clear-nginx-cache-logs', '_wpnonce');
+
+    if (!current_user_can('manage_options')) {
+        wp_die('You do not have permission to access this page.');
+    }
+
+    $log_file_path = NGINX_CACHE_LOG_FILE;
+    if (file_exists($log_file_path)) {
+        file_put_contents($log_file_path, '');
+        display_admin_notice('success', 'SUCCESS: Logs cleared successfully.');
+    } else {
+        display_admin_notice('error', 'ERROR: No logs available.');
+    }
+
+    wp_die();
+}
+
+// AJAX callback function to update send mail option
+add_action('wp_ajax_update_send_mail_option', 'update_send_mail_option');
+function update_send_mail_option() {
+    // Verify nonce
+    check_ajax_referer('update-send-mail-option', '_wpnonce');
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to update this option.');
+    }
+
+    // Get the posted option value
+    $send_mail = isset($_POST['send_mail']) ? $_POST['send_mail'] : '';
+
+    // Get the current options
+    $current_options = get_option('nginx_cache_settings');
+
+    // Update the specific option within the array
+    $current_options['nginx_cache_send_mail'] = $send_mail;
+
+    // Save the updated options
+    $updated = update_option('nginx_cache_settings', $current_options);
+
+    // Check if option is updated successfully
+    if ($updated) {
+        wp_send_json_success('success');
+    } else {
+        wp_send_json_error('Error updating option.');
+    }
+}
 
 function nginx_cache_settings_section_callback() {
     echo 'Configure the settings for FastCGI Cache.';
@@ -193,33 +375,56 @@ function nginx_cache_settings_section_callback() {
 function nginx_cache_path_callback() {
     $options = get_option('nginx_cache_settings');
     $default_cache_path = find_user_home_folder() . '/change-me-now';
-    echo "<input type='text' id='nginx_cache_path' name='nginx_cache_settings[nginx_cache_path]' value='" . esc_attr($options['nginx_cache_path'] ?? $default_cache_path) . "' />";
+    echo "<input type='text' id='nginx_cache_path' name='nginx_cache_settings[nginx_cache_path]' value='" . esc_attr($options['nginx_cache_path'] ?? $default_cache_path) . "' class='regular-text' />";
 }
 
 function nginx_cache_email_callback() {
     $options = get_option('nginx_cache_settings');
     $default_email = 'your-email@example.com'; // Default email value
-    echo "<input type='text' id='nginx_cache_email' name='nginx_cache_settings[nginx_cache_email]' value='" . esc_attr($options['nginx_cache_email'] ?? $default_email) . "' />";
+    echo "<input type='text' id='nginx_cache_email' name='nginx_cache_settings[nginx_cache_email]' value='" . esc_attr($options['nginx_cache_email'] ?? $default_email) . "' class='regular-text' />";
 }
 
 function nginx_cache_cpu_limit_callback() {
     $options = get_option('nginx_cache_settings');
     $default_cpu_limit = 50; // Default CPU limit value
-    echo "<input type='number' id='nginx_cache_cpu_limit' name='nginx_cache_settings[nginx_cache_cpu_limit]' min='10' max='100' value='" . esc_attr($options['nginx_cache_cpu_limit'] ?? $default_cpu_limit) . "' />";
+    echo "<input type='number' id='nginx_cache_cpu_limit' name='nginx_cache_settings[nginx_cache_cpu_limit]' min='10' max='100' value='" . esc_attr($options['nginx_cache_cpu_limit'] ?? $default_cpu_limit) . "' class='small-text' />";
 }
 
-// Callback function to display the Send Mail field
 function nginx_cache_send_mail_callback() {
     $options = get_option('nginx_cache_settings');
-    $send_mail_checked = isset($options['nginx_cache_send_mail']) ? checked($options['nginx_cache_send_mail'], 'yes', false) : ''; // Check if the option is set and set 'checked' attribute accordingly
-    echo "<input type='checkbox' id='nginx_cache_send_mail' name='nginx_cache_settings[nginx_cache_send_mail]' value='yes' $send_mail_checked />";
+    $send_mail_checked = isset($options['nginx_cache_send_mail']) && $options['nginx_cache_send_mail'] === 'yes' ? 'checked="checked"' : '';
+    echo "<label><input type='checkbox' id='nginx_cache_send_mail' name='nginx_cache_settings[nginx_cache_send_mail]' value='yes' {$send_mail_checked} />Send email notifications</label>";
+    ?>
+    <script>
+    jQuery(document).ready(function($) {
+        // Update option value when checkbox state changes
+        $('#nginx_cache_send_mail').change(function() {
+            var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+            $.post(ajaxurl, {
+                action: 'update_send_mail_option',
+                send_mail: isChecked,
+                _wpnonce: '<?php echo wp_create_nonce("update-send-mail-option"); ?>'
+            }, function(response) {
+                // Check if the option is updated successfully
+                if (response.success) {
+                    // Do nothing, option is updated
+                } else {
+                    // Revert checkbox state
+                    $('#nginx_cache_send_mail').prop('checked', !$('#nginx_cache_send_mail').prop('checked'));
+                    alert('Error updating option!');
+                }
+            });
+        });
+    });
+    </script>
+    <?php
 }
 
 // Callback function to display the Reject Regex field
 function nginx_cache_reject_regex_callback() {
     $default_reject_regex = fetch_default_reject_regex_from_php_file(); // Fetch default value
     $options = get_option('nginx_cache_settings');
-    echo "<textarea id='nginx_cache_reject_regex' name='nginx_cache_settings[nginx_cache_reject_regex]' rows='5' cols='50'>" . esc_textarea($options['nginx_cache_reject_regex'] ?? $default_reject_regex) . "</textarea>";
+    echo "<textarea id='nginx_cache_reject_regex' name='nginx_cache_settings[nginx_cache_reject_regex]' rows='5' cols='50' class='large-text'>" . esc_textarea($options['nginx_cache_reject_regex'] ?? $default_reject_regex) . "</textarea>";
 }
 
 // Callback function to display the Logs field
@@ -240,17 +445,19 @@ function nginx_cache_logs_callback() {
             <?php
             // Output the latest 5 lines
             foreach ($cleaned_lines as $line) {
-                // Determine if the line is an error line
-                $is_error = strpos($line, 'ERROR') !== false;
-                $is_info = strpos($line, 'INFO') !== false;
+                // Extract timestamp and message
+                preg_match('/^\[(.*?)\]\s*(.*?)$/', $line, $matches);
+                $timestamp = isset($matches[1]) ? $matches[1] : '';
+                $message = isset($matches[2]) ? $matches[2] : '';
 
                 // Apply different CSS classes based on whether it's an error line or not
-                 $class = $is_error ? 'error-line' : ($is_info ? 'info-line' : 'normal-line');
+                $class = strpos($message, 'ERROR') !== false ? 'error-line' : (strpos($message, 'SUCCESS') !== false ? 'success-line' : 'normal-line');
 
                 // Output the line with the appropriate CSS class
-                echo '<div class="' . $class . '">' . esc_html($line) . '</div>';
+                echo '<div class="' . $class . '"><span class="timestamp">' . esc_html($timestamp) . '</span> ' . esc_html($message) . '</div>';
             }
             ?>
+            <div class="cursor blink">#</div>
         </div>
         <?php
     }
@@ -272,7 +479,8 @@ function fetch_default_reject_regex_from_php_file() {
 function nginx_cache_settings_sanitize($input) {
     $sanitized_input = array();
 
-    if (isset($input['nginx_cache_path'])) {
+    // Sanitize and validate cache path
+    if (!empty($input['nginx_cache_path'])) {
         // Check if the path is valid
         if (validate_path($input['nginx_cache_path'])) {
             $sanitized_input['nginx_cache_path'] = sanitize_text_field($input['nginx_cache_path']);
@@ -283,9 +491,17 @@ function nginx_cache_settings_sanitize($input) {
                 'Restricted/Invalid path: The cache path must be in php-fpm user home and at least one level deeper for safe purge operations',
                 'error'
             );
+            // Log error message
+            $log_message = 'ERROR: Restricted/Invalid path: The cache path must be in php-fpm user home and at least one level deeper for safe purge operations';
+            $log_file_path = NGINX_CACHE_LOG_FILE; // path to the log file
+            if (!empty($log_file_path)) {
+                file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $log_message . PHP_EOL, FILE_APPEND);
+            }
         }
     }
-    if (isset($input['nginx_cache_email'])) {
+
+    // Sanitize and validate email
+    if (!empty($input['nginx_cache_email'])) {
         // Validate email format
         $email = sanitize_email($input['nginx_cache_email']);
         if (is_email($email)) {
@@ -298,9 +514,17 @@ function nginx_cache_settings_sanitize($input) {
                 'Please enter a valid email address.',
                 'error'
             );
+            // Log error message
+            $log_message = 'ERROR: Please enter a valid email address.';
+            $log_file_path = NGINX_CACHE_LOG_FILE; // path to the log file
+            if (!empty($log_file_path)) {
+                file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $log_message . PHP_EOL, FILE_APPEND);
+            }
         }
     }
-    if (isset($input['nginx_cache_cpu_limit'])) {
+
+    // Sanitize and validate CPU limit
+    if (!empty($input['nginx_cache_cpu_limit'])) {
         // Validate CPU limit
         $cpu_limit = intval($input['nginx_cache_cpu_limit']);
         if ($cpu_limit >= 10 && $cpu_limit <= 100) {
@@ -313,12 +537,22 @@ function nginx_cache_settings_sanitize($input) {
                 'Please enter a CPU limit between 10 and 100.',
                 'error'
             );
+            // Log error message
+            $log_message = 'ERROR: Please enter a CPU limit between 10 and 100.';
+            $log_file_path = NGINX_CACHE_LOG_FILE; // path to the log file
+            if (!empty($log_file_path)) {
+                file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $log_message . PHP_EOL, FILE_APPEND);
+            }
         }
     }
+
     // Sanitize Reject Regex field
-    if (isset($input['nginx_cache_reject_regex'])) {
+    if (!empty($input['nginx_cache_reject_regex'])) {
         $sanitized_input['nginx_cache_reject_regex'] = sanitize_text_field($input['nginx_cache_reject_regex']);
     }
+
+    // Checkbox handling
+    $sanitized_input['nginx_cache_send_mail'] = isset($input['nginx_cache_send_mail']) && $input['nginx_cache_send_mail'] === 'yes' ? 'yes' : 'no';
 
     return $sanitized_input;
 }
@@ -332,22 +566,6 @@ function validate_path($path) {
     // Check for any additional validation if needed
     return true;
 }
-
-// Add settings page
-function add_nginx_cache_settings_page() {
-    add_submenu_page(
-        'options-general.php',
-        'Nginx Cache Settings',
-        'Nginx Cache Settings',
-        'manage_options',
-        'nginx_cache_settings',
-        'nginx_cache_settings_page'
-    );
-}
-add_action('admin_menu', 'add_nginx_cache_settings_page');
-
-// Initialize settings
-add_action('admin_init', 'nginx_cache_settings_init');
 
 // Function to reset plugin settings on deactivation
 function reset_plugin_settings_on_deactivation() {
