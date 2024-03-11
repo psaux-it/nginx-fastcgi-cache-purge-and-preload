@@ -131,11 +131,22 @@ function check_processes_status() {
 }
 add_action('admin_init', 'check_processes_status');
 
-// Enqueue custom CSS file
-function enqueue_nginx_fastcgi_cache_purge_preload_css() {
+// Enqueue custom CSS and JavaScript files
+function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
+    // Enqueue CSS file
     wp_enqueue_style('nginx-fastcgi-cache-purge-preload', plugins_url('css/nginx-fastcgi-cache-purge-preload.css', __FILE__));
+
+    // Enqueue JavaScript file
+    wp_enqueue_script('nginx-fastcgi-cache-admin', plugins_url('js/nginx-fastcgi-cache-purge-preload.js', __FILE__), array('jquery'), null, true);
+
+    // Localize nonce value for JavaScript
+    wp_localize_script('nginx-fastcgi-cache-admin', 'nginx_cache_ajax_object', array(
+        'ajaxurl' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('clear-nginx-cache-logs'),
+        'send_mail_nonce' => wp_create_nonce('update-send-mail-option')
+    ));
 }
-add_action('admin_enqueue_scripts', 'enqueue_nginx_fastcgi_cache_purge_preload_css');
+add_action('admin_enqueue_scripts', 'enqueue_nginx_fastcgi_cache_purge_preload_assets');
 
 function nginx_cache_settings_init() {
     // Register settings
@@ -267,20 +278,6 @@ function nginx_cache_settings_page() {
             </p>
         </form> <!-- Closing form tag here -->
     </div>
-    <script>
-        // JavaScript to handle clearing logs
-        document.getElementById('clear-logs-button').addEventListener('click', function() {
-            var xhr = new XMLHttpRequest();
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState === 4 && xhr.status === 200) {
-                    document.getElementById('nginx-cache-logs-container').innerHTML = xhr.responseText;
-
-                }
-            };
-            xhr.open('GET', '<?php echo admin_url('admin-ajax.php?action=clear_nginx_cache_logs&_wpnonce=' . wp_create_nonce('clear-nginx-cache-logs')); ?>', true);
-            xhr.send();
-        });
-    </script>
     <?php
 }
 
@@ -361,30 +358,6 @@ function nginx_cache_send_mail_callback() {
     $options = get_option('nginx_cache_settings');
     $send_mail_checked = isset($options['nginx_cache_send_mail']) && $options['nginx_cache_send_mail'] === 'yes' ? 'checked="checked"' : '';
     echo "<label><input type='checkbox' id='nginx_cache_send_mail' name='nginx_cache_settings[nginx_cache_send_mail]' value='yes' {$send_mail_checked} />Send email notifications</label>";
-    ?>
-    <script>
-    jQuery(document).ready(function($) {
-        // Update option value when checkbox state changes
-        $('#nginx_cache_send_mail').change(function() {
-            var isChecked = $(this).prop('checked') ? 'yes' : 'no';
-            $.post(ajaxurl, {
-                action: 'update_send_mail_option',
-                send_mail: isChecked,
-                _wpnonce: '<?php echo wp_create_nonce("update-send-mail-option"); ?>'
-            }, function(response) {
-                // Check if the option is updated successfully
-                if (response.success) {
-                    // Do nothing, option is updated
-                } else {
-                    // Revert checkbox state
-                    $('#nginx_cache_send_mail').prop('checked', !$('#nginx_cache_send_mail').prop('checked'));
-                    alert('Error updating option!');
-                }
-            });
-        });
-    });
-    </script>
-    <?php
 }
 
 // Callback function to display the Reject Regex field
