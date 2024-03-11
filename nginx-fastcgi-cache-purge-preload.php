@@ -149,6 +149,7 @@ function nginx_cache_settings_init() {
     add_settings_field('nginx_cache_reject_regex', 'Excluded endpoints from cache preloading', 'nginx_cache_reject_regex_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
     add_settings_field('nginx_cache_send_mail', 'Send Mail', 'nginx_cache_send_mail_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
     add_settings_field('nginx_cache_logs', 'Logs', 'nginx_cache_logs_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
+    add_settings_field('nginx_cache_user_agent', 'User Agent Definition', 'nginx_cache_user_agent_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
 }
 // Initialize settings
 add_action('admin_init', 'nginx_cache_settings_init');
@@ -202,47 +203,6 @@ function nginx_cache_settings_page() {
 
     // Display the settings form
     ?>
-    <style>
-        .logs-container {
-            background-color: #000000;
-            border: 1px solid #ddd;
-            padding: 10px;
-            border-radius: 5px;
-            max-height: 200px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 12px;
-        }
-        .logs-container div {
-            margin-bottom: 5px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        .error-line {
-            color: #ff5252;
-        }
-        .normal-line {
-            color: #bdbdbd;
-        }
-        .info-line {
-            color: #bdbdbd;
-        }
-        .success-line {
-            color: #64dd17;
-        }
-        .logs-container .timestamp {
-             color: white;
-        }
-        .cursor {
-            color: #FFFFFF;
-            animation: blink-animation 1s infinite;
-        }
-        @keyframes blink-animation {
-            50% {
-                opacity: 0;
-            }
-        }
-    </style>
     <div class="wrap">
         <h2><img src="<?php echo plugins_url( 'images/logo.png', __FILE__ ); ?>" alt="Logo" style="vertical-align: middle; margin-right: 10px; width: 90px;">Nginx Cache Settings</h2>
         <form method="post" action="">
@@ -252,42 +212,49 @@ function nginx_cache_settings_page() {
             ?>
             <table class="form-table">
                 <tr valign="top">
-                    <th scope="row">Nginx Cache Directory</th>
+                    <th scope="row"><span class="dashicons dashicons-admin-site"></span> Nginx Cache Directory</th>
                     <td>
                         <?php nginx_cache_path_callback(); ?>
                         <p class="description">Enter the path to your Nginx cache directory. Ensure it is outside of publicly accessible directories and not in root.</p>
                     </td>
                 </tr>
                 <tr valign="top">
-                    <th scope="row">Email Address</th>
+                    <th scope="row"><span class="dashicons dashicons-email"></span> Email Address</th>
                     <td>
                         <?php nginx_cache_email_callback(); ?>
                         <p class="description">Enter an email address for notifications or configurations related to Nginx cache.</p>
                     </td>
                 </tr>
                 <tr valign="top">
-                    <th scope="row">CPU Usage Limit (%)</th>
+                    <th scope="row"><span class="dashicons dashicons-dashboard"></span> CPU Usage Limit (%)</th>
                     <td>
                         <?php nginx_cache_cpu_limit_callback(); ?>
                         <p class="description">Enter the CPU usage limit for cache operations (10-100%).</p>
                     </td>
                 </tr>
                 <tr valign="top">
-                    <th scope="row">Exclude Endpoints</th>
+                    <th scope="row"><span class="dashicons dashicons-no"></span> Exclude Endpoints</th>
                     <td>
                         <?php nginx_cache_reject_regex_callback(); ?>
                         <p class="description">Enter a regex pattern to exclude certain requests from being cached.</p>
                     </td>
                 </tr>
                 <tr valign="top">
-                    <th scope="row">Send Email Notification</th>
+                    <th scope="row"><span class="dashicons dashicons-admin-users"></span> User Agent</th>
+                    <td>
+                        <?php nginx_cache_user_agent_callback(); ?>
+                        <p class="description">Enter a user agent to customize preload behavior for specific user agents.</p>
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row"><span class="dashicons dashicons-email-alt"></span> Send Email Notification</th>
                     <td>
                         <?php nginx_cache_send_mail_callback(); ?>
                         <p class="description">Check this box to receive email notifications.</p>
                     </td>
                 </tr>
                 <tr valign="top">
-                    <th scope="row">Logs</th>
+                    <th scope="row"><span class="dashicons dashicons-archive"></span> Logs</th>
                     <td>
                         <?php nginx_cache_logs_callback(); ?>
                         <button id="clear-logs-button" class="button">Clear Logs</button>
@@ -463,6 +430,14 @@ function nginx_cache_logs_callback() {
     }
 }
 
+function nginx_cache_user_agent_callback() {
+    $options = get_option('nginx_cache_settings');
+    $default_user_agent = 'Mozilla/5.0 (compatible; NginxCachePreload/1.0; +https://www.example.com)';
+    $user_agent_domain = parse_url(home_url(), PHP_URL_HOST);
+    $default_user_agent = str_replace('www.example.com', $user_agent_domain, $default_user_agent);
+    echo "<input type='text' id='nginx_cache_user_agent' name='nginx_cache_settings[nginx_cache_user_agent]' value='" . esc_attr($options['nginx_cache_user_agent'] ?? $default_user_agent) . "' class='regular-text' />";
+}
+
 // Function to fetch default Reject Regex from PHP file
 function fetch_default_reject_regex_from_php_file() {
     $php_file_path = plugin_dir_path(__FILE__) . 'includes/reject_regex.php'; // Path to the PHP file
@@ -553,6 +528,11 @@ function nginx_cache_settings_sanitize($input) {
 
     // Checkbox handling
     $sanitized_input['nginx_cache_send_mail'] = isset($input['nginx_cache_send_mail']) && $input['nginx_cache_send_mail'] === 'yes' ? 'yes' : 'no';
+
+    // Sanitize User Agent
+    if (!empty($input['nginx_cache_user_agent'])) {
+        $sanitized_input['nginx_cache_user_agent'] = sanitize_text_field($input['nginx_cache_user_agent']);
+    }
 
     return $sanitized_input;
 }
