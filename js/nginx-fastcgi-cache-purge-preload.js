@@ -1,6 +1,6 @@
 /**
- * Plugin: Nginx FastCGI Cache and Preload For Wordpress
- * Description: This plugin allows you to manage Nginx FastCGI cache and preload operations directly from your WordPress admin dashboard.
+ * JavaScript for Nginx FastCGI Cache and Preload For Wordpress plugin
+ * Description: This JavaScript file contains functions to manage Nginx FastCGI Cache and Preload For Wordpress plugin and interact with WordPress admin dashboard.
  * Version: 1.0
  * Author: Hasan CALISIR | hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
