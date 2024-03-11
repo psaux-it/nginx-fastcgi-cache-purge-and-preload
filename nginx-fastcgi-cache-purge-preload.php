@@ -143,7 +143,7 @@ function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_localize_script('nginx-fastcgi-cache-admin', 'nginx_cache_ajax_object', array(
         'ajaxurl' => admin_url('admin-ajax.php'),
         'nonce' => wp_create_nonce('clear-nginx-cache-logs'),
-        'send_mail_nonce' => wp_create_nonce('update-send-mail-option')
+        'send_mail_nonce' => wp_create_nonce('update-send-mail-option') // Add nonce for send mail option
     ));
 }
 add_action('admin_enqueue_scripts', 'enqueue_nginx_fastcgi_cache_purge_preload_assets');
@@ -216,67 +216,77 @@ function nginx_cache_settings_page() {
     ?>
     <div class="wrap">
         <h2><img src="<?php echo plugins_url( 'images/logo.png', __FILE__ ); ?>" alt="Logo" style="vertical-align: middle; margin-right: 10px; width: 90px;">Nginx Cache Settings</h2>
-        <form method="post" action="">
-            <?php
-            // Add nonce field
-            wp_nonce_field('nginx_cache_settings_nonce', 'nginx_cache_settings_nonce');
-            ?>
-            <table class="form-table">
-                <tr valign="top">
-                    <th scope="row"><span class="dashicons dashicons-admin-site"></span> Nginx Cache Directory</th>
-                    <td>
-                        <?php nginx_cache_path_callback(); ?>
-                        <p class="description">Enter the path to your Nginx cache directory. Ensure it is outside of publicly accessible directories and not in root.</p>
-                    </td>
-                </tr>
-                <tr valign="top">
-                    <th scope="row"><span class="dashicons dashicons-email"></span> Email Address</th>
-                    <td>
-                        <?php nginx_cache_email_callback(); ?>
-                        <p class="description">Enter an email address for notifications or configurations related to Nginx cache.</p>
-                    </td>
-                </tr>
-                <tr valign="top">
-                    <th scope="row"><span class="dashicons dashicons-dashboard"></span> CPU Usage Limit (%)</th>
-                    <td>
-                        <?php nginx_cache_cpu_limit_callback(); ?>
-                        <p class="description">Enter the CPU usage limit for cache operations (10-100%).</p>
-                    </td>
-                </tr>
-                <tr valign="top">
-                    <th scope="row"><span class="dashicons dashicons-no"></span> Exclude Endpoints</th>
-                    <td>
-                        <?php nginx_cache_reject_regex_callback(); ?>
-                        <p class="description">Enter a regex pattern to exclude certain requests from being cached.</p>
-                    </td>
-                </tr>
-                <tr valign="top">
-                    <th scope="row"><span class="dashicons dashicons-admin-users"></span> User Agent</th>
-                    <td>
-                        <?php nginx_cache_user_agent_callback(); ?>
-                        <p class="description">Enter a user agent to customize preload behavior for specific user agents.</p>
-                    </td>
-                </tr>
-                <tr valign="top">
-                    <th scope="row"><span class="dashicons dashicons-email-alt"></span> Send Email Notification</th>
-                    <td>
-                        <?php nginx_cache_send_mail_callback(); ?>
-                        <p class="description">Check this box to receive email notifications.</p>
-                    </td>
-                </tr>
-                <tr valign="top">
-                    <th scope="row"><span class="dashicons dashicons-archive"></span> Logs</th>
-                    <td>
-                        <?php nginx_cache_logs_callback(); ?>
-                        <button id="clear-logs-button" class="button">Clear Logs</button>
-                        <p class="description">Click the button to clear logs.</p>
-                    </td>
-                </tr>
-            </table>
-            <p class="submit">
-                <input type="submit" name="submit" class="button-primary" value="Save Changes">
-            </p>
-        </form> <!-- Closing form tag here -->
+        <h2 class="nav-tab-wrapper">
+            <a href="#settings" class="nav-tab nav-tab-active">Settings</a>
+            <a href="#help" class="nav-tab">Help</a>
+        </h2>
+
+        <div id="settings" class="tab-content active">
+            <form method="post" action="">
+                <?php
+                // Add nonce field
+                wp_nonce_field('nginx_cache_settings_nonce', 'nginx_cache_settings_nonce');
+                ?>
+                <table class="form-table">
+                    <tr valign="top">
+                        <th scope="row"><span class="dashicons dashicons-admin-site"></span> Nginx Cache Directory</th>
+                        <td>
+                            <?php nginx_cache_path_callback(); ?>
+                            <p class="description">Please specify the directory path for your Nginx cache. Please note that purge operation is irreversible, so proceed with caution</p>
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row"><span class="dashicons dashicons-email"></span> Email Address</th>
+                        <td>
+                            <?php nginx_cache_email_callback(); ?>
+                            <p class="description">Enter an email address for notifications or configurations related to Nginx cache.</p>
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row"><span class="dashicons dashicons-dashboard"></span> CPU Usage Limit (%)</th>
+                        <td>
+                            <?php nginx_cache_cpu_limit_callback(); ?>
+                            <p class="description">Enter the CPU usage limit for cache operations (10-100%).</p>
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row"><span class="dashicons dashicons-no"></span> Exclude Endpoints</th>
+                        <td>
+                            <?php nginx_cache_reject_regex_callback(); ?>
+                            <p class="description">Enter a regex pattern to exclude certain requests from being cached.</p>
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                         <th scope="row"><span class="dashicons dashicons-admin-users"></span> User Agent</th>
+                         <td>
+                            <?php nginx_cache_user_agent_callback(); ?>
+                            <p class="description">Enter a user agent to customize preload behavior for specific user agents.</p>
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row"><span class="dashicons dashicons-email-alt"></span> Send Email Notification</th>
+                        <td>
+                            <?php nginx_cache_send_mail_callback(); ?>
+                            <p class="description">Check this box to receive email notifications.</p>
+                        </td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row"><span class="dashicons dashicons-archive"></span> Logs</th>
+                        <td>
+                            <?php nginx_cache_logs_callback(); ?>
+                            <button id="clear-logs-button" class="button">Clear Logs</button>
+                            <p class="description">Click the button to clear logs.</p>
+                        </td>
+                    </tr>
+                </table>
+                <p class="submit">
+                    <input type="submit" name="submit" class="button-primary" value="Save Changes">
+                </p>
+            </form>
+        </div>
+
+        <div id="help" class="nginx-tab-content">
+        </div>
     </div>
     <?php
 }
@@ -436,11 +446,11 @@ function nginx_cache_settings_sanitize($input) {
             add_settings_error(
                 'nginx_cache_settings_group',
                 'invalid_path',
-                'Restricted/Invalid path: The cache path must be in php-fpm user home and at least one level deeper for safe purge operations',
+                'Restricted/Invalid path: It seems this path is critical system path and not allowed for safe purge operations',
                 'error'
             );
             // Log error message
-            $log_message = 'ERROR: Restricted/Invalid path: The cache path must be in php-fpm user home and at least one level deeper for safe purge operations';
+            $log_message = 'ERROR: Restricted/Invalid path: It seems this path is critical system path and not allowed for safe purge operations';
             $log_file_path = NGINX_CACHE_LOG_FILE; // path to the log file
             if (!empty($log_file_path)) {
                 file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $log_message . PHP_EOL, FILE_APPEND);
@@ -510,13 +520,40 @@ function nginx_cache_settings_sanitize($input) {
     return $sanitized_input;
 }
 
+
 // Validate the fastcgi cache path format
 function validate_path($path) {
-    // Check if the path is empty, starts with /, and is not just a single slash or /root/
-    if (empty($path) || $path[0] !== '/' || $path === '/' || $path === '/root/') {
+    // Define critical system directories
+    $system_paths = array(
+        '/',
+        '/bin',
+        '/boot',
+        '/dev',
+        '/etc',
+        '/home',
+        '/lib',
+        '/lib64',
+        '/media',
+        '/mnt',
+        '/proc',
+        '/root',
+        '/run',
+        '/sbin',
+        '/srv',
+        '/sys',
+        '/tmp',
+        '/usr',
+        '/var',
+        '/var',
+        '/dev',
+        '/opt'
+    );
+
+     // Check if the path is empty, and is not a critical system directory
+    if (empty($path) || $path[0] !== '/' || in_array(rtrim($path, '/'), $system_paths) || in_array($path, $system_paths)) {
         return false;
     }
-    // Check for any additional validation if needed
+
     return true;
 }
 
