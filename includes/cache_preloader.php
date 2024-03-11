@@ -7,7 +7,7 @@ License: GPL2
 */
 
 // Define user agent constant
-define('PLUGIN_USER_AGENT', 'MyNginxCachePreloaderBot/1.0');
+define('PLUGIN_USER_AGENT', 'NginxCachePreloaderBot/1.0');
 
 // Function to crawl the website and retrieve links, excluding certain endpoints
 function crawl_website($url, $reject_regex) {
@@ -38,41 +38,6 @@ function crawl_website($url, $reject_regex) {
     return $links;
 }
 
-function parse_robots_txt() {
-    $base_url = home_url(); // Dynamically get the WordPress site's home URL
-    $robots_url = rtrim($base_url, '/') . '/robots.txt';
-    $response = wp_remote_get($robots_url);
-
-    if (is_wp_error($response)) {
-        error_log('Error fetching robots.txt: ' . $response->get_error_message());
-        return []; // Fail gracefully if there's an error fetching robots.txt
-    }
-
-    $robots_txt = wp_remote_retrieve_body($response);
-    $lines = explode("\n", $robots_txt);
-    $rules = ['Allow' => [], 'Disallow' => []];
-
-    $current_user_agent = '*'; // Default user-agent
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if (strpos($line, 'User-agent:') === 0) {
-            $current_user_agent = trim(substr($line, strlen('User-agent:')));
-        } elseif ($current_user_agent === PLUGIN_USER_AGENT || $current_user_agent === '*') {
-            if (strpos($line, 'Disallow:') === 0) {
-                $rule = trim(substr($line, strlen('Disallow:')));
-                if ($rule !== '') { // Ignore empty Disallow rules
-                    $rules['Disallow'][] = $rule;
-                }
-            } elseif (strpos($line, 'Allow:') === 0) {
-                $rule = trim(substr($line, strlen('Allow:')));
-                $rules['Allow'][] = $rule;
-            }
-        }
-    }
-
-    return $rules;
-}
-
 function inotify_helper($nginx_cache_path) {
     // Execute pgrep command to search for inotifywait process
     $output = shell_exec("pgrep -f 'inotifywait.*$nginx_cache_path'");
@@ -85,7 +50,7 @@ function inotify_helper($nginx_cache_path) {
     }
 }
 
-// Function to crawl and visit website links, respecting exclusion regex and robots.txt rules, and checking for broken links
+// Function to crawl and visit website links, checking for broken links
 function crawl_and_visit($reject_regex, $nginx_cache_path) {
     // Check if the crawl and visit operation is in progress
     if (get_option(CRAWL_AND_VISIT_OPTION) !== 'in_progress') {
@@ -96,9 +61,9 @@ function crawl_and_visit($reject_regex, $nginx_cache_path) {
         if ($status === 0) {
             # Check inotify/setfacl operations started on root
             if (!inotify_helper($nginx_cache_path)) {
-                display_admin_notice('error', 'ERROR INOTIFY: Please start inotify service via 'systemctl start wp-fcgi-notify' first !');
+                display_admin_notice('error', 'ERROR INOTIFY: Please start inotify service via "systemctl start wp-fcgi-notify" first !');
             }
-            
+
             // Set the option to indicate that the operation is in progress
             update_option(CRAWL_AND_VISIT_OPTION, 'in_progress');
 
@@ -108,18 +73,15 @@ function crawl_and_visit($reject_regex, $nginx_cache_path) {
             // Keep track of visited URLs to avoid crawling the same page multiple times
             $visited_urls = [];
 
-            // Parse robots.txt
-            $robots_rules = parse_robots_txt();
-
             // Crawl the website starting from the home URL
-            crawl_and_visit_recursive($start_url, $visited_urls, $reject_regex, $robots_rules);
+            crawl_and_visit_recursive($start_url, $visited_urls, $reject_regex);
 
             // Set the option to indicate that the operation has finished
             update_option(CRAWL_AND_VISIT_OPTION, 'completed');
         } elseif ($status === 1) {
             display_admin_notice('error', 'ERROR PERMISSION: Cannot Purge FastCGI cache to start cache preloading. Please restart wp-fcgi-notify.service !');
         } elseif ($status === 2) {
-            display_admin_notice('error', 'ERROR PATH: Your FastCGI cache PATH ($nginx_cache_path) not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service 3) Restart wp-fcgi-notify.service');
+            display_admin_notice('error', 'ERROR PATH: Your FastCGI cache PATH (' . $nginx_cache_path . ') not found. To fix it -- 1) Check plugin settings  2) Check nginx config settings and restart nginx.service 3) Restart wp-fcgi-notify.service');
         } else {
             display_admin_notice('error', 'ERROR UNKNOWN: Cannot Purge FastCGI cache to start cache preloading !');
         }
@@ -129,22 +91,14 @@ function crawl_and_visit($reject_regex, $nginx_cache_path) {
     }
 }
 
-function crawl_and_visit_recursive($url, &$visited_urls, $reject_regex, $robots_rules) {
+function crawl_and_visit_recursive($url, &$visited_urls, $reject_regex) {
     // Control preload process
     if (get_option(CRAWL_AND_VISIT_OPTION) !== 'in_progress') {
         exit(1); // Stop crawling if the option is no longer in progress
     }
 
-    // Check if the URL is allowed by robots.txt rules
-    if (!is_url_allowed_by_robots($url, $robots_rules)) {
-        return; // Skip crawling this URL if disallowed by robots.txt
-    }
-
     // Retrieve links from the current URL, excluding rejected URLs
     $links = crawl_website($url, $reject_regex);
-
-    // Visit the current URL and check for broken links
-    visit_url_and_check_links($url, $links);
 
     // Iterate through links and crawl recursively
     foreach ($links as $link) {
@@ -157,51 +111,7 @@ function crawl_and_visit_recursive($url, &$visited_urls, $reject_regex, $robots_
             // Add URL to visited URLs array
             $visited_urls[] = $link;
             // Crawl and visit links for the current URL recursively
-            crawl_and_visit_recursive($link, $visited_urls, $reject_regex, $robots_rules);
+            crawl_and_visit_recursive($link, $visited_urls, $reject_regex);
         }
     }
-}
-
-// Placeholder function for visiting a URL and checking for broken links
-function visit_url_and_check_links($url, $links) {
-    // Check if the URL is reachable and doesn't return a 404 status code
-    $response = wp_remote_get($url, ['user-agent' => PLUGIN_USER_AGENT]);
-    if (is_wp_error($response)) {
-        // Log error if URL cannot be visited
-        error_log('Error visiting URL ' . $url . ': ' . $response->get_error_message());
-        return;
-    }
-
-    $status_code = wp_remote_retrieve_response_code($response);
-
-    if ($status_code == 404) {
-        // Log broken link if URL returns 404 status code
-        $log_message = date('Y-m-d H:i:s') . ' Broken Link: ' . $url . ' (Status Code: 404)' . PHP_EOL;
-        $log_file = plugin_dir_path(__FILE__) . 'broken_links.log'; // Adjust the log file path as needed
-        file_put_contents($log_file, $log_message, FILE_APPEND);
-    }
-}
-
-// Function to check if a URL is allowed based on robots.txt rules
-function is_url_allowed_by_robots($url, $robots_rules) {
-    $parsed_url = parse_url($url);
-
-    if (!isset($parsed_url['path'])) {
-        // If URL doesn't have a path component, it's not allowed
-        return false;
-    }
-
-    // Get the path component of the URL
-    $path = $parsed_url['path'];
-
-    // Check if the path is allowed based on robots.txt rules
-    foreach ($robots_rules['Disallow'] as $disallow_rule) {
-        // Check if the path matches any Disallow rule
-        if (fnmatch($disallow_rule, $path)) {
-            return false; // URL is disallowed
-        }
-    }
-
-    // If no Disallow rule matches, the URL is allowed
-    return true;
 }
