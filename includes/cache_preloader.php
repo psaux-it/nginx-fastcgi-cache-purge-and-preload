@@ -1,10 +1,16 @@
 <?php
-/*
-Description: Automatically preload Nginx cache by crawling the website using WordPress HTTP API and DOMDocument.
-Author: Hasan ÇALIŞIR | hasan.calisir@psauxit.com
-Author URI: https://www.psauxit.com
-License: GPL2
-*/
+/**
+ * Cache Preloader
+ *
+ * Plugin Name: Nginx FastCGI Cache and Preload For Wordpress
+ * Plugin URI: https://www.psauxit.com
+ * Description: This plugin allows you to manage Nginx FastCGI cache and preload operations directly from your WordPress admin dashboard. 
+ * Description: Cache Preloader preloads Nginx cache by crawling the website using WordPress HTTP API and DOMDocument.
+ * Version: 1.0
+ * Author: Hasan CALISIR | hasan.calisir@psauxit.com
+ * Author URI: https://www.psauxit.com
+ * License: GPL2, WordPress copyright GPL.
+ */
 
 // Define user agent constant
 define('PLUGIN_USER_AGENT', 'NginxCachePreloaderBot/1.0');
