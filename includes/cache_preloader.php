@@ -12,9 +12,6 @@
  * License: GPL2, WordPress copyright GPL.
  */
 
-// Define user agent constant
-define('PLUGIN_USER_AGENT', 'NginxCachePreloaderBot/1.0');
-
 // Function to crawl the website and retrieve links, excluding certain endpoints
 function crawl_website($url, $reject_regex) {
     $args = ['user-agent' => PLUGIN_USER_AGENT];
