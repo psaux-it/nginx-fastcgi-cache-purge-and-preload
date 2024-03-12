@@ -15,13 +15,21 @@ if (!defined('CRAWL_AND_VISIT_OPTION')) {
     define('CRAWL_AND_VISIT_OPTION', 'crawl_and_visit_status');
 }
 
+// Function to retrieve the nginx_cache_user_agent option value
+function get_nginx_cache_user_agent() {
+    return get_option('nginx_cache_settings')['nginx_cache_user_agent'] ?? 'Mozilla/5.0 (compatible; NginxCachePreload/1.0; +localhost)';
+}
+
+// Define the PLUGIN_USER_AGENT constant
+define('PLUGIN_USER_AGENT', get_nginx_cache_user_agent());
+
+// Define a constant for the log file path
+define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
+
 // Include the purge & preload
 require_once plugin_dir_path( __FILE__ ) . 'includes/cache_preloader.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/cache_purger.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/helper.php';
-
-// Define a constant for the log file path
-define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
 
 // Add buttons to WordPress admin bar
 function add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
