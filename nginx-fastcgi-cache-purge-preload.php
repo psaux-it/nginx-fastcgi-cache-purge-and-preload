@@ -18,6 +18,7 @@ if (!defined('CRAWL_AND_VISIT_OPTION')) {
 // Include the purge & preload
 require_once plugin_dir_path( __FILE__ ) . 'includes/cache_preloader.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/cache_purger.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/helper.php';
 
 // Define a constant for the log file path
 define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
@@ -285,7 +286,8 @@ function nginx_cache_settings_page() {
             </form>
         </div>
 
-        <div id="help" class="nginx-tab-content">
+        <div id="help" class="tab-content">
+            <?php echo do_shortcode('[my_faq]'); ?>
         </div>
     </div>
     <?php
