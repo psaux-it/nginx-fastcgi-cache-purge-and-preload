@@ -39,7 +39,7 @@ function my_faq_html() {
     </div>
 
     <div class="faq">
-        <div class="question">Is there any solution to automate this task?</div>
+        <div class="question">Is there any solution to automate granting write permission to the PHP-FPM-USER for Multisite?</div>
         <div class="answer">
           <ol class="nginx-list">
 <pre>
