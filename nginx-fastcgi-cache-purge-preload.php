@@ -76,7 +76,7 @@ function check_wget_availability() {
     if (empty($output)) {
         // Wget is not available
         add_action('admin_notices', 'display_wget_warning');
-        wp_enqueue_script('preload-button-disable', plugins_url('js/preload-button-disable.js', __FILE__), array('jquery'), null, true);
+        wp_enqueue_script('preload-button-disable', plugins_url('assets/js/preload-button-disable.js', __FILE__), array('jquery'), null, true);
     } else {
         // Wget is available, dequeue the preload-button-disable.js if it's already enqueued
         wp_dequeue_script('preload-button-disable');
@@ -169,10 +169,10 @@ add_action('admin_init', 'check_processes_status');
 // Enqueue custom CSS and JavaScript files
 function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Enqueue CSS file
-    wp_enqueue_style('nginx-fastcgi-cache-purge-preload', plugins_url('css/nginx-fastcgi-cache-purge-preload.css', __FILE__));
+    wp_enqueue_style('nginx-fastcgi-cache-purge-preload', plugins_url('assets/css/nginx-fastcgi-cache-purge-preload.css', __FILE__));
 
     // Enqueue JavaScript file
-    wp_enqueue_script('nginx-fastcgi-cache-admin', plugins_url('js/nginx-fastcgi-cache-purge-preload.js', __FILE__), array('jquery'), null, true);
+    wp_enqueue_script('nginx-fastcgi-cache-admin', plugins_url('assets/js/nginx-fastcgi-cache-purge-preload.js', __FILE__), array('jquery'), null, true);
 
     // Localize nonce value for JavaScript
     wp_localize_script('nginx-fastcgi-cache-admin', 'nginx_cache_ajax_object', array(
@@ -250,7 +250,7 @@ function nginx_cache_settings_page() {
     // Display the settings form
     ?>
     <div class="wrap">
-        <h2><img src="<?php echo plugins_url( 'images/logo.png', __FILE__ ); ?>" alt="Logo" style="vertical-align: middle; margin-right: 10px; width: 90px;">Nginx Cache Settings</h2>
+        <h2><img src="<?php echo plugins_url( 'assets/img/logo.png', __FILE__ ); ?>" alt="Logo" style="vertical-align: middle; margin-right: 10px; width: 90px;">Nginx Cache Settings</h2>
         <h2 class="nav-tab-wrapper">
             <a href="#settings" class="nav-tab nav-tab-active">Settings</a>
             <a href="#help" class="nav-tab">Help</a>
