@@ -72,22 +72,25 @@ add_action('admin_bar_menu', 'add_fastcgi_cache_buttons_admin_bar', 100);
 
 // Check if wget is available and handle preload button
 function check_wget_availability() {
-    $output = shell_exec('which wget');
+    $output = shell_exec('type wget');
     if (empty($output)) {
         // Wget is not available
         add_action('admin_notices', 'display_wget_warning');
         wp_enqueue_script('preload-button-disable', plugins_url('js/preload-button-disable.js', __FILE__), array('jquery'), null, true);
+    } else {
+        // Wget is available, dequeue the preload-button-disable.js if it's already enqueued
+        wp_dequeue_script('preload-button-disable');
     }
 }
 add_action('admin_init', 'check_wget_availability');
 
-// Display wget warning message only on the plugin settings page
+// Display warning message only on the plugin settings page
 function display_wget_warning() {
     $current_page = isset($_GET['page']) ? $_GET['page'] : '';
     if ($current_page === 'nginx_cache_settings') {
         ?>
         <div class="notice notice-error">
-            <p><?php _e('Warning: Preload action disabled ! The "wget" command is not available on your system. Please make sure "wget" is installed to use Nginx Cache Preload feature.', 'textdomain'); ?></p>
+            <p><?php _e('Warning: Preload action disabled ! The "wget" command is not available on your system. Please make sure wget is installed to use Nginx Cache Preload feature.', 'textdomain'); ?></p>
         </div>
         <?php
     }
