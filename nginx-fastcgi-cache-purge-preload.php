@@ -9,26 +9,10 @@ Author URI: https://www.psauxit.com
 License: GPL2
 */
 
-// Define a constant for the option key if not already defined
-// Required for both preload and purge ops
-if (!defined('CRAWL_AND_VISIT_OPTION')) {
-    define('CRAWL_AND_VISIT_OPTION', 'crawl_and_visit_status');
-}
-
-// Function to retrieve the nginx_cache_user_agent option value
-function get_nginx_cache_user_agent() {
-    return get_option('nginx_cache_settings')['nginx_cache_user_agent'] ?? 'Mozilla/5.0 (compatible; NginxCachePreload/1.0; +localhost)';
-}
-
-// Define the PLUGIN_USER_AGENT constant
-define('PLUGIN_USER_AGENT', get_nginx_cache_user_agent());
-
 // Define a constant for the log file path
 define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
 
-// Include the purge & preload
-require_once plugin_dir_path( __FILE__ ) . 'includes/cache_preloader.php';
-require_once plugin_dir_path( __FILE__ ) . 'includes/cache_purger.php';
+// Help section of script
 require_once plugin_dir_path( __FILE__ ) . 'includes/helper.php';
 
 // Add buttons to WordPress admin bar
@@ -103,19 +87,28 @@ function handle_fastcgi_cache_actions_admin_bar() {
         // Determine action based on button click
         $action = isset($_GET['purge_cache']) ? 'purge' : 'preload';
 
-        // Retrieve the Nginx FastCGI Cache Path setting value
+        // Necessary data for purge and preload actions
         $nginx_cache_settings = get_option('nginx_cache_settings');
+
         $default_cache_path = find_user_home_folder() . '/change-me-nginx';
+        $default_limit_rate = 1280;
+        $default_cpu_limit = 50;
+        $default_reject_regex = fetch_default_reject_regex_from_php_file();
+
         $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+        $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
+        $nginx_cache_cpu_limit = isset($nginx_cache_settings['nginx_cache_cpu_limit']) ? $nginx_cache_settings['nginx_cache_cpu_limit'] : $default_cpu_limit;
+        $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
 
-        // Retrieve the reject regex from the included file
-        $reject_regex = fetch_default_reject_regex_from_php_file();
+        $PIDFILE = plugin_dir_path(__FILE__) . 'cache_preload.pid';
+        $fdomain = get_site_url();
+        $this_script_path = plugin_dir_path(__FILE__);
 
-        // Call the appropriate function based on the action and pass the cache path
+        // Call the appropriate function based on the action
         if ($action === 'purge') {
-            purge($nginx_cache_path);
+            purge($nginx_cache_path, $PIDFILE);
         } elseif ($action === 'preload') {
-            crawl_and_visit($reject_regex, $nginx_cache_path);
+            preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit);
         }
     }
 }
@@ -125,43 +118,184 @@ add_action('admin_init', 'handle_fastcgi_cache_actions_admin_bar');
 function display_admin_notice($type, $message) {
     echo '<div class="notice notice-' . $type . '"><p>' . esc_html($message) . '</p></div>';
     // Write to the log file
-    $log_file_path = NGINX_CACHE_LOG_FILE; // path to the log file
+    $log_file_path = NGINX_CACHE_LOG_FILE;
     !empty($log_file_path) ? file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL, FILE_APPEND) : die("Log file not found!");
+}
+
+// Preload operation
+function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit) {
+    // Check if there is an ongoing preload process active
+    if (file_exists($PIDFILE)) {
+        $pid = intval(file_get_contents($PIDFILE));
+        if ($pid > 0 && posix_kill($pid, 0)) {
+            display_admin_notice('info', 'INFO: FastCGI cache preloading is already running. If you want to stop it please Purge Cache now!');
+            return;
+        }
+    }
+
+    // Purge cache and get status
+    $status = purge_helper($nginx_cache_path);
+
+    // Handle different status codes
+    if ($status === 0) {
+        // Create PID file
+        if (!touch($PIDFILE)) {
+            display_admin_notice('error', 'FATAL PERMISSION ERROR: Failed to create PID file.');
+            exit(1);
+        }
+
+        $cpulimitPath = shell_exec('type cpulimit');
+
+        // Start cache preloading
+        // TODO: try to remove >/dev/null 2>&1 and catch all errors and handle errors better
+        if (!empty(trim($cpulimitPath))) {
+            $cpulimit = 1;
+        } else {
+            $cpulimit = 0;
+        }
+
+        $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$this_script_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' \"$fdomain\" >/dev/null 2>&1 & echo $!";
+        $output = shell_exec($command);
+
+        // Write PID to PID file
+        if ($output !== null) {
+            $pid = trim($output);
+            file_put_contents($PIDFILE, $pid);
+            if ($cpulimit === 1) {
+                $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" >/dev/null 2>&1 &";
+                shell_exec($command);
+            }
+        } else {
+            display_admin_notice('error', 'ERROR CRITICAL: Cannot start FastCGI cache preload! Please file a bug on plugin support page.');
+        }
+    } elseif ($status === 1) {
+        display_admin_notice('error', 'ERROR PERMISSION: Cannot Purge FastCGI cache to start Cache Preloading. Please read help section of the plugin.');
+    } elseif ($status === 2) {
+        display_admin_notice('error', 'ERROR PATH: Your FastCGI cache PATH (' . $nginx_cache_path . ') not found. Please check your FastCGI cache path.');
+    } else {
+        display_admin_notice('error', 'ERROR UNKNOWN: Cannot Purge FastCGI cache to start Cache Preloading.');
+    }
+}
+
+// Purge cache operation helper
+function purge_helper($nginx_cache_path) {
+    // Check if the target path exists and is a directory
+    if (is_dir($nginx_cache_path)) {
+        // Recursively remove the directory and its contents. Redirect stderr to stdout to capture any errors.
+        $command = "find $nginx_cache_path -mindepth 1 -delete 2>&1";
+        $output = shell_exec($command);
+
+        // Check if output contains "Permission denied" or other indications of a failure
+        if (strpos($output, 'Permission denied') !== false || strpos($output, 'cannot delete') !== false) {
+            return 1; // Permission issue or other error
+        } else {
+            return 0; // Assume purge successful
+        }
+    } else {
+        return 2; // Directory doesn't exist
+    }
+}
+
+// Purge cache operation
+function purge($nginx_cache_path, $PIDFILE) {
+    // Initialize variables for messages
+    $message_type = '';
+    $message_content = '';
+
+    // Check if the PID file exists
+    if (file_exists($PIDFILE)) {
+        $pid = intval(file_get_contents($PIDFILE));
+
+        // Check if the preload process is alive
+        if ($pid > 0 && posix_kill($pid, 0)) {
+            // If process is alive, kill it
+            posix_kill($pid, SIGTERM);
+            usleep(50000); // Wait for 50 milliseconds
+
+            // Call purge_helper to delete cache contents and get status
+            $status = purge_helper($nginx_cache_path);
+
+            // Determine message based on status
+            switch ($status) {
+                case 0:
+                    $message_type = 'success';
+                    $message_content = 'SUCCESS: FastCGI cache preloading is stopped. Purge FastCGI cache is completed.';
+                    break;
+                case 1:
+                    $message_type = 'error';
+                    $message_content = 'ERROR PERMISSION: FastCGI cache preloading is stopped but Purge FastCGI cache failed. Please read help section of the plugin.';
+                    break;
+                case 2:
+                    $message_type = 'error';
+                    $message_content = 'ERROR PATH: Your FastCGI cache PATH (' . $nginx_cache_path . ') not found. Please check your FastCGI cache path.';
+                    break;
+            }
+
+            // Remove the PID file
+            unlink($PIDFILE);
+        }
+    } else {
+        // Call purge_helper to delete cache contents and get status
+        $status = purge_helper($nginx_cache_path);
+
+        // Determine message based on status
+        switch ($status) {
+            case 0:
+                $message_type = 'success';
+                $message_content = 'SUCCESS: Purge FastCGI cache is completed.';
+                break;
+            case 1:
+                $message_type = 'error';
+                $message_content = 'ERROR PERMISSION: Purge FastCGI cache cannot completed. Please read help section of the plugin.';
+                break;
+            case 2:
+                $message_type = 'error';
+                $message_content = 'ERROR PATH: Your FastCGI cache PATH (' . $nginx_cache_path . ') is not found. Please check your FastCGI cache path.';
+                break;
+        }
+    }
+
+    // Display the admin notice
+    display_admin_notice($message_type, $message_content);
 }
 
 // Function to check preload process status
 function check_processes_status() {
+    $PIDFILE = plugin_dir_path(__FILE__) . 'cache_preload.pid'; // Path to the PID file in the plugin directory
     // If the process is running, display admin notice for preload in progress
-    if (get_option(CRAWL_AND_VISIT_OPTION) === 'in_progress') {
-        display_admin_notice('info', 'INFO: FastCGI cache preload is in progress...');
-        return;
-    } elseif (get_option(CRAWL_AND_VISIT_OPTION) === 'completed') {
-        // Retrieve the Nginx Cache Email setting value
-        $options = get_option('nginx_cache_settings');
-        // Retrieve the Nginx Cache Email setting value
-        $nginx_cache_email = isset($options['nginx_cache_email']) ? $options['nginx_cache_email'] : '';
-        // Check if Send Mail is checked
-        $send_mail = isset($options['nginx_cache_send_mail']) && $options['nginx_cache_send_mail'] === 'yes';
-        // Only send if user customized email address and send mail enabled
-        $default_email = 'your-email@example.com';
-        if ($send_mail && !empty($nginx_cache_email) && $nginx_cache_email !== $default_email) {
-            // Extract the domain from the WordPress site URL
-            $domain = str_replace('www.', '', parse_url(get_site_url(), PHP_URL_HOST));
-            // Set mail_from address with user domain
-            $mail_from = "From: Nginx FastCGI Cache Purge Preload Wordpress<fcgi-cache@$domain>";
-            // Mail subject
-            $mail_subject = "$domain-NGINX FastCGI Cache Preload";
-            // Mail message
-            $mail_message = "The NGINX FastCGI Preload operation has been completed for $domain.";
-            // Send email
-            wp_mail($nginx_cache_email, $mail_subject, $mail_message, $mail_from);
+    if (file_exists($PIDFILE)) {
+        $pid = intval(file_get_contents($PIDFILE));
+        if ($pid > 0 && posix_kill($pid, 0)) {
+            display_admin_notice('info', 'INFO: FastCGI cache preload is in progress...');
+            return;
+        } else {
+            // Retrieve the Nginx Cache Email setting value
+            $options = get_option('nginx_cache_settings');
+            // Retrieve the Nginx Cache Email setting value
+            $nginx_cache_email = isset($options['nginx_cache_email']) ? $options['nginx_cache_email'] : '';
+            // Check if Send Mail is checked
+            $send_mail = isset($options['nginx_cache_send_mail']) && $options['nginx_cache_send_mail'] === 'yes';
+            // Only send if user customized email address and send mail enabled
+            $default_email = 'your-email@example.com';
+            if ($send_mail && !empty($nginx_cache_email) && $nginx_cache_email !== $default_email) {
+                // Extract the domain from the WordPress site URL
+                $domain = str_replace('www.', '', parse_url(get_site_url(), PHP_URL_HOST));
+                // Set mail_from address with user domain
+                $mail_from = "From: Nginx FastCGI Cache Purge Preload Wordpress<fcgi-cache@$domain>";
+                // Mail subject
+                $mail_subject = "$domain-NGINX FastCGI Cache Preload";
+                // Mail message
+                $mail_message = "The NGINX FastCGI Preload operation has been completed for $domain.";
+                // Send email
+                wp_mail($nginx_cache_email, $mail_subject, $mail_message, $mail_from);
+            }
+
+            // Display admin notice for completed preload
+            display_admin_notice('success', 'SUCCESS: FastCGI cache preload is completed!');
+
+            // If the process is not running, delete the PID file
+            unlink($PIDFILE);
         }
-
-        // Display admin notice for completed preload
-        display_admin_notice('success', 'SUCCESS: FastCGI cache preload is completed!');
-
-        // If the process is not running, delete the PID file
-        delete_option(CRAWL_AND_VISIT_OPTION);
     }
 }
 add_action('admin_init', 'check_processes_status');
@@ -178,7 +312,7 @@ function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_localize_script('nginx-fastcgi-cache-admin', 'nginx_cache_ajax_object', array(
         'ajaxurl' => admin_url('admin-ajax.php'),
         'nonce' => wp_create_nonce('clear-nginx-cache-logs'),
-        'send_mail_nonce' => wp_create_nonce('update-send-mail-option') // Add nonce for send mail option
+        'send_mail_nonce' => wp_create_nonce('update-send-mail-option'),
     ));
 }
 add_action('admin_enqueue_scripts', 'enqueue_nginx_fastcgi_cache_purge_preload_assets');
@@ -195,7 +329,7 @@ function nginx_cache_settings_init() {
     add_settings_field('nginx_cache_reject_regex', 'Excluded endpoints from cache preloading', 'nginx_cache_reject_regex_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
     add_settings_field('nginx_cache_send_mail', 'Send Mail', 'nginx_cache_send_mail_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
     add_settings_field('nginx_cache_logs', 'Logs', 'nginx_cache_logs_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
-    add_settings_field('nginx_cache_user_agent', 'User Agent Definition', 'nginx_cache_user_agent_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
+    add_settings_field('nginx_cache_limit_rate', 'Limit Rate Definition', 'nginx_cache_limit_rate_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
 }
 // Initialize settings
 add_action('admin_init', 'nginx_cache_settings_init');
@@ -267,35 +401,37 @@ function nginx_cache_settings_page() {
                         <th scope="row"><span class="dashicons dashicons-admin-site"></span> Nginx Cache Directory</th>
                         <td>
                             <?php nginx_cache_path_callback(); ?>
-                            <p class="description">Please specify the directory path for your Nginx cache. Please note that purge operation is irreversible, so proceed with caution</p>
+                            <p class="description">Please specify the directory path for your Nginx cache. Please note that erase operation is irreversible, so proceed with caution</p>
                         </td>
                     </tr>
                     <tr valign="top">
                         <th scope="row"><span class="dashicons dashicons-email"></span> Email Address</th>
                         <td>
                             <?php nginx_cache_email_callback(); ?>
-                            <p class="description">Enter an email address for notifications or configurations related to Nginx cache.</p>
+                            <p class="description">Enter an email address for Nginx cache operation's notifications.</p>
                         </td>
                     </tr>
                     <tr valign="top">
                         <th scope="row"><span class="dashicons dashicons-dashboard"></span> CPU Usage Limit (%)</th>
                         <td>
                             <?php nginx_cache_cpu_limit_callback(); ?>
-                            <p class="description">Enter the CPU usage limit for cache operations (10-100%).</p>
+                            <p class="description">Enter the CPU usage limit for preload operation. You need "cpulimit" installed on your system. (10-100%).</p>
                         </td>
                     </tr>
                     <tr valign="top">
                         <th scope="row"><span class="dashicons dashicons-no"></span> Exclude Endpoints</th>
                         <td>
                             <?php nginx_cache_reject_regex_callback(); ?>
-                            <p class="description">Enter a regex pattern to exclude certain requests from being cached.</p>
+                            <p class="description">Enter a regex pattern to exclude endpoints from being cached. Use | as a delimeter for new rules. </p>
+                            <p class="description">Default regex pattern triggers caching only static pages as much as possible. </p>
+                            <button type="submit" name="nginx-regex-reset-defaults" id="nginx-regex-reset-defaults" class="button nginx-reset-regex-button">Reset Defaults</button>
                         </td>
                     </tr>
                     <tr valign="top">
-                         <th scope="row"><span class="dashicons dashicons-admin-users"></span> User Agent</th>
+                         <th scope="row"><span class="dashicons dashicons-admin-generic"></span> Limit Rate</th>
                          <td>
-                            <?php nginx_cache_user_agent_callback(); ?>
-                            <p class="description">Enter a user agent to customize preload behavior for specific user agents.</p>
+                            <?php nginx_cache_limit_rate_callback(); ?>
+                            <p class="description">Enter a limit rate for preload action in KB/Sec.</p>
                         </td>
                     </tr>
                     <tr valign="top">
@@ -309,7 +445,7 @@ function nginx_cache_settings_page() {
                         <th scope="row"><span class="dashicons dashicons-archive"></span> Logs</th>
                         <td>
                             <?php nginx_cache_logs_callback(); ?>
-                            <button id="clear-logs-button" class="button">Clear Logs</button>
+                            <button id="clear-logs-button" class="button nginx-clear-logs-button">Clear Logs</button>
                             <p class="description">Click the button to clear logs.</p>
                         </td>
                     </tr>
@@ -390,13 +526,13 @@ function nginx_cache_path_callback() {
 
 function nginx_cache_email_callback() {
     $options = get_option('nginx_cache_settings');
-    $default_email = 'your-email@example.com'; // Default email value
+    $default_email = 'your-email@example.com';
     echo "<input type='text' id='nginx_cache_email' name='nginx_cache_settings[nginx_cache_email]' value='" . esc_attr($options['nginx_cache_email'] ?? $default_email) . "' class='regular-text' />";
 }
 
 function nginx_cache_cpu_limit_callback() {
     $options = get_option('nginx_cache_settings');
-    $default_cpu_limit = 50; // Default CPU limit value
+    $default_cpu_limit = 50;
     echo "<input type='number' id='nginx_cache_cpu_limit' name='nginx_cache_settings[nginx_cache_cpu_limit]' min='10' max='100' value='" . esc_attr($options['nginx_cache_cpu_limit'] ?? $default_cpu_limit) . "' class='small-text' />";
 }
 
@@ -408,9 +544,18 @@ function nginx_cache_send_mail_callback() {
 
 // Callback function to display the Reject Regex field
 function nginx_cache_reject_regex_callback() {
-    $default_reject_regex = fetch_default_reject_regex_from_php_file(); // Fetch default value
-    $options = get_option('nginx_cache_settings');
-    echo "<textarea id='nginx_cache_reject_regex' name='nginx_cache_settings[nginx_cache_reject_regex]' rows='5' cols='50' class='large-text'>" . esc_textarea($options['nginx_cache_reject_regex'] ?? $default_reject_regex) . "</textarea>";
+    if (isset($_POST['nginx-regex-reset-defaults'])) {
+        $default_reject_regex = fetch_default_reject_regex_from_php_file();
+        display_admin_notice('info', 'INFO: Reject Regex reset to default. Please remember to Save Changes.');
+    } else {
+        $options = get_option('nginx_cache_settings');
+        $default_reject_regex = fetch_default_reject_regex_from_php_file();
+        $default_reject_regex = isset($options['nginx_cache_reject_regex']) ? $options['nginx_cache_reject_regex'] : $default_reject_regex;
+    }
+
+    //$reject_regex = isset($options['nginx_cache_reject_regex']) ? $options['nginx_cache_reject_regex'] : $default_reject_regex;
+    $reject_regex = preg_replace('/\\\\+/', '\\', $default_reject_regex);
+    echo "<textarea id='nginx_cache_reject_regex' name='nginx_cache_settings[nginx_cache_reject_regex]' rows='3' cols='50' class='large-text'>" . esc_textarea($reject_regex) . "</textarea>";
 }
 
 // Callback function to display the Logs field
@@ -449,17 +594,15 @@ function nginx_cache_logs_callback() {
     }
 }
 
-function nginx_cache_user_agent_callback() {
+function nginx_cache_limit_rate_callback() {
     $options = get_option('nginx_cache_settings');
-    $default_user_agent = 'Mozilla/5.0 (compatible; NginxCachePreload/1.0; +https://www.example.com)';
-    $user_agent_domain = parse_url(home_url(), PHP_URL_HOST);
-    $default_user_agent = str_replace('www.example.com', $user_agent_domain, $default_user_agent);
-    echo "<input type='text' id='nginx_cache_user_agent' name='nginx_cache_settings[nginx_cache_user_agent]' value='" . esc_attr($options['nginx_cache_user_agent'] ?? $default_user_agent) . "' class='regular-text' />";
+    $default_limit_rate = 1280;
+    echo "<input type='number' id='nginx_cache_limit_rate' name='nginx_cache_settings[nginx_cache_limit_rate]' value='" . esc_attr($options['nginx_cache_limit_rate'] ?? $default_limit_rate) . "' class='small-text' />";
 }
 
 // Function to fetch default Reject Regex from PHP file
 function fetch_default_reject_regex_from_php_file() {
-    $php_file_path = plugin_dir_path(__FILE__) . 'includes/reject_regex.php'; // Path to the PHP file
+    $php_file_path = plugin_dir_path(__FILE__) . 'index.php';
     if (file_exists($php_file_path)) {
         $file_content = file_get_contents($php_file_path);
         $regex_match = preg_match('/\$reject_regex\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
@@ -467,7 +610,7 @@ function fetch_default_reject_regex_from_php_file() {
             return $matches[1];
         }
     }
-    return ''; // Default value if not found or file doesn't exist
+    return '';
 }
 
 function nginx_cache_settings_sanitize($input) {
@@ -487,7 +630,7 @@ function nginx_cache_settings_sanitize($input) {
             );
             // Log error message
             $log_message = 'ERROR: Restricted/Invalid path: It seems this path is critical system path and not allowed for safe purge operations';
-            $log_file_path = NGINX_CACHE_LOG_FILE; // path to the log file
+            $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
                 file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $log_message . PHP_EOL, FILE_APPEND);
             }
@@ -510,7 +653,7 @@ function nginx_cache_settings_sanitize($input) {
             );
             // Log error message
             $log_message = 'ERROR: Please enter a valid email address.';
-            $log_file_path = NGINX_CACHE_LOG_FILE; // path to the log file
+            $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
                 file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $log_message . PHP_EOL, FILE_APPEND);
             }
@@ -533,7 +676,7 @@ function nginx_cache_settings_sanitize($input) {
             );
             // Log error message
             $log_message = 'ERROR: Please enter a CPU limit between 10 and 100.';
-            $log_file_path = NGINX_CACHE_LOG_FILE; // path to the log file
+            $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
                 file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $log_message . PHP_EOL, FILE_APPEND);
             }
@@ -542,20 +685,20 @@ function nginx_cache_settings_sanitize($input) {
 
     // Sanitize Reject Regex field
     if (!empty($input['nginx_cache_reject_regex'])) {
-        $sanitized_input['nginx_cache_reject_regex'] = sanitize_text_field($input['nginx_cache_reject_regex']);
+        //$sanitized_input['nginx_cache_reject_regex'] = $input['nginx_cache_reject_regex'];
+        $sanitized_input['nginx_cache_reject_regex'] = preg_replace('/\\\\+/', '\\', $input['nginx_cache_reject_regex']);
     }
 
     // Checkbox handling
     $sanitized_input['nginx_cache_send_mail'] = isset($input['nginx_cache_send_mail']) && $input['nginx_cache_send_mail'] === 'yes' ? 'yes' : 'no';
 
-    // Sanitize User Agent
-    if (!empty($input['nginx_cache_user_agent'])) {
-        $sanitized_input['nginx_cache_user_agent'] = sanitize_text_field($input['nginx_cache_user_agent']);
+    // Sanitize Limit Rate
+    if (!empty($input['nginx_cache_limit_rate'])) {
+        $sanitized_input['nginx_cache_limit_rate'] = sanitize_text_field($input['nginx_cache_limit_rate']);
     }
 
     return $sanitized_input;
 }
-
 
 // Validate the fastcgi cache path format
 function validate_path($path) {
