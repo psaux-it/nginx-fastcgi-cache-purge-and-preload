@@ -9,7 +9,7 @@
  * Author Email:      hasan.calisir@psauxit.com
  * License:           GPL-2.0+
  * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
- * Text Domain:       psauxit
+ * Text Domain:       nginx-fastcgi-cache-purge-and-preload
  * Requires at least: 5.4
  * Requires PHP:      7.4
  */
