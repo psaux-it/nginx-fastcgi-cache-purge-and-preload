@@ -99,7 +99,7 @@ function create_file($file_path) {
 }
 
 // Function to append data to a file using WP_Filesystem
-function append_to_file($file_path, $data) {
+function append_file($file_path, $data) {
     global $wp_filesystem;
 
     // Initialize WP_Filesystem
@@ -258,7 +258,7 @@ function display_admin_notice($type, $message) {
     echo '<div class="notice notice-' . esc_attr($type) . '"><p>' . esc_html($message) . '</p></div>';
     // Write to the log file
     $log_file_path = NGINX_CACHE_LOG_FILE;
-    !empty($log_file_path) ? append_to_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $message) : die("Log file not found!");
+    !empty($log_file_path) ? append_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $message) : die("Log file not found!");
 }
 
 // Preload operation
@@ -781,7 +781,7 @@ function nginx_cache_settings_sanitize($input) {
             $log_message = 'ERROR: Restricted/Invalid path: It seems this path is critical system path and not allowed for safe purge operations';
             $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
-                append_to_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
+                append_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
@@ -804,7 +804,7 @@ function nginx_cache_settings_sanitize($input) {
             $log_message = 'ERROR: Please enter a valid email address.';
             $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
-                append_to_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
+                append_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
@@ -827,7 +827,7 @@ function nginx_cache_settings_sanitize($input) {
             $log_message = 'ERROR: Please enter a CPU limit between 10 and 100.';
             $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
-                append_to_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
+                append_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
