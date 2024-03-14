@@ -14,6 +14,115 @@
  * Requires PHP:      7.4
  */
 
+// Wordpress way to delete file
+function delete_file($file_path) {
+    // Check if WP_Filesystem is available
+    if (!function_exists('WP_Filesystem')) {
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+    }
+
+    // Initialize WP_Filesystem
+    global $wp_filesystem;
+    WP_Filesystem();
+
+    // Check if WP_Filesystem initialization was successful
+    if (!is_wp_error($wp_filesystem)) {
+        // Perform file deletion using WP_Filesystem method
+        if ($wp_filesystem->exists($file_path)) {
+            $wp_filesystem->delete($file_path);
+        }
+    }
+}
+
+// Wordpress way to read file
+function read_file($file_path) {
+    global $wp_filesystem;
+
+    // Initialize WP_Filesystem
+    WP_Filesystem();
+
+    // Check if WP_Filesystem initialization was successful
+    if (is_wp_error($wp_filesystem)) {
+        // Handle initialization error
+        return false;
+    } else {
+        // Read the file contents using WP_Filesystem method
+        return $wp_filesystem->get_contents($file_path);
+    }
+}
+
+// Wordpress way to write file
+function write_file($file_path, $data) {
+    global $wp_filesystem;
+
+    // Initialize WP_Filesystem
+    WP_Filesystem();
+
+    // Check if WP_Filesystem initialization was successful
+    if (is_wp_error($wp_filesystem)) {
+        // Handle initialization error
+        return false;
+    } else {
+        // Write data to the file using WP_Filesystem method
+        $result = $wp_filesystem->put_contents($file_path, $data);
+
+        // Check if writing to the file was successful
+        if ($result === false) {
+            // Handle error writing to the file
+            return false;
+        } else {
+            return true;
+        }
+    }
+}
+
+// Wordpress way to create file
+function create_file($file_path) {
+    // Check if WP_Filesystem is available
+    if ( ! function_exists( 'WP_Filesystem' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+    }
+
+    // Initialize the WP_Filesystem
+    if ( WP_Filesystem() ) {
+        global $wp_filesystem;
+
+        // Check if the file already exists
+        if ( ! $wp_filesystem->exists( $file_path ) ) {
+            // Create the file
+            return $wp_filesystem->touch( $file_path );
+        }
+    }
+
+    // Return false if WP_Filesystem failed to initialize or the file already exists
+    return false;
+}
+
+// Function to append data to a file using WP_Filesystem
+function append_to_file($file_path, $data) {
+    global $wp_filesystem;
+
+    // Initialize WP_Filesystem
+    WP_Filesystem();
+
+    // Check if WP_Filesystem initialization was successful
+    if (is_wp_error($wp_filesystem)) {
+        // Handle initialization error
+        return false;
+    } else {
+        // Append data to the file using WP_Filesystem method
+        $result = $wp_filesystem->put_contents($file_path, $data, FILE_APPEND);
+
+        // Check if appending to the file was successful
+        if ($result === false) {
+            // Handle error appending to the file
+            return false;
+        } else {
+            return true;
+        }
+    }
+}
+
 // Define a constant for the log file path
 define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
 
@@ -65,7 +174,7 @@ function check_wget_availability() {
     if (empty($output)) {
         // Wget is not available
         add_action('admin_notices', 'display_wget_warning');
-        wp_enqueue_script('preload-button-disable', plugins_url('assets/js/preload-button-disable.js', __FILE__), array('jquery'), null, true);
+        wp_enqueue_script('preload-button-disable', plugins_url('assets/js/preload-button-disable.js', __FILE__), array('jquery'), '1.0.0', true);
     } else {
         // Wget is available, dequeue the preload-button-disable.js if it's already enqueued
         wp_dequeue_script('preload-button-disable');
@@ -92,7 +201,7 @@ function display_acl_warning() {
     if ($current_page === 'nginx_cache_settings') {
         ?>
         <div class="notice notice-error">
-            <p><?php _e('ERROR PERMISSON: The purge action may not work as expected due to permission constraints. ACLs have not been applied to the Nginx cache folder to grant permissions to the PHP-FPM user. Kindly refer to the plugins help section for assistance.', 'textdomain'); ?></p>
+            <p><?php esc_html_e('ERROR PERMISSON: The purge action may not work as expected due to permission constraints. ACLs have not been applied to the Nginx cache folder to grant permissions to the PHP-FPM user. Kindly refer to the plugins help section for assistance.', 'textdomain'); ?></p>
         </div>
         <?php
     }
@@ -104,7 +213,7 @@ function display_wget_warning() {
     if ($current_page === 'nginx_cache_settings') {
         ?>
         <div class="notice notice-error">
-            <p><?php _e('ERROR COMMAND: Preload action disabled! The "wget" command is not available on your system. Please make sure "wget" is installed to use Nginx Cache Preload feature.', 'textdomain'); ?></p>
+            <p><?php esc_html_e('ERROR COMMAND: Preload action disabled! The "wget" command is not available on your system. Please make sure "wget" is installed to use Nginx Cache Preload feature.', 'textdomain'); ?></p>
         </div>
         <?php
     }
@@ -146,17 +255,18 @@ add_action('admin_init', 'handle_fastcgi_cache_actions_admin_bar');
 
 // Display admin notices
 function display_admin_notice($type, $message) {
-    echo '<div class="notice notice-' . $type . '"><p>' . esc_html($message) . '</p></div>';
+    echo '<div class="notice notice-' . esc_attr($type) . '"><p>' . esc_html($message) . '</p></div>';
     // Write to the log file
     $log_file_path = NGINX_CACHE_LOG_FILE;
-    !empty($log_file_path) ? file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL, FILE_APPEND) : die("Log file not found!");
+    !empty($log_file_path) ? append_to_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $message) : die("Log file not found!");
 }
 
 // Preload operation
 function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit) {
     // Check if there is an ongoing preload process active
     if (file_exists($PIDFILE)) {
-        $pid = intval(file_get_contents($PIDFILE));
+        $pid = intval(read_file($PIDFILE));
+
         if ($pid > 0 && posix_kill($pid, 0)) {
             display_admin_notice('info', 'INFO: FastCGI cache preloading is already running. If you want to stop it please Purge Cache now!');
             return;
@@ -169,7 +279,7 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
     // Handle different status codes
     if ($status === 0) {
         // Create PID file
-        if (!touch($PIDFILE)) {
+        if (!create_file($PIDFILE)) {
             display_admin_notice('error', 'FATAL PERMISSION ERROR: Failed to create PID file.');
             exit(1);
         }
@@ -190,7 +300,7 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
         // Write PID to PID file
         if ($output !== null) {
             $pid = trim($output);
-            file_put_contents($PIDFILE, $pid);
+            write_file($PIDFILE, $pid);
             if ($cpulimit === 1) {
                 $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" >/dev/null 2>&1 &";
                 shell_exec($command);
@@ -234,7 +344,7 @@ function purge($nginx_cache_path, $PIDFILE) {
 
     // Check if the PID file exists
     if (file_exists($PIDFILE)) {
-        $pid = intval(file_get_contents($PIDFILE));
+        $pid = intval(read_file($PIDFILE));
 
         // Check if the preload process is alive
         if ($pid > 0 && posix_kill($pid, 0)) {
@@ -262,7 +372,7 @@ function purge($nginx_cache_path, $PIDFILE) {
             }
 
             // Remove the PID file
-            unlink($PIDFILE);
+            delete_file($PIDFILE);
         }
     } else {
         // Call purge_helper to delete cache contents and get status
@@ -294,7 +404,8 @@ function check_processes_status() {
     $PIDFILE = plugin_dir_path(__FILE__) . 'cache_preload.pid'; // Path to the PID file in the plugin directory
     // If the process is running, display admin notice for preload in progress
     if (file_exists($PIDFILE)) {
-        $pid = intval(file_get_contents($PIDFILE));
+        $pid = intval(read_file($PIDFILE));
+        
         if ($pid > 0 && posix_kill($pid, 0)) {
             display_admin_notice('info', 'INFO: FastCGI cache preload is in progress...');
             return;
@@ -309,7 +420,9 @@ function check_processes_status() {
             $default_email = 'your-email@example.com';
             if ($send_mail && !empty($nginx_cache_email) && $nginx_cache_email !== $default_email) {
                 // Extract the domain from the WordPress site URL
-                $domain = str_replace('www.', '', parse_url(get_site_url(), PHP_URL_HOST));
+                $site_url = get_site_url();
+				$site_url_parts = wp_parse_url($site_url);
+                $domain = str_replace('www.', '', $site_url_parts['host']);
                 // Set mail_from address with user domain
                 $mail_from = "From: Nginx FastCGI Cache Purge Preload Wordpress<fcgi-cache@$domain>";
                 // Mail subject
@@ -324,7 +437,7 @@ function check_processes_status() {
             display_admin_notice('success', 'SUCCESS: FastCGI cache preload is completed!');
 
             // If the process is not running, delete the PID file
-            unlink($PIDFILE);
+            delete_file($PIDFILE);
         }
     }
 }
@@ -333,10 +446,10 @@ add_action('admin_init', 'check_processes_status');
 // Enqueue custom CSS and JavaScript files
 function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Enqueue CSS file
-    wp_enqueue_style('nginx-fastcgi-cache-purge-preload', plugins_url('assets/css/nginx-fastcgi-cache-purge-preload.css', __FILE__));
+    wp_enqueue_style('nginx-fastcgi-cache-purge-preload', plugins_url('assets/css/nginx-fastcgi-cache-purge-preload.css', __FILE__), array(), '1.0.0');
 
     // Enqueue JavaScript file
-    wp_enqueue_script('nginx-fastcgi-cache-admin', plugins_url('assets/js/nginx-fastcgi-cache-purge-preload.js', __FILE__), array('jquery'), null, true);
+    wp_enqueue_script('nginx-fastcgi-cache-admin', plugins_url('assets/js/nginx-fastcgi-cache-purge-preload.js', __FILE__), array('jquery'), '1.0.0', true);
 
     // Localize nonce value for JavaScript
     wp_localize_script('nginx-fastcgi-cache-admin', 'nginx_cache_ajax_object', array(
@@ -405,7 +518,7 @@ function nginx_cache_settings_page() {
             } else {
                 // Display settings errors
                 foreach ($errors as $error) {
-                    echo '<div class="error"><p>' . $error['message'] . '</p></div>';
+                    echo '<div class="error"><p>' . esc_html($error['message']) . '</p></div>';
                 }
             }
         }
@@ -414,7 +527,7 @@ function nginx_cache_settings_page() {
     // Display the settings form
     ?>
     <div class="wrap">
-        <h2><img src="<?php echo plugins_url( 'assets/img/logo.png', __FILE__ ); ?>" alt="Logo" style="vertical-align: middle; margin-right: 10px; width: 90px;">Nginx Cache Settings</h2>
+        <h2><img src="<?php echo esc_url( plugins_url( 'assets/img/logo.png', __FILE__ ) ); ?>" alt="Logo" style="vertical-align: middle; margin-right: 10px; width: 90px;">Nginx Cache Settings</h2>
         <h2 class="nav-tab-wrapper">
             <a href="#settings" class="nav-tab nav-tab-active">Settings</a>
             <a href="#help" class="nav-tab">Help</a>
@@ -504,7 +617,7 @@ function clear_nginx_cache_logs() {
 
     $log_file_path = NGINX_CACHE_LOG_FILE;
     if (file_exists($log_file_path)) {
-        file_put_contents($log_file_path, '');
+        write_file($log_file_path, '');
         display_admin_notice('success', 'SUCCESS: Logs cleared successfully.');
     } else {
         display_admin_notice('error', 'ERROR: No logs available.');
@@ -569,7 +682,7 @@ function nginx_cache_cpu_limit_callback() {
 function nginx_cache_send_mail_callback() {
     $options = get_option('nginx_cache_settings');
     $send_mail_checked = isset($options['nginx_cache_send_mail']) && $options['nginx_cache_send_mail'] === 'yes' ? 'checked="checked"' : '';
-    echo "<label><input type='checkbox' id='nginx_cache_send_mail' name='nginx_cache_settings[nginx_cache_send_mail]' value='yes' {$send_mail_checked} />Send email notifications</label>";
+    echo "<label><input type='checkbox' id='nginx_cache_send_mail' name='nginx_cache_settings[nginx_cache_send_mail]' value='yes' " . esc_html($send_mail_checked) . " />Send email notifications</label>";
 }
 
 // Callback function to display the Reject Regex field
@@ -591,36 +704,42 @@ function nginx_cache_reject_regex_callback() {
 // Callback function to display the Logs field
 function nginx_cache_logs_callback() {
     $log_file_path = NGINX_CACHE_LOG_FILE;
-    if (!empty($log_file_path)) {
+    if (file_exists($log_file_path) && is_readable($log_file_path)) {
         // Read the log file into an array of lines
-        $lines = file($log_file_path);
+        $lines = read_file($log_file_path);
         // Get the latest 5 lines
-        $latest_lines = array_slice($lines, -5);
+        if (is_array($lines)) {
+            $latest_lines = array_slice($lines, -5);
 
-        // Remove leading tab spaces and spaces from each line
-        $cleaned_lines = array_map(function($line) {
-            return trim($line);
-        }, $latest_lines);
-        ?>
-        <div class="logs-container">
-            <?php
-            // Output the latest 5 lines
-            foreach ($cleaned_lines as $line) {
-                // Extract timestamp and message
-                preg_match('/^\[(.*?)\]\s*(.*?)$/', $line, $matches);
-                $timestamp = isset($matches[1]) ? $matches[1] : '';
-                $message = isset($matches[2]) ? $matches[2] : '';
-
-                // Apply different CSS classes based on whether it's an error line or not
-                $class = strpos($message, 'ERROR') !== false ? 'error-line' : (strpos($message, 'SUCCESS') !== false ? 'success-line' : 'normal-line');
-
-                // Output the line with the appropriate CSS class
-                echo '<div class="' . $class . '"><span class="timestamp">' . esc_html($timestamp) . '</span> ' . esc_html($message) . '</div>';
-            }
+            // Remove leading tab spaces and spaces from each line
+            $cleaned_lines = array_map(function($line) {
+                return trim($line);
+            }, $latest_lines);
             ?>
-            <div class="cursor blink">#</div>
-        </div>
-        <?php
+            <div class="logs-container">
+                <?php
+                // Output the latest 5 lines
+                foreach ($cleaned_lines as $line) {
+                    // Extract timestamp and message
+                    preg_match('/^\[(.*?)\]\s*(.*?)$/', $line, $matches);
+                    $timestamp = isset($matches[1]) ? $matches[1] : '';
+                    $message = isset($matches[2]) ? $matches[2] : '';
+
+                    // Apply different CSS classes based on whether it's an error line or not
+                    $class = strpos($message, 'ERROR') !== false ? 'error-line' : (strpos($message, 'SUCCESS') !== false ? 'success-line' : 'normal-line');
+
+                    // Output the line with the appropriate CSS class
+                    echo '<div class="' . esc_attr($class) . '"><span class="timestamp">' . esc_html($timestamp) . '</span> ' . esc_html($message) . '</div>';
+                }
+                ?>
+                <div class="cursor blink">#</div>
+            </div>
+            <?php
+        } else {
+             echo '<p>Unable to read log file. Please check file permissions.</p>';
+        }
+    } else {
+        echo '<p>Log file not found or is not readable.</p>';
     }
 }
 
@@ -634,7 +753,7 @@ function nginx_cache_limit_rate_callback() {
 function fetch_default_reject_regex_from_php_file() {
     $php_file_path = plugin_dir_path(__FILE__) . 'index.php';
     if (file_exists($php_file_path)) {
-        $file_content = file_get_contents($php_file_path);
+        $file_content = read_file($php_file_path);
         $regex_match = preg_match('/\$reject_regex\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
         if ($regex_match && isset($matches[1])) {
             return $matches[1];
@@ -662,7 +781,7 @@ function nginx_cache_settings_sanitize($input) {
             $log_message = 'ERROR: Restricted/Invalid path: It seems this path is critical system path and not allowed for safe purge operations';
             $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
-                file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $log_message . PHP_EOL, FILE_APPEND);
+                append_to_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
@@ -685,7 +804,7 @@ function nginx_cache_settings_sanitize($input) {
             $log_message = 'ERROR: Please enter a valid email address.';
             $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
-                file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $log_message . PHP_EOL, FILE_APPEND);
+                append_to_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
@@ -708,7 +827,7 @@ function nginx_cache_settings_sanitize($input) {
             $log_message = 'ERROR: Please enter a CPU limit between 10 and 100.';
             $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
-                file_put_contents($log_file_path, '[' . date('Y-m-d H:i:s') . '] ' . $log_message . PHP_EOL, FILE_APPEND);
+                append_to_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
@@ -800,7 +919,7 @@ function defaults_on_plugin_activation() {
     // Create the log file if it doesn't exist
     $log_file_path = NGINX_CACHE_LOG_FILE;
     if (!file_exists($log_file_path)) {
-        $log_file_created = touch($log_file_path);
+        $log_file_created = create_file($log_file_path);
         if (!$log_file_created) {
             // Log file creation failed, handle error accordingly
             error_log('Failed to create log file: ' . $log_file_path);
