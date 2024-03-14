@@ -99,7 +99,7 @@ function create_file($file_path) {
 }
 
 // Function to append data to a file using WP_Filesystem
-function append_file($file_path, $data) {
+function append_data($file_path, $data) {
     global $wp_filesystem;
 
     // Initialize WP_Filesystem
@@ -112,6 +112,7 @@ function append_file($file_path, $data) {
     } else {
         // Append data to the file using WP_Filesystem method
         $result = $wp_filesystem->put_contents($file_path, $data, FILE_APPEND);
+	$wp_filesystem->chmod($file_path, 0644);
 
         // Check if appending to the file was successful
         if ($result === false) {
@@ -258,7 +259,7 @@ function display_admin_notice($type, $message) {
     echo '<div class="notice notice-' . esc_attr($type) . '"><p>' . esc_html($message) . '</p></div>';
     // Write to the log file
     $log_file_path = NGINX_CACHE_LOG_FILE;
-    !empty($log_file_path) ? append_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $message) : die("Log file not found!");
+    !empty($log_file_path) ? append_data($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $message) : die("Log file not found!");
 }
 
 // Preload operation
@@ -706,7 +707,7 @@ function nginx_cache_logs_callback() {
     $log_file_path = NGINX_CACHE_LOG_FILE;
     if (file_exists($log_file_path) && is_readable($log_file_path)) {
         // Read the log file into an array of lines
-        $lines = read_file($log_file_path);
+        $lines = file($log_file_path);
         // Get the latest 5 lines
         if (is_array($lines)) {
             $latest_lines = array_slice($lines, -5);
@@ -781,7 +782,7 @@ function nginx_cache_settings_sanitize($input) {
             $log_message = 'ERROR: Restricted/Invalid path: It seems this path is critical system path and not allowed for safe purge operations';
             $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
-                append_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
+                append_data($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
@@ -804,7 +805,7 @@ function nginx_cache_settings_sanitize($input) {
             $log_message = 'ERROR: Please enter a valid email address.';
             $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
-                append_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
+                append_data($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
@@ -827,7 +828,7 @@ function nginx_cache_settings_sanitize($input) {
             $log_message = 'ERROR: Please enter a CPU limit between 10 and 100.';
             $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
-                append_file($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
+                append_data($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
