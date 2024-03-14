@@ -1,13 +1,18 @@
 <?php
-/*
-Plugin Name: Nginx FastCGI Cache and Preload For Wordpress
-Plugin URI: https://www.psauxit.com
-Description: This plugin allows you to manage Nginx FastCGI cache and preload operations directly from your WordPress admin dashboard.
-Version: 1.0
-Author: Hasan ÇALIŞIR | hasan.calisir@psauxit.com
-Author URI: https://www.psauxit.com
-License: GPL2
-*/
+/**
+ * Plugin Name:       Nginx FastCGI Cache Purge and Preload
+ * Plugin URI:        https://wordpress.org/plugins/nginx-fastcgi-cache-purge-and-preload/
+ * Description:       Manage Nginx FastCGI Cache Purge and Preload operations directly from your WordPress admin dashboard.
+ * Version:           1.0.0
+ * Author:            Hasan CALISIR
+ * Author URI:        https://www.psauxit.com/
+ * Author Email:      hasan.calisir@psauxit.com
+ * License:           GPL-2.0+
+ * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
+ * Text Domain:       psauxit
+ * Requires at least: 5.4
+ * Requires PHP:      7.4
+ */
 
 // Define a constant for the log file path
 define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
