@@ -139,3 +139,11 @@
   color: #0073e6;
   margin-right: 10px;
 }
+
+.nginx-reset-regex-button {
+    margin-top: 10px !important;
+}
+
+.nginx-clear-logs-button {
+    margin-top: 10px !important;
+}
