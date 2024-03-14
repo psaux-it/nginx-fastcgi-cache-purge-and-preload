@@ -73,13 +73,38 @@ function check_wget_availability() {
 }
 add_action('admin_init', 'check_wget_availability');
 
-// Display warning message only on the plugin settings page
+// Check ACLs for purge operation
+function check_acl_availability() {
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $default_cache_path = find_user_home_folder() . '/change-me-nginx';
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+
+    $output = shell_exec("ls -ld \"$nginx_cache_path\" | awk '{print $1}' | grep '+'");
+        if ($output === null) {
+        add_action('admin_notices', 'display_acl_warning');
+    }
+}
+add_action('admin_init', 'check_acl_availability');
+
+// Display acl warning message only on the plugin settings page
+function display_acl_warning() {
+    $current_page = isset($_GET['page']) ? $_GET['page'] : '';
+    if ($current_page === 'nginx_cache_settings') {
+        ?>
+        <div class="notice notice-error">
+            <p><?php _e('ERROR PERMISSON: The purge action may not work as expected due to permission constraints. ACLs have not been applied to the Nginx cache folder to grant permissions to the PHP-FPM user. Kindly refer to the plugins help section for assistance.', 'textdomain'); ?></p>
+        </div>
+        <?php
+    }
+}
+
+// Display wget warning message only on the plugin settings page
 function display_wget_warning() {
     $current_page = isset($_GET['page']) ? $_GET['page'] : '';
     if ($current_page === 'nginx_cache_settings') {
         ?>
         <div class="notice notice-error">
-            <p><?php _e('Warning: Preload action disabled ! The "wget" command is not available on your system. Please make sure wget is installed to use Nginx Cache Preload feature.', 'textdomain'); ?></p>
+            <p><?php _e('ERROR COMMAND: Preload action disabled! The "wget" command is not available on your system. Please make sure "wget" is installed to use Nginx Cache Preload feature.', 'textdomain'); ?></p>
         </div>
         <?php
     }
