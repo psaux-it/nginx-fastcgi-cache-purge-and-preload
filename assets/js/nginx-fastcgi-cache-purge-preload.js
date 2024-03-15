@@ -1,10 +1,11 @@
 /**
- * JavaScript for Nginx FastCGI Cache and Preload For Wordpress plugin
- * Description: This JavaScript file contains functions to manage Nginx FastCGI Cache and Preload For Wordpress plugin and interact with WordPress admin dashboard.
- * Version: 1.0
- * Author: Hasan CALISIR | hasan.calisir@psauxit.com
+ * JavaScript for Nginx FastCGI Cache Purge and Preload
+ * Description: This JavaScript file contains functions to manage Nginx FastCGI Cache Purge and Preload plugin and interact with WordPress admin dashboard.
+ * Version: 1.0.1
+ * Author: Hasan ÇALIŞIR
+ * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
- * License: GPL2, WordPress copyright GPL.
+ * License: GPL-2.0+
  */
 
 jQuery.noConflict();
