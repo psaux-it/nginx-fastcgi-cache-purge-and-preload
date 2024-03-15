@@ -14,116 +14,6 @@
  * Requires PHP:      7.4
  */
 
-// Wordpress way to delete file
-function delete_file($file_path) {
-    // Check if WP_Filesystem is available
-    if (!function_exists('WP_Filesystem')) {
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-    }
-
-    // Initialize WP_Filesystem
-    global $wp_filesystem;
-    WP_Filesystem();
-
-    // Check if WP_Filesystem initialization was successful
-    if (!is_wp_error($wp_filesystem)) {
-        // Perform file deletion using WP_Filesystem method
-        if ($wp_filesystem->exists($file_path)) {
-            $wp_filesystem->delete($file_path);
-        }
-    }
-}
-
-// Wordpress way to read file
-function read_file($file_path) {
-    global $wp_filesystem;
-
-    // Initialize WP_Filesystem
-    WP_Filesystem();
-
-    // Check if WP_Filesystem initialization was successful
-    if (is_wp_error($wp_filesystem)) {
-        // Handle initialization error
-        return false;
-    } else {
-        // Read the file contents using WP_Filesystem method
-        return $wp_filesystem->get_contents($file_path);
-    }
-}
-
-// Wordpress way to write file
-function write_file($file_path, $data) {
-    global $wp_filesystem;
-
-    // Initialize WP_Filesystem
-    WP_Filesystem();
-
-    // Check if WP_Filesystem initialization was successful
-    if (is_wp_error($wp_filesystem)) {
-        // Handle initialization error
-        return false;
-    } else {
-        // Write data to the file using WP_Filesystem method
-        $result = $wp_filesystem->put_contents($file_path, $data);
-
-        // Check if writing to the file was successful
-        if ($result === false) {
-            // Handle error writing to the file
-            return false;
-        } else {
-            return true;
-        }
-    }
-}
-
-// Wordpress way to create file
-function create_file($file_path) {
-    // Check if WP_Filesystem is available
-    if ( ! function_exists( 'WP_Filesystem' ) ) {
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-    }
-
-    // Initialize the WP_Filesystem
-    if ( WP_Filesystem() ) {
-        global $wp_filesystem;
-
-        // Check if the file already exists
-        if ( ! $wp_filesystem->exists( $file_path ) ) {
-            // Create the file
-            return $wp_filesystem->touch( $file_path );
-        }
-    }
-
-    // Return false if WP_Filesystem failed to initialize or the file already exists
-    return false;
-}
-
-// Function to append data to a file using WP_Filesystem
-function append_data($file_path, $data) {
-    global $wp_filesystem;
-
-    // Initialize WP_Filesystem
-    WP_Filesystem();
-
-    // Check if WP_Filesystem initialization was successful
-    if (is_wp_error($wp_filesystem)) {
-        // Handle initialization error
-        return false;
-    } else {
-        // Append data to the file using WP_Filesystem method
-        $result = $wp_filesystem->put_contents($file_path, $data, FILE_APPEND);
-	$wp_filesystem->chmod($file_path, 0644);
-
-        // Check if appending to the file was successful
-        if ($result === false) {
-            // Handle error appending to the file
-            return false;
-        } else {
-            return true;
-        }
-    }
-}
-
 // Define a constant for the log file path
 define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
 
@@ -254,12 +144,163 @@ function handle_fastcgi_cache_actions_admin_bar() {
 }
 add_action('admin_init', 'handle_fastcgi_cache_actions_admin_bar');
 
+// Wordpress WP File System Functions
+////////////////////////////////////////////////////////////////////
+// Wordpress way to delete file
+function delete_file($file_path) {
+    // Check if WP_Filesystem is available
+    if (!function_exists('WP_Filesystem')) {
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+    }
+
+    // Verify WP file-system credentials.
+    $verified_credentials = request_filesystem_credentials(site_url() . '/wp-admin/', '', false, false, null);
+
+    if ( is_wp_error( $verified_credentials ) ) {
+        return $verified_credentials;
+    }
+
+    // Initialize WP_Filesystem
+    WP_Filesystem($verified_credentials);
+    global $wp_filesystem;
+
+    // Check if WP_Filesystem initialization was successful
+    if (!is_wp_error($wp_filesystem)) {
+        // Perform file deletion using WP_Filesystem method
+        if ($wp_filesystem->exists($file_path)) {
+            $wp_filesystem->delete($file_path);
+        }
+    }
+}
+
+// Wordpress way to read file
+function read_file($file_path) {
+    // Check if WP_Filesystem is available
+    if (!function_exists('WP_Filesystem')) {
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+    }
+
+    // Verify WP file-system credentials.
+    $verified_credentials = request_filesystem_credentials(site_url() . '/wp-admin/', '', false, false, null);
+
+    if ( is_wp_error( $verified_credentials ) ) {
+        return $verified_credentials;
+    }
+
+    // Initialize WP_Filesystem
+    WP_Filesystem($verified_credentials);
+    global $wp_filesystem;
+
+    // Check if WP_Filesystem initialization was successful
+    if (is_wp_error($wp_filesystem)) {
+        // Handle initialization error
+        return false;
+    } else {
+        // Read the file contents using WP_Filesystem method
+        return $wp_filesystem->get_contents($file_path);
+    }
+}
+
+// Wordpress way to write file
+function write_file($file_path, $data) {
+    // Check if WP_Filesystem is available
+    if (!function_exists('WP_Filesystem')) {
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+    }
+
+    // Verify WP file-system credentials.
+    $verified_credentials = request_filesystem_credentials(site_url() . '/wp-admin/', '', false, false, null);
+
+    if ( is_wp_error( $verified_credentials ) ) {
+        return $verified_credentials;
+    }
+
+    // Initialize WP_Filesyste
+    WP_Filesystem($verified_credentials);
+    global $wp_filesystem;
+
+    // Check if WP_Filesystem initialization was successful
+    if (is_wp_error($wp_filesystem)) {
+        // Handle initialization error
+        return false;
+    } else {
+        // Write data to the file using WP_Filesystem method
+        $result = $wp_filesystem->put_contents($file_path, $data);
+
+        // Check if writing to the file was successful
+        if ($result === false) {
+            // Handle error writing to the file
+            return false;
+        } else {
+            return true;
+        }
+    }
+}
+
+// Wordpress way to create file
+function create_file($file_path) {
+    // Check if WP_Filesystem is available
+    if ( ! function_exists( 'WP_Filesystem' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+    }
+
+     // Verify WP file-system credentials.
+    $verified_credentials = request_filesystem_credentials(site_url() . '/wp-admin/', '', false, false, null);
+
+    if ( is_wp_error( $verified_credentials ) ) {
+        return $verified_credentials;
+    }
+
+    // Initialize the WP_Filesystem
+    if ( WP_Filesystem($verified_credentials) ) {
+        global $wp_filesystem;
+
+        // Check if the file already exists
+        if ( ! $wp_filesystem->exists($file_path) ) {
+            // Create the file
+            return $wp_filesystem->touch($file_path);
+            $wp_filesystem->chmod($file_path, 0644);
+        }
+    }
+
+    // Return false if WP_Filesystem failed to initialize or the file already exists
+    return false;
+}
+////////////////////////////////////////////////////////////////////
+
+// Write to log
+function write_to_log($log_file_path, $message) {
+    // Check if the log file path is not empty and is writable
+    if (!empty($log_file_path) && is_writable($log_file_path)) {
+        // Open the log file in append mode
+        $handle = fopen($log_file_path, 'a');
+
+        // Check if the file handle was opened successfully
+        if ($handle !== false) {
+            // Write the message to the log file
+            $write_result = fwrite($handle, $message . PHP_EOL);
+
+            // Close the file handle
+            fclose($handle);
+
+            // Return true if writing to the log file was successful, otherwise false
+            return $write_result !== false;
+        } else {
+            // Unable to open log file for writing
+            return false;
+        }
+    } else {
+        // Log file not found or not writable
+        return false;
+    }
+}
+
 // Display admin notices
 function display_admin_notice($type, $message) {
     echo '<div class="notice notice-' . esc_attr($type) . '"><p>' . esc_html($message) . '</p></div>';
     // Write to the log file
     $log_file_path = NGINX_CACHE_LOG_FILE;
-    !empty($log_file_path) ? append_data($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $message) : die("Log file not found!");
+    !empty($log_file_path) ? write_to_log($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $message) : die("Log file not found!");
 }
 
 // Preload operation
@@ -406,7 +447,7 @@ function check_processes_status() {
     // If the process is running, display admin notice for preload in progress
     if (file_exists($PIDFILE)) {
         $pid = intval(read_file($PIDFILE));
-        
+
         if ($pid > 0 && posix_kill($pid, 0)) {
             display_admin_notice('info', 'INFO: FastCGI cache preload is in progress...');
             return;
@@ -422,7 +463,7 @@ function check_processes_status() {
             if ($send_mail && !empty($nginx_cache_email) && $nginx_cache_email !== $default_email) {
                 // Extract the domain from the WordPress site URL
                 $site_url = get_site_url();
-				$site_url_parts = wp_parse_url($site_url);
+                $site_url_parts = wp_parse_url($site_url);
                 $domain = str_replace('www.', '', $site_url_parts['host']);
                 // Set mail_from address with user domain
                 $mail_from = "From: Nginx FastCGI Cache Purge Preload Wordpress<fcgi-cache@$domain>";
@@ -703,6 +744,7 @@ function nginx_cache_reject_regex_callback() {
 }
 
 // Callback function to display the Logs field
+// Callback function to display the Logs field
 function nginx_cache_logs_callback() {
     $log_file_path = NGINX_CACHE_LOG_FILE;
     if (file_exists($log_file_path) && is_readable($log_file_path)) {
@@ -782,7 +824,7 @@ function nginx_cache_settings_sanitize($input) {
             $log_message = 'ERROR: Restricted/Invalid path: It seems this path is critical system path and not allowed for safe purge operations';
             $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
-                append_data($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
+                write_to_log($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
@@ -805,7 +847,7 @@ function nginx_cache_settings_sanitize($input) {
             $log_message = 'ERROR: Please enter a valid email address.';
             $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
-                append_data($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
+                write_to_log($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
@@ -828,7 +870,7 @@ function nginx_cache_settings_sanitize($input) {
             $log_message = 'ERROR: Please enter a CPU limit between 10 and 100.';
             $log_file_path = NGINX_CACHE_LOG_FILE;
             if (!empty($log_file_path)) {
-                append_data($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
+                write_to_log($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
