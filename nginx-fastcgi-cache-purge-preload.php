@@ -253,7 +253,7 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
             $cpulimit = 0;
         }
 
-        $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$this_script_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' \"$fdomain\" >/dev/null 2>&1 & echo $!";
+        $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$this_script_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' \"$fdomain\" >/dev/null 2>&1 & echo \$!";
         $output = shell_exec($command);
 
         // Write PID to PID file
