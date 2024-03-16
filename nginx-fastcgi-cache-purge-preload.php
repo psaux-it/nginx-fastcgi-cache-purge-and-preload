@@ -197,6 +197,24 @@ function perform_file_operation($file_path, $operation, $data = null) {
             return false; // Return false for unsupported operation
     }
 }
+
+// Function to remove a directory using WP_Filesystem
+function wp_remove_directory($directory_path, $recursive = true) {
+    $wp_filesystem = initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        return false; // Return false if WP_Filesystem initialization failed
+    }
+
+    // Check if the directory exists before attempting to remove it
+    if ($wp_filesystem->is_dir($directory_path)) {
+        // Use rmdir function to remove the directory
+        return $wp_filesystem->rmdir($directory_path, $recursive);
+    } else {
+        // Directory does not exist
+        return false;
+    }
+}
 ////////////////////////////////////////////////////////////////////
 
 // Create log file
@@ -253,7 +271,9 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
             $cpulimit = 0;
         }
 
-        $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$this_script_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' \"$fdomain\" >/dev/null 2>&1 & echo \$!";
+        // Keep absolute download content in /tmp
+        $tmp_path = rtrim($this_script_path, '/') . "/tmp";
+        $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' \"$fdomain\" >/dev/null 2>&1 & echo \$!";
         $output = shell_exec($command);
 
         // Write PID to PID file
@@ -395,6 +415,11 @@ function check_processes_status() {
             // Display admin notice for completed preload
             display_admin_notice('success', 'SUCCESS: FastCGI cache preload is completed!');
 
+            // Remove absolute downloaded content
+            $this_script_path = plugin_dir_path(__FILE__);
+            $tmp_path = rtrim($this_script_path, '/') . "/tmp";
+            wp_remove_directory($tmp_path, true);
+            
             // If the process is not running, delete the PID file
             perform_file_operation($PIDFILE, 'delete');
         }
