@@ -198,6 +198,38 @@ function perform_file_operation($file_path, $operation, $data = null) {
     }
 }
 
+function wp_purge($directory_path) {
+    $wp_filesystem = initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        return false; // Return false if WP_Filesystem initialization failed
+    }
+
+    // Check if the directory exists before attempting to remove its contents
+    if ($wp_filesystem->is_dir($directory_path)) {
+        // Get directory contents
+        $contents = $wp_filesystem->dirlist($directory_path);
+
+        // Delete files and directories in the directory
+        foreach ($contents as $file) {
+            $file_path = trailingslashit($directory_path) . $file['name'];
+            if ($wp_filesystem->is_file($file_path) || $wp_filesystem->is_dir($file_path)) {
+                // Attempt to delete file or directory
+                $deleted = $wp_filesystem->delete($file_path, true);
+                if (!$deleted) {
+                    // Error occurred while deleting file or directory
+                    return new WP_Error('delete_error', 'Error deleting file or directory: ' . $file_path);
+                }
+            }
+        }
+
+        return true; // Contents removed successfully
+    } else {
+        // Directory does not exist
+        return new WP_Error('directory_not_found', 'Directory not found.');
+    }
+}
+
 // Function to remove a directory using WP_Filesystem
 function wp_remove_directory($directory_path, $recursive = true) {
     $wp_filesystem = initialize_wp_filesystem();
@@ -261,10 +293,9 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
             exit(1);
         }
 
+        // Check cpulimit command exist
         $cpulimitPath = shell_exec('type cpulimit');
 
-        // Start cache preloading
-        // TODO: try to remove >/dev/null 2>&1 and catch all errors and handle errors better
         if (!empty(trim($cpulimitPath))) {
             $cpulimit = 1;
         } else {
@@ -273,13 +304,16 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
 
         // Keep absolute download content in /tmp
         $tmp_path = rtrim($this_script_path, '/') . "/tmp";
+
+        // Start cache preloading
         $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' \"$fdomain\" >/dev/null 2>&1 & echo \$!";
         $output = shell_exec($command);
 
-        // Write PID to PID file
+        // Keep PID in file
         if ($output !== null) {
             $pid = trim($output);
             perform_file_operation($PIDFILE, 'write', $pid);
+            // Start cpulimit if it is exist
             if ($cpulimit === 1) {
                 $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" >/dev/null 2>&1 &";
                 shell_exec($command);
@@ -300,13 +334,12 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
 function purge_helper($nginx_cache_path) {
     // Check if the target path exists and is a directory
     if (is_dir($nginx_cache_path)) {
-        // Recursively remove the directory and its contents. Redirect stderr to stdout to capture any errors.
-        $command = "find $nginx_cache_path -mindepth 1 -delete 2>&1";
-        $output = shell_exec($command);
+        // Recursively remove the directory and its contents with WP Filesystem
+        $result = wp_purge($nginx_cache_path);
 
-        // Check if output contains "Permission denied" or other indications of a failure
-        if (strpos($output, 'Permission denied') !== false || strpos($output, 'cannot delete') !== false) {
-            return 1; // Permission issue or other error
+        // Check cache purge status
+        if (is_wp_error($result)) {
+            return 1; // Permission issue
         } else {
             return 0; // Assume purge successful
         }
