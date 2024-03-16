@@ -144,11 +144,9 @@ function handle_fastcgi_cache_actions_admin_bar() {
 }
 add_action('admin_init', 'handle_fastcgi_cache_actions_admin_bar');
 
-// Wordpress WP File System Functions
+// Function to verify WP file-system credentials and initialize WP_Filesystem
 ////////////////////////////////////////////////////////////////////
-// Wordpress way to delete file
-function delete_file($file_path) {
-    // Check if WP_Filesystem is available
+function initialize_wp_filesystem() {
     if (!function_exists('WP_Filesystem')) {
         require_once ABSPATH . 'wp-admin/includes/file.php';
     }
@@ -156,150 +154,55 @@ function delete_file($file_path) {
     // Verify WP file-system credentials.
     $verified_credentials = request_filesystem_credentials(site_url() . '/wp-admin/', '', false, false, null);
 
-    if ( is_wp_error( $verified_credentials ) ) {
+    if (is_wp_error($verified_credentials)) {
         return $verified_credentials;
     }
 
     // Initialize WP_Filesystem
-    WP_Filesystem($verified_credentials);
-    global $wp_filesystem;
-
-    // Check if WP_Filesystem initialization was successful
-    if (!is_wp_error($wp_filesystem)) {
-        // Perform file deletion using WP_Filesystem method
-        if ($wp_filesystem->exists($file_path)) {
-            $wp_filesystem->delete($file_path);
-        }
-    }
-}
-
-// Wordpress way to read file
-function read_file($file_path) {
-    // Check if WP_Filesystem is available
-    if (!function_exists('WP_Filesystem')) {
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-    }
-
-    // Verify WP file-system credentials.
-    $verified_credentials = request_filesystem_credentials(site_url() . '/wp-admin/', '', false, false, null);
-
-    if ( is_wp_error( $verified_credentials ) ) {
-        return $verified_credentials;
-    }
-
-    // Initialize WP_Filesystem
-    WP_Filesystem($verified_credentials);
-    global $wp_filesystem;
-
-    // Check if WP_Filesystem initialization was successful
-    if (is_wp_error($wp_filesystem)) {
-        // Handle initialization error
-        return false;
-    } else {
-        // Read the file contents using WP_Filesystem method
-        return $wp_filesystem->get_contents($file_path);
-    }
-}
-
-// Wordpress way to write file
-function write_file($file_path, $data) {
-    // Check if WP_Filesystem is available
-    if (!function_exists('WP_Filesystem')) {
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-    }
-
-    // Verify WP file-system credentials.
-    $verified_credentials = request_filesystem_credentials(site_url() . '/wp-admin/', '', false, false, null);
-
-    if ( is_wp_error( $verified_credentials ) ) {
-        return $verified_credentials;
-    }
-
-    // Initialize WP_Filesyste
-    WP_Filesystem($verified_credentials);
-    global $wp_filesystem;
-
-    // Check if WP_Filesystem initialization was successful
-    if (is_wp_error($wp_filesystem)) {
-        // Handle initialization error
-        return false;
-    } else {
-        // Write data to the file using WP_Filesystem method
-        $result = $wp_filesystem->put_contents($file_path, $data);
-
-        // Check if writing to the file was successful
-        if ($result === false) {
-            // Handle error writing to the file
-            return false;
-        } else {
-            return true;
-        }
-    }
-}
-
-// Wordpress way to create file
-function create_file($file_path) {
-    // Check if WP_Filesystem is available
-    if ( ! function_exists( 'WP_Filesystem' ) ) {
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-    }
-
-     // Verify WP file-system credentials.
-    $verified_credentials = request_filesystem_credentials(site_url() . '/wp-admin/', '', false, false, null);
-
-    if ( is_wp_error( $verified_credentials ) ) {
-        return $verified_credentials;
-    }
-
-    // Initialize the WP_Filesystem
-    if ( WP_Filesystem($verified_credentials) ) {
+    if (WP_Filesystem($verified_credentials)) {
         global $wp_filesystem;
-
-        // Check if the file already exists
-        if ( ! $wp_filesystem->exists($file_path) ) {
-            // Create the file
-            return $wp_filesystem->touch($file_path);
-            $wp_filesystem->chmod($file_path, 0644);
-        }
+        return $wp_filesystem;
     }
 
-    // Return false if WP_Filesystem failed to initialize or the file already exists
-    return false;
+    return false; // Return false if initialization failed
 }
 
-// Wordpress way to append data
-function append_data($file_path, $content) {
-    // Initialize the WordPress filesystem.
-    if ( ! function_exists( 'WP_Filesystem' ) ) {
-        require_once ABSPATH . 'wp-admin/includes/file.php';
+// Function to perform file operations (delete, read, write, create, append)
+function perform_file_operation($file_path, $operation, $data = null) {
+    $wp_filesystem = initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        return false; // Return false if WP_Filesystem initialization failed
     }
 
-    // Verify WP file-system credentials.
-    $verified_credentials = request_filesystem_credentials(site_url() . '/wp-admin/', '', false, false, null);
-
-    if ( is_wp_error( $verified_credentials ) ) {
-        return $verified_credentials;
+    switch ($operation) {
+        case 'delete':
+            return $wp_filesystem->delete($file_path);
+        case 'read':
+            return $wp_filesystem->get_contents($file_path);
+        case 'write':
+            return $wp_filesystem->put_contents($file_path, $data);
+        case 'create':
+            if (!$wp_filesystem->exists($file_path)) {
+                $wp_filesystem->touch($file_path);
+                $wp_filesystem->chmod($file_path, 0644);
+                return true;
+            }
+            return false; // Return false if file already exists
+        case 'append':
+            $current_content = $wp_filesystem->get_contents($file_path);
+            $updated_content = $current_content . "\n" . $data; // Append with newline
+            return $wp_filesystem->put_contents($file_path, $updated_content, FS_CHMOD_FILE);
+        default:
+            return false; // Return false for unsupported operation
     }
-
-    // Initialize WP_Filesyste
-    WP_Filesystem($verified_credentials);
-    global $wp_filesystem;
-
-    // Read existing content
-    $current_content = read_file($file_path);
-
-    // Append new content
-    $updated_content = $current_content . "\n" . $content; // Append with newline
-
-    // Write updated content back to the file
-    return $wp_filesystem->put_contents($file_path, $updated_content, FS_CHMOD_FILE);
 }
 ////////////////////////////////////////////////////////////////////
 
 // Create log file
 function create_log_file($log_file_path) {
     if (!empty($log_file_path)) {
-        $file_creation_result = create_file($log_file_path);
+        $file_creation_result = perform_file_operation($log_file_path, 'create');
         if (is_wp_error($file_creation_result)) {
             return "Error: " . $file_creation_result->get_error_message();
         }
@@ -313,15 +216,15 @@ function display_admin_notice($type, $message) {
     echo '<div class="notice notice-' . esc_attr($type) . '"><p>' . esc_html($message) . '</p></div>';
     // Write to the log file
     $log_file_path = NGINX_CACHE_LOG_FILE;
-    create_file($log_file_path);	
-    !empty($log_file_path) ? append_data($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $message) : die("Log file not found!");
+    perform_file_operation($log_file_path, 'create');
+    !empty($log_file_path) ? perform_file_operation($log_file_path, 'append', '[' . gmdate('Y-m-d H:i:s') . '] ' . $message) : die("Log file not found!");
 }
 
 // Preload operation
 function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit) {
     // Check if there is an ongoing preload process active
     if (file_exists($PIDFILE)) {
-        $pid = intval(read_file($PIDFILE));
+        $pid = intval(perform_file_operation($PIDFILE, 'read'));
 
         if ($pid > 0 && posix_kill($pid, 0)) {
             display_admin_notice('info', 'INFO: FastCGI cache preloading is already running. If you want to stop it please Purge Cache now!');
@@ -335,7 +238,7 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
     // Handle different status codes
     if ($status === 0) {
         // Create PID file
-        if (!create_file($PIDFILE)) {
+        if (!perform_file_operation($PIDFILE, 'create')) {
             display_admin_notice('error', 'FATAL PERMISSION ERROR: Failed to create PID file.');
             exit(1);
         }
@@ -356,7 +259,7 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
         // Write PID to PID file
         if ($output !== null) {
             $pid = trim($output);
-            write_file($PIDFILE, $pid);
+            perform_file_operation($PIDFILE, 'write', $pid);
             if ($cpulimit === 1) {
                 $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" >/dev/null 2>&1 &";
                 shell_exec($command);
@@ -400,7 +303,7 @@ function purge($nginx_cache_path, $PIDFILE) {
 
     // Check if the PID file exists
     if (file_exists($PIDFILE)) {
-        $pid = intval(read_file($PIDFILE));
+        $pid = intval(perform_file_operation($PIDFILE, 'read'));
 
         // Check if the preload process is alive
         if ($pid > 0 && posix_kill($pid, 0)) {
@@ -428,7 +331,7 @@ function purge($nginx_cache_path, $PIDFILE) {
             }
 
             // Remove the PID file
-            delete_file($PIDFILE);
+            perform_file_operation($PIDFILE, 'delete');
         }
     } else {
         // Call purge_helper to delete cache contents and get status
@@ -460,7 +363,7 @@ function check_processes_status() {
     $PIDFILE = plugin_dir_path(__FILE__) . 'cache_preload.pid'; // Path to the PID file in the plugin directory
     // If the process is running, display admin notice for preload in progress
     if (file_exists($PIDFILE)) {
-        $pid = intval(read_file($PIDFILE));
+        $pid = intval(perform_file_operation($PIDFILE, 'read'));
 
         if ($pid > 0 && posix_kill($pid, 0)) {
             display_admin_notice('info', 'INFO: FastCGI cache preload is in progress...');
@@ -493,7 +396,7 @@ function check_processes_status() {
             display_admin_notice('success', 'SUCCESS: FastCGI cache preload is completed!');
 
             // If the process is not running, delete the PID file
-            delete_file($PIDFILE);
+            perform_file_operation($PIDFILE, 'delete');
         }
     }
 }
@@ -673,7 +576,7 @@ function clear_nginx_cache_logs() {
 
     $log_file_path = NGINX_CACHE_LOG_FILE;
     if (file_exists($log_file_path)) {
-        write_file($log_file_path, '');
+        perform_file_operation($log_file_path, 'write', '');
         display_admin_notice('success', 'SUCCESS: Logs cleared successfully.');
     } else {
         display_admin_notice('error', 'ERROR: No logs available.');
@@ -759,7 +662,7 @@ function nginx_cache_reject_regex_callback() {
 // Callback function to display the Logs field
 function nginx_cache_logs_callback() {
     $log_file_path = NGINX_CACHE_LOG_FILE;
-    create_file($log_file_path);
+    perform_file_operation($log_file_path, 'create');
     if (file_exists($log_file_path) && is_readable($log_file_path)) {
         // Read the log file into an array of lines
         $lines = file($log_file_path);
@@ -811,7 +714,7 @@ function nginx_cache_limit_rate_callback() {
 function fetch_default_reject_regex_from_php_file() {
     $php_file_path = plugin_dir_path(__FILE__) . 'index.php';
     if (file_exists($php_file_path)) {
-        $file_content = read_file($php_file_path);
+        $file_content = perform_file_operation($php_file_path, 'read');
         $regex_match = preg_match('/\$reject_regex\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
         if ($regex_match && isset($matches[1])) {
             return $matches[1];
@@ -838,9 +741,9 @@ function nginx_cache_settings_sanitize($input) {
             // Log error message
             $log_message = 'ERROR: Restricted/Invalid path: It seems this path is critical system path and not allowed for safe purge operations';
             $log_file_path = NGINX_CACHE_LOG_FILE;
-            create_file($log_file_path);
+            perform_file_operation($log_file_path, 'create');
             if (!empty($log_file_path)) {
-                append_data($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
+                perform_file_operation($log_file_path, 'append', '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
@@ -862,9 +765,9 @@ function nginx_cache_settings_sanitize($input) {
             // Log error message
             $log_message = 'ERROR: Please enter a valid email address.';
             $log_file_path = NGINX_CACHE_LOG_FILE;
-            create_file($log_file_path);
+            perform_file_operation($log_file_path, 'create');
             if (!empty($log_file_path)) {
-                append_data($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
+                perform_file_operation($log_file_path, 'append', '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
@@ -886,9 +789,9 @@ function nginx_cache_settings_sanitize($input) {
             // Log error message
             $log_message = 'ERROR: Please enter a CPU limit between 10 and 100.';
             $log_file_path = NGINX_CACHE_LOG_FILE;
-            create_file($log_file_path);
+            perform_file_operation($log_file_path, 'create');
             if (!empty($log_file_path)) {
-                append_data($log_file_path, '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
+                perform_file_operation($log_file_path, 'append', '[' . gmdate('Y-m-d H:i:s') . '] ' . $log_message);
             }
         }
     }
@@ -980,7 +883,7 @@ function defaults_on_plugin_activation() {
     // Create the log file if it doesn't exist
     $log_file_path = NGINX_CACHE_LOG_FILE;
     if (!file_exists($log_file_path)) {
-        $log_file_created = create_file($log_file_path);
+        $log_file_created = perform_file_operation($log_file_path, 'create');
         if (!$log_file_created) {
             // Log file creation failed, handle error accordingly
             error_log('Failed to create log file: ' . $log_file_path);
