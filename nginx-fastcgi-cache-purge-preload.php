@@ -139,7 +139,7 @@ function display_pre_check_warning($directory_exists_flag = false, $empty_direct
                 if ($directory_exists_flag) {
                     esc_html_e('ERROR PATH: The specified Nginx Cache Directory does not exist.');
                 } elseif ($empty_directory_flag) {
-                    esc_html_e('WARNING PERMISSION: Nginx cache directory is empty, but ACL permissions are configured. Please reload the WordPress site to confirm ACL status.');
+                    esc_html_e('WARNING PERMISSION: Nginx cache directory is empty. Please reload the WordPress site to check ACL status.');
                 } else {
                     esc_html_e('ERROR PERMISSION: Purge action will fail due to ACL permission constraints. Apply ACLs to Nginx Cache Folder for PHP-FPM user access. Refer to the plugins help section for assistance!');
                 }
@@ -612,7 +612,11 @@ function nginx_cache_settings_page() {
                         <th scope="row"><span class="dashicons dashicons-admin-site"></span> Nginx Cache Directory</th>
                         <td>
                             <?php nginx_cache_path_callback(); ?>
-                            <p class="description">Please specify the directory path for your Nginx cache. Please note that erase operation is irreversible, so proceed with caution</p>
+                            <p class="description">Please specify the directory path for Nginx Cache Purge operation. Please note that erase operation is irreversible, so proceed with caution</p>
+                            <p style="color: #333; background-color: #f2f2f2; border-left: 4px solid #999; padding: 10px; font-size: smaller;">
+                                NOTE: The plugin author explicitly disclaims any liability for unintended deletions resulting from incorrect directory entries.
+                                Users are solely responsible for verifying the directory's accuracy prior to deletion.
+                            </p>
                         </td>
                     </tr>
                     <tr valign="top">
