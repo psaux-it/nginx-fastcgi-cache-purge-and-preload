@@ -47,8 +47,8 @@ jQuery.noConflict();
         // JavaScript to handle tab switching
         // Run only in the my plugin settings page
         if ($('#nginx_cache_settings_nonce').length > 0) {
+            // Hide help tab
             $('#help').hide();
-            
             // Add event listener for tab clicks
             $('.nav-tab').click(function(e) {
                 e.preventDefault();
@@ -82,7 +82,11 @@ jQuery.noConflict();
                                 _wpnonce: nginx_cache_ajax_object.status_ajax_nonce
                             },
                             success: function(response) {
-                                 $('#status').html(response).addClass('active').addClass('loaded').show();
+                                if (response.trim() !== '') {
+                                    $('#status').html(response).addClass('active').addClass('loaded').show();
+                                } else {
+                                    console.error('Empty response received');
+                                }
                             },
                             error: function(xhr, status, error) {
                                 console.error(error);
