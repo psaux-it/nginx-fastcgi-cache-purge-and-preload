@@ -20,6 +20,7 @@ function my_status_ajax_callback() {
         $shortcode_content = my_status_shortcode();
         // Return the shortcode content
         echo $shortcode_content;
+        exit();
     } else {
         // Nonce verification failed, reject the request
         wp_die('Nonce verification failed.', 'Error', array('response' => 403));
