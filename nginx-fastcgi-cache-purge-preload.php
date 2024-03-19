@@ -19,6 +19,7 @@ define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
 
 // Help section of script
 require_once plugin_dir_path( __FILE__ ) . 'includes/helper.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/status.php';
 
 // Add buttons to WordPress admin bar
 function add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
@@ -519,11 +520,21 @@ function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Enqueue JavaScript file
     wp_enqueue_script('nginx-fastcgi-cache-admin', plugins_url('assets/js/nginx-fastcgi-cache-purge-preload.js', __FILE__), array('jquery'), '1.0.1', true);
 
+    // Create a nonce for clearing nginx cache logs
+    $clear_nginx_cache_logs_nonce = wp_create_nonce('clear-nginx-cache-logs');
+
+    // Create a nonce for updating send mail option
+    $update_send_mail_option_nonce = wp_create_nonce('update-send-mail-option');
+
+    // Create a new nonce for the status tab AJAX function
+    $status_ajax_nonce = wp_create_nonce('status_ajax_nonce');
+
     // Localize nonce value for JavaScript
     wp_localize_script('nginx-fastcgi-cache-admin', 'nginx_cache_ajax_object', array(
         'ajaxurl' => admin_url('admin-ajax.php'),
-        'nonce' => wp_create_nonce('clear-nginx-cache-logs'),
-        'send_mail_nonce' => wp_create_nonce('update-send-mail-option'),
+        'nonce' => $clear_nginx_cache_logs_nonce,
+        'send_mail_nonce' => $update_send_mail_option_nonce,
+        'status_ajax_nonce' => $status_ajax_nonce,
     ));
 }
 add_action('admin_enqueue_scripts', 'enqueue_nginx_fastcgi_cache_purge_preload_assets');
@@ -669,6 +680,9 @@ function nginx_cache_settings_page() {
                     <input type="submit" name="submit" class="button-primary" value="Save Changes">
                 </p>
             </form>
+        </div>
+        
+        <div id="status" class="tab-content">
         </div>
 
         <div id="help" class="tab-content">
