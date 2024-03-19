@@ -9,8 +9,7 @@
  * License: GPL-2.0+
  */
 
-
-// AJAX handler to fetch my_status shortcode content
+// AJAX handler to fetch shortcode content
 add_action('wp_ajax_my_status_ajax', 'my_status_ajax_callback');
 add_action('wp_ajax_nopriv_my_status_ajax', 'my_status_ajax_callback');
 function my_status_ajax_callback() {
@@ -27,7 +26,8 @@ function my_status_ajax_callback() {
     }
 }
 
-// Main status check function
+// Check purge action status
+// Check ACLs status
 function check_acl($flag = '') {
     $wp_filesystem = initialize_wp_filesystem();
 
@@ -43,9 +43,9 @@ function check_acl($flag = '') {
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
         // Directory does not exist
         if ($flag === 'purge') {
-            return 'Not Determined';
+            return 'Not Working';
         } elseif ($flag === 'acl') {
-            return 'Not Determined';
+            return 'Not Implemented';
         }
     }
 
@@ -88,15 +88,36 @@ function check_acl($flag = '') {
     }
 }
 
-// Check if a command is available
+// Check required command statuses
 function check_command_status($command) {
     $output = shell_exec("type $command");
     return !empty($output) ? 'Installed' : 'Not Installed';
 }
 
-// Check preload action working
+// Check preload action status
 function check_preload_status() {
     return check_command_status('wget') === 'Installed' ? 'Working' : 'Not Working';
+}
+
+// Check Nginx Cache Path status
+function check_path() {
+    $wp_filesystem = initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        return false; // Return false if WP_Filesystem initialization failed
+    }
+
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $default_cache_path = find_user_home_folder() . '/change-me-nginx';
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+
+     // Check if directory exists
+    if (!$wp_filesystem->is_dir($nginx_cache_path)) {
+        // Cache Directory does not exist
+        return 'Not Found';
+    } else {
+        return 'Found';
+    }
 }
 
 
@@ -136,7 +157,6 @@ function my_status_html() {
                     </tbody>
                 </table>
             </section>
-
             <section class="system-checks">
                 <h2>System Checks</h2>
                 <table>
@@ -147,6 +167,13 @@ function my_status_html() {
                         </tr>
                     </thead>
                     <tbody>
+                         <tr>
+                            <td class="check">Cache Path (Required for Purge)</td>
+                            <td class="status" id="cachePath">
+                                <span class="dashicons"></span>
+                                <span>Exist</span>
+                            </td>
+                        </tr>
                         <tr>
                             <td class="check">ACLs (Required for Purge)</td>
                             <td class="status" id="aclStatus">
@@ -179,6 +206,18 @@ function my_status_html() {
 
     <script>
         jQuery(document).ready(function($) {
+             // Fetch and update Purge Action status
+            var cachePathSpan = document.getElementById("cachePath");
+            var cachePath = "<?php echo check_path(); ?>";
+            cachePathSpan.textContent = cachePath;
+            if (cachePath === "Found") {
+                cachePathSpan.style.color = "green";
+                cachePathSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Found';
+            } else if (cachePath === "Not Found") {
+                cachePathSpan.style.color = "red";
+                cachePathSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Found';
+            }
+
             // Fetch and update Purge Action status
             var purgeStatusSpan = document.getElementById("purgeStatus");
             var purgeStatus = "<?php echo check_acl('purge'); ?>";
@@ -245,7 +284,7 @@ function my_status_html() {
                 cpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
             }
 
-            // Add event listener to update status on click
+            // Add spin effect to icons
             document.querySelectorAll('.status').forEach(status => {
                 status.addEventListener('click', () => {
                     status.querySelector('.dashicons').classList.add('spin');
