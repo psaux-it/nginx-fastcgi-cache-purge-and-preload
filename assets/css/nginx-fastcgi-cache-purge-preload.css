@@ -8,6 +8,9 @@
  * License: GPL-2.0+
  */
 
+/* Global Styles */
+
+/* Container for logs */
 .logs-container {
   background-color: #000000;
   border: 1px solid #ddd;
@@ -19,43 +22,52 @@
   font-size: 12px;
 }
 
+/* Log lines */
 .logs-container div {
   margin-bottom: 5px;
   white-space: pre-wrap;
   word-wrap: break-word;
 }
 
+/* Error log lines */
 .error-line {
   color: #ff5252;
 }
 
+/* Normal log lines */
 .normal-line {
   color: #bdbdbd;
 }
 
+/* Info log lines */
 .info-line {
   color: #bdbdbd;
 }
 
+/* Success log lines */
 .success-line {
   color: #64dd17;
 }
 
+/* Timestamp in logs */
 .logs-container .timestamp {
   color: white;
 }
 
+/* Cursor for logs */
 .cursor {
   color: #FFFFFF;
   animation: blink-animation 1s infinite;
 }
 
+/* Blink animation */
 @keyframes blink-animation {
   50% {
     opacity: 0;
   }
 }
 
+/* Responsive styles */
 @media screen and (max-width: 782px) {
   .form-table th,
   .form-table td {
@@ -68,10 +80,14 @@
   }
 }
 
+/* CSS for FAQ Tab */
+
+/* FAQ container */
 .faq {
   margin-bottom: 20px;
 }
 
+/* Question styles */
 .question {
   font-size: 15px;
   font-weight: bold;
@@ -86,16 +102,19 @@
   transition: background-color 0.3s ease;
 }
 
+/* Question icon */
 .question::before {
   content: '\f534';
   font-family: 'dashicons';
   margin-right: 10px;
 }
 
+/* Hover effect on question */
 .question:hover {
   background-color: #e0e0e0;
 }
 
+/* Answer container */
 .answer {
   display: none;
   padding: 20px;
@@ -106,10 +125,12 @@
   transition: transform 0.3s ease;
 }
 
+/* Show active answer */
 .answer.active {
   display: block;
 }
 
+/* Arrow icon for question */
 .question::after {
   content: '\f140';
   position: absolute;
@@ -121,10 +142,12 @@
   transition: transform 0.3s;
 }
 
+/* Rotate arrow when active */
 .active .question::after {
   transform: rotate(180deg);
 }
 
+/* List styles for FAQ */
 .nginx-list {
   list-style-type: none;
   padding-left: 0;
@@ -134,6 +157,7 @@
   margin-bottom: 10px;
 }
 
+/* Bullet styles for FAQ list */
 .nginx-list li::before {
   content: "\2022";
   font-size: 1.5em;
@@ -141,10 +165,94 @@
   margin-right: 10px;
 }
 
+/* Reset regex button styles */
 .nginx-reset-regex-button {
     margin-top: 10px !important;
 }
 
+/* Clear logs button styles */
 .nginx-clear-logs-button {
     margin-top: 10px !important;
+}
+
+/* CSS for Status Tab */
+
+/* Status Tab Container */
+#status-tab.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Status Summary Table */
+#status-tab .status-summary table,
+#status-tab .system-checks table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+/* Table Header Styles */
+#status-tab th {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 2px solid #ccc;
+    background-color: #f0f0f0; /* Light gray background */
+    color: #333; /* Dark gray text color */
+}
+
+/* Stylish Action, Status, and Check Headers */
+#status-tab .action-header,
+#status-tab .status-header,
+#status-tab .check-header {
+    text-transform: uppercase; /* Convert to uppercase */
+    font-size: 14px; /* Adjust font size */
+    color: #0073e6; /* Blue color */
+    background-color: #f9f9f9; /* Light background color */
+    padding: 8px 10px; /* Adjust padding */
+    width: 50%; /* Equal width */
+}
+
+/* Action, Status, and Check Cells */
+#status-tab .action,
+#status-tab .status,
+#status-tab .check {
+    font-weight: bold;
+    padding: 10px;
+    border-bottom: 1px solid #ccc;
+}
+
+/* Status Styles */
+#status-tab .status-yes {
+    color: green;
+}
+
+#status-tab .status-no {
+    color: red;
+}
+
+/* Footer */
+#status-tab footer {
+    margin-top: 30px;
+    text-align: center;
+    color: #888;
+}
+
+/* Animation Styles */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#status-tab .spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Adjust h2 background color and style */
+#status-tab h2 {
+    background-color: #0073e6; /* Blue background color */
+    color: #fff; /* White text color */
+    padding: 10px; /* Padding around text */
+    margin-top: 20px; /* Spacing from the top */
+    margin-bottom: 10px; /* Spacing from the bottom */
+    text-transform: uppercase; /* Convert text to uppercase */
 }
