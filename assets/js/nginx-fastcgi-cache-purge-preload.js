@@ -47,9 +47,8 @@ jQuery.noConflict();
         // JavaScript to handle tab switching
         // Run only in the my plugin settings page
         if ($('#nginx_cache_settings_nonce').length > 0) {
-            // Initially hide the help content
             $('#help').hide();
-
+            
             // Add event listener for tab clicks
             $('.nav-tab').click(function(e) {
                 e.preventDefault();
@@ -66,12 +65,31 @@ jQuery.noConflict();
                 // Hide all tab contents
                 $('.tab-content').hide();
 
-                // If the clicked tab is the "Settings" tab
+                // Show the corresponding tab content
                 if (targetId === '#settings') {
-                    // Show the settings content
                     $('#settings').addClass('active').show();
+                } else if (targetId === '#status') {
+                    // Check if status content has been loaded already
+                    if ($('#status').hasClass('loaded')) {
+                        $('#status').addClass('active').show();
+                    } else {
+                        // AJAX request for "Status" tab content
+                        $.ajax({
+                            url: nginx_cache_ajax_object.ajaxurl,
+                            type: 'POST',
+                            data: {
+                                action: 'my_status_ajax',
+                                _wpnonce: nginx_cache_ajax_object.status_ajax_nonce
+                            },
+                            success: function(response) {
+                                 $('#status').html(response).addClass('active').addClass('loaded').show();
+                            },
+                            error: function(xhr, status, error) {
+                                console.error(error);
+                            }
+                        });
+                    }
                 } else {
-                    // Show the help content
                     $('#help').addClass('active').show();
                 }
             });
