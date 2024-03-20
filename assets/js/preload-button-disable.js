@@ -1,7 +1,7 @@
 /**
  * JavaScript for Nginx FastCGI Cache Purge and Preload
  * Description: This JavaScript file contains function to disable Preload action if wget command not found on the host.
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
