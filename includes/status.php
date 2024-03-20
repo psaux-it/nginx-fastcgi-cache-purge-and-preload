@@ -9,8 +9,7 @@
  * License: GPL-2.0+
  */
 
-// Check purge action status
-// Check ACLs status
+// Main status check function
 function check_acl($flag = '') {
     $wp_filesystem = initialize_wp_filesystem();
 
@@ -71,18 +70,18 @@ function check_acl($flag = '') {
     }
 }
 
-// Check required command statuses
+// Check if a command is available
 function check_command_status($command) {
     $output = shell_exec("type $command");
     return !empty($output) ? 'Installed' : 'Not Installed';
 }
 
-// Check preload action status
+// Check preload action working
 function check_preload_status() {
     return check_command_status('wget') === 'Installed' ? 'Working' : 'Not Working';
 }
 
-// Check Nginx Cache Path status
+// Check Nginx Cache Path
 function check_path() {
     $wp_filesystem = initialize_wp_filesystem();
 
@@ -104,7 +103,7 @@ function check_path() {
 }
 
 
-// Generate HTML for status tab
+// Function to generate HTML for status tab
 function my_status_html() {
     ob_start();
     ?>
@@ -140,6 +139,7 @@ function my_status_html() {
                     </tbody>
                 </table>
             </section>
+
             <section class="system-checks">
                 <h2>System Checks</h2>
                 <table>
@@ -190,15 +190,16 @@ function my_status_html() {
     return ob_get_clean();
 }
 
-// Update status elements
+// JavaScript code to update status elements
 function update_status() {
     ?>
     <script>
         jQuery(document).ready(function($) {
-            // Fetch and update nginx cache path status
+             // Fetch and update Purge Action status
             var cachePathSpan = document.getElementById("cachePath");
             var cachePath = "<?php echo esc_js(check_path()); ?>";
             cachePathSpan.textContent = cachePath;
+            cachePathSpan.style.fontSize = "15px";
             if (cachePath === "Found") {
                 cachePathSpan.style.color = "green";
                 cachePathSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Found';
@@ -207,10 +208,11 @@ function update_status() {
                 cachePathSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Found';
             }
 
-            // Fetch and update purge action status
+            // Fetch and update Purge Action status
             var purgeStatusSpan = document.getElementById("purgeStatus");
             var purgeStatus = "<?php echo esc_js(check_acl('purge')); ?>";
             purgeStatusSpan.textContent = purgeStatus;
+            purgeStatusSpan.style.fontSize = "15px";
             if (purgeStatus === "Working") {
                 purgeStatusSpan.style.color = "green";
                 purgeStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Working';
@@ -226,6 +228,7 @@ function update_status() {
             var aclStatusSpan = document.getElementById("aclStatus");
             var aclStatus = "<?php echo esc_js(check_acl('acl')); ?>";
             aclStatusSpan.textContent = aclStatus;
+            aclStatusSpan.style.fontSize = "15px";
             if (aclStatus === "Implemented") {
                 aclStatusSpan.style.color = "green";
                 aclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Implemented';
@@ -237,10 +240,11 @@ function update_status() {
                 aclStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
             }
 
-            // Fetch and update preload action status
+            // Fetch and update Preload Action Status
             var preloadStatusSpan = document.getElementById("preloadStatus");
             var preloadStatus = "<?php echo esc_js(check_preload_status()); ?>";
             preloadStatusSpan.textContent = preloadStatus;
+            preloadStatusSpan.style.fontSize = "15px";
             if (preloadStatus === "Working") {
                 preloadStatusSpan.style.color = "green";
                 preloadStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Working';
@@ -249,10 +253,11 @@ function update_status() {
                 preloadStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Working';
             }
 
-            // Fetch and update wget command status
+             // Fetch and update Preload Action Status
             var wgetStatusSpan = document.getElementById("wgetStatus");
             var wgetStatus = "<?php echo esc_js(check_command_status('wget')); ?>";
             wgetStatusSpan.textContent = wgetStatus;
+            wgetStatusSpan.style.fontSize = "15px";
             if (wgetStatus === "Installed") {
                 wgetStatusSpan.style.color = "green";
                 wgetStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
@@ -261,10 +266,11 @@ function update_status() {
                 wgetStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
             }
 
-            // Fetch and update cpulimit command status
+             // Fetch and update Preload Action Status
             var cpulimitStatusSpan = document.getElementById("cpulimitStatus");
             var cpulimitStatus = "<?php echo esc_js(check_command_status('cpulimit')); ?>";
             cpulimitStatusSpan.textContent = cpulimitStatus;
+            cpulimitStatusSpan.style.fontSize = "15px";
             if (cpulimitStatus === "Installed") {
                 cpulimitStatusSpan.style.color = "green";
                 cpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
@@ -273,7 +279,7 @@ function update_status() {
                 cpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
             }
 
-            // Add spin effect to icons
+            // Add event listener to update status on click
             document.querySelectorAll('.status').forEach(status => {
                 status.addEventListener('click', () => {
                     status.querySelector('.dashicons').classList.add('spin');
@@ -287,7 +293,7 @@ function update_status() {
     <?php
 }
 
-// AJAX handler to fetch shortcode content
+// AJAX handler to fetch my_status shortcode content
 add_action('wp_ajax_my_status_ajax', 'my_status_ajax_callback');
 add_action('wp_ajax_nopriv_my_status_ajax', 'my_status_ajax_callback');
 function my_status_ajax_callback() {
@@ -298,8 +304,6 @@ function my_status_ajax_callback() {
 
         // Return the shortcode content
         echo wp_kses_post($shortcode_content);
-
-        // Update status elements
         update_status();
         exit();
     } else {
