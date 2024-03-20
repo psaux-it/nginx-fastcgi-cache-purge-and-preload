@@ -35,19 +35,23 @@ function add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         'href' => '#',
     ));
 
+    // Add child menu items for purge and preload operations with nonces
+    $purge_nonce = wp_create_nonce('purge_cache_nonce');
+    $preload_nonce = wp_create_nonce('preload_cache_nonce');
+
     // Add child menu items for purge and preload operations
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'purge-cache',
         'title' => 'FCGI Cache Purge',
-        'href' => admin_url('?purge_cache=true'),
+        'href' => add_query_arg('purge_cache', 'true', admin_url()) . '&_wpnonce=' . $purge_nonce,
     ));
 
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'preload-cache',
         'title' => 'FCGI Cache Preload',
-        'href' => admin_url('?preload_cache=true'),
+        'href' => add_query_arg('preload_cache', 'true', admin_url()) . '&_wpnonce=' . $preload_nonce,
     ));
 
     // Add settings submenu
@@ -164,8 +168,10 @@ function display_wget_warning() {
 
 // Handle button clicks
 function handle_fastcgi_cache_actions_admin_bar() {
-    // Check if the buttons are clicked
-    if (isset($_GET['purge_cache']) || isset($_GET['preload_cache'])) {
+    // Check if the buttons are clicked and nonce is valid
+    if ((isset($_GET['purge_cache']) && isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'purge_cache_nonce')) ||
+        (isset($_GET['preload_cache']) && isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'preload_cache_nonce'))) {
+        
         // Determine action based on button click
         $action = isset($_GET['purge_cache']) ? 'purge' : 'preload';
 
