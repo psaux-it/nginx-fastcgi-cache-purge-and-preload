@@ -405,8 +405,22 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
 
 // Purge cache operation helper
 function purge_helper($nginx_cache_path) {
-    // Check if the target path exists and is a directory
-    if (is_dir($nginx_cache_path)) {
+    $wp_filesystem = initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        return false; // Return false if WP_Filesystem initialization failed
+    }
+
+    // Remove absolute downloaded content if exists
+    $this_script_path = plugin_dir_path(__FILE__);
+    $tmp_path = rtrim($this_script_path, '/') . "/tmp";
+
+    if ($wp_filesystem->is_dir($tmp_path)) {
+        wp_remove_directory($tmp_path, true);
+    }
+
+    // Check if the cache path exists and is a directory
+    if ($wp_filesystem->is_dir($nginx_cache_path)) {
         // Recursively remove the cache directory contents.
         $result = wp_purge($nginx_cache_path);
 
