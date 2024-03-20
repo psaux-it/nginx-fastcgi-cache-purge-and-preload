@@ -178,9 +178,9 @@ function display_wget_warning() {
 // Handle button clicks
 function handle_fastcgi_cache_actions_admin_bar() {
     // Check if the buttons are clicked and nonce is valid
-    if ((isset($_GET['purge_cache']) && isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'purge_cache_nonce')) ||
-        (isset($_GET['preload_cache']) && isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'preload_cache_nonce'))) {
-        
+    if ((isset($_GET['purge_cache']) && check_admin_referer('purge_cache_nonce')) ||
+        (isset($_GET['preload_cache']) && check_admin_referer('preload_cache_nonce'))) {
+
         // Determine action based on button click
         $action = isset($_GET['purge_cache']) ? 'purge' : 'preload';
 
