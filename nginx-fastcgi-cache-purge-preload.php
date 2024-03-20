@@ -3,7 +3,7 @@
  * Plugin Name:       Nginx FastCGI Cache Purge and Preload
  * Plugin URI:        https://wordpress.org/plugins/nginx-fastcgi-cache-purge-and-preload/
  * Description:       Manage Nginx FastCGI Cache Purge and Preload operations directly from your WordPress admin dashboard.
- * Version:           1.0.1
+ * Version:           1.0.2
  * Author:            Hasan ÇALIŞIR
  * Author URI:        https://www.psauxit.com/
  * Author Email:      hasan.calisir@psauxit.com
@@ -66,7 +66,7 @@ function check_wget_availability() {
     if (empty($output)) {
         // Wget is not available
         add_action('admin_notices', 'display_wget_warning');
-        wp_enqueue_script('preload-button-disable', plugins_url('assets/js/preload-button-disable.js', __FILE__), array('jquery'), '1.0.1', true);
+        wp_enqueue_script('preload-button-disable', plugins_url('assets/js/preload-button-disable.js', __FILE__), array('jquery'), '1.0.2', true);
     } else {
         // Wget is available, dequeue the preload-button-disable.js if it's already enqueued
         wp_dequeue_script('preload-button-disable');
@@ -521,10 +521,10 @@ add_action('admin_init', 'check_processes_status');
 // Enqueue custom CSS and JavaScript files
 function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Enqueue CSS file
-    wp_enqueue_style('nginx-fastcgi-cache-purge-preload', plugins_url('assets/css/nginx-fastcgi-cache-purge-preload.css', __FILE__), array(), '1.0.1');
+    wp_enqueue_style('nginx-fastcgi-cache-purge-preload', plugins_url('assets/css/nginx-fastcgi-cache-purge-preload.css', __FILE__), array(), '1.0.2');
 
     // Enqueue JavaScript file
-    wp_enqueue_script('nginx-fastcgi-cache-admin', plugins_url('assets/js/nginx-fastcgi-cache-purge-preload.js', __FILE__), array('jquery'), '1.0.1', true);
+    wp_enqueue_script('nginx-fastcgi-cache-admin', plugins_url('assets/js/nginx-fastcgi-cache-purge-preload.js', __FILE__), array('jquery'), '1.0.2', true);
 
     // Create a nonce for clearing nginx cache logs
     $clear_nginx_cache_logs_nonce = wp_create_nonce('clear-nginx-cache-logs');
