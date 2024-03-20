@@ -9,23 +9,6 @@
  * License: GPL-2.0+
  */
 
-// AJAX handler to fetch shortcode content
-add_action('wp_ajax_my_status_ajax', 'my_status_ajax_callback');
-add_action('wp_ajax_nopriv_my_status_ajax', 'my_status_ajax_callback');
-function my_status_ajax_callback() {
-    // Check nonce
-    if (isset($_POST['_wpnonce']) && wp_verify_nonce($_POST['_wpnonce'], 'status_ajax_nonce')) {
-        // Call the shortcode function to get HTML content
-        $shortcode_content = my_status_shortcode();
-        // Return the shortcode content
-        echo $shortcode_content;
-        exit();
-    } else {
-        // Nonce verification failed, reject the request
-        wp_die('Nonce verification failed.', 'Error', array('response' => 403));
-    }
-}
-
 // Check purge action status
 // Check ACLs status
 function check_acl($flag = '') {
@@ -200,15 +183,21 @@ function my_status_html() {
             </section>
         </main>
         <footer>
-            <p>&copy; <?php echo date('Y'); ?> Nginx FastCGI Cache Purge and Preload</p>
+            <p>&copy; <?php echo esc_html(gmdate('Y')); ?> Nginx FastCGI Cache Purge and Preload</p>
         </footer>
     </div>
+    <?php
+    return ob_get_clean();
+}
 
+// JavaScript code to update status elements
+function update_status() {
+    ?>
     <script>
         jQuery(document).ready(function($) {
              // Fetch and update Purge Action status
             var cachePathSpan = document.getElementById("cachePath");
-            var cachePath = "<?php echo check_path(); ?>";
+            var cachePath = "<?php echo esc_js(check_path()); ?>";
             cachePathSpan.textContent = cachePath;
             if (cachePath === "Found") {
                 cachePathSpan.style.color = "green";
@@ -220,7 +209,7 @@ function my_status_html() {
 
             // Fetch and update Purge Action status
             var purgeStatusSpan = document.getElementById("purgeStatus");
-            var purgeStatus = "<?php echo check_acl('purge'); ?>";
+            var purgeStatus = "<?php echo esc_js(check_acl('purge')); ?>";
             purgeStatusSpan.textContent = purgeStatus;
             if (purgeStatus === "Working") {
                 purgeStatusSpan.style.color = "green";
@@ -235,7 +224,7 @@ function my_status_html() {
 
             // Fetch and update ACLs status
             var aclStatusSpan = document.getElementById("aclStatus");
-            var aclStatus = "<?php echo check_acl('acl'); ?>";
+            var aclStatus = "<?php echo esc_js(check_acl('acl')); ?>";
             aclStatusSpan.textContent = aclStatus;
             if (aclStatus === "Implemented") {
                 aclStatusSpan.style.color = "green";
@@ -250,7 +239,7 @@ function my_status_html() {
 
             // Fetch and update Preload Action Status
             var preloadStatusSpan = document.getElementById("preloadStatus");
-            var preloadStatus = "<?php echo check_preload_status(); ?>";
+            var preloadStatus = "<?php echo esc_js(check_preload_status()); ?>";
             preloadStatusSpan.textContent = preloadStatus;
             if (preloadStatus === "Working") {
                 preloadStatusSpan.style.color = "green";
@@ -260,9 +249,9 @@ function my_status_html() {
                 preloadStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Working';
             }
 
-            // Fetch and update Preload Action Status
+             // Fetch and update Preload Action Status
             var wgetStatusSpan = document.getElementById("wgetStatus");
-            var wgetStatus = "<?php echo check_command_status('wget'); ?>";
+            var wgetStatus = "<?php echo esc_js(check_command_status('wget')); ?>";
             wgetStatusSpan.textContent = wgetStatus;
             if (wgetStatus === "Installed") {
                 wgetStatusSpan.style.color = "green";
@@ -274,7 +263,7 @@ function my_status_html() {
 
              // Fetch and update Preload Action Status
             var cpulimitStatusSpan = document.getElementById("cpulimitStatus");
-            var cpulimitStatus = "<?php echo check_command_status('cpulimit'); ?>";
+            var cpulimitStatus = "<?php echo esc_js(check_command_status('cpulimit')); ?>";
             cpulimitStatusSpan.textContent = cpulimitStatus;
             if (cpulimitStatus === "Installed") {
                 cpulimitStatusSpan.style.color = "green";
@@ -284,7 +273,7 @@ function my_status_html() {
                 cpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
             }
 
-            // Add spin effect to icons
+            // Add event listener to update status on click
             document.querySelectorAll('.status').forEach(status => {
                 status.addEventListener('click', () => {
                     status.querySelector('.dashicons').classList.add('spin');
@@ -296,7 +285,25 @@ function my_status_html() {
         });
     </script>
     <?php
-    return ob_get_clean();
+}
+
+// AJAX handler to fetch shortcode content
+add_action('wp_ajax_my_status_ajax', 'my_status_ajax_callback');
+add_action('wp_ajax_nopriv_my_status_ajax', 'my_status_ajax_callback');
+function my_status_ajax_callback() {
+    // Check nonce
+    if (isset($_POST['_wpnonce']) && wp_verify_nonce($_POST['_wpnonce'], 'status_ajax_nonce')) {
+        // Call the shortcode function to get HTML content
+        $shortcode_content = my_status_shortcode();
+
+        // Return the shortcode content
+        echo wp_kses_post($shortcode_content);
+        update_status();
+        exit();
+    } else {
+        // Nonce verification failed, reject the request
+        wp_die('Nonce verification failed.', 'Error', array('response' => 403));
+    }
 }
 
 // Shortcode to display the Status HTML
