@@ -551,6 +551,7 @@ function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
 }
 add_action('admin_enqueue_scripts', 'enqueue_nginx_fastcgi_cache_purge_preload_assets');
 
+// Initializes the Nginx Cache settings by registering settings, adding settings section, and fields
 function nginx_cache_settings_init() {
     // Register settings
     register_setting('nginx_cache_settings_group', 'nginx_cache_settings', 'nginx_cache_settings_sanitize');
@@ -565,7 +566,6 @@ function nginx_cache_settings_init() {
     add_settings_field('nginx_cache_logs', 'Logs', 'nginx_cache_logs_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
     add_settings_field('nginx_cache_limit_rate', 'Limit Rate Definition', 'nginx_cache_limit_rate_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
 }
-// Initialize settings
 add_action('admin_init', 'nginx_cache_settings_init');
 
 // Add settings page
@@ -588,6 +588,8 @@ function add_nginx_cache_settings_to_allowed_options($options) {
 }
 add_filter('whitelist_options', 'add_nginx_cache_settings_to_allowed_options');
 
+// Displays the Nginx Cache Settings page in the WordPress admin dashboard
+// Handles form submission, settings validation, and updating options
 function nginx_cache_settings_page() {
     // Check if the form has been submitted
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
@@ -756,28 +758,33 @@ function update_send_mail_option() {
     }
 }
 
+// Callback function to display the settings section description.
 function nginx_cache_settings_section_callback() {
     echo 'Configure the settings for FastCGI Cache.';
 }
 
+// Callback function to display the input field for Nginx Cache Path setting
 function nginx_cache_path_callback() {
     $options = get_option('nginx_cache_settings');
     $default_cache_path = find_user_home_folder() . '/change-me-now';
     echo "<input type='text' id='nginx_cache_path' name='nginx_cache_settings[nginx_cache_path]' value='" . esc_attr($options['nginx_cache_path'] ?? $default_cache_path) . "' class='regular-text' />";
 }
 
+// Callback function to display the input field for Email Address setting
 function nginx_cache_email_callback() {
     $options = get_option('nginx_cache_settings');
     $default_email = 'your-email@example.com';
     echo "<input type='text' id='nginx_cache_email' name='nginx_cache_settings[nginx_cache_email]' value='" . esc_attr($options['nginx_cache_email'] ?? $default_email) . "' class='regular-text' />";
 }
 
+// Callback function to display the input field for CPU Usage Limit setting
 function nginx_cache_cpu_limit_callback() {
     $options = get_option('nginx_cache_settings');
     $default_cpu_limit = 50;
     echo "<input type='number' id='nginx_cache_cpu_limit' name='nginx_cache_settings[nginx_cache_cpu_limit]' min='10' max='100' value='" . esc_attr($options['nginx_cache_cpu_limit'] ?? $default_cpu_limit) . "' class='small-text' />";
 }
 
+// Callback function to display the checkbox for Send Email Notification setting
 function nginx_cache_send_mail_callback() {
     $options = get_option('nginx_cache_settings');
     $send_mail_checked = isset($options['nginx_cache_send_mail']) && $options['nginx_cache_send_mail'] === 'yes' ? 'checked="checked"' : '';
@@ -850,6 +857,7 @@ function nginx_cache_logs_callback() {
     }
 }
 
+// Callback function to display the input field for Limit Rate setting.
 function nginx_cache_limit_rate_callback() {
     $options = get_option('nginx_cache_settings');
     $default_limit_rate = 1280;
@@ -869,6 +877,7 @@ function fetch_default_reject_regex_from_php_file() {
     return '';
 }
 
+// Sanitize inputs
 function nginx_cache_settings_sanitize($input) {
     $sanitized_input = array();
 
