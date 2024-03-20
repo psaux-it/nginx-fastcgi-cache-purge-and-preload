@@ -261,3 +261,13 @@
 td.action, td.check {
     font-size: 14px !important;
 }
+
+/* style for cache path note */
+.cache-path-plugin-note {
+    color: #722F37;
+    background-color: #f2f2f2;
+    border-left: 4px solid #999;
+    padding: 10px;
+    font-size: 12px !important;
+    margin-top: 15px !important;
+}
