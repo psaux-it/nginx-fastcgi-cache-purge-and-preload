@@ -75,7 +75,7 @@ function check_wget_availability() {
 add_action('admin_init', 'check_wget_availability');
 
 // Check ACL properly configured for purge operations
-// Check the cache path is exists or not
+// Check the cache path is exist or not
 function pre_checks($directory_exists_flag = false, $empty_directory_flag = false) {
     $wp_filesystem = initialize_wp_filesystem();
 
@@ -140,7 +140,7 @@ function display_pre_check_warning($directory_exists_flag = false, $empty_direct
                 if ($directory_exists_flag) {
                     esc_html_e('ERROR PATH: The specified Nginx Cache Directory does not exist.');
                 } elseif ($empty_directory_flag) {
-                    esc_html_e('WARNING PERMISSION: Nginx cache directory is empty. Please reload the WordPress site to check ACL status.');
+                    esc_html_e('WARNING PERMISSION: Nginx cache directory is empty. Please reload the WordPress site to confirm ACL status is OK.');
                 } else {
                     esc_html_e('ERROR PERMISSION: Purge action will fail due to ACL permission constraints. Apply ACLs to Nginx Cache Folder for PHP-FPM user access. Refer to the plugins help section for assistance!');
                 }
@@ -196,8 +196,7 @@ function handle_fastcgi_cache_actions_admin_bar() {
 }
 add_action('admin_init', 'handle_fastcgi_cache_actions_admin_bar');
 
-// Function to verify WP file-system credentials and initialize WP_Filesystem
-////////////////////////////////////////////////////////////////////
+// Verify WP file-system credentials and initialize WP_Filesystem
 function initialize_wp_filesystem() {
     if (!function_exists('WP_Filesystem')) {
         require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -219,7 +218,7 @@ function initialize_wp_filesystem() {
     return false; // Return false if initialization failed
 }
 
-// Function to perform file operations (delete, read, write, create, append)
+// Perform file operations (delete, read, write, create, append)
 function perform_file_operation($file_path, $operation, $data = null) {
     $wp_filesystem = initialize_wp_filesystem();
 
@@ -250,6 +249,7 @@ function perform_file_operation($file_path, $operation, $data = null) {
     }
 }
 
+// Purge cache with WP_Filesystem
 function wp_purge($directory_path) {
     $wp_filesystem = initialize_wp_filesystem();
 
@@ -282,7 +282,7 @@ function wp_purge($directory_path) {
     }
 }
 
-// Function to remove a directory using WP_Filesystem
+// Remove a directory using WP_Filesystem
 function wp_remove_directory($directory_path, $recursive = true) {
     $wp_filesystem = initialize_wp_filesystem();
 
@@ -292,14 +292,20 @@ function wp_remove_directory($directory_path, $recursive = true) {
 
     // Check if the directory exists before attempting to remove it
     if ($wp_filesystem->is_dir($directory_path)) {
-        // Use rmdir function to remove the directory
-        return $wp_filesystem->rmdir($directory_path, $recursive);
+        // Attempt to remove the directory
+        $result = $wp_filesystem->delete($directory_path, $recursive);
+
+        if ($result === false) {
+            // Error occurred while removing directory
+            return new WP_Error('remove_directory_error', 'Error removing directory.');
+        }
+
+        return true; // Directory removed successfully
     } else {
         // Directory does not exist
-        return false;
+        return new WP_Error('directory_not_found', 'Directory not found.');
     }
 }
-////////////////////////////////////////////////////////////////////
 
 // Create log file
 function create_log_file($log_file_path) {
@@ -361,7 +367,7 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
         $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' \"$fdomain\" >/dev/null 2>&1 & echo \$!";
         $output = shell_exec($command);
 
-        // Keep PID in file
+        // Write PID to PID file
         if ($output !== null) {
             $pid = trim($output);
             perform_file_operation($PIDFILE, 'write', $pid);
@@ -386,7 +392,7 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
 function purge_helper($nginx_cache_path) {
     // Check if the target path exists and is a directory
     if (is_dir($nginx_cache_path)) {
-        // Recursively remove the directory and its contents with WP Filesystem
+        // Recursively remove the cache directory contents.
         $result = wp_purge($nginx_cache_path);
 
         // Check cache purge status
@@ -609,6 +615,7 @@ function nginx_cache_settings_page() {
         <h2><img src="<?php echo esc_url( plugins_url( 'assets/img/logo.png', __FILE__ ) ); ?>" alt="Logo" style="vertical-align: middle; margin-right: 10px; width: 90px;">Nginx Cache Settings</h2>
         <h2 class="nav-tab-wrapper">
             <a href="#settings" class="nav-tab nav-tab-active">Settings</a>
+            <a href="#status" class="nav-tab">Status</a>
             <a href="#help" class="nav-tab">Help</a>
         </h2>
 
