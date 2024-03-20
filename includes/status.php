@@ -140,7 +140,6 @@ function my_status_html() {
                     </tbody>
                 </table>
             </section>
-
             <section class="system-checks">
                 <h2>System Checks</h2>
                 <table>
@@ -200,7 +199,7 @@ function update_status() {
             var cachePathSpan = document.getElementById("cachePath");
             var cachePath = "<?php echo esc_js(check_path()); ?>";
             cachePathSpan.textContent = cachePath;
-            cachePathSpan.style.fontSize = "15px";
+            cachePathSpan.style.fontSize = "14px";
             if (cachePath === "Found") {
                 cachePathSpan.style.color = "green";
                 cachePathSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Found';
@@ -213,7 +212,7 @@ function update_status() {
             var purgeStatusSpan = document.getElementById("purgeStatus");
             var purgeStatus = "<?php echo esc_js(check_acl('purge')); ?>";
             purgeStatusSpan.textContent = purgeStatus;
-            purgeStatusSpan.style.fontSize = "15px";
+            purgeStatusSpan.style.fontSize = "14px";
             if (purgeStatus === "Working") {
                 purgeStatusSpan.style.color = "green";
                 purgeStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Working';
@@ -229,7 +228,7 @@ function update_status() {
             var aclStatusSpan = document.getElementById("aclStatus");
             var aclStatus = "<?php echo esc_js(check_acl('acl')); ?>";
             aclStatusSpan.textContent = aclStatus;
-            aclStatusSpan.style.fontSize = "15px";
+            aclStatusSpan.style.fontSize = "14px";
             if (aclStatus === "Implemented") {
                 aclStatusSpan.style.color = "green";
                 aclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Implemented';
@@ -245,7 +244,7 @@ function update_status() {
             var preloadStatusSpan = document.getElementById("preloadStatus");
             var preloadStatus = "<?php echo esc_js(check_preload_status()); ?>";
             preloadStatusSpan.textContent = preloadStatus;
-            preloadStatusSpan.style.fontSize = "15px";
+            preloadStatusSpan.style.fontSize = "14px";
             if (preloadStatus === "Working") {
                 preloadStatusSpan.style.color = "green";
                 preloadStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Working';
@@ -258,7 +257,7 @@ function update_status() {
             var wgetStatusSpan = document.getElementById("wgetStatus");
             var wgetStatus = "<?php echo esc_js(check_command_status('wget')); ?>";
             wgetStatusSpan.textContent = wgetStatus;
-            wgetStatusSpan.style.fontSize = "15px";
+            wgetStatusSpan.style.fontSize = "14px";
             if (wgetStatus === "Installed") {
                 wgetStatusSpan.style.color = "green";
                 wgetStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
@@ -271,7 +270,7 @@ function update_status() {
             var cpulimitStatusSpan = document.getElementById("cpulimitStatus");
             var cpulimitStatus = "<?php echo esc_js(check_command_status('cpulimit')); ?>";
             cpulimitStatusSpan.textContent = cpulimitStatus;
-            cpulimitStatusSpan.style.fontSize = "15px";
+            cpulimitStatusSpan.style.fontSize = "14px";
             if (cpulimitStatus === "Installed") {
                 cpulimitStatusSpan.style.color = "green";
                 cpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
