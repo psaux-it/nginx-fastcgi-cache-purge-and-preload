@@ -104,7 +104,7 @@ function check_path() {
 }
 
 
-// Function to generate HTML for status tab
+// Generate HTML for status tab
 function my_status_html() {
     ob_start();
     ?>
@@ -190,12 +190,12 @@ function my_status_html() {
     return ob_get_clean();
 }
 
-// JavaScript code to update status elements
+// Update status elements
 function update_status() {
     ?>
     <script>
         jQuery(document).ready(function($) {
-             // Fetch and update Purge Action status
+            // Fetch and update nginx cache path status
             var cachePathSpan = document.getElementById("cachePath");
             var cachePath = "<?php echo esc_js(check_path()); ?>";
             cachePathSpan.textContent = cachePath;
@@ -207,7 +207,7 @@ function update_status() {
                 cachePathSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Found';
             }
 
-            // Fetch and update Purge Action status
+            // Fetch and update purge action status
             var purgeStatusSpan = document.getElementById("purgeStatus");
             var purgeStatus = "<?php echo esc_js(check_acl('purge')); ?>";
             purgeStatusSpan.textContent = purgeStatus;
@@ -237,7 +237,7 @@ function update_status() {
                 aclStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
             }
 
-            // Fetch and update Preload Action Status
+            // Fetch and update preload action status
             var preloadStatusSpan = document.getElementById("preloadStatus");
             var preloadStatus = "<?php echo esc_js(check_preload_status()); ?>";
             preloadStatusSpan.textContent = preloadStatus;
@@ -249,7 +249,7 @@ function update_status() {
                 preloadStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Working';
             }
 
-             // Fetch and update Preload Action Status
+            // Fetch and update wget command status
             var wgetStatusSpan = document.getElementById("wgetStatus");
             var wgetStatus = "<?php echo esc_js(check_command_status('wget')); ?>";
             wgetStatusSpan.textContent = wgetStatus;
@@ -261,7 +261,7 @@ function update_status() {
                 wgetStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
             }
 
-             // Fetch and update Preload Action Status
+            // Fetch and update cpulimit command status
             var cpulimitStatusSpan = document.getElementById("cpulimitStatus");
             var cpulimitStatus = "<?php echo esc_js(check_command_status('cpulimit')); ?>";
             cpulimitStatusSpan.textContent = cpulimitStatus;
@@ -273,7 +273,7 @@ function update_status() {
                 cpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
             }
 
-            // Add event listener to update status on click
+            // Add spin effect to icons
             document.querySelectorAll('.status').forEach(status => {
                 status.addEventListener('click', () => {
                     status.querySelector('.dashicons').classList.add('spin');
@@ -298,6 +298,8 @@ function my_status_ajax_callback() {
 
         // Return the shortcode content
         echo wp_kses_post($shortcode_content);
+
+        // Update status elements
         update_status();
         exit();
     } else {
