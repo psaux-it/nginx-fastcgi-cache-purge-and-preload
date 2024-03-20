@@ -4,7 +4,7 @@ Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 6.4
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -40,6 +40,21 @@ Navigate to 'Settings' -> 'Nginx Cache Settings' in the WordPress admin dashboar
 Warnings may appear if there are permission issues or missing dependencies (e.g., wget) required for cache operations. Follow the instructions in the warnings to resolve these issues.
 
 == Changelog ==
+
+= 1.0.2 =
+
+Release date: 2024-03-20
+
+* Code optimizations
+* Security optimizations
+* Fix styling & typo
+* Add support on new plugin status tab
+* Add important note for purge operation
+* Better handle ACLs checks
+* Use WP Filesystem to purge cache instead of shell find +delete
+* Remove temporary files after preload operation
+* Escape shell commands properly
+* Better handle wp filesystem
 
 = 1.0.1 =
 
