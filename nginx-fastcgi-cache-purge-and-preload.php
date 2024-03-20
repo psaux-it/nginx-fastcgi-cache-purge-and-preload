@@ -639,8 +639,8 @@ function nginx_cache_settings_page() {
                         <td>
                             <?php nginx_cache_path_callback(); ?>
                             <p class="description">Please specify the directory path for Nginx Cache Purge operation. Please note that erase operation is irreversible, so proceed with caution</p>
-                            <p style="color: #333; background-color: #f2f2f2; border-left: 4px solid #999; padding: 10px; font-size: smaller;">
-                                NOTE: The plugin author explicitly disclaims any liability for unintended deletions resulting from incorrect directory entries.
+                            <p class="cache-path-plugin-note">
+                                NOTE: The plugin author explicitly disclaims any liability for unintended deletions resulting from incorrect directory entries.<br>
                                 Users are solely responsible for verifying the directory's accuracy prior to deletion.
                             </p>
                         </td>
