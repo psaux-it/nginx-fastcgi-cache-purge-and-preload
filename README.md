@@ -1,7 +1,7 @@
 # Nginx FastCGI Cache Purge & Preload Plugin for Wordpress
 ##### QUICK START - ONE LINER's
 
-To obtain the [plugin](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/releases/tag/v1.0.1) from releases and install it on your wordpress instance, simply execute the following one-liner command at the **ROOT** level. In wordpress instance go to plugin settings and set your FastCGI Cache Path, Excluded Endpoints for Preload and CPU Limit %
+To obtain the [plugin](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/releases/tag/v1.0.2) from releases and install it on your wordpress instance, simply execute the following one-liner command at the **ROOT** level. In wordpress instance go to plugin settings and set your FastCGI Cache Path, Excluded Endpoints for Preload and CPU Limit %
 
 ```bash <(curl -Ss https://psaux-it.github.io/install.sh)```  
 ```bash <(wget -qO- https://psaux-it.github.io/install.sh)```
