@@ -50,9 +50,10 @@ Release date: 2024-03-20
 * Fix styling & typo
 * Add support on new plugin status tab
 * Add important note for purge operation
+* Better handle purge operations
 * Better handle ACLs checks
 * Use WP Filesystem to purge cache instead of shell find +delete
-* Remove temporary files after preload operation
+* Remove temporary downloaded content after purge & preload operation
 * Escape shell commands properly
 * Better handle wp filesystem
 
