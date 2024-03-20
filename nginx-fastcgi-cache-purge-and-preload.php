@@ -38,6 +38,7 @@ function add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     // Add child menu items for purge and preload operations with nonces
     $purge_nonce = wp_create_nonce('purge_cache_nonce');
     $preload_nonce = wp_create_nonce('preload_cache_nonce');
+    $settings_nonce = wp_create_nonce('nginx_cache_settings_nonce');
 
     // Add child menu items for purge and preload operations
     $wp_admin_bar->add_menu(array(
@@ -59,7 +60,7 @@ function add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         'parent' => 'fastcgi-cache-operations',
         'id' => 'fastcgi-cache-settings',
         'title' => 'Settings',
-        'href' => admin_url('options-general.php?page=nginx_cache_settings'),
+        'href' => add_query_arg('_wpnonce', $settings_nonce, admin_url('options-general.php?page=nginx_cache_settings')),
     ));
 }
 add_action('admin_bar_menu', 'add_fastcgi_cache_buttons_admin_bar', 100);
@@ -76,7 +77,6 @@ function check_wget_availability() {
         wp_dequeue_script('preload-button-disable');
     }
 }
-add_action('admin_init', 'check_wget_availability');
 
 // Check ACL properly configured for purge operations
 // Check the cache path is exist or not
@@ -132,37 +132,46 @@ function pre_checks($directory_exists_flag = false, $empty_directory_flag = fals
         return;
     }
 }
-add_action('admin_init', 'pre_checks');
 
-// Handle properly global messages
+// Handle pre check messages
 function display_pre_check_warning($directory_exists_flag = false, $empty_directory_flag = false, $empty_directory_warning = false) {
-    $current_page = isset($_GET['page']) ? $_GET['page'] : '';
-    if ($current_page === 'nginx_cache_settings') {
-        ?>
-        <div class="notice <?php echo $empty_directory_warning ? 'notice-warning' : 'notice-error'; ?>">
-            <p><?php
-                if ($directory_exists_flag) {
-                    esc_html_e('ERROR PATH: The specified Nginx Cache Directory does not exist.');
-                } elseif ($empty_directory_flag) {
-                    esc_html_e('WARNING PERMISSION: Nginx cache directory is empty. Please reload the WordPress site to confirm ACL status is OK.');
-                } else {
-                    esc_html_e('ERROR PERMISSION: Purge action will fail due to ACL permission constraints. Apply ACLs to Nginx Cache Folder for PHP-FPM user access. Refer to the plugins help section for assistance!');
-                }
-            ?></p>
-        </div>
-        <?php
+    // Verify nonce
+    if (isset($_GET['_wpnonce']) && check_admin_referer('nginx_cache_settings_nonce', '_wpnonce')) {
+        $current_page = isset($_GET['page']) ? $_GET['page'] : '';
+        if ($current_page === 'nginx_cache_settings') {
+            ?>
+            <div class="notice <?php echo $empty_directory_warning ? 'notice-warning' : 'notice-error'; ?>">
+                <p><?php
+                    if ($directory_exists_flag) {
+                        esc_html_e('ERROR PATH: The specified Nginx Cache Directory does not exist.');
+                    } elseif ($empty_directory_flag) {
+                        esc_html_e('WARNING PERMISSION: Nginx cache directory is empty. Please reload the WordPress site to confirm ACL status is OK.');
+                    } else {
+                        esc_html_e('ERROR PERMISSION: Purge action will fail due to ACL permission constraints. Apply ACLs to Nginx Cache Folder for PHP-FPM user access. Refer to the plugins help section for assistance!');
+                    }
+                ?></p>
+            </div>
+            <?php
+        }
+    } else {
+        echo '<div class="error"><p>Nonce verification failed.</p></div>';
     }
 }
 
 // Display wget warning message only on the plugin settings page
 function display_wget_warning() {
-    $current_page = isset($_GET['page']) ? $_GET['page'] : '';
-    if ($current_page === 'nginx_cache_settings') {
-        ?>
-        <div class="notice notice-error">
-            <p><?php esc_html_e('ERROR COMMAND: Preload action disabled! The "wget" command is not available on your system. Please make sure "wget" is installed to use Nginx Cache Preload feature.', 'textdomain'); ?></p>
-        </div>
-        <?php
+    // Verify nonce
+    if (isset($_GET['_wpnonce']) && check_admin_referer('nginx_cache_settings_nonce', '_wpnonce')) {
+        $current_page = isset($_GET['page']) ? $_GET['page'] : '';
+        if ($current_page === 'nginx_cache_settings') {
+            ?>
+            <div class="notice notice-error">
+                <p><?php esc_html_e('ERROR COMMAND: Preload action disabled! The "wget" command is not available on your system. Please make sure "wget" is installed to use Nginx Cache Preload feature.', 'textdomain'); ?></p>
+            </div>
+            <?php
+        }
+    } else {
+        echo '<div class="error"><p>Nonce verification failed.</p></div>';
     }
 }
 
@@ -706,6 +715,9 @@ function nginx_cache_settings_page() {
     </div>
     <?php
 }
+// Add the trigger for pre-checks only on the settings page
+add_action('load-settings_page_nginx_cache_settings', 'pre_checks');
+add_action('load-settings_page_nginx_cache_settings', 'check_wget_availability');
 
 // AJAX callback function to clear logs
 add_action('wp_ajax_clear_nginx_cache_logs', 'clear_nginx_cache_logs');
