@@ -781,8 +781,14 @@ function nginx_cache_send_mail_callback() {
 // Callback function to display the Reject Regex field
 function nginx_cache_reject_regex_callback() {
     if (isset($_POST['nginx-regex-reset-defaults'])) {
-        $default_reject_regex = fetch_default_reject_regex_from_php_file();
-        display_admin_notice('info', 'INFO: Reject Regex reset to default. Please remember to Save Changes.');
+        if (isset($_POST['nginx_cache_settings_nonce']) && wp_verify_nonce($_POST['nginx_cache_settings_nonce'], 'nginx_cache_settings_nonce')) {
+            $default_reject_regex = fetch_default_reject_regex_from_php_file();
+            display_admin_notice('info', 'INFO: Reject Regex reset to default. Please Save Changes.');
+        } else {
+            // Nonce verification failed, handle accordingly (e.g., display an error message)
+            echo '<div class="error"><p>Nonce verification failed for reset defaults action.</p></div>';
+            return; // Exit the function to prevent further execution
+        }
     } else {
         $options = get_option('nginx_cache_settings');
         $default_reject_regex = fetch_default_reject_regex_from_php_file();
