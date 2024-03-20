@@ -256,3 +256,8 @@
     margin-bottom: 10px; /* Spacing from the bottom */
     text-transform: uppercase; /* Convert text to uppercase */
 }
+
+/* td font size */
+td.action, td.check {
+    font-size: 15px !important;
+}
