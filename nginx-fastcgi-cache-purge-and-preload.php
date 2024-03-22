@@ -31,8 +31,11 @@ function add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     // Add a parent menu item for FastCGI cache operations
     $wp_admin_bar->add_menu(array(
         'id' => 'fastcgi-cache-operations',
-        'title' => 'FastCGI Cache Operations',
+        'title' => '<img style="height: 17px; margin-bottom: -4px; padding-right: 3px;" src="' . plugin_dir_url(__FILE__) . 'assets/img/bar.png" alt="NPP" title="NPP"> FastCGI Cache',
         'href' => '#',
+        'meta' => array(
+            'class' => 'npp-icon',
+        ),
     ));
 
     // Add child menu items for purge and preload operations with nonces
