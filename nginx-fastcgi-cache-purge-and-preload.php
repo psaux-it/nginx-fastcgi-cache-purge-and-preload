@@ -17,9 +17,26 @@
 // Define a constant for the log file path
 define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
 
-// Help section of script
+// Settings page tabs
 require_once plugin_dir_path( __FILE__ ) . 'includes/helper.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/status.php';
+
+// Register activation and deactivation hooks
+register_activation_hook(__FILE__, 'defaults_on_plugin_activation');
+register_deactivation_hook(__FILE__, 'reset_plugin_settings_on_deactivation');
+
+// Add actions and filters
+add_action('admin_bar_menu', 'add_fastcgi_cache_buttons_admin_bar', 100);
+add_action('admin_init', 'handle_fastcgi_cache_actions_admin_bar');
+add_action('admin_init', 'check_processes_status');
+add_action('admin_enqueue_scripts', 'enqueue_nginx_fastcgi_cache_purge_preload_assets');
+add_action('admin_init', 'nginx_cache_settings_init');
+add_action('admin_menu', 'add_nginx_cache_settings_page');
+add_filter('whitelist_options', 'add_nginx_cache_settings_to_allowed_options');
+add_action('load-settings_page_nginx_cache_settings', 'pre_checks');
+add_action('load-settings_page_nginx_cache_settings', 'check_wget_availability');
+add_action('wp_ajax_clear_nginx_cache_logs', 'clear_nginx_cache_logs');
+add_action('wp_ajax_update_send_mail_option', 'update_send_mail_option');
 
 // Add buttons to WordPress admin bar
 function add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
@@ -66,7 +83,6 @@ function add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         'href' => add_query_arg('_wpnonce', $settings_nonce, admin_url('options-general.php?page=nginx_cache_settings')),
     ));
 }
-add_action('admin_bar_menu', 'add_fastcgi_cache_buttons_admin_bar', 100);
 
 // Check if wget is available and handle preload button
 function check_wget_availability() {
@@ -212,7 +228,6 @@ function handle_fastcgi_cache_actions_admin_bar() {
         }
     }
 }
-add_action('admin_init', 'handle_fastcgi_cache_actions_admin_bar');
 
 // Verify WP file-system credentials and initialize WP_Filesystem
 function initialize_wp_filesystem() {
@@ -548,7 +563,6 @@ function check_processes_status() {
         }
     }
 }
-add_action('admin_init', 'check_processes_status');
 
 // Enqueue custom CSS and JavaScript files
 function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
@@ -575,7 +589,6 @@ function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'status_ajax_nonce' => $status_ajax_nonce,
     ));
 }
-add_action('admin_enqueue_scripts', 'enqueue_nginx_fastcgi_cache_purge_preload_assets');
 
 // Initializes the Nginx Cache settings by registering settings, adding settings section, and fields
 function nginx_cache_settings_init() {
@@ -592,7 +605,6 @@ function nginx_cache_settings_init() {
     add_settings_field('nginx_cache_logs', 'Logs', 'nginx_cache_logs_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
     add_settings_field('nginx_cache_limit_rate', 'Limit Rate Definition', 'nginx_cache_limit_rate_callback', 'nginx_cache_settings_group', 'nginx_cache_settings_section');
 }
-add_action('admin_init', 'nginx_cache_settings_init');
 
 // Add settings page
 function add_nginx_cache_settings_page() {
@@ -605,14 +617,12 @@ function add_nginx_cache_settings_page() {
         'nginx_cache_settings_page'
     );
 }
-add_action('admin_menu', 'add_nginx_cache_settings_page');
 
 // Add the option name to the allowed options list
 function add_nginx_cache_settings_to_allowed_options($options) {
     $options['nginx_cache_settings'] = 'nginx_cache_settings';
     return $options;
 }
-add_filter('whitelist_options', 'add_nginx_cache_settings_to_allowed_options');
 
 // Displays the Nginx Cache Settings page in the WordPress admin dashboard
 // Handles form submission, settings validation, and updating options
@@ -732,12 +742,8 @@ function nginx_cache_settings_page() {
     </div>
     <?php
 }
-// Add the trigger for pre-checks only on the settings page
-add_action('load-settings_page_nginx_cache_settings', 'pre_checks');
-add_action('load-settings_page_nginx_cache_settings', 'check_wget_availability');
 
 // AJAX callback function to clear logs
-add_action('wp_ajax_clear_nginx_cache_logs', 'clear_nginx_cache_logs');
 function clear_nginx_cache_logs() {
     check_ajax_referer('clear-nginx-cache-logs', '_wpnonce');
 
@@ -757,7 +763,6 @@ function clear_nginx_cache_logs() {
 }
 
 // AJAX callback function to update send mail option
-add_action('wp_ajax_update_send_mail_option', 'update_send_mail_option');
 function update_send_mail_option() {
     // Verify nonce
     check_ajax_referer('update-send-mail-option', '_wpnonce');
@@ -1037,7 +1042,6 @@ function validate_path($path) {
 function reset_plugin_settings_on_deactivation() {
     delete_option('nginx_cache_settings');
 }
-register_deactivation_hook(__FILE__, 'reset_plugin_settings_on_deactivation');
 
 // Function to find the user's home folder
 function find_user_home_folder() {
@@ -1074,4 +1078,3 @@ function defaults_on_plugin_activation() {
         }
     }
 }
-register_activation_hook(__FILE__, 'defaults_on_plugin_activation');
