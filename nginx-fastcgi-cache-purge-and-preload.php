@@ -18,6 +18,7 @@
 define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
 
 // Settings page tabs & actions & helpers
+require_once plugin_dir_path( __FILE__ ) . 'includes/enqueue-assets.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/wp-filesystem.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/pre-checks.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/admin-bar.php';
@@ -44,25 +45,5 @@ add_action('load-settings_page_nginx_cache_settings', 'pre_checks');
 add_action('load-settings_page_nginx_cache_settings', 'check_wget_availability');
 add_action('wp_ajax_clear_nginx_cache_logs', 'clear_nginx_cache_logs');
 add_action('wp_ajax_update_send_mail_option', 'update_send_mail_option');
-
-// Enqueue custom CSS and JavaScript files
-function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
-    // Enqueue CSS file
-    wp_enqueue_style('nginx-fastcgi-cache-purge-preload', plugins_url('assets/css/nginx-fastcgi-cache-purge-preload.css', __FILE__), array(), '1.0.2');
-    // Enqueue JavaScript file
-    wp_enqueue_script('nginx-fastcgi-cache-admin', plugins_url('assets/js/nginx-fastcgi-cache-purge-preload.js', __FILE__), array('jquery'), '1.0.2', true);
-    // Create a nonce for clearing nginx cache logs
-    $clear_nginx_cache_logs_nonce = wp_create_nonce('clear-nginx-cache-logs');
-    // Create a nonce for updating send mail option
-    $update_send_mail_option_nonce = wp_create_nonce('update-send-mail-option');
-    // Create a nonce for the status tab
-    $status_ajax_nonce = wp_create_nonce('status_ajax_nonce');
-
-    // Localize nonce value for JavaScript
-    wp_localize_script('nginx-fastcgi-cache-admin', 'nginx_cache_ajax_object', array(
-        'ajaxurl' => admin_url('admin-ajax.php'),
-        'nonce' => $clear_nginx_cache_logs_nonce,
-        'send_mail_nonce' => $update_send_mail_option_nonce,
-        'status_ajax_nonce' => $status_ajax_nonce,
-    ));
-}
+add_action('wp_ajax_my_status_ajax', 'my_status_ajax_callback');
+add_action('wp_ajax_nopriv_my_status_ajax', 'my_status_ajax_callback');
