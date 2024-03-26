@@ -117,4 +117,3 @@ listen = /var/run/php-fcgi-websiteuser.sock</code></pre>
 function my_faq_shortcode() {
     return my_faq_html();
 }
-add_shortcode('my_faq', 'my_faq_shortcode');
