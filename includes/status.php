@@ -294,8 +294,6 @@ function update_status() {
 }
 
 // AJAX handler to fetch shortcode content
-add_action('wp_ajax_my_status_ajax', 'my_status_ajax_callback');
-add_action('wp_ajax_nopriv_my_status_ajax', 'my_status_ajax_callback');
 function my_status_ajax_callback() {
     // Check nonce
     if (isset($_POST['_wpnonce']) && wp_verify_nonce($_POST['_wpnonce'], 'status_ajax_nonce')) {
