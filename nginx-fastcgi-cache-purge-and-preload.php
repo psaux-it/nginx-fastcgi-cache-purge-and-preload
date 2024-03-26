@@ -26,7 +26,7 @@ require_once plugin_dir_path( __FILE__ ) . 'includes/log.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/settings.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/purge.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/preload.php';
-require_once plugin_dir_path( __FILE__ ) . 'includes/helper.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/help.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/status.php';
 
 // Register activation and deactivation hooks
