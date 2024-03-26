@@ -316,4 +316,3 @@ function my_status_ajax_callback() {
 function my_status_shortcode() {
     return my_status_html();
 }
-add_shortcode('my_status', 'my_status_shortcode');
