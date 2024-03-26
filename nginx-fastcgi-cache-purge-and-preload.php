@@ -20,6 +20,8 @@ define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . 'fastcgi_ops.log');
 // Settings page tabs & actions & helpers
 require_once plugin_dir_path( __FILE__ ) . 'includes/wp-filesystem.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/pre-checks.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/admin-bar.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/log.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/purge.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/preload.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/helper.php';
@@ -46,16 +48,12 @@ add_action('wp_ajax_update_send_mail_option', 'update_send_mail_option');
 function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Enqueue CSS file
     wp_enqueue_style('nginx-fastcgi-cache-purge-preload', plugins_url('assets/css/nginx-fastcgi-cache-purge-preload.css', __FILE__), array(), '1.0.2');
-
     // Enqueue JavaScript file
     wp_enqueue_script('nginx-fastcgi-cache-admin', plugins_url('assets/js/nginx-fastcgi-cache-purge-preload.js', __FILE__), array('jquery'), '1.0.2', true);
-
     // Create a nonce for clearing nginx cache logs
     $clear_nginx_cache_logs_nonce = wp_create_nonce('clear-nginx-cache-logs');
-
     // Create a nonce for updating send mail option
     $update_send_mail_option_nonce = wp_create_nonce('update-send-mail-option');
-
     // Create a nonce for the status tab
     $status_ajax_nonce = wp_create_nonce('status_ajax_nonce');
 
@@ -66,156 +64,6 @@ function enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'send_mail_nonce' => $update_send_mail_option_nonce,
         'status_ajax_nonce' => $status_ajax_nonce,
     ));
-}
-
-// Add buttons to WordPress admin bar
-function add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
-    // Check if the user has permissions to manage options
-    if (!current_user_can('manage_options')) {
-        return;
-    }
-
-    // Add a parent menu item for FastCGI cache operations
-    $wp_admin_bar->add_menu(array(
-        'id' => 'fastcgi-cache-operations',
-        'title' => '<img style="height: 20px; margin-bottom: -4px; padding-right: 3px;" src="' . plugin_dir_url(__FILE__) . 'assets/img/bar.png" alt="NPP" title="NPP"> FastCGI Cache',
-        'href' => '#',
-        'meta' => array(
-            'class' => 'npp-icon',
-        ),
-    ));
-
-    // Add child menu items for purge and preload operations with nonces
-    $purge_nonce = wp_create_nonce('purge_cache_nonce');
-    $preload_nonce = wp_create_nonce('preload_cache_nonce');
-    $settings_nonce = wp_create_nonce('nginx_cache_settings_nonce');
-
-    // Add child menu items for purge and preload operations
-    $wp_admin_bar->add_menu(array(
-        'parent' => 'fastcgi-cache-operations',
-        'id' => 'purge-cache',
-        'title' => 'FCGI Cache Purge',
-        'href' => add_query_arg('purge_cache', 'true', admin_url()) . '&_wpnonce=' . $purge_nonce,
-    ));
-
-    $wp_admin_bar->add_menu(array(
-        'parent' => 'fastcgi-cache-operations',
-        'id' => 'preload-cache',
-        'title' => 'FCGI Cache Preload',
-        'href' => add_query_arg('preload_cache', 'true', admin_url()) . '&_wpnonce=' . $preload_nonce,
-    ));
-
-    // Add settings submenu
-    $wp_admin_bar->add_menu(array(
-        'parent' => 'fastcgi-cache-operations',
-        'id' => 'fastcgi-cache-settings',
-        'title' => 'Settings',
-        'href' => add_query_arg('_wpnonce', $settings_nonce, admin_url('options-general.php?page=nginx_cache_settings')),
-    ));
-}
-
-// Handle button clicks
-function handle_fastcgi_cache_actions_admin_bar() {
-    // Check if the buttons are clicked and nonce is valid
-    if ((isset($_GET['purge_cache']) && check_admin_referer('purge_cache_nonce')) ||
-        (isset($_GET['preload_cache']) && check_admin_referer('preload_cache_nonce'))) {
-
-        // Determine action based on button click
-        $action = isset($_GET['purge_cache']) ? 'purge' : 'preload';
-
-        // Necessary data for purge and preload actions
-        $nginx_cache_settings = get_option('nginx_cache_settings');
-
-        $default_cache_path = find_user_home_folder() . '/change-me-nginx';
-        $default_limit_rate = 1280;
-        $default_cpu_limit = 50;
-        $default_reject_regex = fetch_default_reject_regex_from_php_file();
-
-        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
-        $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
-        $nginx_cache_cpu_limit = isset($nginx_cache_settings['nginx_cache_cpu_limit']) ? $nginx_cache_settings['nginx_cache_cpu_limit'] : $default_cpu_limit;
-        $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
-
-        $PIDFILE = plugin_dir_path(__FILE__) . 'cache_preload.pid';
-        $fdomain = get_site_url();
-        $this_script_path = plugin_dir_path(__FILE__);
-
-        // Call the appropriate function based on the action
-        if ($action === 'purge') {
-            purge($nginx_cache_path, $PIDFILE);
-        } elseif ($action === 'preload') {
-            preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit);
-        }
-    }
-}
-
-// Create log file
-function create_log_file($log_file_path) {
-    if (!empty($log_file_path)) {
-        $file_creation_result = perform_file_operation($log_file_path, 'create');
-        if (is_wp_error($file_creation_result)) {
-            return "Error: " . $file_creation_result->get_error_message();
-        }
-        return true;
-    }
-    return "Log file path is empty.";
-}
-
-// Display admin notices
-function display_admin_notice($type, $message) {
-    echo '<div class="notice notice-' . esc_attr($type) . '"><p>' . esc_html($message) . '</p></div>';
-    // Write to the log file
-    $log_file_path = NGINX_CACHE_LOG_FILE;
-    perform_file_operation($log_file_path, 'create');
-    !empty($log_file_path) ? perform_file_operation($log_file_path, 'append', '[' . gmdate('Y-m-d H:i:s') . '] ' . $message) : die("Log file not found!");
-}
-
-// Function to check preload process status
-function check_processes_status() {
-    $PIDFILE = plugin_dir_path(__FILE__) . 'cache_preload.pid'; // Path to the PID file in the plugin directory
-    // If the process is running, display admin notice for preload in progress
-    if (file_exists($PIDFILE)) {
-        $pid = intval(perform_file_operation($PIDFILE, 'read'));
-
-        if ($pid > 0 && posix_kill($pid, 0)) {
-            display_admin_notice('info', 'INFO: FastCGI cache preload is in progress...');
-            return;
-        } else {
-            // Retrieve the Nginx Cache Email setting value
-            $options = get_option('nginx_cache_settings');
-            // Retrieve the Nginx Cache Email setting value
-            $nginx_cache_email = isset($options['nginx_cache_email']) ? $options['nginx_cache_email'] : '';
-            // Check if Send Mail is checked
-            $send_mail = isset($options['nginx_cache_send_mail']) && $options['nginx_cache_send_mail'] === 'yes';
-            // Only send if user customized email address and send mail enabled
-            $default_email = 'your-email@example.com';
-            if ($send_mail && !empty($nginx_cache_email) && $nginx_cache_email !== $default_email) {
-                // Extract the domain from the WordPress site URL
-                $site_url = get_site_url();
-                $site_url_parts = wp_parse_url($site_url);
-                $domain = str_replace('www.', '', $site_url_parts['host']);
-                // Set mail_from address with user domain
-                $mail_from = "From: Nginx FastCGI Cache Purge Preload Wordpress<fcgi-cache@$domain>";
-                // Mail subject
-                $mail_subject = "$domain-NGINX FastCGI Cache Preload";
-                // Mail message
-                $mail_message = "The NGINX FastCGI Preload operation has been completed for $domain.";
-                // Send email
-                wp_mail($nginx_cache_email, $mail_subject, $mail_message, $mail_from);
-            }
-
-            // Display admin notice for completed preload
-            display_admin_notice('success', 'SUCCESS: FastCGI cache preload is completed!');
-
-            // Remove absolute downloaded content
-            $this_script_path = plugin_dir_path(__FILE__);
-            $tmp_path = rtrim($this_script_path, '/') . "/tmp";
-            wp_remove_directory($tmp_path, true);
-            
-            // If the process is not running, delete the PID file
-            perform_file_operation($PIDFILE, 'delete');
-        }
-    }
 }
 
 // Initializes the Nginx Cache settings by registering settings, adding settings section, and fields
