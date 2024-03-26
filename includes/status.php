@@ -1,7 +1,7 @@
 <?php
 /**
- * Status for Nginx FastCGI Cache Purge and Preload
- * Description: This status file shows information about plugin status.
+ * Status page for Nginx FastCGI Cache Purge and Preload Plugin
+ * Description: This file contains status page functions to shows information about plugin status
  * Version: 1.0.2
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
@@ -103,6 +103,28 @@ function check_path() {
     }
 }
 
+// Function to get the active PHP process owner
+function get_website_user() {
+    $php_process_owner = '';
+
+    // Get the user ID of the PHP process owner
+    $php_process_uid = posix_getpwuid(posix_geteuid())['name'];
+
+    // Map the user ID to common web server users
+    switch ($php_process_uid) {
+        case 'www-data':
+            $php_process_owner = 'www-data';
+            break;
+        case 'nginx':
+            $php_process_owner = 'nginx';
+            break;
+        default:
+            $php_process_owner = $php_process_uid;
+            break;
+    }
+
+    return $php_process_owner;
+}
 
 // Generate HTML for status tab
 function my_status_html() {
@@ -116,10 +138,24 @@ function my_status_html() {
             <section class="status-summary">
                 <h2>Status Summary</h2>
                 <table>
+                    <tbody>
+                        <tr>
+                            <td class="action">
+                                <div class="action-wrapper">PHP-FPM Setup</div>
+                            </td>
+                            <td class="status" id="phpFpmStatus">
+                                <span class="dashicons"></span>
+                                <span>Correct</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div style="height: 20px;"></div>
+                <table>
                     <thead>
                         <tr>
-                            <th class="action-header">Action</th>
-                            <th class="status-header">Status</th>
+                            <th class="action-header"><span class="dashicons dashicons-admin-generic"></span> Action</th>
+                            <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -134,7 +170,7 @@ function my_status_html() {
                             <td class="action">Preload Action</td>
                             <td class="status" id="preloadStatus">
                                 <span class="dashicons"></span>
-                                <span>Not Working</span>
+                                <span>Working</span>
                             </td>
                         </tr>
                     </tbody>
@@ -145,16 +181,23 @@ function my_status_html() {
                 <table>
                     <thead>
                         <tr>
-                            <th class="check-header">Check</th>
-                            <th class="status-header">Status</th>
+                            <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
+                            <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
                         </tr>
                     </thead>
                     <tbody>
-                         <tr>
+                        <tr>
+                            <td class="check">PHP-FPM User (Website User)</td>
+                            <td class="status" id="phpProcessOwner">
+                                <span class="dashicons"></span>
+                                <span>psauxit</span>
+                            </td>
+                        </tr>
+                        <tr>
                             <td class="check">Cache Path (Required for Purge)</td>
                             <td class="status" id="cachePath">
                                 <span class="dashicons"></span>
-                                <span>Exist</span>
+                                <span>Found</span>
                             </td>
                         </tr>
                         <tr>
@@ -195,6 +238,58 @@ function update_status() {
     ?>
     <script>
         jQuery(document).ready(function($) {
+            var phpFpmRow = document.querySelector("#phpFpmStatus").closest("tr");
+            var phpFpmStatusSpan = document.getElementById("phpFpmStatus");
+            var phpFpmStatus = "<?php echo esc_js(get_website_user()); ?>";
+            phpFpmStatusSpan.textContent = phpFpmStatus;
+            phpFpmStatusSpan.style.fontSize = "14px";
+            if (phpFpmStatus === "nginx" || phpFpmStatus === "www-data") {
+                phpFpmStatusSpan.style.color = "red";
+                phpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Incorrect (Check Help)';
+                phpFpmRow.style.color = "#3C434A";
+                phpFpmRow.style.backgroundColor = "red";
+                // Blink animation
+                phpFpmRow.animate([
+                    { backgroundColor: 'inherit' },
+                    { backgroundColor: '#ff8080' }
+                ], {
+                    duration: 1000,
+                    iterations: Infinity,
+                    direction: 'alternate'
+                });
+            } else {
+                phpFpmStatusSpan.style.color = "green";
+                phpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Correct';
+                phpFpmRow.style.color = "#3C434A";
+                phpFpmRow.style.backgroundColor = "lightgreen";
+                // Blink animation
+                phpFpmRow.animate([
+                    { backgroundColor: 'inherit' },
+                    { backgroundColor: '#90ee90' }
+                ], {
+                    duration: 1000,
+                    iterations: Infinity,
+                    direction: 'alternate'
+                });
+            }
+
+            // Fetch and update php process owner
+            // PHP-FPM (website user)
+            var phpProcessOwnerSpan = document.getElementById("phpProcessOwner");
+            var phpProcessOwner = "<?php echo esc_js(get_website_user()); ?>";
+            phpProcessOwnerSpan.textContent = phpProcessOwner;
+            phpProcessOwnerSpan.style.fontSize = "14px";
+            if (phpProcessOwner === "nginx") {
+                phpProcessOwnerSpan.style.color = "red";
+                phpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> nginx';
+            } else if (phpProcessOwner === "www-data") {
+                phpProcessOwnerSpan.style.color = "red";
+                phpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> www-data';
+            } else {
+                phpProcessOwnerSpan.style.color = "green";
+                phpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + phpProcessOwner;
+            }
+
             // Fetch and update nginx cache path status
             var cachePathSpan = document.getElementById("cachePath");
             var cachePath = "<?php echo esc_js(check_path()); ?>";
@@ -299,10 +394,8 @@ function my_status_ajax_callback() {
     if (isset($_POST['_wpnonce']) && wp_verify_nonce($_POST['_wpnonce'], 'status_ajax_nonce')) {
         // Call the shortcode function to get HTML content
         $shortcode_content = my_status_shortcode();
-
         // Return the shortcode content
         echo wp_kses_post($shortcode_content);
-        
         // Update status elements
         update_status();
         exit();
