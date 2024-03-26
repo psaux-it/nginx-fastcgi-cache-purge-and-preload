@@ -47,3 +47,7 @@ add_action('wp_ajax_clear_nginx_cache_logs', 'clear_nginx_cache_logs');
 add_action('wp_ajax_update_send_mail_option', 'update_send_mail_option');
 add_action('wp_ajax_my_status_ajax', 'my_status_ajax_callback');
 add_action('wp_ajax_nopriv_my_status_ajax', 'my_status_ajax_callback');
+
+// Register shortcodes
+add_shortcode('my_status', 'my_status_shortcode');
+add_shortcode('my_faq', 'my_faq_shortcode');
