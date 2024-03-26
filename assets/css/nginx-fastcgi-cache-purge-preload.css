@@ -1,6 +1,6 @@
 /**
  * Styles for Nginx FastCGI Cache Purge and Preload
- * Description: This CSS file contains styles for the plugin.
+ * Description: This CSS file contains styles for the Nginx FastCGI Cache Purge and Preload plugin.
  * Version: 1.0.2
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
@@ -196,20 +196,20 @@
     padding: 10px;
     text-align: left;
     border-bottom: 2px solid #ccc;
-    background-color: #f0f0f0; /* Light gray background */
-    color: #333; /* Dark gray text color */
+    background-color: #f0f0f0;
+    color: #333;
 }
 
 /* Stylish Action, Status, and Check Headers */
 #status-tab .action-header,
 #status-tab .status-header,
 #status-tab .check-header {
-    text-transform: uppercase; /* Convert to uppercase */
-    font-size: 14px; /* Adjust font size */
-    color: #0073e6; /* Blue color */
-    background-color: #f9f9f9; /* Light background color */
-    padding: 8px 10px; /* Adjust padding */
-    width: 50%; /* Equal width */
+    text-transform: uppercase;
+    font-size: 14px;
+    color: #0073e6;
+    background-color: #f9f9f9;
+    padding: 8px 10px;
+    width: 50%;
 }
 
 /* Action, Status, and Check Cells */
@@ -249,12 +249,12 @@
 
 /* Adjust h2 background color and style */
 #status-tab h2 {
-    background-color: #0073e6; /* Blue background color */
-    color: #fff; /* White text color */
-    padding: 10px; /* Padding around text */
-    margin-top: 20px; /* Spacing from the top */
-    margin-bottom: 10px; /* Spacing from the bottom */
-    text-transform: uppercase; /* Convert text to uppercase */
+    background-color: #0073e6;
+    color: #fff;
+    padding: 10px;
+    margin-top: 20px;
+    margin-bottom: 0px;
+    text-transform: uppercase;
 }
 
 /* td font size */
@@ -270,4 +270,10 @@ td.action, td.check {
     padding: 10px;
     font-size: 12px !important;
     margin-top: 15px !important;
+}
+
+/* Adjust width of td.action and td#phpFpmStatus */
+#status-tab .action,
+#status-tab #phpFpmStatus {
+    width: 50%;
 }
