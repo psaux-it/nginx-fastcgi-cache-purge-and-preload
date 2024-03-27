@@ -2,7 +2,7 @@
 /**
  * Status page for Nginx FastCGI Cache Purge and Preload Plugin
  * Description: This file contains status page functions to shows information about plugin status
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
