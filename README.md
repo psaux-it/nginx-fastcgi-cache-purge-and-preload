@@ -1,6 +1,6 @@
 # Nginx FastCGI Cache Purge & Preload Plugin for Wordpress
 
-https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/1af05002-347c-493f-abb2-e56d80f1bf8d
+https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/235404ff-b35c-4cce-ac17-ebead39130b6
 
 ------
 ![Screenshot 2024-03-27 183824](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/98553964-cd11-4a1f-a6f3-0a0a6d073ba2)
