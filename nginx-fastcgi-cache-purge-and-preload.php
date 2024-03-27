@@ -40,6 +40,7 @@ add_action('admin_init', 'check_processes_status');
 add_action('admin_enqueue_scripts', 'enqueue_nginx_fastcgi_cache_purge_preload_assets');
 add_action('admin_init', 'nginx_cache_settings_init');
 add_action('admin_menu', 'add_nginx_cache_settings_page');
+add_action('admin_head', 'modify_nginx_cache_settings_url');
 add_filter('whitelist_options', 'add_nginx_cache_settings_to_allowed_options');
 add_action('load-settings_page_nginx_cache_settings', 'pre_checks');
 add_action('load-settings_page_nginx_cache_settings', 'check_wget_availability');
