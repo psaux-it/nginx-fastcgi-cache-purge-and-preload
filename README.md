@@ -1,18 +1,58 @@
 # Nginx FastCGI Cache Purge & Preload Plugin for Wordpress
-##### QUICK START - ONE LINER's
 
-To obtain the [plugin](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/releases/tag/v1.0.2) from releases and install it on your wordpress instance, simply execute the following one-liner command at the **ROOT** level. In wordpress instance go to plugin settings and set your FastCGI Cache Path, Excluded Endpoints for Preload and CPU Limit %
-
-```bash <(curl -Ss https://psaux-it.github.io/install.sh)```  
-```bash <(wget -qO- https://psaux-it.github.io/install.sh)```
+https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/1af05002-347c-493f-abb2-e56d80f1bf8d
 
 ------
-![cache_preload](https://user-images.githubusercontent.com/25556606/202007501-8d9e5ab6-3330-452f-b967-6615e703a486.png)<br/>
-![nginx](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/assets/25556606/6f288539-9c73-4eeb-a970-ad18a88b434d)
+![Screenshot 2024-03-27 183824](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/98553964-cd11-4a1f-a6f3-0a0a6d073ba2)
 
-Nginx cache management solution for MULTISITE wordpress.
-#### Integration is straightforward if you are not native linux user and managing your own server. Ask for help! <br/>
+------
+
+![Screenshot 2024-03-27 190007](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/31a4aa9f-f077-4792-a461-4b216456eaf3)
 ---
+
+## What is the actual solution here exactly?
+
+### Overview
+
+This project addresses the challenge of automating Nginx FastCGI cache purging and preloading (Wordpress) in Nginx environments where two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, are involved. 
+
+### Problem Statement
+
+- **WEBSERVER-USER**: Responsible for creating cache folders and files with strict permissions.
+- **PHP-FPM-USER**: Handles cache purge operations but lacks **privileges**
+
+### Challenges
+
+- **Permission Issues**: Adding **PHP-FPM-USER** to the **WEBSERVER-GROUP** doesn't resolve permission conflicts.
+- **Nginx Overrides**: Nginx overrides default setfacl settings, ignoring ACLs. Nginx creates cache folders and files with strict permissions.
+
+Surprisingly, Nginx cache doesn't adhere to DEFAULT ACLs.<br/>
+` setfacl -R -m d:u:websiteuser:rwX /home/websiteuser/fastcgi-cache`
+
+### Solution
+
+Solution involves combining **inotifywait** with **setfacl** under **root**:
+- **fastcgi_ops_root.sh** grants **PHP-FPM-USER** write permissions recursively for cache purge operations for multi instances.
+
+## Implementation
+
+To implement this solution:
+1. Download latest [plugin](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/releases/tag/v1.0.2) from our releases and install to your wordpress instance 
+2. On **root** call ```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` to start automated setup
+
+## What does install.sh do? Is it safe?
+
+This Bash script automates the management of inotify/setfacl operations, ensuring efficiency and security. It enhances the efficiency and security of cache management tasks by automating the setup and configuration processes.
+The **install.sh** script serves as a wrapper that facilitates the execution of the main **fastcgi_ops_root.sh** script from **psaux-it.github.io**. It acts as a convenient entry point for users to initiate the setup and configuration procedures seamlessly.
+Rest assured, this solution is entirely safe to use, providing a reliable and straightforward method for managing Nginx FastCGI cache purge operations on Wordpress front-end.
+
+- **Automated Setup**: Quickly sets up FastCGI cache paths and associated PHP-FPM users.
+- **Dynamic Configuration**: Detects Nginx configuration dynamically for seamless integration.
+- **ACL Verification**: Ensures filesystem ACL configuration for proper functionality.
+- **Systemd Integration**: Generates and enables systemd service for continuous operation.
+- **Manual Configuration Support**: Allows manual configuration for customized setups.
+- **Inotify Operations**: Listens to FastCGI cache folder events for real-time updates.
+
 <details>
   <summary>Here is the short explanation of proper php-fpm nginx setup</summary>
   
@@ -63,47 +103,3 @@ listen = /var/run/php-fcgi-websiteuser.sock
 This is proper php-fpm nginx setup example.
 
 </details>
-
-## What does install.sh do? Is it safe?
-![Screenshot 2024-03-04 193017](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/assets/25556606/c9062e6d-4c47-4938-9abe-c0ec43ae9428)<br/>
-
-This Bash script automates the management of inotify/setfacl operations, ensuring efficiency and security. It enhances the efficiency and security of cache management tasks by automating the setup and configuration processes.
-The **install.sh** script serves as a wrapper that facilitates the execution of the main **fastcgi_ops_root.sh** script from **psaux-it.github.io**. It acts as a convenient entry point for users to initiate the setup and configuration procedures seamlessly.
-Rest assured, this solution is entirely safe to use, providing a reliable and straightforward method for managing Nginx FastCGI cache operations.
-
-- **Automated Setup**: Quickly sets up FastCGI cache paths and associated PHP-FPM users.
-- **Dynamic Configuration**: Detects Nginx configuration dynamically for seamless integration.
-- **ACL Verification**: Ensures filesystem ACL configuration for proper functionality.
-- **Systemd Integration**: Generates and enables systemd service for continuous operation.
-- **Manual Configuration Support**: Allows manual configuration for customized setups.
-- **Inotify Operations**: Listens to FastCGI cache folder events for real-time updates.
-
-## Why we need to run fastcgi_ops_root.sh under root?
-
-### Overview
-
-This project addresses the challenge of automating Nginx FastCGI cache purging and preloading in Nginx environments where two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, are involved. 
-
-### Problem Statement
-
-- **WEBSERVER-USER**: Responsible for creating cache folders and files with strict permissions.
-- **PHP-FPM-USER**: Handles cache purge operations but lacks **privileges**
-
-### Challenges
-
-- **Permission Issues**: Adding **PHP-FPM-USER** to the **WEBSERVER-GROUP** doesn't resolve permission conflicts.
-- **Nginx Overrides**: Nginx overrides default setfacl settings, ignoring ACLs. Nginx creates cache folders and files with strict permissions.
-
-Surprisingly, Nginx cache doesn't adhere to DEFAULT ACLs.<br/>
-` setfacl -R -m d:u:websiteuser:rwX /home/websiteuser/fastcgi-cache`
-
-### Solution
-
-Solution involves combining **inotifywait** with **setfacl** under **root**:
-- **fastcgi_ops_root.sh** grants **PHP-FPM-USER** write permissions recursively for cache purge operations for multi instances.
-
-## Implementation
-
-To implement this solution:
-1. Download latest [plugin](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/releases/tag/v1.0.0) from our releases and install to your wordpress instance 
-2. On **root** call ```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` to start automated setup
