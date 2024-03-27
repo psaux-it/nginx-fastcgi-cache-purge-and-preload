@@ -2,7 +2,7 @@
 /**
  * WP_Filesytem functions for Nginx FastCGI Cache Purge and Preload
  * Description: This file contains WP_Filesytem functions for purge and preload actions.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
