@@ -2,7 +2,7 @@
 /**
  * Pre-checks for Nginx FastCGI Cache Purge and Preload
  * Description: This pre-check file contains several checks for FastCGI Cache Purge and Preload plugin.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -15,7 +15,7 @@ function check_wget_availability() {
     if (empty($output)) {
         // Wget is not available
         add_action('admin_notices', 'display_wget_warning');
-        wp_enqueue_script('preload-button-disable', plugins_url('assets/js/preload-button-disable.js', __FILE__), array('jquery'), '1.0.2', true);
+        wp_enqueue_script('preload-button-disable', plugins_url('assets/js/preload-button-disable.js', __FILE__), array('jquery'), '1.0.3', true);
     } else {
         // Wget is available, dequeue the preload-button-disable.js if it's already enqueued
         wp_dequeue_script('preload-button-disable');
