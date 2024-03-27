@@ -29,12 +29,32 @@ function nginx_cache_settings_init() {
 function add_nginx_cache_settings_page() {
     add_submenu_page(
         'options-general.php',
-        'Nginx Cache Settings',
-        'Nginx Cache Settings',
+        'Nginx FastCGI Cache',
+        'Nginx FastCGI Cache',
         'manage_options',
         'nginx_cache_settings',
         'nginx_cache_settings_page'
     );
+}
+
+// Modify the URL of the submenu page and add nonce
+function modify_nginx_cache_settings_url() {
+    global $submenu;
+    if (isset($submenu['options-general.php'])) {
+        foreach ($submenu['options-general.php'] as $key => $item) {
+            if ($item[2] === 'nginx_cache_settings') {
+                // Generate nonce
+                $nonce = wp_create_nonce('nginx_cache_settings_nonce');
+
+                // Change the URL and add nonce
+                $url_with_nonce = add_query_arg('_wpnonce', $nonce, admin_url('options-general.php?page=nginx_cache_settings'));
+
+                // Modify the URL
+                $submenu['options-general.php'][$key][2] = $url_with_nonce;
+                break;
+            }
+        }
+    }
 }
 
 // Add the option name to the allowed options list
