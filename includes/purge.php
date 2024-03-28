@@ -10,16 +10,12 @@
  */
 
 // Purge cache operation helper
-function purge_helper($nginx_cache_path) {
+function purge_helper($nginx_cache_path, $tmp_path) {
     $wp_filesystem = initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
         return false; // Return false if WP_Filesystem initialization failed
     }
-
-    // Remove absolute downloaded content if exists
-    $this_script_path = plugin_dir_path(__FILE__);
-    $tmp_path = rtrim($this_script_path, '/') . "/tmp";
 
     if ($wp_filesystem->is_dir($tmp_path)) {
         wp_remove_directory($tmp_path, true);
@@ -51,7 +47,7 @@ function purge_helper($nginx_cache_path) {
 }
 
 // Purge cache operation
-function purge($nginx_cache_path, $PIDFILE) {
+function purge($nginx_cache_path, $PIDFILE, $tmp_path) {
     // Initialize variables for messages
     $message_type = '';
     $message_content = '';
@@ -67,7 +63,7 @@ function purge($nginx_cache_path, $PIDFILE) {
             usleep(50000); // Wait for 50 milliseconds
 
             // Call purge_helper to delete cache contents and get status
-            $status = purge_helper($nginx_cache_path);
+            $status = purge_helper($nginx_cache_path, $tmp_path);
 
             // Determine message based on status
             switch ($status) {
@@ -94,7 +90,7 @@ function purge($nginx_cache_path, $PIDFILE) {
         }
     } else {
         // Call purge_helper to delete cache contents and get status
-        $status = purge_helper($nginx_cache_path);
+        $status = purge_helper($nginx_cache_path, $tmp_path);
 
         // Determine message based on status
         switch ($status) {
