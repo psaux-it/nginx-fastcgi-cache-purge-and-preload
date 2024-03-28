@@ -10,7 +10,7 @@
  */
 
 // Preload operation
-function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit) {
+function preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit) {
     // Check if there is an ongoing preload process active
     if (file_exists($PIDFILE)) {
         $pid = intval(perform_file_operation($PIDFILE, 'read'));
@@ -22,7 +22,7 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
     }
 
     // Purge cache and get status
-    $status = purge_helper($nginx_cache_path);
+    $status = purge_helper($nginx_cache_path, $tmp_path);
 
     // Handle different status codes
     if ($status === 0 || $status === 2) {
@@ -40,9 +40,6 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
         } else {
             $cpulimit = 0;
         }
-
-        // Keep absolute download content in /tmp
-        $tmp_path = rtrim($this_script_path, '/') . "/tmp";
 
         // Start cache preloading
         $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' \"$fdomain\" >/dev/null 2>&1 & echo \$!";
