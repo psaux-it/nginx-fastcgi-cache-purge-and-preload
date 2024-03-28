@@ -77,15 +77,16 @@ function handle_fastcgi_cache_actions_admin_bar() {
         $nginx_cache_cpu_limit = isset($nginx_cache_settings['nginx_cache_cpu_limit']) ? $nginx_cache_settings['nginx_cache_cpu_limit'] : $default_cpu_limit;
         $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
 
-        $PIDFILE = plugin_dir_path(__FILE__) . 'cache_preload.pid';
         $fdomain = get_site_url();
-        $this_script_path = plugin_dir_path(__FILE__);
+        $this_script_path = dirname(plugin_dir_path(__FILE__));
+        $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+        $tmp_path = rtrim($this_script_path, '/') . "/tmp";
 
         // Call the appropriate function based on the action
         if ($action === 'purge') {
-            purge($nginx_cache_path, $PIDFILE);
+            purge($nginx_cache_path, $PIDFILE, $tmp_path);
         } elseif ($action === 'preload') {
-            preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit);
+            preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit);
         }
     }
 }
