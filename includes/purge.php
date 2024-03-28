@@ -32,12 +32,21 @@ function purge_helper($nginx_cache_path) {
 
         // Check cache purge status
         if (is_wp_error($result)) {
-            return 1; // Permission issue
+            $error_code = $result->get_error_code();
+            if ($error_code === 'permission_error') {
+                return 1;
+            } elseif ($error_code === 'empty_directory') {
+                return 2;
+            } elseif ($error_code === 'directory_not_found') {
+                return 3;
+            } else {
+                return 4;
+            }
         } else {
-            return 0; // Assume purge successful
+            return 0;
         }
     } else {
-        return 2; // Directory doesn't exist
+        return 3;
     }
 }
 
@@ -68,11 +77,15 @@ function purge($nginx_cache_path, $PIDFILE) {
                     break;
                 case 1:
                     $message_type = 'error';
-                    $message_content = 'ERROR PERMISSION: FastCGI cache preloading is stopped but Purge FastCGI cache failed. Please read help section of the plugin.';
+                    $message_content = 'ERROR PERMISSION: FastCGI cache preloading is stopped but Purge FastCGI cache failed due to permission issues. Please read the help section of the plugin.';
                     break;
-                case 2:
+                case 3:
                     $message_type = 'error';
-                    $message_content = 'ERROR PATH: Your FastCGI cache PATH (' . $nginx_cache_path . ') not found. Please check your FastCGI cache path.';
+                    $message_content = 'ERROR PATH: Your FastCGI cache PATH (' . $nginx_cache_path . ') is not found. Please check your FastCGI cache path.';
+                    break;
+                case 4:
+                    $message_type = 'error';
+                    $message_content = 'ERROR UNKNOWN: An unexpected error occurred while purging the FastCGI cache. Please file a bug.';
                     break;
             }
 
@@ -91,11 +104,19 @@ function purge($nginx_cache_path, $PIDFILE) {
                 break;
             case 1:
                 $message_type = 'error';
-                $message_content = 'ERROR PERMISSION: Purge FastCGI cache cannot completed. Please read help section of the plugin.';
+                $message_content = 'ERROR PERMISSION: Purge FastCGI cache cannot be completed due to permission issues. Please read the help section of the plugin.';
                 break;
             case 2:
+                $message_type = 'info';
+                $message_content = 'INFO: Your FastCGI cache directory is empty.';
+                break;
+            case 3:
                 $message_type = 'error';
                 $message_content = 'ERROR PATH: Your FastCGI cache PATH (' . $nginx_cache_path . ') is not found. Please check your FastCGI cache path.';
+                break;
+            case 4:
+                $message_type = 'error';
+                $message_content = 'ERROR UNKNOWN: An unexpected error occurred while purging the FastCGI cache. Please file a bug.';
                 break;
         }
     }
