@@ -32,7 +32,7 @@ function display_admin_notice($type, $message) {
 
 // Function to check preload process status
 function check_processes_status() {
-    $PIDFILE = plugin_dir_path(__FILE__) . 'cache_preload.pid'; // Path to the PID file in the plugin directory
+    $PIDFILE = dirname(plugin_dir_path(__FILE__)) . '/cache_preload.pid';
     // If the process is running, display admin notice for preload in progress
     if (file_exists($PIDFILE)) {
         $pid = intval(perform_file_operation($PIDFILE, 'read'));
@@ -68,7 +68,7 @@ function check_processes_status() {
             display_admin_notice('success', 'SUCCESS: FastCGI cache preload is completed!');
 
             // Remove absolute downloaded content
-            $this_script_path = plugin_dir_path(__FILE__);
+            $this_script_path = dirname(plugin_dir_path(__FILE__));
             $tmp_path = rtrim($this_script_path, '/') . "/tmp";
             wp_remove_directory($tmp_path, true);
 
