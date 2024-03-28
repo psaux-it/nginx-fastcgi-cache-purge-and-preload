@@ -25,7 +25,7 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
     $status = purge_helper($nginx_cache_path);
 
     // Handle different status codes
-    if ($status === 0) {
+    if ($status === 0 || $status === 2) {
         // Create PID file
         if (!perform_file_operation($PIDFILE, 'create')) {
             display_admin_notice('error', 'FATAL PERMISSION ERROR: Failed to create PID file.');
@@ -62,9 +62,9 @@ function preload($nginx_cache_path, $this_script_path, $fdomain, $PIDFILE, $ngin
         }
     } elseif ($status === 1) {
         display_admin_notice('error', 'ERROR PERMISSION: Cannot Purge FastCGI cache to start Cache Preloading. Please read help section of the plugin.');
-    } elseif ($status === 2) {
+    } elseif ($status === 3) {
         display_admin_notice('error', 'ERROR PATH: Your FastCGI cache PATH (' . $nginx_cache_path . ') not found. Please check your FastCGI cache path.');
     } else {
-        display_admin_notice('error', 'ERROR UNKNOWN: Cannot Purge FastCGI cache to start Cache Preloading.');
+        display_admin_notice('error', 'ERROR UNKNOWN: An unexpected error occurred while preloading the FastCGI cache. Please file a bug.');
     }
 }
