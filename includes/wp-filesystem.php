@@ -67,7 +67,7 @@ function wp_purge($directory_path) {
     $wp_filesystem = initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false; // Return false if WP_Filesystem initialization failed
+        return new WP_Error('filesystem_error', 'WP_Filesystem initialization failed');
     }
 
     // Check if the directory exists before attempting to remove its contents
@@ -76,22 +76,24 @@ function wp_purge($directory_path) {
         $contents = $wp_filesystem->dirlist($directory_path);
 
         // Delete files and directories in the directory
-        foreach ($contents as $file) {
-            $file_path = trailingslashit($directory_path) . $file['name'];
-            if ($wp_filesystem->is_file($file_path) || $wp_filesystem->is_dir($file_path)) {
-                // Attempt to delete file or directory
-                $deleted = $wp_filesystem->delete($file_path, true);
-                if (!$deleted) {
-                    // Error occurred while deleting file or directory
-                    return new WP_Error('delete_error', 'Error deleting file or directory: ' . $file_path);
+        if (!empty($contents)) {
+            foreach ($contents as $file) {
+                $file_path = trailingslashit($directory_path) . $file['name'];
+                if ($wp_filesystem->is_file($file_path) || $wp_filesystem->is_dir($file_path)) {
+                    // Attempt to delete file or directory
+                    $deleted = $wp_filesystem->delete($file_path, true);
+                    if (!$deleted) {
+                        return new WP_Error('permission_error', 'Permission denied while deleting file or directory: ' . $file_path);
+                    }
                 }
             }
+        } else {
+            return new WP_Error('empty_directory', 'Directory is empty');
         }
 
         return true; // Contents removed successfully
     } else {
-        // Directory does not exist
-        return new WP_Error('directory_not_found', 'Directory not found.');
+        return new WP_Error('directory_not_found', 'Directory not found');
     }
 }
 
