@@ -1,0 +1,1866 @@
+/**
+ * Styles for FastCGI Cache Purge and Preload for Nginx
+ * Description: This CSS file contains styles for the FastCGI Cache Purge and Preload for Nginx
+ * Version: 2.0.0
+ * Author: Hasan ÇALIŞIR
+ * Author Email: hasan.calisir@psauxit.com
+ * Author URI: https://www.psauxit.com
+ * License: GPL-2.0+
+ */
+
+/* Global Styles */
+
+/* Container for logs */
+.logs-container {
+    background-color: #000000;
+    padding: 10px;
+    border-radius: 5px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+/* Log lines */
+.logs-container div {
+    margin-bottom: 5px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Error log lines */
+.error-line {
+    color: #ff5252;
+}
+
+/* Normal log lines */
+.normal-line {
+    color: #bdbdbd;
+}
+
+/* Info log lines */
+.info-line {
+    color: #bdbdbd;
+}
+
+/* Success log lines */
+.success-line {
+    color: #64dd17;
+}
+
+/* Timestamp in logs */
+.logs-container .timestamp {
+    color: white;
+}
+
+/* Cursor for logs */
+.cursor {
+    color: #FFFFFF;
+    animation: blink-animation 1s infinite;
+}
+
+/* Blink animation */
+@keyframes blink-animation {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* CSS for FAQ Tab */
+
+/* FAQ container */
+.faq {
+    margin-bottom: 20px;
+}
+
+/* Question styles */
+.question {
+    font-size: 15px;
+    font-weight: bold;
+    color: #007cba;
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-top: 20px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    background-color: #f5f5f5;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease;
+}
+
+/* Question icon */
+.question::before {
+    content: '\f534';
+    font-family: 'dashicons';
+    margin-right: 10px;
+}
+
+/* Hover effect on question */
+.question:hover {
+    background-color: #e0e0e0;
+}
+
+/* Answer container */
+.answer {
+    display: none;
+    padding: 20px;
+    border-radius: 8px;
+    margin-top: 10px;
+    background-color: #fff;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+/* Show active answer */
+.answer.active {
+    display: block;
+}
+
+/* Arrow icon for question */
+.question::after {
+    content: '\f140';
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    font: normal 20px/1 'dashicons';
+    color: #007cba;
+    transition: transform 0.3s;
+}
+
+/* Rotate arrow when active */
+.active .question::after {
+    transform: rotate(180deg);
+}
+
+/* List styles for FAQ */
+.nginx-list {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.nginx-list li {
+    margin-bottom: 10px;
+}
+
+/* Bullet styles for FAQ list */
+.nginx-list li::before {
+    content: "\2022";
+    font-size: 1.5em;
+    color: #0073e6;
+    margin-right: 10px;
+}
+
+/* Reset regex button styles */
+.nginx-reset-regex-button {
+    margin-top: 10px !important;
+}
+
+/* Generate API Key button styles */
+.nginx-api-key-button {
+    display: block !important;
+    margin-top: 10px !important;
+}
+
+/* Clear logs button styles */
+.nginx-clear-logs-button {
+    margin-top: 10px !important;
+}
+
+/* CSS for Status Tab */
+
+/* Status Tab Container */
+#nppp-status-tab.container {
+    max-width: 800px;
+    margin-left: 0px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+}
+
+/* Status Summary Table */
+#nppp-status-tab .status-summary table,
+#nppp-status-tab .system-checks table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+/* Table Header Styles */
+#nppp-status-tab th {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 2px solid #ccc;
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+/* Stylish Action, Status, and Check Headers */
+#nppp-status-tab .action-header,
+#nppp-status-tab .status-header,
+#nppp-status-tab .check-header {
+    text-transform: uppercase;
+    font-size: 14px;
+    color: #0073e6;
+    background-color: #F0F0F0;
+    padding: 8px 10px;
+    width: 50%;
+}
+
+/* Action, Status, and Check Cells */
+#nppp-status-tab .action,
+#nppp-status-tab .status,
+#nppp-status-tab .check {
+    font-weight: bold;
+    padding: 10px;
+    border-bottom: 1px solid #ccc;
+}
+
+/* Status Styles */
+#nppp-status-tab .status-yes {
+    color: green;
+}
+
+#nppp-status-tab .status-no {
+    color: red;
+}
+
+/* Footer */
+#nppp-status-tab footer {
+    margin-top: 30px;
+    text-align: center;
+    color: #888;
+}
+
+/* Animation Styles */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#nppp-status-tab .spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Adjust h2 background color and style */
+#nppp-status-tab h2 {
+    background-color: #337AB7;
+    color: #fff;
+    padding: 10px;
+    margin-top: 20px;
+    margin-bottom: 0px;
+    text-transform: uppercase;
+}
+
+/* td font size */
+td.action, td.check {
+    font-size: 14px !important;
+}
+
+/* style for cache path note */
+.cache-path-plugin-note {
+    max-width: max-content;
+    color: #722F37;
+    background-color: #f2f2f2;
+    border-left: 4px solid #999;
+    padding: 10px;
+    font-size: 12px !important;
+    margin-top: 15px !important;
+}
+
+/* Adjust width of td.action and td#phpFpmStatus */
+#nppp-status-tab .action,
+#nppp-status-tab #phpFpmStatus {
+    width: 50%;
+}
+
+/* CSS for Advanced Tab */
+
+/* premium table header color*/
+#nppp-premium-table thead th[data-dt-column] {
+    background-color: #337AB7 !important;
+}
+
+/* Set text color for column titles */
+#nppp-premium-table span.dt-column-title {
+    color: white;
+}
+
+/* Set text color for column order icons */
+#nppp-premium-table span.dt-column-order {
+    color: white;
+}
+
+/* Style the search box */
+#nppp-premium-table_wrapper .dt-search {
+    margin-bottom: 10px;
+}
+
+/* Style the search label */
+#nppp-premium-table_wrapper .dt-search label {
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+/* Style the search input */
+#nppp-premium-table_wrapper .dt-search input.dt-input {
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #f2f2f2;
+    color: #333;
+    width: 200px;
+}
+
+/* Style the focused state of the search input */
+#nppp-premium-table_wrapper .dt-search input.dt-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}
+
+/* Style pagination buttons */
+#nppp-premium-table_wrapper .dt-paging button {
+    background-color: #337AB7;
+    color: #fff !important;
+    border: none;
+    padding: 5px 10px;
+    margin-right: 5px;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+/* Style disabled pagination buttons */
+#nppp-premium-table_wrapper .dt-paging button.ui-state-disabled {
+    background-color: #ccc;
+    color: #666;
+    cursor: default;
+}
+
+/* Style ellipsis */
+#nppp-premium-table_wrapper .dt-paging .ellipsis {
+    color: #666;
+    margin-right: 5px;
+}
+
+/* Style the nppp-purge-btn button */
+.nppp-purge-btn {
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Style the nppp-purge-btn button */
+.nppp-preload-btn {
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Hover effect for nppp-purge-btn button */
+.nppp-purge-btn:hover {
+    background-color: #0056b3;
+}
+
+/* Hover effect for nppp-purge-btn button */
+.nppp-preload-btn:hover {
+    background-color: #0056b3;
+}
+
+/* Style the length menu dropdown */
+#nppp-premium-table_wrapper .dt-length {
+    margin-bottom: 10px;
+}
+
+/* Style for the length label in the DataTables wrapper */
+#nppp-premium-table_wrapper .dt-length label {
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+/* Style for the length select input in the DataTables wrapper */
+#nppp-premium-table_wrapper .dt-length select.dt-input {
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #f0f8ff;
+    color: #333;
+    cursor: pointer;
+}
+
+/* Focus style for the length select input in the DataTables wrapper */
+#nppp-premium-table_wrapper .dt-length select.dt-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}
+
+
+/* Adjust cursor position inside Show entries dropdown */
+div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
+    padding-right: 25px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px;
+}
+
+/* Style for the font size of table rows within the #nppp-premium-table */
+#nppp-premium-table > tbody > tr {
+    font-size: 13px !important;
+}
+
+/* Common style for the loading spinner */
+.nppp-loading-spinner {
+  position: relative;
+  margin: auto;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 9999;
+  animation: rotate 1s infinite;
+  height: 50px;
+  width: 50px;
+}
+
+/* Style for the spinning ball before the loading spinner */
+.nppp-loading-spinner:before,
+.nppp-loading-spinner:after {
+  border-radius: 50%;
+  content: '';
+  display: block;
+  height: 20px;
+  width: 20px;
+}
+
+/* Style for the spinning ball before the loading spinner */
+.nppp-loading-spinner:before {
+  animation: ball1 1s infinite;
+  background-color: #cb2025;
+  box-shadow: 30px 0 0 #f8b334;
+  margin-bottom: 10px;
+}
+
+/* Style for the spinning ball after the loading spinner */
+.nppp-loading-spinner:after {
+  animation: ball2 1s infinite;
+  background-color: #00a096;
+  box-shadow: 30px 0 0 #97bf0d;
+}
+
+/* Keyframes for the rotation animation of the loading spinner */
+@keyframes rotate {
+  0% {
+    -webkit-transform: rotate(0deg) scale(0.8);
+    -moz-transform: rotate(0deg) scale(0.8);
+  }
+  50% {
+    -webkit-transform: rotate(360deg) scale(1.2);
+    -moz-transform: rotate(360deg) scale(1.2);
+  }
+  100% {
+    -webkit-transform: rotate(720deg) scale(0.8);
+    -moz-transform: rotate(720deg) scale(0.8);
+  }
+}
+
+@keyframes ball1 {
+  0% {
+    box-shadow: 30px 0 0 #f8b334;
+  }
+  50% {
+    box-shadow: 0 0 0 #f8b334;
+    margin-bottom: 0;
+    -webkit-transform: translate(15px,15px);
+    -moz-transform: translate(15px, 15px);
+  }
+  100% {
+    box-shadow: 30px 0 0 #f8b334;
+    margin-bottom: 10px;
+  }
+}
+
+@keyframes ball2 {
+  0% {
+    box-shadow: 30px 0 0 #97bf0d;
+  }
+  50% {
+    box-shadow: 0 0 0 #97bf0d;
+    margin-top: -20px;
+    -webkit-transform: translate(15px,15px);
+    -moz-transform: translate(15px, 15px);
+  }
+  100% {
+    box-shadow: 30px 0 0 #97bf0d;
+    margin-top: 0;
+  }
+}
+
+/* Style for the font size and weight of links within tabs */
+.ui-tabs .ui-tabs-nav li a {
+    font-size: 15px;
+    font-weight: 400;
+}
+
+/* Style for the bottom border of list items within tabs */
+.ui-tabs .ui-tabs-nav li {
+    border-bottom: 1px solid #c5c5c5;
+}
+
+/* Style for the header of UI widgets */
+.ui-widget-header {
+    border: 1px solid #fff;
+    background: #fff;
+}
+
+/* Default styles for narrow screens */
+.nppp-premium-wrap {
+    width: 100%;
+    margin-right: 0;
+}
+
+.nppp-premium-widget {
+    display: none;
+}
+
+/* Flexbox layout for wide screens */
+@media screen and (min-width: 768px) {
+    .nppp-premium-container {
+        display: flex;
+        align-items: flex-start;
+    }
+
+    .nppp-premium-wrap {
+        flex: 0 0 calc(70% - 10px);
+        margin-right: 10px;
+    }
+
+    .nppp-premium-widget {
+        flex: 0 0 calc(30% - 10px);
+        display: block;
+    }
+}
+
+/* Style for the advertisement section */
+#nppp-ad {
+    background-color: #f9f9f9;
+    border: 3px solid #ff9900;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    margin-left: 20px;
+    padding-top: 22px;
+}
+
+/* Style for the heading within the advertisement section */
+#nppp-ad h3 {
+    color: #333;
+    font-size: 20px;
+    margin-bottom: 15px;
+    line-height: 1.2;
+}
+
+/* Style for images within the advertisement section */
+#nppp-ad img {
+    width: 90px !important;
+}
+
+/* Style for plain lists within the advertisement section */
+#nppp-ad .plain-list {
+    text-align: left;
+    margin-top: 10px;
+    list-style-type: circle;
+    list-style-position: inside;
+}
+
+/* Style for list items within plain lists */
+#nppp-ad .plain-list li {
+    text-indent: -20px;
+    padding-left: 23px;
+    line-height: 23px;
+    margin: 0;
+}
+
+/* Style for buttons within the advertisement section */
+#nppp-ad .button {
+    background-color: #0073e6;
+    color: #fff;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 5px;
+}
+
+/* Hover style for buttons within the advertisement section */
+#nppp-ad .button:hover {
+    background-color: #0056b3;
+}
+
+/* Center align the content within the plugin activation section */
+#nppp-plugin-activation {
+    text-align: center;
+    margin-left: 14px;
+}
+
+/* Style for the activation button */
+#nppp-activate-button {
+    font-size: 20px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+/* Hover effect for the activation button */
+#nppp-activate-button:hover {
+    background-color: #45a049;
+    color: #333;
+}
+
+/* Base styles for the header content */
+.nppp-header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Styles for the image container */
+.nppp-img-container {
+    flex: 0 0 auto;
+    margin-right: 10px;
+}
+
+/* Styles for the image itself */
+.nppp-img-container img {
+    width: 90px;
+    height: auto;
+}
+
+/* Styles for the cache buttons */
+.nppp-cache-buttons {
+    flex: 1;
+    display: flex;
+    justify-content: flex-start;
+    gap: 10px;
+}
+
+/* Very cool button style */
+.nppp-button {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 5px;
+    background-color: #007BFF;
+    color: white;
+    text-align: center;
+    text-decoration: none;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.nppp-button:hover {
+    background-color: #0e81ce;
+    border-color: #0e81ce;
+    color: #FFFFFF;
+}
+
+/* Adjustments for small screens */
+@media screen and (max-width: 768px) {
+    .nppp-img-container img {
+        width: 90px;
+    }
+    .nppp-img-container {
+        margin-right: 0;
+    }
+    .nppp-cache-buttons {
+        flex-direction: row;
+        justify-content: space-evenly;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .nppp-button {
+        font-size: 12px;
+    }
+}
+
+/* Style for the toggle switch container */
+.nppp-onoffswitch {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default checkbox */
+.nppp-onoffswitch-checkbox {
+    display: none;
+}
+
+/* Style for the toggle switch label */
+.nppp-onoffswitch-label {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* Style for the text labels (On and Off) */
+.nppp-onoffswitch-inner .nppp-on,
+.nppp-onoffswitch-inner .nppp-off {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner .nppp-on {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner .nppp-off {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Style for the toggle switch handle */
+.nppp-onoffswitch-switch {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #66b317;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Adjust styles based on checkbox state */
+#nginx_cache_send_mail:checked + .nppp-onoffswitch-label .nppp-onoffswitch-inner .nppp-on {
+    color: #23282d;
+}
+
+#nginx_cache_send_mail:checked + .nppp-onoffswitch-label .nppp-onoffswitch-switch {
+    width: 55px;
+    transform: translateX(60px);
+    background: #ea1919;
+}
+
+/* Show the Off label */
+.nppp-onoffswitch-checkbox + .nppp-onoffswitch-label .nppp-off {
+    display: block;
+}
+
+/* Hide the original checkbox */
+#nginx_cache_send_mail {
+    position: absolute;
+    left: -99em;
+}
+
+/* Buttons dsabled */
+.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@keyframes flash {
+    0% { background-color: #4682b4; } /* Initial color */
+    50% { background-color: #1e90ff; } /* Flashing color */
+    100% { background-color: #4682b4; } /* Back to initial color */
+}
+
+.purged-row {
+    animation: flash 0.5s; /* Flash effect for 0.5 seconds */
+}
+
+/* Styling for the icon tabs */
+@media screen and (max-width: 768px) {
+    .tab-header-container {
+        display: flex;
+        justify-content: center;
+        margin-top: 15px;
+    }
+
+    #nppp-nginx-tabs li a {
+        padding: 10px 20px;
+    }
+
+    #nppp-nginx-tabs li a:hover {
+        background-color: #e0e0e0;
+    }
+
+    #nppp-nginx-tabs li a.active,
+    #nppp-nginx-tabs li a:focus {
+        background-color: #337AB7;
+    }
+
+    /* Hide tab text on mobile */
+    #nppp-nginx-tabs li .tab-text {
+        display: none;
+    }
+
+    /* Increase the size of the SVG icons to 48px */
+    #nppp-nginx-tabs li a .nppp-svg-icon-container {
+        width: 36px !important;
+        height: 36px !important;
+    }
+ 
+    .ui-state-active, .ui-widget-content .ui-state-active, .ui-widget-header .ui-state-active, a.ui-button:active, .ui-button:active, .ui-button.ui-state-active:hover {
+        border: unset;
+    }
+}
+
+/* CSS for SVG icon container */
+.nppp-svg-icon-container {
+    display: inline-block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    vertical-align: middle;
+}
+
+/* CSS for SVG icon */
+.nppp-svg-icon-container svg {
+    width: 100%;
+    height: auto;
+}
+
+/* add margin settings page th */
+@media screen and (max-width: 768px) {
+    .form-table th {
+         padding: 30px 0px 5px 0;
+    }
+}
+
+/* premium disable buttons */
+button.nppp-purge-btn[disabled] {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* premium disable buttons */
+button.nppp-preload-btn[disabled] {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* FAQ Accordion Styles */
+#nppp-accordion {
+    width: 100%;
+    margin: 0 auto;
+    font-family: Arial, sans-serif;
+}
+
+#nppp-accordion .nppp-question {
+    background-color: #f4f4f4 !important;
+    color: #333;
+    cursor: pointer;
+    padding: 15px;
+    margin: 0;
+    font-size: 18px;
+    border: 1px solid white;
+    border-radius: 5px;
+}
+
+#nppp-accordion .nppp-answer {
+    background-color: #fff !important;
+    color: #333;
+    padding: 15px;
+    margin: 0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+#nppp-accordion .nppp-answer-content {
+    font-size: 14px;
+}
+
+#nppp-accordion .nppp-answer-content pre {
+    background-color: #f9f9f9 !important;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 10px;
+    overflow-x: auto;
+}
+
+#nppp-accordion .nppp-answer-content code {
+    background-color: #f9f9f9 !important;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    padding: 2px 5px;
+}
+
+#nppp-accordion .nppp-answer-content ol,
+#nppp-accordion .nppp-answer-content ul {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+#nppp-accordion .nppp-answer-content ol ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+/* jQuery UI Accordion Styles */
+#nppp-accordion .ui-accordion-header {
+    background-color: #337ab7 !important;
+    color: white;
+    cursor: pointer;
+    padding: 15px;
+    margin: 0;
+    font-size: 15px;
+}
+
+#nppp-accordion .ui-accordion-content {
+    background-color: #fff !important;
+    color: #333;
+    padding: 15px;
+    margin: 0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+/* Active Header Color */
+#nppp-accordion .ui-state-active {
+    background-color: #337ab7 !important;
+    color: #fff !important;
+}
+
+/* Tooltip container */
+#nppp-unique-id .nppp-tooltip {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  background-color: #337AB7;
+  color: #fff;
+  padding: 2px 5px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 12px;
+  padding-right: 10px;
+  padding-left: 9px;
+}
+
+/* Tooltip text */
+#nppp-unique-id .nppp-tooltip .nppp-tooltiptext {
+  visibility: hidden;
+  width: 120px;
+  background-color: #555;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -60px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+/* Tooltip text arrow */
+#nppp-unique-id .nppp-tooltip .nppp-tooltiptext::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #555 transparent transparent transparent;
+}
+
+/* Show the tooltip text on hover */
+#nppp-unique-id .nppp-tooltip:hover .nppp-tooltiptext {
+  visibility: visible;
+  opacity: 1;
+}
+
+.ui-state-active, .ui-widget-content .ui-state-active, .ui-widget-header .ui-state-active, a.ui-button:active, .ui-button:active, .ui-button.ui-state-active:hover {
+    border: unset !important;
+    background: #337AB7 !important;
+    border-bottom: 3px solid orange !important;
+    border-radius: 5px;
+}
+
+.wp-person a:focus .gravatar, a:focus, a:focus .media-icon img, a:focus .plugin-icon {
+    box-shadow: none !important;
+}
+
+/* Style for the toggle switch preload container */
+.nppp-onoffswitch-preload {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default checkbox */
+.nppp-onoffswitch-checkbox-preload {
+    display: none;
+}
+
+/* Style for the toggle switch label */
+.nppp-onoffswitch-label-preload {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* Style for the text labels (On and Off) */
+.nppp-onoffswitch-inner-preload .nppp-on-preload,
+.nppp-onoffswitch-inner-preload .nppp-off-preload {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-preload .nppp-on-preload {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-preload .nppp-off-preload {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Style for the toggle switch handle */
+.nppp-onoffswitch-switch-preload {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #66b317;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Adjust styles based on checkbox state */
+#nginx_cache_auto_preload:checked + .nppp-onoffswitch-label-preload .nppp-onoffswitch-inner-preload .nppp-on-preload {
+    color: #23282d;
+}
+
+#nginx_cache_auto_preload:checked + .nppp-onoffswitch-label-preload .nppp-onoffswitch-switch-preload {
+    width: 55px;
+    transform: translateX(60px);
+    background: #ea1919;
+}
+
+/* Show the Off label */
+.nppp-onoffswitch-checkbox-preload + .nppp-onoffswitch-label-preload .nppp-off-preload {
+    display: block;
+}
+
+/* Hide the original checkbox */
+#nginx_cache_auto_preload {
+    position: absolute;
+    left: -99em;
+}
+
+/* Change fill color of SVG icons in active tab */
+.ui-tabs-active a .nppp-svg-icon-container svg path {
+    fill: white;
+}
+
+/* style premium auto preload settings accordingly */
+.nppp-onoffswitch-checkbox-preload[disabled] + .nppp-onoffswitch-label-preload {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* style premium rest api settings accordingly */
+.nppp-onoffswitch-checkbox-api[disabled] + .nppp-onoffswitch-label-api {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* premium tooltip */
+.premium-tooltip {
+  display: inline-block;
+  background-color: #337AB7;
+  color: #fff;
+  padding: 2px 5px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 12px;
+  margin-left: 10px;
+  opacity: 0.5;
+}
+
+/* Auto preload premium  container */
+.nppp-auto-preload-container {
+    display: flex;
+    align-items: flex-start;
+}
+
+/* Set max width of reject regex field */
+#nginx_cache_reject_regex {
+    max-width: 978px;
+}
+
+/* Style for the toggle switch api container */
+.nppp-onoffswitch-api {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default api checkbox */
+.nppp-onoffswitch-checkbox-api {
+    display: none;
+}
+
+/* Style for the toggle switch label api */
+.nppp-onoffswitch-label-api {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* Style for the text labels (On and Off) for api */
+.nppp-onoffswitch-inner-api .nppp-on-api,
+.nppp-onoffswitch-inner-api .nppp-off-api {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-api .nppp-on-api {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-api .nppp-off-api {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Style for the toggle switch handle api */
+.nppp-onoffswitch-switch-api {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #66b317;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Adjust styles based on checkbox state api */
+#nginx_cache_api:checked + .nppp-onoffswitch-label-api .nppp-onoffswitch-inner-api .nppp-on-api {
+    color: #23282d;
+}
+
+#nginx_cache_api:checked + .nppp-onoffswitch-label-api .nppp-onoffswitch-switch-api {
+    width: 55px;
+    transform: translateX(60px);
+    background: #ea1919;
+}
+
+/* Show the Off label api */
+.nppp-onoffswitch-checkbox-api + .nppp-onoffswitch-label-api .nppp-off-api {
+    display: block;
+}
+
+/* Hide the original checkbox api */
+#nginx_cache_api {
+    position: absolute;
+    left: -99em;
+}
+
+/* API Key field styles */
+#nginx_cache_api_key {
+    display: block !important;
+    margin-top: 10px !important;
+}
+
+/* Tooltip container for nppp-api-key */
+#nppp-api-key .nppp-tooltip {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  background-color: #337AB7;
+  color: #fff;
+  padding: 2px 5px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 12px;
+  padding-right: 10px;
+  padding-left: 9px;
+}
+
+/* Tooltip text for nppp-api-key */
+#nppp-api-key .nppp-tooltip .nppp-tooltiptext {
+  visibility: hidden;
+  width: 120px;
+  background-color: #555;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -60px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+/* Tooltip text arrow for nppp-api-key */
+#nppp-api-key .nppp-tooltip .nppp-tooltiptext::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #555 transparent transparent transparent;
+}
+
+/* Show the tooltip text on hover for nppp-api-key */
+#nppp-api-key .nppp-tooltip:hover .nppp-tooltiptext {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* Tooltip container for nppp-purge-url */
+#nppp-purge-url .nppp-tooltip {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  background-color: #337AB7;
+  color: #fff;
+  padding: 2px 5px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 12px;
+  padding-right: 10px;
+  padding-left: 9px;
+}
+
+/* Tooltip text for nppp-purge-url*/
+#nppp-purge-url .nppp-tooltip .nppp-tooltiptext {
+  visibility: hidden;
+  width: 120px;
+  background-color: #555;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -60px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+/* Tooltip text arrow for nppp-purge-url */
+#nppp-purge-url .nppp-tooltip .nppp-tooltiptext::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #555 transparent transparent transparent;
+}
+
+/* Show the tooltip text on hover for nppp-purge-url */
+#nppp-purge-url .nppp-tooltip:hover .nppp-tooltiptext {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* Tooltip container for nppp-preload-url */
+#nppp-preload-url .nppp-tooltip {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  background-color: #337AB7;
+  color: #fff;
+  padding: 2px 5px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 12px;
+  padding-right: 10px;
+  padding-left: 9px;
+}
+
+/* Tooltip text for nppp-preload-url*/
+#nppp-preload-url .nppp-tooltip .nppp-tooltiptext {
+  visibility: hidden;
+  width: 120px;
+  background-color: #555;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -60px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+/* Tooltip text arrow for nppp-preload-url */
+#nppp-preload-url .nppp-tooltip .nppp-tooltiptext::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #555 transparent transparent transparent;
+}
+
+/* Show the tooltip text on hover for nppp-purge-url */
+#nppp-preload-url .nppp-tooltip:hover .nppp-tooltiptext {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* Style for the toggle switch preload container */
+.nppp-onoffswitch-schedule {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default checkbox */
+.nppp-onoffswitch-checkbox-schedule {
+    display: none;
+}
+
+/* Style for the toggle switch label */
+.nppp-onoffswitch-label-schedule {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* Style for the text labels (On and Off) */
+.nppp-onoffswitch-inner-schedule .nppp-on-schedule,
+.nppp-onoffswitch-inner-schedule .nppp-off-schedule {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-schedule .nppp-on-schedule {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-schedule .nppp-off-schedule {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Style for the toggle switch handle */
+.nppp-onoffswitch-switch-schedule {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #66b317;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Adjust styles based on checkbox state */
+#nginx_cache_schedule:checked + .nppp-onoffswitch-label-schedule .nppp-onoffswitch-inner-schedule .nppp-on-schedule {
+    color: #23282d;
+}
+
+#nginx_cache_schedule:checked + .nppp-onoffswitch-label-schedule .nppp-onoffswitch-switch-schedule {
+    width: 55px;
+    transform: translateX(60px);
+    background: #ea1919;
+}
+
+/* Show the Off label */
+.nppp-onoffswitch-checkbox-schedule + .nppp-onoffswitch-label-schedule .nppp-off-schedule {
+    display: block;
+}
+
+/* Hide the original checkbox */
+#nginx_cache_schedule {
+    position: absolute;
+    left: -99em;
+}
+
+/* style cache schedule settings accordingly */
+.nppp-onoffswitch-checkbox-schedule[disabled] + .nppp-onoffswitch-label-schedule {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* add hover to to tooltip */
+#nppp-api-key .nppp-tooltip:hover,
+#nppp-purge-url .nppp-tooltip:hover,
+#nppp-preload-url .nppp-tooltip:hover,
+#nppp-unique-id .nppp-tooltip:hover {
+    background-color: #1366D6;
+}
+
+/* Dropdown select container styling */
+.nppp-cron-event-select-container {
+    position: relative;
+    display: inline-block;
+}
+
+/* Hover effect */
+.nppp-cron-event-select:hover {
+    border-color: #999;
+}
+
+/* Focus effect */
+.nppp-cron-event-select:focus {
+    outline: none;
+    border-color: #333;
+}
+
+/* Arrow icon styling */
+.nppp-cron-event-select::after {
+    content: '\25BC';
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: #666;
+}
+
+/* Style for the disabled option */
+.nppp-cron-event-select option[value=""][disabled] {
+    background-color: #337ab7;
+    color: #fff;
+    font-weight: bold;
+}
+
+/* Wrapper for the select and time select containers */
+.nppp-select-wrapper {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin-top: 10px;
+}
+
+/* Style for the select container */
+.nppp-cron-event-select-container {
+    margin-right: 7px; /* Adjust spacing as needed */
+}
+
+.nppp-cron-event-select {
+    width: 125px !important;
+    border: 2px solid #f1f1f1 !important;
+    margin-left: 0px !important;
+    border-radius: 0px !important;
+    min-height: 34px !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;
+}
+
+.nppp-cron-event-select:hover {
+    color: #2271b1 !important;
+    box-shadow: 0 0 0 2px #1366D6 !important;
+}
+
+#nppp_datetimepicker1Input {
+    border: 2px solid #f1f1f1 !important;
+    border-radius: 0px !important;
+    max-width: 72px;
+    font-size: 14px;
+    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;
+    line-height: 2;
+    color: #2c3338;
+    border-color: #8c8f94;
+    box-shadow: none;
+    padding: 0 24px 0 8px;
+    -webkit-appearance: none;
+    background: #fff url(data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M5%206l5%205%205-5%202%201-7%207-7-7%202-1z%22%20fill%3D%22%23555%22%2F%3E%3C%2Fsvg%3E) no-repeat right 5px top 55%;
+    background-size: 16px 16px;
+    cursor: pointer;
+    vertical-align: middle;
+    min-height: 34px;
+}
+
+.tempus-dominus-widget {
+    width: 151px !important;
+}
+
+#nppp_datetimepicker1Input:hover {
+    color: #2271b1;
+    box-shadow: 0 0 0 2px #1366D6;
+}
+
+@media screen and (min-width: 320px) {
+    .nppp-cron-event-select {
+        font-size: 14px !important;
+        min-height: 34px !important;
+        padding: 0px 24px 0px 8px !important;
+    }
+}
+
+/* Style for the container */
+.nppp-time-select-container {
+    display: inline-block;
+}
+
+/* Style for the input group */
+.nppp-input-group {
+    display: flex;
+    align-items: center;
+}
+
+/* Style for the input group append */
+.nppp-input-group-append {
+    margin-left: 7px;
+}
+
+/* Style for the SET button */
+.nginx-cache-schedule-set-button {
+    cursor: pointer !important;
+    background-color: #337AB7 !important;
+    min-height: 25px !important;
+    font-weight: 700 !important;
+    font-size: 12px !important;
+    color: #fff !important;
+    border: none !important;
+    padding: 0 10px !important;
+    border-radius: unset !important;
+}
+
+/* Hover effect */
+.nginx-cache-schedule-set-button:hover {
+    background-color: #1366D6 !important;
+}
+
+/* Hover background color for #nginx-cache-schedule-set .nppp-tooltip */
+#nginx-cache-schedule-set .nppp-tooltip:hover {
+    background-color: #1366D6 !important;
+}
+
+/* Media query for mobile devices */
+@media only screen and (max-width: 768px) {
+    /* Disable margin-bottom */
+    .nginx-cache-schedule-set-button,
+    #nginx-cache-schedule-set {
+        margin-bottom: 0 !important;
+    }
+
+    .nginx-cache-schedule-set-button:hover {
+        background-color: #1366D6 !important;
+    }
+
+    #nginx-cache-schedule-set .nppp-tooltip:hover {
+        background-color: #1366D6 !important;
+    }
+
+    /* Reset line-height */
+    .nginx-cache-schedule-set-button {
+        line-height: 2.11428571 !important;
+    }
+
+    .nppp-scheduled-event {
+        max-width: none !important;
+    }
+}
+
+/* Tooltip container for nginx-cache-schedule-set */
+#nginx-cache-schedule-set .nppp-tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+    background-color: #337AB7;
+    color: #fff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 12px;
+}
+
+/* Tooltip text for nginx-cache-schedule-set */
+#nginx-cache-schedule-set .nppp-tooltip .nppp-tooltiptext {
+    visibility: hidden;
+    width: 92px;
+    background-color: #555;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    position: absolute;
+    z-index: 1;
+    bottom: 136%;
+    left: 74%;
+    margin-left: -60px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    line-height: 1.6;
+}
+
+/* Tooltip text arrow for nginx-cache-schedule-set */
+#nginx-cache-schedule-set .nppp-tooltip .nppp-tooltiptext::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #555 transparent transparent transparent;
+}
+
+/* Show the tooltip text on hover for nginx-cache-schedule-set */
+#nginx-cache-schedule-set .nppp-tooltip:hover .nppp-tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+.nppp-tooltip:hover {
+  background-color: #1366D6 !important;
+}
+
+#nginx-cache-schedule-set[disabled] {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #337AB7 !important;
+}
+
+/* CSS Styles for Scheduled Events */
+.nppp-scheduled-event {
+    border: 2px solid #f1f1f1;
+    /* border: 2px solid #ccc; */
+    padding: 10px;
+    margin-bottom: 10px;
+    /* background-color: #f9f9f9; */
+    max-width: max-content;
+}
+
+.nppp-scheduled-event .nppp-hook-name {
+    color: #ff5722;
+    font-weight: bold;
+}
+
+.nppp-scheduled-event .nppp-next-run {
+    color: #2196f3;
+}
+
+.nppp-cron-info {
+    margin-bottom: 5px;
+}
+
+.nppp-cancel-btn-container {
+    margin-top: 5px;
+}
+
+.nppp-scheduled-event .nppp-cancel-btn {
+    background-color: #f44336;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.nppp-scheduled-event .nppp-cancel-btn:hover {
+    background-color: #d32f2f;
+}
+
+/* CSS Styles for Active Cron Heading */
+.nppp-active-cron-heading {
+    background-color: #337AB7;
+    color: #fff;
+    padding: 2px 5px;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 12px;
+    padding-right: 10px;
+    padding-left: 9px;
+    max-width: max-content;
+    margin-top: unset;
+    margin-bottom: 5px;
+}
+
+#nppp_datetimepicker1Input::placeholder {
+    color: #2c3338 !important;
+    font-size: 14px !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;    
+}
+
+.status-and-nginx-info-container {
+    display: flex;
+}
+
+#nppp-status-tab, #nppp-nginx-info {
+    width: 50%;
+    box-sizing: border-box;
+    padding: 10px;
+}
+
+/* NGINX Status Table */
+#nppp-nginx-info .nginx-status table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+/* NGINX Table Header Styles */
+#nppp-nginx-info .nginx-status th {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 2px solid #ccc;
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+/* NGINX Action Cells */
+#nppp-nginx-info .nginx-status .action {
+    font-weight: bold;
+    padding: 10px;
+    border-bottom: 1px solid #ccc;
+}
+
+/* NGINX Status Cells */
+#nppp-nginx-info .nginx-status .status {
+    padding: 10px;
+    border-bottom: 1px solid #ccc;
+}
+
+/* NGINX Nested Table Styles */
+#nppp-nginx-info .nginx-status .status .nginx-config-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+/* NGINX Nested Table Header Styles */
+#nppp-nginx-info .nginx-status .status .nginx-config-table th {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 2px solid #ccc;
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+/* NGINX Nested Table Data Styles */
+#nppp-nginx-info .nginx-status .status .nginx-config-table td {
+    padding: 8px;
+    padding-left: 0px;
+    border-bottom: 1px solid #ccc;
+}
+
+#nppp-nginx-info h2 {
+    background-color: #337AB7;
+    color: #fff;
+    padding: 10px;
+    margin-top: 20px;
+    margin-bottom: 0px;
+    text-transform: uppercase;
+}
+
+#nppp-nginx-info {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+    margin-left: 20px;
+}
+
+#nppp-nginx-info .nginx-status .status .nginx-config-table th {
+    background-color: #337AB7;
+    color: #fff;
+    padding: 10px;
+    margin-top: 20px;
+    margin-bottom: 0px;
+    text-transform: uppercase;
+}
+
+/* Share width between action and status columns */
+.nginx-status .action,
+.nginx-status .status {
+    width: 50%;
+}
+
+#npppNginxVersion span,
+#npppOpenSSLVersion span {
+    font-size: 14px;
+    color: green;
+    font-weight: bold;
+}
+
+/* Responsive layout for mobile */
+@media (max-width: 768px) {
+    .status-and-nginx-info-container {
+        display: flex;
+        flex-direction: column;
+    }
+
+    #nppp-status-tab.container,
+    #nppp-nginx-info.container {
+        width: 100%;
+    }
+
+    #nppp-nginx-info {
+        margin-left: 0px !important;
+        maargin-top: 20px;
+    }
+}
+
+#nppp-status-tab .cache-status table {
+    width: 100%;
+    border-collapse: collapse;
+}

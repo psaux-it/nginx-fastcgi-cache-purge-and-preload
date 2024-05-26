@@ -1,0 +1,2 @@
+// Default reject regex - v2.0.0
+$reject_regex = "/wp-admin/(.*)|/wp-includes/(.*)|/wp-json/(.*)|/xmlrpc.php|/wp-.*.php|/cart/(.*)|/checkout/(.*)|/wc-ajax/(.*)|/my-account/(.*)|/wc-api/(.*)|/robots.txt|/sitemap(_index)?.xml|[a-z0-9_-]+-sitemap([0-9]+)?.xml|\?|\=|\&|\#";

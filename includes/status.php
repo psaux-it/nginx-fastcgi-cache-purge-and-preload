@@ -1,0 +1,620 @@
+<?php
+/**
+ * Status page for FastCGI Cache Purge and Preload for Nginx
+ * Description: This file contains functions which shows information about FastCGI Cache Purge and Preload for Nginx
+ * Version: 2.0.0
+ * Author: Hasan ÇALIŞIR
+ * Author Email: hasan.calisir@psauxit.com
+ * Author URI: https://www.psauxit.com
+ * License: GPL-2.0+
+ */
+
+// Exit if accessed directly.
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
+// Check purge action status
+// Check ACLs status
+function nppp_check_acl($flag = '') {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        return false; // Return false if WP_Filesystem initialization failed
+    }
+
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $default_cache_path = '/dev/shm/change-me-now';
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+
+    // Check if directory exists
+    if (!$wp_filesystem->is_dir($nginx_cache_path)) {
+        // Directory does not exist
+        if ($flag === 'purge') {
+            return 'Not Working';
+        } elseif ($flag === 'acl') {
+            return 'Not Implemented';
+        }
+    }
+
+    // If directory exist we can perform other checks
+    $files = $wp_filesystem->dirlist($nginx_cache_path);
+
+    // Even default ACLs applied we can face permission errors, so
+    // First check the cache path is readable or not by PHP-FPM USER
+    if ($files === false) {
+        // We cannot read cache path cause permissons
+        if ($flag === 'purge') {
+            return 'Not Working';
+        } elseif ($flag === 'acl') {
+            return 'Not Implemented';
+        }
+    }
+
+    // We are able to read cache path
+    // Check ACL permissions status
+    $output = shell_exec("ls -ld \"$nginx_cache_path\" | awk '{print \$1}' | grep '+'");
+    if ($output === null) {
+        // Main directory does not have ACL permissions
+        if ($flag === 'purge') {
+            return 'Not Working';
+        } elseif ($flag === 'acl') {
+            return 'Not Implemented';
+        }
+    }
+
+    // Check if directory is empty
+    if (empty($files)) {
+        // Directory is empty, but main directory has ACL permissions
+        if ($flag === 'purge') {
+            return 'Tentative';
+        } elseif ($flag === 'acl') {
+            return 'Tentative';
+        }
+    }
+
+    // Check ACL permissions for each file in the directory
+    $output = shell_exec("find \"$nginx_cache_path\" -exec ls -ld {} + | awk '{print \$1}' | grep -v '+'");
+    if (!empty($output)) {
+        if ($flag === 'purge') {
+            return 'Not Working';
+        } elseif ($flag === 'acl') {
+            return 'Not Implemented';
+        }
+    }
+
+    if ($flag === 'purge') {
+        return 'Working';
+    } elseif ($flag === 'acl') {
+        return 'Implemented';
+    }
+}
+
+// Check required command statuses
+function nppp_check_command_status($command) {
+    $output = shell_exec("type $command");
+    return !empty($output) ? 'Installed' : 'Not Installed';
+}
+
+// Check preload action status
+function nppp_check_preload_status() {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        return false; // Return false if WP_Filesystem initialization failed
+    }
+
+    $this_script_path = dirname(plugin_dir_path(__FILE__));
+    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+
+    if ($wp_filesystem->exists($PIDFILE)) {
+        $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
+
+        if ($pid > 0 && posix_kill($pid, 0)) {
+            return 'progress';;
+        }
+    }
+
+    return nppp_check_command_status('wget') === 'Installed' ? 'Working' : 'Not Working';
+
+}
+
+// Check Nginx Cache Path status
+function nppp_check_path() {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        return false; // Return false if WP_Filesystem initialization failed
+    }
+
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $default_cache_path = '/dev/shm/change-me-now';
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+
+     // Check if directory exists
+    if (!$wp_filesystem->is_dir($nginx_cache_path)) {
+        // Cache Directory does not exist
+        return 'Not Found';
+    } else {
+        return 'Found';
+    }
+}
+
+// Check shell exec allowed or not, required for plugin
+function nppp_shell_exec() {
+   // Check allowed to execute shell commands
+    $allowed = false;
+    // Check if shell_exec is enabled
+    if (function_exists('shell_exec')) {
+        // Attempt to execute a harmless command
+        $output = shell_exec('echo "Test"');
+
+        // Check if the command executed successfully
+        if ($output === "Test\n") {
+            $allowed = true;
+        }
+    }
+
+    if ($allowed) {
+        return 'Ok';
+    } else {
+        return 'Not Ok';
+    }
+}
+
+// Function to get the active PHP process owner
+function nppp_get_website_user() {
+    $php_process_owner = '';
+
+    // Get the user ID of the PHP process owner
+    $php_process_uid = posix_getpwuid(posix_geteuid())['name'];
+
+    // Map the user ID to common web server users
+    switch ($php_process_uid) {
+        case 'www-data':
+            $php_process_owner = 'www-data';
+            break;
+        case 'nginx':
+            $php_process_owner = 'nginx';
+            break;
+        default:
+            $php_process_owner = $php_process_uid;
+            break;
+    }
+
+    return $php_process_owner;
+}
+
+// Function to get webserver user
+function nppp_get_webserver_user() {
+    // Execute the command to find the web server user
+    $webserver_user = shell_exec("ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v root | head -1 | cut -d\\  -f1");
+    // Return the web server user if not empty, otherwise return "Not Determined"
+    return !empty($webserver_user) ? trim($webserver_user) : "Not Determined";
+}
+
+// Function to get pages in cache count
+function nppp_get_in_cache_page_count() {
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $default_cache_path = '/dev/shm/change-me-now';
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+
+    $urls_count = 0;
+
+    // Initialize WordPress filesystem
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        return false;
+    }
+
+    // Check for any permisson issue softly
+    if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
+        return 'Undetermined';
+    // Recusive check for permission issues deeply
+    } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
+        return 'Undetermined';
+    }
+
+    // Traverse the cache directory and its subdirectories
+    $cache_iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
+    );
+
+    foreach ($cache_iterator as $file) {
+        if ($wp_filesystem->is_file($file->getPathname())) {
+            // Read file contents
+            $content = $wp_filesystem->get_contents($file->getPathname());
+
+            // Exclude URLs with status 301 Moved Permanently
+            if (strpos($content, 'Status: 301 Moved Permanently') !== false) {
+                continue;
+            }
+
+            // Extract URLs using regex
+            if (preg_match('/KEY:\s+httpsGET(.+)/', $content, $matches)) {
+                $url = trim($matches[1]);
+
+                // Increment count
+                $urls_count++;
+            }
+        }
+    }
+
+    // Return the count of URLs, if no URLs found, return 0
+    return $urls_count > 0 ? $urls_count : 0;
+}
+
+// Generate HTML for status tab
+function nppp_my_status_html() {
+    ob_start();
+    ?>
+    <div class="status-and-nginx-info-container">
+    <div id="nppp-status-tab" class="container">
+        <header>
+
+        </header>
+        <main>
+            <section class="status-summary">
+                <h2>Status Summary</h2>
+                <table>
+                    <tbody>
+                        <tr>
+                            <td class="action">
+                                <div class="action-wrapper">PHP-FPM Setup</div>
+                            </td>
+                            <td class="status" id="npppphpFpmStatus">
+                                <span class="dashicons"></span>
+                                <span>Correct</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div style="height: 20px;"></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="action-header"><span class="dashicons dashicons-admin-generic"></span> Action</th>
+                            <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="action">Purge Action</td>
+                            <td class="status" id="nppppurgeStatus">
+                                <span class="dashicons"></span>
+                                <span>Working</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="action">Preload Action</td>
+                            <td class="status" id="nppppreloadStatus">
+                                <span class="dashicons"></span>
+                                <span>Working</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+            <section class="system-checks">
+                <h2>System Checks</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
+                            <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="check">PHP-FPM User (Website User)</td>
+                            <td class="status" id="npppphpProcessOwner">
+                                <span class="dashicons"></span>
+                                <span>websiteuser</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="check">WEB-SERVER User (Webserver User)</td>
+                            <td class="status" id="npppphpWebServer">
+                                <span class="dashicons"></span>
+                                <span>webserveruser</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="check">Shell_Exec (Required for Plugin)</td>
+                            <td class="status" id="npppshellExec">
+                                <span class="dashicons"></span>
+                                <span>Allowed</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="check">Cache Path (Required for Purge)</td>
+                            <td class="status" id="npppcachePath">
+                                <span class="dashicons"></span>
+                                <span>Found</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="check">ACLs (Required for Purge)</td>
+                            <td class="status" id="npppaclStatus">
+                                <span class="dashicons"></span>
+                                <span>Implemented</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="check">wget (Required for Preload)</td>
+                            <td class="status" id="npppwgetStatus">
+                                <span class="dashicons"></span>
+                                <span>Installed</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="check">cpulimit (Optional for Preload)</td>
+                            <td class="status" id="npppcpulimitStatus">
+                                <span class="dashicons"></span>
+                                <span>Installed</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+            <section class="cache-status">
+                <h2>Cache Status</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
+                            <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="check">Pages In Cache Count</td>
+                            <td class="status" id="npppphpPagesInCache">
+                                <span class="dashicons"></span>
+                                <span><?php echo esc_html(nppp_get_in_cache_page_count()); ?></span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+    <div id="nppp-nginx-info" class="container">
+        <?php echo do_shortcode('[nppp_nginx_config]'); ?>
+    </div>
+    </div>
+    <?php
+    return ob_get_clean();
+}
+
+// Update status elements
+function nppp_update_status() {
+    ?>
+    <script>
+        jQuery(document).ready(function($) {
+            // Fetch and update php fpm status
+            var phpFpmRow = document.querySelector("#npppphpFpmStatus").closest("tr");
+            var npppphpFpmStatusSpan = document.getElementById("npppphpFpmStatus");
+            var npppphpFpmStatus = "<?php echo esc_js(nppp_get_website_user()); ?>";
+            npppphpFpmStatusSpan.textContent = npppphpFpmStatus;
+            npppphpFpmStatusSpan.style.fontSize = "14px";
+            if (npppphpFpmStatus === "nginx" || npppphpFpmStatus === "www-data") {
+                npppphpFpmStatusSpan.style.color = "red";
+                npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Inaccurate (Check Help)';
+            } else {
+                npppphpFpmStatusSpan.style.color = "green";
+                npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Accurate';
+            }
+
+            // Fetch and update pages in cache count
+            var npppcacheInPageSpan = document.getElementById("npppphpPagesInCache");
+            var npppcacheInPageSpanValue = npppcacheInPageSpan.textContent.trim();
+
+            npppcacheInPageSpan.style.fontSize = "14px";
+            if (npppcacheInPageSpanValue === "Undetermined") {
+                npppcacheInPageSpan.style.color = "red";
+                npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Permission Issue';
+            } else if (npppcacheInPageSpanValue === "0") {
+                npppcacheInPageSpan.style.color = "orange";
+                npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppcacheInPageSpanValue;
+            } else {
+                npppcacheInPageSpan.style.color = "green";
+                npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppcacheInPageSpanValue;
+            }
+
+            // Fetch and update php process owner
+            // PHP-FPM (website user)
+            var npppphpProcessOwnerSpan = document.getElementById("npppphpProcessOwner");
+            var npppphpProcessOwner = "<?php echo esc_js(nppp_get_website_user()); ?>";
+            npppphpProcessOwnerSpan.textContent = npppphpProcessOwner;
+            npppphpProcessOwnerSpan.style.fontSize = "14px";
+            if (npppphpProcessOwner === "nginx") {
+                npppphpProcessOwnerSpan.style.color = "red";
+                npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> nginx (Check Help)';
+            } else if (npppphpProcessOwner === "www-data") {
+                npppphpProcessOwnerSpan.style.color = "red";
+                npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> www-data (Check Help)';
+            } else {
+                npppphpProcessOwnerSpan.style.color = "green";
+                npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppphpProcessOwner;
+            }
+
+            // Fetch and update web server user
+            // WEB-SERVER (webserver user)
+            var npppphpWebServerSpan = document.getElementById("npppphpWebServer");
+            var npppphpWebServer = "<?php echo esc_js(nppp_get_webserver_user()); ?>";
+            npppphpWebServerSpan.textContent = npppphpWebServer;
+            npppphpWebServerSpan.style.fontSize = "14px";
+            if (npppphpWebServer === "nginx") {
+                npppphpWebServerSpan.style.color = "green";
+                npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> nginx';
+            } else if (npppphpWebServer === "www-data") {
+                npppphpWebServerSpan.style.color = "green";
+                npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> www-data';
+            } else {
+                npppphpWebServerSpan.style.color = "red";
+                npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> ' + npppphpWebServer + ' (Check Help)';
+            }
+
+            // Fetch and update nginx cache path status
+            var npppcachePathSpan = document.getElementById("npppcachePath");
+            var npppcachePath = "<?php echo esc_js(nppp_check_path()); ?>";
+            npppcachePathSpan.textContent = npppcachePath;
+            npppcachePathSpan.style.fontSize = "14px";
+            if (npppcachePath === "Found") {
+                npppcachePathSpan.style.color = "green";
+                npppcachePathSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Found';
+            } else if (npppcachePath === "Not Found") {
+                npppcachePathSpan.style.color = "red";
+                npppcachePathSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Found';
+            }
+
+            // Fetch and update purge action status
+            var nppppurgeStatusSpan = document.getElementById("nppppurgeStatus");
+            var nppppurgeStatus = "<?php echo esc_js(nppp_check_acl('purge')); ?>";
+            nppppurgeStatusSpan.textContent = nppppurgeStatus;
+            nppppurgeStatusSpan.style.fontSize = "14px";
+            if (nppppurgeStatus === "Working") {
+                nppppurgeStatusSpan.style.color = "green";
+                nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
+            } else if (nppppurgeStatus === "Not Working") {
+                nppppurgeStatusSpan.style.color = "red";
+                nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
+            } else {
+                nppppurgeStatusSpan.style.color = "orange";
+                nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Tentative';
+            }
+
+            // Fetch and update purge shell_exec status
+            var npppshellExecSpan = document.getElementById("npppshellExec");
+            var npppshellExec = "<?php echo esc_js(nppp_shell_exec()); ?>";
+            npppshellExecSpan.textContent = npppshellExec;
+            npppshellExecSpan.style.fontSize = "14px";
+            if (npppshellExec === "Ok") {
+                npppshellExecSpan.style.color = "green";
+                npppshellExecSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Allowed';
+            } else if (npppshellExec === "Not Ok") {
+                npppshellExecSpan.style.color = "red";
+                npppshellExecSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Allowed';
+            }
+
+            // Fetch and update ACLs status
+            var npppaclStatusSpan = document.getElementById("npppaclStatus");
+            var npppaclStatus = "<?php echo esc_js(nppp_check_acl('acl')); ?>";
+            npppaclStatusSpan.textContent = npppaclStatus;
+            npppaclStatusSpan.style.fontSize = "14px";
+            if (npppaclStatus === "Implemented") {
+                npppaclStatusSpan.style.color = "green";
+                npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Implemented';
+            } else if (npppaclStatus === "Not Implemented") {
+                npppaclStatusSpan.style.color = "red";
+                npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Implemented';
+            } else {
+                npppaclStatusSpan.style.color = "orange";
+                npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
+            }
+
+            // Fetch and update preload action status
+            var nppppreloadStatusRow = document.querySelector("#nppppreloadStatus").closest("tr");
+            var nppppreloadStatusCell = nppppreloadStatusRow.querySelector("#nppppreloadStatus");
+            var nppppreloadStatusSpan = document.getElementById("nppppreloadStatus");
+            var nppppreloadStatus = "<?php echo esc_js(nppp_check_preload_status()); ?>";
+            nppppreloadStatusSpan.textContent = nppppreloadStatus;
+            nppppreloadStatusSpan.style.fontSize = "14px";
+            if (nppppreloadStatus === "Working") {
+                nppppreloadStatusSpan.style.color = "green";
+                nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
+            } else if (nppppreloadStatus === "Not Working") {
+                nppppreloadStatusSpan.style.color = "red";
+                nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
+            } else {
+                nppppreloadStatusSpan.style.color = "orange";
+                nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> In Progress';
+                nppppreloadStatusCell.style.backgroundColor = "lightgreen";
+                // Blink animation
+                nppppreloadStatusCell.animate([
+                    { backgroundColor: 'inherit' },
+                    { backgroundColor: '#90ee90' }
+                ], {
+                    duration: 1000,
+                    iterations: Infinity,
+                    direction: 'alternate'
+                });
+            }
+
+            // Fetch and update wget command status
+            var npppwgetStatusSpan = document.getElementById("npppwgetStatus");
+            var npppwgetStatus = "<?php echo esc_js(nppp_check_command_status('wget')); ?>";
+            npppwgetStatusSpan.textContent = npppwgetStatus;
+            npppwgetStatusSpan.style.fontSize = "14px";
+            if (npppwgetStatus === "Installed") {
+                npppwgetStatusSpan.style.color = "green";
+                npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
+            } else if (npppwgetStatus === "Not Installed") {
+                npppwgetStatusSpan.style.color = "red";
+                npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
+            }
+
+            // Fetch and update cpulimit command status
+            var npppcpulimitStatusSpan = document.getElementById("npppcpulimitStatus");
+            var npppcpulimitStatus = "<?php echo esc_js(nppp_check_command_status('cpulimit')); ?>";
+            npppcpulimitStatusSpan.textContent = npppcpulimitStatus;
+            npppcpulimitStatusSpan.style.fontSize = "14px";
+            if (npppcpulimitStatus === "Installed") {
+                npppcpulimitStatusSpan.style.color = "green";
+                npppcpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
+            } else if (npppcpulimitStatus === "Not Installed") {
+                npppcpulimitStatusSpan.style.color = "red";
+                npppcpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
+            }
+
+            // Add spin effect to icons
+            document.querySelectorAll('.status').forEach(status => {
+                status.addEventListener('click', () => {
+                    status.querySelector('.dashicons').classList.add('spin');
+                    setTimeout(() => {
+                        status.querySelector('.dashicons').classList.remove('spin');
+                    }, 1000);
+                });
+            });
+        });
+    </script>
+    <?php
+}
+
+// AJAX handler to fetch shortcode content
+function nppp_cache_status_callback() {
+    // Check nonce
+    if (isset($_POST['_wpnonce'])) {
+        $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
+        if (!wp_verify_nonce($nonce, 'cache-status')) {
+            wp_die('Nonce verification failed.');
+        }
+    } else {
+        wp_die('Nonce is missing.');
+    }
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_die('You do not have permission to access this page.');
+    }
+
+    // Call the shortcode function to get HTML content
+    $shortcode_content = nppp_my_status_shortcode();
+
+    // Return the shortcode content
+    echo wp_kses_post($shortcode_content);
+
+    // Update status elements
+    nppp_update_status();
+
+    // Properly exit to avoid extra output
+    wp_die();
+}
+
+// Shortcode to display the Status HTML
+function nppp_my_status_shortcode() {
+    return nppp_my_status_html();
+}
