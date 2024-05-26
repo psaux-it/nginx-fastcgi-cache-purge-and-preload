@@ -1,14 +1,23 @@
 # Nginx FastCGI Cache Purge & Preload Plugin for Wordpress
 
-https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/235404ff-b35c-4cce-ac17-ebead39130b6
+[https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/235404ff-b35c-4cce-ac17-ebead39130b6](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/93a94d73-1d37-4b69-9ca9-ac1bed766f86)
 
 ------
-![Screenshot 2024-03-27 183824](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/98553964-cd11-4a1f-a6f3-0a0a6d073ba2)
+![Screenshot 2024-05-27 000219](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/b64873e3-e91b-4a97-a228-b88d58b1ed06)
+
+------
+![Screenshot 2024-05-27 000248](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/fca56b7c-a15d-4900-b958-ad44eb1fe19d)
 
 ------
 
-![Screenshot 2024-03-27 190007](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/31a4aa9f-f077-4792-a461-4b216456eaf3)
+![Screenshot 2024-05-26 235131](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/d13d3b8e-6829-414e-8d71-15f3c4a4f7ab)
 ---
+
+---
+![Screenshot 2024-05-26 235351](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/e76a6a69-0be0-4762-b17d-16803656e948)
+
+---
+![Screenshot 2024-05-26 235555](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/da2d37c9-1681-4c97-a4c7-2ca5d5f625dd)
 
 ## What is the actual solution here exactly?
 
