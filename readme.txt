@@ -19,7 +19,7 @@ This plugin allows WordPress users to manage FastCGI Cache Purge and Preload for
 - FastCGI Cache Purge All for Nginx
 - FastCGI Cache Preload All for Nginx
 - FastCGI Cache Auto Preload for Nginx
-- FastCGI Cache Scheduled Purge & Preload for Nginx  via WP Cron
+- FastCGI Cache Scheduled Purge & Preload for Nginx via WP Cron
 - Optimized Performance for FastCGI Cache Preload for Nginx via CPU usage limits, Endpoint exclusion and Rate limiting
 - Manual Page Purge for Nginx in Advanced tab
 - Manual Page Preload for Nginx in Advanced tab
@@ -33,10 +33,17 @@ This plugin allows WordPress users to manage FastCGI Cache Purge and Preload for
 
 == Installation ==
 
+Manual Installation
+
 1. Upload the 'fastcgi-cache-purge-and-preload-nginx' folder to the '/wp-content/plugins/' directory.
 2. Activate the plugin through the 'Plugins' menu in the WordPress admin dashboard.
 3. Configure plugin settings under 'Settings' -> 'FastCGI Cache Purge and Preload' in the WordPress admin dashboard.
 4. Access FastCGI Cache Purge and Preload operations from the WordPress admin bar(both frontend,backend) and Plugin settings page.
+
+Automatic Installation
+
+1. Log in to your WordPress admin panel, navigate to the Plugins menu and click Add New.
+2. In the search field type “FastCGI Cache Purge and Preload Nginx” and click Search Plugins. From the search results, pick "FastCGI Cache Purge and Preload for Nginx" and click Install Now. Wordpress will ask you to confirm to complete the installation.
 
 == Frequently Asked Questions ==
 
@@ -46,11 +53,11 @@ Navigate to 'Settings' -> 'FastCGI Cache Purge and Preload' in the WordPress adm
 
 = Why plugin not functional on my environment? =
 
-This plugin is only compatible with Nginx web servers running on Linux-powered systems.
-Additionally, shell exec must be enabled and not restricted. Simply put, the plugin may not function fully on shared hosting environments where native Linux commands are prohibited from running via PHP.
-Furthermore, users must have a properly configured PHP-FPM & Nginx setup for purge and preload operations. Otherwise permission issues occurs. 
-Warnings may appear if there are permission issues, unsupported environment or missing dependencies required for cache operations.
-Follow the warnings and refer to plugin 'Help' tab for guidance.
+This plugin is compatible exclusively with Nginx web servers running on Linux-powered systems. Additionally, the shell_exec function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native Linux commands are blocked from running via PHP.
+
+Moreover, a correctly configured PHP-FPM and Nginx setup is essential for the purge and preload operations to function properly. Otherwise, permission issues may arise.
+
+If warnings appear, they may indicate permission issues, an unsupported environment, or missing dependencies required for cache operations. Please follow the warnings and refer to the plugin's 'Help' tab for detailed guidance.
 
 == Changelog ==
 
@@ -110,17 +117,6 @@ Release date: 2024-03-15
 Release date: 2024-03-14
 
 * Initial release.
-
-== Upgrade Notice ==
-
-= 1.0.0 =
-Initial release.
-
-== Screenshots ==
-
-1. Admin bar with FastCGI cache operations.
-2. Settings page for configuring plugin options.
-3. Warnings displayed for permission and dependency issues.
 
 == Credits ==
 
