@@ -149,9 +149,6 @@ function nppp_get_active_cron_events_ajax() {
 
     // Return the event data as JSON response
     wp_send_json_success($event_data);
-
-    // Exit after AJAX functions to avoid extra output
-    wp_die();
 }
 
 // Add AJAX action for canceling scheduled event
@@ -165,13 +162,11 @@ function nppp_cancel_scheduled_event_callback() {
         }
     } else {
         wp_send_json_error('Nonce is missing.');
-        wp_die('Nonce is missing.');
     }
 
     // Check user capability
     if (!current_user_can('manage_options')) {
         wp_send_json_error('You do not have permission to access this page.');
-        wp_die('You do not have permission to call this action.');
     }
 
     // Get the hook name of the event to be canceled and sanitize it
@@ -180,7 +175,6 @@ function nppp_cancel_scheduled_event_callback() {
     // Validate the hook
     if (empty($hook) || $hook !== 'npp_cache_preload_event') {
         wp_send_json_error('Invalid hook name');
-        wp_die('Invalid hook name');
     }
 
     // Cancel the scheduled event
@@ -194,9 +188,6 @@ function nppp_cancel_scheduled_event_callback() {
     } else {
         wp_send_json_error('Failed to cancel scheduled event');
     }
-
-    // Exit after AJAX functions to avoid extra output
-    wp_die();
 }
 
 // Add AJAX action for creating scheduled event
