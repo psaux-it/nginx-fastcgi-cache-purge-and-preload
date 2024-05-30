@@ -287,8 +287,8 @@ function nppp_extract_cached_urls($nginx_cache_path) {
                 // Read file contents
                 $content = $wp_filesystem->get_contents($file->getPathname());
 
-                // Exclude URLs with status 301 Moved Permanently
-                if (strpos($content, 'Status: 301 Moved Permanently') !== false) {
+                // Exclude URLs with status 301 Moved Permanently or 302 Found
+                if (strpos($content, 'Status: 301 Moved Permanently') !== false || strpos($content, 'Status: 302 Found') !== false) {
                     continue;
                 }
 
