@@ -1,4 +1,4 @@
-# Nginx FastCGI Cache Purge & Preload Plugin for Wordpress
+# Nginx FastCGI Cache Purge & Preload Plugin for Wordpress (NPP)
 
 [https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/235404ff-b35c-4cce-ac17-ebead39130b6](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/93a94d73-1d37-4b69-9ca9-ac1bed766f86)
 
