@@ -285,32 +285,6 @@ function nppp_nginx_cache_settings_page() {
             </div>
         </div>
     </div>
-    <script>
-    // Function to remove specific query parameters from the URL
-    function removeQueryParameters(parameters) {
-        var url = window.location.href;
-        var urlParts = url.split('?');
-        if (urlParts.length >= 2) {
-            var baseUrl = urlParts[0];
-            var queryParameters = urlParts[1].split('&');
-            var updatedParameters = [];
-            for (var i = 0; i < queryParameters.length; i++) {
-                var parameter = queryParameters[i].split('=');
-                if (parameters.indexOf(parameter[0]) === -1) {
-                    updatedParameters.push(queryParameters[i]);
-                }
-            }
-            return baseUrl + '?' + updatedParameters.join('&');
-        }
-        return url;
-    }
-
-    // Clean the URL immediately after page load
-    document.addEventListener('DOMContentLoaded', function() {
-        var updatedUrl = removeQueryParameters(['status_message', 'message_type']);
-        history.replaceState(null, document.title, updatedUrl);
-    });
-    </script>
     <?php
 }
 
