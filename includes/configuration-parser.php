@@ -68,8 +68,8 @@ function nppp_get_nginx_info() {
 function nppp_generate_html($cache_paths, $nginx_info) {
     ob_start();
     //img url's
-    $image_url_bar = plugins_url('../admin/img/bar.png', __FILE__);
-    $image_url_ad = plugins_url('../admin/img/logo_ad.png', __FILE__);
+    $image_url_bar = plugins_url('/admin/img/bar.png', dirname(__FILE__));
+    $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
     ?>
     <header></header>
     <main>
