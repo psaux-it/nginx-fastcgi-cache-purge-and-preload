@@ -35,6 +35,8 @@ function nppp_send_mail_now($mail_message, $elapsed_time_str) {
         $mail_subject = "NPP Wordpress Report";
         // Get the path to the email template file
         $template_file = __DIR__ . '/mail.html';
+        // get the mail image URL
+        $image_url = plugins_url('/admin/img/logo-blackwhite.png', dirname(__FILE__));
         // Read the content of the HTML file
         $html_content = '';
 
@@ -47,10 +49,10 @@ function nppp_send_mail_now($mail_message, $elapsed_time_str) {
             $html_content = $wp_filesystem->get_contents($template_file);
 
             // Replace placeholders with actual values
-            // Replace placeholders with actual values
             $html_content = str_replace('{{domain}}', $domain, $html_content);
             $html_content = str_replace('{{mail_message}}', $mail_message, $html_content);
             $html_content = str_replace('{{elapsed_time_str}}', $elapsed_time_str, $html_content);
+            $html_content = str_replace('{{image_url}}', $image_url, $html_content);
         }
 
         $headers = array(
