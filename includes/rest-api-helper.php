@@ -22,6 +22,6 @@ if ($api_status === 'yes') {
     require_once plugin_dir_path( __FILE__ ) . '../includes/rest-api.php';
 
     // Add actions for REST API endpoints
-    add_action('rest_api_init', 'npp_nginx_cache_register_purge_endpoint');
-    add_action('rest_api_init', 'npp_nginx_cache_register_preload_endpoint');
+    add_action('rest_api_init', 'nppp_nginx_cache_register_purge_endpoint');
+    add_action('rest_api_init', 'nppp_nginx_cache_register_preload_endpoint');
 }
