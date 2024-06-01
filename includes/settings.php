@@ -876,13 +876,21 @@ function nppp_nginx_cache_limit_rate_callback() {
 
 // Fetch default Reject Regex
 function nppp_fetch_default_reject_regex() {
-    $php_file_path = plugin_dir_path(__FILE__) . '../includes/reject_regex';
-    if (file_exists($php_file_path)) {
-        $file_content = nppp_perform_file_operation($php_file_path, 'read');
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        wp_die('Failed to initialize WP Filesystem.');
+    }
+    
+    $rr_txt_file = plugin_dir_path(__FILE__) . '../includes/reject_regex.txt';
+    if ($wp_filesystem->exists($rr_txt_file)) {
+        $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
         $regex_match = preg_match('/\$reject_regex\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
         if ($regex_match && isset($matches[1])) {
             return $matches[1];
         }
+    } else {
+        wp_die('File does not exist: ' . $rr_txt_file);
     }
     return '';
 }
