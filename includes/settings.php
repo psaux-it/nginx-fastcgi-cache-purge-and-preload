@@ -864,7 +864,7 @@ function nppp_fetch_default_reject_regex() {
             return $matches[1];
         }
     } else {
-        wp_die('File does not exist: ' . $rr_txt_file);
+        wp_die('File does not exist: ' . esc_html($rr_txt_file));
     }
     return '';
 }
