@@ -630,7 +630,7 @@ function nppp_rest_api_purge_url_copy() {
 
     // Construct the REST API purge URL
     $fdomain = get_site_url();
-    $rest_api_route_purge = 'wp-json/npp_nginx_cache/v2/purge';
+    $rest_api_route_purge = 'wp-json/nppp_nginx_cache/v2/purge';
     $rest_api_purge_url = $fdomain . '/' . $rest_api_route_purge;
     // Create the JSON data string with the API key
     $api_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : $default_api_key;
@@ -657,7 +657,7 @@ function nppp_rest_api_preload_url_copy() {
 
     // Construct the REST API preload URL
     $fdomain = get_site_url();
-    $rest_api_route_preload = 'wp-json/npp_nginx_cache/v2/preload';
+    $rest_api_route_preload = 'wp-json/nppp_nginx_cache/v2/preload';
     $rest_api_preload_url = $fdomain . '/' . $rest_api_route_preload;
     // Create the JSON data string with the API key
     $api_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : $default_api_key;
