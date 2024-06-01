@@ -413,7 +413,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
 function nppp_custom_monthly_schedule($schedules) {
     $schedules['monthly_npp'] = array(
         'interval' => 30 * DAY_IN_SECONDS,
-        'display'  => __('Monthly-NPP')
+        'display'  => 'Monthly-NPP'
     );
     return $schedules;
 }
@@ -423,7 +423,7 @@ function nppp_custom_every_min_schedule($schedules) {
     // Add a new schedule interval for every 5 seconds
     $schedules['every_min_npp'] = array(
         'interval' => 60,
-        'display'  => __('Every Minute-NPP')
+        'display'  => 'Every Minute-NPP'
     );
     return $schedules;
 }
