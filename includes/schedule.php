@@ -158,7 +158,6 @@ function nppp_cancel_scheduled_event_callback() {
         $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
         if (!wp_verify_nonce($nonce, 'nppp-cancel-scheduled-event')) {
             wp_send_json_error('Nonce verification failed.');
-            wp_die('Nonce verification failed.');
         }
     } else {
         wp_send_json_error('Nonce is missing.');
