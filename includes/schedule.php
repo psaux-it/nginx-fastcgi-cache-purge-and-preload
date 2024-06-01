@@ -418,9 +418,8 @@ function nppp_custom_monthly_schedule($schedules) {
     return $schedules;
 }
 
-// Custom cron schedule for every 5 seconds recurrence
+// Custom cron schedule for 1 min recurrence
 function nppp_custom_every_min_schedule($schedules) {
-    // Add a new schedule interval for every 5 seconds
     $schedules['every_min_npp'] = array(
         'interval' => 60,
         'display'  => 'Every Minute-NPP'
