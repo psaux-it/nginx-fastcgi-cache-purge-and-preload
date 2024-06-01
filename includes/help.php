@@ -18,8 +18,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 function nppp_my_faq_html() {
     ob_start();
     //img url's
-    $image_url_bar = plugins_url('../admin/img/bar.png', __FILE__);
-    $image_url_ad = plugins_url('../admin/img/logo_ad.png', __FILE__);
+    $image_url_bar = plugins_url('/admin/img/bar.png', dirname(__FILE__));
+    $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
     ?>
     <div class="nppp-premium-container">
       <div class="nppp-premium-wrap">
