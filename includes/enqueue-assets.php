@@ -50,7 +50,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     * License: MIT (https://github.com/Eonasdan/tempus-dominus/blob/master/LICENSE)
     */
     // Enqueue JavaScript files for Tempus Dominus Date/Time Picker
-    wp_enqueue_script('nppp_popper-js', plugins_url('../admin/js/popper.min.js', __FILE__), array(), '2.11.6', true);
+    wp_enqueue_script('nppp_popper-js', plugins_url('../admin/js/popper.min.js', __FILE__), array(), '2.11.8', true);
     wp_enqueue_script('nppp_tempus-dominus-js', plugins_url('../admin/js/tempus-dominus.min.js', __FILE__), array('nppp_popper-js'), '6.9.4', true);
 
     // Enqueue JavaScript files for Nginx FastCGI Cache Purge and Preload Plugin
