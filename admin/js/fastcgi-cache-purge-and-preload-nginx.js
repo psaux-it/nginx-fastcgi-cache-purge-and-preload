@@ -1123,3 +1123,28 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 });
+
+// Function to remove status_message + message_type query parameters from redirected URL on plugin settings page
+function removeQueryParameters(parameters) {
+    var url = window.location.href;
+    var urlParts = url.split('?');
+    if (urlParts.length >= 2) {
+        var baseUrl = urlParts[0];
+        var queryParameters = urlParts[1].split('&');
+        var updatedParameters = [];
+        for (var i = 0; i < queryParameters.length; i++) {
+            var parameter = queryParameters[i].split('=');
+            if (parameters.indexOf(parameter[0]) === -1) {
+                updatedParameters.push(queryParameters[i]);
+            }
+        }
+        return baseUrl + '?' + updatedParameters.join('&');
+    }
+    return url;
+}
+
+// Clean the redirected URL immediately after page load
+document.addEventListener('DOMContentLoaded', function() {
+    var updatedUrl = removeQueryParameters(['status_message', 'message_type']);
+    history.replaceState(null, document.title, updatedUrl);
+});
