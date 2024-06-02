@@ -138,7 +138,7 @@ function nppp_nginx_config_shortcode() {
     if ($wp_filesystem === false) {
         return false;
     }
-    
+
     $config_file = '/etc/nginx/nginx.conf';
     if (!$wp_filesystem->exists($config_file)) {
         return '<p>Nginx configuration file not found.</p>';
