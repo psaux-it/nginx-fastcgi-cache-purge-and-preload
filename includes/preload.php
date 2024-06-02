@@ -244,9 +244,9 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     }
 
     // Checks if the HTTP referrer originated from our own host domain
-    $referrer_parsed_url = parse_url($current_page_url);
+    $referrer_parsed_url = wp_parse_url($current_page_url);
     $home_url = home_url();
-    $parsed_home_url = parse_url($home_url);
+    $parsed_home_url = wp_parse_url($home_url);
 
     if ($referrer_parsed_url['host'] !== $parsed_home_url['host']) {
         nppp_display_admin_notice('error', "ERROR URL: HTTP_REFERRER URL is not from the allowed domain.");
