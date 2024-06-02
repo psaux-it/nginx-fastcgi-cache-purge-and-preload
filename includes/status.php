@@ -2,7 +2,7 @@
 /**
  * Status page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains functions which shows information about FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.0
+ * Version: 2.0.1
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -251,337 +251,140 @@ function nppp_my_status_html() {
     ob_start();
     ?>
     <div class="status-and-nginx-info-container">
-    <div id="nppp-status-tab" class="container">
-        <header>
-
-        </header>
-        <main>
-            <section class="status-summary">
-                <h2>Status Summary</h2>
-                <table>
-                    <tbody>
-                        <tr>
-                            <td class="action">
-                                <div class="action-wrapper">PHP-FPM Setup</div>
-                            </td>
-                            <td class="status" id="npppphpFpmStatus">
-                                <span class="dashicons"></span>
-                                <span>Correct</span>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div style="height: 20px;"></div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th class="action-header"><span class="dashicons dashicons-admin-generic"></span> Action</th>
-                            <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="action">Purge Action</td>
-                            <td class="status" id="nppppurgeStatus">
-                                <span class="dashicons"></span>
-                                <span>Working</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="action">Preload Action</td>
-                            <td class="status" id="nppppreloadStatus">
-                                <span class="dashicons"></span>
-                                <span>Working</span>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </section>
-            <section class="system-checks">
-                <h2>System Checks</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
-                            <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="check">PHP-FPM User (Website User)</td>
-                            <td class="status" id="npppphpProcessOwner">
-                                <span class="dashicons"></span>
-                                <span>websiteuser</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="check">WEB-SERVER User (Webserver User)</td>
-                            <td class="status" id="npppphpWebServer">
-                                <span class="dashicons"></span>
-                                <span>webserveruser</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="check">Shell_Exec (Required for Plugin)</td>
-                            <td class="status" id="npppshellExec">
-                                <span class="dashicons"></span>
-                                <span>Allowed</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="check">Cache Path (Required for Purge)</td>
-                            <td class="status" id="npppcachePath">
-                                <span class="dashicons"></span>
-                                <span>Found</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="check">ACLs (Required for Purge)</td>
-                            <td class="status" id="npppaclStatus">
-                                <span class="dashicons"></span>
-                                <span>Implemented</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="check">wget (Required for Preload)</td>
-                            <td class="status" id="npppwgetStatus">
-                                <span class="dashicons"></span>
-                                <span>Installed</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="check">cpulimit (Optional for Preload)</td>
-                            <td class="status" id="npppcpulimitStatus">
-                                <span class="dashicons"></span>
-                                <span>Installed</span>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </section>
-            <section class="cache-status">
-                <h2>Cache Status</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
-                            <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="check">Pages In Cache Count</td>
-                            <td class="status" id="npppphpPagesInCache">
-                                <span class="dashicons"></span>
-                                <span><?php echo esc_html(nppp_get_in_cache_page_count()); ?></span>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </section>
-        </main>
-    </div>
-    <div id="nppp-nginx-info" class="container">
-        <?php echo do_shortcode('[nppp_nginx_config]'); ?>
-    </div>
+        <div id="nppp-status-tab" class="container">
+            <header></header>
+            <main>
+                <section class="status-summary">
+                    <h2>Status Summary</h2>
+                    <table>
+                        <tbody>
+                            <tr>
+                                <td class="action">
+                                    <div class="action-wrapper">PHP-FPM Setup</div>
+                                </td>
+                                <td class="status" id="npppphpFpmStatus">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_get_website_user()); ?></span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="height: 20px;"></div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="action-header"><span class="dashicons dashicons-admin-generic"></span> Action</th>
+                                <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="action">Purge Action</td>
+                                <td class="status" id="nppppurgeStatus">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_check_acl('purge')); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="action">Preload Action</td>
+                                <td class="status" id="nppppreloadStatus">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_check_preload_status()); ?></span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+                <section class="system-checks">
+                    <h2>System Checks</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
+                                <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="check">PHP-FPM User (Website User)</td>
+                                <td class="status" id="npppphpProcessOwner">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_get_website_user()); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check">WEB-SERVER User (Webserver User)</td>
+                                <td class="status" id="npppphpWebServer">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_get_webserver_user()); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check">Shell_Exec (Required for Plugin)</td>
+                                <td class="status" id="npppshellExec">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_shell_exec()); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check">Cache Path (Required for Purge)</td>
+                                <td class="status" id="npppcachePath">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_check_path()); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check">ACLs (Required for Purge)</td>
+                                <td class="status" id="npppaclStatus">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_check_acl('acl')); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check">wget (Required for Preload)</td>
+                                <td class="status" id="npppwgetStatus">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_check_command_status('wget')); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check">cpulimit (Optional for Preload)</td>
+                                <td class="status" id="npppcpulimitStatus">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_check_command_status('cpulimit')); ?></span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+                <section class="cache-status">
+                    <h2>Cache Status</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
+                                <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="check">Pages In Cache Count</td>
+                                <td class="status" id="npppphpPagesInCache">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_get_in_cache_page_count()); ?></span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+            </main>
+        </div>
+        <div id="nppp-nginx-info" class="container">
+            <?php echo do_shortcode('[nppp_nginx_config]'); ?>
+        </div>
     </div>
     <?php
     return ob_get_clean();
-}
-
-// Update status elements
-function nppp_update_status() {
-    ?>
-    <script>
-        jQuery(document).ready(function($) {
-            // Fetch and update php fpm status
-            var phpFpmRow = document.querySelector("#npppphpFpmStatus").closest("tr");
-            var npppphpFpmStatusSpan = document.getElementById("npppphpFpmStatus");
-            var npppphpFpmStatus = "<?php echo esc_js(nppp_get_website_user()); ?>";
-            npppphpFpmStatusSpan.textContent = npppphpFpmStatus;
-            npppphpFpmStatusSpan.style.fontSize = "14px";
-            if (npppphpFpmStatus === "nginx" || npppphpFpmStatus === "www-data") {
-                npppphpFpmStatusSpan.style.color = "red";
-                npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Inaccurate (Check Help)';
-            } else {
-                npppphpFpmStatusSpan.style.color = "green";
-                npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Accurate';
-            }
-
-            // Fetch and update pages in cache count
-            var npppcacheInPageSpan = document.getElementById("npppphpPagesInCache");
-            var npppcacheInPageSpanValue = npppcacheInPageSpan.textContent.trim();
-
-            npppcacheInPageSpan.style.fontSize = "14px";
-            if (npppcacheInPageSpanValue === "Undetermined") {
-                npppcacheInPageSpan.style.color = "red";
-                npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Permission Issue';
-            } else if (npppcacheInPageSpanValue === "0") {
-                npppcacheInPageSpan.style.color = "orange";
-                npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppcacheInPageSpanValue;
-            } else {
-                npppcacheInPageSpan.style.color = "green";
-                npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppcacheInPageSpanValue;
-            }
-
-            // Fetch and update php process owner
-            // PHP-FPM (website user)
-            var npppphpProcessOwnerSpan = document.getElementById("npppphpProcessOwner");
-            var npppphpProcessOwner = "<?php echo esc_js(nppp_get_website_user()); ?>";
-            npppphpProcessOwnerSpan.textContent = npppphpProcessOwner;
-            npppphpProcessOwnerSpan.style.fontSize = "14px";
-            if (npppphpProcessOwner === "nginx") {
-                npppphpProcessOwnerSpan.style.color = "red";
-                npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> nginx (Check Help)';
-            } else if (npppphpProcessOwner === "www-data") {
-                npppphpProcessOwnerSpan.style.color = "red";
-                npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> www-data (Check Help)';
-            } else {
-                npppphpProcessOwnerSpan.style.color = "green";
-                npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppphpProcessOwner;
-            }
-
-            // Fetch and update web server user
-            // WEB-SERVER (webserver user)
-            var npppphpWebServerSpan = document.getElementById("npppphpWebServer");
-            var npppphpWebServer = "<?php echo esc_js(nppp_get_webserver_user()); ?>";
-            npppphpWebServerSpan.textContent = npppphpWebServer;
-            npppphpWebServerSpan.style.fontSize = "14px";
-            if (npppphpWebServer === "nginx") {
-                npppphpWebServerSpan.style.color = "green";
-                npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> nginx';
-            } else if (npppphpWebServer === "www-data") {
-                npppphpWebServerSpan.style.color = "green";
-                npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> www-data';
-            } else {
-                npppphpWebServerSpan.style.color = "red";
-                npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> ' + npppphpWebServer + ' (Check Help)';
-            }
-
-            // Fetch and update nginx cache path status
-            var npppcachePathSpan = document.getElementById("npppcachePath");
-            var npppcachePath = "<?php echo esc_js(nppp_check_path()); ?>";
-            npppcachePathSpan.textContent = npppcachePath;
-            npppcachePathSpan.style.fontSize = "14px";
-            if (npppcachePath === "Found") {
-                npppcachePathSpan.style.color = "green";
-                npppcachePathSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Found';
-            } else if (npppcachePath === "Not Found") {
-                npppcachePathSpan.style.color = "red";
-                npppcachePathSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Found';
-            }
-
-            // Fetch and update purge action status
-            var nppppurgeStatusSpan = document.getElementById("nppppurgeStatus");
-            var nppppurgeStatus = "<?php echo esc_js(nppp_check_acl('purge')); ?>";
-            nppppurgeStatusSpan.textContent = nppppurgeStatus;
-            nppppurgeStatusSpan.style.fontSize = "14px";
-            if (nppppurgeStatus === "Working") {
-                nppppurgeStatusSpan.style.color = "green";
-                nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
-            } else if (nppppurgeStatus === "Not Working") {
-                nppppurgeStatusSpan.style.color = "red";
-                nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
-            } else {
-                nppppurgeStatusSpan.style.color = "orange";
-                nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Tentative';
-            }
-
-            // Fetch and update purge shell_exec status
-            var npppshellExecSpan = document.getElementById("npppshellExec");
-            var npppshellExec = "<?php echo esc_js(nppp_shell_exec()); ?>";
-            npppshellExecSpan.textContent = npppshellExec;
-            npppshellExecSpan.style.fontSize = "14px";
-            if (npppshellExec === "Ok") {
-                npppshellExecSpan.style.color = "green";
-                npppshellExecSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Allowed';
-            } else if (npppshellExec === "Not Ok") {
-                npppshellExecSpan.style.color = "red";
-                npppshellExecSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Allowed';
-            }
-
-            // Fetch and update ACLs status
-            var npppaclStatusSpan = document.getElementById("npppaclStatus");
-            var npppaclStatus = "<?php echo esc_js(nppp_check_acl('acl')); ?>";
-            npppaclStatusSpan.textContent = npppaclStatus;
-            npppaclStatusSpan.style.fontSize = "14px";
-            if (npppaclStatus === "Implemented") {
-                npppaclStatusSpan.style.color = "green";
-                npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Implemented';
-            } else if (npppaclStatus === "Not Implemented") {
-                npppaclStatusSpan.style.color = "red";
-                npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Implemented';
-            } else {
-                npppaclStatusSpan.style.color = "orange";
-                npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
-            }
-
-            // Fetch and update preload action status
-            var nppppreloadStatusRow = document.querySelector("#nppppreloadStatus").closest("tr");
-            var nppppreloadStatusCell = nppppreloadStatusRow.querySelector("#nppppreloadStatus");
-            var nppppreloadStatusSpan = document.getElementById("nppppreloadStatus");
-            var nppppreloadStatus = "<?php echo esc_js(nppp_check_preload_status()); ?>";
-            nppppreloadStatusSpan.textContent = nppppreloadStatus;
-            nppppreloadStatusSpan.style.fontSize = "14px";
-            if (nppppreloadStatus === "Working") {
-                nppppreloadStatusSpan.style.color = "green";
-                nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
-            } else if (nppppreloadStatus === "Not Working") {
-                nppppreloadStatusSpan.style.color = "red";
-                nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
-            } else {
-                nppppreloadStatusSpan.style.color = "orange";
-                nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> In Progress';
-                nppppreloadStatusCell.style.backgroundColor = "lightgreen";
-                // Blink animation
-                nppppreloadStatusCell.animate([
-                    { backgroundColor: 'inherit' },
-                    { backgroundColor: '#90ee90' }
-                ], {
-                    duration: 1000,
-                    iterations: Infinity,
-                    direction: 'alternate'
-                });
-            }
-
-            // Fetch and update wget command status
-            var npppwgetStatusSpan = document.getElementById("npppwgetStatus");
-            var npppwgetStatus = "<?php echo esc_js(nppp_check_command_status('wget')); ?>";
-            npppwgetStatusSpan.textContent = npppwgetStatus;
-            npppwgetStatusSpan.style.fontSize = "14px";
-            if (npppwgetStatus === "Installed") {
-                npppwgetStatusSpan.style.color = "green";
-                npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
-            } else if (npppwgetStatus === "Not Installed") {
-                npppwgetStatusSpan.style.color = "red";
-                npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
-            }
-
-            // Fetch and update cpulimit command status
-            var npppcpulimitStatusSpan = document.getElementById("npppcpulimitStatus");
-            var npppcpulimitStatus = "<?php echo esc_js(nppp_check_command_status('cpulimit')); ?>";
-            npppcpulimitStatusSpan.textContent = npppcpulimitStatus;
-            npppcpulimitStatusSpan.style.fontSize = "14px";
-            if (npppcpulimitStatus === "Installed") {
-                npppcpulimitStatusSpan.style.color = "green";
-                npppcpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
-            } else if (npppcpulimitStatus === "Not Installed") {
-                npppcpulimitStatusSpan.style.color = "red";
-                npppcpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
-            }
-
-            // Add spin effect to icons
-            document.querySelectorAll('.status').forEach(status => {
-                status.addEventListener('click', () => {
-                    status.querySelector('.dashicons').classList.add('spin');
-                    setTimeout(() => {
-                        status.querySelector('.dashicons').classList.remove('spin');
-                    }, 1000);
-                });
-            });
-        });
-    </script>
-    <?php
 }
 
 // AJAX handler to fetch shortcode content
@@ -606,9 +409,6 @@ function nppp_cache_status_callback() {
 
     // Return the shortcode content
     echo wp_kses_post($shortcode_content);
-
-    // Update status elements
-    nppp_update_status();
 
     // Properly exit to avoid extra output
     wp_die();

@@ -2,7 +2,7 @@
 /**
  * FAQ for FastCGI Cache Purge and Preload for Nginx
  * Description: This help file contains informations about FastCGI Cache Purge and Preload for Nginx plugin usage.
- * Version: 2.0.0
+ * Version: 2.0.1
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -18,8 +18,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 function nppp_my_faq_html() {
     ob_start();
     //img url's
-    $image_url_bar = plugins_url('../admin/img/bar.png', __FILE__);
-    $image_url_ad = plugins_url('../admin/img/logo_ad.png', __FILE__);
+    $image_url_bar = plugins_url('/admin/img/bar.png', dirname(__FILE__));
+    $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
     ?>
     <div class="nppp-premium-container">
       <div class="nppp-premium-wrap">

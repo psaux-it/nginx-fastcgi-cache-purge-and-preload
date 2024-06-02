@@ -1,7 +1,7 @@
 /**
  * JavaScript for FastCGI Cache Purge and Preload for Nginx
  * Description: This JavaScript file contains functions to manage FastCGI Cache Purge and Preload for Nginx plugin and interact with WordPress admin dashboard.
- * Version: 2.0.0
+ * Version: 2.0.1
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -9,7 +9,7 @@
  */
 
 jQuery(document).ready(function($) {
-    // Initialize Datatables
+    // Initialize jQuery UI tabs
     $('#nppp-nginx-tabs').tabs({
         activate: function(event, ui) {
             var tabId = ui.newPanel.attr('id');
@@ -50,6 +50,9 @@ jQuery(document).ready(function($) {
                 if (response.trim() !== '') {
                     // Replace loading spinner with content
                     $('#status-content-placeholder').html(response).show();
+                    
+                    // Update status metrics after the content is inserted into the DOM
+                    npppupdateStatus();
                 } else {
                     console.error('Empty response received');
                 }
@@ -1123,3 +1126,216 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 });
+
+// Function to remove status_message + message_type query parameters from redirected URL on plugin settings page
+function removeQueryParameters(parameters) {
+    var url = window.location.href;
+    var urlParts = url.split('?');
+    if (urlParts.length >= 2) {
+        var baseUrl = urlParts[0];
+        var queryParameters = urlParts[1].split('&');
+        var updatedParameters = [];
+        for (var i = 0; i < queryParameters.length; i++) {
+            var parameter = queryParameters[i].split('=');
+            if (parameters.indexOf(parameter[0]) === -1) {
+                updatedParameters.push(queryParameters[i]);
+            }
+        }
+        return baseUrl + '?' + updatedParameters.join('&');
+    }
+    return url;
+}
+
+// Clean the redirected URL immediately after page load
+document.addEventListener('DOMContentLoaded', function() {
+    var updatedUrl = removeQueryParameters(['status_message', 'message_type']);
+    history.replaceState(null, document.title, updatedUrl);
+});
+
+// update status tab metrics
+function npppupdateStatus() {
+    // Fetch and update php fpm status
+    var phpFpmRow = document.querySelector("#npppphpFpmStatus").closest("tr");
+    var npppphpFpmStatusSpan = document.getElementById("npppphpFpmStatus");
+    var npppphpFpmStatus = npppphpFpmStatusSpan.textContent.trim();
+    npppphpFpmStatusSpan.textContent = npppphpFpmStatus;
+    npppphpFpmStatusSpan.style.fontSize = "14px";
+    if (npppphpFpmStatus === "nginx" || npppphpFpmStatus === "www-data") {
+        npppphpFpmStatusSpan.style.color = "red";
+        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Inaccurate (Check Help)';
+    } else {
+        npppphpFpmStatusSpan.style.color = "green";
+        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Accurate';
+    }
+
+    // Fetch and update pages in cache count
+    var npppcacheInPageSpan = document.getElementById("npppphpPagesInCache");
+    var npppcacheInPageSpanValue = npppcacheInPageSpan.textContent.trim();
+    npppcacheInPageSpan.style.fontSize = "14px";
+    if (npppcacheInPageSpanValue === "Undetermined") {
+        npppcacheInPageSpan.style.color = "red";
+        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Permission Issue';
+    } else if (npppcacheInPageSpanValue === "0") {
+        npppcacheInPageSpan.style.color = "orange";
+        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppcacheInPageSpanValue;
+    } else {
+        npppcacheInPageSpan.style.color = "green";
+        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppcacheInPageSpanValue;
+    }
+
+    // Fetch and update php process owner
+    // PHP-FPM (website user)
+    var npppphpProcessOwnerSpan = document.getElementById("npppphpProcessOwner");
+    var npppphpProcessOwner = npppphpProcessOwnerSpan.textContent.trim();
+    npppphpProcessOwnerSpan.textContent = npppphpProcessOwner;
+    npppphpProcessOwnerSpan.style.fontSize = "14px";
+    if (npppphpProcessOwner === "nginx") {
+        npppphpProcessOwnerSpan.style.color = "red";
+        npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> nginx (Check Help)';
+    } else if (npppphpProcessOwner === "www-data") {
+        npppphpProcessOwnerSpan.style.color = "red";
+        npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> www-data (Check Help)';
+    } else {
+        npppphpProcessOwnerSpan.style.color = "green";
+        npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppphpProcessOwner;
+    }
+
+    // Fetch and update web server user
+    // WEB-SERVER (webserver user)
+    var npppphpWebServerSpan = document.getElementById("npppphpWebServer");
+    var npppphpWebServer = npppphpWebServerSpan.textContent.trim();
+    npppphpWebServerSpan.textContent = npppphpWebServer;
+    npppphpWebServerSpan.style.fontSize = "14px";
+    if (npppphpWebServer === "nginx") {
+        npppphpWebServerSpan.style.color = "green";
+        npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> nginx';
+    } else if (npppphpWebServer === "www-data") {
+        npppphpWebServerSpan.style.color = "green";
+        npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> www-data';
+    } else {
+        npppphpWebServerSpan.style.color = "red";
+        npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> ' + npppphpWebServer + ' (Check Help)';
+    }
+
+    // Fetch and update nginx cache path status
+    var npppcachePathSpan = document.getElementById("npppcachePath");
+    var npppcachePath = npppcachePathSpan.textContent.trim();
+    npppcachePathSpan.textContent = npppcachePath;
+    npppcachePathSpan.style.fontSize = "14px";
+    if (npppcachePath === "Found") {
+        npppcachePathSpan.style.color = "green";
+        npppcachePathSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Found';
+    } else if (npppcachePath === "Not Found") {
+        npppcachePathSpan.style.color = "red";
+        npppcachePathSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Found';
+    }
+
+    // Fetch and update purge action status
+    var nppppurgeStatusSpan = document.getElementById("nppppurgeStatus");
+    var nppppurgeStatus = nppppurgeStatusSpan.textContent.trim();
+    nppppurgeStatusSpan.textContent = nppppurgeStatus;
+    nppppurgeStatusSpan.style.fontSize = "14px";
+    if (nppppurgeStatus === "Working") {
+        nppppurgeStatusSpan.style.color = "green";
+        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
+    } else if (nppppurgeStatus === "Not Working") {
+        nppppurgeStatusSpan.style.color = "red";
+        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
+    } else {
+        nppppurgeStatusSpan.style.color = "orange";
+        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Tentative';
+    }
+
+    // Fetch and update purge shell_exec status
+    var npppshellExecSpan = document.getElementById("npppshellExec");
+    var npppshellExec = npppshellExecSpan.textContent.trim();
+    npppshellExecSpan.textContent = npppshellExec;
+    npppshellExecSpan.style.fontSize = "14px";
+    if (npppshellExec === "Ok") {
+        npppshellExecSpan.style.color =  "green";
+        npppshellExecSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Allowed';
+    } else if (npppshellExec === "Not Ok") {
+        npppshellExecSpan.style.color = "red";
+        npppshellExecSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Allowed';
+    }
+
+    // Fetch and update ACLs status
+    var npppaclStatusSpan = document.getElementById("npppaclStatus");
+    var npppaclStatus = npppaclStatusSpan.textContent.trim();
+    npppaclStatusSpan.textContent = npppaclStatus;
+    npppaclStatusSpan.style.fontSize = "14px";
+    if (npppaclStatus === "Implemented") {
+        npppaclStatusSpan.style.color = "green";
+        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Implemented';
+    } else if (npppaclStatus === "Not Implemented") {
+        npppaclStatusSpan.style.color = "red";
+        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Implemented';
+    } else {
+        npppaclStatusSpan.style.color = "orange";
+        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
+    }
+
+    // Fetch and update preload action status
+    var nppppreloadStatusRow = document.querySelector("#nppppreloadStatus").closest("tr");
+    var nppppreloadStatusCell = nppppreloadStatusRow.querySelector("#nppppreloadStatus");
+    var nppppreloadStatusSpan = document.getElementById("nppppreloadStatus");
+    var nppppreloadStatus = nppppreloadStatusSpan.textContent.trim();
+    nppppreloadStatusSpan.textContent = nppppreloadStatus;
+    nppppreloadStatusSpan.style.fontSize = "14px";
+    if (nppppreloadStatus === "Working") {
+        nppppreloadStatusSpan.style.color = "green";
+        nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
+    } else if (nppppreloadStatus === "Not Working") {
+        nppppreloadStatusSpan.style.color = "red";
+        nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
+    } else {
+        nppppreloadStatusSpan.style.color = "orange";
+        nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> In Progress';
+        nppppreloadStatusCell.style.backgroundColor = "lightgreen";
+        // Blink animation
+        nppppreloadStatusCell.animate([
+            { backgroundColor: 'inherit' },
+            { backgroundColor: '#90ee90' }
+        ], {
+            duration: 1000,
+            iterations: Infinity,
+            direction: 'alternate'
+        });
+    }
+
+    // Fetch and update wget command status
+    var npppwgetStatusSpan = document.getElementById("npppwgetStatus");
+    var npppwgetStatus = npppwgetStatusSpan.textContent.trim();
+    npppwgetStatusSpan.textContent = npppwgetStatus;
+    npppwgetStatusSpan.style.fontSize = "14px";
+    if (npppwgetStatus === "Installed") {
+        npppwgetStatusSpan.style.color = "green";
+        npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
+    } else if (npppwgetStatus === "Not Installed") {
+        npppwgetStatusSpan.style.color = "red";
+        npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
+    }
+
+    // Fetch and update cpulimit command status
+    var npppcpulimitStatusSpan = document.getElementById("npppcpulimitStatus");
+    var npppcpulimitStatus = npppcpulimitStatusSpan.textContent.trim();
+    npppcpulimitStatusSpan.textContent = npppcpulimitStatus;
+    npppcpulimitStatusSpan.style.fontSize = "14px";
+    if (npppcpulimitStatus === "Installed") {
+        npppcpulimitStatusSpan.style.color = "green";
+        npppcpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
+    } else if (npppcpulimitStatus === "Not Installed") {
+        npppcpulimitStatusSpan.style.color = "red";
+        npppcpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
+    }
+
+    // Add spin effect to icons
+    document.querySelectorAll('.status').forEach(status => {
+        status.addEventListener('click', () => {
+            status.querySelector('.dashicons').classList.add('spin');
+            setTimeout(() => {
+                status.querySelector('.dashicons').classList.remove('spin');
+            }, 1000);
+        });
+    });
+}

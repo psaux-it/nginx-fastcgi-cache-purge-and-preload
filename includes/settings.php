@@ -2,7 +2,7 @@
 /**
  * Settings page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains settings page functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.0
+ * Version: 2.0.1
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -63,8 +63,15 @@ function nppp_nginx_cache_settings_page() {
             wp_die('Nonce verification failed');
         }
 
-        $status_message = urldecode($_GET['status_message']);
-        $message_type = urldecode($_GET['message_type']);
+        // Sanitize the status message and message type
+        $status_message = sanitize_text_field(urldecode($_GET['status_message']));
+        $message_type = sanitize_text_field(urldecode($_GET['message_type']));
+
+        // Validate the message type against a set of allowed values
+        $allowed_message_types = ['success', 'error', 'info', 'warning'];
+        if (!in_array($message_type, $allowed_message_types)) {
+            $message_type = 'info';
+        }
 
         // Display the status message as an admin notice
         nppp_display_admin_notice($message_type, $status_message, false);
@@ -285,32 +292,6 @@ function nppp_nginx_cache_settings_page() {
             </div>
         </div>
     </div>
-    <script>
-    // Function to remove specific query parameters from the URL
-    function removeQueryParameters(parameters) {
-        var url = window.location.href;
-        var urlParts = url.split('?');
-        if (urlParts.length >= 2) {
-            var baseUrl = urlParts[0];
-            var queryParameters = urlParts[1].split('&');
-            var updatedParameters = [];
-            for (var i = 0; i < queryParameters.length; i++) {
-                var parameter = queryParameters[i].split('=');
-                if (parameters.indexOf(parameter[0]) === -1) {
-                    updatedParameters.push(queryParameters[i]);
-                }
-            }
-            return baseUrl + '?' + updatedParameters.join('&');
-        }
-        return url;
-    }
-
-    // Clean the URL immediately after page load
-    document.addEventListener('DOMContentLoaded', function() {
-        var updatedUrl = removeQueryParameters(['status_message', 'message_type']);
-        history.replaceState(null, document.title, updatedUrl);
-    });
-    </script>
     <?php
 }
 
@@ -630,7 +611,7 @@ function nppp_rest_api_purge_url_copy() {
 
     // Construct the REST API purge URL
     $fdomain = get_site_url();
-    $rest_api_route_purge = 'wp-json/npp_nginx_cache/v2/purge';
+    $rest_api_route_purge = 'wp-json/nppp_nginx_cache/v2/purge';
     $rest_api_purge_url = $fdomain . '/' . $rest_api_route_purge;
     // Create the JSON data string with the API key
     $api_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : $default_api_key;
@@ -657,7 +638,7 @@ function nppp_rest_api_preload_url_copy() {
 
     // Construct the REST API preload URL
     $fdomain = get_site_url();
-    $rest_api_route_preload = 'wp-json/npp_nginx_cache/v2/preload';
+    $rest_api_route_preload = 'wp-json/nppp_nginx_cache/v2/preload';
     $rest_api_preload_url = $fdomain . '/' . $rest_api_route_preload;
     // Create the JSON data string with the API key
     $api_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : $default_api_key;
@@ -876,13 +857,21 @@ function nppp_nginx_cache_limit_rate_callback() {
 
 // Fetch default Reject Regex
 function nppp_fetch_default_reject_regex() {
-    $php_file_path = plugin_dir_path(__FILE__) . '../includes/reject_regex';
-    if (file_exists($php_file_path)) {
-        $file_content = nppp_perform_file_operation($php_file_path, 'read');
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        wp_die('Failed to initialize WP Filesystem.');
+    }
+    
+    $rr_txt_file = plugin_dir_path(__FILE__) . '../includes/reject_regex.txt';
+    if ($wp_filesystem->exists($rr_txt_file)) {
+        $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
         $regex_match = preg_match('/\$reject_regex\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
         if ($regex_match && isset($matches[1])) {
             return $matches[1];
         }
+    } else {
+        wp_die('File does not exist: ' . esc_html($rr_txt_file));
     }
     return '';
 }

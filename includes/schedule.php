@@ -2,7 +2,7 @@
 /**
  * Preload action related schedule cron events for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains preload action related schedule cron events functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.0
+ * Version: 2.0.1
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -149,9 +149,6 @@ function nppp_get_active_cron_events_ajax() {
 
     // Return the event data as JSON response
     wp_send_json_success($event_data);
-
-    // Exit after AJAX functions to avoid extra output
-    wp_die();
 }
 
 // Add AJAX action for canceling scheduled event
@@ -161,17 +158,14 @@ function nppp_cancel_scheduled_event_callback() {
         $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
         if (!wp_verify_nonce($nonce, 'nppp-cancel-scheduled-event')) {
             wp_send_json_error('Nonce verification failed.');
-            wp_die('Nonce verification failed.');
         }
     } else {
         wp_send_json_error('Nonce is missing.');
-        wp_die('Nonce is missing.');
     }
 
     // Check user capability
     if (!current_user_can('manage_options')) {
         wp_send_json_error('You do not have permission to access this page.');
-        wp_die('You do not have permission to call this action.');
     }
 
     // Get the hook name of the event to be canceled and sanitize it
@@ -180,7 +174,6 @@ function nppp_cancel_scheduled_event_callback() {
     // Validate the hook
     if (empty($hook) || $hook !== 'npp_cache_preload_event') {
         wp_send_json_error('Invalid hook name');
-        wp_die('Invalid hook name');
     }
 
     // Cancel the scheduled event
@@ -194,9 +187,6 @@ function nppp_cancel_scheduled_event_callback() {
     } else {
         wp_send_json_error('Failed to cancel scheduled event');
     }
-
-    // Exit after AJAX functions to avoid extra output
-    wp_die();
 }
 
 // Add AJAX action for creating scheduled event
@@ -423,17 +413,16 @@ function nppp_create_scheduled_event_preload_status_callback() {
 function nppp_custom_monthly_schedule($schedules) {
     $schedules['monthly_npp'] = array(
         'interval' => 30 * DAY_IN_SECONDS,
-        'display'  => __('Monthly-NPP')
+        'display'  => 'Monthly-NPP'
     );
     return $schedules;
 }
 
-// Custom cron schedule for every 5 seconds recurrence
+// Custom cron schedule for 1 min recurrence
 function nppp_custom_every_min_schedule($schedules) {
-    // Add a new schedule interval for every 5 seconds
     $schedules['every_min_npp'] = array(
         'interval' => 60,
-        'display'  => __('Every Minute-NPP')
+        'display'  => 'Every Minute-NPP'
     );
     return $schedules;
 }

@@ -2,7 +2,7 @@
 /**
  * Preload action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains preload action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.0
+ * Version: 2.0.1
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -162,13 +162,13 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             $parts = explode(" ", $output);
             $pid = end($parts);
 
-            // Sleep for 2 seconds to check background process status again
+            // Sleep for 1 seconds to check background process status again
             sleep(1);
 
             // Check if the process is still running
             $isRunning = posix_kill($pid, 0);
 
-            // we did not get immediate exit from process
+            // We did not get immediate exit from process
             if ($isRunning) {
                 nppp_perform_file_operation($PIDFILE, 'write', $pid);
 
@@ -240,6 +240,16 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     // Valitade the sanitized url before process
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) === false) {
         nppp_display_admin_notice('error', "ERROR URL: HTTP_REFERRER URL can not validated.");
+        return;
+    }
+
+    // Checks if the HTTP referrer originated from our own host domain
+    $referrer_parsed_url = wp_parse_url($current_page_url);
+    $home_url = home_url();
+    $parsed_home_url = wp_parse_url($home_url);
+
+    if ($referrer_parsed_url['host'] !== $parsed_home_url['host']) {
+        nppp_display_admin_notice('error', "ERROR URL: HTTP_REFERRER URL is not from the allowed domain.");
         return;
     }
 

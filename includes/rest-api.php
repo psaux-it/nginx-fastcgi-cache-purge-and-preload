@@ -2,7 +2,7 @@
 /**
  * Rest API for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains rest api functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.0
+ * Version: 2.0.1
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Permission callback function to check API key validity
-function npp_nginx_cache_authorize_endpoint($request) {
+function nppp_nginx_cache_authorize_endpoint($request) {
     // Sanitize API key.
     $api_key = sanitize_text_field($request->get_param('api_key'));
     if (!preg_match('/^[a-f0-9]{64}$/i', $api_key)) {
@@ -32,10 +32,10 @@ function npp_nginx_cache_authorize_endpoint($request) {
 }
 
 // Register the REST API endpoint for purge action.
-function npp_nginx_cache_register_purge_endpoint() {
-    register_rest_route('npp_nginx_cache/v2', '/purge', array(
+function nppp_nginx_cache_register_purge_endpoint() {
+    register_rest_route('nppp_nginx_cache/v2', '/purge', array(
         'methods' => 'POST',
-        'callback' => 'npp_nginx_cache_purge_endpoint',
+        'callback' => 'nppp_nginx_cache_purge_endpoint',
         'args' => array(
             'api_key' => array(
                 'required' => true,
@@ -43,15 +43,15 @@ function npp_nginx_cache_register_purge_endpoint() {
                 'type' => 'string',
             ),
         ),
-        'permission_callback' => 'npp_nginx_cache_authorize_endpoint',
+        'permission_callback' => 'nppp_nginx_cache_authorize_endpoint',
     ));
 }
 
 // Register the REST API endpoint for preload action.
-function npp_nginx_cache_register_preload_endpoint() {
-    register_rest_route('npp_nginx_cache/v2', '/preload', array(
+function nppp_nginx_cache_register_preload_endpoint() {
+    register_rest_route('nppp_nginx_cache/v2', '/preload', array(
         'methods' => 'POST',
-        'callback' => 'npp_nginx_cache_preload_endpoint',
+        'callback' => 'nppp_nginx_cache_preload_endpoint',
         'args' => array(
             'api_key' => array(
                 'required' => true,
@@ -59,12 +59,12 @@ function npp_nginx_cache_register_preload_endpoint() {
                 'type' => 'string',
             ),
         ),
-        'permission_callback' => 'npp_nginx_cache_authorize_endpoint',
+        'permission_callback' => 'nppp_nginx_cache_authorize_endpoint',
     ));
 }
 
 // Handle the REST API request for purge action.
-function npp_nginx_cache_purge_endpoint($request) {
+function nppp_nginx_cache_purge_endpoint($request) {
     // Necessary data for purge action
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $default_cache_path = '/dev/shm/change-me-now';
@@ -83,7 +83,7 @@ function npp_nginx_cache_purge_endpoint($request) {
 }
 
 // Handle the REST API request for preload action.
-function npp_nginx_cache_preload_endpoint($request) {
+function nppp_nginx_cache_preload_endpoint($request) {
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
