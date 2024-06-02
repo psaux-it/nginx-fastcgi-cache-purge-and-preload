@@ -63,8 +63,15 @@ function nppp_nginx_cache_settings_page() {
             wp_die('Nonce verification failed');
         }
 
-        $status_message = urldecode($_GET['status_message']);
-        $message_type = urldecode($_GET['message_type']);
+        // Sanitize the status message and message type
+        $status_message = sanitize_text_field(urldecode($_GET['status_message']));
+        $message_type = sanitize_text_field(urldecode($_GET['message_type']));
+
+        // Validate the message type against a set of allowed values
+        $allowed_message_types = ['success', 'error', 'info', 'warning'];
+        if (!in_array($message_type, $allowed_message_types)) {
+            $message_type = 'info';
+        }
 
         // Display the status message as an admin notice
         nppp_display_admin_notice($message_type, $status_message, false);
