@@ -4,7 +4,7 @@ Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 6.5.3
-Stable tag: 2.0.0
+Stable tag: 2.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,20 +16,18 @@ This plugin allows WordPress users to manage FastCGI Cache Purge and Preload for
 
 == Features ==
 
-- FastCGI Cache Purge All for Nginx
-- FastCGI Cache Preload All for Nginx
-- FastCGI Cache Auto Preload for Nginx
-- FastCGI Cache Scheduled Purge & Preload for Nginx via WP Cron
-- Optimized Performance for FastCGI Cache Preload for Nginx via CPU usage limits, Endpoint exclusion and Rate limiting
-- Manual Page Purge for Nginx in Advanced tab
-- Manual Page Preload for Nginx in Advanced tab
-- Frontend On-Page FastCGI Cache Purge and Preload for Nginx actions
-- REST API support for FastCGI Cache Purge and Preload for Nginx
-- Advanced Status tab for Plugin functionality check, Nginx Configuration checks
-- User-Friendly Wordpress Admin Notices for actions
-- Easy management with ajax powered toggle switch options 
-- Easy-to-use interface directly integrated into the WordPress admin bar
-- E-Mail Notifications for completed Preload actions with ready to use template
+- Purge all FastCGI Cache for Nginx
+- Preload all FastCGI Cache for Nginx
+- Auto Preload FastCGI Cache for Nginx
+- Schedule Purge & Preload FastCGI Cache for Nginx via WP Cron
+- Remotely Purge & Preload FastCGI Cache for Nginx via REST API
+- Optimize FastCGI Cache Preload for Nginx performance with CPU usage limit, endpoint exclusion and rate limiting options
+- Manually page Purge & Preload FastCGI Cache for Nginx on Advanced Tab
+- Control plugin functionality, cache status and Nginx configuration on Status Tab
+- Supports On-Page Actions: Manually Purge & Preload FastCGI Cache on visited page
+- User-Friendly AJAX powered easy plugin settings inteface, integrated into the WordPress admin bar for quick access
+- Handy WordPress Admin Notices and logs for plugin status and all actions
+- Email notifications, alerts for completed Preload actions with ready-to-use template
 
 == Installation ==
 
@@ -49,7 +47,7 @@ Automatic Installation
 
 = How do I configure the plugin settings? =
 
-Navigate to 'Settings' -> 'FastCGI Cache Purge and Preload' in the WordPress admin dashboard or navigate to 'Admin Bar' -> 'FastCGI Cache' to configure the options.
+Navigate to 'Settings' -> 'FastCGI Cache Purge and Preload' in the WordPress admin dashboard or navigate to 'Admin Bar' -> 'FastCGI Cache' to configure the options and use the actions.
 
 = Why plugin not functional on my environment? =
 
@@ -60,6 +58,18 @@ Moreover, a correctly configured PHP-FPM and Nginx setup is essential for the pu
 If warnings appear, they may indicate permission issues, an unsupported environment, or missing dependencies required for cache operations. Please follow the warnings and refer to the plugin's 'Help' tab for detailed guidance.
 
 == Changelog ==
+
+= 2.0.1 =
+
+Release date: 2024-05-24
+
+* Fix Generic function/class/define/namespace/option names
+* Fix Not permitted files
+* Fix properly enqueue inline js
+* Fix Internationalization
+* Fix Calling files remotely
+* Fix Out of Date Libraries
+* Fix Sanitize, Escape, and Validate
 
 = 2.0.0 =
 
