@@ -46,7 +46,7 @@ Solution involves combining **inotifywait** with **setfacl** under **root**:
 ## Implementation
 
 To implement this solution:
-1. Download latest [plugin](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/releases/tag/v2.0.0) from our releases and install to your wordpress instance 
+1. Download latest [plugin](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/releases/tag/v2.0.1) from our releases and install to your wordpress instance 
 2. On **root** call ```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` to start automated setup
 
 ## What does install.sh do? Is it safe?
