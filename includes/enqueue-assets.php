@@ -174,5 +174,5 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
     }
 
     // Enqueue CSS and JavaScript files for frontend admin bar icon style set
-    wp_enqueue_script('nppp-admin-bar-icon-front', plugins_url('../frontend/js/nppp-admin-bar-icon-front.js', __FILE__), array('jquery'), '2.0.1', true);
+    // wp_enqueue_script('nppp-admin-bar-icon-front', plugins_url('../frontend/js/nppp-admin-bar-icon-front.js', __FILE__), array('jquery'), '2.0.1', true);
 }
