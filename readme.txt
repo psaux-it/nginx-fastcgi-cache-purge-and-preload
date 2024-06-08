@@ -15,6 +15,26 @@ Manage FastCGI Cache Purge and Preload for Nginx operations directly from your W
 
 This plugin allows WordPress users to manage FastCGI Cache Purge and Preload for Nginx operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.
 
+= How does It work? =
+
+**Overview:**
+
+This plugin addresses the challenge of automating FastCGI cache purging and preloading in Nginx environments involving two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, by offering an alternative approach. It accomplishes this through server-side automation using a bash script that utilizes **inotifywait** in conjunction with **setfacl**. 
+
+**Problem Statement:**
+
+– *WEBSERVER-USER*: Responsible for creating cache folders and files with strict permissions.
+– *PHP-FPM-USER*: Handles cache purge operations but lacks privileges.
+
+**Challenges:**
+
+– **Permission Issues:** Adding PHP-FPM-USER to the WEBSERVER-GROUP doesn't resolve permission conflicts.
+– **Nginx Overrides:** Nginx overrides default setfacl settings, ignoring ACLs. Nginx creates cache folders and files with strict permissions.
+
+**Solution:**
+
+– The solution entails combining **inotifywait* with **setfacl** to grant write permissions to the **PHP-FPM-USER* for the corresponding **Nginx Cache Paths** automatically under root, facilitated by server-side bash scripting. For detailed information on this automation bash scripting solution, please consult the plugin settings' **Help**.
+
 == Features ==
 
 * Purge all FastCGI Cache for Nginx
@@ -189,6 +209,7 @@ Release date: 2024-03-14
 == Upgrade Notice ==
 
 = 2.0.1 =
+
 * Important fixes for function/class/define/namespace/option names.
 * Properly enqueued inline JavaScript.
 * Internationalization and security improvements.
