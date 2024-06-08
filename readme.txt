@@ -1,5 +1,5 @@
 === FastCGI Cache Purge and Preload for Nginx ===
-Contributors: Hasan ÇALIŞIR
+Contributors: psauxit
 Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
@@ -16,18 +16,18 @@ This plugin allows WordPress users to manage FastCGI Cache Purge and Preload for
 
 == Features ==
 
-- Purge all FastCGI Cache for Nginx
-- Preload all FastCGI Cache for Nginx
-- Auto Preload FastCGI Cache for Nginx
-- Schedule Purge & Preload FastCGI Cache for Nginx via WP Cron
-- Remotely Purge & Preload FastCGI Cache for Nginx via REST API
-- Optimize FastCGI Cache Preload for Nginx performance with CPU usage limit, endpoint exclusion and rate limiting options
-- Manually page Purge & Preload FastCGI Cache for Nginx on Advanced Tab
-- Control plugin functionality, cache status and Nginx configuration on Status Tab
-- Supports On-Page Actions: Manually Purge & Preload FastCGI Cache on visited page
-- User-Friendly AJAX powered easy plugin settings inteface, integrated into the WordPress admin bar for quick access
-- Handy WordPress Admin Notices and logs for plugin status and all actions
-- Email notifications, alerts for completed Preload actions with ready-to-use template
+* Purge all FastCGI Cache for Nginx
+* Preload all FastCGI Cache for Nginx
+* Auto Preload FastCGI Cache for Nginx
+* Schedule Purge & Preload FastCGI Cache for Nginx via WP Cron
+* Remotely Purge & Preload FastCGI Cache for Nginx via REST API
+* Optimize FastCGI Cache Preload for Nginx performance with CPU usage limit, endpoint exclusion and rate limiting options
+* Manually page Purge & Preload FastCGI Cache for Nginx on Advanced Tab
+* Control plugin functionality, cache status and Nginx configuration on Status Tab
+* Supports On-Page Actions: Manually Purge & Preload FastCGI Cache on visited page
+* User-Friendly AJAX powered easy plugin settings inteface, integrated into the WordPress admin bar for quick access
+* Handy WordPress Admin Notices and logs for plugin status and all actions
+* Email notifications, alerts for completed Preload actions with ready-to-use template
 
 == Installation ==
 
@@ -45,17 +45,72 @@ Automatic Installation
 
 == Frequently Asked Questions ==
 
+= Is the plugin completely free? =
+
+Yes, the plugin is completely free to use.
+
+= Who is this plugin intended for? =
+	
+For anyone who wants to use server side Nginx’s built-in caching mechanism to serve cached content directly. It is particularly beneficial for those who wish to manage purge and preload actions directly from the WordPress admin dashboard, WP Cron or REST API
+
+= Will this plugin slow my site down? =
+	
+No, this plugin does not introduce any performance overhead to your website. It operates exclusively within the WordPress admin environment and does not affect the frontend or public-facing aspects of your site.
+
+= Will it work on my theme? =
+	
+Sure! Works 100% with all themes.
+	
+= Will it work with my plugins? =
+	
+Sure! It works 100% with all plugins.
+
+= What changes will it make to my site? =
+
+None.
+
+= Is this plugin compatible with other Wordpress cache plugins? =
+
+Certainly! Nginx FastCGI cache operates differently from traditional WordPress cache plugins, functioning at the server level by storing fully generated HTML pages. As such, it can be used alongside other WordPress cache plugins without any compatibility issues.
+
 = How do I configure the plugin settings? =
 
 Navigate to 'Settings' -> 'FastCGI Cache Purge and Preload' in the WordPress admin dashboard or navigate to 'Admin Bar' -> 'FastCGI Cache' to configure the options and use the actions.
 
 = Why plugin not functional on my environment? =
 
-This plugin is compatible exclusively with Nginx web servers running on Linux-powered systems. Additionally, the shell_exec function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native Linux commands are blocked from running via PHP.
+This plugin is compatible exclusively with **Nginx** web servers running on **Linux-powered** systems. Additionally, the **shell_exec** function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native Linux commands are blocked from running via PHP.
 
 Moreover, a correctly configured PHP-FPM and Nginx setup is essential for the purge and preload operations to function properly. Otherwise, permission issues may arise.
 
 If warnings appear, they may indicate permission issues, an unsupported environment, or missing dependencies required for cache operations. Please follow the warnings and refer to the plugin's 'Help' tab for detailed guidance.
+
+= What Linux commands are required for the preload action? =
+
+For the preload action to work properly, the server needs to have the **wget** command installed. The plugin uses **wget** to preload cache by fetching pages. Additionally, it's highly recommended to have the **cpulimit** command installed to manage server load effectively during the preload action.
+
+= Why am I encountering a permission error? =
+
+Encountering a permission error when attempting to purge cache from client side in Nginx environments is a common issue, especially when two distinct users, namely the **WEBSERVER-USER** and **PHP-FPM-USER**, are involved. This occurs due to differences in permissions between these users, often leading to access restrictions when trying to manipulate cache files. For detailed guidance on resolving this issue and automating server-side tasks using a bash script, please refer to the plugin settings **Help** tab.
+
+= Why can't I use my preferred path for the Nginx Cache Directory? =
+
+The Nginx Cache Directory option has restrictions on the paths you can use to prevent accidental deletions or harm to critical system files. By default, certain paths, like '/home' and other vital system directories, are blocked to safeguard your system's stability and prevent data loss.
+
+While this might limit your options, it ensures your system's security. Recommended directories to choose from, such as '/dev/shm/' or '/var/cache/', which are commonly used for caching purposes and are generally safer.
+
+= I am still encountering difficulties. Do you provide server-side integration services? =
+
+Yes, please refer to the plugin settings **Help** tab.
+
+== Screenshots ==
+
+1. Settings Tab_1
+2. Settings Tab_2
+3. Status Tab
+4. Advanced Tab
+5. Help Tab
+6. Frontend Admin Bar
 
 == Changelog ==
 
@@ -127,6 +182,13 @@ Release date: 2024-03-15
 Release date: 2024-03-14
 
 * Initial release.
+
+== Upgrade Notice ==
+
+= 2.0.1 =
+* Important fixes for function/class/define/namespace/option names.
+* Properly enqueued inline JavaScript.
+* Internationalization and security improvements.
 
 == Credits ==
 
