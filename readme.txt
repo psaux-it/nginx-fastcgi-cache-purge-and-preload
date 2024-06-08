@@ -113,6 +113,7 @@ Yes, please refer to the plugin settings **Help** tab.
 5. Help Tab
 6. Frontend Admin Bar
 7. Frontend Admin Bar 2
+8. E-Mail Notification
 
 == Changelog ==
 
