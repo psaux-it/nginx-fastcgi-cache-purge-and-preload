@@ -1,5 +1,6 @@
 === FastCGI Cache Purge and Preload for Nginx ===
 Contributors: psauxit
+Donate link: https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/
 Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
@@ -105,12 +106,13 @@ Yes, please refer to the plugin settings **Help** tab.
 
 == Screenshots ==
 
-1. Settings Tab_1
-2. Settings Tab_2
+1. Settings Tab 1
+2. Settings Tab 2
 3. Status Tab
 4. Advanced Tab
 5. Help Tab
 6. Frontend Admin Bar
+7. Frontend Admin Bar 2
 
 == Changelog ==
 
@@ -204,4 +206,4 @@ This plugin is licensed under the GPLv2 or later.
 
 == Other Notes ==
 
-For more information, visit the plugin homepage: [FastCGI Cache Purge and Preload for Nginx](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
+For more information, visit the plugin development page: [FastCGI Cache Purge and Preload for Nginx](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
