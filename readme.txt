@@ -17,23 +17,31 @@ This plugin allows WordPress users to manage FastCGI Cache Purge and Preload for
 
 = How does It work? =
 
-**Overview:**
+**Technical Background:**
 
-This plugin addresses the challenge of automating FastCGI cache purging and preloading in Nginx environments involving two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, by offering an alternative approach. It accomplishes this through server-side automation using a bash script that utilizes **inotifywait** in conjunction with **setfacl**. 
+In properly configured Nginx servers, it is not strictly necessary to have separate **PHP-FPM-USER** (as known WEBSITE-USER) and **WEBSERVER-USER** (commonly, nginx or www-data), but there are scenarios where separating these users can enhance security and performance. Here’s why:
 
-**Problem Statement:**
+**Security**: By running the PHP-FPM process under a different user than the Nginx web server, you reduce the risk of privilege escalation. If one process is compromised, the attacker does not automatically gain control over the other process.
+
+**Permission Management**: Having separate users allows for more granular permission settings. For example, PHP scripts can be restricted to only the directories they need to access, while the web server user can be given more restrictive permissions on other parts of the filesystem.
+
+**Resource Management**: Separate users can help with resource management and monitoring, as it becomes easier to track resource usage per user.
+
+This plugin also addresses the challenge of automating FastCGI cache purging and preloading in Nginx environments that involve two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, by offering an alternative simple approach. It accomplishes this with the help of server-side tools **inotifywait** and **setfacl**.
+
+**Problem Statement**:
 
 – *WEBSERVER-USER*: Responsible for creating cache folders and files with strict permissions.
 – *PHP-FPM-USER*: Handles cache purge operations but lacks privileges.
 
-**Challenges:**
+**Challenges**:
 
-– **Permission Issues:** Adding PHP-FPM-USER to the WEBSERVER-GROUP doesn't resolve permission conflicts.
+– **Permission Issues:** Adding PHP-FPM-USER to the WEBSERVER-GROUP doesn't resolve permission conflicts for purge operations.
 – **Nginx Overrides:** Nginx overrides default setfacl settings, ignoring ACLs. Nginx creates cache folders and files with strict permissions.
 
-**Solution:**
+**Solution**:
 
-– The solution entails combining **inotifywait* with **setfacl** to grant write permissions to the **PHP-FPM-USER* for the corresponding **Nginx Cache Paths** automatically under root, facilitated by server-side bash scripting. For detailed information on this automation bash scripting solution, please consult the plugin settings' **Help**.
+- In case your current web server setup involves two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, the solution proposed by this plugin involves combining **Linux** server side tools **inotifywait** with **setfacl** to automatically grant write permissions to the **PHP-FPM-USER** for the corresponding **Nginx Cache Paths**, facilitated by server-side bash scripting. Users need to manage **inotifywait** and **setfacl** operations manually or use the provided basic bash script for **fully functional purge and preload actions provided by this plugin**. If you prefer to use the pre-made automation bash script, you can find the necessary informations in the plugin settings' **Help** tab.
 
 == Features ==
 
