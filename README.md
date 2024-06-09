@@ -56,8 +56,8 @@ To implement this solution:
 
 ## What does install.sh do? Is it safe?
 
-This Bash script automates the management of inotify/setfacl operations, ensuring efficiency and security. It enhances the efficiency and security of cache management tasks by automating the setup and configuration processes.
-The **install.sh** script serves as a wrapper that facilitates the execution of the main **fastcgi_ops_root.sh** script from **psaux-it.github.io**. It acts as a convenient entry point for users to initiate the setup and configuration procedures seamlessly.
+This Bash script automates the management of **inotify/setfacl** operations, ensuring efficiency and security. It enhances the efficiency and security of cache management tasks by automating the setup and configuration processes.
+The [install.sh](https://github.com/psaux-it/psaux-it.github.io/blob/main/install.sh) script serves as a wrapper that facilitates the execution of the main [fastcgi_ops_root.sh](https://github.com/psaux-it/psaux-it.github.io/blob/main/fastcgi_ops_root.sh) script from [psaux-it.github.io](https://github.com/psaux-it/psaux-it.github.io). It acts as a convenient entry point for users to initiate the setup and configuration procedures seamlessly.
 Rest assured, this solution is entirely safe to use, providing a reliable and straightforward method for managing Nginx FastCGI cache purge operations on Wordpress front-end.
 
 - **Automated Setup**: Quickly sets up FastCGI cache paths and associated PHP-FPM users.
