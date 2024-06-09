@@ -1,5 +1,10 @@
 # Nginx FastCGI Cache Purge & Preload Plugin for Wordpress (NPP)
 
+🚀 If you find this project helpful, please consider supporting its development by making a donation:<br/>
+🚀 If you require assistance with NPP server-side integration, please explore our services:
+
+![GitHub Release](https://img.shields.io/github/v/release/psaux-it/nginx-fastcgi-cache-purge-and-preload?logo=github) [![Donate](https://img.shields.io/badge/Donate-PayTR-blue?style=flat&logo=visa)](https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/) [![Donate](https://img.shields.io/badge/Check-Services-blue?style=flat&logo=Linux)](https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/)
+
 [https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/235404ff-b35c-4cce-ac17-ebead39130b6](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/assets/25556606/93a94d73-1d37-4b69-9ca9-ac1bed766f86)
 
 ------
@@ -46,7 +51,7 @@ Solution involves combining **inotifywait** with **setfacl** under **root**:
 ## Implementation
 
 To implement this solution:
-1. Download latest [plugin](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/releases/tag/v2.0.1) from our releases and install to your wordpress instance 
+1. Download latest [plugin](https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/) from official wordpress plugin repository or from our latest [releases](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/releases/tag/v2.0.1) and install to your wordpress instance also you can search plugin on wordpress admin dashboard as 'fastcgi cache purge and preload for nginx'
 2. On **root** call ```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` to start automated setup
 
 ## What does install.sh do? Is it safe?
