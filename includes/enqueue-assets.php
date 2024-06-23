@@ -66,6 +66,8 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     $cache_status_nonce = wp_create_nonce('cache-status');
     // Create a nonce for auto preload option
     $update_auto_preload_option_nonce = wp_create_nonce('nppp-update-auto-preload-option');
+    // Create a nonce for auto purge option
+    $update_auto_purge_option_nonce = wp_create_nonce('nppp-update-auto-purge-option');
     // Create a nonce for api key option
     $update_api_key_option_nonce = wp_create_nonce('nppp-update-api-key-option');
     // Create a nonce for default reject regex
@@ -91,6 +93,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'clear_logs_nonce' => $clear_nginx_cache_logs_nonce,
         'send_mail_nonce' => $update_send_mail_option_nonce,
         'auto_preload_nonce' => $update_auto_preload_option_nonce,
+        'auto_purge_nonce' => $update_auto_purge_option_nonce,
         'api_key_nonce' => $update_api_key_option_nonce,
         'api_key_copy_nonce' => $update_api_key_copy_value_nonce,
         'api_preload_url_copy_nonce' => $update_rest_api_preload_url_copy_nonce,
