@@ -1869,7 +1869,7 @@ button.nppp-preload-btn[disabled] {
 .nppp-separator {
     border: none;
     border-top: 2px solid #FFA500;
-    width: 50%;
+    width: 160px;
 }
 
 /* Style for the toggle switch autopurge container */
