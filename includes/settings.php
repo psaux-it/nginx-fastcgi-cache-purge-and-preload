@@ -32,6 +32,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_api_key', 'API Key', 'nppp_nginx_cache_api_key_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_api', 'API', 'nppp_nginx_cache_api_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_schedule', 'Scheduled Cache', 'nppp_nginx_cache_schedule_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_purge_on_update', 'Purge Cache on Post/Page Update', 'nppp_nginx_cache_purge_on_update_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -468,6 +469,43 @@ function nppp_update_auto_preload_option() {
     }
 }
 
+// AJAX callback function to update auto purge option
+function nppp_update_auto_purge_option() {
+    // Verify nonce
+    if (isset($_POST['_wpnonce'])) {
+        $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
+        if (!wp_verify_nonce($nonce, 'nppp-update-auto-purge-option')) {
+            wp_send_json_error('Nonce verification failed.');
+        }
+    } else {
+        wp_send_json_error('Nonce is missing.');
+    }
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to update this option.');
+    }
+
+    // Get the posted option value and sanitize it
+    $auto_purge = isset($_POST['auto_purge']) ? sanitize_text_field(wp_unslash($_POST['auto_purge'])) : '';
+
+    // Get the current options
+    $current_options = get_option('nginx_cache_settings', array());
+
+    // Update the specific option within the array
+    $current_options['nginx_cache_purge_on_update'] = $auto_purge;
+
+    // Save the updated options
+    $updated = update_option('nginx_cache_settings', $current_options);
+
+    // Check if option is updated successfully
+    if ($updated) {
+        wp_send_json_success('Option updated successfully.');
+    } else {
+        wp_send_json_error('Error updating option.');
+    }
+}
+
 // AJAX callback function to update cache schedule option
 function nppp_update_cache_schedule_option() {
     // Verify nonce
@@ -846,6 +884,23 @@ function nppp_nginx_cache_schedule_callback() {
     <?php
 }
 
+// Callback function for the nginx_cache_purge_on_update field
+function nppp_nginx_cache_purge_on_update_callback() {
+    $options = get_option('nginx_cache_settings');
+    $auto_purge_checked = isset($options['nginx_cache_purge_on_update']) && $options['nginx_cache_purge_on_update'] === 'yes' ? 'checked="checked"' : '';
+
+    ?>
+    <input type="checkbox" name="nginx_cache_settings[nginx_cache_purge_on_update]" class="nppp-onoffswitch-checkbox-autopurge" value="yes" id="nginx_cache_purge_on_update" <?php echo esc_attr($auto_purge_checked); ?>>
+    <label class="nppp-onoffswitch-label-autopurge" for="nginx_cache_purge_on_update">
+        <span class="nppp-onoffswitch-inner-autopurge">
+            <span class="nppp-off-autopurge">OFF</span>
+            <span class="nppp-on-autopurge">ON</span>
+        </span>
+        <span class="nppp-onoffswitch-switch-autopurge"></span>
+    </label>
+    <?php
+}
+
 // Callback function to display the Reject Regex field
 function nppp_nginx_cache_reject_regex_callback() {
     $options = get_option('nginx_cache_settings');
@@ -914,7 +969,7 @@ function nppp_fetch_default_reject_regex() {
     if ($wp_filesystem === false) {
         wp_die('Failed to initialize WP Filesystem.');
     }
-    
+
     $rr_txt_file = plugin_dir_path(__FILE__) . '../includes/reject_regex.txt';
     if ($wp_filesystem->exists($rr_txt_file)) {
         $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
@@ -1064,6 +1119,9 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize Auto Preload
     $sanitized_input['nginx_cache_auto_preload'] = isset($input['nginx_cache_auto_preload']) && $input['nginx_cache_auto_preload'] === 'yes' ? 'yes' : 'no';
+
+    // Sanitize Auto Purge
+    $sanitized_input['nginx_cache_purge_on_update'] = isset($input['nginx_cache_purge_on_update']) && $input['nginx_cache_purge_on_update'] === 'yes' ? 'yes' : 'no';
 
      // Sanitize Cache Schedule
     $sanitized_input['nginx_cache_schedule'] = isset($input['nginx_cache_schedule']) && $input['nginx_cache_schedule'] === 'yes' ? 'yes' : 'no';
