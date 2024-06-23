@@ -277,6 +277,25 @@ jQuery(document).ready(function($) {
         });
     });
 
+    // Update auto purge status when state changes
+    $('#nginx_cache_purge_on_update').change(function() {
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action: 'nppp_update_auto_purge_option',
+            auto_purge: isChecked,
+            _wpnonce: nppp_admin_data.auto_purge_nonce
+        }, function(response) {
+            // Handle response
+            if (response.success) {
+                // Option updated successfully
+            } else {
+                // Error updating option, revert checkbox
+                $('#nginx_cache_purge_on_update').prop('checked', !$('#nginx_cache_purge_on_update').prop('checked'));
+                alert('Error updating option!');
+            }
+        });
+    });
+
     // Update rest api status when state changes
     $('#nginx_cache_api').change(function() {
         var isChecked = $(this).prop('checked') ? 'yes' : 'no';
