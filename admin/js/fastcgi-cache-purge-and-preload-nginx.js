@@ -791,6 +791,39 @@ jQuery(document).ready(function($) {
         }
     });
 
+    // Toggle switch rules for auto purge
+    var isChecked = $('#nginx_cache_purge_on_update').prop('checked');
+    // Update the toggle switch based on the checkbox state
+    if (isChecked) {
+        // Checkbox is checked, toggle switch to On
+        $('.nppp-onoffswitch-switch-autopurge').css('background', '#66b317');
+        $('.nppp-on-autopurge').css('color', '#ffffff');
+        $('.nppp-off-autopurge').css('color', '#000000');
+    } else {
+        // Checkbox is unchecked, toggle switch to Off
+        $('.nppp-onoffswitch-switch-autopurge').css('background', '#ea1919');
+        $('.nppp-on-autopurge').css('color', '#000000');
+        $('.nppp-off-autopurge').css('color', '#ffffff');
+    }
+
+    // Add event listener to the original checkbox
+    $('#nginx_cache_purge_on_update').change(function() {
+        // Check if the checkbox is checked
+        var isChecked = $(this).prop('checked');
+        // Update the toggle switch based on the checkbox state
+        if (isChecked) {
+            // Checkbox is checked, toggle switch to On
+            $('.nppp-onoffswitch-switch-autopurge').css('background', '#66b317');
+            $('.nppp-on-autopurge').css('color', '#ffffff');
+            $('.nppp-off-autopurge').css('color', '#000000');
+        } else {
+            // Checkbox is unchecked, toggle switch to Off
+            $('.nppp-onoffswitch-switch-autopurge').css('background', '#ea1919');
+            $('.nppp-on-autopurge').css('color', '#000000');
+            $('.nppp-off-autopurge').css('color', '#ffffff');
+        }
+    });
+
     // Unique ID copy clipboard
     jQuery('#nppp-unique-id').click(function(event) {
         var uniqueIdElement = jQuery(this);
