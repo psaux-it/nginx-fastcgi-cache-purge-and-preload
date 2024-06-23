@@ -146,6 +146,14 @@ function nppp_nginx_cache_settings_page() {
                     wp_nonce_field('nginx_cache_settings_nonce', 'nginx_cache_settings_nonce');
                     ?>
                     <table class="form-table">
+                        <!-- Start Purge Options Section -->
+                        <tr valign="top">
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Purge Options</h3></th>
+                            <td style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
+                        </tr>
                         <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-admin-site"></span> Nginx Cache Directory</th>
                             <td>
@@ -161,11 +169,24 @@ function nppp_nginx_cache_settings_page() {
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row"><span class="dashicons dashicons-email"></span> Email Address</th>
+                            <th scope="row"><span class="dashicons dashicons-update"></span> Auto Purge</th>
                             <td>
-                                <?php nppp_nginx_cache_email_callback(); ?>
-                                <p class="description">Enter an email address to get Nginx FastCGI Cache operation's notifications.</p>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-autopurge">
+                                        <?php nppp_nginx_cache_purge_on_update_callback(); ?>
+                                    </div>
+                                </div>
+                                <p class="description">Enabling this feature ensures that whenever you make changes to the content of a <strong>POST/PAGE</strong> on your website,<br></p>
+                                <p class="description">the cached version of that specific <strong>POST/PAGE</strong> is automatically cleared.</p>
                             </td>
+                        </tr>
+                        <!-- Start Preload Options Section -->
+                        <tr valign="top">
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Preload Options</h3></th>
+                            <td style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-dashboard"></span> CPU Usage Limit (%)</th>
@@ -190,6 +211,14 @@ function nppp_nginx_cache_settings_page() {
                                  <?php nppp_nginx_cache_limit_rate_callback(); ?>
                                  <p class="description">Enter a limit rate for preload action in KB/Sec. <br> Preventing excessive bandwidth usage and avoiding overwhelming the server.</p>
                             </td>
+                        </tr>
+                        <!-- Start Advanced Options Section -->
+                        <tr valign="top">
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Advanced Options</h3></th>
+                            <td style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-clock"></span> WP Schedule Cache</th>
@@ -255,6 +284,14 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">You can copy your API Key and the full REST API URLs for Purge and Preload actions via above buttons with just a click.</p>
                             </td>
                         </tr>
+                        <!-- Start Mail Options Section -->
+                        <tr valign="top">
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Mail Options</h3></th>
+                            <td style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
+                        </tr>
                         <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-email-alt"></span> Send Email Notification</th>
                             <td>
@@ -263,6 +300,21 @@ function nppp_nginx_cache_settings_page() {
                                 </div>
                                 <p class="description">Enable this feature to receive email notifications about essential plugin activities, ensuring you stay informed about preload actions, <br>cron task statuses, and general plugin updates..</p>
                             </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row"><span class="dashicons dashicons-email"></span> Email Address</th>
+                            <td>
+                                <?php nppp_nginx_cache_email_callback(); ?>
+                                <p class="description">Enter an email address to get Nginx FastCGI Cache operation's notifications.</p>
+                            </td>
+                        </tr>
+                        <!-- Start Logging Options Section -->
+                        <tr valign="top">
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Logging Options</h3></th>
+                            <td style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-archive"></span> Logs</th>
