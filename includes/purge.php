@@ -139,6 +139,40 @@ function nppp_purge_single($nginx_cache_path, $current_page_url) {
     nppp_display_admin_notice('info', "INFO ADMIN: Cache purge attempted, but the page $current_page_url is not currently found in the cache.");
 }
 
+// Purge cache automatically for modified content (post/page)
+// Will be hooked wp save_post action
+function nppp_purge_cache_on_update($post_id) {
+    // Check if this is an autosave or a post revision
+    if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+        return;
+    }
+
+    // Verify if the current user can edit the post
+    if (!current_user_can('edit_post', $post_id)) {
+        return;
+    }
+
+    // Get the plugin options
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Check if the purge cache on update setting is enabled
+    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+        // Get the URL of the post/page from $post_id which should return a well-formed URL
+        // no extra sanitization applied such as esc_url_raw here
+        // also in nppp_purge_single function we already use FILTER_VALIDATE_URL
+        $post_url = get_permalink($post_id);
+
+        // Set default cache path to prevent any errors if the option is not set
+        $default_cache_path = '/dev/shm/change-me-now';
+
+        // Get the nginx cache path from the plugin options, or use the default path if not set
+        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+
+        // Purge the cache for the current post/page URL
+        nppp_purge_single($nginx_cache_path, $post_url);
+    }
+}
+
 // Purge cache operation
 function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = false, $nppp_is_admin_bar = false) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
