@@ -159,7 +159,10 @@ function nppp_nginx_cache_settings_page() {
                             <th scope="row"><span class="dashicons dashicons-admin-site"></span> Nginx Cache Directory</th>
                             <td>
                                 <?php nppp_nginx_cache_path_callback(); ?>
-                                <p class="description">Please specify the directory path for Nginx Cache Purge operation.</p>
+                                <p class="description">Please provide the complete NGINX cache directory path required for plugin operations.</p>
+                                <p class="description">The cache directory is essential for the proper functioning of cache purge and preload actions.</p>
+                                <p class="description">It is crucial that the PHP-FPM process owner has both read and write permissions to this directory.</p>
+                                <p class="description">Without these permissions, the plugin will be unable to purge or preload the cache effectively.</p>
                                 <p class="cache-path-plugin-note">
                                     <span style="color: red;">NOTE:</span> The plugin author explicitly disclaims any liability for unintended deletions resulting<br>
                                     from incorrect directory entries. Users are solely responsible for verifying the directory's<br>
@@ -177,8 +180,8 @@ function nppp_nginx_cache_settings_page() {
                                         <?php nppp_nginx_cache_purge_on_update_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description">Enabling this feature ensures that whenever you make changes to the content of a <strong>POST/PAGE</strong> on your website,<br></p>
-                                <p class="description">the cached version of that specific <strong>POST/PAGE</strong> is automatically cleared.</p>
+                                <p class="description">Enabling this feature ensures that whenever you make changes to the content of a <strong>POST/PAGE</strong><br></p>
+                                <p class="description">on your website, the cached version of that specific <strong>POST/PAGE</strong> is automatically cleared.</p>
                             </td>
                         </tr>
                         <!-- Start Preload Options Section -->
