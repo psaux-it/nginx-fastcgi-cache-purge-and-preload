@@ -61,7 +61,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             }
 
             // Start cache preloading
-            $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=1 --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
+            // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
+            // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
+            //    speeding up cache preloading via reducing latency we use --no-check-certificate .
+            //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
+            $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=1 --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
             $output = shell_exec($command);
 
             // Write PID to file
@@ -154,7 +158,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         }
 
         // Start cache preloading
-        $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=1 --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
+        // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
+        // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
+        //    speeding up cache preloading via reducing latency we use --no-check-certificate .
+        //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
+        $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=1 --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
         $output = shell_exec($command);
 
         // Write PID to file
@@ -254,7 +262,13 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     }
 
     // Start cache preloading
-    $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -p -E -k -P \"$tmp_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --timeout=5 --tries=1 -e robots=off \"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+    // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
+    // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
+    //    speeding up cache preloading via reducing latency we use --no-check-certificate .
+    //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
+    // 3. -m (--mirror) removed here that we need single URL request
+    // 4. -w (--wait) removed we need single HTTP request
+    $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --timeout=5 --tries=1 -e robots=off \"$current_page_url\" >/dev/null 2>&1 & echo \$!";
     $output = shell_exec($command);
 
     // Write PID to file
