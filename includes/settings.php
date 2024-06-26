@@ -33,6 +33,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_api', 'API', 'nppp_nginx_cache_api_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_schedule', 'Scheduled Cache', 'nppp_nginx_cache_schedule_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_purge_on_update', 'Purge Cache on Post/Page Update', 'nppp_nginx_cache_purge_on_update_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_wait_request', 'Per Request Wait Time', 'nppp_nginx_cache_wait_request_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -214,6 +215,18 @@ function nppp_nginx_cache_settings_page() {
                             <td>
                                  <?php nppp_nginx_cache_limit_rate_callback(); ?>
                                  <p class="description">Enter a limit rate for preload action in KB/Sec. <br> Preventing excessive bandwidth usage and avoiding overwhelming the server.</p>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row"><span class="dashicons dashicons-hourglass"></span> Wait Time</th>
+                            <td>
+                                 <?php nppp_nginx_cache_wait_request_callback(); ?>
+                                 <p class="description">Wait the specified number of seconds between the retrievals. <br></p>
+                                 <p class="description">Use of this option is recommended, as it lightens the server load by making the requests less frequent. <br></p>
+                                 <p class="description">Higher values dramatically increase cache preload times, while lowering the value can increase server load (CPU, Memory, Network) .<br></p>
+                                 <p class="description">Adjust the values to find the optimal balance based on your desired server resource allocation. <br></p>
+                                 <p class="description">If you face unexpected permission issues, try incrementally increasing the value, taking small steps each time. <br></p>
+                                 <p class="description">Default: 1 second, 0 Disabled <br></p>
                             </td>
                         </tr>
                         <!-- Start Advanced Options Section -->
@@ -837,6 +850,13 @@ function nppp_nginx_cache_cpu_limit_callback() {
     echo "<input type='number' id='nginx_cache_cpu_limit' name='nginx_cache_settings[nginx_cache_cpu_limit]' min='10' max='100' value='" . esc_attr($options['nginx_cache_cpu_limit'] ?? $default_cpu_limit) . "' class='small-text' />";
 }
 
+// Callback function to display the input field for Per Request Wait Time setting
+function nppp_nginx_cache_wait_request_callback() {
+    $options = get_option('nginx_cache_settings');
+    $default_wait_time = 1;
+    echo "<input type='number' id='nginx_cache_wait_request' name='nginx_cache_settings[nginx_cache_wait_request]' min='0' max='60' value='" . esc_attr($options['nginx_cache_wait_request'] ?? $default_wait_time) . "' class='small-text' />";
+}
+
 // Callback function to display the checkbox for Send Email Notification setting
 function nppp_nginx_cache_send_mail_callback() {
     $options = get_option('nginx_cache_settings');
@@ -961,7 +981,7 @@ function nppp_nginx_cache_logs_callback() {
 // Callback function to display the input field for Limit Rate setting.
 function nppp_nginx_cache_limit_rate_callback() {
     $options = get_option('nginx_cache_settings');
-    $default_limit_rate = 1280;
+    $default_limit_rate = 1024;
     echo "<input type='number' id='nginx_cache_limit_rate' name='nginx_cache_settings[nginx_cache_limit_rate]' value='" . esc_attr($options['nginx_cache_limit_rate'] ?? $default_limit_rate) . "' class='small-text' />";
 }
 
@@ -1111,6 +1131,30 @@ function nppp_nginx_cache_settings_sanitize($input) {
         }
     }
 
+    // Sanitize and validate Per Request Wait Time
+    if (isset($input['nginx_cache_wait_request'])) {
+        // Validate Wait Time
+        $wait_time = intval($input['nginx_cache_wait_request']);
+        if ($wait_time >= 0 && $wait_time <= 60) {
+            $sanitized_input['nginx_cache_wait_request'] = $wait_time;
+        } else {
+            // Wait Time is not within range, add error message
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'invalid-wait-time',
+                'Please enter a Per Request Wait Time between 0 and 60 seconds.',
+                'error'
+            );
+            // Log error message
+            $log_message = 'ERROR: Please enter a Per Request Wait Time between 0 and 60 seconds.';
+            $log_file_path = NGINX_CACHE_LOG_FILE;
+            nppp_perform_file_operation($log_file_path, 'create');
+            if (!empty($log_file_path)) {
+                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
+            }
+        }
+    }
+
     // Sanitize Reject Regex field
     if (!empty($input['nginx_cache_reject_regex'])) {
         //$sanitized_input['nginx_cache_reject_regex'] = $input['nginx_cache_reject_regex'];
@@ -1226,6 +1270,8 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_email' => 'your-email@example.com',
         'nginx_cache_cpu_limit' => 50,
         'nginx_cache_reject_regex' => nppp_fetch_default_reject_regex(),
+        'nginx_cache_wait_request' => 1,
+        'nginx_cache_limit_rate' => 1024,
     );
 
     // Update options
