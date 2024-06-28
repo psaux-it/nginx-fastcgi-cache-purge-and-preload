@@ -32,6 +32,13 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         }
     }
 
+    // Get the plugin options
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Get the necessary option from plugin options
+    $default_wait_time = 1;
+    $nginx_cache_wait = isset($nginx_cache_settings['nginx_cache_wait_request']) ? $nginx_cache_settings['nginx_cache_wait_request'] : $default_wait_time;
+
     // Here we check where preload request comes from. We have several routes.
     // If nppp_is_auto_preload is false thats mean we are here by one of following routes.
     // Preload(settings page), Preload(admin bar), Preload CRON or Preload REST API.
@@ -65,7 +72,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
             //    speeding up cache preloading via reducing latency we use --no-check-certificate .
             //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-            $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=1 --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
+            $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=$nginx_cache_wait --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
             $output = shell_exec($command);
 
             // Write PID to file
@@ -162,7 +169,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
         //    speeding up cache preloading via reducing latency we use --no-check-certificate .
         //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-        $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=1 --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
+        $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=$nginx_cache_wait --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
         $output = shell_exec($command);
 
         // Write PID to file
