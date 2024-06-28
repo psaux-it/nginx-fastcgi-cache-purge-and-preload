@@ -194,6 +194,19 @@ function nppp_nginx_cache_settings_page() {
                             <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
+                            <th scope="row"><span class="dashicons dashicons-update"></span> Auto Preload</th>
+                            <td>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-preload">
+                                        <?php nppp_nginx_cache_auto_preload_callback(); ?>
+                                    </div>
+                                </div>
+                                <p class="description">Enable this feature to automatically preload the cache after purging. This ensures fast page load times for visitors by proactively caching content.</p>
+                                <p class="description">When enabled, your website's cache will preload with the latest content automatically after purge, ensuring quick loading times even for uncached pages.</p>
+                                <p class="description">This feature is particularly useful for dynamic websites with frequently changing content.</p>
+                            </td>
+                        </tr>
+                        <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-dashboard"></span> CPU Usage Limit (%)</th>
                             <td>
                                 <?php nppp_nginx_cache_cpu_limit_callback(); ?>
@@ -271,19 +284,6 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">Enable this feature to automatically schedule cache preloading task at specified intervals. This ensures that your website's cache is consistently updated, <br> optimizing performance and reducing server load.</p>
                                 <p class="description">When enabled, your website will automatically refresh its cache according to the configured schedule, keeping content up-to-date and reducing load times for visitors.</p>
                                 <p class="description">This feature is particularly useful for maintaining peak performance on dynamic websites with content that changes periodically. By scheduling caching tasks <br> you can ensure that your site remains fast and responsive, even during peak traffic periods.</p>
-                            </td>
-                        </tr>
-                        <tr valign="top">
-                            <th scope="row"><span class="dashicons dashicons-update"></span> Auto Preload</th>
-                            <td>
-                                <div class="nppp-auto-preload-container">
-                                    <div class="nppp-onoffswitch-preload">
-                                        <?php nppp_nginx_cache_auto_preload_callback(); ?>
-                                    </div>
-                                </div>
-                                <p class="description">Enable this feature to automatically preload the cache after purging. This ensures fast page load times for visitors by proactively caching content.</p>
-                                <p class="description">When enabled, your website's cache will preload with the latest content automatically after purge, ensuring quick loading times even for uncached pages.</p>
-                                <p class="description">This feature is particularly useful for dynamic websites with frequently changing content.</p>
                             </td>
                         </tr>
                         <tr valign="top">
