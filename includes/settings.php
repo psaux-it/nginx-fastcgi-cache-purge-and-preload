@@ -161,8 +161,9 @@ function nppp_nginx_cache_settings_page() {
                             <td>
                                 <?php nppp_nginx_cache_path_callback(); ?>
                                 <p class="description">Please provide the complete NGINX cache directory path required for plugin operations.</p>
-                                <p class="description">The cache directory is essential for the proper functioning of cache purge and preload actions.</p>
-                                <p class="description">It is crucial that the PHP-FPM process owner has both read and write permissions to this directory.</p>
+                                <p class="description">The properly configured NGINX cache directory, which must be set in the server-side NGINX configuration,</p>
+                                <p class="description">is essential for the effective functioning of cache purge and preload actions.</p>
+                                <p class="description">It is crucial that the php process owner has both read and write permissions to this directory.</p>
                                 <p class="description">Without these permissions, the plugin will be unable to purge or preload the cache effectively.</p>
                                 <p class="cache-path-plugin-note">
                                     <span style="color: red;">NOTE:</span> The plugin author explicitly disclaims any liability for unintended deletions resulting<br>
@@ -182,7 +183,8 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <p class="description">Enabling this feature ensures that whenever you make changes to the content of a <strong>POST/PAGE</strong><br></p>
-                                <p class="description">on your website, the cached version of that specific <strong>POST/PAGE</strong> is automatically cleared.</p>
+                                <p class="description">on your website, the cached version of that specific <strong>POST/PAGE</strong> is automatically cleared.<br></p>
+                                <p class="description">Additionally, if the <strong>Auto Preload</strong> option is enabled, the cache for the <strong>POST/PAGE</strong> will be automatically preloaded after the cache is purged.</p>
                             </td>
                         </tr>
                         <!-- Start Preload Options Section -->
@@ -204,6 +206,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">Enable this feature to automatically preload the cache after purging. This ensures fast page load times for visitors by proactively caching content.</p>
                                 <p class="description">When enabled, your website's cache will preload with the latest content automatically after purge, ensuring quick loading times even for uncached pages.</p>
                                 <p class="description">This feature is particularly useful for dynamic websites with frequently changing content.</p>
+                                <p class="description">This feature triggers when either <strong>Auto Purge</strong> is enabled for a single <strong>POST/PAGE</strong> or when the <strong>Purge All</strong> cache action is used.</p>
                             </td>
                         </tr>
                         <tr valign="top">
