@@ -21,7 +21,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_style('nppp_jquery-ui-tabs-theme', plugins_url('../admin/css/jquery-ui-theme.css', __FILE__), array(), '1.13.2');
 
     // Enqueue CSS files for dataTables
-    wp_enqueue_style('nppp_datatables-css', plugins_url('../admin/css/dataTables.min.css', __FILE__), array(), '2.0.7');
+    wp_enqueue_style('nppp_datatables-css', plugins_url('../admin/css/dataTables.min.css', __FILE__), array(), '2.0.8');
 
     // Enqueue CSS files for Tempus Dominus Date/Time Picker
     wp_enqueue_style('nppp_tempus-dominus-css', plugins_url('../admin/css/tempus-dominus.min.css', __FILE__), array(), '6.9.4');
@@ -41,7 +41,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     * License: MIT (https://datatables.net/license/mit)
     */
     // Enqueue JavaScript files for dataTables
-    wp_enqueue_script('nppp_datatables-js', plugins_url('../admin/js/dataTables.min.js', __FILE__), array('jquery'), '2.0.7', true);
+    wp_enqueue_script('nppp_datatables-js', plugins_url('../admin/js/dataTables.min.js', __FILE__), array('jquery'), '2.0.8', true);
 
     /*!
     * Tempus Dominus Date Time Picker v6.9.4
