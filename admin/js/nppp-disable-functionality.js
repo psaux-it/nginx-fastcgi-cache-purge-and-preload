@@ -58,7 +58,7 @@ jQuery(document).ready(function($) {
         });
     }
 
-    // Check if we're on the plugin settings page and disable checkbox functionality
+    // Check if we're on the plugin settings page and disable plugin functionality
     if ($('#nppp-nginx-tabs').length > 0) {
         // Disable Purge and Preload buttons on settings page
         $('.nppp-button').addClass('disabled').removeAttr('href');
@@ -95,7 +95,7 @@ jQuery(document).ready(function($) {
         // disable generate API key button
         $('#api-key-button').prop('disabled', true);
 
-        // disable rest url stuff
+        // disable rest API stuff
         $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({
             'pointer-events': 'none',
             'opacity': '0.5',
@@ -111,7 +111,7 @@ jQuery(document).ready(function($) {
             'cursor': 'not-allowed'
         });
 
-        // disable settings page form submit button
+        // disable main form submit button
         $('input[type="submit"][name="submit"].button-primary').prop('disabled', true);
     }
 });
