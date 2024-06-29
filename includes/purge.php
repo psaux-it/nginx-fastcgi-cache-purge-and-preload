@@ -51,13 +51,33 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
     }
 }
 
-// on page purge operations
-function nppp_purge_single($nginx_cache_path, $current_page_url) {
+// Auto Purge & On page purge operations
+function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purge = false) {
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
         return false;
+    }
+
+    // Get the PIDFILE location
+    $this_script_path = dirname(plugin_dir_path(__FILE__));
+    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+
+    // Get the status of Auto Preload option
+    $options = get_option('nginx_cache_settings');
+    $nppp_auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
+
+    // First, we need to check if any active cache preloading action is ongoing,
+    // Purging the cache for a single page or post, whether manually (On-Page) or automatically via Auto Purge option during content updates,
+    // can create complications if active cache preloading is ongoing.
+    if ($wp_filesystem->exists($PIDFILE)) {
+        $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
+
+        if ($pid > 0 && posix_kill($pid, 0)) {
+            nppp_display_admin_notice('info', "INFO: Auto Purge for page $current_page_url halted due to active preload. You can stop cache preloading via Purge All.");
+            return;
+        }
     }
 
     // Check read and write permissions for the cache path before purge cache
@@ -77,7 +97,6 @@ function nppp_purge_single($nginx_cache_path, $current_page_url) {
     }
 
     try {
-
         // Traverse the cache directory and its subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
@@ -122,7 +141,17 @@ function nppp_purge_single($nginx_cache_path, $current_page_url) {
                     // Perform the purge action (delete the file)
                     $deleted = $wp_filesystem->delete($cache_path);
                     if ($deleted) {
-                        nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
+                         if (!$nppp_auto_purge && !$nppp_auto_preload) {
+                             nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
+                         } else {
+                             if ($nppp_auto_purge && $nppp_auto_preload) {
+                                 nppp_preload_cache_on_update($current_page_url);
+                             } elseif ($nppp_auto_purge) {
+                                 nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
+                             } elseif ($nppp_auto_preload) {
+                                  nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
+                             }
+                        }
                     } else {
                         nppp_display_admin_notice('error', "ERROR UNKNOWN: An unexpected error occurred while purging cache for page $current_page_url. Please file a bug on plugin support page.");
                     }
@@ -169,7 +198,8 @@ function nppp_purge_cache_on_update($post_id) {
         $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
         // Purge the cache for the current post/page URL
-        nppp_purge_single($nginx_cache_path, $post_url);
+        // Auto Purge true
+        nppp_purge_single($nginx_cache_path, $post_url, true);
     }
 }
 
