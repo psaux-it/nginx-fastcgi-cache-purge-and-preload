@@ -13,14 +13,16 @@ jQuery(document).ready(function($) {
     var purgeButton = $('#wp-admin-bar-purge-cache');
     var statusButton = $('#wp-admin-bar-fastcgi-cache-status');
 
-    // Select the status and advanced tabs
-    var statusTab = $('#nppp-nginx-tabs > ul > li:nth-child(2) a');
-    var advancedTab = $('#nppp-nginx-tabs > ul > li:nth-child(3) a');
-
     // Check if the preload button exists and disable it
     if (preloadButton.length > 0) {
         // Disable the button
-        preloadButton.find('a').css('pointer-events', 'none');
+        preloadButton.find('a').css({
+            'pointer-events': 'none',
+            'opacity': '0.5',
+            'cursor': 'not-allowed'
+        });
+
+        // Prevent default click behavior
         preloadButton.find('a').click(function(event) {
             event.preventDefault();
         });
@@ -29,22 +31,34 @@ jQuery(document).ready(function($) {
     // Check if the purge button exists and disable it
     if (purgeButton.length > 0) {
         // Disable the button
-        purgeButton.find('a').css('pointer-events', 'none');
+        purgeButton.find('a').css({
+            'pointer-events': 'none',
+            'opacity': '0.5',
+            'cursor': 'not-allowed'
+        });
+
+        // Prevent default click behavior
         purgeButton.find('a').click(function(event) {
             event.preventDefault();
         });
     }
 
-    // Check if the purge button exists and disable it
+    // Check if the status button exists and disable it
     if (statusButton.length > 0) {
         // Disable the button
-        statusButton.find('a').css('pointer-events', 'none');
+        statusButton.find('a').css({
+            'pointer-events': 'none',
+            'opacity': '0.5',
+            'cursor': 'not-allowed'
+        });
+
+        // Prevent default click behavior
         statusButton.find('a').click(function(event) {
             event.preventDefault();
         });
     }
 
-    // Check if we're on the plugin settings page and disable plugin functionality
+    // Check if we're on the plugin settings page and disable checkbox functionality
     if ($('#nppp-nginx-tabs').length > 0) {
         // Disable Purge and Preload buttons on settings page
         $('.nppp-button').addClass('disabled').removeAttr('href');
@@ -81,14 +95,13 @@ jQuery(document).ready(function($) {
         // disable generate API key button
         $('#api-key-button').prop('disabled', true);
 
-        // disable rest API stuff
+        // disable rest url stuff
         $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({
             'pointer-events': 'none',
             'opacity': '0.5',
             'cursor': 'not-allowed'
         }).off('click').on('click', function(event) {
             event.preventDefault();
-            event.stopImmediatePropagation();
         });
 
         // style cron status heading
@@ -98,7 +111,7 @@ jQuery(document).ready(function($) {
             'cursor': 'not-allowed'
         });
 
-        // disable main form submit button
+        // disable settings page form submit button
         $('input[type="submit"][name="submit"].button-primary').prop('disabled', true);
     }
 });
