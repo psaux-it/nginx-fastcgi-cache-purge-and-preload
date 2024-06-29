@@ -1958,3 +1958,10 @@ button.nppp-preload-btn[disabled] {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* style send e-mail toggle switch settings accordingly */
+.nppp-onoffswitch-checkbox:disabled + .nppp-onoffswitch-label {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
