@@ -142,7 +142,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
             $nppp_single_action = false;
             break;
         case 'nppp_purge_cache_single':
-            nppp_purge_single($nginx_cache_path, $clean_current_page_url);
+            nppp_purge_single($nginx_cache_path, $clean_current_page_url, false);
             $nppp_single_action = true;
             break;
         case 'nppp_preload_cache_single':
