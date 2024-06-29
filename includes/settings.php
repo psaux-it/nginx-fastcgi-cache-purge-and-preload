@@ -1019,9 +1019,9 @@ function nppp_nginx_cache_api_key_callback() {
     echo "<div style='display: block; align-items: baseline;'>";
     echo "<button id='api-key-button' class='button nginx-api-key-button'>Generate API Key</button>";
     echo "<div style='display: flex; align-items: baseline; margin-top: 8px; margin-bottom: 8px;'>";
-    echo "<p class='description' id='nppp-api-key' style='margin-right: 10px;'><span class='nppp-tooltip'>API Key<span class='nppp-tooltiptext'>Click to copy API Key</span></span></p>";
-    echo "<p class='description' id='nppp-purge-url' style='margin-right: 10px;'><span class='nppp-tooltip'>Purge URL<span class='nppp-tooltiptext'>Click to copy full REST API URL for Purge</span></span></p>";
-    echo "<p class='description' id='nppp-preload-url'><span class='nppp-tooltip'>Preload URL<span class='nppp-tooltiptext'>Click to copy full REST API URL for Preload</span></span></p>";
+    echo "<p class='description' id='nppp-api-key' style='margin-right: 10px;'><span class='nppp-tooltip'>API Key<span class='nppp-tooltiptext'>Click to copy REST API Key</span></span></p>";
+    echo "<p class='description' id='nppp-purge-url' style='margin-right: 10px;'><span class='nppp-tooltip'>Purge URL<span class='nppp-tooltiptext'>Click to copy full REST API CURL URL for Purge</span></span></p>";
+    echo "<p class='description' id='nppp-preload-url'><span class='nppp-tooltip'>Preload URL<span class='nppp-tooltiptext'>Click to copy full REST API CURL URL for Preload</span></span></p>";
     echo "</div>";
     echo "</div>";
 }
