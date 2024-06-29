@@ -175,7 +175,7 @@ function nppp_nginx_cache_settings_page() {
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row"><span class="dashicons dashicons-update"></span> Auto Purge</th>
+                            <th scope="row"><span class="dashicons dashicons-trash"></span> Auto Purge</th>
                             <td>
                                 <div class="nppp-auto-preload-container">
                                     <div class="nppp-onoffswitch-autopurge">
