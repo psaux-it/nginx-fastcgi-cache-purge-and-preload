@@ -97,6 +97,14 @@ function nppp_my_faq_html() {
             </div>
           </div>
 
+          <h3 class="nppp-question">Why can’t I use my preferred path for the Nginx Cache Directory?</h3>
+          <div class="nppp-answer">
+            <div class="nppp-answer-content">
+              <p>The Nginx Cache Directory option has restrictions on the paths you can use to prevent accidental deletions or harm to critical system files. By default, certain paths, like ‘/home’ and other vital system directories, ar>
+              <p>While this might limit your options, it ensures your system’s security. Recommended directories to choose from, such as ‘/dev/shm/’ or ‘/var/cache/’, which are commonly used for caching purposes and are generally safer.>
+            </div>
+          </div>  
+
           <h3 class="nppp-question">What is different about this plugin compared to other Nginx Cache Plugins?</h3>
           <div class="nppp-answer">
             <div class="nppp-answer-content">
