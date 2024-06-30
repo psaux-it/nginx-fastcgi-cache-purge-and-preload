@@ -68,14 +68,14 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     $options = get_option('nginx_cache_settings');
     $nppp_auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
 
-    // First, we need to check if any active cache preloading action is ongoing,
-    // Purging the cache for a single page or post, whether manually (On-Page) or automatically via Auto Purge option during content updates,
-    // can create complications if active cache preloading is ongoing.
+    // First, check if any active cache preloading action is in progress.
+    // Purging the cache for a single page or post, whether done manually (Fonrtpage) or automatically (Auto Purge) after content updates,
+    // can cause issues if there is an active cache preloading process.
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
         if ($pid > 0 && posix_kill($pid, 0)) {
-            nppp_display_admin_notice('info', "INFO: Auto Purge for page $current_page_url halted due to active preload. You can stop cache preloading via Purge All.");
+            nppp_display_admin_notice('info', "INFO: Auto Purge for page $current_page_url halted due to ongoing cache preloading. You can stop cache preloading anytime via Purge All.");
             return;
         }
     }
