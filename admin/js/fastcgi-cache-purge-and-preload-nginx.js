@@ -50,7 +50,7 @@ jQuery(document).ready(function($) {
                 if (response.trim() !== '') {
                     // Replace loading spinner with content
                     $('#status-content-placeholder').html(response).show();
-                    
+
                     // Update status metrics after the content is inserted into the DOM
                     npppupdateStatus();
                 } else {
@@ -241,6 +241,13 @@ jQuery(document).ready(function($) {
 
     // Update send mail status when state changes
     $('#nginx_cache_send_mail').change(function() {
+        // Calculate the notification position
+        var sendMailElement = jQuery(this);
+        var clickToCopySpanMail = sendMailElement.next('.nppp-onoffswitch-label');
+        var clickToCopySpanOffsetMail = clickToCopySpanMail.offset();
+        var notificationLeftMail = clickToCopySpanOffsetMail.left + clickToCopySpanMail.outerWidth() + 10;
+        var notificationTopMail = clickToCopySpanOffsetMail.top;
+
         var isChecked = $(this).prop('checked') ? 'yes' : 'no';
         $.post(nppp_admin_data.ajaxurl, {
             action: 'nppp_update_send_mail_option',
@@ -249,7 +256,29 @@ jQuery(document).ready(function($) {
         }, function(response) {
             // Handle response
             if (response.success) {
-                // Option updated successfully
+                // Show a small notification indicating successful saved option
+                var notification = document.createElement('div');
+                notification.textContent = 'Saved';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftMail + 'px';
+                notification.style.top = notificationTopMail + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_send_mail').prop('checked', !$('#nginx_cache_send_mail').prop('checked'));
@@ -258,8 +287,15 @@ jQuery(document).ready(function($) {
         });
     });
 
-     // Update auto preload status when state changes
+    // Update auto preload status when state changes
     $('#nginx_cache_auto_preload').change(function() {
+        // Calculate the notification position
+        var autoPreloadElement = jQuery(this);
+        var clickToCopySpanAutoPreload = autoPreloadElement.next('.nppp-onoffswitch-label-preload');
+        var clickToCopySpanOffsetAutoPreload = clickToCopySpanAutoPreload.offset();
+        var notificationLeftAutoPreload = clickToCopySpanOffsetAutoPreload.left + clickToCopySpanAutoPreload.outerWidth() + 10;
+        var notificationTopAutoPreload = clickToCopySpanOffsetAutoPreload.top;
+
         var isChecked = $(this).prop('checked') ? 'yes' : 'no';
         $.post(nppp_admin_data.ajaxurl, {
             action: 'nppp_update_auto_preload_option',
@@ -268,7 +304,29 @@ jQuery(document).ready(function($) {
         }, function(response) {
             // Handle response
             if (response.success) {
-                // Option updated successfully
+                // Show a small notification indicating successfully saved option
+                var notification = document.createElement('div');
+                notification.textContent = 'Saved';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftAutoPreload + 'px';
+                notification.style.top = notificationTopAutoPreload + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_auto_preload').prop('checked', !$('#nginx_cache_auto_preload').prop('checked'));
@@ -279,6 +337,13 @@ jQuery(document).ready(function($) {
 
     // Update auto purge status when state changes
     $('#nginx_cache_purge_on_update').change(function() {
+        // Calculate the notification position
+        var autoPurgeElement = jQuery(this);
+        var clickToCopySpanAutoPurge = autoPurgeElement.next('.nppp-onoffswitch-label-autopurge');
+        var clickToCopySpanOffsetAutoPurge = clickToCopySpanAutoPurge.offset();
+        var notificationLeftAutoPurge = clickToCopySpanOffsetAutoPurge.left + clickToCopySpanAutoPurge.outerWidth() + 10;
+        var notificationTopAutoPurge = clickToCopySpanOffsetAutoPurge.top;
+
         var isChecked = $(this).prop('checked') ? 'yes' : 'no';
         $.post(nppp_admin_data.ajaxurl, {
             action: 'nppp_update_auto_purge_option',
@@ -287,7 +352,29 @@ jQuery(document).ready(function($) {
         }, function(response) {
             // Handle response
             if (response.success) {
-                // Option updated successfully
+                // Show a small notification indicating successfully saved option
+                var notification = document.createElement('div');
+                notification.textContent = 'Saved';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftAutoPurge + 'px';
+                notification.style.top = notificationTopAutoPurge + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_purge_on_update').prop('checked', !$('#nginx_cache_purge_on_update').prop('checked'));
@@ -298,6 +385,13 @@ jQuery(document).ready(function($) {
 
     // Update rest api status when state changes
     $('#nginx_cache_api').change(function() {
+        // Calculate the notification position
+        var restApiElement = jQuery(this);
+        var clickToCopySpanRestApi = restApiElement.next('.nppp-onoffswitch-label-api');
+        var clickToCopySpanOffsetRestApi = clickToCopySpanRestApi.offset();
+        var notificationLeftRestApi = clickToCopySpanOffsetRestApi.left + clickToCopySpanRestApi.outerWidth() + 10;
+        var notificationTopRestApi = clickToCopySpanOffsetRestApi.top;
+
         var isChecked = $(this).prop('checked') ? 'yes' : 'no';
         $.post(nppp_admin_data.ajaxurl, {
             action: 'nppp_update_api_option',
@@ -306,7 +400,29 @@ jQuery(document).ready(function($) {
         }, function(response) {
             // Handle response
             if (response.success) {
-                // Option updated successfully
+                // Show a small notification indicating successfully saved option
+                var notification = document.createElement('div');
+                notification.textContent = 'Saved';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftRestApi + 'px';
+                notification.style.top = notificationTopRestApi + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_api').prop('checked', !$('#nginx_cache_api').prop('checked'));
@@ -428,6 +544,13 @@ jQuery(document).ready(function($) {
 
     // Update cache schedule status when state changes
     $('#nginx_cache_schedule').change(function() {
+        // Calculate the notification position
+        var cacheScheduleElement = jQuery(this);
+        var clickToCopySpanCacheSchedule = cacheScheduleElement.next('.nppp-onoffswitch-label-schedule');
+        var clickToCopySpanOffsetCacheSchedule = clickToCopySpanCacheSchedule.offset();
+        var notificationLeftCacheSchedule = clickToCopySpanOffsetCacheSchedule.left + clickToCopySpanCacheSchedule.outerWidth() + 10;
+        var notificationTopCacheSchedule = clickToCopySpanOffsetCacheSchedule.top;
+
         var isChecked = $(this).prop('checked') ? 'yes' : 'no';
 
         // Disable or enable the "Set Cron" button based on toggle switch status
@@ -445,9 +568,32 @@ jQuery(document).ready(function($) {
         }, function(response) {
             // Handle response
             if (response.success) {
-                // Option updated successfully
+                // Show a small notification indicating successfully saved option
+                var notification = document.createElement('div');
+                notification.textContent = 'Saved';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftCacheSchedule + 'px';
+                notification.style.top = notificationTopCacheSchedule + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
+
                 switch (response.data) {
-                    case 'unscheduled_success':
+                    case 'Option updated successfully. Unschedule success.':
                         $('.scheduled-events-list').empty();
                         var html = '<div class="nppp-scheduled-event">';
                         html += '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
@@ -455,10 +601,10 @@ jQuery(document).ready(function($) {
                         html += '</div>';
                         $('.scheduled-events-list').append(html);
                         break;
-                    case 'no_event_found':
+                    case 'Option updated successfully. No event found.':
                         // Handle case where no existing event was found
                         break;
-                    case 'updated_success':
+                    case 'Option updated successfully.':
                         // Handle generic success case
                         break;
                     default:
