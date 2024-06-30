@@ -1,1 +1,1 @@
-<?php // Silence is golden-psauxit
+<?php // Silence is golden
