@@ -167,7 +167,7 @@ Release date: 2024-06-30
 * Add support on new --wait option (Manage server load while cache preloading)
 * Auto Preload now supports also single POST/PAGE cache preloading when Auto Purge enabled
 * Improve Nginx cache preload performance (--no-check-certificate)
-* Improve UI/UX (regroup plugin settings)
+* Improve UI/UX (regroup plugin settings, add notification for saving AJAX-powered plugin options)
 * Improve Help tab informations
 * Globally prevent purging cache while cache preloading is in progress (Onpage Purge & Auto Purge & Manual Purge)
 * Improve Help tab informations
