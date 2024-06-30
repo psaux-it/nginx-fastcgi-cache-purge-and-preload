@@ -1,7 +1,7 @@
 /**
  * Styles for FastCGI Cache Purge and Preload for Nginx
  * Description: This CSS file contains styles for the FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.1
+ * Version: 2.0.2
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -1863,4 +1863,105 @@ button.nppp-preload-btn[disabled] {
 #nppp-status-tab .cache-status table {
     width: 100%;
     border-collapse: collapse;
+}
+
+/* Style for the settings tab group separator */
+.nppp-separator {
+    border: none;
+    border-top: 2px solid #FFA500;
+    width: 160px;
+}
+
+/* Style for the toggle switch autopurge container */
+.nppp-onoffswitch-autopurge {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default autopurge checkbox */
+.nppp-onoffswitch-checkbox-autopurge {
+    display: none;
+}
+
+/* Style for the autopurge toggle switch label */
+.nppp-onoffswitch-label-autopurge {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* Style for autopurge text labels (On and Off) */
+.nppp-onoffswitch-inner-autopurge .nppp-on-autopurge,
+.nppp-onoffswitch-inner-autopurge .nppp-off-autopurge {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-autopurge .nppp-on-autopurge {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-autopurge .nppp-off-autopurge {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Style for the toggle switch handle autopurge */
+.nppp-onoffswitch-switch-autopurge {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #66b317;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Adjust styles based on checkbox state */
+#nginx_cache_purge_on_update:checked + .nppp-onoffswitch-label-autopurge .nppp-onoffswitch-inner-autopurge .nppp-on-autopurge {
+    color: #23282d;
+}
+
+#nginx_cache_purge_on_update:checked + .nppp-onoffswitch-label-autopurge .nppp-onoffswitch-switch-autopurge {
+    width: 55px;
+    transform: translateX(60px);
+    background: #ea1919;
+}
+
+/* Show the Off label */
+.nppp-onoffswitch-checkbox-autopurge + .nppp-onoffswitch-label-autopurge .nppp-off-autopurge {
+    display: block;
+}
+
+/* Hide the original autopurge checkbox */
+#nginx_cache_purge_on_update {
+    position: absolute;
+    left: -99em;
+}
+
+/* style disabled auto purge settings accordingly */
+.nppp-onoffswitch-checkbox-autopurge[disabled] + .nppp-onoffswitch-label-autopurge {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* style send e-mail toggle switch settings accordingly */
+.nppp-onoffswitch-checkbox:disabled + .nppp-onoffswitch-label {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
 }

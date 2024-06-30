@@ -3,7 +3,7 @@
  * Plugin Name:       FastCGI Cache Purge and Preload for Nginx
  * Plugin URI:        https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload
  * Description:       Manage FastCGI Cache Purge and Preload for Nginx operations directly from your WordPress admin dashboard.
- * Version:           2.0.1
+ * Version:           2.0.2
  * Author:            Hasan ÇALIŞIR
  * Author URI:        https://www.psauxit.com/
  * Author Email:      hasan.calisir@psauxit.com
@@ -55,6 +55,7 @@ add_action('wp_ajax_nppp_clear_nginx_cache_logs', 'nppp_clear_nginx_cache_logs')
 add_action('wp_ajax_nppp_get_nginx_cache_logs', 'nppp_get_nginx_cache_logs');
 add_action('wp_ajax_nppp_update_send_mail_option', 'nppp_update_send_mail_option');
 add_action('wp_ajax_nppp_update_auto_preload_option', 'nppp_update_auto_preload_option');
+add_action('wp_ajax_nppp_update_auto_purge_option', 'nppp_update_auto_purge_option');
 add_action('wp_ajax_nppp_cache_status', 'nppp_cache_status_callback');
 add_action('wp_ajax_nppp_load_premium_content', 'nppp_load_premium_content_callback');
 add_action('wp_ajax_nppp_purge_cache_premium', 'nppp_purge_cache_premium_callback');
@@ -73,7 +74,7 @@ add_filter('cron_schedules', 'nppp_custom_every_min_schedule');
 add_action('npp_cache_preload_event', 'nppp_create_scheduled_event_preload_callback');
 add_action('npp_cache_preload_status_event', 'nppp_create_scheduled_event_preload_status_callback');
 add_action('wp_ajax_nppp_get_active_cron_events_ajax', 'nppp_get_active_cron_events_ajax');
-// front actions messages
+add_action('save_post', 'nppp_purge_cache_on_update');
 add_action('wp', function() {
     if (is_user_logged_in() && current_user_can('administrator') && isset($_GET['nppp_front'])) {
         $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';

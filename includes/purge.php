@@ -2,7 +2,7 @@
 /**
  * Purge action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.1
+ * Version: 2.0.2
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -51,13 +51,33 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
     }
 }
 
-// on page purge operations
-function nppp_purge_single($nginx_cache_path, $current_page_url) {
+// Auto Purge & On page purge operations
+function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purge = false) {
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
         return false;
+    }
+
+    // Get the PIDFILE location
+    $this_script_path = dirname(plugin_dir_path(__FILE__));
+    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+
+    // Get the status of Auto Preload option
+    $options = get_option('nginx_cache_settings');
+    $nppp_auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
+
+    // First, check if any active cache preloading action is in progress.
+    // Purging the cache for a single page or post, whether done manually (Fonrtpage) or automatically (Auto Purge) after content updates,
+    // can cause issues if there is an active cache preloading process.
+    if ($wp_filesystem->exists($PIDFILE)) {
+        $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
+
+        if ($pid > 0 && posix_kill($pid, 0)) {
+            nppp_display_admin_notice('info', "INFO: Auto Purge for page $current_page_url halted due to ongoing cache preloading. You can stop cache preloading anytime via Purge All.");
+            return;
+        }
     }
 
     // Check read and write permissions for the cache path before purge cache
@@ -77,7 +97,6 @@ function nppp_purge_single($nginx_cache_path, $current_page_url) {
     }
 
     try {
-
         // Traverse the cache directory and its subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
@@ -122,7 +141,17 @@ function nppp_purge_single($nginx_cache_path, $current_page_url) {
                     // Perform the purge action (delete the file)
                     $deleted = $wp_filesystem->delete($cache_path);
                     if ($deleted) {
-                        nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
+                         if (!$nppp_auto_purge && !$nppp_auto_preload) {
+                             nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
+                         } else {
+                             if ($nppp_auto_purge && $nppp_auto_preload) {
+                                 nppp_preload_cache_on_update($current_page_url);
+                             } elseif ($nppp_auto_purge) {
+                                 nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
+                             } elseif ($nppp_auto_preload) {
+                                  nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
+                             }
+                        }
                     } else {
                         nppp_display_admin_notice('error', "ERROR UNKNOWN: An unexpected error occurred while purging cache for page $current_page_url. Please file a bug on plugin support page.");
                     }
@@ -137,6 +166,41 @@ function nppp_purge_single($nginx_cache_path, $current_page_url) {
 
     // Return false if the URL is not found
     nppp_display_admin_notice('info', "INFO ADMIN: Cache purge attempted, but the page $current_page_url is not currently found in the cache.");
+}
+
+// Purge cache automatically for modified content (post/page)
+// Will be hooked wp save_post action
+function nppp_purge_cache_on_update($post_id) {
+    // Check if this is an autosave or a post revision
+    if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+        return;
+    }
+
+    // Verify if the current user can edit the post
+    if (!current_user_can('edit_post', $post_id)) {
+        return;
+    }
+
+    // Get the plugin options
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Check if the purge cache on update setting is enabled
+    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+        // Get the URL of the post/page from $post_id which should return a well-formed URL
+        // no extra sanitization applied such as esc_url_raw here
+        // also in nppp_purge_single function we already use FILTER_VALIDATE_URL
+        $post_url = get_permalink($post_id);
+
+        // Set default cache path to prevent any errors if the option is not set
+        $default_cache_path = '/dev/shm/change-me-now';
+
+        // Get the nginx cache path from the plugin options, or use the default path if not set
+        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+
+        // Purge the cache for the current post/page URL
+        // Auto Purge true
+        nppp_purge_single($nginx_cache_path, $post_url, true);
+    }
 }
 
 // Purge cache operation

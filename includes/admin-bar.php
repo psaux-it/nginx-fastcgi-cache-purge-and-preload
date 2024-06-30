@@ -2,7 +2,7 @@
 /**
  * WP Admin Bar code for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Admin Bar code for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.1
+ * Version: 2.0.2
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -142,7 +142,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
             $nppp_single_action = false;
             break;
         case 'nppp_purge_cache_single':
-            nppp_purge_single($nginx_cache_path, $clean_current_page_url);
+            nppp_purge_single($nginx_cache_path, $clean_current_page_url, false);
             $nppp_single_action = true;
             break;
         case 'nppp_preload_cache_single':

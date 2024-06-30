@@ -2,7 +2,7 @@
 /**
  * Preload action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains preload action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.1
+ * Version: 2.0.2
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -32,6 +32,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         }
     }
 
+    // Get the plugin options
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $default_wait_time = 1;
+    $nginx_cache_wait = isset($nginx_cache_settings['nginx_cache_wait_request']) ? $nginx_cache_settings['nginx_cache_wait_request'] : $default_wait_time;
+
     // Here we check where preload request comes from. We have several routes.
     // If nppp_is_auto_preload is false thats mean we are here by one of following routes.
     // Preload(settings page), Preload(admin bar), Preload CRON or Preload REST API.
@@ -46,8 +51,8 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             // Create PID file
             if (!$wp_filesystem->exists($PIDFILE)) {
                 if (!nppp_perform_file_operation($PIDFILE, 'create')) {
-                    nppp_display_admin_notice('error', 'FATAL PERMISSION ERROR: Failed to create PID file.');
-                    exit(1);
+                    nppp_display_admin_notice('error', 'FATAL ERROR: Failed to create PID file.');
+                    return;
                 }
             }
 
@@ -60,16 +65,20 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 $cpulimit = 0;
             }
 
-            // Start cache preloading
-            $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=1 --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
+            // Start cache preloading for whole website (Preload All)
+            // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
+            // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
+            //    speeding up cache preloading via reducing latency we use --no-check-certificate .
+            //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
+            $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=$nginx_cache_wait --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
             $output = shell_exec($command);
 
-            // Write PID to file
+            // Get the process ID
             if ($output !== null) {
                 $parts = explode(" ", $output);
                 $pid = end($parts);
 
-                // Sleep for 2 seconds to check background process status again
+                // Sleep for 1 seconds to check background process status again
                 sleep(1);
 
                 // Check if the process is still running
@@ -122,14 +131,14 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                     nppp_display_admin_notice('error', 'ERROR COMMAND: Cannot start FastCGI cache preload! Please check your exclude endpoints reject regex pattern is correct.');
                 }
             } else {
-                nppp_display_admin_notice('error', 'ERROR COMMAND: Cannot start FastCGI cache preload! Please file a bug on plugin support page.');
+                nppp_display_admin_notice('error', 'ERROR COMMAND: Cannot start FastCGI cache preload! Please report this issue on the plugin support page.');
             }
         } elseif ($status === 1) {
             nppp_display_admin_notice('error', 'ERROR PERMISSION: Cannot purge FastCGI cache to start cache preloading. Please read help section of the plugin.');
         } elseif ($status === 3) {
             nppp_display_admin_notice('error', 'ERROR PATH: Your FastCGI cache PATH (' . $nginx_cache_path . ') not found. Please check your FastCGI cache path.');
         } else {
-            nppp_display_admin_notice('error', 'ERROR UNKNOWN: An unexpected error occurred while preloading the FastCGI cache. Please file a bug on plugin support page.');
+            nppp_display_admin_notice('error', 'ERROR UNKNOWN: An unexpected error occurred while preloading the FastCGI cache. Please report this issue on the plugin support page.');
         }
     // Here preload request comes from Purge(Settings Page) or Purge(Admin Bar)
     // As mentioned before auto preload feature only triggers with purge action itself
@@ -140,8 +149,8 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         // Create PID file
         if (!$wp_filesystem->exists($PIDFILE)) {
             if (!nppp_perform_file_operation($PIDFILE, 'create')) {
-                nppp_display_admin_notice('error', 'FATAL PERMISSION ERROR: Failed to create PID file.');
-                exit(1);
+                nppp_display_admin_notice('error', 'FATAL ERROR: Failed to create PID file.');
+                return;
             }
         }
 
@@ -153,11 +162,15 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             $cpulimit = 0;
         }
 
-        // Start cache preloading
-        $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=1 --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
+        // Start cache preloading for whole website (Preload All)
+        // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
+        // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
+        //    speeding up cache preloading via reducing latency we use --no-check-certificate .
+        //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
+        $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=$nginx_cache_wait --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
         $output = shell_exec($command);
 
-        // Write PID to file
+        // Get the process ID
         if ($output !== null) {
             $parts = explode(" ", $output);
             $pid = end($parts);
@@ -201,7 +214,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 nppp_display_admin_notice('error', 'ERROR COMMAND: Cannot start FastCGI cache preload! Please check your exclude endpoints reject regex pattern is correct.');
             }
         } else {
-            nppp_display_admin_notice('error', 'ERROR CRITICAL: Cannot start FastCGI cache preload! Please file a bug on plugin support page.');
+            nppp_display_admin_notice('error', 'ERROR CRITICAL: Cannot start FastCGI cache preload! Please report this issue on the plugin support page.');
         }
     }
 }
@@ -253,11 +266,17 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         return;
     }
 
-    // Start cache preloading
-    $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -p -E -k -P \"$tmp_path\" --no-cookies --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --timeout=5 --tries=1 -e robots=off \"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+    // Start cache preloading for single post/page (when manual On-page preload action triggers)
+    // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
+    // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
+    //    speeding up cache preloading via reducing latency we use --no-check-certificate .
+    //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
+    // 3. -m (--mirror) removed here that we need single URL request
+    // 4. -w (--wait) removed we need single HTTP request
+    $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --timeout=5 --tries=1 -e robots=off \"$current_page_url\" >/dev/null 2>&1 & echo \$!";
     $output = shell_exec($command);
 
-    // Write PID to file
+    // Get the process ID
     if ($output !== null) {
         $parts = explode(" ", $output);
         $pid = end($parts);
@@ -265,15 +284,91 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         // Check if the process is still running
         $isRunning = posix_kill($pid, 0);
 
-        // let's continue if process still alive after two sec
+        // let's continue if process still alive
         if ($isRunning) {
+            // Write process ID to file
             nppp_perform_file_operation($PIDFILE, 'write', $pid);
             $default_success_message = "SUCCESS ADMIN: Cache preloading has started in the background for page $current_page_url";
             nppp_display_admin_notice('success', $default_success_message);
         } else {
-            nppp_display_admin_notice('error', "ERROR COMMAND: Cannot start FastCGI cache preload for page $current_page_url, Please file a bug on plugin support page.");
+            nppp_display_admin_notice('error', "ERROR COMMAND: Cannot start FastCGI cache preload for page $current_page_url. Please report this issue on the plugin support page.");
         }
     } else {
-        nppp_display_admin_notice('error', "ERROR COMMAND: Cannot start FastCGI cache preload for page $current_page_url, Please file a bug on plugin support page.");
+        nppp_display_admin_notice('error', "ERROR COMMAND: Cannot start FastCGI cache preload for page $current_page_url. Please report this issue on the plugin support page.");
+    }
+}
+
+// Only triggers conditionally if Auto Purge & Auto Preload enabled at the same time
+// Only preloads cache for single post/page if Auto Purge triggered before for this modified/updated post/page
+// This functions not trgiggers after On-Page purge actions
+function nppp_preload_cache_on_update($current_page_url) {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        return false;
+    }
+
+    // Get the plugin options
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Set default options to prevent any error
+    $default_cache_path = '/dev/shm/change-me-now';
+    $default_limit_rate = 1024;
+    $default_reject_regex = nppp_fetch_default_reject_regex();
+
+    // Get the necessary data for preload action from plugin options
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+    $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
+    $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
+
+    // Extra data for preload action
+    $this_script_path = dirname(plugin_dir_path(__FILE__));
+    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+
+    // Here we already purged cache successfully and we did not face any permission issue
+    // So we don't need to check any permission issues again.
+    // Also all url valitadation the sanitization actions have been taken before in purge cache step
+    // So we don't need to valitade the sanitize url again here.
+    // Also we are sure that there is no any active ongoing preload process here that we checked in purge cache step
+    // So we don't need to check any on going active preload process here.
+
+    // We just need to create a PIDFILE if it does not exist yet
+    if (!$wp_filesystem->exists($PIDFILE)) {
+        if (!nppp_perform_file_operation($PIDFILE, 'create')) {
+            nppp_display_admin_notice('error', 'FATAL ERROR: Failed to create PID file.');
+            return;
+        }
+    }
+
+    // Start cache preloading for single post/page (when Auto Purge & Auto Preload enabled both)
+    // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
+    // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
+    //    speeding up cache preloading via reducing latency we use --no-check-certificate .
+    //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
+    // 3. -m (--mirror) removed here that we need single URL request
+    // 4. -w (--wait) removed we need single HTTP request
+    $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --timeout=5 --tries=1 -e robots=off \"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+    $output = shell_exec($command);
+
+    // Get the process ID
+    if ($output !== null) {
+        $parts = explode(" ", $output);
+        $pid = end($parts);
+
+        // Check if the process is still running
+        $isRunning = posix_kill($pid, 0);
+
+        // let's continue if process still alive
+        if ($isRunning) {
+            // Write process ID to file
+            nppp_perform_file_operation($PIDFILE, 'write', $pid);
+            $default_success_message = "SUCCESS ADMIN: Cache purged and auto preloading started for page $current_page_url";
+            nppp_display_admin_notice('success', $default_success_message);
+        } else {
+            nppp_display_admin_notice('error', "ERROR COMMAND: Cache purged, but unable to start auto preloading for $current_page_url. Please report this issue on the plugin support page.");
+        }
+    } else {
+        nppp_display_admin_notice('error', "ERROR COMMAND: Cache purged, but unable to start auto preloading for $current_page_url. Please report this issue on the plugin support page.");
     }
 }

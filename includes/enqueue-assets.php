@@ -2,7 +2,7 @@
 /**
  * Enqueue custom CSS and JavaScript files for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains enqueue assets functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.1
+ * Version: 2.0.2
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -21,13 +21,13 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_style('nppp_jquery-ui-tabs-theme', plugins_url('../admin/css/jquery-ui-theme.css', __FILE__), array(), '1.13.2');
 
     // Enqueue CSS files for dataTables
-    wp_enqueue_style('nppp_datatables-css', plugins_url('../admin/css/dataTables.min.css', __FILE__), array(), '2.0.7');
+    wp_enqueue_style('nppp_datatables-css', plugins_url('../admin/css/dataTables.min.css', __FILE__), array(), '2.0.8');
 
     // Enqueue CSS files for Tempus Dominus Date/Time Picker
     wp_enqueue_style('nppp_tempus-dominus-css', plugins_url('../admin/css/tempus-dominus.min.css', __FILE__), array(), '6.9.4');
 
     // Enqueue CSS files for Nginx FastCGI Cache Purge and Preload Plugin
-    wp_enqueue_style('nppp_admin-css', plugins_url('../admin/css/fastcgi-cache-purge-and-preload-nginx.css', __FILE__), array(), '2.0.1');
+    wp_enqueue_style('nppp_admin-css', plugins_url('../admin/css/fastcgi-cache-purge-and-preload-nginx.css', __FILE__), array(), '2.0.2');
 
     // Enqueue jQuery UI core, jQuery UI Tabs, jQuery UI Accordion
     wp_enqueue_script('jquery-ui-core');
@@ -41,7 +41,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     * License: MIT (https://datatables.net/license/mit)
     */
     // Enqueue JavaScript files for dataTables
-    wp_enqueue_script('nppp_datatables-js', plugins_url('../admin/js/dataTables.min.js', __FILE__), array('jquery'), '2.0.7', true);
+    wp_enqueue_script('nppp_datatables-js', plugins_url('../admin/js/dataTables.min.js', __FILE__), array('jquery'), '2.0.8', true);
 
     /*!
     * Tempus Dominus Date Time Picker v6.9.4
@@ -54,7 +54,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_script('nppp_tempus-dominus-js', plugins_url('../admin/js/tempus-dominus.min.js', __FILE__), array('nppp_popper-js'), '6.9.4', true);
 
     // Enqueue JavaScript files for Nginx FastCGI Cache Purge and Preload Plugin
-    wp_enqueue_script('nppp_admin-js', plugins_url('../admin/js/fastcgi-cache-purge-and-preload-nginx.js', __FILE__), array('jquery'), '2.0.1', true);
+    wp_enqueue_script('nppp_admin-js', plugins_url('../admin/js/fastcgi-cache-purge-and-preload-nginx.js', __FILE__), array('jquery'), '2.0.2', true);
 
     // Retrieve plugin options.
     $options = get_option('nginx_cache_settings');
@@ -66,6 +66,8 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     $cache_status_nonce = wp_create_nonce('cache-status');
     // Create a nonce for auto preload option
     $update_auto_preload_option_nonce = wp_create_nonce('nppp-update-auto-preload-option');
+    // Create a nonce for auto purge option
+    $update_auto_purge_option_nonce = wp_create_nonce('nppp-update-auto-purge-option');
     // Create a nonce for api key option
     $update_api_key_option_nonce = wp_create_nonce('nppp-update-api-key-option');
     // Create a nonce for default reject regex
@@ -91,6 +93,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'clear_logs_nonce' => $clear_nginx_cache_logs_nonce,
         'send_mail_nonce' => $update_send_mail_option_nonce,
         'auto_preload_nonce' => $update_auto_preload_option_nonce,
+        'auto_purge_nonce' => $update_auto_purge_option_nonce,
         'api_key_nonce' => $update_api_key_option_nonce,
         'api_key_copy_nonce' => $update_api_key_copy_value_nonce,
         'api_preload_url_copy_nonce' => $update_rest_api_preload_url_copy_nonce,
@@ -138,7 +141,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
         $output = shell_exec('type wget');
         if (empty($output)) {
             // Wget is not available
-            wp_enqueue_script('preload-button-disable', plugins_url('../admin/js/preload-button-disable.js', __FILE__), array('jquery'), '2.0.1', true);
+            wp_enqueue_script('preload-button-disable', plugins_url('../admin/js/preload-button-disable.js', __FILE__), array('jquery'), '2.0.2', true);
         } else {
             // Wget is available, dequeue the preload-button-disable.js if it's already enqueued
             wp_dequeue_script('preload-button-disable');
@@ -147,7 +150,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
     } else {
         // This plugin only works on Linux with nginx
         // Disable plugin functionality to prevent unexpected behaviors.
-        wp_enqueue_script('nppp-disable-functionality', plugins_url('../admin/js/nppp-disable-functionality.js', __FILE__), array('jquery'), '2.0.1', true);
+        wp_enqueue_script('nppp-disable-functionality', plugins_url('../admin/js/nppp-disable-functionality.js', __FILE__), array('jquery'), '2.0.2', true);
     }
 }
 
@@ -158,9 +161,9 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
         if (wp_verify_nonce($nonce, 'nppp_redirect_nonce')) {
             if (!is_admin()) {
                 // Enqueue CSS files for Nginx FastCGI Cache Purge and Preload Plugin
-                wp_enqueue_style('nppp_admin-front-css', plugins_url('../frontend/css/fastcgi-cache-purge-and-preload-nginx-front.css', __FILE__), array(), '2.0.1');
+                wp_enqueue_style('nppp_admin-front-css', plugins_url('../frontend/css/fastcgi-cache-purge-and-preload-nginx-front.css', __FILE__), array(), '2.0.2');
                 // Enqueue JavaScript files for Nginx FastCGI Cache Purge and Preload Plugin frontend
-                wp_enqueue_script('nppp_admin-front-js', plugins_url('../frontend/js/fastcgi-cache-purge-and-preload-nginx-front.js', __FILE__), array('jquery'), '2.0.1', true);
+                wp_enqueue_script('nppp_admin-front-js', plugins_url('../frontend/js/fastcgi-cache-purge-and-preload-nginx-front.js', __FILE__), array('jquery'), '2.0.2', true);
             }
         }
     }
@@ -168,11 +171,11 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
     // Check plugin requirements and limit the functionality accordingly on front-end
     $nppp_met = nppp_plugin_requirements_met();
     if (!$nppp_met) {
-        wp_enqueue_script('nppp-disable-functionality-front', plugins_url('../frontend/js/nppp-disable-functionality-front.js', __FILE__), array('jquery'), '2.0.1', true);
+        wp_enqueue_script('nppp-disable-functionality-front', plugins_url('../frontend/js/nppp-disable-functionality-front.js', __FILE__), array('jquery'), '2.0.2', true);
     } else {
         wp_dequeue_script('nppp-disable-functionality-front');
     }
 
     // Enqueue CSS and JavaScript files for frontend admin bar icon style set
-    // wp_enqueue_script('nppp-admin-bar-icon-front', plugins_url('../frontend/js/nppp-admin-bar-icon-front.js', __FILE__), array('jquery'), '2.0.1', true);
+    // wp_enqueue_script('nppp-admin-bar-icon-front', plugins_url('../frontend/js/nppp-admin-bar-icon-front.js', __FILE__), array('jquery'), '2.0.2', true);
 }

@@ -1,7 +1,7 @@
 /**
  * Frontend JavaScript for FastCGI Cache Purge and Preload for Nginx
- * Description: This JavaScript file contains functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.1
+ * Description: This JavaScript file contains functions that disabling frontpage admin bar actions for FastCGI Cache Purge and Preload for Nginx
+ * Version: 2.0.2
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -19,43 +19,73 @@ jQuery(document).ready(function($) {
     // Check if the preload button exists and disable it
     if (preloadButton.length > 0) {
         // Disable the button
-        preloadButton.find('a').css('pointer-events', 'none');
+        preloadButton.find('a').css({
+            'pointer-events': 'none',
+            'opacity': '0.5',
+            'cursor': 'not-allowed'
+        });
+
+        // Prevent default click behavior
         preloadButton.find('a').click(function(event) {
             event.preventDefault();
         });
     }
 
-    // Check if the preload button exists and disable it
+    // Check if the purge button exists and disable it
     if (purgeButton.length > 0) {
         // Disable the button
-        purgeButton.find('a').css('pointer-events', 'none');
+        purgeButton.find('a').css({
+            'pointer-events': 'none',
+            'opacity': '0.5',
+            'cursor': 'not-allowed'
+        });
+
+        // Prevent default click behavior
         purgeButton.find('a').click(function(event) {
             event.preventDefault();
         });
     }
 
-    // Check if the preload button exists and disable it
+    // Check if the status button exists and disable it
     if (statusButton.length > 0) {
         // Disable the button
-        statusButton.find('a').css('pointer-events', 'none');
+        statusButton.find('a').css({
+            'pointer-events': 'none',
+            'opacity': '0.5',
+            'cursor': 'not-allowed'
+        });
+
+        // Prevent default click behavior
         statusButton.find('a').click(function(event) {
             event.preventDefault();
         });
     }
 
-    // Check if the preload button exists and disable it
+    // Check if the purge single button exists and disable it
     if (purgeButtonSingle.length > 0) {
         // Disable the button
-        purgeButtonSingle.find('a').css('pointer-events', 'none');
+        purgeButtonSingle.find('a').css({
+            'pointer-events': 'none',
+            'opacity': '0.5',
+            'cursor': 'not-allowed'
+        });
+
+        // Prevent default click behavior
         purgeButtonSingle.find('a').click(function(event) {
             event.preventDefault();
         });
     }
 
-    // Check if the preload button exists and disable it
+    // Check if the preload single button exists and disable it
     if (preloadButtonSingle.length > 0) {
         // Disable the button
-        preloadButtonSingle.find('a').css('pointer-events', 'none');
+        preloadButtonSingle.find('a').css({
+            'pointer-events': 'none',
+            'opacity': '0.5',
+            'cursor': 'not-allowed'
+        });
+
+        // Prevent default click behavior
         preloadButtonSingle.find('a').click(function(event) {
             event.preventDefault();
         });

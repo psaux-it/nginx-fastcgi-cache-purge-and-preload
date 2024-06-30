@@ -2,7 +2,7 @@
 /**
  * Settings page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains settings page functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.1
+ * Version: 2.0.2
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -32,6 +32,8 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_api_key', 'API Key', 'nppp_nginx_cache_api_key_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_api', 'API', 'nppp_nginx_cache_api_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_schedule', 'Scheduled Cache', 'nppp_nginx_cache_schedule_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_purge_on_update', 'Purge Cache on Post/Page Update', 'nppp_nginx_cache_purge_on_update_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_wait_request', 'Per Request Wait Time', 'nppp_nginx_cache_wait_request_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -146,11 +148,23 @@ function nppp_nginx_cache_settings_page() {
                     wp_nonce_field('nginx_cache_settings_nonce', 'nginx_cache_settings_nonce');
                     ?>
                     <table class="form-table">
+                        <!-- Start Purge Options Section -->
+                        <tr valign="top">
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Purge Options</h3></th>
+                            <td style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
+                        </tr>
                         <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-admin-site"></span> Nginx Cache Directory</th>
                             <td>
                                 <?php nppp_nginx_cache_path_callback(); ?>
-                                <p class="description">Please specify the directory path for Nginx Cache Purge operation.</p>
+                                <p class="description">Please provide the complete NGINX cache directory path required for plugin operations.</p>
+                                <p class="description">The properly configured NGINX cache directory, which must be set in the server-side NGINX configuration,</p>
+                                <p class="description">is essential for the effective functioning of cache purge and preload actions.</p>
+                                <p class="description">It is crucial that the php process owner has both read and write permissions to this directory.</p>
+                                <p class="description">Without these permissions, the plugin will be unable to purge or preload the cache effectively.</p>
                                 <p class="cache-path-plugin-note">
                                     <span style="color: red;">NOTE:</span> The plugin author explicitly disclaims any liability for unintended deletions resulting<br>
                                     from incorrect directory entries. Users are solely responsible for verifying the directory's<br>
@@ -161,17 +175,45 @@ function nppp_nginx_cache_settings_page() {
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row"><span class="dashicons dashicons-email"></span> Email Address</th>
+                            <th scope="row"><span class="dashicons dashicons-trash"></span> Auto Purge</th>
                             <td>
-                                <?php nppp_nginx_cache_email_callback(); ?>
-                                <p class="description">Enter an email address to get Nginx FastCGI Cache operation's notifications.</p>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-autopurge">
+                                        <?php nppp_nginx_cache_purge_on_update_callback(); ?>
+                                    </div>
+                                </div>
+                                <p class="description">Enabling this feature ensures that whenever you make changes to the content of a <strong>POST/PAGE</strong><br></p>
+                                <p class="description">on your website, the cached version of that specific <strong>POST/PAGE</strong> is automatically cleared.<br></p>
+                                <p class="description">Additionally, if the <strong>Auto Preload</strong> option is enabled, the cache for the <strong>POST/PAGE</strong> will be automatically preloaded after the cache is purged.</p>
+                            </td>
+                        </tr>
+                        <!-- Start Preload Options Section -->
+                        <tr valign="top">
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Preload Options</h3></th>
+                            <td style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row"><span class="dashicons dashicons-update"></span> Auto Preload</th>
+                            <td>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-preload">
+                                        <?php nppp_nginx_cache_auto_preload_callback(); ?>
+                                    </div>
+                                </div>
+                                <p class="description">Enable this feature to automatically preload the cache after purging. This ensures fast page load times for visitors by proactively caching content.</p>
+                                <p class="description">When enabled, your website's cache will preload with the latest content automatically after purge, ensuring quick loading times even for uncached pages.</p>
+                                <p class="description">This feature is particularly useful for dynamic websites with frequently changing content.</p>
+                                <p class="description">This feature triggers when either <strong>Auto Purge</strong> is enabled for a single <strong>POST/PAGE</strong> or when the <strong>Purge All</strong> cache action is used.</p>
                             </td>
                         </tr>
                         <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-dashboard"></span> CPU Usage Limit (%)</th>
                             <td>
                                 <?php nppp_nginx_cache_cpu_limit_callback(); ?>
-                                <p class="description">Enter the CPU usage limit for preload operation. <br> Please note that Preload action is CPU intensive task and could cause high server loads. <br> You need "cpulimit" installed on your system and higly recommended (10-100%).</p>
+                                <p class="description">Enter the CPU usage limit for preload operation (%). <br> Please note that Preload action is CPU intensive task and could cause high server loads. <br> You need "cpulimit" installed on your system and higly recommended (10-100%).</p>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -190,6 +232,26 @@ function nppp_nginx_cache_settings_page() {
                                  <?php nppp_nginx_cache_limit_rate_callback(); ?>
                                  <p class="description">Enter a limit rate for preload action in KB/Sec. <br> Preventing excessive bandwidth usage and avoiding overwhelming the server.</p>
                             </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row"><span class="dashicons dashicons-hourglass"></span> Wait Time</th>
+                            <td>
+                                 <?php nppp_nginx_cache_wait_request_callback(); ?>
+                                 <p class="description">Wait the specified number of seconds between the retrievals. <br></p>
+                                 <p class="description">Use of this option is recommended, as it lightens the server load by making the requests less frequent. <br></p>
+                                 <p class="description">Higher values dramatically increase cache preload times, while lowering the value can increase server load (CPU, Memory, Network) .<br></p>
+                                 <p class="description">Adjust the values to find the optimal balance based on your desired server resource allocation. <br></p>
+                                 <p class="description">If you face unexpected permission issues, try incrementally increasing the value, taking small steps each time. <br></p>
+                                 <p class="description">Default: 1 second, 0 Disabled <br></p>
+                            </td>
+                        </tr>
+                        <!-- Start Advanced Options Section -->
+                        <tr valign="top">
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Advanced Options</h3></th>
+                            <td style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-clock"></span> WP Schedule Cache</th>
@@ -228,19 +290,6 @@ function nppp_nginx_cache_settings_page() {
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row"><span class="dashicons dashicons-update"></span> Auto Preload</th>
-                            <td>
-                                <div class="nppp-auto-preload-container">
-                                    <div class="nppp-onoffswitch-preload">
-                                        <?php nppp_nginx_cache_auto_preload_callback(); ?>
-                                    </div>
-                                </div>
-                                <p class="description">Enable this feature to automatically preload the cache after purging. This ensures fast page load times for visitors by proactively caching content.</p>
-                                <p class="description">When enabled, your website's cache will preload with the latest content automatically after purge, ensuring quick loading times even for uncached pages.</p>
-                                <p class="description">This feature is particularly useful for dynamic websites with frequently changing content.</p>
-                            </td>
-                        </tr>
-                        <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-admin-network"></span> REST API</th>
                             <td>
                                 <div class="nppp-auto-preload-container">
@@ -255,6 +304,14 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">You can copy your API Key and the full REST API URLs for Purge and Preload actions via above buttons with just a click.</p>
                             </td>
                         </tr>
+                        <!-- Start Mail Options Section -->
+                        <tr valign="top">
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Mail Options</h3></th>
+                            <td style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
+                        </tr>
                         <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-email-alt"></span> Send Email Notification</th>
                             <td>
@@ -263,6 +320,21 @@ function nppp_nginx_cache_settings_page() {
                                 </div>
                                 <p class="description">Enable this feature to receive email notifications about essential plugin activities, ensuring you stay informed about preload actions, <br>cron task statuses, and general plugin updates..</p>
                             </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row"><span class="dashicons dashicons-email"></span> Email Address</th>
+                            <td>
+                                <?php nppp_nginx_cache_email_callback(); ?>
+                                <p class="description">Enter an email address to get Nginx FastCGI Cache operation's notifications.</p>
+                            </td>
+                        </tr>
+                        <!-- Start Logging Options Section -->
+                        <tr valign="top">
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Logging Options</h3></th>
+                            <td style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-archive"></span> Logs</th>
@@ -404,6 +476,43 @@ function nppp_update_auto_preload_option() {
 
     // Update the specific option within the array
     $current_options['nginx_cache_auto_preload'] = $auto_preload;
+
+    // Save the updated options
+    $updated = update_option('nginx_cache_settings', $current_options);
+
+    // Check if option is updated successfully
+    if ($updated) {
+        wp_send_json_success('Option updated successfully.');
+    } else {
+        wp_send_json_error('Error updating option.');
+    }
+}
+
+// AJAX callback function to update auto purge option
+function nppp_update_auto_purge_option() {
+    // Verify nonce
+    if (isset($_POST['_wpnonce'])) {
+        $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
+        if (!wp_verify_nonce($nonce, 'nppp-update-auto-purge-option')) {
+            wp_send_json_error('Nonce verification failed.');
+        }
+    } else {
+        wp_send_json_error('Nonce is missing.');
+    }
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to update this option.');
+    }
+
+    // Get the posted option value and sanitize it
+    $auto_purge = isset($_POST['auto_purge']) ? sanitize_text_field(wp_unslash($_POST['auto_purge'])) : '';
+
+    // Get the current options
+    $current_options = get_option('nginx_cache_settings', array());
+
+    // Update the specific option within the array
+    $current_options['nginx_cache_purge_on_update'] = $auto_purge;
 
     // Save the updated options
     $updated = update_option('nginx_cache_settings', $current_options);
@@ -744,6 +853,13 @@ function nppp_nginx_cache_cpu_limit_callback() {
     echo "<input type='number' id='nginx_cache_cpu_limit' name='nginx_cache_settings[nginx_cache_cpu_limit]' min='10' max='100' value='" . esc_attr($options['nginx_cache_cpu_limit'] ?? $default_cpu_limit) . "' class='small-text' />";
 }
 
+// Callback function to display the input field for Per Request Wait Time setting
+function nppp_nginx_cache_wait_request_callback() {
+    $options = get_option('nginx_cache_settings');
+    $default_wait_time = 1;
+    echo "<input type='number' id='nginx_cache_wait_request' name='nginx_cache_settings[nginx_cache_wait_request]' min='0' max='60' value='" . esc_attr($options['nginx_cache_wait_request'] ?? $default_wait_time) . "' class='small-text' />";
+}
+
 // Callback function to display the checkbox for Send Email Notification setting
 function nppp_nginx_cache_send_mail_callback() {
     $options = get_option('nginx_cache_settings');
@@ -790,6 +906,23 @@ function nppp_nginx_cache_schedule_callback() {
             <span class="nppp-on-schedule">ON</span>
         </span>
         <span class="nppp-onoffswitch-switch-schedule"></span>
+    </label>
+    <?php
+}
+
+// Callback function for the nginx_cache_purge_on_update field
+function nppp_nginx_cache_purge_on_update_callback() {
+    $options = get_option('nginx_cache_settings');
+    $auto_purge_checked = isset($options['nginx_cache_purge_on_update']) && $options['nginx_cache_purge_on_update'] === 'yes' ? 'checked="checked"' : '';
+
+    ?>
+    <input type="checkbox" name="nginx_cache_settings[nginx_cache_purge_on_update]" class="nppp-onoffswitch-checkbox-autopurge" value="yes" id="nginx_cache_purge_on_update" <?php echo esc_attr($auto_purge_checked); ?>>
+    <label class="nppp-onoffswitch-label-autopurge" for="nginx_cache_purge_on_update">
+        <span class="nppp-onoffswitch-inner-autopurge">
+            <span class="nppp-off-autopurge">OFF</span>
+            <span class="nppp-on-autopurge">ON</span>
+        </span>
+        <span class="nppp-onoffswitch-switch-autopurge"></span>
     </label>
     <?php
 }
@@ -851,7 +984,7 @@ function nppp_nginx_cache_logs_callback() {
 // Callback function to display the input field for Limit Rate setting.
 function nppp_nginx_cache_limit_rate_callback() {
     $options = get_option('nginx_cache_settings');
-    $default_limit_rate = 1280;
+    $default_limit_rate = 1024;
     echo "<input type='number' id='nginx_cache_limit_rate' name='nginx_cache_settings[nginx_cache_limit_rate]' value='" . esc_attr($options['nginx_cache_limit_rate'] ?? $default_limit_rate) . "' class='small-text' />";
 }
 
@@ -862,7 +995,7 @@ function nppp_fetch_default_reject_regex() {
     if ($wp_filesystem === false) {
         wp_die('Failed to initialize WP Filesystem.');
     }
-    
+
     $rr_txt_file = plugin_dir_path(__FILE__) . '../includes/reject_regex.txt';
     if ($wp_filesystem->exists($rr_txt_file)) {
         $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
@@ -886,9 +1019,9 @@ function nppp_nginx_cache_api_key_callback() {
     echo "<div style='display: block; align-items: baseline;'>";
     echo "<button id='api-key-button' class='button nginx-api-key-button'>Generate API Key</button>";
     echo "<div style='display: flex; align-items: baseline; margin-top: 8px; margin-bottom: 8px;'>";
-    echo "<p class='description' id='nppp-api-key' style='margin-right: 10px;'><span class='nppp-tooltip'>API Key<span class='nppp-tooltiptext'>Click to copy API Key</span></span></p>";
-    echo "<p class='description' id='nppp-purge-url' style='margin-right: 10px;'><span class='nppp-tooltip'>Purge URL<span class='nppp-tooltiptext'>Click to copy full REST API URL for Purge</span></span></p>";
-    echo "<p class='description' id='nppp-preload-url'><span class='nppp-tooltip'>Preload URL<span class='nppp-tooltiptext'>Click to copy full REST API URL for Preload</span></span></p>";
+    echo "<p class='description' id='nppp-api-key' style='margin-right: 10px;'><span class='nppp-tooltip'>API Key<span class='nppp-tooltiptext'>Click to copy REST API Key</span></span></p>";
+    echo "<p class='description' id='nppp-purge-url' style='margin-right: 10px;'><span class='nppp-tooltip'>Purge URL<span class='nppp-tooltiptext'>Click to copy full REST API CURL URL for Purge</span></span></p>";
+    echo "<p class='description' id='nppp-preload-url'><span class='nppp-tooltip'>Preload URL<span class='nppp-tooltiptext'>Click to copy full REST API CURL URL for Preload</span></span></p>";
     echo "</div>";
     echo "</div>";
 }
@@ -1001,6 +1134,30 @@ function nppp_nginx_cache_settings_sanitize($input) {
         }
     }
 
+    // Sanitize and validate Per Request Wait Time
+    if (isset($input['nginx_cache_wait_request'])) {
+        // Validate Wait Time
+        $wait_time = intval($input['nginx_cache_wait_request']);
+        if ($wait_time >= 0 && $wait_time <= 60) {
+            $sanitized_input['nginx_cache_wait_request'] = $wait_time;
+        } else {
+            // Wait Time is not within range, add error message
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'invalid-wait-time',
+                'Please enter a Per Request Wait Time between 0 and 60 seconds.',
+                'error'
+            );
+            // Log error message
+            $log_message = 'ERROR: Please enter a Per Request Wait Time between 0 and 60 seconds.';
+            $log_file_path = NGINX_CACHE_LOG_FILE;
+            nppp_perform_file_operation($log_file_path, 'create');
+            if (!empty($log_file_path)) {
+                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
+            }
+        }
+    }
+
     // Sanitize Reject Regex field
     if (!empty($input['nginx_cache_reject_regex'])) {
         //$sanitized_input['nginx_cache_reject_regex'] = $input['nginx_cache_reject_regex'];
@@ -1012,6 +1169,9 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize Auto Preload
     $sanitized_input['nginx_cache_auto_preload'] = isset($input['nginx_cache_auto_preload']) && $input['nginx_cache_auto_preload'] === 'yes' ? 'yes' : 'no';
+
+    // Sanitize Auto Purge
+    $sanitized_input['nginx_cache_purge_on_update'] = isset($input['nginx_cache_purge_on_update']) && $input['nginx_cache_purge_on_update'] === 'yes' ? 'yes' : 'no';
 
      // Sanitize Cache Schedule
     $sanitized_input['nginx_cache_schedule'] = isset($input['nginx_cache_schedule']) && $input['nginx_cache_schedule'] === 'yes' ? 'yes' : 'no';
@@ -1113,6 +1273,8 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_email' => 'your-email@example.com',
         'nginx_cache_cpu_limit' => 50,
         'nginx_cache_reject_regex' => nppp_fetch_default_reject_regex(),
+        'nginx_cache_wait_request' => 1,
+        'nginx_cache_limit_rate' => 1024,
     );
 
     // Update options
