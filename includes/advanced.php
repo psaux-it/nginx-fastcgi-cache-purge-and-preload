@@ -111,7 +111,7 @@ function nppp_purge_cache_premium_callback() {
         wp_send_json_error('You do not have permission to access this page.');
     }
 
-    // log path
+    // Create log file
     $log_file_path = NGINX_CACHE_LOG_FILE;
     nppp_perform_file_operation($log_file_path, 'create');
 
@@ -123,6 +123,21 @@ function nppp_purge_cache_premium_callback() {
 
     if ($wp_filesystem === false) {
         wp_send_json_error('Failed to initialize WP Filesystem');
+    }
+
+    // Get the PID file path
+    $this_script_path = dirname(plugin_dir_path(__FILE__));
+    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+
+    // First, check if any cache preloading action is in progress.
+    // Purging the cache for a single page or post in Advanced tab while cache preloading is in progress can cause issues
+    if ($wp_filesystem->exists($PIDFILE)) {
+        $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
+
+        if ($pid > 0 && posix_kill($pid, 0)) {
+            $error_message = "INFO ADMIN: Purge cache halted due to ongoing cache preloading. You can stop cache preloading anytime via Purge All.";
+            wp_send_json_error($error_message);
+        }
     }
 
     // Get the file path from the AJAX request and sanitize it
