@@ -4,22 +4,38 @@ Donate link: https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordp
 Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
-Tested up to: 6.5.3
-Stable tag: 2.0.1
+Tested up to: 6.5.5
+Stable tag: 2.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Manage FastCGI Cache Purge and Preload for Nginx operations directly from your WordPress admin dashboard.
+Manage Nginx Cache Purge and Preload operations directly from your WordPress admin dashboard.
 
 == Description ==
 
-This plugin allows WordPress users to manage FastCGI Cache Purge and Preload for Nginx operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.
+This plugin allows WordPress users to manage Nginx Cache Purge and Preload operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.
+
+== Features ==
+
+🚀**Purge All Nginx Cache**: Completely clear all cached data stored by Nginx.
+🚀**Preload All Nginx Cache**: Populate the Nginx cache with the most recent data for the entire website.
+🚀**Auto Preload Nginx Cache**: Automatically preload the cache after purging, ensuring fast page load times by caching content proactively. This feature is triggered when Auto Purge is enabled for a single POST/PAGE or when the Purge All cache action is used.
+🚀**Auto Purge Nginx Cache**: Automatically purge the cached version of a POST/PAGE whenever its content is changed. Additionally, if the Auto Preload option is enabled, the cache for the POST/PAGE will be automatically preloaded after the cache is purged.
+🚀**Schedule Cache Purge & Preload via WP Cron**: Automate the purge and preload process using WordPress Cron jobs.
+🚀**Remote Nginx Cache Purge & Preload via REST API**: Remotely trigger cache purging and preloading through REST API endpoints.
+🚀**Manual Nginx Cache Purge & Preload**: Allow manual purging and preloading of cache through the table view in Advanced Tab.
+🚀**On-Page Nginx Cache Purge & Preload**: Manually purge and preload Nginx cache for the currently visited page directly from the frontend.
+🚀**Optimized Nginx Cache Preload**: Enhance Nginx cache preload performance with options to limit CPU usage, exclude endpoints, wait retrievals and rate limiting.
+🚀**Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, and Nginx status from the Status tab.
+🚀**User-Friendly Interface**: Easy-to-use AJAX-powered settings, integrated into the WordPress admin bar for quick access.
+🚀**Admin Notices and Logs**: Receive handy notifications and view logs for plugin status and all cache-related actions within the WordPress admin area.
+🚀**Email Notifications**: Receive email alerts upon completion of preload actions, with customizable templates to suit your needs.
 
 = How does It work? =
 
 **Technical Background:**
 
-In properly configured Nginx servers, it is not strictly necessary to have separate **PHP-FPM-USER** (as known WEBSITE-USER) and **WEBSERVER-USER** (commonly, nginx or www-data), but there are scenarios where separating these users can enhance security and performance. Here’s why:
+In properly configured Nginx servers, it is not strictly necessary to have separate **PHP-FPM-USER** (as known WEBSITE-USER or process owner) and **WEBSERVER-USER** (commonly, nginx or www-data), but there are scenarios where separating these users can enhance security and performance. Here’s why:
 
 **Security**: By running the PHP-FPM process under a different user than the Nginx web server, you reduce the risk of privilege escalation. If one process is compromised, the attacker does not automatically gain control over the other process.
 
@@ -27,36 +43,22 @@ In properly configured Nginx servers, it is not strictly necessary to have separ
 
 **Resource Management**: Separate users can help with resource management and monitoring, as it becomes easier to track resource usage per user.
 
-This plugin also addresses the challenge of automating FastCGI cache purging and preloading in Nginx environments that involve two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, by offering an alternative simple approach. It accomplishes this with the help of server-side tools **inotifywait** and **setfacl**.
+> [!NOTE]
+> In case your current web server setup involves two distinct users, purge actions may fail due to permission issues. Here’s why:
 
 **Problem Statement**:
 
-– *WEBSERVER-USER*: Responsible for creating cache folders and files with strict permissions.
-– *PHP-FPM-USER*: Handles cache purge operations but lacks privileges.
+– **webserver-user**: Responsible for creating cache folders and files with strict permissions.
+– **php-fpm-user**: Handles cache purge operations but lacks privileges.
 
 **Challenges**:
 
 – **Permission Issues:** Adding PHP-FPM-USER to the WEBSERVER-GROUP doesn't resolve permission conflicts for purge operations.
 – **Nginx Overrides:** Nginx overrides default setfacl settings, ignoring ACLs. Nginx creates cache folders and files with strict permissions.
 
-**Solution**:
+**Proposed Solution by NPP**:
 
-- In case your current web server setup involves two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, the solution proposed by this plugin involves combining **Linux** server side tools **inotifywait** with **setfacl** to automatically grant write permissions to the **PHP-FPM-USER** for the corresponding **Nginx Cache Paths**, facilitated by server-side bash scripting. Users need to manage **inotifywait** and **setfacl** operations manually or use the provided basic bash script for **fully functional purge and preload actions provided by this plugin**. If you prefer to use the pre-made automation bash script, you can find the necessary informations in the plugin settings' **Help** tab.
-
-== Features ==
-
-* Purge all FastCGI Cache for Nginx
-* Preload all FastCGI Cache for Nginx
-* Auto Preload FastCGI Cache for Nginx
-* Schedule Purge & Preload FastCGI Cache for Nginx via WP Cron
-* Remotely Purge & Preload FastCGI Cache for Nginx via REST API
-* Optimize FastCGI Cache Preload for Nginx performance with CPU usage limit, endpoint exclusion and rate limiting options
-* Manually page Purge & Preload FastCGI Cache for Nginx on Advanced Tab
-* Control plugin functionality, cache status and Nginx configuration on Status Tab
-* Supports On-Page Actions: Manually Purge & Preload FastCGI Cache on visited page
-* User-Friendly AJAX powered easy plugin settings inteface, integrated into the WordPress admin bar for quick access
-* Handy WordPress Admin Notices and logs for plugin status and all actions
-* Email notifications, alerts for completed Preload actions with ready-to-use template
+In case your current web server setup involves two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, the solution proposed by this plugin (instead of external Nginx Modules) involves combining **Linux** server side tools **inotifywait** with **setfacl** to automatically grant write permissions to the **PHP-FPM-USER** for the corresponding **Nginx Cache Paths**, facilitated by server-side bash scripting. Users need to manage **inotifywait** and **setfacl** operations manually or use the provided basic bash script for **fully functional purge and preload actions provided by this plugin**. If you prefer to use the pre-made automation bash script, you can find the necessary informations in the plugin settings' **Help** tab.
 
 == Installation ==
 
@@ -128,6 +130,18 @@ The Nginx Cache Directory option has restrictions on the paths you can use to pr
 
 While this might limit your options, it ensures your system's security. Recommended directories to choose from, such as '/dev/shm/' or '/var/cache/', which are commonly used for caching purposes and are generally safer.
 
+= What is different about this plugin compared to other Nginx Cache Plugins? =
+
+NPP offers a more direct solution without any external NGINX module such as Cache Purge module. This plugin directly traverses the cache directory and clears cache if PHP-FPM and WEBSERVER user permissions are adjusted properly. To automate and fix these permission issues, there is a pre-made bash script that needs to be run manually on host server under the root user.
+
+```bash <(curl -Ss https://psaux-it.github.io/install.sh)```
+
+Note that, NPP also supports Nginx cache preloading with a simple direct approach, with the help of wget. This feature is missing in other Nginx Cache plugins.
+
+There are many cases where the external Nginx modules works fine for cache purge operations, but integrating the module with Nginx can be challenging for non-technical or regular WordPress users. Not every Linux distro packages this module or has outdated module versions, so users may need to follow extra steps to integrate it, which becomes more complicated.
+
+Also, there are other cases where even bleeding-edge module versions are easily installed and integrated with Nginx by users, but purge operations do not work as expected.
+
 = I am still encountering difficulties. Do you provide server-side integration services? =
 
 Yes, please refer to the plugin settings **Help** tab.
@@ -145,6 +159,24 @@ Yes, please refer to the plugin settings **Help** tab.
 
 == Changelog ==
 
+= 2.0.2 =
+
+Release date: 2024-06-30
+
+* Add support on Auto Purge (POST/PAGE whenever its content is updated)
+* Add support on new --wait option (Manage server load while cache preloading)
+* Auto Preload now supports also single POST/PAGE cache preloading when Auto Purge enabled
+* Improve Nginx cache preload performance (--no-check-certificate)
+* Improve UI/UX (regroup plugin settings)
+* Improve Help tab informations
+* Globally prevent purging cache while cache preloading is in progress (Onpage Purge & Auto Purge & Manual Purge)
+* Improve Help tab informations
+* Improve plugin settings descriptions
+* Enhance handling of disable functionality in unsupported environments
+* Version bumps for assets
+* Style and typo fixes
+* Tested up to: 6.5.5
+
 = 2.0.1 =
 
 Release date: 2024-05-24
@@ -159,7 +191,7 @@ Release date: 2024-05-24
 
 = 2.0.0 =
 
-Release date: 2024-05-24
+Release date: 2024-04-24
 
 * Add support on Auto Preload
 * Add support on WP Cron Scheduled Preload
