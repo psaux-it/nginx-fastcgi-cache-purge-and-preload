@@ -17,7 +17,7 @@ Moreover, a correctly configured PHP-FPM and Nginx setup is essential for the pu
 If warnings appear or plugin settings/tabs disabled, they may indicate permission issues, an unsupported environment, or missing dependencies required for cache operations.
 
 > [!TIP]
-> You do not need any external Nginx module. Simply execute the following command in your terminal and follow instructions after installing plugin:
+> You do not need any external Nginx module. Simply execute the following command in your terminal after installing plugin and follow instructions:
 
 💯 ```bash <(curl -Ss https://psaux-it.github.io/install.sh)```
 
