@@ -14,19 +14,27 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Function to parse the Nginx configuration file
-function nppp_parse_nginx_config($file) {
-    $wp_filesystem = nppp_initialize_wp_filesystem();
+// Function to parse the Nginx configuration file with included paths
+// for Nginx Cache Paths
+function nppp_parse_nginx_config($file, $wp_filesystem = null) {
+    if (is_null($wp_filesystem)) {
+        $wp_filesystem = nppp_initialize_wp_filesystem();
 
-    if ($wp_filesystem === false) {
+        if ($wp_filesystem === false) {
+            return false;
+        }
+    }
+
+    if (!$wp_filesystem->exists($file)) {
         return false;
     }
 
     $config = $wp_filesystem->get_contents($file);
     $cache_paths = [];
+    $included_files = [];
 
     // Regex to match cache path directives
-    preg_match_all('/(proxy_cache_path|fastcgi_cache_path|scgi_cache_path|uwsgi_cache_path)\s+([^;]+);/', $config, $cache_directives, PREG_SET_ORDER);
+    preg_match_all('/^\s*(?!#\s*)(proxy_cache_path|fastcgi_cache_path|scgi_cache_path|uwsgi_cache_path)\s+([^;]+);/m', $config, $cache_directives, PREG_SET_ORDER);
 
     foreach ($cache_directives as $cache_directive) {
         $directive = $cache_directive[1];
@@ -37,6 +45,40 @@ function nppp_parse_nginx_config($file) {
         $cache_paths[$directive][] = $value;
     }
 
+    // Regex to match include directives
+    preg_match_all('/^\s*(?!#\s*)include\s+([^;]+);/m', $config, $include_directives, PREG_SET_ORDER);
+
+    foreach ($include_directives as $include_directive) {
+        $include_path = trim($include_directive[1]);
+        if (strpos($include_path, '*') !== false) {
+            $files = glob($include_path);
+            if ($files !== false) {
+                $included_files = array_merge($included_files, $files);
+            }
+        } else {
+            $included_files[] = $include_path;
+        }
+    }
+
+    // Recursively parse included files
+    foreach ($included_files as $included_file) {
+        $result = nppp_parse_nginx_config($included_file, $wp_filesystem);
+        if ($result !== false && isset($result['cache_paths'])) {
+            foreach ($result['cache_paths'] as $directive => $paths) {
+                if (!isset($cache_paths[$directive])) {
+                    $cache_paths[$directive] = [];
+                }
+                $cache_paths[$directive] = array_merge($cache_paths[$directive], $paths);
+            }
+        }
+    }
+    
+    // Return empty if no Nginx cache paths are found
+    if (empty($cache_paths)) {
+        return ['cache_paths' => []];
+    }
+
+    // Return found active Nginx Cache Paths
     return ['cache_paths' => $cache_paths];
 }
 
@@ -80,31 +122,45 @@ function nppp_generate_html($cache_paths, $nginx_info) {
                     <tr>
                         <td class="action">Nginx Version</td>
                         <td class="status" id="npppNginxVersion">
-                            <span class="dashicons dashicons-yes"></span>
-                            <span><?php echo esc_html($nginx_info['nginx_version']); ?></span>
+                            <?php if ($nginx_info['nginx_version'] === 'Unknown'): ?>
+                                <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: orange;"> <?php echo esc_html($nginx_info['nginx_version']); ?></span>
+                            <?php else: ?>
+                                <span class="dashicons dashicons-yes"></span>
+                                <span><?php echo esc_html($nginx_info['nginx_version']); ?></span>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <tr>
                         <td class="action">OpenSSL Version</td>
                         <td class="status" id="npppOpenSSLVersion">
-                            <span class="dashicons dashicons-yes"></span>
-                            <span><?php echo esc_html($nginx_info['openssl_version']); ?></span>
+                            <?php if ($nginx_info['openssl_version'] === 'Unknown'): ?>
+                                <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: orange;"> <?php echo esc_html($nginx_info['openssl_version']); ?></span>
+                            <?php else: ?>
+                                <span class="dashicons dashicons-yes"></span>
+                                <span><?php echo esc_html($nginx_info['openssl_version']); ?></span>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <tr>
-                        <td class="action">Found Active Cache Paths</td>
+                        <td class="action">Active Nginx Cache Paths</td>
                         <td class="status">
-                            <table class="nginx-config-table">
-                                <tbody>
-                                    <?php foreach ($cache_paths as $values): ?>
-                                        <?php foreach ($values as $value): ?>
-                                            <tr>
-                                                <td><span class=""></span><?php echo esc_html($value); ?></td>
-                                            </tr>
+                            <?php if (empty($cache_paths)): ?>
+                                <p style="color: red; font-weight: bold;"><span class="dashicons dashicons-no-alt"></span> Not Found</p>
+                            <?php else: ?>
+                                <table class="nginx-config-table">
+                                    <tbody>
+                                        <?php foreach ($cache_paths as $values): ?>
+                                            <?php foreach ($values as $value): ?>
+                                                <tr>
+                                                    <td><span class=""></span><?php echo esc_html($value); ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
                                         <?php endforeach; ?>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                                    </tbody>
+                                </table>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 </tbody>
@@ -136,16 +192,26 @@ function nppp_nginx_config_shortcode() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        return '<p>Failed to initialize filesystem.</p>';
     }
 
+    // Path to Nginx configuration file
+    // Check if Nginx configuration file exists
     $config_file = '/etc/nginx/nginx.conf';
     if (!$wp_filesystem->exists($config_file)) {
         return '<p>Nginx configuration file not found.</p>';
     }
 
-    $config_data = nppp_parse_nginx_config($config_file);
+    // Parse Nginx configuration file
+    // Check if parsing the configuration file failed
+    $config_data = nppp_parse_nginx_config($config_file, $wp_filesystem);
+    if ($config_data === false) {
+        return '<p>Failed to parse Nginx configuration file.</p>';
+    }
+
+    // Get Nginx version, OpenSSL version, and other info
     $nginx_info = nppp_get_nginx_info();
 
+    // Generate HTML output based on parsed data and Nginx info
     return nppp_generate_html($config_data['cache_paths'], $nginx_info);
 }
