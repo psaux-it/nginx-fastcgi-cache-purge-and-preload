@@ -154,7 +154,7 @@ function nppp_generate_html($cache_paths, $nginx_info) {
                                         <?php foreach ($cache_paths as $values): ?>
                                             <?php foreach ($values as $value): ?>
                                                 <tr>
-                                                    <td><span class=""></span><?php echo esc_html($value); ?></td>
+                                                    <td><span class="dashicons dashicons-arrow-right-alt" style="color: green; font-size: 17px !important;"></span>&nbsp;<span style="color: teal; font-size: 14px;"><?php echo esc_html($value); ?></span></td>
                                                 </tr>
                                             <?php endforeach; ?>
                                         <?php endforeach; ?>
