@@ -168,8 +168,9 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     nppp_display_admin_notice('info', "INFO ADMIN: Cache purge attempted, but the page $current_page_url is not currently found in the cache.");
 }
 
-// Purge cache automatically for modified content (post/page)
-// Will be hooked wp save_post action
+// Auto Purge
+// Purge cache automatically for updated content (post/page)
+// This function hooks into the 'save_post' action
 function nppp_purge_cache_on_update($post_id) {
     // Check if this is an autosave or a post revision
     if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
@@ -197,9 +198,76 @@ function nppp_purge_cache_on_update($post_id) {
         // Get the nginx cache path from the plugin options, or use the default path if not set
         $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
-        // Purge the cache for the current post/page URL
+        // Purge the cache for the updated post/page
         // Auto Purge true
         nppp_purge_single($nginx_cache_path, $post_url, true);
+    }
+}
+
+// Auto Purge
+// Purge cache automatically when a comment status changes (post/page)
+// This function hooks into the 'wp_insert_comment' action
+function nppp_purge_cache_on_comment($comment_id, $comment) {
+    $oldstatus = '';
+    $approved  = $comment->comment_approved;
+
+    if ( null === $approved ) {
+        $newstatus = false;
+    } elseif ( '1' === $approved ) {
+        $newstatus = 'approved';
+    } elseif ( '0' === $approved ) {
+        $newstatus = 'unapproved';
+    } elseif ( 'spam' === $approved ) {
+        $newstatus = 'spam';
+    } elseif ( 'trash' === $approved ) {
+        $newstatus = 'trash';
+    } else {
+        $newstatus = false;
+    }
+
+    nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment);
+}
+
+// Auto Purge
+// Purge cache automatically when a comment status changes (post/page)
+// This function hooks into the 'transition_comment_status' action
+function nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment) {
+    // Get the post ID associated with the comment
+    $post_id = $comment->comment_post_ID;
+
+    // Verify if the current user can edit the post
+    if (!current_user_can('edit_post', $post_id)) {
+        return;
+    }
+
+    // Get the URL of the post/page from $post_id
+    $post_url = get_permalink($post_id);
+
+    // Get the plugin options
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Set default cache path to prevent any errors if the option is not set
+    $default_cache_path = '/dev/shm/change-me-now';
+
+    // Get the nginx cache path from the plugin options, or use the default path if not set
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+
+    switch ( $newstatus ) {
+        case 'approved':
+            if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+                // Purge the cache when comment status change for the post/page
+                nppp_purge_single($nginx_cache_path, $post_url, true);
+            }
+            break;
+
+        case 'spam':
+        case 'unapproved':
+        case 'trash':
+            if ( 'approved' === $oldstatus && isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+                // Purge the cache when comment status change for the post/page
+                nppp_purge_single($nginx_cache_path, $post_url, true);
+            }
+            break;
     }
 }
 
