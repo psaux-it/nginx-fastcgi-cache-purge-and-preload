@@ -15,6 +15,10 @@ Manage Nginx Cache Purge and Preload operations directly from your WordPress adm
 
 This plugin allows WordPress users to manage Nginx Cache Purge and Preload operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.
 
+== Important ==
+
+Please read the full description and FAQ here for fully functional purge and preload actions provided by this plugin:
+
 == Features ==
 
 🚀**Purge All Nginx Cache**: Completely clear all cached data stored by Nginx.
@@ -31,34 +35,23 @@ This plugin allows WordPress users to manage Nginx Cache Purge and Preload opera
 🚀**Admin Notices and Logs**: Receive handy notifications and view logs for plugin status and all cache-related actions within the WordPress admin area.
 🚀**Email Notifications**: Receive email alerts upon completion of preload actions, with customizable templates to suit your needs.
 
-= How does It work? =
+= What you need? =
 
-**Technical Background:**
+**Technical Difficulties:**
 
-In properly configured Nginx servers, it is not strictly necessary to have separate **PHP-FPM-USER** (as known WEBSITE-USER or process owner) and **WEBSERVER-USER** (commonly, nginx or www-data), but there are scenarios where separating these users can enhance security and performance. Here’s why:
-
-**Security**: By running the PHP-FPM process under a different user than the Nginx web server, you reduce the risk of privilege escalation. If one process is compromised, the attacker does not automatically gain control over the other process.
-
-**Permission Management**: Having separate users allows for more granular permission settings. For example, PHP scripts can be restricted to only the directories they need to access, while the web server user can be given more restrictive permissions on other parts of the filesystem.
-
-**Resource Management**: Separate users can help with resource management and monitoring, as it becomes easier to track resource usage per user.
-
-> [!NOTE]
-> In case your current web server setup involves two distinct users, purge actions may fail due to permission issues. Here’s why:
-
-**Problem Statement**:
-
-– **webserver-user**: Responsible for creating cache folders and files with strict permissions.
-– **php-fpm-user**: Handles cache purge operations but lacks privileges.
-
-**Challenges**:
-
-– **Permission Issues:** Adding PHP-FPM-USER to the WEBSERVER-GROUP doesn't resolve permission conflicts for purge operations.
-– **Nginx Overrides:** Nginx overrides default setfacl settings, ignoring ACLs. Nginx creates cache folders and files with strict permissions.
+In properly configured Nginx servers, it is not strictly necessary to have separate **PHP-FPM-USER** (as a known WEBSITE-USER/Process Owner) and **WEBSERVER-USER** (commonly, nginx or www-data), but there are scenarios where separating these users can enhance security and performance. Although this configuration is recommended as a standard, It leads to difficulties in purging and preloading the cache. When the **PHP-FPM-USER** and **WEBSERVER-USER** are different, the PHP process may not have the necessary permissions to manage cache files created by the webserver, as the PHP process may be unable to read, write, or delete cache files owned by the **WEBSERVER-USER**.
 
 **Proposed Solution by NPP**:
 
-In case your current web server setup involves two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, the solution proposed by this plugin (instead of external Nginx Modules) involves combining **Linux** server side tools **inotifywait** with **setfacl** to automatically grant write permissions to the **PHP-FPM-USER** for the corresponding **Nginx Cache Paths**, facilitated by server-side bash scripting. Users need to manage **inotifywait** and **setfacl** operations manually or use the provided basic bash script for **fully functional purge and preload actions provided by this plugin**. If you prefer to use the pre-made automation bash script, you can find the necessary informations in the plugin settings' **Help** tab.
+In case your current Nginx web server setup involves two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, the solution proposed by this plugin (instead of external Nginx Modules) involves combining **Linux** server side tools **inotifywait** with **setfacl** to automatically grant write permissions to the **PHP-FPM-USER** for the corresponding **Nginx Cache Paths**, facilitated by server-side bash scripting. Users need to manage **inotifywait** and **setfacl** operations manually or use the provided below one liner basic automation bash script for **fully functional purge and preload actions provided by this plugin**.
+
+`bash <(curl -Ss https://psaux-it.github.io/install.sh)`
+
+**More in-depth Information""
+
+- [NPP Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
+- [NPP Main Automation Bash Script Source Code](https://github.com/psaux-it/psaux-it.github.io/blob/main/fastcgi_ops_root.sh)
+- [Optimizing Wordpress and Woocommerce with Nginx FastCGI Cache](https://www.psauxit.com/optimizing-wordpress-and-woocommerce-with-nginx-fastcgi-cache/)
 
 == Installation ==
 
@@ -134,7 +127,7 @@ While this might limit your options, it ensures your system's security. Recommen
 
 NPP offers a more direct solution without any external NGINX module such as Cache Purge module. This plugin directly traverses the cache directory and clears cache if PHP-FPM and WEBSERVER user permissions are adjusted properly. To automate and fix these permission issues, there is a pre-made bash script that needs to be run manually on host server under the root user.
 
-```bash <(curl -Ss https://psaux-it.github.io/install.sh)```
+`bash <(curl -Ss https://psaux-it.github.io/install.sh)`
 
 Note that, NPP also supports Nginx cache preloading with a simple direct approach, with the help of wget. This feature is missing in other Nginx Cache plugins.
 
