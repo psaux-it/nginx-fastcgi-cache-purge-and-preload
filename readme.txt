@@ -17,7 +17,7 @@ This plugin allows WordPress users to manage Nginx Cache Purge and Preload opera
 
 == Important ==
 
-Please read the full description and FAQ here for fully functional purge and preload actions provided by this plugin:
+Please read the full description and FAQ here for fully functional Nginx cache Purge and Preload actions provided by this plugin:
 
 == Features ==
 
@@ -39,19 +39,19 @@ Please read the full description and FAQ here for fully functional purge and pre
 
 **Technical Difficulties:**
 
-In properly configured Nginx servers, it is not strictly necessary to have separate **PHP-FPM-USER** (as a known WEBSITE-USER/Process Owner) and **WEBSERVER-USER** (commonly, nginx or www-data), but there are scenarios where separating these users can enhance security and performance. Although this configuration is recommended as a standard, It leads to difficulties in purging and preloading the cache. When the **PHP-FPM-USER** and **WEBSERVER-USER** are different, the PHP process may not have the necessary permissions to manage cache files created by the webserver, as the PHP process may be unable to read, write, or delete cache files owned by the **WEBSERVER-USER**.
+In properly configured Nginx servers, it is not strictly necessary to have separate **PHP-FPM-USER** (as a known WEBSITE-USER or PHP process owner) and **WEBSERVER-USER** (commonly, nginx or www-data), but there are scenarios where separating these users can enhance security and performance. Although this configuration is recommended as a standard, It leads to difficulties in purging and preloading the cache by the PHP process owner. When the **PHP-FPM-USER** and **WEBSERVER-USER** are different, the PHP process owner may not have the necessary permissions to manage cache files created by the **WEBSERVER-USER**, as the PHP process owner may be unable to read, write, or delete cache files owned by the **WEBSERVER-USER**.
 
 **Proposed Solution by NPP**:
 
-In case your current Nginx web server setup involves two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, the solution proposed by this plugin (instead of external Nginx Modules) involves combining **Linux** server side tools **inotifywait** with **setfacl** to automatically grant write permissions to the **PHP-FPM-USER** for the corresponding **Nginx Cache Paths**, facilitated by server-side bash scripting. Users need to manage **inotifywait** and **setfacl** operations manually or use the provided below one liner basic automation bash script for **fully functional purge and preload actions provided by this plugin**.
+In case your current Nginx web server setup involves two distinct users, **WEBSERVER-USER** and **PHP-FPM-USER**, the solution proposed by NPP involves combining **Linux** server side tools **inotifywait** with **setfacl** to automatically grant read/write permissions to the **PHP-FPM-USER** for the corresponding **Nginx Cache Paths** (owned by **WEBSERVER-USER**), facilitated by server-side bash scripting. Users need to manage **inotifywait** and **setfacl** operations manually or use the provided below one liner basic automation bash script for **fully functional purge and preload actions provided by this plugin**.
 
 `bash <(curl -Ss https://psaux-it.github.io/install.sh)`
 
 **More in-depth Information""
 
-- [NPP Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
-- [NPP Main Automation Bash Script Source Code](https://github.com/psaux-it/psaux-it.github.io/blob/main/fastcgi_ops_root.sh)
-- [Optimizing Wordpress and Woocommerce with Nginx FastCGI Cache](https://www.psauxit.com/optimizing-wordpress-and-woocommerce-with-nginx-fastcgi-cache/)
+- [NPP plugin main development repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
+- [NPP plugin main bash script automation source code](https://github.com/psaux-it/psaux-it.github.io/blob/main/fastcgi_ops_root.sh)
+- [Optimizing Wordpress with Nginx FastCGI Cache and NPP plugin](https://www.psauxit.com/optimizing-wordpress-and-woocommerce-with-nginx-fastcgi-cache/)
 
 == Installation ==
 
