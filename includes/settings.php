@@ -163,7 +163,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">Please provide the complete NGINX cache directory path required for plugin operations.</p>
                                 <p class="description">The properly configured NGINX cache directory, which must be set in the server-side NGINX configuration,</p>
                                 <p class="description">is essential for the effective functioning of cache purge and preload actions.</p>
-                                <p class="description">It is crucial that the php process owner has both read and write permissions to this directory.</p>
+                                <p class="description">It is crucial that the <strong>PHP process owner</strong> has both read and write permissions to this directory.</p>
                                 <p class="description">Without these permissions, the plugin will be unable to purge or preload the cache effectively.</p>
                                 <p class="cache-path-plugin-note">
                                     <span style="color: red;">NOTE:</span> The plugin author explicitly disclaims any liability for unintended deletions resulting<br>
