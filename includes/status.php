@@ -306,14 +306,14 @@ function nppp_my_status_html() {
                         </thead>
                         <tbody>
                             <tr>
-                                <td class="check">PHP-FPM User (Website User)</td>
+                                <td class="check">PHP-FPM-USER (Website User)</td>
                                 <td class="status" id="npppphpProcessOwner">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_get_website_user()); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">WEB-SERVER User (Webserver User)</td>
+                                <td class="check">WEB-SERVER-USER (Webserver User)</td>
                                 <td class="status" id="npppphpWebServer">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_get_webserver_user()); ?></span>
