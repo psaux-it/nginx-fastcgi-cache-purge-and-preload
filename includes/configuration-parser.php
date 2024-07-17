@@ -126,7 +126,7 @@ function nppp_generate_html($cache_paths, $nginx_info) {
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span style="color: orange;"> <?php echo esc_html($nginx_info['nginx_version']); ?></span>
                             <?php else: ?>
-                                <span class="dashicons dashicons-yes"></span>
+                                <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span><?php echo esc_html($nginx_info['nginx_version']); ?></span>
                             <?php endif; ?>
                         </td>
@@ -138,7 +138,7 @@ function nppp_generate_html($cache_paths, $nginx_info) {
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span style="color: orange;"> <?php echo esc_html($nginx_info['openssl_version']); ?></span>
                             <?php else: ?>
-                                <span class="dashicons dashicons-yes"></span>
+                                <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span><?php echo esc_html($nginx_info['openssl_version']); ?></span>
                             <?php endif; ?>
                         </td>
