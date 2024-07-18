@@ -26,7 +26,7 @@ If warnings appear or plugin settings/tabs disabled, they may indicate permissio
 🚀**Purge All Nginx Cache**: Completely clear all cached data stored by Nginx.<br/>
 🚀**Preload All Nginx Cache**: Populate the Nginx cache with the most recent data for the entire website.<br/>
 🚀**Auto Preload Nginx Cache**: Automatically preload the cache after purging, ensuring fast page load times by caching content proactively. This feature is triggered when Auto Purge is enabled for a single POST/PAGE or when the Purge All cache action is used.<br/>
-🚀**Auto Purge Nginx Cache**: Automatically purge the cached version of a POST/PAGE whenever its content is changed. Additionally, if the Auto Preload option is enabled, the cache for the POST/PAGE will be automatically preloaded after the cache is purged.<br/>
+🚀**Auto Purge Nginx Cache**: Automatically purge the cached version of a POST/PAGE whenever it is updated, when new comments are approved, or when the comment status is changed. Additionally, if the Auto Preload option is enabled, the cache for the POST/PAGE will be automatically preloaded after the cache is purged.<br/>
 🚀**Schedule Cache Purge & Preload via WP Cron**: Automate the purge and preload process using WordPress Cron jobs.<br/>
 🚀**Remote Nginx Cache Purge & Preload via REST API**: Remotely trigger cache purging and preloading through REST API endpoints.<br/>
 🚀**Manual Nginx Cache Purge & Preload**: Allow manual purging and preloading of cache through the table view in Advanced Tab.<br/>
