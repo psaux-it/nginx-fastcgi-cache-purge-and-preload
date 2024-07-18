@@ -53,32 +53,44 @@ This project addresses the challenge of automating Nginx FastCGI cache purging a
 - **Permission Issues**: Adding **PHP-FPM-USER** to the **WEBSERVER-GROUP** doesn't resolve permission conflicts.
 - **Nginx Overrides**: Nginx overrides default setfacl settings, ignoring ACLs. Nginx creates cache folders and files with strict permissions.
 
-Surprisingly, Nginx cache doesn't adhere to DEFAULT ACLs.<br/>
-` setfacl -R -m d:u:websiteuser:rwX /home/websiteuser/fastcgi-cache`
-
 ### Solution
 
 Solution involves combining **inotifywait** with **setfacl** under **root**:
-- **fastcgi_ops_root.sh** grants **PHP-FPM-USER** write permissions recursively for cache purge operations for multi instances.
 
 ## Installation Instructions
 
 To implement this solution:
 1. Download latest [plugin](https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/) from official wordpress plugin repository or from our latest [releases](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/releases/tag/v2.0.2) and install to your wordpress instance also you can search plugin on wordpress admin dashboard as 'fastcgi cache purge and preload for nginx'
-2. On **root** call ```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` to start automated setup
+2. On **root** call ```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` one liner to start automated setup
 
 ### What does install.sh do? Is it safe?
 
-This Bash script automates the management of **inotify/setfacl** operations, ensuring efficiency and security. It enhances the efficiency and security of cache management tasks by automating the setup and configuration processes.
-The [install.sh](https://github.com/psaux-it/psaux-it.github.io/blob/main/install.sh) script serves as a wrapper that facilitates the execution of the main [fastcgi_ops_root.sh](https://github.com/psaux-it/psaux-it.github.io/blob/main/fastcgi_ops_root.sh) script from [psaux-it.github.io](https://github.com/psaux-it/psaux-it.github.io). It acts as a convenient entry point for users to initiate the setup and configuration procedures seamlessly.
-Rest assured, this solution is entirely safe to use, providing a reliable and straightforward method for managing Nginx FastCGI cache purge operations on Wordpress front-end.
+The [install.sh](https://github.com/psaux-it/psaux-it.github.io/blob/main/install.sh) script serves as a wrapper that facilitates the execution of the main [fastcgi_ops_root.sh](https://github.com/psaux-it/psaux-it.github.io/blob/main/fastcgi_ops_root.sh) script from [psaux-it.github.io](https://github.com/psaux-it/psaux-it.github.io). This script attempts to automatically match and grant (via setfacl) permissions for **PHP-FPM-USER** (as known, process owner or website-user) along with their associated **Nginx Cache Paths**.
+If it cannot automatically match the **PHP-FPM-USER** along with their associated **Nginx Cache Path**, it offers an easy manual setup option with the **manual-configs.nginx** file.<br/>
 
-- **Automated Setup**: Quickly sets up FastCGI cache paths and associated PHP-FPM users.
+Mainly, in case your current web server setup involves two distinct users, **WEBSERVER-USER** (nginx or www-data) and **PHP-FPM-USER**, the solution proposed by this script involves combining Linux server side tools
+**inotifywait** with **setfacl** to automatically grant write permissions to the **PHP-FPM-USER** for the corresponding **Nginx Cache Paths**, which are matched either automatically or via a manual configuration file.
+
+- **Automated Detection**: Quickly sets up Nginx Cache Paths and associated PHP-FPM users.
 - **Dynamic Configuration**: Detects Nginx configuration dynamically for seamless integration.
-- **ACL Verification**: Ensures filesystem ACL configuration for proper functionality.
-- **Systemd Integration**: Generates and enables systemd service for continuous operation.
-- **Manual Configuration Support**: Allows manual configuration for customized setups.
+- **Systemd Integration**: Generates and enables systemd service **npp-wordpress** for continuous operation.
+- **Manual Configuration Support**: Allow manual configuration via the **manual-configs.nginx** file.
 - **Inotify Operations**: Listens to FastCGI cache folder events for real-time updates.
+
+> [!TIP]
+> 1. Furthermore, if you're hosting multiple WordPress sites each with their own Nginx cache paths and associated PHP-FPM pool users on the same host, you'll find that deploying just one instance of this script effectively manages all WordPress instances using the NPP plugin. This streamlined approach centralizes cache management tasks, ensuring optimal efficiency and simplified maintenance throughout your server environment.<br/>
+> 2. If Auto detection not works for you, for proper matching, please ensure that your Nginx Cache Path includes the associated PHP-FPM-USER username.
+
+For example assuming your PHP-FPM-USER = **psauxit**<br/>
+The following example **fastcgi_cache_path** naming formats will match perfectly with your **PHP-FPM-USER** and detected by script automatically.
+
+```
+fastcgi_cache_path /dev/shm/fastcgi-cache-psauxit
+fastcgi_cache_path /dev/shm/cache-psauxit
+fastcgi_cache_path /dev/shm/psauxit
+fastcgi_cache_path /var/cache/psauxit-fastcgi
+fastcgi_cache_path /var/cache/website-psauxit.com
+```
 
 ## Visuals
 
