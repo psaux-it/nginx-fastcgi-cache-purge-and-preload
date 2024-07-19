@@ -166,6 +166,7 @@ function nppp_shell_exec() {
 function nppp_get_website_user() {
     $php_process_owner = '';
 
+    // Check if the POSIX extension is available
     if (function_exists('posix_getpwuid') && function_exists('posix_geteuid')) {
         // Get the user ID of the PHP process owner
         $php_process_uid = posix_geteuid();
@@ -181,7 +182,9 @@ function nppp_get_website_user() {
         $php_process_owner = $php_process_uid;
     }
 
-    // Fail? Try again to find PHP process owner more directly with help of shell
+    // If POSIX functions are not available or user information is 'Not Determined',
+    // try again to find PHP process owner more directly with help of shell
+    
     if (empty($php_process_owner) || $php_process_owner === 'Not Determined') {
         if (defined('ABSPATH')) {
             $wordpressRoot = ABSPATH;
