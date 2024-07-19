@@ -20,7 +20,7 @@ function nppp_check_acl($flag = '') {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false; // Return false if WP_Filesystem initialization failed
+        return false;
     }
 
     $nginx_cache_settings = get_option('nginx_cache_settings');
@@ -101,7 +101,7 @@ function nppp_check_preload_status() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false; // Return false if WP_Filesystem initialization failed
+        return false;
     }
 
     $this_script_path = dirname(plugin_dir_path(__FILE__));
@@ -124,7 +124,7 @@ function nppp_check_path() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false; // Return false if WP_Filesystem initialization failed
+        return false;
     }
 
     $nginx_cache_settings = get_option('nginx_cache_settings');
