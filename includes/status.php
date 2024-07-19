@@ -179,7 +179,7 @@ function nppp_get_website_user() {
 
     // If POSIX functions are not available or user information is 'Not Determined',
     // try again to find PHP process owner more directly with help of shell
-    
+
     if (empty($php_process_owner) || $php_process_owner === 'Not Determined') {
         if (defined('ABSPATH')) {
             $wordpressRoot = ABSPATH;
