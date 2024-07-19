@@ -162,26 +162,48 @@ function nppp_shell_exec() {
     }
 }
 
-// Function to get the active PHP process owner
+// Function to get the PHP process owner (website-user)
 function nppp_get_website_user() {
     $php_process_owner = '';
 
-    // Get the user ID of the PHP process owner
-    $php_process_uid = posix_getpwuid(posix_geteuid())['name'];
+    if (function_exists('posix_getpwuid') && function_exists('posix_geteuid')) {
+        // Get the user ID of the PHP process owner
+        $php_process_uid = posix_geteuid();
+        $userInfo = posix_getpwuid($php_process_uid);
 
-    // Map the user ID to common web server users
-    switch ($php_process_uid) {
-        case 'www-data':
-            $php_process_owner = 'www-data';
-            break;
-        case 'nginx':
-            $php_process_owner = 'nginx';
-            break;
-        default:
-            $php_process_owner = $php_process_uid;
-            break;
+        // Get the user NAME of the PHP process owner
+        if ($userInfo) {
+            $php_process_uid = $userInfo['name'];
+        } else {
+            $php_process_uid = 'Not Determined';
+        }
+
+        $php_process_owner = $php_process_uid;
     }
 
+    // Fail? Try again to find PHP process owner more directly with help of shell
+    if (empty($php_process_owner) || $php_process_owner === 'Not Determined') {
+        if (defined('ABSPATH')) {
+            $wordpressRoot = ABSPATH;
+        } else {
+            $wordpressRoot = __DIR__;
+        }
+
+        // Get the PHP process owner
+        $command = "ls -ld " . escapeshellarg($wordpressRoot . '/index.php') . " | awk '{print $3}'";
+
+        // Execute the shell command
+        $process_owner = shell_exec($command);
+
+        // Check the PHP process owner if not empty
+        if (!empty($process_owner)) {
+            $php_process_owner = trim($process_owner);
+        } else {
+            $php_process_owner = "Not Determined";
+        }
+    }
+
+    // Return the PHP process owner
     return $php_process_owner;
 }
 
