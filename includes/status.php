@@ -140,26 +140,21 @@ function nppp_check_path() {
     }
 }
 
-// Check shell exec allowed or not, required for plugin
+// Check if shell_exec is allowed or not, required for plugin
 function nppp_shell_exec() {
-   // Check allowed to execute shell commands
-    $allowed = false;
     // Check if shell_exec is enabled
     if (function_exists('shell_exec')) {
         // Attempt to execute a harmless command
         $output = shell_exec('echo "Test"');
 
         // Check if the command executed successfully
-        if ($output === "Test\n") {
-            $allowed = true;
+        // Trim the output to handle any extra whitespace or newlines
+        if (trim($output) === "Test") {
+            return 'Ok';
         }
     }
 
-    if ($allowed) {
-        return 'Ok';
-    } else {
-        return 'Not Ok';
-    }
+    return 'Not Ok';
 }
 
 // Function to get the PHP process owner (website-user)
