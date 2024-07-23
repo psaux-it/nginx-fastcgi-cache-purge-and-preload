@@ -15,7 +15,11 @@ jQuery(document).ready(function($) {
             var tabId = ui.newPanel.attr('id');
 
             // Handle specific actions for each tab
-            if (tabId === 'status') {
+            if (tabId === 'settings') {
+                // Reload the plugin settings page
+                // to see updated global warnings/errors
+                location.reload();
+            } else if (tabId === 'status') {
                 loadStatusTabContent();
             } else if (tabId === 'premium') {
                 loadPremiumTabContent();
