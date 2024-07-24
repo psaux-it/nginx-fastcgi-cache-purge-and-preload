@@ -74,6 +74,7 @@ add_filter('cron_schedules', 'nppp_custom_every_min_schedule');
 add_action('npp_cache_preload_event', 'nppp_create_scheduled_event_preload_callback');
 add_action('npp_cache_preload_status_event', 'nppp_create_scheduled_event_preload_status_callback');
 add_action('wp_ajax_nppp_get_active_cron_events_ajax', 'nppp_get_active_cron_events_ajax');
+add_action('wp_ajax_nppp_clear_plugin_cache', 'nppp_clear_plugin_cache_callback');
 add_action('save_post', 'nppp_purge_cache_on_update');
 add_action('wp_insert_comment', 'nppp_purge_cache_on_comment', 200, 2);
 add_action('transition_comment_status', 'nppp_purge_cache_on_comment_change', 200, 3);
