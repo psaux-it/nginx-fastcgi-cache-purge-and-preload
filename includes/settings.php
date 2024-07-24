@@ -54,8 +54,7 @@ function nppp_add_nginx_cache_settings_to_allowed_options($options) {
     return $options;
 }
 
-// Displays the Nginx Cache Settings page in the WordPress admin dashboard
-// Handles form submission, settings validation, and updating options
+// Displays the NPP Nginx Cache Settings page in the WordPress admin dashboard
 function nppp_nginx_cache_settings_page() {
     if (isset($_GET['status_message']) && isset($_GET['message_type'])) {
         // Sanitize and validate the nonce
@@ -79,47 +78,6 @@ function nppp_nginx_cache_settings_page() {
         nppp_display_admin_notice($message_type, $status_message, false);
     }
 
-    // Retrieve the Nginx cache path option
-    $options = get_option('nginx_cache_settings');
-    $nginx_cache_path = isset($options['nginx_cache_path']) ? $options['nginx_cache_path'] : '';
-
-    // Check if the form has been submitted
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
-        // Verify nonce
-        if (isset($_POST['nginx_cache_settings_nonce'])) {
-            // Sanitize the nonce input
-            $nonce = sanitize_text_field(wp_unslash($_POST['nginx_cache_settings_nonce']));
-
-            // Verify the nonce
-            if (wp_verify_nonce($nonce, 'nginx_cache_settings_nonce')) {
-
-                // Sanitize and validate the submitted values
-                $new_settings = nppp_nginx_cache_settings_sanitize($_POST['nginx_cache_settings']);
-
-                // Check if there are any settings errors
-                $errors = get_settings_errors('nppp_nginx_cache_settings_group');
-
-                // If there are no sanitize errors, proceed to update the settings
-                if (empty($errors)) {
-                    // Update the settings with the new values
-                    update_option('nginx_cache_settings', $new_settings);
-
-                    // Show success message
-                    echo '<div class="updated"><p>Settings saved successfully!</p></div>';
-                } else {
-                    // Display settings errors
-                    foreach ($errors as $error) {
-                        echo '<div class="error"><p>' . esc_html($error['message']) . '</p></div>';
-                    }
-                }
-            } else {
-                // Nonce verification failed
-                wp_die('Nonce verification failed');
-            }
-        }
-    }
-
-    // Display the settings form
     ?>
     <div class="wrap">
         <div class="nppp-header-content">
@@ -142,9 +100,9 @@ function nppp_nginx_cache_settings_page() {
                 </ul>
             </div>
             <div id="settings" class="tab-content active">
-                <form method="post" action="">
+                <div id="settings-content-placeholder">
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <?php
-                    // Add nonce field
                     wp_nonce_field('nginx_cache_settings_nonce', 'nginx_cache_settings_nonce');
                     ?>
                     <table class="form-table">
@@ -349,6 +307,7 @@ function nppp_nginx_cache_settings_page() {
                         <input type="submit" name="submit" class="button-primary" value="Update Options">
                     </p>
                 </form>
+                </div>
             </div>
 
             <div id="status" class="tab-content">
@@ -365,6 +324,89 @@ function nppp_nginx_cache_settings_page() {
         </div>
     </div>
     <?php
+}
+
+// Processes the form submission, validates the nonce,
+// checks user permissions, sanitize & validate and save the plugin settings,
+// clear plugin cache if Nginx Cache Path updated,
+// redirects the user back to the settings page with a message
+// This function hooks into the 'admin_post'
+function nppp_handle_nginx_cache_settings_submission() {
+    // Check if the form has been submitted
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_nginx_cache_settings') {
+        // Verify nonce
+        if (isset($_POST['nginx_cache_settings_nonce'])) {
+            // Sanitize the nonce input
+            $nonce = sanitize_text_field(wp_unslash($_POST['nginx_cache_settings_nonce']));
+
+            // Verify the nonce
+            if (wp_verify_nonce($nonce, 'nginx_cache_settings_nonce')) {
+                // Sanitize and validate the submitted values
+                $new_settings = nppp_nginx_cache_settings_sanitize($_POST['nginx_cache_settings']);
+
+                // Check if there are any settings errors
+                $errors = get_settings_errors('nppp_nginx_cache_settings_group');
+
+                // If there are no sanitize errors, proceed to update the settings
+                if (empty($errors)) {
+                    // Get the sumbitted nginx cache path
+                    $new_nginx_cache_path = isset($new_settings['nginx_cache_path']) ? $new_settings['nginx_cache_path'] : '';
+
+                    // Get the old cache path from options
+                    $old_nginx_cache_path = get_option('nginx_cache_settings')['nginx_cache_path'];
+
+                    // Delete plugin cache when Nginx Cache Path changed
+                    if ($new_nginx_cache_path !== $old_nginx_cache_path) {
+                        $static_key_base = 'nppp';
+                        $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
+                        $transients = array($transient_key_permissions_check);
+
+                        foreach ($transients as $transient) {
+                            delete_transient($transient);
+                        }
+
+                        // Update the settings with the new values
+                        update_option('nginx_cache_settings', $new_settings);
+
+                        // Redirect with success message
+                        wp_redirect(add_query_arg(array(
+                            'status_message' => urlencode('Plugin cache cleared, settings saved successfully!'),
+                            'message_type' => 'success',
+                            'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
+                        ), admin_url('options-general.php?page=nginx_cache_settings')));
+                        exit;
+                    } else {
+                        // Update the settings with the new values
+                        update_option('nginx_cache_settings', $new_settings);
+
+                        // Redirect with success message
+                        wp_redirect(add_query_arg(array(
+                            'status_message' => urlencode('Settings saved successfully!'),
+                            'message_type' => 'success',
+                            'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
+                        ), admin_url('options-general.php?page=nginx_cache_settings')));
+                        exit;
+                    }
+                } else {
+                    // Redirect with error messages
+                    $error_messages = array();
+                    foreach ($errors as $error) {
+                        $error_messages[] = esc_html($error['message']);
+                    }
+
+                    wp_redirect(add_query_arg(array(
+                        'status_message' => urlencode(implode(', ', $error_messages)),
+                        'message_type' => 'error',
+                        'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
+                    ), admin_url('options-general.php?page=nginx_cache_settings')));
+                    exit;
+                }
+            } else {
+                // Nonce verification failed
+                wp_die('Nonce verification failed');
+            }
+        }
+    }
 }
 
 // AJAX callback function to clear logs
