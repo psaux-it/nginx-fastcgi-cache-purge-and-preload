@@ -80,12 +80,6 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         }
     }
 
-    // Check read and write permissions for the cache path before purge cache
-    if (!nppp_check_permissions_recursive($nginx_cache_path)) {
-        nppp_display_admin_notice('error', "ERROR PERMISSION: Cache purge failed for page $current_page_url due to permission issue. Refer to -Help- tab for guidance.");
-        return;
-    }
-
     // Valitade the sanitized url before process
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) !== false) {
         // Remove http:// or https:// from the URL and append a forward slash
@@ -103,8 +97,15 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
             RecursiveIteratorIterator::SELF_FIRST
         );
 
+        $found = false;
         foreach ($cache_iterator as $file) {
             if ($wp_filesystem->is_file($file->getPathname())) {
+                // Check read and write permissions for each file
+                if (!$wp_filesystem->is_readable($file->getPathname()) || !$wp_filesystem->is_writable($file->getPathname())) {
+                    nppp_display_admin_notice('error', "ERROR PERMISSION: Cache purge failed for page $current_page_url due to permission issue. Refer to -Help- tab for guidance.");
+                    return;
+                }
+                
                 // Read file contents
                 $content = $wp_filesystem->get_contents($file->getPathname());
 
@@ -116,6 +117,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 // Check for the URL after 'KEY: httpsGET'
                 if (preg_match('/^KEY:\s+https?GET' . preg_quote($url_to_search_exact, '/') . '$/m', $content)) {
                     $cache_path = $file->getPathname();
+                    $found = true;
 
                     // Sanitize and validate the file path before delete
                     // This is an extra security layer
@@ -164,8 +166,10 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         return;
     }
 
-    // Return false if the URL is not found
-    nppp_display_admin_notice('info', "INFO ADMIN: Cache purge attempted, but the page $current_page_url is not currently found in the cache.");
+    // If the URL is not found in the cache
+    if (!$found) {
+        nppp_display_admin_notice('info', "INFO ADMIN: Cache purge attempted, but the page $current_page_url is not currently found in the cache.");
+    }
 }
 
 // Auto Purge
