@@ -86,6 +86,8 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     $update_cache_schedule_option_nonce = wp_create_nonce('nppp-update-cache-schedule-option');
     // Create a nonce for cancel scheduled event
     $cancel_scheduled_event_nonce = wp_create_nonce('nppp-cancel-scheduled-event');
+    // Create a nonce for plugin cache clear
+    $clear_plugin_cache_nonce = wp_create_nonce('nppp-clear-plugin-cache-action');
 
     // Localize nonce values for nppp_admin-js
     wp_localize_script('nppp_admin-js', 'nppp_admin_data', array(
@@ -107,6 +109,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'get_save_cron_nonce' => $update_cron_expression_option_nonce,
         'cache_schedule_nonce' => $update_cache_schedule_option_nonce,
         'cancel_scheduled_event_nonce' => $cancel_scheduled_event_nonce,
+        'plugin_cache_nonce' => $clear_plugin_cache_nonce,
     ));
 }
 
@@ -122,7 +125,7 @@ function nppp_plugin_requirements_met() {
             $output = shell_exec('echo "Test"');
 
             // Check if the command executed successfully
-            if ($output === "Test\n") {
+            if (trim($output) === "Test") {
                 $nppp_met = true;
             }
         }
@@ -138,7 +141,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
 
     // Check if wget command exists
     if ($nppp_met) {
-        $output = shell_exec('type wget');
+        $output = shell_exec('command -v wget');
         if (empty($output)) {
             // Wget is not available
             wp_enqueue_script('preload-button-disable', plugins_url('../admin/js/preload-button-disable.js', __FILE__), array('jquery'), '2.0.2', true);
@@ -175,7 +178,4 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
     } else {
         wp_dequeue_script('nppp-disable-functionality-front');
     }
-
-    // Enqueue CSS and JavaScript files for frontend admin bar icon style set
-    // wp_enqueue_script('nppp-admin-bar-icon-front', plugins_url('../frontend/js/nppp-admin-bar-icon-front.js', __FILE__), array('jquery'), '2.0.2', true);
 }
