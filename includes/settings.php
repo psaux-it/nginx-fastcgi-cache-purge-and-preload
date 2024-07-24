@@ -105,6 +105,7 @@ function nppp_nginx_cache_settings_page() {
                     <?php
                     wp_nonce_field('nginx_cache_settings_nonce', 'nginx_cache_settings_nonce');
                     ?>
+                    <input type="hidden" name="action" value="save_nginx_cache_settings">
                     <table class="form-table">
                         <!-- Start Purge Options Section -->
                         <tr valign="top">
