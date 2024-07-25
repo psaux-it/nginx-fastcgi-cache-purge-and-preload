@@ -1477,16 +1477,8 @@ function npppupdateStatus() {
     var npppphpProcessOwner = npppphpProcessOwnerSpan.textContent.trim();
     npppphpProcessOwnerSpan.textContent = npppphpProcessOwner;
     npppphpProcessOwnerSpan.style.fontSize = "14px";
-    if (npppphpProcessOwner === "nginx") {
-        npppphpProcessOwnerSpan.style.color = "red";
-        npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> nginx (Check Help)';
-    } else if (npppphpProcessOwner === "www-data") {
-        npppphpProcessOwnerSpan.style.color = "red";
-        npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> www-data (Check Help)';
-    } else {
-        npppphpProcessOwnerSpan.style.color = "green";
-        npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppphpProcessOwner;
-    }
+    npppphpProcessOwnerSpan.style.color = "green";
+    npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-arrow-right-alt" style="font-size: 16px;"></span> ' + npppphpProcessOwner;
 
     // Fetch and update web server user
     // WEB-SERVER (webserver user)
@@ -1494,16 +1486,8 @@ function npppupdateStatus() {
     var npppphpWebServer = npppphpWebServerSpan.textContent.trim();
     npppphpWebServerSpan.textContent = npppphpWebServer;
     npppphpWebServerSpan.style.fontSize = "14px";
-    if (npppphpWebServer === "nginx") {
-        npppphpWebServerSpan.style.color = "green";
-        npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> nginx';
-    } else if (npppphpWebServer === "www-data") {
-        npppphpWebServerSpan.style.color = "green";
-        npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> www-data';
-    } else {
-        npppphpWebServerSpan.style.color = "red";
-        npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> ' + npppphpWebServer + ' (Check Help)';
-    }
+    npppphpWebServerSpan.style.color = "green";
+    npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-arrow-right-alt" style="font-size: 16px;"></span> ' + npppphpWebServer;
 
     // Fetch and update nginx cache path status
     var npppcachePathSpan = document.getElementById("npppcachePath");
