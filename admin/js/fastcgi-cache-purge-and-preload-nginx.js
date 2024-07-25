@@ -1552,10 +1552,12 @@ function npppupdateStatus() {
     var npppaclStatus = npppaclStatusSpan.textContent.trim();
     npppaclStatusSpan.textContent = npppaclStatus;
     npppaclStatusSpan.style.fontSize = "14px";
-    if (npppaclStatus === "true") {
+    if (npppaclStatus.includes("Granted")) {
         npppaclStatusSpan.style.color = "green";
-        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Granted';
-    } else if (npppaclStatus === "false") {
+        // Extract and display the process owner information if present
+        var processOwner = npppaclStatus.replace("Granted", "").trim();
+        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Granted ' + (processOwner ? `<span style="color:darkorange;">${processOwner}</span>` : '');
+    } else if (npppaclStatus.includes("Need Action")) {
         npppaclStatusSpan.style.color = "red";
         npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Need Action (Check Help)';
     } else {
