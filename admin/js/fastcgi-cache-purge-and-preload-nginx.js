@@ -16,9 +16,13 @@ jQuery(document).ready(function($) {
 
             // Handle specific actions for each tab
             if (tabId === 'settings') {
-                // Reload the plugin settings page
-                // to see updated global warnings/errors
-                location.reload();
+                // Check if the Settings tab is already active
+                if (!ui.newPanel.hasClass('ui-tabs-active')) {
+                    $('#settings-content-placeholder').html('<div class="nppp-loading-spinner"></div>');
+
+                    // Reload the settings page to create cache
+                    location.reload();
+                }
             } else if (tabId === 'status') {
                 loadStatusTabContent();
             } else if (tabId === 'premium') {
@@ -762,6 +766,84 @@ jQuery(document).ready(function($) {
         });
     });
 
+    // Event handler for the clear plugin cache button
+    $(document).off('click', '#nppp-clear-plugin-cache-btn').on('click', '#nppp-clear-plugin-cache-btn', function(e) {
+        e.preventDefault();
+
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'nppp_clear_plugin_cache',
+                _wpnonce: nppp_admin_data.plugin_cache_nonce
+            },
+            success: function(response) {
+                var $messageElement = $('.clear-plugin-cache p');
+
+                // Apply the response data to the <p> tag
+                if (response.success) {
+                    $messageElement.html(response.data);
+                } else {
+                    $messageElement.html('<p>An error occurred while clearing the plugin cache: ' + response.data + '</p>');
+                }
+
+                // Effect styles
+                $messageElement.css({
+                    "background-color": "darkorange",
+                    "color": "white"
+                });
+
+                // Effect duration
+                var duration = 100;
+                var numFlashes = 8;
+
+                // Flashing effect
+                for (var i = 0; i < numFlashes; i++) {
+                    $messageElement.fadeOut(duration).fadeIn(duration);
+                }
+
+                // Remove the highlight after a short delay
+                setTimeout(function() {
+                    $messageElement.css({
+                        "background-color": "",
+                        "color": ""
+                    });
+
+                    // Re-trigger recursive permission check
+                    // and cache the result
+                    location.reload();
+                }, numFlashes * duration * 2);
+            },
+            error: function(xhr, status, error) {
+                var $messageElement = $('.clear-plugin-cache p');
+                $messageElement.html('<p>An error occurred while clearing the plugin cache: ' + error + '</p>');
+
+                // Effect styles
+                $messageElement.css({
+                    "background-color": "darkorange",
+                    "color": "white"
+                });
+
+                // Effect duration
+                var duration = 100;
+                var numFlashes = 8;
+
+                // Flashing effect
+                for (var i = 0; i < numFlashes; i++) {
+                    $messageElement.fadeOut(duration).fadeIn(duration);
+                }
+
+                // Remove the highlight after a short delay
+                setTimeout(function() {
+                    $messageElement.css({
+                        "background-color": "",
+                        "color": ""
+                    });
+                }, numFlashes * duration * 2);
+            }
+        });
+    });
+
     // Function to initialize DataTables.js for premium table
     function initializePremiumTable() {
         $('#nppp-premium-table').DataTable({
@@ -1360,14 +1442,18 @@ function npppupdateStatus() {
     var phpFpmRow = document.querySelector("#npppphpFpmStatus").closest("tr");
     var npppphpFpmStatusSpan = document.getElementById("npppphpFpmStatus");
     var npppphpFpmStatus = npppphpFpmStatusSpan.textContent.trim();
+
+    // Log the fetched status to debug
+    console.log("Fetched status:", npppphpFpmStatus);
+
     npppphpFpmStatusSpan.textContent = npppphpFpmStatus;
     npppphpFpmStatusSpan.style.fontSize = "14px";
-    if (npppphpFpmStatus === "nginx" || npppphpFpmStatus === "www-data") {
+    if (npppphpFpmStatus === "false") {
         npppphpFpmStatusSpan.style.color = "red";
-        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Inaccurate (Check Help)';
+        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Required (Check Help)';
     } else {
         npppphpFpmStatusSpan.style.color = "green";
-        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Accurate';
+        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Not Required';
     }
 
     // Fetch and update pages in cache count
@@ -1437,15 +1523,15 @@ function npppupdateStatus() {
     var nppppurgeStatus = nppppurgeStatusSpan.textContent.trim();
     nppppurgeStatusSpan.textContent = nppppurgeStatus;
     nppppurgeStatusSpan.style.fontSize = "14px";
-    if (nppppurgeStatus === "Working") {
+    if (nppppurgeStatus === "true") {
         nppppurgeStatusSpan.style.color = "green";
         nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
-    } else if (nppppurgeStatus === "Not Working") {
+    } else if (nppppurgeStatus === "false") {
         nppppurgeStatusSpan.style.color = "red";
         nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
     } else {
         nppppurgeStatusSpan.style.color = "orange";
-        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Tentative';
+        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
     }
 
     // Fetch and update purge shell_exec status
@@ -1466,12 +1552,12 @@ function npppupdateStatus() {
     var npppaclStatus = npppaclStatusSpan.textContent.trim();
     npppaclStatusSpan.textContent = npppaclStatus;
     npppaclStatusSpan.style.fontSize = "14px";
-    if (npppaclStatus === "Implemented") {
+    if (npppaclStatus === "true") {
         npppaclStatusSpan.style.color = "green";
-        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Implemented';
-    } else if (npppaclStatus === "Not Implemented") {
+        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Granted';
+    } else if (npppaclStatus === "false") {
         npppaclStatusSpan.style.color = "red";
-        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Implemented';
+        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Need Action (Check Help)';
     } else {
         npppaclStatusSpan.style.color = "orange";
         npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
@@ -1484,10 +1570,10 @@ function npppupdateStatus() {
     var nppppreloadStatus = nppppreloadStatusSpan.textContent.trim();
     nppppreloadStatusSpan.textContent = nppppreloadStatus;
     nppppreloadStatusSpan.style.fontSize = "14px";
-    if (nppppreloadStatus === "Working") {
+    if (nppppreloadStatus === "true") {
         nppppreloadStatusSpan.style.color = "green";
         nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
-    } else if (nppppreloadStatus === "Not Working") {
+    } else if (nppppreloadStatus === "false") {
         nppppreloadStatusSpan.style.color = "red";
         nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
     } else {
