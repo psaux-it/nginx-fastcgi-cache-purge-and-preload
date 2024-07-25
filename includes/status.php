@@ -14,10 +14,9 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// When generating the 'Status' tab, or pre-check we need to check Nginx Cache path permissions recursively in several times.
-// This check traverses the entire Nginx Cache Path. If the user has a very large cache,
-// this process can be very expensive and cause significant performance degradation.
-// To mitigate this, we use a transient to store the permission check status. I call this plugin own cache.
+// To optimize performance and prevent redundancy, we use cached recursive permission checks. 
+// This technique stores the results of time-consuming (expensive) permission verifications for reuse.
+// The results are cached for to reduce performance overhead, especially useful when the Nginx cache path is extensive.
 function nppp_check_permissions_recursive_with_cache() {
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $default_cache_path = '/dev/shm/change-me-now';
@@ -308,6 +307,11 @@ function nppp_get_in_cache_page_count() {
 function nppp_my_status_html() {
     // Call functions once and store their results
     $perm_in_cache_status = nppp_check_perm_in_cache();
+    $php_process_owner = nppp_get_website_user();
+
+    // Format the status string
+    $status_message = $perm_in_cache_status === 'true' ? 'Granted' : 'Need Action (Check Help)';
+    $status_message .= ' (' . esc_html($php_process_owner) . ')';
 
     ob_start();
     ?>
@@ -378,7 +382,7 @@ function nppp_my_status_html() {
                                 <td class="check">PHP Process Owner (Website User)</td>
                                 <td class="status" id="npppphpProcessOwner">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html(nppp_get_website_user()); ?></span>
+                                    <span><?php echo esc_html($php_process_owner); ?></span>
                                 </td>
                             </tr>
                             <tr>
@@ -406,7 +410,7 @@ function nppp_my_status_html() {
                                 <td class="check">Cache Path Permission (Required)</td>
                                 <td class="status" id="npppaclStatus">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html($perm_in_cache_status); ?></span>
+                                    <span><?php echo esc_html($status_message); ?></span>
                                 </td>
                             </tr>
                             <tr>
