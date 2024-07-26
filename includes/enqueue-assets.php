@@ -179,3 +179,21 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
         wp_dequeue_script('nppp-disable-functionality-front');
     }
 }
+
+// This function adds inline CSS to hide notices from other plugins on the
+// settings page of the NPP plugin. It ensures that only notices from NPP
+// are visible while on the plugin settings page.
+function nppp_manage_admin_notices() {
+    // Register a dummy stylesheet
+    wp_register_style('nppp-manage-notices', false);
+
+    // Enqueue the dummy stylesheet
+    wp_enqueue_style('nppp-manage-notices');
+
+    // Add inline CSS to hide all admin notices except those with the class 'notice-nppp'
+    wp_add_inline_style('nppp-manage-notices', '
+        /* Hide all admin notices except those with the class \'notice-nppp\' */
+        .notice { display: none !important; }
+        .notice.notice-nppp { display: block !important; }
+    ');
+}
