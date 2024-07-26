@@ -206,7 +206,7 @@ function nppp_nginx_cache_settings_page() {
                         </tr>
                         <!-- Start Advanced Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Advanced Options</h3></th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Schedule Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
