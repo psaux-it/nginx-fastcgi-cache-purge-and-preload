@@ -305,13 +305,20 @@ function nppp_get_in_cache_page_count() {
 
 // Generate HTML for status tab
 function nppp_my_status_html() {
-    // Call functions once and store their results
     $perm_in_cache_status = nppp_check_perm_in_cache();
     $php_process_owner = nppp_get_website_user();
+    $web_server_user = nppp_get_webserver_user();
+
+    // Compare the two users and set the status
+    if ($php_process_owner === $web_server_user) {
+        $nppp_isolation_status = 'Not Isolated';
+    } else {
+        $nppp_isolation_status = 'Isolated';
+    }
 
     // Format the status string
-    $status_message = $perm_in_cache_status === 'true' ? 'Granted' : 'Need Action (Check Help)';
-    $status_message .= ' (' . esc_html($php_process_owner) . ')';
+    $perm_status_message = $perm_in_cache_status === 'true' ? 'Granted' : 'Need Action (Check Help)';
+    $perm_status_message .= ' (' . esc_html($php_process_owner) . ')';
 
     ob_start();
     ?>
@@ -389,7 +396,7 @@ function nppp_my_status_html() {
                                 <td class="check">Web Server User (nginx | www-data)</td>
                                 <td class="status" id="npppphpWebServer">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html(nppp_get_webserver_user()); ?></span>
+                                    <span><?php echo esc_html($web_server_user); ?></span>
                                 </td>
                             </tr>
                             <tr>
@@ -410,7 +417,14 @@ function nppp_my_status_html() {
                                 <td class="check">Cache Path Permission (Required)</td>
                                 <td class="status" id="npppaclStatus">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html($status_message); ?></span>
+                                    <span><?php echo esc_html($perm_status_message); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check">Permission Isolation (Optional)</td>
+                                <td class="status" id="nppppermIsolation">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html($nppp_isolation_status); ?></span>
                                 </td>
                             </tr>
                             <tr>
