@@ -1590,6 +1590,19 @@ function npppupdateStatus() {
         npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
     }
 
+    // Fetch and update permission isolation status
+    var nppppermIsolationSpan = document.getElementById("nppppermIsolation");
+    var nppppermIsolation = nppppermIsolationSpan.textContent.trim();
+    nppppermIsolationSpan.textContent = nppppermIsolation;
+    nppppermIsolationSpan.style.fontSize = "14px";
+    if (nppppermIsolation === "Isolated") {
+        nppppermIsolationSpan.style.color = "green";
+        nppppermIsolationSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + nppppermIsolation;
+    } else if (nppppermIsolation === "Not Isolated") {
+        nppppermIsolationSpan.style.color = "orange";
+        nppppermIsolationSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + nppppermIsolation;
+    }
+
     // Fetch and update cpulimit command status
     var npppcpulimitStatusSpan = document.getElementById("npppcpulimitStatus");
     var npppcpulimitStatus = npppcpulimitStatusSpan.textContent.trim();
