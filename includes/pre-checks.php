@@ -96,7 +96,7 @@ function nppp_display_pre_check_warning($error_message = '') {
     if (!empty($error_message)) {
         add_action('admin_notices', function() use ($error_message) {
             ?>
-            <div class="notice notice-error is-dismissible">
+            <div class="notice notice-error is-dismissible notice-nppp">
                 <p><?php echo esc_html($error_message); ?></p>
             </div>
             <?php
