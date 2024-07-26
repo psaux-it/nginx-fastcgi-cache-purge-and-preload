@@ -51,6 +51,7 @@ add_action('admin_init', 'nppp_nginx_cache_settings_init');
 add_action('admin_menu', 'nppp_add_nginx_cache_settings_page');
 add_filter('whitelist_options', 'nppp_add_nginx_cache_settings_to_allowed_options');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_pre_checks');
+add_action('load-settings_page_nginx_cache_settings', 'nppp_manage_admin_notices');
 add_action('wp_ajax_nppp_clear_nginx_cache_logs', 'nppp_clear_nginx_cache_logs');
 add_action('wp_ajax_nppp_get_nginx_cache_logs', 'nppp_get_nginx_cache_logs');
 add_action('wp_ajax_nppp_update_send_mail_option', 'nppp_update_send_mail_option');
@@ -79,6 +80,9 @@ add_action('save_post', 'nppp_purge_cache_on_update');
 add_action('wp_insert_comment', 'nppp_purge_cache_on_comment', 200, 2);
 add_action('transition_comment_status', 'nppp_purge_cache_on_comment_change', 200, 3);
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
+add_action('nppp_plugin_admin_notices', function($type, $message, $log_message) {
+    echo '<div class="notice notice-' . esc_attr($type) . ' is-dismissible notice-nppp"><p>' . esc_html($message) . '</p></div>';
+}, 10, 3);
 add_action('wp', function() {
     if (is_user_logged_in() && current_user_can('administrator') && isset($_GET['nppp_front'])) {
         $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
