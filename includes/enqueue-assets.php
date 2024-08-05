@@ -88,6 +88,8 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     $cancel_scheduled_event_nonce = wp_create_nonce('nppp-cancel-scheduled-event');
     // Create a nonce for plugin cache clear
     $clear_plugin_cache_nonce = wp_create_nonce('nppp-clear-plugin-cache-action');
+    // Create a nonce for restart systemd service npp-wordpress
+    $restart_systemd_service_nonce = wp_create_nonce('nppp-restart-systemd-service');
 
     // Localize nonce values for nppp_admin-js
     wp_localize_script('nppp_admin-js', 'nppp_admin_data', array(
@@ -110,6 +112,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'cache_schedule_nonce' => $update_cache_schedule_option_nonce,
         'cancel_scheduled_event_nonce' => $cancel_scheduled_event_nonce,
         'plugin_cache_nonce' => $clear_plugin_cache_nonce,
+        'systemd_service_nonce' => $restart_systemd_service_nonce,
     ));
 }
 
