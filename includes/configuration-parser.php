@@ -115,6 +115,11 @@ function nppp_generate_html($cache_paths, $nginx_info) {
     ?>
     <header></header>
     <main>
+        <section class="nginx-status" style="background-color: mistyrose;">
+            <h2>Systemd Service Management</h2>
+            <p style="padding-left: 10px; font-weight: 500;">In case you use the one-liner automation bash script, it creates a systemd service named npp-wordpress, which grants the permissions required for cache purge and preload actions. It also assigns passwordless sudo permissions to PHP process owner specifically for managing the systemd npp-wordpress service directly from the frontend.</p>
+            <button id="nppp-restart-systemd-service-btn" class="button button-primary" style="margin-left: 10px; margin-bottom: 15px;">Restart Service</button>
+        </section>
         <section class="nginx-status">
             <h2>NGINX STATUS</h2>
             <table>
@@ -185,6 +190,51 @@ function nppp_generate_html($cache_paths, $nginx_info) {
     </div>
     <?php
     return ob_get_clean();
+}
+
+// Handles the AJAX request to restart the systemd service
+function nppp_restart_systemd_service() {
+    // Check nonce
+    if (isset($_POST['_wpnonce'])) {
+        $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
+        if (!wp_verify_nonce($nonce, 'nppp-restart-systemd-service')) {
+            wp_send_json_error('Nonce verification failed.');
+            return;
+        }
+    } else {
+        wp_send_json_error('Nonce is missing.');
+        return;
+    }
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to access this action.');
+        return;
+    }
+
+    // Get full paths for sudo and systemctl
+    $sudo_path = trim(shell_exec('command -v sudo'));
+    $systemctl_path = trim(shell_exec('command -v systemctl'));
+
+    if (empty($sudo_path) || empty($systemctl_path)) {
+        wp_send_json_error('Required commands sudo | systemctl not found.');
+        return;
+    }
+
+    // Execute the restart command
+    $restart_command = escapeshellcmd("sudo $systemctl_path restart npp-wordpress.service");
+    $restart_output = shell_exec($restart_command);
+
+    // Execute the status command
+    $status_command = escapeshellcmd("sudo $systemctl_path is-active npp-wordpress.service");
+    $status = trim(shell_exec($status_command));
+
+    // Return response based on the service status
+    if (empty($restart_output) && $status === 'active') {
+        wp_send_json_success('Systemd service restarted and is active.');
+    } else {
+        wp_send_json_error('Failed to restart the systemd service or the service is not active.');
+    }
 }
 
 // Shortcode function to display the Nginx configuration on status tab
