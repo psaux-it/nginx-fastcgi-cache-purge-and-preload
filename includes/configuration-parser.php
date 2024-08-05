@@ -106,8 +106,25 @@ function nppp_get_nginx_info() {
     ];
 }
 
+// Check if the systemd service file exists
+function nppp_is_service_file_exists() {
+    // Initialize the WP Filesystem
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    // Check if WP Filesystem initialization failed
+    if ($wp_filesystem === false) {
+        return false;
+    }
+
+    $systemd_file = '/etc/systemd/system/npp-wordpress.service';
+    return $wp_filesystem->exists($systemd_file);
+}
+
 // Function to generate HTML output
 function nppp_generate_html($cache_paths, $nginx_info) {
+    // Check if the systemd service file exists
+    $service_file_exists = nppp_is_service_file_exists();
+
     ob_start();
     //img url's
     $image_url_bar = plugins_url('/admin/img/bar.png', dirname(__FILE__));
@@ -117,8 +134,12 @@ function nppp_generate_html($cache_paths, $nginx_info) {
     <main>
         <section class="nginx-status" style="background-color: mistyrose;">
             <h2>Systemd Service Management</h2>
-            <p style="padding-left: 10px; font-weight: 500;">In case you used the one-liner automation bash script for the initial setup, you can restart the systemd service here. Restarting the service may helps to fix permission issues and keep cache consistency stable. The automation script assigns passwordless sudo permissions to the PHP process owner specifically for managing the npp-wordpress service directly from the frontend.</p>
-            <button id="nppp-restart-systemd-service-btn" class="button button-primary" style="margin-left: 10px; margin-bottom: 15px;">Restart Service</button>
+            <p style="padding-left: 10px; font-weight: 500;">
+                In case you used the one-liner automation bash script for the initial setup, you can restart the systemd service here. Restarting the service may help to fix permission issues and keep cache consistency stable. The automation script assigns passwordless sudo permissions to the PHP process owner specifically for managing the npp-wordpress service directly from the frontend.
+            </p>
+            <button id="nppp-restart-systemd-service-btn" class="button button-primary <?php echo !$service_file_exists ? 'disabled' : ''; ?>" style="margin-left: 10px; margin-bottom: 15px; background-color: #2271b1 !important; color: white !important;">
+                Restart Service
+            </button>
         </section>
         <section class="nginx-status">
             <h2>NGINX STATUS</h2>
