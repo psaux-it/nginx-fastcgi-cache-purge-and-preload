@@ -9,6 +9,62 @@
  */
 
 jQuery(document).ready(function($) {
+    // Function to adjust the status tab table layout for mobile
+    function adjustTableForMobile() {
+        const mobileBreakpoint = 480;
+
+        // Get the current viewport width
+        const viewportWidth = window.innerWidth;
+
+        // Check if viewport is smaller than the breakpoint
+        if (viewportWidth < mobileBreakpoint) {
+            // Select the specific row in the status-summary section
+            $('.status-summary table tbody tr').each(function() {
+                const actionWrapperDiv = $(this).find('.action .action-wrapper:last-of-type');
+                const statusTd = $(this).find('#npppphpFpmStatus');
+
+                // Check if the row has the actionWrapperDiv and statusTd
+                if (actionWrapperDiv.length && statusTd.length) {
+                    // Create a new div for status content
+                    const statusWrapper = $('<div class="status-wrapper"></div>');
+                    statusWrapper.css({
+                        'font-size': '14px',
+                        'color': 'green',
+                        'margin-top': '5px'
+                    }).html(statusTd.html());
+
+                    // Hide the original status td
+                    statusTd.hide();
+
+                    // Append the new status wrapper after the action-wrapper div
+                    actionWrapperDiv.after(statusWrapper);
+                }
+
+                // Target the second action-wrapper with font-size 12px
+                const actionWrapperDivs = $(this).find('.action .action-wrapper');
+                if (actionWrapperDivs.length > 1) {
+                    const secondActionWrapperDiv = actionWrapperDivs.eq(1);
+                    if (secondActionWrapperDiv.css('font-size') === '12px') {
+                        // Adjust the text font size to 10px
+                        const textSpan = $('<span></span>').css({
+                            'font-size': '10px',
+                            'color': secondActionWrapperDiv.css('color') // Use the existing color
+                        }).text(secondActionWrapperDiv.text().trim());
+
+                        // Replace the content of the second action-wrapper with the new span
+                        secondActionWrapperDiv.empty().append(textSpan);
+                    }
+                }
+            });
+        }
+    }
+
+    // Adjust layout on viewport resize
+    $(window).on('resize', adjustTableForMobile);
+
+    // Initial call to adjust the layout on page load
+    adjustTableForMobile();
+
     // Initialize jQuery UI tabs
     $('#nppp-nginx-tabs').tabs({
         activate: function(event, ui) {
@@ -25,6 +81,7 @@ jQuery(document).ready(function($) {
                 }
             } else if (tabId === 'status') {
                 loadStatusTabContent();
+                adjustTableForMobile();
             } else if (tabId === 'premium') {
                 loadPremiumTabContent();
             }
@@ -39,6 +96,7 @@ jQuery(document).ready(function($) {
     // Load status content if user comes from wordpress admin bar directly
     if (window.location.hash === '#status') {
         loadStatusTabContent();
+        adjustTableForMobile();
     }
 
     // Function to load content for the 'Status' tab via AJAX
