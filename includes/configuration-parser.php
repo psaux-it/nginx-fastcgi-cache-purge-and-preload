@@ -117,7 +117,7 @@ function nppp_generate_html($cache_paths, $nginx_info) {
     <main>
         <section class="nginx-status" style="background-color: mistyrose;">
             <h2>Systemd Service Management</h2>
-            <p style="padding-left: 10px; font-weight: 500;">In case you used the one-liner automation bash script for the initial setup, you can restart the systemd service named npp-wordpress here. Restarting the service may helps to fix permission issues and keep cache consistency stable. The automation script assigns passwordless sudo permissions to the PHP process owner specifically for managing the npp-wordpress service directly from the frontend.</p>
+            <p style="padding-left: 10px; font-weight: 500;">In case you used the one-liner automation bash script for the initial setup, you can restart the systemd service here. Restarting the service may helps to fix permission issues and keep cache consistency stable. The automation script assigns passwordless sudo permissions to the PHP process owner specifically for managing the npp-wordpress service directly from the frontend.</p>
             <button id="nppp-restart-systemd-service-btn" class="button button-primary" style="margin-left: 10px; margin-bottom: 15px;">Restart Service</button>
         </section>
         <section class="nginx-status">
