@@ -844,6 +844,63 @@ jQuery(document).ready(function($) {
         });
     });
 
+    // Event listener for the restart systemd service button
+    $(document).off('click', '#nppp-restart-systemd-service-btn').on('click', '#nppp-restart-systemd-service-btn', function(e) {
+        e.preventDefault();
+
+        // Make AJAX request to restart systemd service
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'nppp_restart_systemd_service',
+                _wpnonce: nppp_admin_data.systemd_service_nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    // Get the button element and its position
+                    var buttonElement = $('#nppp-restart-systemd-service-btn');
+                    var buttonOffset = buttonElement.offset();
+                    var buttonWidth = buttonElement.outerWidth();
+
+                    // Calculate the notification position
+                    var notificationLeft = buttonOffset.left + buttonWidth + 10;
+                    var notificationTop = buttonOffset.top - 3;
+
+                    // Show a small notification indicating successful restart
+                    var notification = document.createElement('div');
+                    notification.textContent = 'Service Restarted';
+                    notification.style.position = 'absolute';
+                    notification.style.left = notificationLeft + 'px';
+                    notification.style.top = notificationTop + 'px';
+                    notification.style.backgroundColor = '#50C878';
+                    notification.style.color = '#fff';
+                    notification.style.padding = '8px 12px';
+                    notification.style.transition = 'opacity 0.3s ease-in-out';
+                    notification.style.opacity = '1';
+                    notification.style.zIndex = '9999';
+                    notification.style.fontSize = '13px';
+                    notification.style.fontWeight = '700';
+                    notification.style.borderRadius = '4px';
+                    document.body.appendChild(notification);
+
+                    // Set the notification duration
+                    setTimeout(function() {
+                        notification.style.opacity = '0';
+                        setTimeout(function() {
+                            document.body.removeChild(notification);
+                        }, 300);
+                    }, 1000);
+                } else {
+                    alert(response.data);
+                }
+            },
+            error: function() {
+                alert('An error occurred while restarting the service.');
+            }
+        });
+    });
+
     // Function to initialize DataTables.js for premium table
     function initializePremiumTable() {
         $('#nppp-premium-table').DataTable({
