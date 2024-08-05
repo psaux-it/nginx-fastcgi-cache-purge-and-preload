@@ -778,68 +778,79 @@ jQuery(document).ready(function($) {
                 _wpnonce: nppp_admin_data.plugin_cache_nonce
             },
             success: function(response) {
-                var $messageElement = $('.clear-plugin-cache p');
+                // Get the button element and its position
+                var buttonElement = $('#nppp-clear-plugin-cache-btn');
+                var buttonOffset = buttonElement.offset();
+                var buttonWidth = buttonElement.outerWidth();
 
-                // Apply the response data to the <p> tag
-                if (response.success) {
-                    $messageElement.html(response.data);
-                } else {
-                    $messageElement.html('<p>An error occurred while clearing the plugin cache: ' + response.data + '</p>');
-                }
+                // Calculate the notification position
+                var notificationLeft = buttonOffset.left + buttonWidth + 10;
+                var notificationTop = buttonOffset.top - 3;
 
-                // Effect styles
-                $messageElement.css({
-                    "background-color": "darkorange",
-                    "color": "white"
-                });
+                // Show a small notification indicating successful cache clearing
+                var notification = document.createElement('div');
+                notification.textContent = 'Cache Cleared';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeft + 'px';
+                notification.style.top = notificationTop + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                notification.style.borderRadius = '4px';
+                document.body.appendChild(notification);
 
-                // Effect duration
-                var duration = 100;
-                var numFlashes = 8;
-
-                // Flashing effect
-                for (var i = 0; i < numFlashes; i++) {
-                    $messageElement.fadeOut(duration).fadeIn(duration);
-                }
-
-                // Remove the highlight after a short delay
+                // Set the notification duration
                 setTimeout(function() {
-                    $messageElement.css({
-                        "background-color": "",
-                        "color": ""
-                    });
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
 
-                    // Re-trigger recursive permission check
-                    // and cache the result
-                    location.reload();
-                }, numFlashes * duration * 2);
+                        // Re-trigger recursive permission check and cache the result
+                        if (response.success) {
+                            location.reload();
+                        }
+                    }, 300);
+                }, 2500);
             },
             error: function(xhr, status, error) {
-                var $messageElement = $('.clear-plugin-cache p');
-                $messageElement.html('<p>An error occurred while clearing the plugin cache: ' + error + '</p>');
+                // Get the button element and its position
+                var buttonElement = $('#nppp-clear-plugin-cache-btn');
+                var buttonOffset = buttonElement.offset();
+                var buttonWidth = buttonElement.outerWidth();
 
-                // Effect styles
-                $messageElement.css({
-                    "background-color": "darkorange",
-                    "color": "white"
-                });
+                // Calculate the notification position
+                var notificationLeft = buttonOffset.left + buttonWidth + 10;
+                var notificationTop = buttonOffset.top - 3;
 
-                // Effect duration
-                var duration = 100;
-                var numFlashes = 8;
+                // Show a small notification indicating error
+                var notification = document.createElement('div');
+                notification.textContent = 'Cache cannot be cleared';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeft + 'px';
+                notification.style.top = notificationTop + 'px';
+                notification.style.backgroundColor = '#D32F2F';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                notification.style.borderRadius = '4px';
+                document.body.appendChild(notification);
 
-                // Flashing effect
-                for (var i = 0; i < numFlashes; i++) {
-                    $messageElement.fadeOut(duration).fadeIn(duration);
-                }
-
-                // Remove the highlight after a short delay
+                // Set the notification duration
                 setTimeout(function() {
-                    $messageElement.css({
-                        "background-color": "",
-                        "color": ""
-                    });
-                }, numFlashes * duration * 2);
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 2500);
             }
         });
     });
@@ -857,46 +868,74 @@ jQuery(document).ready(function($) {
                 _wpnonce: nppp_admin_data.systemd_service_nonce
             },
             success: function(response) {
-                if (response.success) {
-                    // Get the button element and its position
-                    var buttonElement = $('#nppp-restart-systemd-service-btn');
-                    var buttonOffset = buttonElement.offset();
-                    var buttonWidth = buttonElement.outerWidth();
+                // Get the button element and its position
+                var buttonElement = $('#nppp-restart-systemd-service-btn');
+                var buttonOffset = buttonElement.offset();
+                var buttonWidth = buttonElement.outerWidth();
 
-                    // Calculate the notification position
-                    var notificationLeft = buttonOffset.left + buttonWidth + 10;
-                    var notificationTop = buttonOffset.top - 3;
+                // Calculate the notification position
+                var notificationLeft = buttonOffset.left + buttonWidth + 10;
+                var notificationTop = buttonOffset.top - 3;
 
-                    // Show a small notification indicating successful restart
-                    var notification = document.createElement('div');
-                    notification.textContent = 'Service Restarted';
-                    notification.style.position = 'absolute';
-                    notification.style.left = notificationLeft + 'px';
-                    notification.style.top = notificationTop + 'px';
-                    notification.style.backgroundColor = '#50C878';
-                    notification.style.color = '#fff';
-                    notification.style.padding = '8px 12px';
-                    notification.style.transition = 'opacity 0.3s ease-in-out';
-                    notification.style.opacity = '1';
-                    notification.style.zIndex = '9999';
-                    notification.style.fontSize = '13px';
-                    notification.style.fontWeight = '700';
-                    notification.style.borderRadius = '4px';
-                    document.body.appendChild(notification);
+                // Show a small notification indicating successful restart
+                var notification = document.createElement('div');
+                notification.textContent = 'Service Restarted';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeft + 'px';
+                notification.style.top = notificationTop + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                notification.style.borderRadius = '4px';
+                document.body.appendChild(notification);
 
-                    // Set the notification duration
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
                     setTimeout(function() {
-                        notification.style.opacity = '0';
-                        setTimeout(function() {
-                            document.body.removeChild(notification);
-                        }, 300);
-                    }, 1000);
-                } else {
-                    alert(response.data);
-                }
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 2500);
             },
             error: function() {
-                alert('An error occurred while restarting the service.');
+                // Get the button element and its position
+                var buttonElement = $('#nppp-restart-systemd-service-btn');
+                var buttonOffset = buttonElement.offset();
+                var buttonWidth = buttonElement.outerWidth();
+
+                // Calculate the notification position
+                var notificationLeft = buttonOffset.left + buttonWidth + 10;
+                var notificationTop = buttonOffset.top - 3;
+
+                // Show a small notification indicating failure
+                var notification = document.createElement('div');
+                notification.textContent = 'Service cannot be restarted';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeft + 'px';
+                notification.style.top = notificationTop + 'px';
+                notification.style.backgroundColor = '#D32F2F';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                notification.style.borderRadius = '4px';
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 2500);
             }
         });
     });
