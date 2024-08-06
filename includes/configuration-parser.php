@@ -215,22 +215,22 @@ function nppp_generate_html($cache_paths, $nginx_info) {
 
 // Handles the AJAX request to restart the systemd service
 function nppp_restart_systemd_service() {
+    // Define the systemd service name
+    $service_name = 'npp-wordpress.service';
+
     // Check nonce
     if (isset($_POST['_wpnonce'])) {
         $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
         if (!wp_verify_nonce($nonce, 'nppp-restart-systemd-service')) {
             wp_send_json_error('Nonce verification failed.');
-            return;
         }
     } else {
         wp_send_json_error('Nonce is missing.');
-        return;
     }
 
     // Check user capability
     if (!current_user_can('manage_options')) {
         wp_send_json_error('You do not have permission to access this action.');
-        return;
     }
 
     // Get full paths for sudo and systemctl
@@ -238,23 +238,35 @@ function nppp_restart_systemd_service() {
     $systemctl_path = trim(shell_exec('command -v systemctl'));
 
     if (empty($sudo_path) || empty($systemctl_path)) {
-        wp_send_json_error('Required commands sudo | systemctl not found.');
-        return;
+        wp_send_json_error('Required commands sudo or systemctl not found.');
     }
 
-    // Execute the restart command
-    $restart_command = escapeshellcmd("sudo $systemctl_path restart npp-wordpress.service");
-    $restart_output = shell_exec($restart_command);
+    $output = [];
+    $return_var = 0;
+
+    // Construct and execute the restart command
+    $restart_command = "echo '' | sudo -S " . escapeshellcmd($systemctl_path) . " restart " . escapeshellcmd($service_name);
+    exec($restart_command . ' 2>&1', $output, $return_var);
+
+    // Check if sudo prompted for a password
+    if ($return_var === 1 && strpos(implode("\n", $output), 'password') !== false) {
+        wp_send_json_error('Sudo password prompt detected. Failed to restart the systemd service.');
+    }
+
+    // Check command output and return status
+    if ($return_var !== 0) {
+        wp_send_json_error('Failed to restart the systemd service. Output: ' . implode("\n", $output));
+    }
 
     // Execute the status command
-    $status_command = escapeshellcmd("sudo $systemctl_path is-active npp-wordpress.service");
+    $status_command = 'sudo ' . escapeshellcmd($systemctl_path) . ' is-active ' . escapeshellcmd($service_name);
     $status = trim(shell_exec($status_command));
 
     // Return response based on the service status
-    if (empty($restart_output) && $status === 'active') {
+    if ($status === 'active') {
         wp_send_json_success('Systemd service restarted and is active.');
     } else {
-        wp_send_json_error('Failed to restart the systemd service or the service is not active.');
+        wp_send_json_error('Restart completed but the service is not active. Status: ' . $status);
     }
 }
 
