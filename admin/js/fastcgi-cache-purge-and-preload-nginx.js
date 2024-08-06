@@ -828,6 +828,23 @@ jQuery(document).ready(function($) {
     $(document).off('click', '#nppp-clear-plugin-cache-btn').on('click', '#nppp-clear-plugin-cache-btn', function(e) {
         e.preventDefault();
 
+        // Get the button element and its position
+        var buttonElement = $('#nppp-clear-plugin-cache-btn');
+        var buttonOffset = buttonElement.offset();
+        var buttonWidth = buttonElement.outerWidth();
+
+        // Set the loading spinner
+        var spinner = document.createElement('div');
+        spinner.className = 'nppp-loading-spinner';
+        spinner.style.position = 'absolute';
+        spinner.style.left = buttonOffset.left + buttonWidth + 10 + 'px';
+        spinner.style.top = (buttonOffset.top - 12) + 'px';
+        spinner.style.zIndex = '9999';
+
+        // Show loading spinner
+        document.body.appendChild(spinner);
+
+        // Make AJAX request to clear plugin cache
         $.ajax({
             url: nppp_admin_data.ajaxurl,
             type: 'POST',
@@ -836,22 +853,18 @@ jQuery(document).ready(function($) {
                 _wpnonce: nppp_admin_data.plugin_cache_nonce
             },
             success: function(response) {
-                // Get the button element and its position
-                var buttonElement = $('#nppp-clear-plugin-cache-btn');
-                var buttonOffset = buttonElement.offset();
-                var buttonWidth = buttonElement.outerWidth();
+                // Remove the loading spinner
+                document.body.removeChild(spinner);
 
                 // Calculate the notification position
                 var notificationLeft = buttonOffset.left + buttonWidth + 10;
                 var notificationTop = buttonOffset.top - 3;
 
-                // Show a small notification indicating successful cache clearing
+                // Show a small notification indicating status
                 var notification = document.createElement('div');
-                notification.textContent = 'Cache Cleared';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeft + 'px';
                 notification.style.top = notificationTop + 'px';
-                notification.style.backgroundColor = '#50C878';
                 notification.style.color = '#fff';
                 notification.style.padding = '8px 12px';
                 notification.style.transition = 'opacity 0.3s ease-in-out';
@@ -860,6 +873,18 @@ jQuery(document).ready(function($) {
                 notification.style.fontSize = '13px';
                 notification.style.fontWeight = '700';
                 notification.style.borderRadius = '4px';
+
+                if (response.success) {
+                    // Handle success case
+                    notification.textContent = 'Cache Cleared';
+                    notification.style.backgroundColor = '#50C878';
+                } else {
+                    // Handle error case
+                    notification.textContent = 'Cache cannot be cleared';
+                    notification.style.backgroundColor = '#D32F2F';
+                }
+
+                // Show notification
                 document.body.appendChild(notification);
 
                 // Set the notification duration
@@ -873,13 +898,11 @@ jQuery(document).ready(function($) {
                             location.reload();
                         }
                     }, 300);
-                }, 2500);
+                }, 2000);
             },
             error: function(xhr, status, error) {
-                // Get the button element and its position
-                var buttonElement = $('#nppp-clear-plugin-cache-btn');
-                var buttonOffset = buttonElement.offset();
-                var buttonWidth = buttonElement.outerWidth();
+                // Remove the loading spinner
+                document.body.removeChild(spinner);
 
                 // Calculate the notification position
                 var notificationLeft = buttonOffset.left + buttonWidth + 10;
@@ -887,7 +910,7 @@ jQuery(document).ready(function($) {
 
                 // Show a small notification indicating error
                 var notification = document.createElement('div');
-                notification.textContent = 'Cache cannot be cleared';
+                notification.textContent = 'An ajax error occured';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeft + 'px';
                 notification.style.top = notificationTop + 'px';
@@ -900,6 +923,8 @@ jQuery(document).ready(function($) {
                 notification.style.fontSize = '13px';
                 notification.style.fontWeight = '700';
                 notification.style.borderRadius = '4px';
+
+                // Show notification
                 document.body.appendChild(notification);
 
                 // Set the notification duration
@@ -908,7 +933,7 @@ jQuery(document).ready(function($) {
                     setTimeout(function() {
                         document.body.removeChild(notification);
                     }, 300);
-                }, 2500);
+                }, 2000);
             }
         });
     });
@@ -917,11 +942,12 @@ jQuery(document).ready(function($) {
     $(document).off('click', '#nppp-restart-systemd-service-btn').on('click', '#nppp-restart-systemd-service-btn', function(e) {
         e.preventDefault();
 
-        // Create and show the loading spinner
+        // Get the button element and its position
         var buttonElement = $('#nppp-restart-systemd-service-btn');
         var buttonOffset = buttonElement.offset();
         var buttonWidth = buttonElement.outerWidth();
 
+        // Set the loading spinner
         var spinner = document.createElement('div');
         spinner.className = 'nppp-loading-spinner';
         spinner.style.position = 'absolute';
@@ -929,6 +955,7 @@ jQuery(document).ready(function($) {
         spinner.style.top = (buttonOffset.top - 12) + 'px';
         spinner.style.zIndex = '9999';
 
+        // Show loading spinner
         document.body.appendChild(spinner);
 
         // Make AJAX request to restart systemd service
@@ -947,7 +974,7 @@ jQuery(document).ready(function($) {
                 var notificationLeft = buttonOffset.left + buttonWidth + 10;
                 var notificationTop = buttonOffset.top - 3;
 
-                // Show a small notification indicating successful restart
+                // Show a small notification indicating status
                 var notification = document.createElement('div');
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeft + 'px';
@@ -971,7 +998,7 @@ jQuery(document).ready(function($) {
                     notification.style.backgroundColor = '#D32F2F';
                 }
 
-                // show status notification
+                // Show status notification
                 document.body.appendChild(notification);
 
                 // Set the notification duration
@@ -983,7 +1010,7 @@ jQuery(document).ready(function($) {
                 }, 2500);
             },
             error: function() {
-                // Remove the spinner
+                // Remove the loading spinner
                 document.body.removeChild(spinner);
 
                 // Calculate the notification position
