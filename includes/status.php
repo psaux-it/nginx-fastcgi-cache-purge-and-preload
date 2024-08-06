@@ -328,7 +328,7 @@ function nppp_my_status_html() {
             <main>
                 <section class="clear-plugin-cache" style="background-color: mistyrose;">
                     <h2>Clear Plugin Cache</h2>
-                    <p style="padding-left: 10px; font-weight: 500;">To ensure the accuracy of the displayed statuses, please clear the plugin cache. This plugin caches some expensive metrics for 1 Hour to improve performance. However, If you're in the testing stage and making frequent changes and re-checking Status tab, clearing the cache is necessary to view the most up-to-date and accurate status.</p>
+                    <p style="padding-left: 10px; font-weight: 500;">To ensure the accuracy of the displayed statuses, please clear the plugin cache. This plugin caches expensive status metrics to enhance performance. However, If you're in the testing stage and making frequent changes and re-checking Status tab, clearing the cache is necessary to view the most up-to-date and accurate status.</p>
                     <button id="nppp-clear-plugin-cache-btn" class="button button-primary" style="margin-left: 10px; margin-bottom: 15px;">Clear Plugin Cache</button>
                 </section>
                 <section class="status-summary">
