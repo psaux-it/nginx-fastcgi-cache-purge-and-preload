@@ -917,6 +917,20 @@ jQuery(document).ready(function($) {
     $(document).off('click', '#nppp-restart-systemd-service-btn').on('click', '#nppp-restart-systemd-service-btn', function(e) {
         e.preventDefault();
 
+        // Create and show the loading spinner
+        var buttonElement = $('#nppp-restart-systemd-service-btn');
+        var buttonOffset = buttonElement.offset();
+        var buttonWidth = buttonElement.outerWidth();
+
+        var spinner = document.createElement('div');
+        spinner.className = 'nppp-loading-spinner';
+        spinner.style.position = 'absolute';
+        spinner.style.left = buttonOffset.left + buttonWidth + 10 + 'px';
+        spinner.style.top = (buttonOffset.top - 12) + 'px';
+        spinner.style.zIndex = '9999';
+
+        document.body.appendChild(spinner);
+
         // Make AJAX request to restart systemd service
         $.ajax({
             url: nppp_admin_data.ajaxurl,
@@ -926,10 +940,8 @@ jQuery(document).ready(function($) {
                 _wpnonce: nppp_admin_data.systemd_service_nonce
             },
             success: function(response) {
-                // Get the button element and its position
-                var buttonElement = $('#nppp-restart-systemd-service-btn');
-                var buttonOffset = buttonElement.offset();
-                var buttonWidth = buttonElement.outerWidth();
+                // Remove the spinner
+                document.body.removeChild(spinner);
 
                 // Calculate the notification position
                 var notificationLeft = buttonOffset.left + buttonWidth + 10;
@@ -937,11 +949,9 @@ jQuery(document).ready(function($) {
 
                 // Show a small notification indicating successful restart
                 var notification = document.createElement('div');
-                notification.textContent = 'Service Restarted';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeft + 'px';
                 notification.style.top = notificationTop + 'px';
-                notification.style.backgroundColor = '#50C878';
                 notification.style.color = '#fff';
                 notification.style.padding = '8px 12px';
                 notification.style.transition = 'opacity 0.3s ease-in-out';
@@ -950,6 +960,18 @@ jQuery(document).ready(function($) {
                 notification.style.fontSize = '13px';
                 notification.style.fontWeight = '700';
                 notification.style.borderRadius = '4px';
+
+                if (response.success) {
+                    // Handle success case
+                    notification.textContent = 'Service Restarted';
+                    notification.style.backgroundColor = '#50C878';
+                } else {
+                    // Handle error case
+                    notification.textContent = 'Service cannot be restarted';
+                    notification.style.backgroundColor = '#D32F2F';
+                }
+
+                // show status notification
                 document.body.appendChild(notification);
 
                 // Set the notification duration
@@ -961,10 +983,8 @@ jQuery(document).ready(function($) {
                 }, 2500);
             },
             error: function() {
-                // Get the button element and its position
-                var buttonElement = $('#nppp-restart-systemd-service-btn');
-                var buttonOffset = buttonElement.offset();
-                var buttonWidth = buttonElement.outerWidth();
+                // Remove the spinner
+                document.body.removeChild(spinner);
 
                 // Calculate the notification position
                 var notificationLeft = buttonOffset.left + buttonWidth + 10;
@@ -972,7 +992,7 @@ jQuery(document).ready(function($) {
 
                 // Show a small notification indicating failure
                 var notification = document.createElement('div');
-                notification.textContent = 'Service cannot be restarted';
+                notification.textContent = 'An ajax error occured';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeft + 'px';
                 notification.style.top = notificationTop + 'px';
