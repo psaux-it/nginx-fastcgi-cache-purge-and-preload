@@ -898,7 +898,7 @@ jQuery(document).ready(function($) {
                             location.reload();
                         }
                     }, 300);
-                }, 2000);
+                }, 1200);
             },
             error: function(xhr, status, error) {
                 // Remove the loading spinner
@@ -1007,7 +1007,7 @@ jQuery(document).ready(function($) {
                     setTimeout(function() {
                         document.body.removeChild(notification);
                     }, 300);
-                }, 2500);
+                }, 2000);
             },
             error: function() {
                 // Remove the loading spinner
@@ -1040,7 +1040,7 @@ jQuery(document).ready(function($) {
                     setTimeout(function() {
                         document.body.removeChild(notification);
                     }, 300);
-                }, 2500);
+                }, 2000);
             }
         });
     });
