@@ -188,7 +188,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
 // are visible while on the plugin settings page.
 function nppp_manage_admin_notices() {
     // Register a dummy stylesheet
-    wp_register_style('nppp-manage-notices', false);
+    wp_register_style('nppp-manage-notices', false, array(), '2.0.2');
 
     // Enqueue the dummy stylesheet
     wp_enqueue_style('nppp-manage-notices');
