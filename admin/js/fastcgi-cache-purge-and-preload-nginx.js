@@ -1553,34 +1553,6 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 });
 
-// position vertically middle nppp ad
-jQuery(document).ready(function($) {
-    // Function to vertically position #nppp-ad
-    function positionAdVertically() {
-        // Get the height of .nginx-status element
-        var statusHeight = $('section.nginx-status').outerHeight();
-
-        // Get the height of the container
-        var containerHeight = $('#nppp-nginx-info').outerHeight();
-
-        // Calculate the available height
-        var availableHeight = containerHeight - statusHeight;
-
-        // Get the height of #nppp-ad element
-        var adHeight = $('#nppp-ad').outerHeight();
-
-        // Calculate the margin-top to vertically center #nppp-ad
-        var marginTop = (availableHeight - adHeight) / 2 - 20;
-
-        // Set the margin-top property
-        $('#nppp-ad').css('margin-top', marginTop + 'px');
-    }
-
-    // Call the function initially and on window resize
-    positionAdVertically();
-    $(window).resize(positionAdVertically);
-});
-
 // trim trailing leading white spaces from inputs
 document.addEventListener('DOMContentLoaded', function () {
     // IDs of input fields to apply trimming
