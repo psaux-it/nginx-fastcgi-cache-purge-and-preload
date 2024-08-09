@@ -331,7 +331,7 @@ function nppp_extract_cached_urls($nginx_cache_path) {
                 }
             }
         }
-    } catch (UnexpectedValueException $e) {
+    } catch (Exception $e) {
         return "<div class=\"nppp-premium-wrap\"><h2>Advanced Tab</h2><p>ERROR PERMISSION: Unable to access directory $nginx_cache_path. Refer to -Help- tab for guidance.</p></div>";
     }
 
