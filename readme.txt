@@ -5,7 +5,7 @@ Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 6.6.1
-Stable tag: 2.0.2
+Stable tag: 2.0.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -17,7 +17,7 @@ This plugin allows WordPress users to manage Nginx Cache Purge and Preload opera
 
 == Important ==
 
-Please read the full description and FAQ here for fully functional Nginx cache Purge and Preload actions provided by this plugin:
+Please read the full description and FAQ here for fully functional Nginx cache purge and preload actions provided by this plugin:
 
 == Features ==
 
