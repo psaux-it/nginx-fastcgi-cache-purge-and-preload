@@ -141,14 +141,14 @@ Yes, please refer to the plugin settings **Help** tab.
 
 == Screenshots ==
 
-1. Settings Tab 1
-2. Settings Tab 2
-3. Status Tab
-4. Advanced Tab
-5. Help Tab
-6. Frontend Admin Bar
-7. Frontend Admin Bar 2
-8. E-Mail Notification
+1. Settings Tab Purge
+2. Settings Tab Preload
+3. Settings Tab Schedule
+4. Settings Tab Mail & Logging
+5. Status Tab
+6. Advanced Tab
+7. Help Tab
+8. Front-end Admin Bar
 
 == Changelog ==
 
