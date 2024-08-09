@@ -2,7 +2,7 @@
 /**
  * Purge action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.2
+ * Version: 2.0.3
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -80,12 +80,6 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         }
     }
 
-    // Check read and write permissions for the cache path before purge cache
-    if (!nppp_check_permissions_recursive($nginx_cache_path)) {
-        nppp_display_admin_notice('error', "ERROR PERMISSION: Cache purge failed for page $current_page_url due to permission issue. Refer to -Help- tab for guidance.");
-        return;
-    }
-
     // Valitade the sanitized url before process
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) !== false) {
         // Remove http:// or https:// from the URL and append a forward slash
@@ -103,8 +97,15 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
             RecursiveIteratorIterator::SELF_FIRST
         );
 
+        $found = false;
         foreach ($cache_iterator as $file) {
             if ($wp_filesystem->is_file($file->getPathname())) {
+                // Check read and write permissions for each file
+                if (!$wp_filesystem->is_readable($file->getPathname()) || !$wp_filesystem->is_writable($file->getPathname())) {
+                    nppp_display_admin_notice('error', "ERROR PERMISSION: Cache purge failed for page $current_page_url due to permission issue. Refer to -Help- tab for guidance.");
+                    return;
+                }
+                
                 // Read file contents
                 $content = $wp_filesystem->get_contents($file->getPathname());
 
@@ -116,6 +117,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 // Check for the URL after 'KEY: httpsGET'
                 if (preg_match('/^KEY:\s+https?GET' . preg_quote($url_to_search_exact, '/') . '$/m', $content)) {
                     $cache_path = $file->getPathname();
+                    $found = true;
 
                     // Sanitize and validate the file path before delete
                     // This is an extra security layer
@@ -159,17 +161,20 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 }
             }
         }
-    } catch (UnexpectedValueException $e) {
+    } catch (Exception $e) {
         nppp_display_admin_notice('error', "ERROR PERMISSION: Cache purge failed for page $current_page_url due to permission issue. Refer to -Help- tab for guidance.");
         return;
     }
 
-    // Return false if the URL is not found
-    nppp_display_admin_notice('info', "INFO ADMIN: Cache purge attempted, but the page $current_page_url is not currently found in the cache.");
+    // If the URL is not found in the cache
+    if (!$found) {
+        nppp_display_admin_notice('info', "INFO ADMIN: Cache purge attempted, but the page $current_page_url is not currently found in the cache.");
+    }
 }
 
-// Purge cache automatically for modified content (post/page)
-// Will be hooked wp save_post action
+// Auto Purge
+// Purge cache automatically for updated content (post/page)
+// This function hooks into the 'save_post' action
 function nppp_purge_cache_on_update($post_id) {
     // Check if this is an autosave or a post revision
     if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
@@ -197,9 +202,76 @@ function nppp_purge_cache_on_update($post_id) {
         // Get the nginx cache path from the plugin options, or use the default path if not set
         $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
-        // Purge the cache for the current post/page URL
+        // Purge the cache for the updated post/page
         // Auto Purge true
         nppp_purge_single($nginx_cache_path, $post_url, true);
+    }
+}
+
+// Auto Purge
+// Purge cache automatically when a comment status changes (post/page)
+// This function hooks into the 'wp_insert_comment' action
+function nppp_purge_cache_on_comment($comment_id, $comment) {
+    $oldstatus = '';
+    $approved  = $comment->comment_approved;
+
+    if ( null === $approved ) {
+        $newstatus = false;
+    } elseif ( '1' === $approved ) {
+        $newstatus = 'approved';
+    } elseif ( '0' === $approved ) {
+        $newstatus = 'unapproved';
+    } elseif ( 'spam' === $approved ) {
+        $newstatus = 'spam';
+    } elseif ( 'trash' === $approved ) {
+        $newstatus = 'trash';
+    } else {
+        $newstatus = false;
+    }
+
+    nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment);
+}
+
+// Auto Purge
+// Purge cache automatically when a comment status changes (post/page)
+// This function hooks into the 'transition_comment_status' action
+function nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment) {
+    // Get the post ID associated with the comment
+    $post_id = $comment->comment_post_ID;
+
+    // Verify if the current user can edit the post
+    if (!current_user_can('edit_post', $post_id)) {
+        return;
+    }
+
+    // Get the URL of the post/page from $post_id
+    $post_url = get_permalink($post_id);
+
+    // Get the plugin options
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Set default cache path to prevent any errors if the option is not set
+    $default_cache_path = '/dev/shm/change-me-now';
+
+    // Get the nginx cache path from the plugin options, or use the default path if not set
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+
+    switch ( $newstatus ) {
+        case 'approved':
+            if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+                // Purge the cache when comment status change for the post/page
+                nppp_purge_single($nginx_cache_path, $post_url, true);
+            }
+            break;
+
+        case 'spam':
+        case 'unapproved':
+        case 'trash':
+            if ( 'approved' === $oldstatus && isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+                // Purge the cache when comment status change for the post/page
+                nppp_purge_single($nginx_cache_path, $post_url, true);
+            }
+            break;
     }
 }
 

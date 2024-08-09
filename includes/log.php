@@ -2,7 +2,7 @@
 /**
  * Logging & status functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Logging & status functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.2
+ * Version: 2.0.3
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -26,12 +26,12 @@ function nppp_create_log_file($log_file_path) {
     return "Log file path is empty.";
 }
 
-// Display admin notices nonce verified
+// Hook to display your plugin's notices
 function nppp_display_admin_notice($type, $message, $log_message = true) {
-    // Display admin notice
-    echo '<div class="notice notice-' . esc_attr($type) . ' is-dismissible"><p>' . esc_html($message) . '</p></div>';
+    // Add notice to a custom hook
+    do_action('nppp_plugin_admin_notices', $type, $message, $log_message);
 
-    // Write to the log file
+    // Write to the log file if required
     if ($log_message) {
         $log_file_path = NGINX_CACHE_LOG_FILE;
         nppp_perform_file_operation($log_file_path, 'create');

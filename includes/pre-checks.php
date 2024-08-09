@@ -2,7 +2,7 @@
 /**
  * Pre-checks for FastCGI Cache Purge and Preload for Nginx
  * Description: This pre-check file contains several critical checks for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.2
+ * Version: 2.0.3
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -20,15 +20,16 @@ function nppp_pre_checks_critical() {
     if (PHP_OS !== 'Linux') {
         return 'GLOBAL ERROR OPT: Plugin is not functional on your environment. The plugin requires Linux operating system.';
     }
+
     if (strpos($_SERVER['SERVER_SOFTWARE'], 'nginx') === false) {
         return 'GLOBAL ERROR SERVER: Plugin is not functional on your environment. The plugin requires Nginx web server.';
     }
 
     // Check if shell_exec is enabled
     if (function_exists('shell_exec')) {
-	    // Attempt to execute a harmless command
+        // Attempt to execute a harmless command
         $output = shell_exec('echo "Test"');
-		if ($output !== "Test\n") {
+        if (trim($output) !== "Test") {
             return 'GLOBAL ERROR SHELL: Plugin is not functional on your environment. The function php shell_exec() is restricted. Please check your server php settings.';
         }
     } else {
@@ -36,7 +37,7 @@ function nppp_pre_checks_critical() {
     }
 
     // Check if wget is available
-    $output = shell_exec('type wget');
+    $output = shell_exec('command -v wget');
     if (empty($output)) {
         return 'GLOBAL ERROR COMMAND: wget is not available. Please ensure "wget" is installed on your server. Preload action is not functional on your environment.';
     }
@@ -72,17 +73,17 @@ function nppp_pre_checks() {
         return;
     }
 
-    // quick check for permisson issue
-    if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
-        nppp_display_pre_check_warning('GLOBAL ERROR PERMISSION: Insufficient permissions. Refer to Help for guidance!');
-        return;
-        // recusive check  for permission issues
-    } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
-        nppp_display_pre_check_warning('GLOBAL ERROR PERMISSION: Insufficient permissions. Refer to Help for guidance!');
+    // Optimize performance by caching results of recursive permission checks
+    $permission_check_result = nppp_check_permissions_recursive_with_cache();
+    $nppp_permissions_check_result = $permission_check_result;
+
+    if ($nppp_permissions_check_result === 'false') {
+        // Handle the case where permissions are not sufficient
+        nppp_display_pre_check_warning('GLOBAL ERROR PERMISSION: Insufficient permissions for Nginx Cache Path. Consult the Help tab for guidance. After making changes, clear the plugin cache in the Status tab to refresh the status.');
         return;
     }
 
-    // Check cache is empty wanring
+    // Check cache is empty
     $files = $wp_filesystem->dirlist($nginx_cache_path);
     if (empty($files)) {
         nppp_display_pre_check_warning('GLOBAL WARNING CACHE: Cache is empty. For immediate cache creation consider utilizing the preload action now!');
@@ -95,7 +96,7 @@ function nppp_display_pre_check_warning($error_message = '') {
     if (!empty($error_message)) {
         add_action('admin_notices', function() use ($error_message) {
             ?>
-            <div class="notice notice-error is-dismissible">
+            <div class="notice notice-error is-dismissible notice-nppp">
                 <p><?php echo esc_html($error_message); ?></p>
             </div>
             <?php

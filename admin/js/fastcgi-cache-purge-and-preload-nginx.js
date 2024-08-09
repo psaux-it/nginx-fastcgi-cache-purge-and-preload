@@ -1,7 +1,7 @@
 /**
  * JavaScript for FastCGI Cache Purge and Preload for Nginx
  * Description: This JavaScript file contains functions to manage FastCGI Cache Purge and Preload for Nginx plugin and interact with WordPress admin dashboard.
- * Version: 2.0.2
+ * Version: 2.0.3
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -9,14 +9,79 @@
  */
 
 jQuery(document).ready(function($) {
+    // Function to adjust the status tab table layout for mobile
+    function adjustTableForMobile() {
+        const mobileBreakpoint = 480;
+
+        // Get the current viewport width
+        const viewportWidth = window.innerWidth;
+
+        // Check if viewport is smaller than the breakpoint
+        if (viewportWidth < mobileBreakpoint) {
+            // Select the specific row in the status-summary section
+            $('.status-summary table tbody tr').each(function() {
+                const actionWrapperDiv = $(this).find('.action .action-wrapper:last-of-type');
+                const statusTd = $(this).find('#npppphpFpmStatus');
+
+                // Check if the row has the actionWrapperDiv and statusTd
+                if (actionWrapperDiv.length && statusTd.length) {
+                    // Create a new div for status content
+                    const statusWrapper = $('<div class="status-wrapper"></div>');
+                    statusWrapper.css({
+                        'font-size': '14px',
+                        'color': 'green',
+                        'margin-top': '5px'
+                    }).html(statusTd.html());
+
+                    // Hide the original status td
+                    statusTd.hide();
+
+                    // Append the new status wrapper after the action-wrapper div
+                    actionWrapperDiv.after(statusWrapper);
+                }
+
+                // Target the second action-wrapper with font-size 12px
+                const actionWrapperDivs = $(this).find('.action .action-wrapper');
+                if (actionWrapperDivs.length > 1) {
+                    const secondActionWrapperDiv = actionWrapperDivs.eq(1);
+                    if (secondActionWrapperDiv.css('font-size') === '12px') {
+                        // Adjust the text font size to 10px
+                        const textSpan = $('<span></span>').css({
+                            'font-size': '10px',
+                            'color': secondActionWrapperDiv.css('color') // Use the existing color
+                        }).text(secondActionWrapperDiv.text().trim());
+
+                        // Replace the content of the second action-wrapper with the new span
+                        secondActionWrapperDiv.empty().append(textSpan);
+                    }
+                }
+            });
+        }
+    }
+
+    // Adjust layout on viewport resize
+    $(window).on('resize', adjustTableForMobile);
+
+    // Initial call to adjust the layout on page load
+    adjustTableForMobile();
+
     // Initialize jQuery UI tabs
     $('#nppp-nginx-tabs').tabs({
         activate: function(event, ui) {
             var tabId = ui.newPanel.attr('id');
 
             // Handle specific actions for each tab
-            if (tabId === 'status') {
+            if (tabId === 'settings') {
+                // Check if the Settings tab is already active
+                if (!ui.newPanel.hasClass('ui-tabs-active')) {
+                    $('#settings-content-placeholder').html('<div class="nppp-loading-spinner"></div>');
+
+                    // Reload the settings page to create cache
+                    location.reload();
+                }
+            } else if (tabId === 'status') {
                 loadStatusTabContent();
+                adjustTableForMobile();
             } else if (tabId === 'premium') {
                 loadPremiumTabContent();
             }
@@ -31,6 +96,7 @@ jQuery(document).ready(function($) {
     // Load status content if user comes from wordpress admin bar directly
     if (window.location.hash === '#status') {
         loadStatusTabContent();
+        adjustTableForMobile();
     }
 
     // Function to load content for the 'Status' tab via AJAX
@@ -758,6 +824,227 @@ jQuery(document).ready(function($) {
         });
     });
 
+    // Event handler for the clear plugin cache button
+    $(document).off('click', '#nppp-clear-plugin-cache-btn').on('click', '#nppp-clear-plugin-cache-btn', function(e) {
+        e.preventDefault();
+
+        // Get the button element and its position
+        var buttonElement = $('#nppp-clear-plugin-cache-btn');
+        var buttonOffset = buttonElement.offset();
+        var buttonWidth = buttonElement.outerWidth();
+
+        // Set the loading spinner
+        var spinner = document.createElement('div');
+        spinner.className = 'nppp-loading-spinner';
+        spinner.style.position = 'absolute';
+        spinner.style.left = buttonOffset.left + buttonWidth + 10 + 'px';
+        spinner.style.top = (buttonOffset.top - 12) + 'px';
+        spinner.style.zIndex = '9999';
+
+        // Show loading spinner
+        document.body.appendChild(spinner);
+
+        // Make AJAX request to clear plugin cache
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'nppp_clear_plugin_cache',
+                _wpnonce: nppp_admin_data.plugin_cache_nonce
+            },
+            success: function(response) {
+                // Remove the loading spinner
+                document.body.removeChild(spinner);
+
+                // Calculate the notification position
+                var notificationLeft = buttonOffset.left + buttonWidth + 10;
+                var notificationTop = buttonOffset.top - 3;
+
+                // Show a small notification indicating status
+                var notification = document.createElement('div');
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeft + 'px';
+                notification.style.top = notificationTop + 'px';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                notification.style.borderRadius = '4px';
+
+                if (response.success) {
+                    // Handle success case
+                    notification.textContent = 'Cache Cleared';
+                    notification.style.backgroundColor = '#50C878';
+                } else {
+                    // Handle error case
+                    notification.textContent = 'Cache cannot be cleared';
+                    notification.style.backgroundColor = '#D32F2F';
+                }
+
+                // Show notification
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+
+                        // Re-trigger recursive permission check and cache the result
+                        if (response.success) {
+                            location.reload();
+                        }
+                    }, 300);
+                }, 1200);
+            },
+            error: function(xhr, status, error) {
+                // Remove the loading spinner
+                document.body.removeChild(spinner);
+
+                // Calculate the notification position
+                var notificationLeft = buttonOffset.left + buttonWidth + 10;
+                var notificationTop = buttonOffset.top - 3;
+
+                // Show a small notification indicating error
+                var notification = document.createElement('div');
+                notification.textContent = 'An ajax error occured';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeft + 'px';
+                notification.style.top = notificationTop + 'px';
+                notification.style.backgroundColor = '#D32F2F';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                notification.style.borderRadius = '4px';
+
+                // Show notification
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 2000);
+            }
+        });
+    });
+
+    // Event listener for the restart systemd service button
+    $(document).off('click', '#nppp-restart-systemd-service-btn').on('click', '#nppp-restart-systemd-service-btn', function(e) {
+        e.preventDefault();
+
+        // Get the button element and its position
+        var buttonElement = $('#nppp-restart-systemd-service-btn');
+        var buttonOffset = buttonElement.offset();
+        var buttonWidth = buttonElement.outerWidth();
+
+        // Set the loading spinner
+        var spinner = document.createElement('div');
+        spinner.className = 'nppp-loading-spinner';
+        spinner.style.position = 'absolute';
+        spinner.style.left = buttonOffset.left + buttonWidth + 10 + 'px';
+        spinner.style.top = (buttonOffset.top - 12) + 'px';
+        spinner.style.zIndex = '9999';
+
+        // Show loading spinner
+        document.body.appendChild(spinner);
+
+        // Make AJAX request to restart systemd service
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'nppp_restart_systemd_service',
+                _wpnonce: nppp_admin_data.systemd_service_nonce
+            },
+            success: function(response) {
+                // Remove the spinner
+                document.body.removeChild(spinner);
+
+                // Calculate the notification position
+                var notificationLeft = buttonOffset.left + buttonWidth + 10;
+                var notificationTop = buttonOffset.top - 3;
+
+                // Show a small notification indicating status
+                var notification = document.createElement('div');
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeft + 'px';
+                notification.style.top = notificationTop + 'px';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                notification.style.borderRadius = '4px';
+
+                if (response.success) {
+                    // Handle success case
+                    notification.textContent = 'Service Restarted';
+                    notification.style.backgroundColor = '#50C878';
+                } else {
+                    // Handle error case
+                    notification.textContent = 'Service cannot be restarted';
+                    notification.style.backgroundColor = '#D32F2F';
+                }
+
+                // Show status notification
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 2000);
+            },
+            error: function() {
+                // Remove the loading spinner
+                document.body.removeChild(spinner);
+
+                // Calculate the notification position
+                var notificationLeft = buttonOffset.left + buttonWidth + 10;
+                var notificationTop = buttonOffset.top - 3;
+
+                // Show a small notification indicating failure
+                var notification = document.createElement('div');
+                notification.textContent = 'An ajax error occured';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeft + 'px';
+                notification.style.top = notificationTop + 'px';
+                notification.style.backgroundColor = '#D32F2F';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                notification.style.borderRadius = '4px';
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 2000);
+            }
+        });
+    });
+
     // Function to initialize DataTables.js for premium table
     function initializePremiumTable() {
         $('#nppp-premium-table').DataTable({
@@ -1266,34 +1553,6 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 });
 
-// position vertically middle nppp ad
-jQuery(document).ready(function($) {
-    // Function to vertically position #nppp-ad
-    function positionAdVertically() {
-        // Get the height of .nginx-status element
-        var statusHeight = $('section.nginx-status').outerHeight();
-
-        // Get the height of the container
-        var containerHeight = $('#nppp-nginx-info').outerHeight();
-
-        // Calculate the available height
-        var availableHeight = containerHeight - statusHeight;
-
-        // Get the height of #nppp-ad element
-        var adHeight = $('#nppp-ad').outerHeight();
-
-        // Calculate the margin-top to vertically center #nppp-ad
-        var marginTop = (availableHeight - adHeight) / 2 - 20;
-
-        // Set the margin-top property
-        $('#nppp-ad').css('margin-top', marginTop + 'px');
-    }
-
-    // Call the function initially and on window resize
-    positionAdVertically();
-    $(window).resize(positionAdVertically);
-});
-
 // trim trailing leading white spaces from inputs
 document.addEventListener('DOMContentLoaded', function () {
     // IDs of input fields to apply trimming
@@ -1356,14 +1615,18 @@ function npppupdateStatus() {
     var phpFpmRow = document.querySelector("#npppphpFpmStatus").closest("tr");
     var npppphpFpmStatusSpan = document.getElementById("npppphpFpmStatus");
     var npppphpFpmStatus = npppphpFpmStatusSpan.textContent.trim();
+
+    // Log the fetched status to debug
+    console.log("Fetched status:", npppphpFpmStatus);
+
     npppphpFpmStatusSpan.textContent = npppphpFpmStatus;
     npppphpFpmStatusSpan.style.fontSize = "14px";
-    if (npppphpFpmStatus === "nginx" || npppphpFpmStatus === "www-data") {
+    if (npppphpFpmStatus === "false") {
         npppphpFpmStatusSpan.style.color = "red";
-        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Inaccurate (Check Help)';
+        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Required (Check Help)';
     } else {
         npppphpFpmStatusSpan.style.color = "green";
-        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Accurate';
+        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Not Required';
     }
 
     // Fetch and update pages in cache count
@@ -1387,16 +1650,8 @@ function npppupdateStatus() {
     var npppphpProcessOwner = npppphpProcessOwnerSpan.textContent.trim();
     npppphpProcessOwnerSpan.textContent = npppphpProcessOwner;
     npppphpProcessOwnerSpan.style.fontSize = "14px";
-    if (npppphpProcessOwner === "nginx") {
-        npppphpProcessOwnerSpan.style.color = "red";
-        npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> nginx (Check Help)';
-    } else if (npppphpProcessOwner === "www-data") {
-        npppphpProcessOwnerSpan.style.color = "red";
-        npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> www-data (Check Help)';
-    } else {
-        npppphpProcessOwnerSpan.style.color = "green";
-        npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppphpProcessOwner;
-    }
+    npppphpProcessOwnerSpan.style.color = "green";
+    npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-arrow-right-alt" style="font-size: 16px;"></span> ' + npppphpProcessOwner;
 
     // Fetch and update web server user
     // WEB-SERVER (webserver user)
@@ -1404,16 +1659,8 @@ function npppupdateStatus() {
     var npppphpWebServer = npppphpWebServerSpan.textContent.trim();
     npppphpWebServerSpan.textContent = npppphpWebServer;
     npppphpWebServerSpan.style.fontSize = "14px";
-    if (npppphpWebServer === "nginx") {
-        npppphpWebServerSpan.style.color = "green";
-        npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> nginx';
-    } else if (npppphpWebServer === "www-data") {
-        npppphpWebServerSpan.style.color = "green";
-        npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> www-data';
-    } else {
-        npppphpWebServerSpan.style.color = "red";
-        npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-no"></span> ' + npppphpWebServer + ' (Check Help)';
-    }
+    npppphpWebServerSpan.style.color = "green";
+    npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-arrow-right-alt" style="font-size: 16px;"></span> ' + npppphpWebServer;
 
     // Fetch and update nginx cache path status
     var npppcachePathSpan = document.getElementById("npppcachePath");
@@ -1433,15 +1680,15 @@ function npppupdateStatus() {
     var nppppurgeStatus = nppppurgeStatusSpan.textContent.trim();
     nppppurgeStatusSpan.textContent = nppppurgeStatus;
     nppppurgeStatusSpan.style.fontSize = "14px";
-    if (nppppurgeStatus === "Working") {
+    if (nppppurgeStatus === "true") {
         nppppurgeStatusSpan.style.color = "green";
         nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
-    } else if (nppppurgeStatus === "Not Working") {
+    } else if (nppppurgeStatus === "false") {
         nppppurgeStatusSpan.style.color = "red";
         nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
     } else {
         nppppurgeStatusSpan.style.color = "orange";
-        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Tentative';
+        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
     }
 
     // Fetch and update purge shell_exec status
@@ -1462,12 +1709,14 @@ function npppupdateStatus() {
     var npppaclStatus = npppaclStatusSpan.textContent.trim();
     npppaclStatusSpan.textContent = npppaclStatus;
     npppaclStatusSpan.style.fontSize = "14px";
-    if (npppaclStatus === "Implemented") {
+    if (npppaclStatus.includes("Granted")) {
         npppaclStatusSpan.style.color = "green";
-        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Implemented';
-    } else if (npppaclStatus === "Not Implemented") {
+        // Extract and display the process owner information if present
+        var processOwner = npppaclStatus.replace("Granted", "").trim();
+        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Granted ' + (processOwner ? `<span style="color:darkorange;">${processOwner}</span>` : '');
+    } else if (npppaclStatus.includes("Need Action")) {
         npppaclStatusSpan.style.color = "red";
-        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Implemented';
+        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Need Action (Check Help)';
     } else {
         npppaclStatusSpan.style.color = "orange";
         npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
@@ -1480,10 +1729,10 @@ function npppupdateStatus() {
     var nppppreloadStatus = nppppreloadStatusSpan.textContent.trim();
     nppppreloadStatusSpan.textContent = nppppreloadStatus;
     nppppreloadStatusSpan.style.fontSize = "14px";
-    if (nppppreloadStatus === "Working") {
+    if (nppppreloadStatus === "true") {
         nppppreloadStatusSpan.style.color = "green";
         nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
-    } else if (nppppreloadStatus === "Not Working") {
+    } else if (nppppreloadStatus === "false") {
         nppppreloadStatusSpan.style.color = "red";
         nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
     } else {
@@ -1512,6 +1761,19 @@ function npppupdateStatus() {
     } else if (npppwgetStatus === "Not Installed") {
         npppwgetStatusSpan.style.color = "red";
         npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
+    }
+
+    // Fetch and update permission isolation status
+    var nppppermIsolationSpan = document.getElementById("nppppermIsolation");
+    var nppppermIsolation = nppppermIsolationSpan.textContent.trim();
+    nppppermIsolationSpan.textContent = nppppermIsolation;
+    nppppermIsolationSpan.style.fontSize = "14px";
+    if (nppppermIsolation === "Isolated") {
+        nppppermIsolationSpan.style.color = "green";
+        nppppermIsolationSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + nppppermIsolation;
+    } else if (nppppermIsolation === "Not Isolated") {
+        nppppermIsolationSpan.style.color = "orange";
+        nppppermIsolationSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + nppppermIsolation;
     }
 
     // Fetch and update cpulimit command status

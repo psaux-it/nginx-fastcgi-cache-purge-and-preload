@@ -1,7 +1,7 @@
 /**
  * Default wget reject regex pattern for FastCGI Cache Purge and Preload for Nginx
  * Description: This txt file contains default wget reject regex pattern for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.2
+ * Version: 2.0.3
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com

@@ -2,7 +2,7 @@
 /**
  * Status page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains functions which shows information about FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.2
+ * Version: 2.0.3
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -14,85 +14,84 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Check purge action status
-// Check ACLs status
-function nppp_check_acl($flag = '') {
-    $wp_filesystem = nppp_initialize_wp_filesystem();
-
-    if ($wp_filesystem === false) {
-        return false; // Return false if WP_Filesystem initialization failed
-    }
-
+// To optimize performance and prevent redundancy, we use cached recursive permission checks. 
+// This technique stores the results of time-consuming (expensive) permission verifications for reuse.
+// The results are cached for to reduce performance overhead, especially useful when the Nginx cache path is extensive.
+function nppp_check_permissions_recursive_with_cache() {
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $default_cache_path = '/dev/shm/change-me-now';
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
-    // Check if directory exists
-    if (!$wp_filesystem->is_dir($nginx_cache_path)) {
-        // Directory does not exist
-        if ($flag === 'purge') {
-            return 'Not Working';
-        } elseif ($flag === 'acl') {
-            return 'Not Implemented';
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        return false;
+    }
+
+    // Define a static key-based transient
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_permissions_check_' . md5($static_key_base);
+
+    // Check for cached result
+    $result = get_transient($transient_key);
+    if ($result === false) {
+        // Perform the expensive recursive permission check
+        $result = nppp_check_permissions_recursive($nginx_cache_path);
+
+        // Convert boolean result to string
+        $result = $result ? 'true' : 'false';
+
+        // Cache the result for 1 hour
+        set_transient($transient_key, $result, 3600);
+    }
+
+    return $result;
+}
+
+// Function to clear all transients related to the plugin
+function nppp_clear_plugin_cache() {
+    // Define the static key base used in transient names
+    $static_key_base = 'nppp';
+
+    // Generate the transient key for the permissions check
+    $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
+
+    // List of static transients to clear
+    $transients = array(
+        $transient_key_permissions_check,
+    );
+
+    // Attempt to delete all transients
+    foreach ($transients as $transient) {
+        // Delete the transient
+        delete_transient($transient);
+
+        // Check if the transient still exists
+        if (get_transient($transient) !== false) {
+            return 'An error occurred while clearing the plugin cache.';
         }
     }
 
-    // If directory exist we can perform other checks
-    $files = $wp_filesystem->dirlist($nginx_cache_path);
+    // Notify the user if all transients were cleared successfully
+    return 'Plugin cache cleared successfully. Refreshing the Status..';
+}
 
-    // Even default ACLs applied we can face permission errors, so
-    // First check the cache path is readable or not by PHP-FPM USER
-    if ($files === false) {
-        // We cannot read cache path cause permissons
-        if ($flag === 'purge') {
-            return 'Not Working';
-        } elseif ($flag === 'acl') {
-            return 'Not Implemented';
-        }
-    }
+// Check server side action need for cache path permissions.
+function nppp_check_perm_in_cache() {
+    // Define a static key-based transient
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_permissions_check_' . md5($static_key_base);
 
-    // We are able to read cache path
-    // Check ACL permissions status
-    $output = shell_exec("ls -ld \"$nginx_cache_path\" | awk '{print \$1}' | grep '+'");
-    if ($output === null) {
-        // Main directory does not have ACL permissions
-        if ($flag === 'purge') {
-            return 'Not Working';
-        } elseif ($flag === 'acl') {
-            return 'Not Implemented';
-        }
-    }
+    // Get the cached result
+    $result = get_transient($transient_key);
 
-    // Check if directory is empty
-    if (empty($files)) {
-        // Directory is empty, but main directory has ACL permissions
-        if ($flag === 'purge') {
-            return 'Tentative';
-        } elseif ($flag === 'acl') {
-            return 'Tentative';
-        }
-    }
-
-    // Check ACL permissions for each file in the directory
-    $output = shell_exec("find \"$nginx_cache_path\" -exec ls -ld {} + | awk '{print \$1}' | grep -v '+'");
-    if (!empty($output)) {
-        if ($flag === 'purge') {
-            return 'Not Working';
-        } elseif ($flag === 'acl') {
-            return 'Not Implemented';
-        }
-    }
-
-    if ($flag === 'purge') {
-        return 'Working';
-    } elseif ($flag === 'acl') {
-        return 'Implemented';
-    }
+    // Return the permission status from cache
+    return $result;
 }
 
 // Check required command statuses
 function nppp_check_command_status($command) {
-    $output = shell_exec("type $command");
+    $output = shell_exec("command -v $command");
     return !empty($output) ? 'Installed' : 'Not Installed';
 }
 
@@ -101,7 +100,7 @@ function nppp_check_preload_status() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false; // Return false if WP_Filesystem initialization failed
+        return false;
     }
 
     $this_script_path = dirname(plugin_dir_path(__FILE__));
@@ -115,8 +114,14 @@ function nppp_check_preload_status() {
         }
     }
 
-    return nppp_check_command_status('wget') === 'Installed' ? 'Working' : 'Not Working';
+    $cached_result = nppp_check_perm_in_cache();
+    $wget_status = nppp_check_command_status('wget');
 
+    if ($cached_result === 'false' || $wget_status !== 'Installed') {
+        return 'false';
+    }
+
+    return 'true';
 }
 
 // Check Nginx Cache Path status
@@ -124,7 +129,7 @@ function nppp_check_path() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false; // Return false if WP_Filesystem initialization failed
+        return false;
     }
 
     $nginx_cache_settings = get_option('nginx_cache_settings');
@@ -140,57 +145,100 @@ function nppp_check_path() {
     }
 }
 
-// Check shell exec allowed or not, required for plugin
+// Check if shell_exec is allowed or not, required for plugin
 function nppp_shell_exec() {
-   // Check allowed to execute shell commands
-    $allowed = false;
     // Check if shell_exec is enabled
     if (function_exists('shell_exec')) {
         // Attempt to execute a harmless command
         $output = shell_exec('echo "Test"');
 
         // Check if the command executed successfully
-        if ($output === "Test\n") {
-            $allowed = true;
+        // Trim the output to handle any extra whitespace or newlines
+        if (trim($output) === "Test") {
+            return 'Ok';
         }
     }
 
-    if ($allowed) {
-        return 'Ok';
-    } else {
-        return 'Not Ok';
-    }
+    return 'Not Ok';
 }
 
-// Function to get the active PHP process owner
+// Function to get the PHP process owner (website-user)
 function nppp_get_website_user() {
     $php_process_owner = '';
 
-    // Get the user ID of the PHP process owner
-    $php_process_uid = posix_getpwuid(posix_geteuid())['name'];
+    // Check if the POSIX extension is available
+    if (function_exists('posix_getpwuid') && function_exists('posix_geteuid')) {
+        // Get the user ID of the PHP process owner
+        $php_process_uid = posix_geteuid();
+        $userInfo = posix_getpwuid($php_process_uid);
 
-    // Map the user ID to common web server users
-    switch ($php_process_uid) {
-        case 'www-data':
-            $php_process_owner = 'www-data';
-            break;
-        case 'nginx':
-            $php_process_owner = 'nginx';
-            break;
-        default:
-            $php_process_owner = $php_process_uid;
-            break;
+        // Get the user NAME of the PHP process owner
+        if ($userInfo) {
+            $php_process_uid = $userInfo['name'];
+        } else {
+            $php_process_uid = 'Not Determined';
+        }
+
+        $php_process_owner = $php_process_uid;
     }
 
+    // If POSIX functions are not available or user information is 'Not Determined',
+    // try again to find PHP process owner more directly with help of shell
+
+    if (empty($php_process_owner) || $php_process_owner === 'Not Determined') {
+        if (defined('ABSPATH')) {
+            $wordpressRoot = ABSPATH;
+        } else {
+            $wordpressRoot = __DIR__;
+        }
+
+        // Get the PHP process owner
+        $command = "ls -ld " . escapeshellarg($wordpressRoot . '/index.php') . " | awk '{print $3}'";
+
+        // Execute the shell command
+        $process_owner = shell_exec($command);
+
+        // Check the PHP process owner if not empty
+        if (!empty($process_owner)) {
+            $php_process_owner = trim($process_owner);
+        } else {
+            $php_process_owner = "Not Determined";
+        }
+    }
+
+    // Return the PHP process owner
     return $php_process_owner;
 }
 
 // Function to get webserver user
 function nppp_get_webserver_user() {
-    // Execute the command to find the web server user
-    $webserver_user = shell_exec("ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v root | head -1 | cut -d\\  -f1");
-    // Return the web server user if not empty, otherwise return "Not Determined"
-    return !empty($webserver_user) ? trim($webserver_user) : "Not Determined";
+    // Check the running processes for Nginx
+    $nginx_user_process = shell_exec("ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v 'root' | awk '{print $1}' | sort | uniq");
+    // Convert the process output to an array and filter out empty values
+    $process_users = array_filter(array_unique(array_map('trim', explode("\n", $nginx_user_process))));
+    // Try to get the user from the Nginx configuration file
+    $nginx_user_conf = shell_exec("grep -i '^user' /etc/nginx/nginx.conf | awk '{print $2}'");
+
+    // If both sources provide a user, check for consistency
+    if (!empty($nginx_user_conf) && !empty($process_users)) {
+        // Check if the configuration user is among the process users
+        if (in_array($nginx_user_conf, $process_users)) {
+            return $nginx_user_conf;
+        }
+    }
+
+    // If only the configuration user is found, return it
+    if (!empty($nginx_user_conf)) {
+        return $nginx_user_conf;
+    }
+
+    // If only the process user is found, return it
+    if (!empty($process_users)) {
+        return reset($process_users);
+    }
+
+    // If no user is found, return "Not Determined"
+    return "Not Determined";
 }
 
 // Function to get pages in cache count
@@ -208,38 +256,47 @@ function nppp_get_in_cache_page_count() {
         return false;
     }
 
-    // Check for any permisson issue softly
-    if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
-        return 'Undetermined';
-    // Recusive check for permission issues deeply
-    } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
+    // Check for any permission issue in cached status
+    $cached_result = nppp_check_perm_in_cache();
+
+    // Return 'Undetermined' if the cache check returns 'false'
+    if ($cached_result === 'false') {
         return 'Undetermined';
     }
 
-    // Traverse the cache directory and its subdirectories
-    $cache_iterator = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
-        RecursiveIteratorIterator::SELF_FIRST
-    );
+    try {
+        $cache_iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
 
-    foreach ($cache_iterator as $file) {
-        if ($wp_filesystem->is_file($file->getPathname())) {
-            // Read file contents
-            $content = $wp_filesystem->get_contents($file->getPathname());
+        foreach ($cache_iterator as $file) {
+            if ($wp_filesystem->is_file($file->getPathname())) {
+                // Check if the file is readable
+                if (!$wp_filesystem->is_readable($file->getPathname())) {
+                    return 'Undetermined';
+                }
 
-            // Exclude URLs with status 301 Moved Permanently
-            if (strpos($content, 'Status: 301 Moved Permanently') !== false) {
-                continue;
-            }
+                // Read file contents
+                $content = $wp_filesystem->get_contents($file->getPathname());
 
-            // Extract URLs using regex
-            if (preg_match('/KEY:\s+httpsGET(.+)/', $content, $matches)) {
-                $url = trim($matches[1]);
+                // Exclude URLs with status 301 Moved Permanently
+                if (strpos($content, 'Status: 301 Moved Permanently') !== false) {
+                    continue;
+                }
 
-                // Increment count
-                $urls_count++;
+                // Extract URLs using regex
+                if (preg_match('/KEY:\s+httpsGET(.+)/', $content, $matches)) {
+                    $url = trim($matches[1]);
+
+                    // Increment count
+                    $urls_count++;
+                }
             }
         }
+    } catch (Exception $e) {
+        // Return 'Undetermined' if a permission issue occurs
+        return 'Undetermined';
     }
 
     // Return the count of URLs, if no URLs found, return 0
@@ -248,23 +305,46 @@ function nppp_get_in_cache_page_count() {
 
 // Generate HTML for status tab
 function nppp_my_status_html() {
+    $perm_in_cache_status = nppp_check_perm_in_cache();
+    $php_process_owner = nppp_get_website_user();
+    $web_server_user = nppp_get_webserver_user();
+
+    // Compare the two users and set the status
+    if ($php_process_owner === $web_server_user) {
+        $nppp_isolation_status = 'Not Isolated';
+    } else {
+        $nppp_isolation_status = 'Isolated';
+    }
+
+    // Format the status string
+    $perm_status_message = $perm_in_cache_status === 'true' ? 'Granted' : 'Need Action (Check Help)';
+    $perm_status_message .= ' (' . esc_html($php_process_owner) . ')';
+
     ob_start();
     ?>
     <div class="status-and-nginx-info-container">
         <div id="nppp-status-tab" class="container">
             <header></header>
             <main>
+                <section class="clear-plugin-cache" style="background-color: mistyrose;">
+                    <h2>Clear Plugin Cache</h2>
+                    <p style="padding-left: 10px; font-weight: 500;">To ensure the accuracy of the displayed statuses, please clear the plugin cache. This plugin caches expensive status metrics to enhance performance. However, If you're in the testing stage and making frequent changes and re-checking Status tab, clearing the cache is necessary to view the most up-to-date and accurate status.</p>
+                    <button id="nppp-clear-plugin-cache-btn" class="button button-primary" style="margin-left: 10px; margin-bottom: 15px;">Clear Plugin Cache</button>
+                </section>
                 <section class="status-summary">
                     <h2>Status Summary</h2>
                     <table>
                         <tbody>
                             <tr>
                                 <td class="action">
-                                    <div class="action-wrapper">PHP-FPM Setup</div>
+                                    <div class="action-wrapper">Server Side Action (Use One-liner)</div>
+                                    <div class="action-wrapper" style="font-size: 12px; color: white; background-color: #ff9900; width: max-content; margin-top: 5px; padding-right: 5px; padding-left: 5px;">
+                                        bash <(curl -Ss https://psaux-it.github.io/install.sh)
+                                    </div>
                                 </td>
                                 <td class="status" id="npppphpFpmStatus">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html(nppp_get_website_user()); ?></span>
+                                    <span><?php echo esc_html($perm_in_cache_status); ?></span>
                                 </td>
                             </tr>
                         </tbody>
@@ -282,7 +362,7 @@ function nppp_my_status_html() {
                                 <td class="action">Purge Action</td>
                                 <td class="status" id="nppppurgeStatus">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html(nppp_check_acl('purge')); ?></span>
+                                    <span><?php echo esc_html($perm_in_cache_status); ?></span>
                                 </td>
                             </tr>
                             <tr>
@@ -306,49 +386,56 @@ function nppp_my_status_html() {
                         </thead>
                         <tbody>
                             <tr>
-                                <td class="check">PHP-FPM User (Website User)</td>
+                                <td class="check">PHP Process Owner (Website User)</td>
                                 <td class="status" id="npppphpProcessOwner">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html(nppp_get_website_user()); ?></span>
+                                    <span><?php echo esc_html($php_process_owner); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">WEB-SERVER User (Webserver User)</td>
+                                <td class="check">Web Server User (nginx | www-data)</td>
                                 <td class="status" id="npppphpWebServer">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html(nppp_get_webserver_user()); ?></span>
+                                    <span><?php echo esc_html($web_server_user); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">Shell_Exec (Required for Plugin)</td>
+                                <td class="check">Shell Execution (Required)</td>
                                 <td class="status" id="npppshellExec">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_shell_exec()); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">Cache Path (Required for Purge)</td>
+                                <td class="check">Nginx Cache Path (Required)</td>
                                 <td class="status" id="npppcachePath">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_check_path()); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">ACLs (Required for Purge)</td>
+                                <td class="check">Cache Path Permission (Required)</td>
                                 <td class="status" id="npppaclStatus">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html(nppp_check_acl('acl')); ?></span>
+                                    <span><?php echo esc_html($perm_status_message); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">wget (Required for Preload)</td>
+                                <td class="check">Permission Isolation (Optional)</td>
+                                <td class="status" id="nppppermIsolation">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html($nppp_isolation_status); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check">wget (Required command)</td>
                                 <td class="status" id="npppwgetStatus">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_check_command_status('wget')); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">cpulimit (Optional for Preload)</td>
+                                <td class="check">cpulimit (Optional command)</td>
                                 <td class="status" id="npppcpulimitStatus">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_check_command_status('cpulimit')); ?></span>
@@ -385,6 +472,30 @@ function nppp_my_status_html() {
     </div>
     <?php
     return ob_get_clean();
+}
+
+// AJAX handler to clear the plugin cache
+function nppp_clear_plugin_cache_callback() {
+    // Check nonce
+    if (isset($_POST['_wpnonce'])) {
+        $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
+        if (!wp_verify_nonce($nonce, 'nppp-clear-plugin-cache-action')) {
+            wp_die('Nonce verification failed.');
+        }
+    } else {
+        wp_die('Nonce is missing.');
+    }
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_die('You do not have permission to access this page.');
+    }
+
+     // Clear the plugin cache
+    $message = nppp_clear_plugin_cache();
+
+    // Return success response
+    wp_send_json_success($message);
 }
 
 // AJAX handler to fetch shortcode content
