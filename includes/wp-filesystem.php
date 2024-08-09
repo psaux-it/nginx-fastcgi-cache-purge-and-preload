@@ -191,7 +191,7 @@ function nppp_check_permissions_recursive($path) {
             }
         }
         return true;
-    } catch (UnexpectedValueException $e) {
+    } catch (Exception $e) {
         // Handle the directory access issue
         return false;
     }
