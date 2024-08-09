@@ -17,7 +17,7 @@ This plugin allows WordPress users to manage Nginx Cache Purge and Preload opera
 
 == Important ==
 
-Please read the full description and FAQ here for fully functional Nginx cache purge and preload actions provided by this plugin:
+Please read the full description (What you need?) and FAQ for fully functional Nginx cache purge and preload actions provided by this plugin:
 
 == Features ==
 
@@ -50,7 +50,7 @@ In case your current Nginx web server setup involves two distinct users, **WEBSE
 **More in-depth Information""
 
 - [NPP plugin main development repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
-- [NPP plugin main bash script automation source code](https://github.com/psaux-it/psaux-it.github.io/blob/main/fastcgi_ops_root.sh)
+- [NPP plugin main automation bash script source code](https://github.com/psaux-it/psaux-it.github.io/blob/main/fastcgi_ops_root.sh)
 - [Optimizing Wordpress with Nginx FastCGI Cache and NPP plugin](https://www.psauxit.com/optimizing-wordpress-and-woocommerce-with-nginx-fastcgi-cache/)
 
 == Installation ==
@@ -151,6 +151,18 @@ Yes, please refer to the plugin settings **Help** tab.
 8. Front-end Admin Bar
 
 == Changelog ==
+
+= 2.0.3 =
+
+Release date: 2024-08-09
+
+* Add support for Auto-Purging the Nginx cache based on comment events, such as comment approval or comment status changes
+* Optimized Status Tab, handling of finding active Nginx Cache Paths, PHP process owners and other metrics
+* Enhanced performance by caching results of recursive permission checks and reducing expensive directory traversals
+* Add support for restarting systemd services and managing systemd-related tasks directly from front-end
+* Made numerous improvements to the core plugin code to enhance UI/UX and performance
+* Version bumps for external assets
+* Tested up to: 6.6.1
 
 = 2.0.2 =
 
