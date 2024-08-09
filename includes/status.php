@@ -294,7 +294,7 @@ function nppp_get_in_cache_page_count() {
                 }
             }
         }
-    } catch (UnexpectedValueException $e) {
+    } catch (Exception $e) {
         // Return 'Undetermined' if a permission issue occurs
         return 'Undetermined';
     }
