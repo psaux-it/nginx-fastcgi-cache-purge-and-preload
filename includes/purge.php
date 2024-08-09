@@ -161,7 +161,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 }
             }
         }
-    } catch (UnexpectedValueException $e) {
+    } catch (Exception $e) {
         nppp_display_admin_notice('error', "ERROR PERMISSION: Cache purge failed for page $current_page_url due to permission issue. Refer to -Help- tab for guidance.");
         return;
     }
