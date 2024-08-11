@@ -12,14 +12,15 @@
 
 This wordpress plugin is compatible exclusively with **Nginx web servers** running on **Linux-powered** systems. Additionally, the **shell_exec** function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native Linux commands are blocked from running via PHP.
 
-Moreover, a correctly configured PHP-FPM and Nginx setup is essential for the purge and preload operations to function properly. Otherwise, permission issues may arise.
+Moreover, granting the correct permissions to the PHP process owner is essential for the purge and preload operations to function properly. Otherwise, issues will arise.
 
-If warnings appear or plugin settings/tabs disabled, they may indicate permission issues, an unsupported environment, or missing dependencies required for cache operations.
+If warnings appear or plugin settings/tabs disabled, they may indicate permission issues, an unsupported environment, or missing dependencies required for plugin.
 
 > [!TIP]
-> You do not need any external Nginx module. Simply execute the following command in your terminal after installing plugin and follow instructions:
+> You do not need any external Nginx module. Simply execute the one of the following one liner's in your terminal after installing plugin and follow instructions. <br/> <br/>Please read the information below to understand what **install.sh** does. Is it safe?
 
-💯 ```bash <(curl -Ss https://psaux-it.github.io/install.sh)```
+💯```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` <br/>
+💯```wget -qO /tmp/install.sh https://psaux-it.github.io/install.sh && bash /tmp/install.sh```
 
 ### Features
 
