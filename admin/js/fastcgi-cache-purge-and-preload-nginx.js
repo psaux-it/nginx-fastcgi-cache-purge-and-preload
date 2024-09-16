@@ -1624,6 +1624,9 @@ function npppupdateStatus() {
     if (npppphpFpmStatus === "false") {
         npppphpFpmStatusSpan.style.color = "red";
         npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Required (Check Help)';
+    } else if (npppphpFpmStatus === "Not Found") {
+        npppphpFpmStatusSpan.style.color = "orange";
+        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
     } else {
         npppphpFpmStatusSpan.style.color = "green";
         npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Not Required';
@@ -1639,6 +1642,9 @@ function npppupdateStatus() {
     } else if (npppcacheInPageSpanValue === "0") {
         npppcacheInPageSpan.style.color = "orange";
         npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppcacheInPageSpanValue;
+    } else if (npppcacheInPageSpanValue === "Not Found") {
+        npppcacheInPageSpan.style.color = "orange";
+        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
     } else {
         npppcacheInPageSpan.style.color = "green";
         npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppcacheInPageSpanValue;
