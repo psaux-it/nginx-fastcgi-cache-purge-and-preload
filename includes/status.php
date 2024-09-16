@@ -286,14 +286,14 @@ function nppp_get_in_cache_page_count() {
     $cached_result = nppp_check_perm_in_cache(false, false, false);
     $path_status = nppp_check_path();
 
-    // Return 'Undetermined' if the cache check returns 'false'
-    if ($cached_result === 'false') {
-        return 'Undetermined';
-    }
-
-    // Return 'Not Found' if the cache parh not found
+    // Return 'Not Found' if the cache path not found
     if ($path_status !== 'Found') {
         return 'Not Found';
+    }
+
+    // Return 'Undetermined' if the perm in cache returns 'false'
+    if ($cached_result === 'false') {
+        return 'Undetermined';
     }
 
     try {
