@@ -17,11 +17,52 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Function to check if plugin critical requirements are met
 function nppp_pre_checks_critical() {
     // Check if the operating system is Linux and the web server is nginx
-    if (PHP_OS !== 'Linux') {
+    if (!nppp_is_linux()) {
         return 'GLOBAL ERROR OPT: Plugin is not functional on your environment. The plugin requires Linux operating system.';
     }
 
-    if (strpos($_SERVER['SERVER_SOFTWARE'], 'nginx') === false) {
+    // Initialize $server_software variable
+    $server_software = '';
+
+    // Check if $_SERVER['SERVER_SOFTWARE'] is set
+    if (isset($_SERVER['SERVER_SOFTWARE'])) {
+        // Unslash and sanitize $_SERVER['SERVER_SOFTWARE']
+        $server_software = sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']));
+    }
+
+    // Check for Nginx-specific environment variables
+    if (empty($server_software) && isset($_SERVER['NGINX_VERSION'])) {
+        $server_software = 'nginx';
+    } elseif (empty($server_software) && isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        // Likely Nginx acting as a reverse proxy
+        $server_software = 'nginx';
+    }
+
+    // Check for the SAPI name to detect if Nginx is using PHP-FPM
+    if (empty($server_software)) {
+        $sapi_name = php_sapi_name();
+        if (strpos($sapi_name, 'fpm-fcgi') !== false) {
+            // Likely Nginx with PHP-FPM
+            $server_software = 'nginx';
+        }
+    }
+
+    // If still no server software detected, check outgoing headers
+    if (empty($server_software)) {
+        $headers = headers_list();
+        foreach ($headers as $header) {
+            if (stripos($header, 'server: nginx') !== false) {
+                $server_software = 'nginx';
+                break;
+            } elseif (stripos($header, 'server: apache') !== false) {
+                $server_software = 'apache';
+                break;
+            }
+        }
+    }
+
+    // Check if the web server is Nginx
+    if (strpos($server_software, 'nginx') === false) {
         return 'GLOBAL ERROR SERVER: Plugin is not functional on your environment. The plugin requires Nginx web server.';
     }
 
