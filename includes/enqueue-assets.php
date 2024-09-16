@@ -116,20 +116,85 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     ));
 }
 
+// Checks if the plugin requirements are met, specifically if the server
+// is running on a Linux environment.
+function nppp_is_linux() {
+    // Check using PHP_OS constant
+    if (PHP_OS === 'Linux') {
+        return true;
+    }
+
+    // Check using PHP_OS_FAMILY (available in PHP 7.2+)
+    if (defined('PHP_OS_FAMILY') && PHP_OS_FAMILY === 'Linux') {
+        return true;
+    }
+
+    // Fallback check using php_uname() for edge cases or older PHP versions
+    if (stripos(php_uname(), 'Linux') !== false) {
+        return true;
+    }
+
+    // If none of the checks pass
+    return false;
+}
+
 // Check plugin requirements
 function nppp_plugin_requirements_met() {
     $nppp_met = false;
 
-    // Check if the operating system is Linux and the web server is nginx
-    if (PHP_OS === 'Linux' && strpos($_SERVER['SERVER_SOFTWARE'], 'nginx') !== false) {
-        // Check if shell_exec is enabled
-        if (function_exists('shell_exec')) {
-            // Attempt to execute a harmless command
-            $output = shell_exec('echo "Test"');
+    // Check if the operating system is Linux
+    if (nppp_is_linux()) {
+        // Initialize $server_software variable
+        $server_software = '';
 
-            // Check if the command executed successfully
-            if (trim($output) === "Test") {
-                $nppp_met = true;
+        // Check if $_SERVER['SERVER_SOFTWARE'] is set
+        if (isset($_SERVER['SERVER_SOFTWARE'])) {
+            // Unslash and sanitize $_SERVER['SERVER_SOFTWARE']
+            $server_software = sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']));
+        }
+
+        // Check for Nginx-specific environment variables
+        if (empty($server_software) && isset($_SERVER['NGINX_VERSION'])) {
+            $server_software = 'nginx';
+        } elseif (empty($server_software) && isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            // Nginx acting as a reverse proxy
+            $server_software = 'nginx';
+        }
+
+        // Check for the SAPI name to detect if Nginx is using PHP-FPM
+        if (empty($server_software)) {
+            $sapi_name = php_sapi_name();
+            if (strpos($sapi_name, 'fpm-fcgi') !== false) {
+                // Nginx with PHP-FPM
+                $server_software = 'nginx';
+            }
+        }
+
+        // If still no server software detected, check outgoing headers
+        if (empty($server_software)) {
+            $headers = headers_list();
+            foreach ($headers as $header) {
+                if (stripos($header, 'server: nginx') !== false) {
+                    $server_software = 'nginx';
+                    break;
+                } elseif (stripos($header, 'server: apache') !== false) {
+                    $server_software = 'apache';
+                    break;
+                }
+            }
+        }
+
+        // Check if the web server is Nginx
+        if (strpos($server_software, 'nginx') !== false) {
+            // Check if shell_exec is enabled
+            if (function_exists('shell_exec')) {
+                // Attempt to execute a harmless command
+                $output = shell_exec('echo "Test"');
+
+                // Check if the command executed successfully
+                if (trim($output) === "Test") {
+                    $nppp_met = true;
+                }
             }
         }
     }
