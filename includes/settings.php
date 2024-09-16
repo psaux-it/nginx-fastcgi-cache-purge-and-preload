@@ -65,8 +65,8 @@ function nppp_nginx_cache_settings_page() {
         }
 
         // Sanitize the status message and message type
-        $status_message = sanitize_text_field(urldecode($_GET['status_message']));
-        $message_type = sanitize_text_field(urldecode($_GET['message_type']));
+        $status_message = sanitize_text_field(wp_unslash($_GET['status_message']));
+        $message_type = sanitize_text_field(wp_unslash($_GET['message_type']));
 
         // Validate the message type against a set of allowed values
         $allowed_message_types = ['success', 'error', 'info', 'warning'];
