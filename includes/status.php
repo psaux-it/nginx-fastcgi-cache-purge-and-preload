@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// To optimize performance and prevent redundancy, we use cached recursive permission checks. 
+// To optimize performance and prevent redundancy, we use cached recursive permission checks.
 // This technique stores the results of time-consuming (expensive) permission verifications for reuse.
 // The results are cached for to reduce performance overhead, especially useful when the Nginx cache path is extensive.
 function nppp_check_permissions_recursive_with_cache() {
@@ -77,13 +77,37 @@ function nppp_clear_plugin_cache() {
 }
 
 // Check server side action need for cache path permissions.
-function nppp_check_perm_in_cache() {
+function nppp_check_perm_in_cache($check_path = false, $check_perm = false, $check_fpm = false) {
     // Define a static key-based transient
     $static_key_base = 'nppp';
     $transient_key = 'nppp_permissions_check_' . md5($static_key_base);
 
-    // Get the cached result
+    // Get the cached result and path status
     $result = get_transient($transient_key);
+
+    if ($check_path) {
+        $path_status = nppp_check_path();
+
+        if ($path_status !== 'Found') {
+            return 'false';
+        }
+    }
+
+    if ($check_perm) {
+        $path_status = nppp_check_path();
+
+        if ($path_status !== 'Found') {
+            return 'Not Found';
+        }
+    }
+
+    if ($check_fpm) {
+        $path_status = nppp_check_path();
+
+        if ($path_status !== 'Found') {
+            return 'Not Found';
+        }
+    }
 
     // Return the permission status from cache
     return $result;
@@ -114,10 +138,12 @@ function nppp_check_preload_status() {
         }
     }
 
+    // Check permission status, wget command status and cache path existence
     $cached_result = nppp_check_perm_in_cache();
     $wget_status = nppp_check_command_status('wget');
+    $path_status = nppp_check_path();
 
-    if ($cached_result === 'false' || $wget_status !== 'Installed') {
+    if ($cached_result === 'false' || $wget_status !== 'Installed' || $path_status !== 'Found') {
         return 'false';
     }
 
@@ -257,11 +283,17 @@ function nppp_get_in_cache_page_count() {
     }
 
     // Check for any permission issue in cached status
-    $cached_result = nppp_check_perm_in_cache();
+    $cached_result = nppp_check_perm_in_cache(false, false, false);
+    $path_status = nppp_check_path();
 
     // Return 'Undetermined' if the cache check returns 'false'
     if ($cached_result === 'false') {
         return 'Undetermined';
+    }
+
+    // Return 'Not Found' if the cache parh not found
+    if ($path_status !== 'Found') {
+        return 'Not Found';
     }
 
     try {
@@ -305,7 +337,9 @@ function nppp_get_in_cache_page_count() {
 
 // Generate HTML for status tab
 function nppp_my_status_html() {
-    $perm_in_cache_status = nppp_check_perm_in_cache();
+    $perm_in_cache_status_purge = nppp_check_perm_in_cache(true, false, false);
+    $perm_in_cache_status_fpm = nppp_check_perm_in_cache(false, false, true);
+    $perm_in_cache_status_perm = nppp_check_perm_in_cache(false, true, false);
     $php_process_owner = nppp_get_website_user();
     $web_server_user = nppp_get_webserver_user();
 
@@ -317,7 +351,11 @@ function nppp_my_status_html() {
     }
 
     // Format the status string
-    $perm_status_message = $perm_in_cache_status === 'true' ? 'Granted' : 'Need Action (Check Help)';
+    $perm_status_message = $perm_in_cache_status_perm === 'true'
+    ? 'Granted'
+    : ($perm_in_cache_status_perm === 'Not Found' ? 'Not Determined' : 'Need Action (Check Help)');
+
+    //$perm_status_message = $perm_in_cache_status_perm === 'true' ? 'Granted' : 'Need Action (Check Help)';
     $perm_status_message .= ' (' . esc_html($php_process_owner) . ')';
 
     ob_start();
@@ -344,7 +382,7 @@ function nppp_my_status_html() {
                                 </td>
                                 <td class="status" id="npppphpFpmStatus">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html($perm_in_cache_status); ?></span>
+                                    <span><?php echo esc_html($perm_in_cache_status_fpm); ?></span>
                                 </td>
                             </tr>
                         </tbody>
@@ -362,7 +400,7 @@ function nppp_my_status_html() {
                                 <td class="action">Purge Action</td>
                                 <td class="status" id="nppppurgeStatus">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html($perm_in_cache_status); ?></span>
+                                    <span><?php echo esc_html($perm_in_cache_status_purge); ?></span>
                                 </td>
                             </tr>
                             <tr>
