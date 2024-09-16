@@ -282,7 +282,8 @@ function nppp_get_in_cache_page_count() {
         return false;
     }
 
-    // Check for any permission issue in cached status
+    // Check permission issue in cache & cache path existence to
+    // prevent expensive directory traversal
     $cached_result = nppp_check_perm_in_cache(false, false, false);
     $path_status = nppp_check_path();
 
