@@ -342,8 +342,14 @@ function nppp_handle_nginx_cache_settings_submission() {
 
             // Verify the nonce
             if (wp_verify_nonce($nonce, 'nginx_cache_settings_nonce')) {
-                // Sanitize and validate the submitted values
-                $new_settings = nppp_nginx_cache_settings_sanitize($_POST['nginx_cache_settings']);
+                // Check if 'nginx_cache_settings' is set in the POST data
+                if (isset($_POST['nginx_cache_settings'])) {
+                    // Make sure we unslash and sanitize immediately
+                    $nginx_cache_settings = array_map('sanitize_text_field', wp_unslash($_POST['nginx_cache_settings']));
+
+                    // Validate the submitted values
+                    $new_settings = nppp_nginx_cache_settings_sanitize($nginx_cache_settings);
+                }
 
                 // Check if there are any settings errors
                 $errors = get_settings_errors('nppp_nginx_cache_settings_group');
