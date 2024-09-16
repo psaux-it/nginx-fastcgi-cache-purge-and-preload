@@ -334,7 +334,7 @@ function nppp_nginx_cache_settings_page() {
 // This function hooks into the 'admin_post'
 function nppp_handle_nginx_cache_settings_submission() {
     // Check if the form has been submitted
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_nginx_cache_settings') {
+    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_nginx_cache_settings') {
         // Verify nonce
         if (isset($_POST['nginx_cache_settings_nonce'])) {
             // Sanitize the nonce input
