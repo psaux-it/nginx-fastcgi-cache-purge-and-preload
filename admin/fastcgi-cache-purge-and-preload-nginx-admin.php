@@ -88,7 +88,7 @@ add_action('wp', function() {
     if (is_user_logged_in() && current_user_can('administrator') && isset($_GET['nppp_front'])) {
         $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
         if (wp_verify_nonce($nonce, 'nppp_redirect_nonce')) {
-            $status_message_key = sanitize_text_field($_GET['nppp_front']);
+            $status_message_key = sanitize_text_field(wp_unslash($_GET['nppp_front']));
             $status_message_data = get_transient($status_message_key);
 
             if ($status_message_data) {
