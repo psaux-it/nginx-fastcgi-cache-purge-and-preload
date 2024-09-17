@@ -355,8 +355,6 @@ function nppp_my_status_html() {
     $perm_status_message = $perm_in_cache_status_perm === 'true'
     ? 'Granted'
     : ($perm_in_cache_status_perm === 'Not Found' ? 'Not Determined' : 'Need Action (Check Help)');
-
-    //$perm_status_message = $perm_in_cache_status_perm === 'true' ? 'Granted' : 'Need Action (Check Help)';
     $perm_status_message .= ' (' . esc_html($php_process_owner) . ')';
 
     ob_start();
