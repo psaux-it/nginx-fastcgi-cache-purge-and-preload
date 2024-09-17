@@ -1108,7 +1108,7 @@ jQuery(document).ready(function($) {
             switch (category) {
                 case 'POST':
                     $cell.css({
-                        'color': 'turquoise',
+                        'color': 'fuchsia',
                         'font-weight': 'bold'
                     });
                     break;
@@ -1154,9 +1154,21 @@ jQuery(document).ready(function($) {
                         'font-weight': 'bold'
                     });
                     break;
+                case 'DATE_ARCHIVE':
+                    $cell.css({
+                        'color': 'darkmagenta',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'PRODUCT':
+                    $cell.css({
+                        'color': 'coral',
+                        'font-weight': 'bold'
+                    });
+                    break;
                 default:
                     $cell.css({
-                        'color': 'gray',
+                        'color': 'hotpink',
                         'font-weight': 'bold'
                     });
             }
