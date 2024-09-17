@@ -56,6 +56,7 @@ function nppp_premium_html($nginx_cache_path) {
                 <th>Cached URL</th>
                 <th>Cache Path</th>
                 <th>Content Category</th>
+                <th>Cache Date</th>
                 <th>Action</th>
             </tr>
         </thead>
@@ -68,6 +69,7 @@ function nppp_premium_html($nginx_cache_path) {
                         <td><?php echo esc_html($urlData['url']); ?></td>
                         <td><?php echo esc_html($urlData['file_path']); ?></td>
                         <td><?php echo esc_html($urlData['category']); ?></td>
+                        <td><?php echo esc_html($urlData['cache_date']); ?></td>
                         <td>
                             <button class="nppp-purge-btn" data-file="<?php echo esc_attr($urlData['file_path']); ?>">Purge</button>
                             <button class="nppp-preload-btn" data-url="<?php echo esc_attr($urlData['url']); ?>" style="display: none;">Preload</button>
@@ -316,6 +318,10 @@ function nppp_extract_cached_urls($nginx_cache_path) {
 
                     // Validate the URL
                     if (filter_var($final_url, FILTER_VALIDATE_URL) !== false) {
+                        // Get the file modification time for cache date
+                        $cache_timestamp = $file->getMTime();
+                        $cache_date = wp_date('Y-m-d H:i:s', $cache_timestamp);
+
                         // Categorize URLs based on WordPress permalink structures
                         $category = nppp_categorize_url($final_url);
 
@@ -323,7 +329,8 @@ function nppp_extract_cached_urls($nginx_cache_path) {
                         $urls[] = array(
                             'file_path' => $file->getPathname(),
                             'url' => $final_url,
-                            'category' => $category
+                            'category' => $category,
+                            'cache_date' => $cache_date
                        );
                     } else {
                         exit("Critical error: Invalid URL encountered. Script terminated.");
@@ -344,30 +351,30 @@ function nppp_categorize_url($url) {
 
     // Check if it's a post
     if (preg_match('#/(\d{4})/(\d{2})/(\d{2})/([^/]+)/#', $url)) {
-        return 'post'; // Day and name permalink structure
+        return 'POST'; // Day and name permalink structure
     } elseif (preg_match('#/(\d{4})/(\d{2})/([^/]+)/#', $url)) {
-        return 'post'; // Month and name permalink structure
+        return 'POST'; // Month and name permalink structure
     } elseif (preg_match('#/(\d{4})/([^/]+)/#', $url)) {
-        return 'post'; // Year and name permalink structure
+        return 'POST'; // Year and name permalink structure
     } elseif (preg_match('#/(\d+)/#', $url)) {
-        return 'post'; // Numeric permalink structure (post ID)
+        return 'POST'; // Numeric permalink structure (post ID)
     } elseif (preg_match('#/author/([^/]+)/#', $url)) {
-        return 'author'; // Author permalink structure
+        return 'AUTHOR'; // Author permalink structure
     } elseif (preg_match('#/page/(\d+)/#', $url)) {
-        return 'page'; // Page permalink structure
+        return 'PAGE'; // Page permalink structure
     } elseif (preg_match('#/tag/([^/]+)/#', $url)) {
-        return 'tag'; // Tag permalink structure
+        return 'TAG'; // Tag permalink structure
     } elseif (preg_match('#/category/([^/]+)/#', $url)) {
-        return 'category'; // Category permalink structure
+        return 'CATEGORY'; // Category permalink structure
     } elseif (preg_match('#/(20\d{2})/(\d{2})/(\d{2})/#', $url)) {
-        return 'daily_archive'; // Daily archive
+        return 'DAILY_ARCHIVE'; // Daily archive
     } elseif (preg_match('#/(20\d{2})/(\d{2})/#', $url)) {
-        return 'monthly_archive'; // Monthly archive
+        return 'MONTHLY_ARCHIVE'; // Monthly archive
     } elseif (preg_match('#/(20\d{2})/#', $url)) {
-        return 'yearly_archive'; // Yearly archive
+        return 'YEARLY_ARCHIVE'; // Yearly archive
     } elseif (preg_match('#/.+#', $url)) {
-        return 'post';
+        return 'POST';
     } else {
-        return 'unknown'; // Unable to determine category
+        return 'UNKNOWN'; // Unable to determine category
     }
 }
