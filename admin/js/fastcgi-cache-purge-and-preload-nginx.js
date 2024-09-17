@@ -1132,7 +1132,7 @@ jQuery(document).ready(function($) {
                     break;
                 case 'CATEGORY':
                     $cell.css({
-                        'color': 'purple',
+                        'color': 'mediumslateblue',
                         'font-weight': 'bold'
                     });
                     break;
@@ -1168,7 +1168,7 @@ jQuery(document).ready(function($) {
                     break;
                 default:
                     $cell.css({
-                        'color': 'hotpink',
+                        'color': 'burlywood',
                         'font-weight': 'bold'
                     });
             }
