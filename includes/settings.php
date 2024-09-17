@@ -125,10 +125,14 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">It is crucial that the <strong>PHP process owner</strong> has both read and write permissions to this directory.</p>
                                 <p class="description">Without these permissions, the plugin will be unable to purge or preload the cache effectively.</p>
                                 <p class="cache-path-plugin-note">
-                                    <span style="color: red;">NOTE:</span> The plugin author explicitly disclaims any liability for unintended deletions resulting<br>
-                                    from incorrect directory entries. Users are solely responsible for verifying the directory's<br>
-                                    accuracy prior to deletion. For safety, paths such as <strong>'/home'</strong> and other <strong>critical system paths</strong><br>
-                                    are prohibited in default. Best practice using directories like <strong>'/dev/shm/'.</strong><br>
+                                    <span style="color: red;">NOTE:</span> The plugin author explicitly disclaims any liability for unintended deletions resulting
+                                    <br class="line-break">
+                                    from incorrect directory entries. Users are solely responsible for verifying the directory's
+                                    <br class="line-break">
+                                    accuracy prior to deletion. For safety, paths such as <strong>'/home'</strong> and other <strong>critical system paths</strong>
+                                    <br class="line-break">
+                                    are prohibited in default. Best practice using directories like <strong>'/dev/shm/'</strong>
+                                    <br class="line-break">
                                     or <strong>'/var/cache/'</strong>. Please refer HELP section for detailed information.
                                 </p>
                             </td>
