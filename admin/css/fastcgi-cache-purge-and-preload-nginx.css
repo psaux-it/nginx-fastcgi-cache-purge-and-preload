@@ -680,13 +680,14 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
     }
     .nppp-cache-buttons {
         flex-direction: row;
-        justify-content: space-evenly;
+        /*justify-content: space-evenly; */
         align-items: center;
         gap: 10px;
+        margin-left: 15px;
     }
 
     .nppp-button {
-        font-size: 12px;
+        font-size: 14px;
     }
 }
 
