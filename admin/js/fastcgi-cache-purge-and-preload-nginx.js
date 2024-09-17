@@ -1047,7 +1047,7 @@ jQuery(document).ready(function($) {
 
     // Function to initialize DataTables.js for premium table
     function initializePremiumTable() {
-        $('#nppp-premium-table').DataTable({
+        var table = $('#nppp-premium-table').DataTable({
             autoWidth: false,
             responsive: true,
             paging: true,
@@ -1072,18 +1072,95 @@ jQuery(document).ready(function($) {
 
             // Set column widths
             columnDefs: [
-                { width: "30%", targets: 0 },
-                { width: "40%", targets: 1 },
-                { width: "15%", targets: 2 },
-                { width: "15%", targets: 3 },
-                { responsivePriority: 1, targets: 0 },
-                { responsivePriority: 2, targets: -1 },
-                { defaultContent: "", targets: "_all" }
-            ]
+                { width: "32%", targets: 0, className: 'text-left' }, // Cached URL
+                { width: "34%", targets: 1, className: 'text-left' }, // Cache Path
+                { width: "10%", targets: 2, className: 'text-left' }, // Content Category
+                { width: "12%", targets: 3, className: 'text-left' }, // Cache Date
+                { width: "12%", targets: 4, className: 'text-left' }, // Action
+                { responsivePriority: 1, targets: 0 }, // Cached URL gets priority for responsiveness
+                { responsivePriority: 2, targets: -1 }, // Action column gets second priority
+                { defaultContent: "", targets: "_all" } // Ensures all columns render even if empty
+            ],
+
+            // Ensure callback on table draw for initial load
+            initComplete: function() {
+                applyCategoryStyles();
+                hideEmptyCells();
+            }
         });
 
-        // Hide empty cells
-        hideEmptyCells();
+        // Apply styles whenever the table is redrawn (e.g., after pagination)
+        table.on('draw', function() {
+            applyCategoryStyles();
+            hideEmptyCells();
+        });
+    }
+
+    // Function to apply custom styles based on Content Category column
+    function applyCategoryStyles() {
+        $('#nppp-premium-table tbody tr').each(function() {
+            var $cell = $(this).find('td').eq(2);
+
+            // Get the text of the Content Category column
+            var category = $cell.text().trim();
+
+            // Apply different CSS styles based on the category
+            switch (category) {
+                case 'POST':
+                    $cell.css({
+                        'color': 'turquoise',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'AUTHOR':
+                    $cell.css({
+                        'color': 'orange',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'PAGE':
+                    $cell.css({
+                        'color': 'green',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'TAG':
+                    $cell.css({
+                        'color': 'blue',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'CATEGORY':
+                    $cell.css({
+                        'color': 'purple',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'DAILY_ARCHIVE':
+                    $cell.css({
+                        'color': 'red',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'MONTHLY_ARCHIVE':
+                    $cell.css({
+                        'color': 'brown',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'YEARLY_ARCHIVE':
+                    $cell.css({
+                        'color': 'darkblue',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                default:
+                    $cell.css({
+                        'color': 'gray',
+                        'font-weight': 'bold'
+                    });
+            }
+        });
     }
 
     // Function to hide empty cells
@@ -1097,7 +1174,8 @@ jQuery(document).ready(function($) {
             var cells = [
                 row.querySelector('td:nth-child(2)'),
                 row.querySelector('td:nth-child(3)'),
-                row.querySelector('td:nth-child(4)')
+                row.querySelector('td:nth-child(4)'),
+                row.querySelector('td:nth-child(5)')
             ];
 
             // Loop through each cell
