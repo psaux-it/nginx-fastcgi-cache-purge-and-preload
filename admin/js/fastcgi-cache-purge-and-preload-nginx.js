@@ -1706,9 +1706,6 @@ function npppupdateStatus() {
     var npppphpFpmStatusSpan = document.getElementById("npppphpFpmStatus");
     var npppphpFpmStatus = npppphpFpmStatusSpan.textContent.trim();
 
-    // Log the fetched status to debug
-    console.log("Fetched status:", npppphpFpmStatus);
-
     npppphpFpmStatusSpan.textContent = npppphpFpmStatus;
     npppphpFpmStatusSpan.style.fontSize = "14px";
     if (npppphpFpmStatus === "false") {
