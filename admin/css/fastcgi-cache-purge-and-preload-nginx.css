@@ -1969,3 +1969,13 @@ button.nppp-preload-btn[disabled] {
 .text-left {
     text-align: left !important;
 }
+
+/* style for advanced tab error messages */
+.nppp-advanced-error-message {
+    color: white;
+    background-color: cadetblue;
+    font-weight: bold;
+    max-width: max-content;
+    padding: 5px;
+    font-size: 12.5px;
+}
