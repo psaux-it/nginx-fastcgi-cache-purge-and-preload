@@ -91,7 +91,7 @@ function nppp_nginx_cache_settings_page() {
                 </div>
                 <p class="nppp-cache-tip">
                     <span class="dashicons dashicons-info"></span>
-                    Use Purge All to stop ongoing Preload.
+                    Use Purge All to stop ongoing Preloading
                 </p>
             </div>
         </div>
