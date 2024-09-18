@@ -625,7 +625,7 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
 /* Base styles for the header content */
 .nppp-header-content {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
 }
 
@@ -647,6 +647,7 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
     display: flex;
     justify-content: flex-start;
     gap: 10px;
+    margin-top: 12px;
 }
 
 /* Very cool button style */
@@ -1992,5 +1993,25 @@ button.nppp-preload-btn[disabled] {
 @media (max-width: 767px) {
     .cache-path-plugin-note .line-break {
         display: none;
+    }
+}
+
+/* Style for header cache button notification */
+.nppp-cache-tip {
+    font-size: 14px;
+    color: #666;
+    line-height: 1.4;
+    background-color: coral;
+    color: white;
+}
+
+.nppp-buttons-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 767px) {
+    .nppp-cache-tip {
+        margin-left: 15px;
     }
 }
