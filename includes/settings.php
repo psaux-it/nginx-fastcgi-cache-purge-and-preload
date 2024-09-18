@@ -84,9 +84,15 @@ function nppp_nginx_cache_settings_page() {
             <div class="nppp-img-container">
                 <img src="<?php echo esc_url( plugins_url( '../admin/img/logo.png', __FILE__ ) ); ?>">
             </div>
-            <div class="nppp-cache-buttons">
-                <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce')); ?>" class="nppp-button nppp-button-primary" id="nppp-purge-button">Purge All</a>
-                <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce')); ?>" class="nppp-button nppp-button-primary" id="nppp-preload-button">Preload All</a>
+            <div class="nppp-buttons-wrapper">
+                <div class="nppp-cache-buttons">
+                    <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce')); ?>" class="nppp-button nppp-button-primary" id="nppp-purge-button">Purge All</a>
+                    <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce')); ?>" class="nppp-button nppp-button-primary" id="nppp-preload-button">Preload All</a>
+                </div>
+                <p class="nppp-cache-tip">
+                    <span class="dashicons dashicons-info"></span>
+                    Use Purge All to stop ongoing Preload.
+                </p>
             </div>
         </div>
         <h2></h2>
