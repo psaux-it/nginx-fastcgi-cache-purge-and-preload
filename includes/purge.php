@@ -105,7 +105,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     nppp_display_admin_notice('error', "ERROR PERMISSION: Cache purge failed for page $current_page_url due to permission issue. Refer to -Help- tab for guidance.");
                     return;
                 }
-                
+
                 // Read file contents
                 $content = $wp_filesystem->get_contents($file->getPathname());
 
@@ -147,7 +147,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                              nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
                          } else {
                              if ($nppp_auto_purge && $nppp_auto_preload) {
-                                 nppp_preload_cache_on_update($current_page_url);
+                                 nppp_preload_cache_on_update($current_page_url, true);
                              } elseif ($nppp_auto_purge) {
                                  nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
                              } elseif ($nppp_auto_preload) {
@@ -166,9 +166,16 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         return;
     }
 
-    // If the URL is not found in the cache
+    // If the URL is not found in the cache, check auto preload status
     if (!$found) {
-        nppp_display_admin_notice('info', "INFO ADMIN: Cache purge attempted, but the page $current_page_url is not currently found in the cache.");
+        // Check if auto preload is enabled
+        if ($nppp_auto_preload) {
+            // Trigger the preload function
+            nppp_preload_cache_on_update($current_page_url, false);
+        } else {
+            // Display admin notice if auto preload is not enabled
+            nppp_display_admin_notice('info', "INFO ADMIN: Cache purge attempted, but the page $current_page_url is not currently found in the cache.");
+        }
     }
 }
 
