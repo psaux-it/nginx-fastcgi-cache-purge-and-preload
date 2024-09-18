@@ -301,7 +301,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 // Only triggers conditionally if Auto Purge & Auto Preload enabled at the same time
 // Only preloads cache for single post/page if Auto Purge triggered before for this modified/updated post/page
 // This functions not trgiggers after On-Page purge actions
-function nppp_preload_cache_on_update($current_page_url) {
+function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
@@ -359,16 +359,40 @@ function nppp_preload_cache_on_update($current_page_url) {
         // Check if the process is still running
         $isRunning = posix_kill($pid, 0);
 
-        // let's continue if process still alive
+        // Check if the process is still alive
         if ($isRunning) {
             // Write process ID to file
             nppp_perform_file_operation($PIDFILE, 'write', $pid);
-            $default_success_message = "SUCCESS ADMIN: Cache purged and auto preloading started for page $current_page_url";
-            nppp_display_admin_notice('success', $default_success_message);
+
+            // Determine the success message based on auto purge status
+            if ($found) {
+                $success_message = "SUCCESS ADMIN: Auto purge cache completed, Auto preload started for page $current_page_url";
+            } else {
+                $success_message = "SUCCESS ADMIN: Auto purge cache attempted but page not found in cache, Auto preload started for page $current_page_url";
+            }
+
+            // Display the success message
+            nppp_display_admin_notice('success', $success_message);
         } else {
-            nppp_display_admin_notice('error', "ERROR COMMAND: Cache purged, but unable to start auto preloading for $current_page_url. Please report this issue on the plugin support page.");
+            // Determine the error message based on auto purge status
+            if ($found) {
+                $error_message = "ERROR COMMAND: Auto purge cache completed, but unable to start Auto preload for $current_page_url. Please report this issue on the plugin support page.";
+            } else {
+                $error_message = "ERROR COMMAND: Auto purge cache attempted but page not found in cache, unable to start Auto preload. Please report this issue on the plugin support page.";
+            }
+
+            // Display the error message
+            nppp_display_admin_notice('error', $error_message);
         }
     } else {
-        nppp_display_admin_notice('error', "ERROR COMMAND: Cache purged, but unable to start auto preloading for $current_page_url. Please report this issue on the plugin support page.");
+        // Determine the error message based on auto purge status
+        if ($found) {
+            $error_message = "ERROR COMMAND: Auto purge cache completed, but unable to start Auto preload for $current_page_url. Please report this issue on the plugin support page.";
+        } else {
+            $error_message = "ERROR COMMAND: Auto purge cache attempted but page not found in cache, unable to start Auto preload. Please report this issue on the plugin support page.";
+        }
+
+        // Display the error message
+        nppp_display_admin_notice('error', $error_message);
     }
 }
