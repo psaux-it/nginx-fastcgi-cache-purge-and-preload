@@ -154,6 +154,9 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">Enabling this feature ensures that whenever you make changes to the content of a <strong>POST/PAGE</strong><br></p>
                                 <p class="description">or when <strong>COMMENT</strong> are approved or their status is changed, the cached version of that <strong>POST/PAGE</strong> is automatically cleared.<br></p>
                                 <p class="description">Additionally, if the <strong>Auto Preload</strong> option is enabled, the cache for the <strong>POST/PAGE</strong> will be automatically preloaded after the cache is purged.</p>
+                                <br>
+                                <p class="description"><strong>New Feature:</strong> The entire cache is automatically purged when a <strong>THEME</strong> or <strong>PLUGIN</strong> is updated, manually or automatically.<br></p>
+                                <p class="description">If <strong>Auto Preload</strong> is enabled, the entire cache will also be automatically preloaded after the update, ensuring your site always serves the latest content.<br></p>
                             </td>
                         </tr>
                         <!-- Start Preload Options Section -->
