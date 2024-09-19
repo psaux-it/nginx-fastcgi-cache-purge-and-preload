@@ -225,7 +225,7 @@ function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
     // Check if auto purge on update is enabled
     if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
         // Determine the type of update: plugin or theme
-        if ( isset( $hook_extra['type'] ) && in_array( $hook_extra['type'], array( 'plugin', 'theme' ), true ) ) {
+        if (isset($hook_extra['type']) && in_array($hook_extra['type'], array('plugin', 'theme'), true)) {
             // Retrieve necessary options for purge actions
             $default_cache_path = '/dev/shm/change-me-now';
             $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
