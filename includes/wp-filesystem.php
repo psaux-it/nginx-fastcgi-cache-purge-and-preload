@@ -16,23 +16,39 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Verify WP file-system credentials and initialize WP_Filesystem
 function nppp_initialize_wp_filesystem() {
+    global $wp_filesystem;
+
+    // Return existing WP_Filesystem instance if already initialized
+    if (!empty($wp_filesystem)) {
+        return $wp_filesystem;
+    }
+
+    // Include the necessary file if WP_Filesystem doesn't exist
     if (!function_exists('WP_Filesystem')) {
         require_once ABSPATH . 'wp-admin/includes/file.php';
     }
 
-    // Verify WP file-system credentials.
-    $verified_credentials = request_filesystem_credentials(site_url() . '/wp-admin/', '', false, false, null);
+    // Request filesystem credentials
+    $credentials = request_filesystem_credentials(admin_url(''), '', false, false, null);
 
-    if (is_wp_error($verified_credentials)) {
-        return $verified_credentials;
+    // Handle credential request failure
+    if (!$credentials || is_wp_error($credentials)) {
+        error_log('nppp_initialize_wp_filesystem: Unable to obtain filesystem credentials.');
+        return false;
     }
 
-    // Initialize WP_Filesystem
-    if (WP_Filesystem($verified_credentials)) {
+    // Initialize the WP_Filesystem
+    if (WP_Filesystem($credentials)) {
         global $wp_filesystem;
-        return $wp_filesystem;
+        if (!empty($wp_filesystem)) {
+            return $wp_filesystem;
+        } else {
+            error_log('nppp_initialize_wp_filesystem: WP_Filesystem object is not set.');
+            return false;
+        }
     }
 
+    error_log('nppp_initialize_wp_filesystem: Could not initialize the WP Filesystem.');
     return false;
 }
 
@@ -72,7 +88,7 @@ function nppp_wp_purge($directory_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return new WP_Error('filesystem_error', 'WP_Filesystem initialization failed');
+        wp_die('Failed to initialize WP Filesystem.');
     }
 
     // Check if the directory exists before attempting to remove its contents
@@ -139,7 +155,7 @@ function nppp_is_directory_readable($directory_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        wp_die('Failed to initialize WP Filesystem.');
     }
 
     // Check if the directory is readable
@@ -176,7 +192,7 @@ function nppp_check_permissions_recursive($path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        wp_die('Failed to initialize WP Filesystem.');
     }
 
     try {
