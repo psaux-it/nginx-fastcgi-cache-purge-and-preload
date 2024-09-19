@@ -179,7 +179,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     }
 }
 
-// Auto Purge
+// Auto Purge (Single)
 // Purge cache automatically for updated content (post/page)
 // This function hooks into the 'save_post' action
 function nppp_purge_cache_on_update($post_id) {
@@ -215,8 +215,32 @@ function nppp_purge_cache_on_update($post_id) {
     }
 }
 
-// Auto Purge
-// Purge cache automatically when a comment status changes (post/page)
+// Auto Purge (Entire)
+// Purge entire cache automatically for plugin or theme updates.
+// This function hooks into the 'upgrader_process_complete' action
+function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
+    // Retrieve plugin settings
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Check if auto purge on update is enabled
+    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+        // Determine the type of update: plugin or theme
+        if ( isset( $hook_extra['type'] ) && in_array( $hook_extra['type'], array( 'plugin', 'theme' ), true ) ) {
+            // Retrieve necessary options for purge actions
+            $default_cache_path = '/dev/shm/change-me-now';
+            $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+            $this_script_path = dirname(plugin_dir_path(__FILE__));
+            $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+            $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+
+            // Trigger purge action
+            nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true);
+        }
+    }
+}
+
+// Auto Purge (Single)
+// Purge cache automatically when a new comment exists (post/page)
 // This function hooks into the 'wp_insert_comment' action
 function nppp_purge_cache_on_comment($comment_id, $comment) {
     $oldstatus = '';
@@ -239,7 +263,7 @@ function nppp_purge_cache_on_comment($comment_id, $comment) {
     nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment);
 }
 
-// Auto Purge
+// Auto Purge (Single)
 // Purge cache automatically when a comment status changes (post/page)
 // This function hooks into the 'transition_comment_status' action
 function nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment) {
