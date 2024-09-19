@@ -278,8 +278,13 @@ function nppp_create_scheduled_event_preload_status($start_time) {
 // So first we need the first scheduled time of event
 function nppp_get_preload_start_time() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
+
     if ($wp_filesystem === false) {
-        return null;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Define a constant for the log file path
@@ -349,8 +354,13 @@ function nppp_get_preload_start_time() {
 // Function to check the status of the background process
 function nppp_create_scheduled_event_preload_status_callback() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
+
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Get scheduled time
