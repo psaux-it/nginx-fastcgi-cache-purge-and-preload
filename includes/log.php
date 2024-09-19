@@ -80,7 +80,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true) {
             }
 
             // Prepare the log entry with timestamp
-            $log_entry = '[' . current_time('Y-m-d H:i:s') . '] ' . $sanitized_message . PHP_EOL;
+            $log_entry = '[' . current_time( 'Y-m-d H:i:s' ) . '] ' . $sanitized_message;
 
             // Attempt to append the log entry
             $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
