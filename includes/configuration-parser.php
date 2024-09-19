@@ -76,7 +76,7 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
             }
         }
     }
-    
+
     // Return empty if no Nginx cache paths are found
     if (empty($cache_paths)) {
         return ['cache_paths' => []];
