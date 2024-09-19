@@ -75,7 +75,7 @@ function nppp_nginx_cache_settings_page() {
         }
 
         // Display the status message as an admin notice
-        nppp_display_admin_notice($message_type, $status_message, false);
+        nppp_display_admin_notice($message_type, $status_message, false, true);
     }
 
     ?>
@@ -442,12 +442,10 @@ function nppp_clear_nginx_cache_logs() {
     $log_file_path = NGINX_CACHE_LOG_FILE;
     if ($wp_filesystem->exists($log_file_path)) {
         nppp_perform_file_operation($log_file_path, 'write', '');
-        nppp_display_admin_notice('success', 'SUCCESS: Logs cleared successfully.');
+        nppp_display_admin_notice('success', 'SUCCESS LOGS: Logs cleared successfully.', true, false);
     } else {
-        nppp_display_admin_notice('error', 'ERROR LOGS: Log file not found.');
+        nppp_display_admin_notice('error', 'ERROR LOGS: Log file not found.', true, false);
     }
-    // Exit after AJAX functions to avoid extra output
-    wp_die();
 }
 
 // Child AJAX callback function to retrieve log content after clear
@@ -1052,7 +1050,11 @@ function nppp_fetch_default_reject_regex() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        wp_die('Failed to initialize WP Filesystem.');
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     $rr_txt_file = plugin_dir_path(__FILE__) . '../includes/reject_regex.txt';
@@ -1269,8 +1271,13 @@ function nppp_nginx_cache_settings_sanitize($input) {
 function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     // Initialize WP filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
+
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Define the default path for whitelist
