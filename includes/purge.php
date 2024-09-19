@@ -234,7 +234,7 @@ function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
             $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
             // Trigger purge action
-            nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true);
+            nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
         }
     }
 }
@@ -307,7 +307,7 @@ function nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment) {
 }
 
 // Purge cache operation
-function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = false, $nppp_is_admin_bar = false) {
+function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = false, $nppp_is_admin_bar = false, $nppp_is_auto_purge = false) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
@@ -464,7 +464,11 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
     // Display the admin notice
     if (!empty($message_type) && !empty($message_content)) {
-        nppp_display_admin_notice($message_type, $message_content);
+        if ($nppp_is_auto_purge) {
+            nppp_display_admin_notice($message_type, $message_content, true, false);
+        } else {
+            nppp_display_admin_notice($message_type, $message_content);
+        }
     }
 
     // Check if there was an error during the cache purge process
