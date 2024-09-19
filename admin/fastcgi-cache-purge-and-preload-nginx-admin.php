@@ -82,7 +82,25 @@ add_action('wp_insert_comment', 'nppp_purge_cache_on_comment', 200, 2);
 add_action('transition_comment_status', 'nppp_purge_cache_on_comment_change', 200, 3);
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
 add_action('nppp_plugin_admin_notices', function($type, $message, $log_message) {
-    echo '<div class="notice notice-' . esc_attr($type) . ' is-dismissible notice-nppp"><p>' . esc_html($message) . '</p></div>';
+    // Define allowed notice types to prevent unexpected classes
+    $allowed_types = array('success', 'error', 'warning', 'info');
+
+    // Validate and sanitize the notice type
+    if (!in_array($type, $allowed_types, true)) {
+        $type = 'info';
+    } else {
+        $type = sanitize_key($type);
+    }
+
+    // Sanitize the message
+    $sanitized_message = sanitize_text_field($message);
+
+    // Output the notice directly with proper escaping
+    ?>
+    <div class="notice notice-<?php echo esc_attr($type); ?> is-dismissible notice-nppp">
+        <p><?php echo esc_html($sanitized_message); ?></p>
+    </div>
+    <?php
 }, 10, 3);
 add_action('wp', function() {
     if (is_user_logged_in() && current_user_can('administrator') && isset($_GET['nppp_front'])) {
