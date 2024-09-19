@@ -41,8 +41,13 @@ function nppp_send_mail_now($mail_message, $elapsed_time_str) {
         $html_content = '';
 
         $wp_filesystem = nppp_initialize_wp_filesystem();
+    
         if ($wp_filesystem === false) {
-            return false;
+            nppp_display_admin_notice(
+                'error',
+                'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            );
+            return;
         }
 
         if ($wp_filesystem->exists($template_file)) {
