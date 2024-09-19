@@ -81,6 +81,7 @@ add_action('save_post', 'nppp_purge_cache_on_update');
 add_action('wp_insert_comment', 'nppp_purge_cache_on_comment', 200, 2);
 add_action('transition_comment_status', 'nppp_purge_cache_on_comment_change', 200, 3);
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
+add_action('upgrader_process_complete', 'nppp_purge_cache_on_theme_plugin_update', 10, 2);
 add_action('nppp_plugin_admin_notices', function($type, $message, $log_message) {
     // Define allowed notice types to prevent unexpected classes
     $allowed_types = array('success', 'error', 'warning', 'info');
