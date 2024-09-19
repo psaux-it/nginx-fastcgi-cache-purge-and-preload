@@ -57,7 +57,11 @@ function nppp_perform_file_operation($file_path, $operation, $data = null) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        wp_die('Failed to initialize WP Filesystem.');
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     switch ($operation) {
@@ -88,7 +92,11 @@ function nppp_wp_purge($directory_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        wp_die('Failed to initialize WP Filesystem.');
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Check if the directory exists before attempting to remove its contents
@@ -129,7 +137,11 @@ function nppp_wp_remove_directory($directory_path, $recursive = true) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        wp_die('Failed to initialize WP Filesystem.');
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Check if the directory exists before attempting to remove it
@@ -155,7 +167,11 @@ function nppp_is_directory_readable($directory_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        wp_die('Failed to initialize WP Filesystem.');
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Check if the directory is readable
@@ -192,7 +208,11 @@ function nppp_check_permissions_recursive($path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        wp_die('Failed to initialize WP Filesystem.');
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     try {
