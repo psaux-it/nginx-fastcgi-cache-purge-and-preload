@@ -16,14 +16,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Permission callback function to check API key validity
 function nppp_nginx_cache_authorize_endpoint($request) {
-    // Sanitize API key.
+    // Retrieve and sanitize API key.
     $api_key = sanitize_text_field($request->get_param('api_key'));
+
+    // Validate API key format (64-character hexadecimal).
     if (!preg_match('/^[a-f0-9]{64}$/i', $api_key)) {
         return new WP_Error('invalid_api_key', 'Invalid API Key.', array('status' => 403));
     }
 
+    // Retrieve stored API key from options.
     $options = get_option('nginx_cache_settings');
     $stored_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : '';
+
+    // Compare provided API key with stored key.
     if ($api_key !== $stored_key) {
         return new WP_Error('invalid_api_key', 'Invalid API Key.', array('status' => 403));
     }
@@ -41,6 +46,7 @@ function nppp_nginx_cache_register_purge_endpoint() {
                 'required' => true,
                 'description' => 'API Key for authentication.',
                 'type' => 'string',
+                'sanitize_callback'=> 'sanitize_text_field',
             ),
         ),
         'permission_callback' => 'nppp_nginx_cache_authorize_endpoint',
@@ -57,6 +63,7 @@ function nppp_nginx_cache_register_preload_endpoint() {
                 'required' => true,
                 'description' => 'API Key for authentication.',
                 'type' => 'string',
+                'sanitize_callback'=> 'sanitize_text_field',
             ),
         ),
         'permission_callback' => 'nppp_nginx_cache_authorize_endpoint',
@@ -69,17 +76,21 @@ function nppp_nginx_cache_purge_endpoint($request) {
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $default_cache_path = '/dev/shm/change-me-now';
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+    $this_script_path = dirname(plugin_dir_path(__FILE__));
     $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Call purge action
     ob_start();
-    nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, true, false);
+    nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, true, false, false);
     // Get status message
     $status_message = wp_strip_all_tags(ob_get_clean());
 
     // Return status response
-    return array('success' => true, 'status_message' => $status_message);
+    return new WP_REST_Response(array(
+        'success' => true,
+        'message' => $status_message
+    ), 200);
 }
 
 // Handle the REST API request for preload action.
@@ -112,5 +123,8 @@ function nppp_nginx_cache_preload_endpoint($request) {
     $status_message = wp_strip_all_tags(ob_get_clean());
 
     // Return status response.
-    return array('success' => true, 'status_message' => $status_message);
+    return new WP_REST_Response(array(
+        'success' => true,
+        'message' => $status_message
+    ), 200);
 }
