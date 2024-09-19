@@ -42,7 +42,7 @@ function nppp_create_log_file($log_file_path) {
 }
 
 // Hook to display your plugin's notices
-function nppp_display_admin_notice($type, $message, $log_message = true) {
+function nppp_display_admin_notice($type, $message, $log_message = true, $display_notice = true) {
     // Validate and sanitize the notice type
     $allowed_types = array('success', 'error', 'warning', 'info');
     if (!in_array($type, $allowed_types, true)) {
@@ -53,7 +53,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true) {
     $sanitized_message = sanitize_text_field($message);
 
     // Trigger the custom action to display the notice
-    do_action('nppp_plugin_admin_notices', $type, $sanitized_message, $log_message);
+    do_action('nppp_plugin_admin_notices', $type, $sanitized_message, $log_message, $display_notice);
 
     // Write to the log file if required
     if ($log_message) {
