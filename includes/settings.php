@@ -1108,6 +1108,11 @@ function nppp_nginx_cache_api_callback() {
 function nppp_nginx_cache_settings_sanitize($input) {
     $sanitized_input = array();
 
+    // Ensure input is an array
+    if (!is_array($input)) {
+        return $sanitized_input;
+    }
+
     // Sanitize and validate cache path
     if (!empty($input['nginx_cache_path'])) {
         // Validate the path
