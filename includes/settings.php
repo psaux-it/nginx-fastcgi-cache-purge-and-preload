@@ -155,8 +155,9 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">or when <strong>COMMENT</strong> are approved or their status is changed, the cached version of that <strong>POST/PAGE</strong> is automatically cleared.<br></p>
                                 <p class="description">Additionally, if the <strong>Auto Preload</strong> option is enabled, the cache for the <strong>POST/PAGE</strong> will be automatically preloaded after the cache is purged.</p>
                                 <br>
-                                <p class="description"><strong>New Feature:</strong> The entire cache is automatically purged when a <strong>THEME</strong> or <strong>PLUGIN</strong> is updated, manually or automatically.<br></p>
-                                <p class="description">If <strong>Auto Preload</strong> is enabled, the entire cache will also be automatically preloaded after the update, ensuring your site always serves the latest content.<br></p>
+                                <p class="description"><strong>New Feature:</strong> The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when a <strong>THEME</strong> or <strong>PLUGIN</strong> is updated, manually or automatically.<br></p>
+                                <p class="description">If <strong>Auto Preload</strong> is enabled, the <span style="color: orange;"><strong>entire cache</strong></span> will also be automatically preloaded after the the cache is purged,<br></p>
+                                <p class="description">ensuring your site always serves the latest content.</p>
                             </td>
                         </tr>
                         <!-- Start Preload Options Section -->
@@ -178,7 +179,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">Enable this feature to automatically preload the cache after purging. This ensures fast page load times for visitors by proactively caching content.</p>
                                 <p class="description">When enabled, your website's cache will preload with the latest content automatically after purge, ensuring quick loading times even for uncached pages.</p>
                                 <p class="description">This feature is particularly useful for dynamic websites with frequently changing content.</p>
-                                <p class="description">This feature triggers when either <strong>Auto Purge</strong> is enabled for a single <strong>POST/PAGE</strong> or when the <strong>Purge All</strong> cache action is used.</p>
+                                <p class="description">This feature triggers when either <strong>Auto Purge</strong> feature is enabled or when the <strong>Purge All</strong> cache action is used manually.</p>
                             </td>
                         </tr>
                         <tr valign="top">
