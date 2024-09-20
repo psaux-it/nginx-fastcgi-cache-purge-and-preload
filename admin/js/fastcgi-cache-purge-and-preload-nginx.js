@@ -1588,20 +1588,24 @@ jQuery(document).ready(function($) {
         $('.nppp-cron-event-select option[value=""][disabled]').hide();
     });
 
+    // Set cache button behaviours
     $('#nppp-purge-button, #nppp-preload-button').on('click', function(event) {
-    // Prevent the default click behavior
-    event.preventDefault();
+        // Prevent the default click behavior
+        event.preventDefault();
 
-    // Disable the clicked button
-    $(this).prop('disabled', true);
+        // Disable the clicked button
+        $(this).prop('disabled', true).addClass('disabled');
 
-    // Store the URL of the button's destination
-    var url = $(this).attr('href');
+        // Show the preloader
+        $('#nppp-loader-overlay').addClass('active').fadeIn(200);
 
-    // Set a timeout to reload the page after 2 seconds
-    setTimeout(function() {
-        window.location.href = url; // Reload the page with the stored URL
-    }, 2000); // 2000 milliseconds = 2 seconds
+        // Store the URL of the button's destination
+        var url = $(this).attr('href');
+
+        // Set a timeout to reload the page after 2 seconds
+        setTimeout(function() {
+            window.location.href = url;
+        }, 2000);
     });
 });
 
