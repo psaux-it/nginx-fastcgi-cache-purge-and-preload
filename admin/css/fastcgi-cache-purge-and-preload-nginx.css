@@ -2022,3 +2022,89 @@ button.nppp-preload-btn[disabled] {
         margin-top: 6px;
     }
 }
+
+/* Loader Overlay */
+#nppp-loader-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    pointer-events: none;
+}
+
+#nppp-loader-overlay.active {
+    pointer-events: all;
+}
+
+/* Spinner Container */
+.nppp-spinner-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 12vw;
+    height: 12vw;
+    max-width: 80px;
+    max-height: 80px;
+}
+
+/* Spinner Animation */
+.nppp-loader {
+    position: absolute;
+    border: 8px solid #e0e0e0;
+    border-top: 8px solid #4db8ff;
+    border-radius: 50%;
+    width: 100%;
+    height: 100%;
+    animation: nppp-spin 1s linear infinite;
+}
+
+@keyframes nppp-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* NPP Text (Static, Bigger and Brighter) */
+.nppp-loader-text {
+    position: absolute;
+    color: #ff5733;
+    font-weight: bold;
+    font-size: 1.8em;
+    pointer-events: none;
+    text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 600px) {
+    .nppp-loader-text {
+        font-size: 1.4em;
+    }
+}
+
+/* Loader Message (Bigger, Bolder, More Visible) */
+.nppp-loader-message {
+    margin-top: 20px;
+    color: #ffffff;
+    font-size: 1.4em;
+    font-weight: 600;
+    text-align: center;
+}
+
+@media (max-width: 600px) {
+    .nppp-loader-message {
+        font-size: 1.2em;
+    }
+}
+
+/* Disabled Button Style */
+.nppp-button.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+    cursor: not-allowed;
+}
