@@ -80,6 +80,13 @@ function nppp_nginx_cache_settings_page() {
 
     ?>
     <div class="wrap">
+        <div id="nppp-loader-overlay" style="display: none;" aria-live="assertive" aria-busy="true">
+            <div class="nppp-spinner-container">
+                <div class="nppp-loader"></div>
+                <span class="nppp-loader-text">NPP</span>
+            </div>
+            <p class="nppp-loader-message">Processing, please wait...</p>
+        </div>
         <div class="nppp-header-content">
             <div class="nppp-img-container">
                 <img src="<?php echo esc_url( plugins_url( '../admin/img/logo.png', __FILE__ ) ); ?>">
