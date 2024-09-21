@@ -45,7 +45,7 @@ function nppp_premium_html($nginx_cache_path) {
 
     // Check for errors from nppp_extract_cached_urls()
     if (isset($extractedUrls['error'])) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">' . esc_html($extractedUrls['error']) . '</p></div>';
+        return '<div class="nppp-premium-wrap"><h2>Displaying Cached Content</h2><p class="nppp-advanced-error-message">' . esc_html($extractedUrls['error']) . '</p></div>';
     }
 
     // Output the premium tab content
@@ -121,8 +121,18 @@ function nppp_load_premium_content_callback() {
     $options = get_option('nginx_cache_settings');
     $nginx_cache_path = isset($options['nginx_cache_path']) ? $options['nginx_cache_path'] : '';
 
-    // Load premium content
-    echo wp_kses_post(nppp_premium_html($nginx_cache_path));
+    // Generate the HTML content
+    $premium_content = nppp_premium_html($nginx_cache_path);
+
+    // Return the generated HTML to AJAX
+    if (!empty($premium_content)) {
+        echo wp_kses_post($premium_content);
+    } else {
+        // Send empty string to AJAX to trigger proper error
+        echo '';
+    }
+
+    // Properly exit to avoid extra output
     wp_die();
 }
 
@@ -453,7 +463,7 @@ function nppp_categorize_url($url) {
         $category = 'EXTERNAL';
         // Cache the result
         $url_cache[$url] = $category;
-        set_transient($cache_key, $category, 5 * MINUTE_IN_SECONDS);
+        set_transient($cache_key, $category, DAY_IN_SECONDS);
         return $category;
     }
 
@@ -485,7 +495,7 @@ function nppp_categorize_url($url) {
 
         // Cache the result
         $url_cache[$url] = $category;
-        set_transient($cache_key, $category, 5 * MINUTE_IN_SECONDS);
+        set_transient($cache_key, $category, DAY_IN_SECONDS);
         return $category;
     } else {
         global $wp_rewrite;
@@ -618,7 +628,7 @@ function nppp_categorize_url($url) {
 
         // Cache the result
         $url_cache[$url] = $category;
-        set_transient($cache_key, $category, 5 * MINUTE_IN_SECONDS);
+        set_transient($cache_key, $category, DAY_IN_SECONDS);
 
         return $category;
     }
