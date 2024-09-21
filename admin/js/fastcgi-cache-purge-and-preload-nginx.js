@@ -65,45 +65,106 @@ jQuery(document).ready(function($) {
     // Initial call to adjust the layout on page load
     adjustTableForMobile();
 
-    // Initialize jQuery UI tabs
+    // Cache jQuery selectors for better performance and easier reference
+    const $preloader = $('#nppp-loader-overlay');
+    const $settingsPlaceholder = $('#settings-content-placeholder');
+    const $statusPlaceholder = $('#status-content-placeholder');
+    const $premiumPlaceholder = $('#premium-content-placeholder');
+
+    // Function to show the preloader overlay
+    // Adds the 'active' class and fades in the preloader over 50 milliseconds
+    function showPreloader() {
+        // Adjust the `.nppp-loader-fill` animation duration
+        $('.nppp-loader-fill').css({
+            'animation': 'nppp-fill 2s ease-in-out infinite'
+        });
+
+        // Remove backdrop filters from `#nppp-loader-overlay` by setting them to 'none'
+        $('#nppp-loader-overlay').css({
+            'backdrop-filter': 'none',
+            '-webkit-backdrop-filter': 'none',
+            'transition': 'none'
+        });
+
+        // Add 'active' class and fade in the preloader
+        $preloader.addClass('active').fadeIn(50);
+    }
+
+    // Function to hide the preloader overlay
+    // Removes the 'active' class and fades out the preloader over 50 milliseconds
+    function hidePreloader() {
+        $preloader.removeClass('active').fadeOut(50);
+
+        // Reset the `.nppp-loader-fill` animation duration back
+        $('.nppp-loader-fill').css({
+            'animation': 'nppp-fill 5s ease-in-out infinite'
+        });
+
+        // Re-apply backdrop filters to `#nppp-loader-overlay` with original values
+        $('#nppp-loader-overlay').css({
+            'backdrop-filter': 'blur(1px)',
+            '-webkit-backdrop-filter': 'blur(1px)',
+            'transition': 'opacity 0.3s ease, visibility 0.3s ease'
+        });
+    }
+
+    // Initialize jQuery UI tabs on the element with ID 'nppp-nginx-tabs'
     $('#nppp-nginx-tabs').tabs({
         activate: function(event, ui) {
             var tabId = ui.newPanel.attr('id');
+            // Show the preloader when a new tab is activated
+            if (tabId !== 'help') {
+                showPreloader();
+            }
+
+            // Hide all content placeholders to ensure only the active tab's content is visible
+            $settingsPlaceholder.hide();
+            $statusPlaceholder.hide();
+            $premiumPlaceholder.hide();
 
             // Handle specific actions for each tab
             if (tabId === 'settings') {
-                // Check if the Settings tab is already active
+                // Check if the Settings tab panel does not have the 'ui-tabs-active' class
                 if (!ui.newPanel.hasClass('ui-tabs-active')) {
-                    $('#settings-content-placeholder').html('<div class="nppp-loading-spinner"></div>');
-
                     // Reload the settings page to create cache
                     location.reload();
+                } else {
+                    // If the Settings tab is already active, hide the preloader
+                    hidePreloader();
                 }
             } else if (tabId === 'status') {
+                // Load content for the 'Status' tab via AJAX
                 loadStatusTabContent();
+                // Adjust table layout for mobile devices if necessary
                 adjustTableForMobile();
             } else if (tabId === 'premium') {
+                // Load content for the 'Premium' tab via AJAX
                 loadPremiumTabContent();
             }
         },
         beforeLoad: function(event, ui) {
+            // Attach a fail handler to the AJAX request associated with the tab
             ui.jqXHR.fail(function() {
                 ui.panel.html("Couldn't load this tab. We'll try to fix this as soon as possible.");
+                // Hide the preloader since loading failed
+                hidePreloader();
             });
         }
     });
 
-    // Load status content if user comes from wordpress admin bar directly
+    // Check if the user navigated directly to the 'Status' tab via URL hash (e.g., yoursite.com/page#status)
     if (window.location.hash === '#status') {
+        // Show the preloader when loading the Status tab directly
+        showPreloader();
+        // Load content for the 'Status' tab via AJAX
         loadStatusTabContent();
+        // Adjust table layout for mobile devices if necessary
         adjustTableForMobile();
     }
 
     // Function to load content for the 'Status' tab via AJAX
+    // Sends a POST request to the server to fetch the Status tab content
     function loadStatusTabContent() {
-        // Show loading spinner
-        $('#status-content-placeholder').html('<div class="nppp-loading-spinner"></div>');
-
         // AJAX request for the "Status" tab content
         $.ajax({
             url: nppp_admin_data.ajaxurl,
@@ -114,13 +175,27 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.trim() !== '') {
-                    // Replace loading spinner with content
-                    $('#status-content-placeholder').html(response).show();
+                    // Insert the response HTML into the Status tab placeholder
+                    // Keep it not visible with opacity
+                    $statusPlaceholder.html(response).css('opacity', 0).show();
 
-                    // Update status metrics after the content is inserted into the DOM
+                    // Update status metrics
                     npppupdateStatus();
+
+                    // Hide the preloader now that content is ready
+                    hidePreloader();
+
+                    // Finally show content to user
+                    $statusPlaceholder.animate({ opacity: 1 }, 100);
                 } else {
                     console.error('Empty response received');
+                    // Hide the preloader since loading failed
+                    hidePreloader();
+                    // Replace placeholder with proper error message
+                    $statusPlaceholder.html(`
+                        <h2>Error Displaying Tab Content</h2>
+                        <p class="nppp-advanced-error-message">Failed to initialize the Status TAB.</p>
+                    `);
                 }
 
                 // Recalculate scroll positions and sizes
@@ -128,15 +203,23 @@ jQuery(document).ready(function($) {
             },
             error: function(xhr, status, error) {
                 console.error(error);
+                // Hide the preloader since loading failed
+                hidePreloader();
+                // Replace placeholder with proper error message
+                $statusPlaceholder.html(`
+                    <h2>Error Displaying Tab Content</h2>
+                    <p class="nppp-advanced-error-message">Failed to initialize the Status TAB.</p>
+                `);
+
+                // Recalculate scroll positions and sizes
+                $(window).trigger('resize').trigger('scroll');
             }
         });
     }
 
     // Function to load content for the 'Premium' tab via AJAX
+    // Sends a POST request to the server to fetch the Advanced tab content
     function loadPremiumTabContent() {
-        // Show loading spinner
-        $('#premium-content-placeholder').html('<div class="nppp-loading-spinner"></div>');
-
         // AJAX request for the "Premium" tab content
         $.ajax({
             url: nppp_admin_data.ajaxurl,
@@ -146,23 +229,37 @@ jQuery(document).ready(function($) {
                 _wpnonce: nppp_admin_data.premium_content_nonce
             },
             success: function(response) {
-                // Replace loading spinner with content
-                $('#premium-content-placeholder').html(response);
+                // Insert the response HTML into the Advanced tab placeholder
+                // Keep it not visible with opacity
+                $premiumPlaceholder.html(response).css('opacity', 0).show();
 
-                // Initialize DataTables.js for premium table
+                // Initialize DataTables.js for the advanced table within the loaded content
                 initializePremiumTable();
 
                 // Recalculate column widths for responsive layout
                 $('#nppp-premium-table').DataTable().responsive.recalc();
 
-                // Show the content
-                $('#premium-content-placeholder').show();
+                // Hide the preloader that content is ready
+                hidePreloader();
+
+                // Finally show content to user
+                $premiumPlaceholder.animate({ opacity: 1 }, 100);
 
                 // Recalculate scroll positions and sizes
                 $(window).trigger('resize').trigger('scroll');
             },
             error: function(xhr, status, error) {
                 console.error(status + ': ' + error);
+                // Hide the preloader since loading failed
+                hidePreloader();
+                // Replace placeholder with proper error message
+                $premiumPlaceholder.html(`
+                    <h2>Error Displaying Tab Content</h2>
+                    <p class="nppp-advanced-error-message">Failed to initialize the Advanced TAB.</p>
+                `);
+
+                // Recalculate scroll positions and sizes
+                $(window).trigger('resize').trigger('scroll');
             }
         });
     }
