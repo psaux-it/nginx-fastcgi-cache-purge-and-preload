@@ -1753,7 +1753,7 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 });
 
-// trim trailing leading white spaces from inputs
+// Trim trailing leading white spaces from inputs, sanitize nginx cache path on client side
 document.addEventListener('DOMContentLoaded', function () {
     // IDs of input fields to apply trimming
     const inputIds = ['#nginx_cache_path', '#nginx_cache_email', '#nginx_cache_reject_regex', '#nginx_cache_api_key'];
@@ -1767,6 +1767,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 inputField.value = inputField.value.trim();
             }
 
+            // Function to remove trailing slash and prevent special characters for Linux directory paths
+            function sanitizeNginxCachePath() {
+                inputField.value = inputField.value.replace(/\/$/, '');  // Remove trailing slash
+                inputField.value = inputField.value.replace(/[^a-zA-Z0-9\/\-_\.]/g, '');  // Allow only Linux-allowed characters
+            }
+
+            // Apply specific logic for #nginx_cache_path
+            if (inputId === '#nginx_cache_path') {
+                inputField.addEventListener('blur', sanitizeNginxCachePath);
+                inputField.addEventListener('input', function () {
+                    setTimeout(sanitizeNginxCachePath, 0);
+                });
+            }
+
             // Trim the input value when the user leaves the input field (on blur)
             inputField.addEventListener('blur', trimInputValue);
 
@@ -1778,7 +1792,12 @@ document.addEventListener('DOMContentLoaded', function () {
             // Trim the input value just before the form is submitted
             const form = inputField.closest('form');
             if (form) {
-                form.addEventListener('submit', trimInputValue);
+                form.addEventListener('submit', function() {
+                    trimInputValue();
+                    if (inputId === '#nginx_cache_path') {
+                        sanitizeNginxCachePath(); // Ensure it's sanitized before submission
+                    }
+                });
             }
         }
     });
