@@ -2053,17 +2053,19 @@ button.nppp-preload-btn[disabled] {
     height: 12vw;
     max-width: 80px;
     max-height: 80px;
+    border-radius: 50%;
 }
 
 /* Spinner Animation */
 .nppp-loader {
     position: absolute;
-    border: 8px solid #e0e0e0;
-    border-top: 8px solid #4db8ff;
+    border: 8px solid rgba(224, 224, 224, 1);
+    border-top: 8px solid rgba(77, 184, 255, 1);
     border-radius: 50%;
     width: 100%;
     height: 100%;
     animation: nppp-spin 1s linear infinite;
+    z-index: 3;
 }
 
 @keyframes nppp-spin {
@@ -2071,23 +2073,61 @@ button.nppp-preload-btn[disabled] {
     100% { transform: rotate(360deg); }
 }
 
-/* NPP Text (Static, Bigger and Brighter) */
+/* Mask Container (used for filling effect) */
+.nppp-fill-mask {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    z-index: 1;
+}
+
+/* Circular Filling Effect */
+.nppp-loader-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 200%;
+    background: rgba(30, 144, 255, 0.5);
+    transform: scaleY(0);
+    transform-origin: bottom;
+    animation: nppp-fill 5s ease-in-out infinite;
+}
+
+@keyframes nppp-fill {
+    0% {
+        transform: scaleY(0);
+    }
+    50% {
+        transform: scaleY(1);
+    }
+    100% {
+        transform: scaleY(0);
+    }
+}
+
+/* Static Text */
 .nppp-loader-text {
     position: absolute;
-    color: #ff5733;
+    color: #ffffff;
     font-weight: bold;
     font-size: 1.8em;
     pointer-events: none;
     text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
+    z-index: 4;
 }
 
 @media (max-width: 600px) {
     .nppp-loader-text {
-        font-size: 1.4em;
+        font-size: 1.6em;
     }
 }
 
-/* Loader Message (Bigger, Bolder, More Visible) */
+/* Loader Message (Text below the spinner) */
 .nppp-loader-message {
     margin-top: 20px;
     color: #ffffff;
