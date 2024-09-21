@@ -571,8 +571,13 @@ function nppp_cache_status_callback() {
     // Call the shortcode function to get HTML content
     $shortcode_content = nppp_my_status_shortcode();
 
-    // Return the shortcode content
-    echo wp_kses_post($shortcode_content);
+    // Return the generated HTML to AJAX
+    if (!empty($shortcode_content)) {
+        echo wp_kses_post($shortcode_content);
+    } else {
+        // Send empty string to AJAX to trigger proper error
+        echo '';
+    }
 
     // Properly exit to avoid extra output
     wp_die();
