@@ -83,9 +83,12 @@ function nppp_nginx_cache_settings_page() {
         <div id="nppp-loader-overlay" style="display: none;" aria-live="assertive" aria-busy="true">
             <div class="nppp-spinner-container">
                 <div class="nppp-loader"></div>
+                <div class="nppp-fill-mask">
+                    <div class="nppp-loader-fill"></div>
+                </div>
                 <span class="nppp-loader-text">NPP</span>
-            </div>
-            <p class="nppp-loader-message">Processing, please wait...</p>
+           </div>
+           <p class="nppp-loader-message">Processing, please wait...</p>
         </div>
         <div class="nppp-header-content">
             <div class="nppp-img-container">
