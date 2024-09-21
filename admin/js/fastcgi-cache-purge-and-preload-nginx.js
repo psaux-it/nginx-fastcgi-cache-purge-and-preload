@@ -176,16 +176,16 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 if (response.trim() !== '') {
                     // Insert the response HTML into the Status tab placeholder
-                    // Keep it not visible with opacity
+                    // Set initial opacity to 0 for fade-in effect and show the element
                     $statusPlaceholder.html(response).css('opacity', 0).show();
 
-                    // Update status metrics
+                    // Update status metrics or perform additional initialization after content is loaded
                     npppupdateStatus();
 
-                    // Hide the preloader now that content is ready
+                    // Hide the preloader now that content is loaded
                     hidePreloader();
 
-                    // Finally show content to user
+                    // Animate the opacity to 1 over 100 milliseconds for a fade-in effect
                     $statusPlaceholder.animate({ opacity: 1 }, 100);
                 } else {
                     console.error('Empty response received');
@@ -196,6 +196,7 @@ jQuery(document).ready(function($) {
                         <h2>Error Displaying Tab Content</h2>
                         <p class="nppp-advanced-error-message">Failed to initialize the Status TAB.</p>
                     `);
+                    $statusPlaceholder.show();
                 }
 
                 // Recalculate scroll positions and sizes
@@ -210,9 +211,7 @@ jQuery(document).ready(function($) {
                     <h2>Error Displaying Tab Content</h2>
                     <p class="nppp-advanced-error-message">Failed to initialize the Status TAB.</p>
                 `);
-
-                // Recalculate scroll positions and sizes
-                $(window).trigger('resize').trigger('scroll');
+                $statusPlaceholder.show();
             }
         });
     }
@@ -229,21 +228,33 @@ jQuery(document).ready(function($) {
                 _wpnonce: nppp_admin_data.premium_content_nonce
             },
             success: function(response) {
-                // Insert the response HTML into the Advanced tab placeholder
-                // Keep it not visible with opacity
-                $premiumPlaceholder.html(response).css('opacity', 0).show();
+                if (response.trim() !== '') {
+                    // Insert the response HTML into the Advanced tab placeholder
+                    // Set initial opacity to 0 for fade-in effect
+                    $premiumPlaceholder.html(response).css('opacity', 0).show();
 
-                // Initialize DataTables.js for the advanced table within the loaded content
-                initializePremiumTable();
+                    // Initialize DataTables.js for the advanced table within the loaded content
+                    initializePremiumTable();
 
-                // Recalculate column widths for responsive layout
-                $('#nppp-premium-table').DataTable().responsive.recalc();
+                    // Recalculate column widths for responsive layout
+                    $('#nppp-premium-table').DataTable().responsive.recalc();
 
-                // Hide the preloader that content is ready
-                hidePreloader();
+                    // Hide the preloader now that content is loaded
+                    hidePreloader();
 
-                // Finally show content to user
-                $premiumPlaceholder.animate({ opacity: 1 }, 100);
+                    // Animate the opacity to 1 over 200 milliseconds for a fade-in effect
+                    $premiumPlaceholder.animate({ opacity: 1 }, 100);
+                } else {
+                    console.error(status + ': ' + error);
+                    // Hide the preloader since loading failed
+                    hidePreloader();
+                    // Replace placeholder with proper error message
+                    $premiumPlaceholder.html(`
+                        <h2>Error Displaying Tab Content</h2>
+                        <p class="nppp-advanced-error-message">Failed to initialize the Advanced TAB.</p>
+                    `);
+                    $premiumPlaceholder.show();
+                }
 
                 // Recalculate scroll positions and sizes
                 $(window).trigger('resize').trigger('scroll');
@@ -257,9 +268,7 @@ jQuery(document).ready(function($) {
                     <h2>Error Displaying Tab Content</h2>
                     <p class="nppp-advanced-error-message">Failed to initialize the Advanced TAB.</p>
                 `);
-
-                // Recalculate scroll positions and sizes
-                $(window).trigger('resize').trigger('scroll');
+                $premiumPlaceholder.show();
             }
         });
     }
