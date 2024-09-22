@@ -67,7 +67,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
 
             // Check if realpath returned a valid directory
             if ($sanitized_path === false) {
-                error_log("nppp_display_admin_notice: Log file directory does not exist.");
+                error_log("Invalid or inaccessible log file directory: " . $log_file_dir);
                 return;
             }
 
@@ -75,7 +75,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             $create_result = nppp_perform_file_operation($sanitized_path, 'create');
 
             if (!$create_result) {
-                error_log("nppp_display_admin_notice: Error creating log file: " . $create_result->get_error_message());
+                error_log("Error creating log file at " . $sanitized_path);
                 return;
             }
 
@@ -86,11 +86,13 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
 
             if (!$append_result) {
-                error_log("nppp_display_admin_notice: Error appending to log file: " . $append_result->get_error_message());
+                error_log("Error appending to log file at " . $sanitized_path);
+                return;
             }
         } else {
             // Log an error if the log file path is not defined or empty
-            error_log("nppp_display_admin_notice: Log file path is not defined.");
+            error_log("Log file path is not defined or is empty.");
+            return;
         }
     }
 }
