@@ -44,32 +44,14 @@ add_filter('rest_pre_serve_request', function($served, $result, $request, $serve
         // Set headers to prevent caching
         header('Cache-Control: no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
-        header('Expires: Wed, 11 Jan 1984 05:00:00 GMT'); // Expired date in the past
+        header('Expires: Wed, 11 Jan 1984 05:00:00 GMT');
     }
     return $served;
 }, 10, 4);
 
-// Prevent caching in W3 Total Cache for NPP endpoints
-add_filter('w3tc_pgcache_cache_query', function($cache, $query_string) {
-    if (strpos(esc_url_raw($_SERVER['REQUEST_URI']), '/wp-json/nppp_nginx_cache/v2/') !== false) {
-        // Prevent caching of the API requests
-        return false;
-    }
-    return $cache;
-}, 10, 2);
-
-// Prevent caching in WP Super Cache for NPP endpoints
-add_filter('wpsupercache_buffer', function($buffer) {
-    if (strpos(esc_url_raw($_SERVER['REQUEST_URI']), '/wp-json/nppp_nginx_cache/v2/') !== false) {
-        // Prevent caching of the buffer
-        return false;
-    }
-    return $buffer;
-});
-
 // Disable object caching for NPP endpoints
 add_action('rest_api_init', function() {
-    if (strpos(esc_url_raw($_SERVER['REQUEST_URI']), '/wp-json/nppp_nginx_cache/v2/') !== false) {
+    if (isset($_SERVER['REQUEST_URI']) && strpos(esc_url_raw(wp_unslash($_SERVER['REQUEST_URI'])), '/wp-json/nppp_nginx_cache/v2/') !== false) {
         wp_suspend_cache_addition(true);
     }
 });
