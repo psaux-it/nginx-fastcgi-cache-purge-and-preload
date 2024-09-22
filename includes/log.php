@@ -74,7 +74,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             // Attempt to create the log file if it doesn't exist
             $create_result = nppp_perform_file_operation($sanitized_path, 'create');
 
-            if (is_wp_error($create_result)) {
+            if (!$create_result) {
                 error_log("nppp_display_admin_notice: Error creating log file: " . $create_result->get_error_message());
                 return;
             }
@@ -85,7 +85,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             // Attempt to append the log entry
             $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
 
-            if (is_wp_error($append_result)) {
+            if (!$append_result) {
                 error_log("nppp_display_admin_notice: Error appending to log file: " . $append_result->get_error_message());
             }
         } else {
