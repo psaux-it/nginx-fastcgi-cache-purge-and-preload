@@ -91,13 +91,15 @@ if ($api_status === 'yes') {
         // Register dummy purge endpoint
         register_rest_route('nppp_nginx_cache/v2', '/purge', array(
             'methods' => 'POST',
-            'callback' => '__return_null'
+            'callback' => '__return_null',
+            'permission_callback' => '__return_true',
         ));
 
         // Register dummy preload endpoint
         register_rest_route('nppp_nginx_cache/v2', '/preload', array(
             'methods' => 'POST',
-            'callback' => '__return_null'
+            'callback' => '__return_null',
+            'permission_callback' => '__return_true',
         ));
     }, 10);
 
