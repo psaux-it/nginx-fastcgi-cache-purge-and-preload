@@ -40,6 +40,7 @@ require_once plugin_dir_path( __FILE__ ) . '../includes/status.php';
 require_once plugin_dir_path( __FILE__ ) . '../includes/advanced.php';
 require_once plugin_dir_path( __FILE__ ) . '../includes/send-mail.php';
 require_once plugin_dir_path( __FILE__ ) . '../includes/schedule.php';
+require_once plugin_dir_path( __FILE__ ) . '../includes/rest-api-helper.php';
 
 // Add actions and filters
 add_action('load-settings_page_nginx_cache_settings', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets');
