@@ -1,7 +1,7 @@
 <?php
 /**
- * Logging & status functions for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains Logging & status functions for FastCGI Cache Purge and Preload for Nginx
+ * Logging & WP admin notices function for FastCGI Cache Purge and Preload for Nginx
+ * Description: This file contain logging & wp admin notices function for FastCGI Cache Purge and Preload for Nginx
  * Version: 2.0.3
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
@@ -12,33 +12,6 @@
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
-}
-
-// Create log file
-function nppp_create_log_file($log_file_path) {
-    // Check if log file path is provided and is a string
-    if (empty($log_file_path) || !is_string($log_file_path)) {
-        return "Log file path is invalid.";
-    }
-
-    // Sanitize the file path to prevent directory traversal
-    $log_file_dir  = dirname($log_file_path);
-    $log_file_name = basename($log_file_path);
-    $sanitized_path = realpath($log_file_dir) . '/' . $log_file_name;
-
-    // Check if realpath returned a valid directory
-    if ($sanitized_path === false) {
-        return "Log file directory does not exist.";
-    }
-
-    // Attempt to create the file
-    $file_creation_result = nppp_perform_file_operation($sanitized_path, 'create');
-
-    if (is_wp_error($file_creation_result)) {
-        return "Error: " . $file_creation_result->get_error_message();
-    }
-
-    return true;
 }
 
 // Hook to display your plugin's notices
@@ -55,43 +28,42 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     // Trigger the custom action to display the notice
     do_action('nppp_plugin_admin_notices', $type, $sanitized_message, $log_message, $display_notice);
 
-    // Write to the log file if required
+    // Write to the log file
     if ($log_message) {
-        if (defined('NGINX_CACHE_LOG_FILE') && !empty(NGINX_CACHE_LOG_FILE)) {
-            $log_file_path = NGINX_CACHE_LOG_FILE;
+        if (!defined('NGINX_CACHE_LOG_FILE')) {
+            // If the log file path is not defined or empty
+            define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . '../fastcgi_ops.log');
+        }
 
-            // Sanitize the file path to prevent directory traversal
-            $log_file_dir  = dirname($log_file_path);
-            $log_file_name = basename($log_file_path);
-            $sanitized_path = realpath($log_file_dir) . '/' . $log_file_name;
+        // Sanitize the file path to prevent directory traversal
+        $log_file_path = NGINX_CACHE_LOG_FILE;
+        $log_file_dir  = dirname($log_file_path);
+        $log_file_name = basename($log_file_path);
 
-            // Check if realpath returned a valid directory
-            if ($sanitized_path === false) {
-                error_log("Invalid or inaccessible log file directory: " . $log_file_dir);
-                return;
-            }
+        // Use realpath() to sanitize the directory
+        $sanitized_dir_path = realpath($log_file_dir);
 
-            // Attempt to create the log file if it doesn't exist
-            $create_result = nppp_perform_file_operation($sanitized_path, 'create');
+        // Check if the directory is valid and exists
+        if ($sanitized_dir_path === false) {
+            error_log("Invalid or inaccessible log file directory: " . $log_file_dir);
+            return;
+        }
 
-            if (!$create_result) {
-                error_log("Error creating log file at " . $sanitized_path);
-                return;
-            }
+        // Reconstruct the sanitized path for the file
+        $sanitized_path = $sanitized_dir_path . '/' . $log_file_name;
 
-            // Prepare the log entry with timestamp
-            $log_entry = '[' . current_time( 'Y-m-d H:i:s' ) . '] ' . $sanitized_message;
+        // Attempt to create the log file before append new log entry
+        nppp_perform_file_operation($sanitized_path, 'create');
 
-            // Attempt to append the log entry
-            $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
+        // Prepare the log entry with timestamp
+        $log_entry = '[' . current_time( 'Y-m-d H:i:s' ) . '] ' . $sanitized_message;
 
-            if (!$append_result) {
-                error_log("Error appending to log file at " . $sanitized_path);
-                return;
-            }
-        } else {
-            // Log an error if the log file path is not defined or empty
-            error_log("Log file path is not defined or is empty.");
+        // Attempt to append the log entry
+        $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
+
+        // Check the append log status
+        if (!$append_result) {
+            error_log("Error appending to log file at " . $sanitized_path);
             return;
         }
     }
