@@ -19,14 +19,8 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Retrieve API option statuses.
-$options = get_option('nginx_cache_settings');
-$api_status = isset($options['nginx_cache_api']) ? $options['nginx_cache_api'] : '';
-
+// Load NPP
 require_once plugin_dir_path(__FILE__) . 'admin/fastcgi-cache-purge-and-preload-nginx-admin.php';
-if ($api_status === 'yes') {
-    require_once plugin_dir_path(__FILE__) . 'includes/rest-api-helper.php';
-}
 
 // Register activation and deactivation hooks
 register_activation_hook( __FILE__, 'nppp_defaults_on_plugin_activation' );
