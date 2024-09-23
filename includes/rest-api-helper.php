@@ -25,11 +25,11 @@ function nppp_handle_dummy_endpoints($result, $server, $request) {
     // Check if the request is for the NPP plugin's endpoints
     if (strpos($route, '/nppp_nginx_cache/v2/purge') !== false || strpos($route, '/nppp_nginx_cache/v2/preload') !== false) {
         // Return a custom response when the API feature is disabled
-        $status_message = 'The NPP API feature is currently disabled. You have reached a dummy endpoint.';
+        $status_message = 'The NPP REST API feature is disabled.';
         return new WP_REST_Response(array(
-            'success' => false,
+            'success' => true,
             'message' => $status_message
-        ), 403);
+        ), 200);
     }
 
     // Return the default result if no custom handling is needed
@@ -44,7 +44,7 @@ add_filter('rest_pre_serve_request', function($served, $result, $request, $serve
         // Set headers to prevent caching
         header('Cache-Control: no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
-        header('Expires: Wed, 11 Jan 1984 05:00:00 GMT');
+        header('Expires: Wed, 11 Jan 1984 05:00:00 GMT'); // Expired date in the past
     }
     return $served;
 }, 10, 4);
@@ -61,31 +61,48 @@ if ($api_status === 'yes') {
     // Remove the rest_pre_dispatch filter when the API is enabled
     remove_filter('rest_pre_dispatch', 'nppp_handle_dummy_endpoints', 10);
 
+    // De-register dummy endpoints
+    remove_action('rest_api_init', 'nppp_register_dummy_endpoints');
+
     // Load main NPP REST API code
     require_once plugin_dir_path(__FILE__) . '../includes/rest-api.php';
 
     // Register real NPP REST API endpoints
-    add_action('rest_api_init', 'nppp_nginx_cache_register_purge_endpoint');
-    add_action('rest_api_init', 'nppp_nginx_cache_register_preload_endpoint');
-} else {
-    // Register dummy endpoints when the NPP REST API is disabled
-    add_action('rest_api_init', function() {
-        // Register dummy purge endpoint
-        register_rest_route('nppp_nginx_cache/v2', '/purge', array(
-            'methods' => 'POST',
-            'callback' => '__return_null',
-            'permission_callback' => '__return_true',
-        ));
+    if (!has_action('rest_api_init', 'nppp_nginx_cache_register_purge_endpoint')) {
+        add_action('rest_api_init', 'nppp_nginx_cache_register_purge_endpoint');
+    }
 
-        // Register dummy preload endpoint
-        register_rest_route('nppp_nginx_cache/v2', '/preload', array(
-            'methods' => 'POST',
-            'callback' => '__return_null',
-            'permission_callback' => '__return_true',
-        ));
-    }, 10);
+    if (!has_action('rest_api_init', 'nppp_nginx_cache_register_preload_endpoint')) {
+        add_action('rest_api_init', 'nppp_nginx_cache_register_preload_endpoint');
+    }
+} else {
+    // De-register real NPP REST API endpoints
+    remove_action('rest_api_init', 'nppp_nginx_cache_register_purge_endpoint');
+    remove_action('rest_api_init', 'nppp_nginx_cache_register_preload_endpoint');
+
+    // Register dummy endpoints when the NPP REST API is disabled
+    if (!has_action('rest_api_init', 'nppp_register_dummy_endpoints')) {
+        add_action('rest_api_init', 'nppp_register_dummy_endpoints');
+    }
 
     // Catch calls to the endpoints when the NPP REST API is disabled
     // This sends user-friendly errors instead of generic 404 responses
     add_filter('rest_pre_dispatch', 'nppp_handle_dummy_endpoints', 10, 3);
+}
+
+// Function to register dummy endpoints
+function nppp_register_dummy_endpoints() {
+    // Register dummy purge endpoint
+    register_rest_route('nppp_nginx_cache/v2', '/purge', array(
+        'methods' => 'POST',
+        'callback' => '__return_null',
+        'permission_callback' => '__return_true',
+    ));
+
+    // Register dummy preload endpoint
+    register_rest_route('nppp_nginx_cache/v2', '/preload', array(
+        'methods' => 'POST',
+        'callback' => '__return_null',
+        'permission_callback' => '__return_true',
+    ));
 }
