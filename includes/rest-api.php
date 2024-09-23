@@ -14,30 +14,96 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Add CORS headers
-add_action('rest_api_init', function () {
-    add_action('rest_pre_serve_request', function ($result) {
-        // Get the current request route
-        $request_uri = esc_url_raw($_SERVER['REQUEST_URI']);
+// Retrieve the client's IP address, considering proxies.
+function nppp_get_client_ip() {
+    // Check for HTTP_CLIENT_IP
+    if (isset($_SERVER['HTTP_CLIENT_IP']) && ! empty($_SERVER['HTTP_CLIENT_IP'])) {
+        return sanitize_text_field(wp_unslash($_SERVER['HTTP_CLIENT_IP']));
+    }
 
-        // Check if the request is for the purge or preload endpoint
-        if (strpos($request_uri, '/wp-json/nppp_nginx_cache/v2/purge') !== false ||
-            strpos($request_uri, '/wp-json/nppp_nginx_cache/v2/preload') !== false) {
+    // Check for HTTP_X_FORWARDED_FOR (handles multiple IPs)
+    if (isset($_SERVER['HTTP_X_FORWARDED_FOR']) && ! empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        // Sanitize the entire X-Forwarded-For header
+        $sanitized_x_forwarded_for = sanitize_text_field(wp_unslash($_SERVER['HTTP_X_FORWARDED_FOR']));
 
-            // Add CORS headers only for these specific endpoints
-            header("Access-Control-Allow-Origin: *");
-            header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
-            header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Api-Key");
+        // Handle multiple IP addresses (comma-separated)
+        $ip_addresses = explode(',', $sanitized_x_forwarded_for);
+
+        // Trim whitespace from the first IP address
+        if (isset($ip_addresses[0])) {
+            $client_ip = trim($ip_addresses[0]);
+            return sanitize_text_field($client_ip);
         }
+    }
 
-        return $result;
-    });
-});
+    // Check for REMOTE_ADDR
+    if (isset($_SERVER['REMOTE_ADDR']) && ! empty($_SERVER['REMOTE_ADDR'])) {
+        return sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
+    }
+
+    // If none of the above, return empty string
+    return '';
+}
+
+// Determine the endpoint action based on the current route.
+function nppp_get_endpoint_action($route) {
+    switch ( $route ) {
+        case '/nppp_nginx_cache/v2/purge':
+            return 'purge';
+        case '/nppp_nginx_cache/v2/preload':
+            return 'preload';
+        default:
+            return '';
+    }
+}
+
+// Add CORS and No-Cache headers to specific REST API endpoints.
+add_action('rest_api_init', 'nppp_register_cors_headers');
+
+// Register the callback for adding CORS and No-Cache headers.
+function nppp_register_cors_headers() {
+    add_action('rest_pre_serve_request', 'nppp_add_cors_and_no_cache_headers', 10, 3);
+}
+
+// Add CORS and No-Cache headers to the response for specific endpoints.
+function nppp_add_cors_and_no_cache_headers($served, $result, $request) {
+    // Define the specific routes to target
+    $allowed_routes = array(
+        '/nppp_nginx_cache/v2/purge',
+        '/nppp_nginx_cache/v2/preload',
+    );
+
+    // Retrieve the current route
+    $route = $request->get_route();
+
+    // Check if the current route is one of the allowed routes
+    if (in_array( $route, $allowed_routes, true)) {
+        // Add CORS headers
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Api-Key');
+        header('Access-Control-Max-Age: 86400' );
+
+        // Add No-Cache headers
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0' );
+        header('Cache-Control: post-check=0, pre-check=0', false );
+        header('Pragma: no-cache' );
+        header('Expires: 0' );
+
+        // Handle preflight OPTIONS request
+        if (isset($_SERVER['REQUEST_METHOD']) && 'OPTIONS' === $_SERVER['REQUEST_METHOD']) {
+            status_header( 200 );
+            exit();
+        }
+    }
+
+    return $served;
+}
 
 // Log NPP REST API calls
 function nppp_log_api_request($endpoint, $status) {
     // Get the IP address
-    $ip_address = $_SERVER['REMOTE_ADDR'];
+    $ip_address = nppp_get_client_ip();
 
     // Determine log prefix based on the status
     $log_prefix = (strpos($status, 'ERROR') !== false) ? 'API ERROR' : 'API REQUEST';
@@ -104,7 +170,7 @@ function nppp_api_rate_limit_check($ip_address, $endpoint) {
     } else {
         $request_count++;
 
-        // Limit requests to 5 per minute
+        // Limit requests to 1 per minute
         if ($request_count > $rate_limit) {
             nppp_log_api_request($endpoint, "ERROR 429 TOO MANY REQUEST");
             return new WP_Error('rate_limit_error', 'NPP REST API Rate Limit Exceeded. Wait 1 Minute.', array('status' => 429));
@@ -152,20 +218,23 @@ function nppp_validate_and_rate_limit_endpoint($request) {
 
     // 3. Fallback to the request body 'api_key' if no header is found
     if (empty($api_key)) {
-        $api_key = sanitize_text_field($request->get_param('api_key'));
+        $api_key = $request->get_param('api_key');
     }
 
     // 4. If no API key is provided, return an error
+    // or Sanitize API Key
     if (empty($api_key)) {
         return new WP_Error('authentication_error', 'No API Key provided', array('status' => 403));
+    } else {
+        $api_key = sanitize_text_field($api_key);
     }
 
     // Get the IP address for rate limiting
-    $ip_address = $_SERVER['REMOTE_ADDR'];
+    $ip_address = nppp_get_client_ip();
 
     // Get the current route to determine the endpoint
     $route = $request->get_route();
-    $endpoint = strpos($route, 'preload') !== false ? 'preload' : 'purge';
+    $endpoint = nppp_get_endpoint_action($route);
 
     // Perform rate limit check
     $rate_limit = nppp_api_rate_limit_check($ip_address, $endpoint);
