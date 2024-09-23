@@ -1277,9 +1277,16 @@ function nppp_nginx_cache_settings_sanitize($input) {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid-api-key',
-                'ERROR API: Please enter a valid 64-character hexadecimal string for the API key.',
+                'ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.',
                 'error'
             );
+            // Log error message
+            $log_message = 'ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.';
+            $log_file_path = NGINX_CACHE_LOG_FILE;
+            nppp_perform_file_operation($log_file_path, 'create');
+            if (!empty($log_file_path)) {
+                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
+            }
         }
     }
 
