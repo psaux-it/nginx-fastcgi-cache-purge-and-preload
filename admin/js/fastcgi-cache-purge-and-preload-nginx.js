@@ -1721,11 +1721,11 @@ $(document).ready(function() {
     });
 
     // Start masking API key on front-end
-    var apiKeyInput = $('#nginx_cache_api_key');
-    var generateButton = $('#api-key-button');
+    var nppApiKeyInput = $('#nginx_cache_api_key');
+    var nppGenerateButton = $('#api-key-button');
 
     // Function to mask the first 10 characters of the API key
-    function maskApiKey(apiKey) {
+    function nppMaskApiKey(apiKey) {
         if (apiKey.length <= 10) {
             return '*'.repeat(apiKey.length);
         }
@@ -1733,48 +1733,63 @@ $(document).ready(function() {
     }
 
     // Function to set the API key and apply masking
-    function setApiKey(apiKey) {
-        apiKeyInput.data('original-key', apiKey);
-        apiKeyInput.val(maskApiKey(apiKey));
+    function nppSetApiKey(apiKey) {
+        nppApiKeyInput.data('original-key', apiKey);
+        nppApiKeyInput.val(nppMaskApiKey(apiKey));
     }
 
     // Function to unmask the API key on focus
-    function unmaskApiKey() {
-        var originalKey = apiKeyInput.data('original-key');
-        apiKeyInput.val(originalKey);
+    function nppUnmaskApiKey() {
+        var originalKey = nppApiKeyInput.data('original-key');
+        nppApiKeyInput.val(originalKey);
     }
 
     // Function to remask the API key on blur
-    function remaskApiKey() {
-        var originalKey = apiKeyInput.data('original-key');
-        apiKeyInput.val(maskApiKey(originalKey));
+    function nppRemaskApiKey() {
+        var originalKey = nppApiKeyInput.data('original-key');
+        nppApiKeyInput.val(nppMaskApiKey(originalKey));
     }
 
     // Handles manual input by updating the stored original key.
-    function handleManualInput() {
-        var currentVal = apiKeyInput.val();
-        apiKeyInput.data('original-key', currentVal);
+    function nppHandleManualInput() {
+        var currentVal = nppApiKeyInput.val();
+        nppApiKeyInput.data('original-key', currentVal);
     }
 
     // Initial masking on page load
-    var initialApiKey = apiKeyInput.val();
-    setApiKey(initialApiKey);
+    var nppInitialApiKey = nppApiKeyInput.val();
+    nppSetApiKey(nppInitialApiKey);
 
     // Bind focus and blur events to handle masking and unmasking
-    apiKeyInput.on('focus', unmaskApiKey);
-    apiKeyInput.on('blur', remaskApiKey);
+    nppApiKeyInput.on('focus', nppUnmaskApiKey);
+    nppApiKeyInput.on('blur', nppRemaskApiKey);
 
     // Bind input event to handle manual changes
-    apiKeyInput.on('input', handleManualInput);
+    nppApiKeyInput.on('input', nppHandleManualInput);
 
     // Handle the "Generate API Key" button click
-    generateButton.on('click', function() {
+    nppGenerateButton.on('click', function() {
         setTimeout(function() {
             // Backend has updated the input field with the new API key
-            var newApiKey = apiKeyInput.val();
-            setApiKey(newApiKey);
+            var newApiKey = nppApiKeyInput.val();
+            nppSetApiKey(newApiKey);
         }, 500);
     });
+
+    // Find the closest form that contains the API key input
+    var nppForm = nppApiKeyInput.closest('form');
+
+    // Check if the form exists
+    if (nppForm.length) {
+        // Attach a submit event handler to the form
+        nppForm.on('submit', function(event) {
+            // Retrieve the original (unmasked) API key from data attribute
+            var originalKey = nppApiKeyInput.data('original-key');
+
+            // Replace the masked value with the original API key
+            nppApiKeyInput.val(originalKey);
+        });
+    }
 });
 
 /*!
@@ -1831,8 +1846,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Function to remove trailing slash and prevent special characters for Linux directory paths
             function sanitizeNginxCachePath() {
-                inputField.value = inputField.value.replace(/\/$/, '');  // Remove trailing slash
-                inputField.value = inputField.value.replace(/[^a-zA-Z0-9\/\-_\.]/g, '');  // Allow only Linux-allowed characters
+                inputField.value = inputField.value.replace(/\/$/, '');
+                inputField.value = inputField.value.replace(/[^a-zA-Z0-9\/\-_\.]/g, '');
             }
 
             // Apply specific logic for #nginx_cache_path
