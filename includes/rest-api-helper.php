@@ -36,26 +36,6 @@ function nppp_handle_dummy_endpoints($result, $server, $request) {
     return $result;
 }
 
-// Prevent caching of REST API responses for NPP endpoints
-add_filter('rest_pre_serve_request', function($served, $result, $request, $server) {
-    // Only apply to specific NPP endpoints
-    $route = $request->get_route();
-    if (strpos($route, '/nppp_nginx_cache/v2/purge') !== false || strpos($route, '/nppp_nginx_cache/v2/preload') !== false) {
-        // Set headers to prevent caching
-        header('Cache-Control: no-cache, must-revalidate, max-age=0');
-        header('Pragma: no-cache');
-        header('Expires: Wed, 11 Jan 1984 05:00:00 GMT'); // Expired date in the past
-    }
-    return $served;
-}, 10, 4);
-
-// Disable object caching for NPP endpoints
-add_action('rest_api_init', function() {
-    if (isset($_SERVER['REQUEST_URI']) && strpos(esc_url_raw(wp_unslash($_SERVER['REQUEST_URI'])), '/wp-json/nppp_nginx_cache/v2/') !== false) {
-        wp_suspend_cache_addition(true);
-    }
-});
-
 // Check NPP REST API status
 if ($api_status === 'yes') {
     // Remove the rest_pre_dispatch filter when the API is enabled
