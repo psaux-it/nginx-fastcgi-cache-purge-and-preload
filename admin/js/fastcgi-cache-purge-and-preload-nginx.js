@@ -1726,6 +1726,9 @@ $(document).ready(function() {
 
     // Function to mask the first 10 characters of the API key
     function maskApiKey(apiKey) {
+        if (apiKey.length <= 10) {
+            return '*'.repeat(apiKey.length);
+        }
         return '*'.repeat(10) + apiKey.slice(10);
     }
 
@@ -1733,39 +1736,42 @@ $(document).ready(function() {
     function setApiKey(apiKey) {
         apiKeyInput.data('original-key', apiKey);
         apiKeyInput.val(maskApiKey(apiKey));
-        console.log('Set API Key: originalKey=', apiKey, 'maskedKey=', maskApiKey(apiKey));
     }
 
     // Function to unmask the API key on focus
     function unmaskApiKey() {
         var originalKey = apiKeyInput.data('original-key');
         apiKeyInput.val(originalKey);
-        console.log('Unmask API Key: ', originalKey);
     }
 
     // Function to remask the API key on blur
     function remaskApiKey() {
         var originalKey = apiKeyInput.data('original-key');
         apiKeyInput.val(maskApiKey(originalKey));
-        console.log('Remask API Key: ', maskApiKey(originalKey));
+    }
+
+    // Handles manual input by updating the stored original key.
+    function handleManualInput() {
+        var currentVal = apiKeyInput.val();
+        apiKeyInput.data('original-key', currentVal);
     }
 
     // Initial masking on page load
     var initialApiKey = apiKeyInput.val();
     setApiKey(initialApiKey);
 
-    // Bind focus and blur events
+    // Bind focus and blur events to handle masking and unmasking
     apiKeyInput.on('focus', unmaskApiKey);
     apiKeyInput.on('blur', remaskApiKey);
 
+    // Bind input event to handle manual changes
+    apiKeyInput.on('input', handleManualInput);
+
     // Handle the "Generate API Key" button click
     generateButton.on('click', function() {
-        // Simulate backend API key generation
-        // Replace this with your actual AJAX call if needed
         setTimeout(function() {
-            // Assume backend has updated the input field with the new API key
+            // Backend has updated the input field with the new API key
             var newApiKey = apiKeyInput.val();
-            console.log('Generated new API Key: ', newApiKey);
             setApiKey(newApiKey);
         }, 500);
     });
