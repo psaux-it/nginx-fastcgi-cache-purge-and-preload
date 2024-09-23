@@ -106,7 +106,7 @@ function nppp_log_api_request($endpoint, $status) {
     $ip_address = nppp_get_client_ip();
 
     // Determine log prefix based on the status
-    $log_prefix = (strpos($status, 'ERROR') !== false) ? 'API ERROR' : 'API REQUEST';
+    $log_prefix = (strpos($status, 'ERROR') !== false) ? 'ERROR API' : 'API REQUEST';
 
     // Create a log entry with timestamp, IP, endpoint, and status
     $log_entry = sprintf(
