@@ -14,23 +14,84 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Permission callback function to check API key validity
-function nppp_nginx_cache_authorize_endpoint($request) {
-    // Retrieve and sanitize API key.
-    $api_key = sanitize_text_field($request->get_param('api_key'));
+// Log NPP REST API calls
+function nppp_log_api_request($endpoint, $status) {
+    // Get the IP address
+    $ip_address = $_SERVER['REMOTE_ADDR'];
 
-    // Validate API key format (64-character hexadecimal).
-    if (!preg_match('/^[a-f0-9]{64}$/i', $api_key)) {
-        return new WP_Error('invalid_api_key', 'Invalid API Key.', array('status' => 403));
+    // Determine log prefix based on the status
+    $log_prefix = (strpos($status, 'ERROR') !== false) ? 'API ERROR' : 'API REQUEST';
+
+    // Create a log entry with timestamp, IP, endpoint, and status
+    $log_entry = sprintf(
+        "[%s] %s: IP: %s | Endpoint: %s | Status: %s",
+        current_time('Y-m-d H:i:s'),
+        $log_prefix,
+        $ip_address,
+        $endpoint,
+        $status
+    );
+
+    // Check if the log file path is defined
+    if (!defined('NGINX_CACHE_LOG_FILE')) {
+        // If the log file path is not defined or empty
+        define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . '../fastcgi_ops.log');
     }
 
-    // Retrieve stored API key from options.
-    $options = get_option('nginx_cache_settings');
-    $stored_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : '';
+    // Sanitize the file path to prevent directory traversal
+    $log_file_path = NGINX_CACHE_LOG_FILE;
+    $log_file_dir  = dirname($log_file_path);
+    $log_file_name = basename($log_file_path);
 
-    // Compare provided API key with stored key.
-    if ($api_key !== $stored_key) {
-        return new WP_Error('invalid_api_key', 'Invalid API Key.', array('status' => 403));
+    // Use realpath() to sanitize the directory
+    $sanitized_dir_path = realpath($log_file_dir);
+
+    // Check if the directory is valid and exists
+    if ($sanitized_dir_path === false) {
+        error_log("Invalid or inaccessible log file directory: " . $log_file_dir);
+        return;
+    }
+
+    // Reconstruct the sanitized path for the file
+    $sanitized_path = $sanitized_dir_path . '/' . $log_file_name;
+
+    // Attempt to create the log file before append new log entry
+    nppp_perform_file_operation($sanitized_path, 'create');
+
+    // Attempt to append the log entry
+    $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
+
+    // Check the append log status
+    if (!$append_result) {
+        error_log("Error appending to log file at " . $sanitized_path);
+        return;
+    }
+}
+
+// Rate limit API requests
+function nppp_api_rate_limit_check($ip_address, $endpoint) {
+    $transient_key = 'nppp_rate_limit_' . md5($ip_address . $endpoint);
+
+    // Set rate limit based on the endpoint, 1 request in 1 Minute
+    $rate_limit = ($endpoint === 'purge') ? 1 : 1;
+
+    // Get the count of requests made by this IP and endpoint
+    $request_count = get_transient($transient_key);
+
+    if (false === $request_count) {
+        // First request, set the transient with a lifespan of 1 minute
+        set_transient($transient_key, 1, 60);
+    } else {
+        $request_count++;
+
+        // Limit requests to 5 per minute
+        if ($request_count > $rate_limit) {
+            nppp_log_api_request($endpoint, "ERROR 429 TOO MANY REQUEST");
+            return new WP_Error('rate_limit_error', 'NPP REST API Rate Limit Exceeded. Wait 1 Minute.', array('status' => 429));
+        }
+
+        // Update the request count
+        set_transient($transient_key, $request_count, 60);
     }
 
     return true;
@@ -41,6 +102,7 @@ function nppp_nginx_cache_register_purge_endpoint() {
     register_rest_route('nppp_nginx_cache/v2', '/purge', array(
         'methods' => 'POST',
         'callback' => 'nppp_nginx_cache_purge_endpoint',
+        'permission_callback' => '__return_true',
         'args' => array(
             'api_key' => array(
                 'required' => true,
@@ -49,7 +111,6 @@ function nppp_nginx_cache_register_purge_endpoint() {
                 'sanitize_callback'=> 'sanitize_text_field',
             ),
         ),
-        'permission_callback' => 'nppp_nginx_cache_authorize_endpoint',
     ));
 }
 
@@ -58,6 +119,7 @@ function nppp_nginx_cache_register_preload_endpoint() {
     register_rest_route('nppp_nginx_cache/v2', '/preload', array(
         'methods' => 'POST',
         'callback' => 'nppp_nginx_cache_preload_endpoint',
+        'permission_callback' => '__return_true',
         'args' => array(
             'api_key' => array(
                 'required' => true,
@@ -66,12 +128,59 @@ function nppp_nginx_cache_register_preload_endpoint() {
                 'sanitize_callback'=> 'sanitize_text_field',
             ),
         ),
-        'permission_callback' => 'nppp_nginx_cache_authorize_endpoint',
     ));
+}
+
+// Validation, authentication, rate limiting
+function nppp_validate_and_rate_limit_endpoint($request) {
+    // Retrieve and sanitize API key
+    $api_key = sanitize_text_field($request->get_param('api_key'));
+
+    // Get the IP address for rate limiting
+    $ip_address = $_SERVER['REMOTE_ADDR'];
+
+    // Get the current route to determine the endpoint
+    $route = $request->get_route();
+    $endpoint = strpos($route, 'preload') !== false ? 'preload' : 'purge';
+
+    // Perform rate limit check
+    $rate_limit = nppp_api_rate_limit_check($ip_address, $endpoint);
+    if (is_wp_error($rate_limit)) {
+        return $rate_limit;
+    }
+
+    // Validate API key format
+    if (!preg_match('/^[a-f0-9]{64}$/i', $api_key)) {
+        nppp_log_api_request($endpoint, 'ERROR 403 INVALID API KEY');
+        return new WP_Error('validation_error', 'NPP REST API Invalid API Key', array('status' => 403));
+    }
+
+    // Retrieve the stored API key from options
+    $options = get_option('nginx_cache_settings');
+    $stored_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : '';
+
+    // Authentication check
+    if (!hash_equals($stored_key, $api_key)) {
+        nppp_log_api_request($endpoint, 'ERROR 403 AUTHENTICATION FAILED');
+        return new WP_Error('authentication_error', 'NPP REST API Authentication Error', array('status' => 403));
+    }
+
+    // Everything passed
+    return true;
 }
 
 // Handle the REST API request for purge action.
 function nppp_nginx_cache_purge_endpoint($request) {
+    // Validate the API key and check rate limit
+    $validation = nppp_validate_and_rate_limit_endpoint($request);
+    if (is_wp_error($validation)) {
+        return $validation;
+    }
+
+    // Log the successful purge API call
+    // Not hit the rate limit, authentication errors
+    nppp_log_api_request('purge', 'SUCCESS 200 OK');
+
     // Necessary data for purge action
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $default_cache_path = '/dev/shm/change-me-now';
@@ -83,6 +192,7 @@ function nppp_nginx_cache_purge_endpoint($request) {
     // Call purge action
     ob_start();
     nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, true, false, false);
+
     // Get status message
     $status_message = wp_strip_all_tags(ob_get_clean());
 
@@ -95,6 +205,16 @@ function nppp_nginx_cache_purge_endpoint($request) {
 
 // Handle the REST API request for preload action.
 function nppp_nginx_cache_preload_endpoint($request) {
+    // Validate the API key and check rate limit
+    $validation = nppp_validate_and_rate_limit_endpoint($request);
+    if (is_wp_error($validation)) {
+        return $validation;
+    }
+
+    // Log the successful preload API call
+    // Not hit the rate limit, authentication errors
+    nppp_log_api_request('preload', 'SUCCESS 200 OK');
+
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
@@ -119,6 +239,7 @@ function nppp_nginx_cache_preload_endpoint($request) {
     // Call preload action
     ob_start();
     nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, false, true, false, false);
+
     // Get status message
     $status_message = wp_strip_all_tags(ob_get_clean());
 
