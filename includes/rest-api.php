@@ -14,6 +14,26 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Add CORS headers
+add_action('rest_api_init', function () {
+    add_action('rest_pre_serve_request', function ($result) {
+        // Get the current request route
+        $request_uri = esc_url_raw($_SERVER['REQUEST_URI']);
+
+        // Check if the request is for the purge or preload endpoint
+        if (strpos($request_uri, '/wp-json/nppp_nginx_cache/v2/purge') !== false ||
+            strpos($request_uri, '/wp-json/nppp_nginx_cache/v2/preload') !== false) {
+
+            // Add CORS headers only for these specific endpoints
+            header("Access-Control-Allow-Origin: *");
+            header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
+            header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Api-Key");
+        }
+
+        return $result;
+    });
+});
+
 // Log NPP REST API calls
 function nppp_log_api_request($endpoint, $status) {
     // Get the IP address
@@ -103,14 +123,6 @@ function nppp_nginx_cache_register_purge_endpoint() {
         'methods' => 'POST',
         'callback' => 'nppp_nginx_cache_purge_endpoint',
         'permission_callback' => '__return_true',
-        'args' => array(
-            'api_key' => array(
-                'required' => true,
-                'description' => 'API Key for authentication.',
-                'type' => 'string',
-                'sanitize_callback'=> 'sanitize_text_field',
-            ),
-        ),
     ));
 }
 
@@ -120,21 +132,33 @@ function nppp_nginx_cache_register_preload_endpoint() {
         'methods' => 'POST',
         'callback' => 'nppp_nginx_cache_preload_endpoint',
         'permission_callback' => '__return_true',
-        'args' => array(
-            'api_key' => array(
-                'required' => true,
-                'description' => 'API Key for authentication.',
-                'type' => 'string',
-                'sanitize_callback'=> 'sanitize_text_field',
-            ),
-        ),
     ));
 }
 
 // Validation, authentication, rate limiting
 function nppp_validate_and_rate_limit_endpoint($request) {
-    // Retrieve and sanitize API key
-    $api_key = sanitize_text_field($request->get_param('api_key'));
+    // Retrieve API key from Authorization header
+    $api_key = $request->get_header('Authorization');
+
+    // Check if Authorization header contains a Bearer token
+    if (!empty($api_key) && strpos($api_key, 'Bearer ') === 0) {
+        $api_key = substr($api_key, 7);
+    }
+
+    // 2. Fallback to the X-Api-Key header if Authorization is not found
+    if (empty($api_key)) {
+        $api_key = $request->get_header('X-Api-Key');
+    }
+
+    // 3. Fallback to the request body 'api_key' if no header is found
+    if (empty($api_key)) {
+        $api_key = sanitize_text_field($request->get_param('api_key'));
+    }
+
+    // 4. If no API key is provided, return an error
+    if (empty($api_key)) {
+        return new WP_Error('authentication_error', 'No API Key provided', array('status' => 403));
+    }
 
     // Get the IP address for rate limiting
     $ip_address = $_SERVER['REMOTE_ADDR'];
