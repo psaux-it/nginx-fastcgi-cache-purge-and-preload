@@ -1719,6 +1719,56 @@ $(document).ready(function() {
             window.location.href = url;
         }, 2000);
     });
+
+    // Start masking API key on front-end
+    var apiKeyInput = $('#nginx_cache_api_key');
+    var generateButton = $('#api-key-button');
+
+    // Function to mask the first 10 characters of the API key
+    function maskApiKey(apiKey) {
+        return '*'.repeat(10) + apiKey.slice(10);
+    }
+
+    // Function to set the API key and apply masking
+    function setApiKey(apiKey) {
+        apiKeyInput.data('original-key', apiKey);
+        apiKeyInput.val(maskApiKey(apiKey));
+        console.log('Set API Key: originalKey=', apiKey, 'maskedKey=', maskApiKey(apiKey));
+    }
+
+    // Function to unmask the API key on focus
+    function unmaskApiKey() {
+        var originalKey = apiKeyInput.data('original-key');
+        apiKeyInput.val(originalKey);
+        console.log('Unmask API Key: ', originalKey);
+    }
+
+    // Function to remask the API key on blur
+    function remaskApiKey() {
+        var originalKey = apiKeyInput.data('original-key');
+        apiKeyInput.val(maskApiKey(originalKey));
+        console.log('Remask API Key: ', maskApiKey(originalKey));
+    }
+
+    // Initial masking on page load
+    var initialApiKey = apiKeyInput.val();
+    setApiKey(initialApiKey);
+
+    // Bind focus and blur events
+    apiKeyInput.on('focus', unmaskApiKey);
+    apiKeyInput.on('blur', remaskApiKey);
+
+    // Handle the "Generate API Key" button click
+    generateButton.on('click', function() {
+        // Simulate backend API key generation
+        // Replace this with your actual AJAX call if needed
+        setTimeout(function() {
+            // Assume backend has updated the input field with the new API key
+            var newApiKey = apiKeyInput.val();
+            console.log('Generated new API Key: ', newApiKey);
+            setApiKey(newApiKey);
+        }, 500);
+    });
 });
 
 /*!
