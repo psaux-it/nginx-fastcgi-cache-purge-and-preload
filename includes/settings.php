@@ -366,6 +366,11 @@ function nppp_handle_nginx_cache_settings_submission() {
 
             // Verify the nonce
             if (wp_verify_nonce($nonce, 'nginx_cache_settings_nonce')) {
+                // Capability check
+                if (!current_user_can('manage_options')) {
+                    wp_die('You do not have sufficient permissions to access this page.');
+                }
+
                 // Check if 'nginx_cache_settings' is set in the POST data
                 if (isset($_POST['nginx_cache_settings'])) {
                     // Make sure we unslash and sanitize immediately
@@ -436,6 +441,9 @@ function nppp_handle_nginx_cache_settings_submission() {
                 // Nonce verification failed
                 wp_die('Nonce verification failed');
             }
+        } else {
+            // Nonce verification failed
+            wp_die('Nonce not found');
         }
     }
 }
