@@ -1773,7 +1773,7 @@ $(document).ready(function() {
             // Backend has updated the input field with the new API key
             var newApiKey = nppApiKeyInput.val();
             nppSetApiKey(newApiKey);
-        }, 500);
+        }, 700);
     });
 
     // Find the closest form that contains the API key input
