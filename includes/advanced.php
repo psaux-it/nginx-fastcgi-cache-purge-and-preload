@@ -58,19 +58,21 @@ function nppp_premium_html($nginx_cache_path) {
                 <th>Cached URL</th>
                 <th>Cache Path</th>
                 <th>Content Category</th>
+                <th>Cache Method</th>
                 <th>Cache Date</th>
                 <th>Action</th>
             </tr>
         </thead>
         <tbody>
             <?php if (empty($extractedUrls)) : ?>
-                <tr><td colspan="5">No cached content available yet. Consider Preload Cache now.</td></tr>
+                <tr><td colspan="6">No cached content available yet. Consider Preload Cache now.</td></tr>
             <?php else :
                 foreach ($extractedUrls as $urlData) : ?>
                     <tr>
                         <td><?php echo esc_html($urlData['url']); ?></td>
                         <td><?php echo esc_html($urlData['file_path']); ?></td>
                         <td><?php echo esc_html($urlData['category']); ?></td>
+                        <td>GET</td>
                         <td><?php echo esc_html($urlData['cache_date']); ?></td>
                         <td>
                             <button class="nppp-purge-btn" data-file="<?php echo esc_attr($urlData['file_path']); ?>">Purge</button>
