@@ -74,7 +74,7 @@ function nppp_premium_html($nginx_cache_path) {
                         <td><?php echo esc_html($urlData['cache_date']); ?></td>
                         <td>
                             <button class="nppp-purge-btn" data-file="<?php echo esc_attr($urlData['file_path']); ?>">Purge</button>
-                            <button class="nppp-preload-btn" data-url="<?php echo esc_attr($urlData['url']); ?>" style="display: none;">Preload</button>
+                            <button class="nppp-preload-btn" data-url="<?php echo esc_attr($urlData['url']); ?>">Preload</button>
                         </td>
                     </tr>
                 <?php endforeach;
