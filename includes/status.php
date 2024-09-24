@@ -298,8 +298,8 @@ function nppp_get_in_cache_page_count() {
         return;
     }
 
-    // Check permission issue in cache & cache path existence to
-    // prevent expensive directory traversal
+    // Check permission issue in cache
+    // Cache path existence to prevent expensive directory traversal
     $cached_result = nppp_check_perm_in_cache(false, false, false);
     $path_status = nppp_check_path();
 
@@ -311,6 +311,19 @@ function nppp_get_in_cache_page_count() {
     // Return 'Undetermined' if the perm in cache returns 'false'
     if ($cached_result === 'false') {
         return 'Undetermined';
+    }
+
+    // Check NGINX Cache Key format is in supported format
+    // If not we can not get the pages in cache count
+    $config_data = nppp_parse_nginx_cache_key();
+
+    if ($config_data === false) {
+        return 'Not Found';
+    } else {
+        // Output error message if cache keys are found
+        if (!empty($config_data['cache_keys'])) {
+            return 'Not Found';
+        }
     }
 
     try {
