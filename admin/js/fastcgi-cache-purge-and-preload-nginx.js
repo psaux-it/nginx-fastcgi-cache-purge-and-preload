@@ -1184,13 +1184,15 @@ $(document).ready(function() {
 
             // Set column widths
             columnDefs: [
-                { width: "32%", targets: 0, className: 'text-left' }, // Cached URL
-                { width: "34%", targets: 1, className: 'text-left' }, // Cache Path
+                { width: "28%", targets: 0, className: 'text-left' }, // Cached URL
+                { width: "30%", targets: 1, className: 'text-left' }, // Cache Path
                 { width: "10%", targets: 2, className: 'text-left' }, // Content Category
-                { width: "12%", targets: 3, className: 'text-left' }, // Cache Date
-                { width: "12%", targets: 4, className: 'text-left' }, // Action
+                { width: "10%", targets: 3, className: 'text-left' }, // Cache Method
+                { width: "10%", targets: 4, className: 'text-left' }, // Cache Date
+                { width: "12%", targets: 5, className: 'text-left' }, // Actions
                 { responsivePriority: 1, targets: 0 }, // Cached URL gets priority for responsiveness
-                { responsivePriority: 2, targets: -1 }, // Action column gets second priority
+                { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] }, // Collapse all in first row on mobile, hide actions always
+                //{ responsivePriority: 2, targets: -1 }, // Action column gets second priority on mobile
                 { defaultContent: "", targets: "_all" } // Ensures all columns render even if empty
             ],
 
@@ -1284,6 +1286,11 @@ $(document).ready(function() {
                         'font-weight': 'bold'
                     });
             }
+            // Apply styles to the Cache Method column (4th column)
+            var $cacheMethodCell = $(this).find('td').eq(3);
+            $cacheMethodCell.css({
+                'color': 'green'
+            });
         });
     }
 
