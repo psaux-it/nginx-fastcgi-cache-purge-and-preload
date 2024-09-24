@@ -40,6 +40,18 @@ function nppp_premium_html($nginx_cache_path) {
         return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</p></div>';
     }
 
+    // Check NGINX Cache Key format is in supported format If not ADVANCED tab fail
+    $config_data = nppp_parse_nginx_cache_key();
+
+    if ($config_data === false) {
+        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR CONF: Unable to locate the nginx.conf file in the specified paths or encountered a parsing error.</p></div>';
+    } else {
+        // Output error message if cache keys are found
+        if (!empty($config_data['cache_keys'])) {
+            return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR CACHE KEY: Nginx cache key format is not suitable for the plugin. Refer to the Help tab for guidance.</p></div>';
+        }
+    }
+
     // Get extracted URLs
     $extractedUrls = nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path);
 
