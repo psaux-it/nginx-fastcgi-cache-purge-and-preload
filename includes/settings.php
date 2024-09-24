@@ -391,8 +391,9 @@ function nppp_handle_nginx_cache_settings_submission() {
                     // Get the old cache path from options
                     $old_nginx_cache_path = get_option('nginx_cache_settings')['nginx_cache_path'];
 
-                    // Delete plugin cache when Nginx Cache Path changed
-                    if ($new_nginx_cache_path !== $old_nginx_cache_path) {
+                    // Form submit
+                    if ($new_nginx_cache_path !== $old_nginx_cache_path || $new_nginx_cache_path === $old_nginx_cache_path) {
+                        // Always delete the plugin cache when the form is submitted, regardless of whether the cache path has changed or not
                         $static_key_base = 'nppp';
                         $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
                         $transients = array($transient_key_permissions_check);
@@ -401,23 +402,15 @@ function nppp_handle_nginx_cache_settings_submission() {
                             delete_transient($transient);
                         }
 
+                        // Add small delay for transient operation
+                        usleep(500000);
+
                         // Update the settings with the new values
                         update_option('nginx_cache_settings', $new_settings);
 
                         // Redirect with success message
                         wp_redirect(add_query_arg(array(
                             'status_message' => urlencode('Plugin cache cleared, settings saved successfully!'),
-                            'message_type' => 'success',
-                            'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
-                        ), admin_url('options-general.php?page=nginx_cache_settings')));
-                        exit;
-                    } else {
-                        // Update the settings with the new values
-                        update_option('nginx_cache_settings', $new_settings);
-
-                        // Redirect with success message
-                        wp_redirect(add_query_arg(array(
-                            'status_message' => urlencode('Settings saved successfully!'),
                             'message_type' => 'success',
                             'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
                         ), admin_url('options-general.php?page=nginx_cache_settings')));
@@ -1349,7 +1342,51 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     } else {
         // Now check if the directory exists
         if (!$wp_filesystem->is_dir($path)) {
-            return 'directory_not_exist_or_readable';
+            // Assign necessary variables
+            $service_name = 'npp-wordpress.service';
+            $service_path = '/etc/systemd/system/' . $service_name;
+            $nginx_path = trim(shell_exec('command -v nginx'));
+            $sudo_path = trim(shell_exec('command -v sudo'));
+            $systemctl_path = trim(shell_exec('command -v systemctl'));
+
+            // Force to create the nginx cache path that if defined in conf already
+            // This code block will only run if the plugin's initial setup
+            // was done using the following one-liner script:
+            // [ bash <(curl -Ss https://psaux-it.github.io/install.sh) ]
+            if (function_exists('exec') && function_exists('shell_exec')) {
+                if (!empty($nginx_path) && !empty($sudo_path)) {
+                    // Construct and execute the 'nginx -T' command using 'echo "" | sudo -S' to prevent hang during  password prompt
+                    $nginx_command = "echo '' | sudo -S " . escapeshellcmd($nginx_path) . " -T > /dev/null 2>&1";
+                    exec($nginx_command, $output, $return_var);
+                }
+            }
+
+            // Re-check if directory exists
+            if (!$wp_filesystem->is_dir($path)) {
+                // Display error message for non-existent directory
+                return 'directory_not_exist_or_readable';
+            } else {
+                // Restart the npp-wordpress systemd service to apply setfacl to the created Nginx cache path.
+                // This code block depends on the npp-wordpress.service and will only run
+                // if the plugin's initial setup was done using the following one-liner script:
+                // [ bash <(curl -Ss https://psaux-it.github.io/install.sh) ]
+                if (!empty($systemctl_path) && !empty($sudo_path)) {
+                    if ($wp_filesystem->exists($service_path)) {
+                        // Construct and execute the restart command
+                        $restart_command = "echo '' | sudo -S " . escapeshellcmd($systemctl_path) . " restart " . escapeshellcmd($service_name);
+                        exec($restart_command . ' 2>&1', $output, $return_var);
+                    }
+                }
+                // Clear recursive permission plugin cache
+                $static_key_base = 'nppp';
+                $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
+                $transients = array($transient_key_permissions_check);
+                foreach ($transients as $transient) {
+                    delete_transient($transient);
+                }
+                // Add small delay
+                usleep(500000);
+            }
         }
     }
 
