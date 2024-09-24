@@ -14,6 +14,161 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Tries to determine the nginx.conf path using 'nginx -V'.
+// If that fails, falls back to checking common paths.
+function nppp_get_nginx_conf_paths($wp_filesystem) {
+    $conf_paths = [];
+
+    // Try to get the nginx.conf path using 'nginx -V'
+    if (function_exists('exec')) {
+        $output = [];
+        $return_var = 0;
+        exec('nginx -V 2>&1', $output, $return_var);
+
+        if ($return_var === 0) {
+            $output_str = implode("\n", $output);
+
+            // Look for '--conf-path=' in the output
+            if (preg_match('/--conf-path=(\S+)/', $output_str, $matches)) {
+                $conf_path = $matches[1];
+                if ($wp_filesystem->exists($conf_path)) {
+                    $conf_paths[] = $conf_path;
+                }
+            }
+        }
+    }
+
+    // If we didn't find the conf path via 'nginx -V', or if the file doesn't exist, check common paths
+    if (empty($conf_paths)) {
+        $possible_paths = [
+            '/etc/nginx/nginx.conf',
+            '/usr/local/etc/nginx/nginx.conf',
+            '/etc/nginx/conf/nginx.conf',
+            '/usr/local/nginx/conf/nginx.conf',
+            '/usr/local/etc/nginx/conf/nginx.conf',
+            '/usr/local/etc/nginx.conf',
+            '/opt/nginx/conf/nginx.conf',
+            // Add more paths as needed
+        ];
+
+        foreach ($possible_paths as $path) {
+            if ($wp_filesystem->exists($path)) {
+                $conf_paths[] = $path;
+            }
+        }
+    }
+
+    return $conf_paths;
+}
+
+// Parses the Nginx configuration files and extracts fastcgi_cache_key directives.
+function nppp_parse_nginx_cache_key() {
+    static $parsed_files = [];
+    $cache_keys = [];
+
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return false;
+    }
+
+    $conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
+
+    if (empty($conf_paths)) {
+        // Could not find any nginx.conf files
+        return false;
+    }
+
+    foreach ($conf_paths as $conf_path) {
+        // Parse the nginx.conf file
+        $result = nppp_parse_nginx_cache_key_file($conf_path, $wp_filesystem, $parsed_files);
+
+        if ($result !== false && isset($result['cache_keys'])) {
+            $cache_keys = array_merge($cache_keys, $result['cache_keys']);
+        }
+    }
+
+    // Return only found fastcgi_cache_key values
+    return ['cache_keys' => $cache_keys];
+}
+
+
+// Helper function to parse individual Nginx configuration files.
+function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) {
+    if (in_array($file, $parsed_files)) {
+        return false;
+    }
+    $parsed_files[] = $file;
+
+    if (!$wp_filesystem->exists($file)) {
+        return false;
+    }
+
+    // Read the file contents
+    $config_content = $wp_filesystem->get_contents($file);
+    if ($config_content === false) {
+        return false;
+    }
+
+    $cache_keys = [];
+    $included_files = [];
+    $current_dir = dirname($file);
+
+    // Regex to match fastcgi_cache_key directives
+    preg_match_all('/^\s*(?!#)\s*fastcgi_cache_key\s+([^;]+);/m', $config_content, $cache_key_directives, PREG_SET_ORDER);
+
+    foreach ($cache_key_directives as $cache_key_directive) {
+        $value = trim($cache_key_directive[1]);
+
+        // Add to cache_keys only if it doesn't match the default value
+        if ($value !== '$scheme$request_method$host$request_uri') {
+            $cache_keys[] = $value;
+        }
+    }
+
+    // Regex to match include directives
+    preg_match_all('/^\s*(?!#)\s*include\s+([^;]+);/m', $config_content, $include_directives, PREG_SET_ORDER);
+
+    foreach ($include_directives as $include_directive) {
+        $include_path = trim($include_directive[1]);
+
+        // Resolve variables like ${...}
+        $include_path = preg_replace_callback('/\$\{([^}]+)\}/', function($matches) {
+            return getenv($matches[1]) ?: $matches[0];
+        }, $include_path);
+
+        // Resolve relative paths based on the current directory
+        if (!preg_match('/^\//', $include_path)) {
+            $include_path = $current_dir . '/' . $include_path;
+        }
+
+        // Handle wildcards
+        if (strpos($include_path, '*') !== false) {
+            $files = glob($include_path);
+            if ($files !== false) {
+                $included_files = array_merge($included_files, $files);
+            }
+        } else {
+            $included_files[] = $include_path;
+        }
+    }
+
+    // Recursively parse included files
+    foreach ($included_files as $included_file) {
+        $result = nppp_parse_nginx_cache_key_file($included_file, $wp_filesystem, $parsed_files);
+        if ($result !== false && isset($result['cache_keys'])) {
+            $cache_keys = array_merge($cache_keys, $result['cache_keys']);
+        }
+    }
+
+    // Return only found fastcgi_cache_key values
+    return ['cache_keys' => $cache_keys];
+}
+
 // Function to check if plugin critical requirements are met
 function nppp_pre_checks_critical() {
     // Check if the operating system is Linux and the web server is nginx
@@ -111,11 +266,54 @@ function nppp_pre_checks() {
         return;
     }
 
-    // Check if directory exists
+    // Check if cache directory exists if not force to create it
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
-        // Display error message for non-existent directory
-        nppp_display_pre_check_warning('GLOBAL ERROR PATH: The specified Nginx Cache Directory is default one or does not exist anymore. Please check your Nginx Cache Directory.');
-        return;
+        // Assign necessary variables
+        $service_name = 'npp-wordpress.service';
+        $service_path = '/etc/systemd/system/' . $service_name;
+        $nginx_path = trim(shell_exec('command -v nginx'));
+        $sudo_path = trim(shell_exec('command -v sudo'));
+        $systemctl_path = trim(shell_exec('command -v systemctl'));
+
+        // Force to create the nginx cache path that if defined in conf already
+        // This code block will only run if the plugin's initial setup
+        // was done using the following one-liner script:
+        // [ bash <(curl -Ss https://psaux-it.github.io/install.sh) ]
+        if (function_exists('exec') && function_exists('shell_exec')) {
+            if (!empty($nginx_path) && !empty($sudo_path)) {
+                // Construct and execute the 'nginx -T' command using 'echo "" | sudo -S' to prevent hang during  password prompt
+                $nginx_command = "echo '' | sudo -S " . escapeshellcmd($nginx_path) . " -T > /dev/null 2>&1";
+                exec($nginx_command, $output, $return_var);
+            }
+        }
+
+        // Re-check if directory exists
+        if (!$wp_filesystem->is_dir($nginx_cache_path)) {
+            // Display error message for non-existent directory
+            nppp_display_pre_check_warning('GLOBAL ERROR PATH: The specified Nginx Cache Directory is default one or does not exist anymore. Please check your Nginx Cache Directory.');
+            return;
+        } else {
+            // Restart the npp-wordpress systemd service to apply setfacl to the created Nginx cache path.
+            // This code block depends on the npp-wordpress.service and will only run
+            // if the plugin's initial setup was done using the following one-liner script:
+            // [ bash <(curl -Ss https://psaux-it.github.io/install.sh) ]
+            if (!empty($systemctl_path) && !empty($sudo_path)) {
+                if ($wp_filesystem->exists($service_path)) {
+                    // Construct and execute the restart command
+                    $restart_command = "echo '' | sudo -S " . escapeshellcmd($systemctl_path) . " restart " . escapeshellcmd($service_name);
+                    exec($restart_command . ' 2>&1', $output, $return_var);
+                }
+            }
+            // Clear recursive permission plugin cache
+            $static_key_base = 'nppp';
+            $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
+            $transients = array($transient_key_permissions_check);
+            foreach ($transients as $transient) {
+                delete_transient($transient);
+            }
+            // Add small delay
+            usleep(500000);
+        }
     }
 
     // Optimize performance by caching results of recursive permission checks
