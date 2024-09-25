@@ -80,7 +80,7 @@ function nppp_nginx_cache_settings_page() {
 
     ?>
     <div class="wrap">
-        <div id="nppp-loader-overlay" style="display: none;" aria-live="assertive" aria-busy="true">
+        <div id="nppp-loader-overlay" aria-live="assertive" aria-busy="true">
             <div class="nppp-spinner-container">
                 <div class="nppp-loader"></div>
                 <div class="nppp-fill-mask">
@@ -117,7 +117,7 @@ function nppp_nginx_cache_settings_page() {
             </div>
             <div id="settings" class="tab-content active">
                 <div id="settings-content-placeholder">
-                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <form id="nppp-settings-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <?php
                     wp_nonce_field('nginx_cache_settings_nonce', 'nginx_cache_settings_nonce');
                     ?>
