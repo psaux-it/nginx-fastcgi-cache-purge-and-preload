@@ -2105,4 +2105,24 @@ function npppupdateStatus() {
         });
     });
 }
+
+// This ensures that the preloader is shown when the form is being processed.
+document.addEventListener('DOMContentLoaded', function() {
+    // Get the settings form by its ID
+    var npppNginxForm = document.getElementById('nppp-settings-form');
+
+    // Check if the form exists on the page
+    if (npppNginxForm) {
+        // Add a submit event listener to the form
+        npppNginxForm.addEventListener('submit', function() {
+            // Get the preloader overlay by its ID
+            var npppOverlay = document.getElementById('nppp-loader-overlay');
+
+            // If the overlay exists, add the "active" class to display it
+            if (npppOverlay) {
+                npppOverlay.classList.add('active');
+            }
+        });
+    }
+});
 })(jQuery, window, document);
