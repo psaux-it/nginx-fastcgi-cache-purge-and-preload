@@ -1072,7 +1072,7 @@ function nppp_fetch_default_reject_regex() {
         return;
     }
 
-    $rr_txt_file = plugin_dir_path(__FILE__) . '../includes/reject_regex.txt';
+    $rr_txt_file = dirname(__FILE__) . '/reject_regex.txt';
     if ($wp_filesystem->exists($rr_txt_file)) {
         $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
         $regex_match = preg_match('/\$reject_regex\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
