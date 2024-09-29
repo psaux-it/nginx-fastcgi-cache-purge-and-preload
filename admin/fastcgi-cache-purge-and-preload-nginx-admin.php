@@ -19,29 +19,32 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Define the current version
+define('NPPP_PLUGIN_VERSION', '2.0.3');
+
 // Define a constant for the log file path
-if ( ! defined( 'NGINX_CACHE_LOG_FILE' ) ) {
-    define( 'NGINX_CACHE_LOG_FILE', plugin_dir_path( __FILE__ ) . '../fastcgi_ops.log' );
+if (! defined('NGINX_CACHE_LOG_FILE')) {
+    define('NGINX_CACHE_LOG_FILE', dirname(__DIR__) . '/fastcgi_ops.log');
 }
 
-// Plugin functions
-require_once plugin_dir_path( __FILE__ ) . '../includes/enqueue-assets.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/wp-filesystem.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/pre-checks.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/admin-bar.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/log.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/svg.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/settings.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/purge.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/preload.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/help.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/configuration-parser.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/status.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/advanced.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/send-mail.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/schedule.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/rest-api-helper.php';
-require_once plugin_dir_path( __FILE__ ) . '../includes/plugin-tracking.php';
+// Include plugin files
+require_once dirname(__DIR__) . '/includes/enqueue-assets.php';
+require_once dirname(__DIR__) . '/includes/wp-filesystem.php';
+require_once dirname(__DIR__) . '/includes/pre-checks.php';
+require_once dirname(__DIR__) . '/includes/admin-bar.php';
+require_once dirname(__DIR__) . '/includes/log.php';
+require_once dirname(__DIR__) . '/includes/svg.php';
+require_once dirname(__DIR__) . '/includes/settings.php';
+require_once dirname(__DIR__) . '/includes/purge.php';
+require_once dirname(__DIR__) . '/includes/preload.php';
+require_once dirname(__DIR__) . '/includes/help.php';
+require_once dirname(__DIR__) . '/includes/configuration-parser.php';
+require_once dirname(__DIR__) . '/includes/status.php';
+require_once dirname(__DIR__) . '/includes/advanced.php';
+require_once dirname(__DIR__) . '/includes/send-mail.php';
+require_once dirname(__DIR__) . '/includes/schedule.php';
+require_once dirname(__DIR__) . '/includes/rest-api-helper.php';
+require_once dirname(__DIR__) . '/includes/plugin-tracking.php';
 
 // Add actions and filters
 add_action('load-settings_page_nginx_cache_settings', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets');
