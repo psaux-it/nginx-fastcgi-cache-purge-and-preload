@@ -45,7 +45,7 @@ if ($api_status === 'yes') {
     remove_action('rest_api_init', 'nppp_register_dummy_endpoints');
 
     // Load main NPP REST API code
-    require_once plugin_dir_path(__FILE__) . '../includes/rest-api.php';
+    require_once dirname(__FILE__) . '/rest-api.php';
 
     // Register real NPP REST API endpoints
     if (!has_action('rest_api_init', 'nppp_nginx_cache_register_purge_endpoint')) {
