@@ -9,6 +9,11 @@
  * License: GPL-2.0+
  */
 
+// Exit if accessed directly.
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
 // Function to track plugin status
 function nppp_plugin_tracking($status = 'active') {
     if (!function_exists('get_plugin_data')) {
