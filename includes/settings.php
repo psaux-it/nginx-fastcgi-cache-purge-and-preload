@@ -1395,12 +1395,33 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
 
 // Function to reset plugin settings on deactivation
 function nppp_reset_plugin_settings_on_deactivation() {
+    // Delete options
     delete_option('nginx_cache_settings');
+
     // Stop preload process status inspector event
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
+
+    // Check if the preload status event action exists and remove it
+    if (has_action('npp_cache_preload_status_event', 'nppp_create_scheduled_event_preload_status_callback')) {
+        remove_action('npp_cache_preload_status_event', 'nppp_create_scheduled_event_preload_status_callback');
+    }
+
+    // Clear all instances of 'npp_cache_preload_event'
+    wp_clear_scheduled_hook('npp_cache_preload_event');
+
+    // Check if the action exists and remove it
+    if (has_action('npp_cache_preload_event', 'nppp_create_scheduled_event_preload_callback')) {
+        remove_action('npp_cache_preload_event', 'nppp_create_scheduled_event_preload_callback');
+    }
+
+    // Send plugin status to API
+    nppp_plugin_tracking('inactive');
+
+    // Remove scheduled cron for plugin status check
+    nppp_schedule_plugin_tracking_event(true);
 }
 
-// Automatically update the default options when the plugin is activated or reactivated
+// Automatically update the default options when the plugin is activated
 function nppp_defaults_on_plugin_activation() {
     $new_api_key = bin2hex(random_bytes(32));
 
@@ -1426,4 +1447,10 @@ function nppp_defaults_on_plugin_activation() {
             error_log('Failed to create log file: ' . $log_file_path);
         }
     }
+
+    // Send plugin status to API
+    nppp_plugin_tracking('active');
+
+    // Schedule cron for plugin status check
+    nppp_schedule_plugin_tracking_event();
 }
