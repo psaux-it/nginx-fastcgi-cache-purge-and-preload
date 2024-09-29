@@ -1,12 +1,51 @@
 <?php
 /**
  * Plugin Tracking for FastCGI Cache Purge and Preload for Nginx
- * Description: This file handles tracking the plugin activation and deactivation status and sends this information to the main API to track plugin statistics
- * and sends this information to the FastCGI Cache Purge and Preload for Nginx API.
+ * 
+ * Description: This file handles tracking the plugin activation and deactivation status 
+ * and sends this information to the main API to track plugin statistics.
+ * 
  * Version: 2.0.3
  * Author: Hasan ÇALIŞIR
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
+ * 
+ * Security and API Usage:
+ * =======================
+ * This plugin uses two secure API endpoints for tracking plugin activation and deactivation. 
+ * The endpoints are used solely for the purpose of improving the plugin based on user statistics.
+ * 
+ * 1. JWT Token Generation Endpoint
+ * --------------------------------
+ * - URL: https://api.psauxit.com/get-jwt
+ * - Purpose: This endpoint generates a JWT token for authenticating plugin tracking requests.
+ * - Data Sent:
+ *   - site_url: The URL of the site using the plugin.
+ *   - plugin_version: The version of the plugin in use.
+ * - Security: 
+ *   - Data is transmitted securely over HTTPS.
+ *   - No personal data is collected, only site URL and plugin version.
+ *   - JWT token is valid for a short period and is used to authenticate requests.
+ * 
+ * 2. Plugin Tracking Endpoint
+ * ---------------------------
+ * - URL: https://api.psauxit.com/rpc/upsert_plugin_tracking
+ * - Purpose: This endpoint tracks the plugin's status (active/inactive) for usage statistics.
+ * - Data Sent:
+ *   - p_plugin_name: The name of the plugin.
+ *   - p_version: The version of the plugin.
+ *   - p_status: The plugin status (active/inactive).
+ *   - p_site_url: The site URL where the plugin is installed.
+ * - Security:
+ *   - Requests are made with the JWT token obtained from the previous endpoint.
+ *   - All communication is encrypted over HTTPS.
+ *   - Only technical information related to the plugin is collected (no personal data).
+ * 
+ * Summary:
+ * --------
+ * - The plugin does not collect any personal data.
+ * - Only necessary technical data is sent (site URL, plugin name, version, status).
+ * - All communication is encrypted via HTTPS and authenticated using JWT tokens.
  */
 
 // Exit if accessed directly.
