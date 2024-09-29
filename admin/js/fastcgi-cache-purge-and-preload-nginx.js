@@ -2125,4 +2125,28 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Adjust width of submit button according to it's container nppp-nginx-tabs
+document.addEventListener('DOMContentLoaded', function() {
+    const tabsContainer = document.getElementById('nppp-nginx-tabs');
+    const submitContainer = document.querySelector('.submit');
+
+    function updateSubmitPosition() {
+        const containerRect = tabsContainer.getBoundingClientRect();
+
+        // Set the width and position of the submit button to match the container
+        submitContainer.style.left = `${containerRect.left}px`;
+        submitContainer.style.width = `${containerRect.width}px`;
+
+        // Remove any extra padding or margins on the button that could cause overflow
+        submitContainer.style.margin = '0';
+        submitContainer.style.padding = '0';
+    }
+
+    // Initial update on page load
+    updateSubmitPosition();
+
+    // Update the position when the window is resized
+    window.addEventListener('resize', updateSubmitPosition);
+});
 })(jQuery, window, document);
