@@ -2153,3 +2153,58 @@ button.nppp-preload-btn[disabled] {
     pointer-events: none;
     cursor: not-allowed;
 }
+
+/* Make the submit container sticky at the bottom */
+.submit {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    z-index: 1000;
+    background-color: #fff;
+    padding: 10px;
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Make the submit button itself full-width */
+.submit input[type="submit"] {
+    width: 100%;
+    padding: 5px;
+    background-color: #0073aa;
+    color: #fff;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 15px;
+}
+
+/* Button hover effect */
+.submit input[type="submit"]:hover {
+    background-color: #006799;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 600px) {
+    .submit {
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        padding: 10px 10px;
+    }
+
+    .submit input[type="submit"] {
+        font-size: 15px;
+        padding: 12px;
+    }
+}
+
+/* Target the specific submit button */
+.submit input[type="submit"].button-primary:focus {
+    box-shadow: none;
+    outline: none;
+}
