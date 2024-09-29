@@ -32,7 +32,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     if ($log_message) {
         if (!defined('NGINX_CACHE_LOG_FILE')) {
             // If the log file path is not defined or empty
-            define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . '../fastcgi_ops.log');
+            define('NGINX_CACHE_LOG_FILE', dirname(__FILE__) . '/../fastcgi_ops.log');
         }
 
         // Sanitize the file path to prevent directory traversal
