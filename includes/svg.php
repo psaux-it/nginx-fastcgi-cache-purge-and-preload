@@ -41,7 +41,7 @@ function nppp_svg_icon_shortcode($atts) {
     $size = sanitize_text_field($atts['size']);
 
     // Path to the SVG icons directory
-    $icons_directory = plugin_dir_path(__FILE__) . '../admin/img/icons/';
+    $icons_directory = dirname(__FILE__) . '/../admin/img/icons/';
 
     // Check if the icon file exists
     $icon_path = $icons_directory . $icon . '.svg';
