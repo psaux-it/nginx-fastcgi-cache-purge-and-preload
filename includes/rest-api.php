@@ -121,7 +121,7 @@ function nppp_log_api_request($endpoint, $status) {
     // Check if the log file path is defined
     if (!defined('NGINX_CACHE_LOG_FILE')) {
         // If the log file path is not defined or empty
-        define('NGINX_CACHE_LOG_FILE', plugin_dir_path(__FILE__) . '../fastcgi_ops.log');
+        define('NGINX_CACHE_LOG_FILE', dirname(__FILE__) . '/../fastcgi_ops.log');
     }
 
     // Sanitize the file path to prevent directory traversal
