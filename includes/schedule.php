@@ -289,7 +289,7 @@ function nppp_get_preload_start_time() {
 
     // Define a constant for the log file path
     if ( ! defined( 'NGINX_CACHE_LOG_FILE' ) ) {
-        define( 'NGINX_CACHE_LOG_FILE', plugin_dir_path( __FILE__ ) . '../fastcgi_ops.log' );
+        define('NGINX_CACHE_LOG_FILE', dirname(__FILE__) . '/../fastcgi_ops.log');
     }
 
     // Check if the log file constant is defined
@@ -371,7 +371,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
     $scheduled_time = DateTime::createFromFormat('Y-m-d H:i:s', $scheduled_time_str, $wordpress_timezone);
 
     // get preload pid file
-    $PIDFILE = dirname(plugin_dir_path(__FILE__)) . '/cache_preload.pid';
+    $PIDFILE = dirname(__FILE__) . '/../cache_preload.pid';
 
     // Check if there is an ongoing preload process active
     if ($wp_filesystem->exists($PIDFILE)) {
