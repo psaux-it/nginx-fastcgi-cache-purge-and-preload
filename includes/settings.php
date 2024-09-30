@@ -1431,7 +1431,7 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_email' => 'your-email@example.com',
         'nginx_cache_cpu_limit' => 50,
         'nginx_cache_reject_regex' => nppp_fetch_default_reject_regex(),
-        'nginx_cache_wait_request' => 1,
+        'nginx_cache_wait_request' => 0,
         'nginx_cache_limit_rate' => 1024,
     );
 
