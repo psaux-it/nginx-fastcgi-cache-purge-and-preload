@@ -104,7 +104,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
                     // Start cpulimit if it is exist
                     if ($cpulimit === 1) {
-                        $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" >/dev/null 2>&1 &";
+                        $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
                         shell_exec($command);
                     }
 
@@ -201,7 +201,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
                 // Start cpulimit if it is exist
                 if ($cpulimit === 1) {
-                    $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" >/dev/null 2>&1 &";
+                    $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
                     shell_exec($command);
                 }
 
