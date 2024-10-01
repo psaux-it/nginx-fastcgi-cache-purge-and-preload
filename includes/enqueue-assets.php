@@ -90,6 +90,8 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     $clear_plugin_cache_nonce = wp_create_nonce('nppp-clear-plugin-cache-action');
     // Create a nonce for restart systemd service npp-wordpress
     $restart_systemd_service_nonce = wp_create_nonce('nppp-restart-systemd-service');
+    // Create a nonce for default reject extension
+    $update_default_reject_extension_option_nonce = wp_create_nonce('nppp-update-default-reject-extension-option');
 
     // Localize nonce values for nppp_admin-js
     wp_localize_script('nppp_admin-js', 'nppp_admin_data', array(
@@ -104,6 +106,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'api_purge_url_copy_nonce' => $update_rest_api_purge_url_copy_nonce,
         'api_nonce' => $update_api_option_nonce,
         'reject_regex_nonce' => $update_default_reject_regex_option_nonce,
+        'reject_extension_nonce' => $update_default_reject_extension_option_nonce,
         'cache_status_nonce' => $cache_status_nonce,
         'premium_nonce_purge' => wp_create_nonce('purge_cache_premium_nonce'),
         'premium_nonce_preload' => wp_create_nonce('preload_cache_premium_nonce'),
