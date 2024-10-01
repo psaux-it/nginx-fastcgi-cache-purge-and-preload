@@ -767,7 +767,7 @@ function nppp_update_api_option() {
     }
 }
 
-// AJAX callback function to update api key option
+// AJAX callback function to update default reject regex option
 function nppp_update_default_reject_regex_option() {
     // Verify nonce
     check_ajax_referer('nppp-update-default-reject-regex-option', '_wpnonce');
@@ -777,9 +777,8 @@ function nppp_update_default_reject_regex_option() {
         wp_send_json_error('You do not have permission to update this option.');
     }
 
-    // Get default reject regex and prepeare it
+    // Get default reject regex
     $default_reject_regex = nppp_fetch_default_reject_regex();
-    //$reject_regex = preg_replace('/\\\\+/', '\\', $default_reject_regex);
     // Get the current options
     $current_options = get_option('nginx_cache_settings');
     // Update the specific option within the array
@@ -787,8 +786,31 @@ function nppp_update_default_reject_regex_option() {
     // Save the option
     update_option('nginx_cache_settings', $current_options);
 
-    // Return the new key as the AJAX response
+    // Return the new reject pattern as the AJAX response
     wp_send_json_success($default_reject_regex);
+}
+
+// AJAX callback function to update default reject extension option
+function nppp_update_default_reject_extension_option() {
+    // Verify nonce
+    check_ajax_referer('nppp-update-default-reject-extension-option', '_wpnonce');
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to update this option.');
+    }
+
+    // Get default reject extension
+    $default_reject_extension = nppp_fetch_default_reject_extension();
+    // Get the current options
+    $current_options = get_option('nginx_cache_settings');
+    // Update the specific option within the array
+    $current_options['nginx_cache_reject_extension'] = $default_reject_extension;
+    // Save the option
+    update_option('nginx_cache_settings', $current_options);
+
+    // Return the new extension set as the AJAX response
+    wp_send_json_success($default_reject_extension);
 }
 
 // AJAX callback function to copy rest api curl purge url
