@@ -25,6 +25,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_email', 'Email Address', 'nppp_nginx_cache_email_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_cpu_limit', 'CPU Usage Limit for Cache Preloading (0-100)', 'nppp_nginx_cache_cpu_limit_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_reject_regex', 'Excluded endpoints from cache preloading', 'nppp_nginx_cache_reject_regex_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_reject_extension', 'Excluded file extensions from cache preloading', 'nppp_nginx_cache_reject_extension_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_send_mail', 'Send Mail', 'nppp_nginx_cache_send_mail_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_logs', 'Logs', 'nppp_nginx_cache_logs_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_limit_rate', 'Limit Rate Definition', 'nppp_nginx_cache_limit_rate_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
@@ -203,10 +204,24 @@ function nppp_nginx_cache_settings_page() {
                             <th scope="row"><span class="dashicons dashicons-no"></span> Exclude Endpoints</th>
                             <td>
                                 <?php nppp_nginx_cache_reject_regex_callback(); ?>
-                                <p class="description">Enter a regex pattern to exclude endpoints from being cached while Preloading. Use | as a delimeter for new rules.</p>
-                                <p class="description">Default regex pattern triggers caching only static pages as much as possible to reduce CPU load and fastest Preload times.</p>
-                                <button id="nginx-regex-reset-defaults" class="button nginx-reset-regex-button">Reset Default Regex</button>
-                                <p class="description">Click the button to reset default regex.</p>
+                                <p class="description">Enter a regex pattern to exclude endpoints from being cached while Preloading. Use | as a delimiter for multiple patterns.</p>
+                                <p class="description">The default regex patterns exclude dynamic endpoints to prevent caching of user-specific content such as <code>wp-admin|my-account</code>.</p>
+                                <p class="description">These exclusions are better handled server-side using <code>fastcgi_cache_bypass</code>, <code>fastcgi_no_cache</code>, and <code>skip_cache</code> rules in your Nginx configuration.</p>
+                                <p class="description">Here, these patterns are used to prevent <code>wget -r</code> from making requests to these endpoints during the Preloading process to avoid unnecessary server load.</p>
+                                <button id="nginx-regex-reset-defaults" class="button nginx-reset-regex-button">Reset Default</button>
+                                <p class="description">Click the button to reset default</p>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row"><span class="dashicons dashicons-no"></span> Exclude File Extensions</th>
+                            <td>
+                                <?php nppp_nginx_cache_reject_extension_callback(); ?>
+                                <p class="description">Enter file extensions to exclude from being downloaded during Preloading. Use commas to separate each extension.</p>
+                                <p class="description">Nginx FastCGI cache is designed to cache dynamic content, such as PHP-generated pages. Static assets like <code>CSS</code>, <code>JS</code>, and images are not cached by FastCGI.</p>
+                                <p class="description">Nginx efficiently serves static assets from the disk, and headers like <code>expires</code> help reduce frequent requests for these files.</p>
+                                <p class="description">By excluding static files, Preload operation are accelerated by avoiding unnecessary requests via <code>wget</code> for static assets.</p>
+                                <button id="nginx-extension-reset-defaults" class="button nginx-reset-extension-button">Reset Default</button>
+                                <p class="description">Click the button to reset default</p>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -224,8 +239,8 @@ function nppp_nginx_cache_settings_page() {
                                  <p class="description">Use of this option is recommended, as it lightens the server load by making the requests less frequent. <br></p>
                                  <p class="description">Higher values dramatically increase cache preload times, while lowering the value can increase server load (CPU, Memory, Network) .<br></p>
                                  <p class="description">Adjust the values to find the optimal balance based on your desired server resource allocation. <br></p>
-                                 <p class="description">If you face unexpected permission issues, try incrementally increasing the value, taking small steps each time. <br></p>
-                                 <p class="description">Default: 1 second, 0 Disabled <br></p>
+                                 <p class="description">If you encounter unexpected permission issues or risk overwhelming your server, try setting it to 1 first and take small steps with each adjustment. <br></p>
+                                 <p class="description">Default: 0 second, Disabled <br></p>
                             </td>
                         </tr>
                         <!-- Start Advanced Options Section -->
@@ -1008,6 +1023,15 @@ function nppp_nginx_cache_reject_regex_callback() {
     echo "<textarea id='nginx_cache_reject_regex' name='nginx_cache_settings[nginx_cache_reject_regex]' rows='3' cols='50' class='large-text'>" . esc_textarea($reject_regex) . "</textarea>";
 }
 
+// Callback function to display the Reject extension field
+function nppp_nginx_cache_reject_extension_callback() {
+    $options = get_option('nginx_cache_settings');
+    $default_reject_extension = nppp_fetch_default_reject_extension();
+    $default_reject_extension = isset($options['nginx_cache_reject_extension']) ? $options['nginx_cache_reject_extension'] : $default_reject_extension;
+    $reject_extension = preg_replace('/\\\\+/', '\\', $default_reject_extension);
+    echo "<textarea id='nginx_cache_reject_extension' name='nginx_cache_settings[nginx_cache_reject_extension]' rows='3' cols='50' class='large-text'>" . esc_textarea($reject_extension) . "</textarea>";
+}
+
 // Callback function to display the Logs field
 function nppp_nginx_cache_logs_callback() {
     $log_file_path = NGINX_CACHE_LOG_FILE;
@@ -1060,7 +1084,7 @@ function nppp_nginx_cache_limit_rate_callback() {
     echo "<input type='number' id='nginx_cache_limit_rate' name='nginx_cache_settings[nginx_cache_limit_rate]' value='" . esc_attr($options['nginx_cache_limit_rate'] ?? $default_limit_rate) . "' class='small-text' />";
 }
 
-// Fetch default Reject Regex
+// Fetch default reject regex
 function nppp_fetch_default_reject_regex() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -1076,6 +1100,31 @@ function nppp_fetch_default_reject_regex() {
     if ($wp_filesystem->exists($rr_txt_file)) {
         $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
         $regex_match = preg_match('/\$reject_regex\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
+        if ($regex_match && isset($matches[1])) {
+            return $matches[1];
+        }
+    } else {
+        wp_die('File does not exist: ' . esc_html($rr_txt_file));
+    }
+    return '';
+}
+
+// Fetch default reject file extensions
+function nppp_fetch_default_reject_extension() {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
+    }
+
+    $rr_txt_file = dirname(__FILE__) . '/reject_regex.txt';
+    if ($wp_filesystem->exists($rr_txt_file)) {
+        $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
+        $regex_match = preg_match('/\$reject_extension\s*=\s*"([^"]+)"/', $file_content, $matches);
         if ($regex_match && isset($matches[1])) {
             return $matches[1];
         }
@@ -1241,8 +1290,12 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize Reject Regex field
     if (!empty($input['nginx_cache_reject_regex'])) {
-        //$sanitized_input['nginx_cache_reject_regex'] = $input['nginx_cache_reject_regex'];
         $sanitized_input['nginx_cache_reject_regex'] = preg_replace('/\\\\+/', '\\', $input['nginx_cache_reject_regex']);
+    }
+
+    // Sanitize Reject extension field
+    if (!empty($input['nginx_cache_reject_extension'])) {
+        $sanitized_input['nginx_cache_reject_extension'] = preg_replace('/\\\\+/', '\\', $input['nginx_cache_reject_extension']);
     }
 
     // Sanitize Send Mail
@@ -1430,6 +1483,7 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_path' => '/dev/shm/change-me-now',
         'nginx_cache_email' => 'your-email@example.com',
         'nginx_cache_cpu_limit' => 50,
+        'nginx_cache_reject_extension' => nppp_fetch_default_reject_extension(),
         'nginx_cache_reject_regex' => nppp_fetch_default_reject_regex(),
         'nginx_cache_wait_request' => 0,
         'nginx_cache_limit_rate' => 1024,
