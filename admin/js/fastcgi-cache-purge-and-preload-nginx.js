@@ -945,7 +945,7 @@ $(document).ready(function() {
             method: 'POST',
             data: {
                 action: 'nppp_update_default_reject_extension_option',
-                _wpnonce: nppp_admin_data.reject_regex_nonce
+                _wpnonce: nppp_admin_data.reject_extension_nonce
             },
             success: function(response) {
                 // Check if AJAX request was successful
