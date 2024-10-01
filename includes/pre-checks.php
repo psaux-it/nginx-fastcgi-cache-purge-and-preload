@@ -48,7 +48,6 @@ function nppp_get_nginx_conf_paths($wp_filesystem) {
             '/usr/local/etc/nginx/conf/nginx.conf',
             '/usr/local/etc/nginx.conf',
             '/opt/nginx/conf/nginx.conf',
-            // Add more paths as needed
         ];
 
         foreach ($possible_paths as $path) {
@@ -124,8 +123,15 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
     foreach ($cache_key_directives as $cache_key_directive) {
         $value = trim($cache_key_directive[1]);
 
-        // Add to cache_keys only if it doesn't match the default value
-        if ($value !== '$scheme$request_method$host$request_uri') {
+        // Strip leading and trailing quotes
+        $unquoted_value = trim($value, "'\"");
+
+        // Check if the unquoted value contains the required sequence in order
+        $required_sequence = '\$scheme\s*\$request_method\s*\$host\s*\$request_uri';
+        $pattern = '/'. $required_sequence .'/';
+
+        if (!preg_match($pattern, $unquoted_value)) {
+            // The cache key does NOT contain the required sequence
             $cache_keys[] = $value;
         }
     }
