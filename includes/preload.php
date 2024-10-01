@@ -39,7 +39,12 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $default_wait_time = 1;
+    $default_reject_extension = nppp_fetch_default_reject_extension();
+    $nginx_cache_reject_extension = isset($nginx_cache_settings['nginx_cache_reject_extension']) ? $nginx_cache_settings['nginx_cache_reject_extension'] : $default_reject_extension;
     $nginx_cache_wait = isset($nginx_cache_settings['nginx_cache_wait_request']) ? $nginx_cache_settings['nginx_cache_wait_request'] : $default_wait_time;
+
+    // Define the user agent string
+    $user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36';
 
     // Here we check where preload request comes from. We have several routes.
     // If nppp_is_auto_preload is false thats mean we are here by one of following routes.
@@ -74,7 +79,16 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
             //    speeding up cache preloading via reducing latency we use --no-check-certificate .
             //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-            $command = "nohup wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-if-modified-since --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=$nginx_cache_wait --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
+            $command = "nohup wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
+                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
+                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-P \"$tmp_path\" " .
+                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
+                "--wait=$nginx_cache_wait " .
+                "--reject-regex='\"$nginx_cache_reject_regex\"' " .
+                "--reject='\"$nginx_cache_reject_extension\"' " .
+                "--user-agent='\"$user_agent\"' " .
+                "\"$fdomain\" >/dev/null 2>&1 & echo \$!";
             $output = shell_exec($command);
 
             // Get the process ID
@@ -171,7 +185,16 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
         //    speeding up cache preloading via reducing latency we use --no-check-certificate .
         //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-        $command = "nohup wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-if-modified-since --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=$nginx_cache_wait --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
+        $command = "nohup wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
+                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
+                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-P \"$tmp_path\" " .
+                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
+                "--wait=$nginx_cache_wait " .
+                "--reject-regex='\"$nginx_cache_reject_regex\"' " .
+                "--reject='\"$nginx_cache_reject_extension\"' " .
+                "--user-agent='\"$user_agent\"' " .
+                "\"$fdomain\" >/dev/null 2>&1 & echo \$!";
         $output = shell_exec($command);
 
         // Get the process ID
@@ -223,7 +246,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     }
 }
 
-// single page preload
+// Single page preload
 function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -279,9 +302,17 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
     //    speeding up cache preloading via reducing latency we use --no-check-certificate .
     //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-    // 3. -m (--mirror) removed here that we need single URL request
-    // 4. -w (--wait) removed we need single HTTP request
-    $command = "nohup wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-if-modified-since --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --timeout=5 --tries=1 -e robots=off \"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+    // 3. --recursive removed here that we need single URL request
+    // 4. --wait removed we need single HTTP request
+    // 5. --reject-regex removed that preload URL already verified
+    // 6. --reject removed that we don't use --recursive
+    $command = "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
+                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
+                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-P \"$tmp_path\" " .
+                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
+                "--user-agent='\"$user_agent\"' " .
+                "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
     $output = shell_exec($command);
 
     // Get the process ID
@@ -326,17 +357,18 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';
     $default_limit_rate = 1024;
-    $default_reject_regex = nppp_fetch_default_reject_regex();
 
     // Get the necessary data for preload action from plugin options
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
     $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
-    $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
 
     // Extra data for preload action
     $this_script_path = dirname(plugin_dir_path(__FILE__));
     $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+
+    // Define the user agent string
+    $user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36';
 
     // Here we already purged cache successfully and we did not face any permission issue
     // So we don't need to check any permission issues again.
@@ -358,9 +390,17 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
     //    speeding up cache preloading via reducing latency we use --no-check-certificate .
     //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-    // 3. -m (--mirror) removed here that we need single URL request
-    // 4. -w (--wait) removed we need single HTTP request
-    $command = "nohup wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-if-modified-since --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --timeout=5 --tries=1 -e robots=off \"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+    // 3. --recursive removed here that we need single URL request
+    // 4. --wait removed we need single HTTP request
+    // 5. --reject-regex removed that preload URL already verified
+    // 6. --reject removed that we don't use --recursive
+    $command = "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
+                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
+                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-P \"$tmp_path\" " .
+                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
+                "--user-agent='\"$user_agent\"' " .
+                "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
     $output = shell_exec($command);
 
     // Get the process ID
