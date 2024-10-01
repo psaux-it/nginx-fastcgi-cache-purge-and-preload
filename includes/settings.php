@@ -344,7 +344,7 @@ function nppp_nginx_cache_settings_page() {
                         </tr>
                     </table>
                     <p class="submit">
-                        <input type="submit" name="submit" class="button-primary" value="Update Options">
+                        <input type="submit" name="nppp_submit" class="button-primary" value="Update Options">
                     </p>
                 </form>
                 </div>
