@@ -922,7 +922,7 @@ $(document).ready(function() {
             success: function(response) {
                 // Check if AJAX request was successful
                 if (response.success) {
-                    // Update input field with the new API key
+                    // Update input field with the default reject regex
                     $('#nginx_cache_reject_regex').val(response.data);
                 } else {
                     // Display error message if AJAX request failed
@@ -950,8 +950,8 @@ $(document).ready(function() {
             success: function(response) {
                 // Check if AJAX request was successful
                 if (response.success) {
-                    // Update input field with the new API key
-                    $('#nginx_cache_reject_regex').val(response.data);
+                    // Update input field with the default reject extension
+                    $('#nginx_cache_reject_extension').val(response.data);
                 } else {
                     // Display error message if AJAX request failed
                     console.error(response.data);
