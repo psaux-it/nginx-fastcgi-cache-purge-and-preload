@@ -936,6 +936,34 @@ $(document).ready(function() {
         });
     });
 
+    // Make AJAX request to update default reject extension
+    $('#nginx-extension-reset-defaults').on('click', function(event) {
+        event.preventDefault();
+
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'nppp_update_default_reject_extension_option',
+                _wpnonce: nppp_admin_data.reject_regex_nonce
+            },
+            success: function(response) {
+                // Check if AJAX request was successful
+                if (response.success) {
+                    // Update input field with the new API key
+                    $('#nginx_cache_reject_regex').val(response.data);
+                } else {
+                    // Display error message if AJAX request failed
+                    console.error(response.data);
+                }
+            },
+            error: function(xhr, status, error) {
+                // Display error message if AJAX request encounters an error
+                console.error(error);
+            }
+        });
+    });
+
     // Event handler for the clear plugin cache button
     $(document).off('click', '#nppp-clear-plugin-cache-btn').on('click', '#nppp-clear-plugin-cache-btn', function(e) {
         e.preventDefault();
