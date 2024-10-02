@@ -19,6 +19,11 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Define the plugin main file path
+if (! defined('NPPP_PLUGIN_FILE')) {
+    define('NPPP_PLUGIN_FILE', __FILE__);
+}
+
 // Load NPP
 require_once plugin_dir_path(__FILE__) . 'admin/fastcgi-cache-purge-and-preload-nginx-admin.php';
 
