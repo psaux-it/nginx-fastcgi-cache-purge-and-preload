@@ -19,12 +19,19 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Define the current version
-define('NPPP_PLUGIN_VERSION', '2.0.3');
+// Define a constant for the current plugin version
+if (!defined('NPPP_PLUGIN_VERSION')) {
+    define('NPPP_PLUGIN_VERSION', '2.0.3');
+}
 
 // Define a constant for the log file path
 if (! defined('NGINX_CACHE_LOG_FILE')) {
     define('NGINX_CACHE_LOG_FILE', dirname(__DIR__) . '/fastcgi_ops.log');
+}
+
+// Define a constant for the user agent
+if (!defined('NPPP_USER_AGENT')) {
+    define('NPPP_USER_AGENT', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36');
 }
 
 // Include plugin files
