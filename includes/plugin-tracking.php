@@ -30,11 +30,11 @@
  * 2. Plugin Tracking Endpoint
  * ---------------------------
  * - URL: https://api.psauxit.com/rpc/upsert_plugin_tracking
- * - Purpose: This endpoint tracks the plugin's status (active/inactive) for usage statistics.
+ * - Purpose: This endpoint tracks the plugin's status (active/inactive/opt-out) for usage statistics.
  * - Data Sent:
  *   - p_plugin_name: The name of the plugin.
  *   - p_version: The version of the plugin.
- *   - p_status: The plugin status (active/inactive).
+ *   - p_status: The plugin status (active/inactive/opt-out).
  *   - p_site_url: The site URL where the plugin is installed.
  * - Security:
  *   - Requests are made with the JWT token obtained from the previous endpoint.
