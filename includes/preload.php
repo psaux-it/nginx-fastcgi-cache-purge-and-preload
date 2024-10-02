@@ -43,9 +43,6 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     $nginx_cache_reject_extension = isset($nginx_cache_settings['nginx_cache_reject_extension']) ? $nginx_cache_settings['nginx_cache_reject_extension'] : $default_reject_extension;
     $nginx_cache_wait = isset($nginx_cache_settings['nginx_cache_wait_request']) ? $nginx_cache_settings['nginx_cache_wait_request'] : $default_wait_time;
 
-    // Define the user agent string
-    $user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36';
-
     // Here we check where preload request comes from. We have several routes.
     // If nppp_is_auto_preload is false thats mean we are here by one of following routes.
     // Preload(settings page), Preload(admin bar), Preload CRON or Preload REST API.
@@ -87,7 +84,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 "--wait=$nginx_cache_wait " .
                 "--reject-regex='\"$nginx_cache_reject_regex\"' " .
                 "--reject='\"$nginx_cache_reject_extension\"' " .
-                "--user-agent='\"$user_agent\"' " .
+                "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
                 "\"$fdomain\" >/dev/null 2>&1 & echo \$!";
             $output = shell_exec($command);
 
@@ -193,7 +190,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 "--wait=$nginx_cache_wait " .
                 "--reject-regex='\"$nginx_cache_reject_regex\"' " .
                 "--reject='\"$nginx_cache_reject_extension\"' " .
-                "--user-agent='\"$user_agent\"' " .
+                "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
                 "\"$fdomain\" >/dev/null 2>&1 & echo \$!";
         $output = shell_exec($command);
 
@@ -311,7 +308,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
                 "--ignore-length --timeout=5 --tries=1 -e robots=off " .
                 "-P \"$tmp_path\" " .
                 "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-                "--user-agent='\"$user_agent\"' " .
+                "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
                 "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
     $output = shell_exec($command);
 
@@ -367,9 +364,6 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
-    // Define the user agent string
-    $user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36';
-
     // Here we already purged cache successfully and we did not face any permission issue
     // So we don't need to check any permission issues again.
     // Also all url valitadation the sanitization actions have been taken before in purge cache step
@@ -399,7 +393,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
                 "--ignore-length --timeout=5 --tries=1 -e robots=off " .
                 "-P \"$tmp_path\" " .
                 "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-                "--user-agent='\"$user_agent\"' " .
+                "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
                 "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
     $output = shell_exec($command);
 
