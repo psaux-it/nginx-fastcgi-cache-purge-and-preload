@@ -35,6 +35,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_schedule', 'Scheduled Cache', 'nppp_nginx_cache_schedule_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_purge_on_update', 'Purge Cache on Post/Page Update', 'nppp_nginx_cache_purge_on_update_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_wait_request', 'Per Request Wait Time', 'nppp_nginx_cache_wait_request_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_tracking_opt_in', 'Enable Tracking', 'nppp_nginx_cache_tracking_opt_in_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -342,6 +343,12 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">Click the button to clear logs.</p>
                             </td>
                         </tr>
+                        <tr valign="top">
+                            <th scope="row"><span class="dashicons dashicons-admin-users"></span> Opt-in</th>
+                            <td>
+                                <?php nppp_nginx_cache_tracking_opt_in_callback(); ?>
+                            </td>
+                        </tr>
                     </table>
                     <p class="submit">
                         <input type="submit" name="nppp_submit" class="button-primary" value="Update Options">
@@ -374,9 +381,9 @@ function nppp_nginx_cache_settings_page() {
 function nppp_handle_nginx_cache_settings_submission() {
     // Check if the form has been submitted
     if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_nginx_cache_settings') {
-        // Verify nonce
+        // Check nonce exists
         if (isset($_POST['nginx_cache_settings_nonce'])) {
-            // Sanitize the nonce input
+            // Sanitize the nonce
             $nonce = sanitize_text_field(wp_unslash($_POST['nginx_cache_settings_nonce']));
 
             // Verify the nonce
@@ -388,26 +395,24 @@ function nppp_handle_nginx_cache_settings_submission() {
 
                 // Check if 'nginx_cache_settings' is set in the POST data
                 if (isset($_POST['nginx_cache_settings'])) {
+                    // Retrieve existing options before sanitizing the input
+                    $existing_options = get_option('nginx_cache_settings');
+
                     // Make sure we unslash and sanitize immediately
                     $nginx_cache_settings = array_map('sanitize_text_field', wp_unslash($_POST['nginx_cache_settings']));
 
                     // Validate the submitted values
                     $new_settings = nppp_nginx_cache_settings_sanitize($nginx_cache_settings);
-                }
 
-                // Check if there are any settings errors
-                $errors = get_settings_errors('nppp_nginx_cache_settings_group');
+                    // Check if there are any settings errors
+                    $errors = get_settings_errors('nppp_nginx_cache_settings_group');
 
-                // If there are no sanitize errors, proceed to update the settings
-                if (empty($errors)) {
-                    // Get the sumbitted nginx cache path
-                    $new_nginx_cache_path = isset($new_settings['nginx_cache_path']) ? $new_settings['nginx_cache_path'] : '';
+                    // If there are no sanitize errors, proceed to update the settings
+                    if (empty($errors)) {
+                        // Get the old and new opt-in values
+                        $old_opt_in = isset($existing_options['nginx_cache_tracking_opt_in']) ? $existing_options['nginx_cache_tracking_opt_in'] : '1';
+                        $new_opt_in = isset($new_settings['nginx_cache_tracking_opt_in']) ? $new_settings['nginx_cache_tracking_opt_in'] : '1';
 
-                    // Get the old cache path from options
-                    $old_nginx_cache_path = get_option('nginx_cache_settings')['nginx_cache_path'];
-
-                    // Form submit
-                    if ($new_nginx_cache_path !== $old_nginx_cache_path || $new_nginx_cache_path === $old_nginx_cache_path) {
                         // Always delete the plugin cache when the form is submitted, regardless of whether the cache path has changed or not
                         $static_key_base = 'nppp';
                         $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
@@ -423,6 +428,12 @@ function nppp_handle_nginx_cache_settings_submission() {
                         // Update the settings with the new values
                         update_option('nginx_cache_settings', $new_settings);
 
+                        // Compare old and new opt-in values
+                        if ($old_opt_in !== $new_opt_in) {
+                            // Opt-in status has changed, handle accordingly
+                            nppp_handle_opt_in_change($new_opt_in);
+                        }
+
                         // Redirect with success message
                         wp_redirect(add_query_arg(array(
                             'status_message' => urlencode('Plugin cache cleared, settings saved successfully!'),
@@ -430,20 +441,23 @@ function nppp_handle_nginx_cache_settings_submission() {
                             'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
                         ), admin_url('options-general.php?page=nginx_cache_settings')));
                         exit;
+                    } else {
+                        // Redirect with error messages
+                        $error_messages = array();
+                        foreach ($errors as $error) {
+                            $error_messages[] = esc_html($error['message']);
+                        }
+
+                        wp_redirect(add_query_arg(array(
+                            'status_message' => urlencode(implode(', ', $error_messages)),
+                            'message_type' => 'error',
+                            'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
+                        ), admin_url('options-general.php?page=nginx_cache_settings')));
+                        exit;
                     }
                 } else {
-                    // Redirect with error messages
-                    $error_messages = array();
-                    foreach ($errors as $error) {
-                        $error_messages[] = esc_html($error['message']);
-                    }
-
-                    wp_redirect(add_query_arg(array(
-                        'status_message' => urlencode(implode(', ', $error_messages)),
-                        'message_type' => 'error',
-                        'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
-                    ), admin_url('options-general.php?page=nginx_cache_settings')));
-                    exit;
+                    // No settings submitted
+                    wp_die('No settings to save.');
                 }
             } else {
                 // Nonce verification failed
@@ -1054,6 +1068,18 @@ function nppp_nginx_cache_reject_extension_callback() {
     echo "<textarea id='nginx_cache_reject_extension' name='nginx_cache_settings[nginx_cache_reject_extension]' rows='3' cols='50' class='large-text'>" . esc_textarea($reject_extension) . "</textarea>";
 }
 
+// Callback to display the tracking opt-in checkbox
+function nppp_nginx_cache_tracking_opt_in_callback() {
+    // Retrieve all plugin settings
+    $options = get_option('nginx_cache_settings');
+    // Get the value for tracking opt-in, default to '1' if not set
+    $value = isset($options['nginx_cache_tracking_opt_in']) ? $options['nginx_cache_tracking_opt_in'] : '1';
+    ?>
+    <input type="checkbox" name="nginx_cache_settings[nginx_cache_tracking_opt_in]" value="1" <?php checked('1', $value); ?> />
+    <label for="nginx_cache_tracking_opt_in">Opt-in to help improve plugin development.</label>
+    <?php
+}
+
 // Callback function to display the Logs field
 function nppp_nginx_cache_logs_callback() {
     $log_file_path = NGINX_CACHE_LOG_FILE;
@@ -1335,6 +1361,9 @@ function nppp_nginx_cache_settings_sanitize($input) {
     // Sanitize REST API
     $sanitized_input['nginx_cache_api'] = isset($input['nginx_cache_api']) && $input['nginx_cache_api'] === 'yes' ? 'yes' : 'no';
 
+    // Sanitize Opt-in
+    $sanitized_input['nginx_cache_tracking_opt_in'] = isset($input['nginx_cache_tracking_opt_in']) && $input['nginx_cache_tracking_opt_in'] == '1' ? '1' : '0';
+
     // Sanitize Limit Rate
     if (!empty($input['nginx_cache_limit_rate'])) {
         $sanitized_input['nginx_cache_limit_rate'] = sanitize_text_field($input['nginx_cache_limit_rate']);
@@ -1470,9 +1499,6 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
 
 // Function to reset plugin settings on deactivation
 function nppp_reset_plugin_settings_on_deactivation() {
-    // Delete options
-    delete_option('nginx_cache_settings');
-
     // Stop preload process status inspector event
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
 
@@ -1489,14 +1515,20 @@ function nppp_reset_plugin_settings_on_deactivation() {
         remove_action('npp_cache_preload_event', 'nppp_create_scheduled_event_preload_callback');
     }
 
-    // Send plugin status to API
-    nppp_plugin_tracking('inactive');
+    // Retrieve existing options to check opt-in status
+    $existing_options = get_option('nginx_cache_settings');
 
-    // Remove scheduled cron for plugin status check
-    nppp_schedule_plugin_tracking_event(true);
+    // Check if the user has opted in
+    if (isset($existing_options['nginx_cache_tracking_opt_in']) && $existing_options['nginx_cache_tracking_opt_in'] === '1') {
+        // Send plugin status to API
+        nppp_plugin_tracking('inactive');
+
+        // Remove scheduled cron for plugin status check
+        nppp_schedule_plugin_tracking_event(true);
+    }
 }
 
-// Automatically update the default options when the plugin is activated
+// Automatically update the default options when the plugin is activated or reactivated
 function nppp_defaults_on_plugin_activation() {
     $new_api_key = bin2hex(random_bytes(32));
 
@@ -1504,15 +1536,24 @@ function nppp_defaults_on_plugin_activation() {
     $default_options = array(
         'nginx_cache_path' => '/dev/shm/change-me-now',
         'nginx_cache_email' => 'your-email@example.com',
-        'nginx_cache_cpu_limit' => 50,
+        'nginx_cache_cpu_limit' => 80,
         'nginx_cache_reject_extension' => nppp_fetch_default_reject_extension(),
         'nginx_cache_reject_regex' => nppp_fetch_default_reject_regex(),
         'nginx_cache_wait_request' => 0,
-        'nginx_cache_limit_rate' => 1024,
+        'nginx_cache_limit_rate' => 5120,
+        'nginx_cache_tracking_opt_in' => '1',
+        'nginx_cache_api_key' => $new_api_key,
     );
 
-    // Update options
-    update_option('nginx_cache_settings', $default_options);
+    // Retrieve existing options (if any)
+    $existing_options = get_option('nginx_cache_settings', array());
+
+    // Merge existing options with default options
+    // Existing options overwrite default options
+    $updated_options = array_merge($default_options, $existing_options);
+
+    // Update options in the database
+    update_option('nginx_cache_settings', $updated_options);
 
     // Create the log file if it doesn't exist
     $log_file_path = NGINX_CACHE_LOG_FILE;
@@ -1524,9 +1565,12 @@ function nppp_defaults_on_plugin_activation() {
         }
     }
 
-    // Send plugin status to API
-    nppp_plugin_tracking('active');
+    // Check if user has opted in
+    if (isset($updated_options['nginx_cache_tracking_opt_in']) && $updated_options['nginx_cache_tracking_opt_in'] === '1') {
+        // Send plugin status to API
+        nppp_plugin_tracking('active');
 
-    // Schedule cron for plugin status check
-    nppp_schedule_plugin_tracking_event();
+        // Schedule cron for plugin status check
+        nppp_schedule_plugin_tracking_event();
+    }
 }
