@@ -393,6 +393,7 @@ td.action, td.check {
     background-color: #f0f8ff;
     color: #333;
     cursor: pointer;
+    width: 45px;
 }
 
 /* Focus style for the length select input in the DataTables wrapper */
