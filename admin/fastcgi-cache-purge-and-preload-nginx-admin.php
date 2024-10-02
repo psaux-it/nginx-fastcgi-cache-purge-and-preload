@@ -58,7 +58,6 @@ add_action('admin_bar_menu', 'nppp_add_fastcgi_cache_buttons_admin_bar', 100);
 add_action('admin_init', 'nppp_handle_fastcgi_cache_actions_admin_bar');
 add_action('admin_init', 'nppp_nginx_cache_settings_init');
 add_action('admin_menu', 'nppp_add_nginx_cache_settings_page');
-add_filter('whitelist_options', 'nppp_add_nginx_cache_settings_to_allowed_options');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_pre_checks');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_manage_admin_notices');
 add_action('wp_ajax_nppp_clear_nginx_cache_logs', 'nppp_clear_nginx_cache_logs');
