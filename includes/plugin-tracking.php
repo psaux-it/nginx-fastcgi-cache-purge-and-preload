@@ -2,7 +2,7 @@
 /**
  * Plugin Tracking for FastCGI Cache Purge and Preload for Nginx
  * 
- * Description: This file handles tracking the plugin activation and deactivation status 
+ * Description: This file handles tracking the plugin activation and deactivation status
  * and sends this information to the main API to track plugin statistics.
  * 
  * Version: 2.0.3
@@ -22,7 +22,7 @@
  * - Data Sent:
  *   - site_url: The URL of the site using the plugin.
  *   - plugin_version: The version of the plugin in use.
- * - Security: 
+ * - Security:
  *   - Data is transmitted securely over HTTPS.
  *   - No personal data is collected, only site URL and plugin version.
  *   - JWT token is valid for a short period and is used to authenticate requests.
@@ -55,6 +55,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Function to track plugin status
 function nppp_plugin_tracking($status = 'active') {
+    // Check if user has opted in
+    $options = get_option('nginx_cache_settings');
+
+    // Always send 'opt-out' or 'inactive' status regardless of opt-in preference
+    if ($status === 'opt-out' || $status === 'inactive') {
+        // Proceed to send data to API
+    } else {
+        // For other statuses, check if user has opted in
+        if (!isset($options['nginx_cache_tracking_opt_in']) || $options['nginx_cache_tracking_opt_in'] !== '1') {
+            // User has not opted in, do not send tracking data
+            return;
+        }
+    }
+
     if (!function_exists('get_plugin_data')) {
         require_once(ABSPATH . 'wp-admin/includes/plugin.php');
     }
@@ -74,6 +88,7 @@ function nppp_plugin_tracking($status = 'active') {
             'plugin_version' => $plugin_version
         )),
         'headers' => array('Content-Type' => 'application/json'),
+        'timeout' => 15,
     ));
 
     // Parse token
@@ -94,6 +109,7 @@ function nppp_plugin_tracking($status = 'active') {
                     'Content-Type' => 'application/json',
                     'Authorization' => 'Bearer ' . $nppp_jwt_token
                 ),
+                'timeout' => 15,
             ));
 
             // Log tracking failure
@@ -115,8 +131,6 @@ function nppp_schedule_plugin_tracking_event($status = false) {
 
         // Remove the action that is tied to the event
         remove_action('npp_plugin_tracking_event', 'nppp_plugin_tracking');
-
-        // Log the event clearing (optional)
         return;
     }
 
@@ -144,5 +158,19 @@ function nppp_schedule_plugin_tracking_event($status = false) {
     // Register the callback function for the scheduled event
     if (!has_action('npp_plugin_tracking_event', 'nppp_plugin_tracking')) {
         add_action('npp_plugin_tracking_event', 'nppp_plugin_tracking');
+    }
+}
+
+// Function to handle changes in the opt-in status
+function nppp_handle_opt_in_change($opt_in_value) {
+    $opt_in_value = strval($opt_in_value);
+    if ($opt_in_value == '1') {
+        // User opted in
+        nppp_plugin_tracking('active');
+        nppp_schedule_plugin_tracking_event();
+    } else {
+        // User opted out
+        nppp_plugin_tracking('opt-out');
+        nppp_schedule_plugin_tracking_event(true);
     }
 }
