@@ -74,7 +74,7 @@ function nppp_plugin_tracking($status = 'active') {
     }
 
     // Get plugin file path
-    $plugin_file_path = dirname(__FILE__) . '/../fastcgi-cache-purge-and-preload-nginx.php';
+    $plugin_file_path = NPPP_PLUGIN_FILE;
 
     // Get plugin information
     $plugin_data = get_plugin_data($plugin_file_path);
