@@ -19,11 +19,6 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Define a constant for the current plugin version
-if (!defined('NPPP_PLUGIN_VERSION')) {
-    define('NPPP_PLUGIN_VERSION', '2.0.3');
-}
-
 // Define a constant for the log file path
 if (! defined('NGINX_CACHE_LOG_FILE')) {
     define('NGINX_CACHE_LOG_FILE', dirname(__DIR__) . '/fastcgi_ops.log');
@@ -52,9 +47,11 @@ require_once dirname(__DIR__) . '/includes/send-mail.php';
 require_once dirname(__DIR__) . '/includes/schedule.php';
 require_once dirname(__DIR__) . '/includes/rest-api-helper.php';
 require_once dirname(__DIR__) . '/includes/plugin-tracking.php';
+require_once dirname(__DIR__) . '/includes/update.php';
 
 // Add actions and filters
 add_action('load-settings_page_nginx_cache_settings', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets');
+add_action('load-settings_page_nginx_cache_settings', 'nppp_check_for_plugin_update');
 add_action('admin_enqueue_scripts', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets');
 add_action('wp_enqueue_scripts', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets');
 add_action('admin_bar_menu', 'nppp_add_fastcgi_cache_buttons_admin_bar', 100);
