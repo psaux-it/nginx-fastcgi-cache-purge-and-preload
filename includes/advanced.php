@@ -63,6 +63,12 @@ function nppp_premium_html($nginx_cache_path) {
     // Output the premium tab content
     ob_start();
     ?>
+    <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+        <p style="margin: 0; display: flex; align-items: center;">
+            <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+            <strong>Note:</strong> If the table is not visible or appears broken, please ensure that the <code>fastcgi_cache_key</code> format is correctly <code>$scheme$request_method$host$request_uri</code> configured.
+        </p>
+    </div>
     <h2></h2>
     <table id="nppp-premium-table" class="display">
         <thead>
