@@ -50,12 +50,6 @@ function nppp_add_nginx_cache_settings_page() {
     );
 }
 
-// Add the option name to the allowed options list
-function nppp_add_nginx_cache_settings_to_allowed_options($options) {
-    $options['nginx_cache_settings'] = 'nginx_cache_settings';
-    return $options;
-}
-
 // Displays the NPP Nginx Cache Settings page in the WordPress admin dashboard
 function nppp_nginx_cache_settings_page() {
     if (isset($_GET['status_message']) && isset($_GET['message_type'])) {
