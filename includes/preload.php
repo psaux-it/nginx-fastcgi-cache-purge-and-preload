@@ -124,12 +124,12 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
                     // Check the status of $nppp_is_rest_api and display success message accordingly
                     if (is_bool($nppp_is_rest_api) && $nppp_is_rest_api) {
-                        nppp_display_admin_notice('success', 'SUCCESS REST: Cache preloading has started in the background. Please check the --Status-- tab for progress updates.', true, false);
+                        nppp_display_admin_notice('success', 'SUCCESS REST: Cache preloading has started in the background. Please check the --Status-- tab for progress updates.');
                     }
 
                     // Check the status of $nppp_is_wp_cron and display success message accordingly
                     if (is_bool($nppp_is_wp_cron) && $nppp_is_wp_cron) {
-                        nppp_display_admin_notice('success', 'SUCCESS CRON: Cache preloading has started in the background. Please check the --Status-- tab for progress updates.', true, false);
+                        nppp_display_admin_notice('success', 'SUCCESS CRON: Cache preloading has started in the background. Please check the --Status-- tab for progress updates.');
                     }
 
                     // Check the status of $nppp_is_admin_bar and display success message accordingly
@@ -227,7 +227,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
                 // Display the deferred message as admin notice
                 if (is_bool($nppp_is_rest_api) && $nppp_is_rest_api) {
-                    nppp_display_admin_notice('success', 'SUCCESS REST: Cache purged successfully. Auto preload initiated in the background. Monitor the -Status- tab for real-time updates.', true, false);
+                    nppp_display_admin_notice('success', 'SUCCESS REST: Cache purged successfully. Auto preload initiated in the background. Monitor the -Status- tab for real-time updates.');
                 } elseif (is_bool($nppp_is_admin_bar) && $nppp_is_admin_bar) {
                     nppp_display_admin_notice('success', 'SUCCESS ADMIN: Cache purged successfully. Auto preload initiated in the background. Monitor the -Status- tab for real-time updates.');
                 } else {
