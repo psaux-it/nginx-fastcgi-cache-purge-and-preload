@@ -284,7 +284,14 @@ function nppp_nginx_cache_purge_endpoint($request) {
 
     // Call purge action
     ob_start();
-    nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, true, false, false);
+    nppp_purge(
+        $nginx_cache_path,
+        $PIDFILE,
+        $tmp_path,
+        true,  // $nppp_is_rest_api
+        false, // $nppp_is_admin_bar
+        false  // $nppp_is_auto_purge
+    );
 
     // Get status message
     $status_message = wp_strip_all_tags(ob_get_clean());
@@ -331,7 +338,20 @@ function nppp_nginx_cache_preload_endpoint($request) {
 
     // Call preload action
     ob_start();
-    nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, false, true, false, false);
+    nppp_preload(
+        $nginx_cache_path,
+        $this_script_path,
+        $tmp_path,
+        $fdomain,
+        $PIDFILE,
+        $nginx_cache_reject_regex,
+        $nginx_cache_limit_rate,
+        $nginx_cache_cpu_limit,
+        false, // $nppp_is_auto_preload
+        true,  // $nppp_is_rest_api
+        false, // $nppp_is_wp_cron
+        false  // $nppp_is_admin_bar
+    );
 
     // Get status message
     $status_message = wp_strip_all_tags(ob_get_clean());
