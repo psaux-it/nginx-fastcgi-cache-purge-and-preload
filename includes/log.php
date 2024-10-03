@@ -25,9 +25,6 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     // Sanitize the message
     $sanitized_message = sanitize_text_field($message);
 
-    // Trigger the custom action to display the notice
-    do_action('nppp_plugin_admin_notices', $type, $sanitized_message, $log_message, $display_notice);
-
     // Write to the log file
     if ($log_message) {
         if (!defined('NGINX_CACHE_LOG_FILE')) {
@@ -44,27 +41,54 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         $sanitized_dir_path = realpath($log_file_dir);
 
         // Check if the directory is valid and exists
-        if ($sanitized_dir_path === false) {
+        if ($sanitized_dir_path !== false) {
+            // Reconstruct the sanitized path for the file
+            $sanitized_path = $sanitized_dir_path . '/' . $log_file_name;
+
+            // Attempt to create the log file before append if it doesn't exist
+            nppp_perform_file_operation($sanitized_path, 'create');
+
+            // Prepare the log entry with timestamp
+            $log_entry = '[' . current_time( 'Y-m-d H:i:s' ) . '] ' . $sanitized_message;
+
+            // Attempt to append the log entry
+            $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
+
+            if (!$append_result) {
+                error_log("Error appending to log file at " . $sanitized_path);
+            }
+        } else {
             error_log("Invalid or inaccessible log file directory: " . $log_file_dir);
-            return;
         }
+    }
 
-        // Reconstruct the sanitized path for the file
-        $sanitized_path = $sanitized_dir_path . '/' . $log_file_name;
+    // If this is a REST API request prevent admin notices
+    if (function_exists('wp_doing_rest') && wp_doing_rest()) {
+        echo '<p>' . esc_html($sanitized_message) . '</p>';
+        return;
+    } elseif (defined('REST_REQUEST') && REST_REQUEST) {
+        // Fallback for older WordPress versions
+        echo '<p>' . esc_html($sanitized_message) . '</p>';
+        return;
+    }
 
-        // Attempt to create the log file before append new log entry
-        nppp_perform_file_operation($sanitized_path, 'create');
+    // If this is a WP CRON request prevent admin notices
+    if (function_exists('wp_doing_cron') && wp_doing_cron()) {
+        // If this is a cron job, don't display or return any message
+        return '';
+    } elseif (defined('DOING_CRON') && DOING_CRON) {
+        // Fallback for older WordPress versions
+        return '';
+    }
 
-        // Prepare the log entry with timestamp
-        $log_entry = '[' . current_time( 'Y-m-d H:i:s' ) . '] ' . $sanitized_message;
-
-        // Attempt to append the log entry
-        $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
-
-        // Check the append log status
-        if (!$append_result) {
-            error_log("Error appending to log file at " . $sanitized_path);
+    // Perform the permission check for admin actions
+    if (is_admin()) {
+        if (! current_user_can('manage_options')) {
+            echo '<div class="notice notice-error"><p>You do not have sufficient permissions to access this page.</p></div>';
             return;
         }
     }
+
+    // Trigger the custom action to display the notice (if not prevented earlier)
+    do_action('nppp_plugin_admin_notices', $type, $sanitized_message, $log_message, $display_notice);
 }
