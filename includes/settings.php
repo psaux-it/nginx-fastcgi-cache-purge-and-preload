@@ -291,10 +291,22 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <?php nppp_nginx_cache_api_key_callback(); ?>
-                                <p class="description">Enable this feature to for remote triggering of Purge and Preload actions. Generate your API Key automatically with single click.</p>
-                                <p class="description">This premium functionality streamlines cache management, enhancing website performance and efficiency through seamless integration with external systems.</p>
-                                <p class="description">The REST API capability ensures effortless cache control from anywhere, facilitating automated maintenance and optimization.</p>
-                                <p class="description">You can copy your API Key and the full REST API URLs for Purge and Preload actions via above buttons with just a click.</p>
+                                <p class="description">Enable this feature to for remote triggering of Purge and Preload actions.</p>
+                                <p class="description">This functionality streamlines cache management, enhancing website performance and efficiency through seamless integration with external systems.</p>
+                                <p class="description">The REST API capability ensures effortless cache control from anywhere, facilitating automated maintenance and optimization.</p><br>
+                                <p class="description"><strong style="color: orange;">API Key Management and Usage:</strong></p>
+                                <ul class="description" style="color: #646970; font-size: 14px;">
+                                    <li><strong>Generate API Key:</strong> Click to generate a new API Key. Also you can create your own 64-char API Key and Update Options</li>
+                                    <li><strong>API Key:</strong> Click to copy your API Key to the clipboard.</li>
+                                    <li><strong>Purge URL:</strong> Click to copy a pre-configured cURL command for cache purging.</li>
+                                    <li><strong>Preload URL:</strong> Click to copy a pre-configured cURL command for cache preloading.</li>
+                                </ul>
+                                <p class="description"><strong style="color: orange;">Allowed API Authentication Headers:</strong></p>
+                                <ul class="description" style="color: #646970; font-size: 14px;">
+                                    <li><strong>Authorization Header:</strong><code>Authorization: Bearer YOUR_API_KEY</code></li>
+                                    <li><strong>X-Api-Key Header:</strong><code>X-Api-Key: YOUR_API_KEY</code></li>
+                                    <li><strong>Request Body or Query String Parameter:</strong><code>api_key=YOUR_API_KEY</code></li>
+                                </ul>
                             </td>
                         </tr>
                         <!-- Start Mail Options Section -->
