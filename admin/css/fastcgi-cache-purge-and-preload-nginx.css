@@ -2226,3 +2226,43 @@ p.description {
     margin: 2px 0 5px;
     font-style: normal;
 }
+
+/* Style settings tab submenu items */
+.nppp-submenu {
+    margin-bottom: 20px;
+}
+
+.nppp-submenu ul {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    gap: 15px;
+    margin-left: -12px;
+    margin-top: 0px;
+}
+
+.nppp-submenu ul li {
+    display: inline;
+}
+
+.nppp-submenu ul li a {
+    text-decoration: none;
+    color: #0073aa; /* WordPress Blue */
+    font-weight: 600;
+}
+
+.nppp-submenu ul li a:hover {
+    color: #00a0d2; /* Lighter Blue on Hover */
+}
+
+
+/* Responsive Adjustments */
+@media (max-width: 600px) {
+    .nppp-submenu ul {
+        flex-direction: column;
+    }
+
+    .nppp-button-link {
+        width: 100%;
+    }
+}
