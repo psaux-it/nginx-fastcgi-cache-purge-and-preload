@@ -1090,7 +1090,7 @@ function nppp_nginx_cache_tracking_opt_in_callback() {
     // Get the value for tracking opt-in, default to '1' if not set
     $value = isset($options['nginx_cache_tracking_opt_in']) ? $options['nginx_cache_tracking_opt_in'] : '1';
     ?>
-    <input type="checkbox" name="nginx_cache_settings[nginx_cache_tracking_opt_in]" value="1" <?php checked('1', $value); ?> />
+    <input type="checkbox" id="nginx_cache_tracking_opt_in" name="nginx_cache_settings[nginx_cache_tracking_opt_in]" value="1" <?php checked('1', $value); ?> />
     <label for="nginx_cache_tracking_opt_in">Opt-in to help improve plugin development.</label>
     <?php
 }
