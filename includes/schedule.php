@@ -229,7 +229,7 @@ function nppp_create_scheduled_events($cron_expression) {
     if ($existing_timestamp) {
         $cleared = wp_clear_scheduled_hook('npp_cache_preload_event');
         if (!$cleared) {
-            error_log('Failed to unschedule existing event.');
+            nppp_custom_error_log('Failed to unschedule existing event.');
             return;
         }
     }
@@ -242,7 +242,7 @@ function nppp_create_scheduled_events($cron_expression) {
     $scheduled = wp_schedule_event($next_execution_timestamp, $recurrence, 'npp_cache_preload_event');
 
     if (!$scheduled) {
-        error_log('Failed to schedule new event.');
+        nppp_custom_error_log('Failed to schedule new event.');
         return;
     }
 
