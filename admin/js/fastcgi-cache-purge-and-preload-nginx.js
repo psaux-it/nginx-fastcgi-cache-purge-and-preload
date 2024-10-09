@@ -1840,6 +1840,117 @@ $(document).ready(function() {
             }, 500);
         }
     });
+
+    // Select the submit button within the form
+    var $submitButton = $('#nppp-settings-form input[type="submit"]');
+
+    // Store the original button text
+    var originalText = $submitButton.val();
+
+    // Object to store original values of monitored fields
+    var originalValues = {};
+
+    // List of field selectors to monitor
+    var fieldsToMonitor = [
+        '#nginx_cache_path',
+        '#nginx_cache_cpu_limit',
+        '#nginx_cache_reject_regex',
+        '#nginx_cache_reject_extension',
+        '#nginx_cache_limit_rate',
+        '#nginx_cache_wait_request',
+        '#nginx_cache_email',
+        '#nginx_cache_tracking_opt_in',
+        '#nginx_cache_api_key'
+    ];
+
+    // Initialize originalValues with current field values
+    fieldsToMonitor.forEach(function(selector) {
+        var $field = $(selector);
+        if ($field.attr('type') === 'checkbox') {
+            originalValues[selector] = $field.is(':checked');
+        } else {
+            originalValues[selector] = $field.val();
+        }
+    });
+
+    // Function to check if any field has changed
+    function checkForChanges() {
+        var hasChanged = false;
+
+        fieldsToMonitor.forEach(function(selector) {
+            var $field = $(selector);
+            var originalValue = originalValues[selector];
+            var currentValue;
+
+            if ($field.attr('type') === 'checkbox') {
+                currentValue = $field.is(':checked');
+            } else {
+                currentValue = $field.val();
+            }
+
+            if (currentValue !== originalValue) {
+                hasChanged = true;
+            }
+        });
+
+        if (hasChanged) {
+            markFormChanged();
+        } else {
+            resetButtonState();
+        }
+    }
+
+    // Function to mark the form as changed
+    function markFormChanged() {
+        if (!$submitButton.hasClass('nppp-submit-changed')) {
+            $submitButton.addClass('nppp-submit-changed');
+            $submitButton.val('Save Settings Now');
+        }
+    }
+
+    // Function to reset the button to its original state
+    function resetButtonState() {
+        if ($submitButton.hasClass('nppp-submit-changed')) {
+            $submitButton.removeClass('nppp-submit-changed');
+            $submitButton.val(originalText);
+        }
+    }
+
+    // Attach event listeners to the specified fields
+    $(fieldsToMonitor.join(', ')).on('input change', function() {
+        checkForChanges();
+    });
+
+    // Reset the button state when the form is submitted
+    $('#nppp-settings-form').on('submit', function() {
+        resetButtonState();
+        // Update originalValues to the new values after submission
+        fieldsToMonitor.forEach(function(selector) {
+            var $field = $(selector);
+            if ($field.attr('type') === 'checkbox') {
+                originalValues[selector] = $field.is(':checked');
+            } else {
+                originalValues[selector] = $field.val();
+            }
+        });
+    });
+
+    // Reset the button state if there's a reset button
+    $('#nppp-settings-form').on('reset', function() {
+        // Delay the reset to allow the form to reset first
+        setTimeout(function() {
+            resetButtonState();
+            // Update originalValues to the reset values
+            fieldsToMonitor.forEach(function(selector) {
+                var $field = $(selector);
+                if ($field.attr('type') === 'checkbox') {
+                    originalValues[selector] = $field.is(':checked');
+                } else {
+                    originalValues[selector] = $field.val();
+                }
+            });
+        }, 0);
+    });
 });
 
 /*!
