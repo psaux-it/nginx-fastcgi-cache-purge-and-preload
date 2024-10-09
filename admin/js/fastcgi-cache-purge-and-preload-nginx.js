@@ -1836,7 +1836,7 @@ $(document).ready(function() {
         if ($(target).length) {
             // Animate scrolling to the target section
             $('html, body').animate({
-                scrollTop: $(target).offset().top - 20
+                scrollTop: $(target).offset().top - 30
             }, 500);
         }
     });
