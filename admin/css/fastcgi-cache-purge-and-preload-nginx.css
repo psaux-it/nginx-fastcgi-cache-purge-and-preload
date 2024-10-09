@@ -2239,6 +2239,12 @@ p.description {
     gap: 15px;
     margin-left: -12px;
     margin-top: 0px;
+    border: 2px dotted #FFA500;
+    max-width: max-content;
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-top: 10px;
+    padding-bottom: 5px;
 }
 
 .nppp-submenu ul li {
@@ -2259,6 +2265,33 @@ p.description {
 @media (max-width: 600px) {
     .nppp-submenu ul {
         flex-direction: column;
+        align-items: center;
+        margin-left: 0;
+        margin: 0 auto;
+        max-width: 100%;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .nppp-button-link {
+        width: 100%;
+    }
+
+    .nppp-submenu ul li a:focus {
+        background-color: peachpuff !important;
+    }
+}
+
+/* Responsive Adjustments for Tablets */
+@media (min-width: 601px) and (max-width: 769px) {
+    .nppp-submenu ul {
+        flex-direction: column;
+        align-items: center;
+        margin-left: 0;
+        margin: 0 auto;
+        max-width: 100%;
+        padding-left: 0;
+        padding-right: 0;
     }
 
     .nppp-button-link {
