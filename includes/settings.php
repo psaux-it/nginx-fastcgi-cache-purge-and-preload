@@ -113,6 +113,15 @@ function nppp_nginx_cache_settings_page() {
             </div>
             <div id="settings" class="tab-content active">
                 <div id="settings-content-placeholder">
+                <div class="nppp-submenu">
+                    <ul>
+                        <li><a href="#purge-options">Purge Options</a></li>
+                        <li><a href="#preload-options">Preload Options</a></li>
+                        <li><a href="#schedule-options">Schedule Options</a></li>
+                        <li><a href="#mail-options">Mail Options</a></li>
+                        <li><a href="#logging-options">Logging Options</a></li>
+                    </ul>
+                </div>
                 <form id="nppp-settings-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <?php
                     wp_nonce_field('nginx_cache_settings_nonce', 'nginx_cache_settings_nonce');
@@ -121,7 +130,7 @@ function nppp_nginx_cache_settings_page() {
                     <table class="form-table">
                         <!-- Start Purge Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Purge Options</h3></th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="purge-options" style="margin: 0; padding: 0;">Purge Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
@@ -168,7 +177,7 @@ function nppp_nginx_cache_settings_page() {
                         </tr>
                         <!-- Start Preload Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Preload Options</h3></th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="preload-options" style="margin: 0; padding: 0;">Preload Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
@@ -240,7 +249,7 @@ function nppp_nginx_cache_settings_page() {
                         </tr>
                         <!-- Start Advanced Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Schedule Options</h3></th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="schedule-options" style="margin: 0; padding: 0;">Schedule Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
@@ -294,14 +303,14 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">Enable this feature to for remote triggering of Purge and Preload actions.</p>
                                 <p class="description">This functionality streamlines cache management, enhancing website performance and efficiency through seamless integration with external systems.</p>
                                 <p class="description">The REST API capability ensures effortless cache control from anywhere, facilitating automated maintenance and optimization.</p><br>
-                                <p class="description"><strong style="color: orange;">API Key Management and Usage:</strong></p>
+                                <p class="description"><strong>API Key Management and Usage:</strong></p>
                                 <ul class="description" style="color: #646970; font-size: 14px;">
                                     <li><strong>Generate API Key:</strong> Click to generate a new API Key. Also you can create your own 64-char API Key and Update Options</li>
                                     <li><strong>API Key:</strong> Click to copy your API Key to the clipboard.</li>
                                     <li><strong>Purge URL:</strong> Click to copy a pre-configured cURL command for cache purging.</li>
                                     <li><strong>Preload URL:</strong> Click to copy a pre-configured cURL command for cache preloading.</li>
                                 </ul>
-                                <p class="description"><strong style="color: orange;">Allowed API Authentication Headers:</strong></p>
+                                <p class="description"><strong>Allowed API Authentication Headers:</strong></p>
                                 <ul class="description" style="color: #646970; font-size: 14px;">
                                     <li><strong>Authorization Header:</strong><code>Authorization: Bearer YOUR_API_KEY</code></li>
                                     <li><strong>X-Api-Key Header:</strong><code>X-Api-Key: YOUR_API_KEY</code></li>
@@ -311,7 +320,7 @@ function nppp_nginx_cache_settings_page() {
                         </tr>
                         <!-- Start Mail Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Mail Options</h3></th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="mail-options" style="margin: 0; padding: 0;">Mail Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
@@ -335,7 +344,7 @@ function nppp_nginx_cache_settings_page() {
                         </tr>
                         <!-- Start Logging Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 style="margin: 0; padding: 0;">Logging Options</h3></th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="logging-options" style="margin: 0; padding: 0;">Logging Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
