@@ -362,6 +362,7 @@ function nppp_nginx_cache_settings_page() {
                             <th scope="row"><span class="dashicons dashicons-admin-users"></span> Opt-in</th>
                             <td>
                                 <?php nppp_nginx_cache_tracking_opt_in_callback(); ?>
+                                <p class="description">Please check the <strong>GDPR Compliance and Data Collection</strong> section in the Help tab to get more info.</p>
                             </td>
                         </tr>
                     </table>
