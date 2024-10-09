@@ -1583,7 +1583,7 @@ function nppp_defaults_on_plugin_activation() {
         $log_file_created = nppp_perform_file_operation($log_file_path, 'create');
         if (!$log_file_created) {
             // Log file creation failed, handle error accordingly
-            error_log('Failed to create log file: ' . $log_file_path);
+            nppp_custom_error_log('Failed to create log file: ' . $log_file_path);
         }
     }
 
