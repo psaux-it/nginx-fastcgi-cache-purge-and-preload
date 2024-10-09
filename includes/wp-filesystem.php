@@ -14,12 +14,12 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Custom error logger function
-function nppp_custom_error_log($message, $error_type = E_USER_ERROR) {
+// Custom logger function
+function nppp_custom_error_log($message, $error_type = E_USER_WARNING) {
     if (defined('WP_DEBUG' ) && WP_DEBUG) {
         if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
             // Log to WordPress debug.log
-            $sanitized_message = sanitize_text_field(wp_unslash($message));
+            $sanitized_message = wp_strip_all_tags(wp_unslash($message));
             wp_trigger_error($sanitized_message, $error_type);
         }
     }
