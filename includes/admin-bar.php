@@ -140,7 +140,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
 
     switch ($_GET['action']) {
         case 'nppp_purge_cache':
-            nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true);
+            nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, false);
             $nppp_single_action = false;
             break;
         case 'nppp_preload_cache':
