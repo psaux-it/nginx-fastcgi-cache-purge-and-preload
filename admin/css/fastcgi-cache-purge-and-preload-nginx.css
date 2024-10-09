@@ -2247,14 +2247,13 @@ p.description {
 
 .nppp-submenu ul li a {
     text-decoration: none;
-    color: #0073aa; /* WordPress Blue */
+    color: #0073aa;
     font-weight: 600;
 }
 
 .nppp-submenu ul li a:hover {
-    color: #00a0d2; /* Lighter Blue on Hover */
+    color: #00a0d2;
 }
-
 
 /* Responsive Adjustments */
 @media (max-width: 600px) {
@@ -2264,5 +2263,9 @@ p.description {
 
     .nppp-button-link {
         width: 100%;
+    }
+
+    .nppp-submenu ul li a:focus {
+        background-color: peachpuff !important;
     }
 }
