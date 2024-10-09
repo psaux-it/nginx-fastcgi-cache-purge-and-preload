@@ -134,7 +134,7 @@ function nppp_log_api_request($endpoint, $status) {
 
     // Check if the directory is valid and exists
     if ($sanitized_dir_path === false) {
-        error_log("Invalid or inaccessible log file directory: " . $log_file_dir);
+        nppp_custom_error_log("Invalid or inaccessible log file directory: " . $log_file_dir);
         return;
     }
 
@@ -149,7 +149,7 @@ function nppp_log_api_request($endpoint, $status) {
 
     // Check the append log status
     if (!$append_result) {
-        error_log("Error appending to log file at " . $sanitized_path);
+        nppp_custom_error_log("Error appending to log file at " . $sanitized_path);
         return;
     }
 }
