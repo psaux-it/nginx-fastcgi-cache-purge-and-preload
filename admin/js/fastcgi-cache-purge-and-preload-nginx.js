@@ -1825,6 +1825,21 @@ $(document).ready(function() {
             nppApiKeyInput.val(originalKey);
         });
     }
+
+    // Handle click events on sub-menu links
+    $('.nppp-submenu a').on('click', function(e){
+        e.preventDefault();
+
+        var target = $(this).attr('href');
+
+        // Check if the target exists
+        if ($(target).length) {
+            // Animate scrolling to the target section
+            $('html, body').animate({
+                scrollTop: $(target).offset().top - 20
+            }, 500);
+        }
+    });
 });
 
 /*!
