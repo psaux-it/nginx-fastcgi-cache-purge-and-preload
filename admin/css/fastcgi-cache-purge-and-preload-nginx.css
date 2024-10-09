@@ -2269,3 +2269,14 @@ p.description {
         background-color: peachpuff !important;
     }
 }
+
+/* Style form submit button changes */
+.nppp-submit-changed {
+    background-color: #a70000 !important;
+    color: white !important;
+}
+
+/* Add transition for smooth color change */
+#nppp-settings-form input[type="submit"].nppp-submit-changed {
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
