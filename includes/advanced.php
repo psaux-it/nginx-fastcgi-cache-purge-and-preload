@@ -114,7 +114,7 @@ function nppp_log_and_send_error($error_message, $log_file_path) {
             '[' . current_time('Y-m-d H:i:s') . '] ' . $error_message
         );
     } else {
-        error_log('Log file not found!');
+        nppp_custom_error_log('Log file not found!');
     }
     wp_send_json_error($error_message);
 }
@@ -128,7 +128,7 @@ function nppp_log_and_send_success($success_message, $log_file_path) {
             '[' . current_time('Y-m-d H:i:s') . '] ' . $success_message
         );
     } else {
-        error_log('Log file not found!');
+        nppp_custom_error_log('Log file not found!');
     }
     wp_send_json_success($success_message);
 }
