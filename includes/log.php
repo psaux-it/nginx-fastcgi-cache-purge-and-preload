@@ -55,10 +55,10 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
 
             if (!$append_result) {
-                error_log("Error appending to log file at " . $sanitized_path);
+                nppp_custom_error_log("Error appending to log file at " . $sanitized_path);
             }
         } else {
-            error_log("Invalid or inaccessible log file directory: " . $log_file_dir);
+            nppp_custom_error_log("Invalid or inaccessible log file directory: " . $log_file_dir);
         }
     }
 
