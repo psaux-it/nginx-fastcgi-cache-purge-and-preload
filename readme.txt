@@ -5,7 +5,7 @@ Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 6.6.1
-Stable tag: 2.0.3
+Stable tag: 2.0.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -47,7 +47,7 @@ In case your current Nginx web server setup involves two distinct users, **WEBSE
 
 `bash <(curl -Ss https://psaux-it.github.io/install.sh)`
 
-**More in-depth Information""
+**More in-depth Information**
 
 - [NPP plugin main development repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
 - [NPP plugin main automation bash script source code](https://github.com/psaux-it/psaux-it.github.io/blob/main/fastcgi_ops_root.sh)
@@ -151,6 +151,36 @@ Yes, please refer to the plugin settings **Help** tab.
 8. Front-end Admin Bar
 
 == Changelog ==
+
+= 2.0.4 =
+
+Release date: 2024-10-10
+
+This is a massive update: 39 changed files, 3,392 additions, and 1,063 deletions.
+Here the short changelog for version 2.0.4
+
+* Add support on Auto Purge when a Theme or Plugin is updated
+* REST API improvements, rate-limiting & security & logging and more
+* Add new Cache Date & Cache Method columns to Advanced tab
+* Better handle fastcgi_cache_key format and warn user for non standart setups
+* Better handle Content Category in Advanced tab
+* Keep found Content Categories in cache to optimize Advanced tab performance
+* Lots of UI/UX optimizations on desktop and mobile, sticky form submission button & preloader and more
+* Fix Nginx Cache Path front-end sanitization that prevent manual slash usage
+* Enhance wp_filesystem initialization
+* Update external assets to latest version, jQuery UI v1.13.3, datatables v2.1.8
+* Use minified version of main plugin assets to optimize load times
+* Optimize Preload action, don't use -m mirroring anymore, use -r instead
+* Add new Preload feature, Exclude File Extensions
+* If one-liner bash script used, NPP now force create Nginx Cache Path
+* Use nohup to detach wget completely from PHP
+* Fix plugin options deleted after deactivation
+* Drop lots of redundant code to improve performance
+* Improve help section and feature descriptions
+* Fix Plugin Check (PCP) errors and warnings
+* Add plugin tracking code to collect basic data to improve plugin development
+* Improved the Status tab to more effectively determine permission status
+* Prevent interfere with core wp and other plugin code
 
 = 2.0.3 =
 
