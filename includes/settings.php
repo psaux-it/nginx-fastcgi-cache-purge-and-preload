@@ -201,7 +201,7 @@ function nppp_nginx_cache_settings_page() {
                             <th scope="row"><span class="dashicons dashicons-dashboard"></span> CPU Usage Limit (%)</th>
                             <td>
                                 <?php nppp_nginx_cache_cpu_limit_callback(); ?>
-                                <p class="description">Enter the CPU usage limit for preload operation (%). <br> Please note that Preload action is CPU intensive task and could cause high server loads. <br> You need "cpulimit" installed on your system and higly recommended (10-100%).</p>
+                                <p class="description">Enter the CPU usage limit for <code>wget</code> (%).<br><code>wget</code> can cause high CPU usage; if you encounter this problem, install <code>cpulimit</code> via package manager to manage it (10-100%).</p>
                             </td>
                         </tr>
                         <tr valign="top">
