@@ -2007,10 +2007,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Function to remove trailing slash and prevent special characters for Linux directory paths
             function sanitizeNginxCachePath() {
-                // Remove the trailing slash only (if present)
-                inputField.value = inputField.value.replace(/\/$/, '');
-                // Allow only valid characters for Linux directory paths
-                inputField.value = inputField.value.replace(/[^a-zA-Z0-9\/\-_\.]/g, '');
+                let oldValue;
+                do {
+                    oldValue = inputField.value;
+
+                    // Remove all invalid characters for Linux directory paths (allow /, -, _, ., a-z, A-Z, 0-9)
+                    inputField.value = inputField.value.replace(/[^a-zA-Z0-9\/\-_\.]/g, '');
+
+                    // Replace multiple consecutive slashes with a single slash
+                    inputField.value = inputField.value.replace(/\/{2,}/g, '/');
+
+                    // Remove folder names made up of only underscores or hyphens (e.g., __ or -- or ___)
+                    inputField.value = inputField.value.replace(/\/(?:[_\-]+)(\/|$)/g, '/');
+
+                    // Remove trailing slashes (if any)
+                    inputField.value = inputField.value.replace(/\/+$/, '');
+
+                } while (oldValue !== inputField.value);
             }
 
             // Apply specific logic for #nginx_cache_path
