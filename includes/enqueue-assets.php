@@ -17,8 +17,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Enqueue CSS and JavaScript files only plugin settings page load
 function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Enqueue CSS files for jQuery UI Tabs
-    wp_enqueue_style('nppp_jquery-ui-css', plugins_url('../admin/css/jquery-ui.min.css', __FILE__), array(), '1.13.2');
-    wp_enqueue_style('nppp_jquery-ui-tabs-theme', plugins_url('../admin/css/jquery-ui-theme.css', __FILE__), array(), '1.13.2');
+    wp_enqueue_style('nppp_jquery-ui-css', plugins_url('../admin/css/jquery-ui.min.css', __FILE__), array(), '1.13.3');
+    wp_enqueue_style('nppp_jquery-ui-tabs-theme', plugins_url('../admin/css/jquery-ui-theme.min.css', __FILE__), array(), '1.13.3');
 
     // Enqueue CSS files for dataTables
     wp_enqueue_style('nppp_datatables-css', plugins_url('../admin/css/dataTables.min.css', __FILE__), array(), '2.1.3');
