@@ -213,7 +213,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">These exclusions are better handled server-side using <code>fastcgi_cache_bypass</code>, <code>fastcgi_no_cache</code>, and <code>skip_cache</code> rules in your Nginx configuration.</p>
                                 <p class="description">Here, these patterns are used to prevent <code>wget -r</code> from making requests to these endpoints during the Preloading process to avoid unnecessary server load.</p>
                                 <button id="nginx-regex-reset-defaults" class="button nginx-reset-regex-button">Reset Default</button>
-                                <p class="description">Click the button to reset default</p>
+                                <p class="description">Click the button to reset defaults.<br>After plugin updates, it's best to reset first to apply the latest changes, then reapply your custom rules.</p>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -225,7 +225,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">Nginx efficiently serves static assets from the disk, and headers like <code>expires</code> help reduce frequent requests for these files.</p>
                                 <p class="description">By excluding static files, Preload operation are accelerated by avoiding unnecessary requests via <code>wget</code> for static assets.</p>
                                 <button id="nginx-extension-reset-defaults" class="button nginx-reset-extension-button">Reset Default</button>
-                                <p class="description">Click the button to reset default</p>
+                                <p class="description">Click the button to reset defaults.<br>After plugin updates, it's best to reset first to apply the latest changes, then reapply your custom rules.</p>
                             </td>
                         </tr>
                         <tr valign="top">
