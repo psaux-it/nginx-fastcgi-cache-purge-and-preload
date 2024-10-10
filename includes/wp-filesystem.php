@@ -2,7 +2,7 @@
 /**
  * WP_Filesytem functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains WP_Filesytem functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -14,25 +14,52 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Custom logger function
+function nppp_custom_error_log($message, $error_type = E_USER_WARNING) {
+    if (defined('WP_DEBUG' ) && WP_DEBUG) {
+        if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // Log to WordPress debug.log
+            $sanitized_message = wp_strip_all_tags(wp_unslash($message));
+            wp_trigger_error($sanitized_message, $error_type);
+        }
+    }
+}
+
 // Verify WP file-system credentials and initialize WP_Filesystem
 function nppp_initialize_wp_filesystem() {
+    global $wp_filesystem;
+
+    // Return existing WP_Filesystem instance if already initialized
+    if (!empty($wp_filesystem)) {
+        return $wp_filesystem;
+    }
+
+    // Include the necessary file if WP_Filesystem doesn't exist
     if (!function_exists('WP_Filesystem')) {
         require_once ABSPATH . 'wp-admin/includes/file.php';
     }
 
-    // Verify WP file-system credentials.
-    $verified_credentials = request_filesystem_credentials(site_url() . '/wp-admin/', '', false, false, null);
+    // Request filesystem credentials
+    $credentials = request_filesystem_credentials(admin_url(''), '', false, false, null);
 
-    if (is_wp_error($verified_credentials)) {
-        return $verified_credentials;
+    // Handle credential request failure
+    if (!$credentials || is_wp_error($credentials)) {
+        nppp_custom_error_log('nppp_initialize_wp_filesystem: Unable to obtain filesystem credentials.');
+        return false;
     }
 
-    // Initialize WP_Filesystem
-    if (WP_Filesystem($verified_credentials)) {
+    // Initialize the WP_Filesystem
+    if (WP_Filesystem($credentials)) {
         global $wp_filesystem;
-        return $wp_filesystem;
+        if (!empty($wp_filesystem)) {
+            return $wp_filesystem;
+        } else {
+            nppp_custom_error_log('nppp_initialize_wp_filesystem: WP_Filesystem object is not set.');
+            return false;
+        }
     }
 
+    nppp_custom_error_log('nppp_initialize_wp_filesystem: Could not initialize the WP Filesystem.');
     return false;
 }
 
@@ -41,7 +68,11 @@ function nppp_perform_file_operation($file_path, $operation, $data = null) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        wp_die('Failed to initialize WP Filesystem.');
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     switch ($operation) {
@@ -72,7 +103,11 @@ function nppp_wp_purge($directory_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return new WP_Error('filesystem_error', 'WP_Filesystem initialization failed');
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Check if the directory exists before attempting to remove its contents
@@ -113,7 +148,11 @@ function nppp_wp_remove_directory($directory_path, $recursive = true) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        wp_die('Failed to initialize WP Filesystem.');
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Check if the directory exists before attempting to remove it
@@ -139,7 +178,11 @@ function nppp_is_directory_readable($directory_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Check if the directory is readable
@@ -176,7 +219,11 @@ function nppp_check_permissions_recursive($path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     try {

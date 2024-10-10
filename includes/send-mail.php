@@ -2,7 +2,7 @@
 /**
  * Send mail code for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains send mail code for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -41,8 +41,13 @@ function nppp_send_mail_now($mail_message, $elapsed_time_str) {
         $html_content = '';
 
         $wp_filesystem = nppp_initialize_wp_filesystem();
+    
         if ($wp_filesystem === false) {
-            return false;
+            nppp_display_admin_notice(
+                'error',
+                'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            );
+            return;
         }
 
         if ($wp_filesystem->exists($template_file)) {

@@ -2,7 +2,7 @@
 /**
  * Status page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains functions which shows information about FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// To optimize performance and prevent redundancy, we use cached recursive permission checks. 
+// To optimize performance and prevent redundancy, we use cached recursive permission checks.
 // This technique stores the results of time-consuming (expensive) permission verifications for reuse.
 // The results are cached for to reduce performance overhead, especially useful when the Nginx cache path is extensive.
 function nppp_check_permissions_recursive_with_cache() {
@@ -25,7 +25,11 @@ function nppp_check_permissions_recursive_with_cache() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Define a static key-based transient
@@ -77,13 +81,37 @@ function nppp_clear_plugin_cache() {
 }
 
 // Check server side action need for cache path permissions.
-function nppp_check_perm_in_cache() {
+function nppp_check_perm_in_cache($check_path = false, $check_perm = false, $check_fpm = false) {
     // Define a static key-based transient
     $static_key_base = 'nppp';
     $transient_key = 'nppp_permissions_check_' . md5($static_key_base);
 
-    // Get the cached result
+    // Get the cached result and path status
     $result = get_transient($transient_key);
+
+    if ($check_path) {
+        $path_status = nppp_check_path();
+
+        if ($path_status !== 'Found') {
+            return 'false';
+        }
+    }
+
+    if ($check_perm) {
+        $path_status = nppp_check_path();
+
+        if ($path_status !== 'Found') {
+            return 'Not Found';
+        }
+    }
+
+    if ($check_fpm) {
+        $path_status = nppp_check_path();
+
+        if ($path_status !== 'Found') {
+            return 'Not Found';
+        }
+    }
 
     // Return the permission status from cache
     return $result;
@@ -100,7 +128,11 @@ function nppp_check_preload_status() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     $this_script_path = dirname(plugin_dir_path(__FILE__));
@@ -114,10 +146,12 @@ function nppp_check_preload_status() {
         }
     }
 
+    // Check permission status, wget command status and cache path existence
     $cached_result = nppp_check_perm_in_cache();
     $wget_status = nppp_check_command_status('wget');
+    $path_status = nppp_check_path();
 
-    if ($cached_result === 'false' || $wget_status !== 'Installed') {
+    if ($cached_result === 'false' || $wget_status !== 'Installed' || $path_status !== 'Found') {
         return 'false';
     }
 
@@ -129,7 +163,11 @@ function nppp_check_path() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     $nginx_cache_settings = get_option('nginx_cache_settings');
@@ -253,15 +291,39 @@ function nppp_get_in_cache_page_count() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
-    // Check for any permission issue in cached status
-    $cached_result = nppp_check_perm_in_cache();
+    // Check permission issue in cache
+    // Cache path existence to prevent expensive directory traversal
+    $cached_result = nppp_check_perm_in_cache(false, false, false);
+    $path_status = nppp_check_path();
 
-    // Return 'Undetermined' if the cache check returns 'false'
+    // Return 'Not Found' if the cache path not found
+    if ($path_status !== 'Found') {
+        return 'Not Found';
+    }
+
+    // Return 'Undetermined' if the perm in cache returns 'false'
     if ($cached_result === 'false') {
         return 'Undetermined';
+    }
+
+    // Check NGINX Cache Key format is in supported format
+    // If not we can not get the pages in cache count
+    $config_data = nppp_parse_nginx_cache_key();
+
+    if ($config_data === false) {
+        return 'Not Found';
+    } else {
+        // Output error message if cache keys are found
+        if (!empty($config_data['cache_keys'])) {
+            return 'Not Found';
+        }
     }
 
     try {
@@ -305,7 +367,9 @@ function nppp_get_in_cache_page_count() {
 
 // Generate HTML for status tab
 function nppp_my_status_html() {
-    $perm_in_cache_status = nppp_check_perm_in_cache();
+    $perm_in_cache_status_purge = nppp_check_perm_in_cache(true, false, false);
+    $perm_in_cache_status_fpm = nppp_check_perm_in_cache(false, false, true);
+    $perm_in_cache_status_perm = nppp_check_perm_in_cache(false, true, false);
     $php_process_owner = nppp_get_website_user();
     $web_server_user = nppp_get_webserver_user();
 
@@ -317,7 +381,9 @@ function nppp_my_status_html() {
     }
 
     // Format the status string
-    $perm_status_message = $perm_in_cache_status === 'true' ? 'Granted' : 'Need Action (Check Help)';
+    $perm_status_message = $perm_in_cache_status_perm === 'true'
+    ? 'Granted'
+    : ($perm_in_cache_status_perm === 'Not Found' ? 'Not Determined' : 'Need Action (Check Help)');
     $perm_status_message .= ' (' . esc_html($php_process_owner) . ')';
 
     ob_start();
@@ -344,7 +410,7 @@ function nppp_my_status_html() {
                                 </td>
                                 <td class="status" id="npppphpFpmStatus">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html($perm_in_cache_status); ?></span>
+                                    <span><?php echo esc_html($perm_in_cache_status_fpm); ?></span>
                                 </td>
                             </tr>
                         </tbody>
@@ -362,7 +428,7 @@ function nppp_my_status_html() {
                                 <td class="action">Purge Action</td>
                                 <td class="status" id="nppppurgeStatus">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html($perm_in_cache_status); ?></span>
+                                    <span><?php echo esc_html($perm_in_cache_status_purge); ?></span>
                                 </td>
                             </tr>
                             <tr>
@@ -518,8 +584,13 @@ function nppp_cache_status_callback() {
     // Call the shortcode function to get HTML content
     $shortcode_content = nppp_my_status_shortcode();
 
-    // Return the shortcode content
-    echo wp_kses_post($shortcode_content);
+    // Return the generated HTML to AJAX
+    if (!empty($shortcode_content)) {
+        echo wp_kses_post($shortcode_content);
+    } else {
+        // Send empty string to AJAX to trigger proper error
+        echo '';
+    }
 
     // Properly exit to avoid extra output
     wp_die();

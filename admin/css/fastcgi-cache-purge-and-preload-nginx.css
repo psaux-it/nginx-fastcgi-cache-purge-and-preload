@@ -1,7 +1,7 @@
 /**
  * Styles for FastCGI Cache Purge and Preload for Nginx
  * Description: This CSS file contains styles for the FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -153,6 +153,11 @@
 
 /* Reset regex button styles */
 .nginx-reset-regex-button {
+    margin-top: 10px !important;
+}
+
+/* Reset extension button styles */
+.nginx-reset-extension-button {
     margin-top: 10px !important;
 }
 
@@ -388,6 +393,7 @@ td.action, td.check {
     background-color: #f0f8ff;
     color: #333;
     cursor: pointer;
+    width: 45px;
 }
 
 /* Focus style for the length select input in the DataTables wrapper */
@@ -625,7 +631,7 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
 /* Base styles for the header content */
 .nppp-header-content {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
 }
 
@@ -647,6 +653,7 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
     display: flex;
     justify-content: flex-start;
     gap: 10px;
+    margin-top: 9px;
 }
 
 /* Very cool button style */
@@ -662,6 +669,7 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
     cursor: pointer;
     transition: background-color 0.3s ease;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    font-weight: 500;
 }
 
 .nppp-button:hover {
@@ -680,13 +688,15 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
     }
     .nppp-cache-buttons {
         flex-direction: row;
-        justify-content: space-evenly;
+        /*justify-content: space-evenly; */
         align-items: center;
         gap: 10px;
+        margin-left: 15px;
     }
 
     .nppp-button {
-        font-size: 12px;
+        font-size: 14px;
+        font-weight: 500;
     }
 }
 
@@ -843,7 +853,8 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
 /* add margin settings page th */
 @media screen and (max-width: 768px) {
     .form-table th {
-         padding: 30px 0px 5px 0;
+        padding: 30px 0px 5px 0;
+        font-size: 16px;
     }
 }
 
@@ -1125,6 +1136,11 @@ button.nppp-preload-btn[disabled] {
 
 /* Set max width of reject regex field */
 #nginx_cache_reject_regex {
+    max-width: 978px;
+}
+
+/* Set max width of reject extension field */
+#nginx_cache_reject_extension {
     max-width: 978px;
 }
 
@@ -1964,4 +1980,343 @@ button.nppp-preload-btn[disabled] {
     pointer-events: none;
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.text-left {
+    text-align: left !important;
+}
+
+/* style for advanced tab error messages */
+.nppp-advanced-error-message {
+    color: white;
+    background-color: cadetblue;
+    font-weight: bold;
+    max-width: max-content;
+    padding: 5px;
+    font-size: 12.5px;
+}
+
+/* Show line breaks on screens wider than 768px (e.g., tablets and desktops) */
+@media (min-width: 768px) {
+    .cache-path-plugin-note .line-break {
+        display: inline;
+    }
+}
+
+/* Hide line breaks on screens narrower than 768px (e.g., mobile devices) */
+@media (max-width: 767px) {
+    .cache-path-plugin-note .line-break {
+        display: none;
+    }
+}
+
+/* Style for header cache button notification */
+.nppp-cache-tip {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.4;
+    background-color: #337AB7;
+    color: white;
+    font-weight: 500;
+    padding: 2px;
+    align-items: center;
+}
+
+.nppp-buttons-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 767px) {
+    .nppp-cache-tip {
+        margin-left: 15px;
+        font-weight: 500;
+        font-size: 13px;
+        margin-top: 6px;
+    }
+}
+
+/* Loader Overlay */
+#nppp-loader-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    pointer-events: none;
+    backdrop-filter: blur(1px);
+    -webkit-backdrop-filter: blur(1px);
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+#nppp-loader-overlay.active {
+    display: flex;
+    pointer-events: all;
+}
+
+/* Spinner Container */
+.nppp-spinner-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 12vw;
+    height: 12vw;
+    max-width: 80px;
+    max-height: 80px;
+    border-radius: 50%;
+}
+
+/* Spinner Animation */
+.nppp-loader {
+    position: absolute;
+    border: 8px solid rgba(224, 224, 224, 1);
+    border-top: 8px solid rgba(77, 184, 255, 1);
+    border-radius: 50%;
+    width: 100%;
+    height: 100%;
+    animation: nppp-spin 1s linear infinite;
+    z-index: 3;
+}
+
+@keyframes nppp-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Mask Container (used for filling effect) */
+.nppp-fill-mask {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    z-index: 1;
+}
+
+/* Circular Filling Effect */
+.nppp-loader-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 200%;
+    background: rgba(51, 122, 183, 1);
+    transform: scaleY(0);
+    transform-origin: bottom;
+    animation: nppp-fill 5s ease-in-out infinite;
+}
+
+@keyframes nppp-fill {
+    0% {
+        transform: scaleY(0);
+    }
+    50% {
+        transform: scaleY(1);
+    }
+    100% {
+        transform: scaleY(0);
+    }
+}
+
+/* Static Text */
+.nppp-loader-text {
+    position: absolute;
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 1.8em;
+    pointer-events: none;
+    text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
+    z-index: 4;
+}
+
+@media (max-width: 600px) {
+    .nppp-loader-text {
+        font-size: 1.4em;
+    }
+}
+
+/* Loader Message (Text below the spinner) */
+.nppp-loader-message {
+    margin-top: 20px;
+    color: #ffffff;
+    font-size: 1.4em;
+    font-weight: 600;
+    text-align: center;
+}
+
+@media (max-width: 600px) {
+    .nppp-loader-message {
+        font-size: 1.2em;
+    }
+}
+
+/* Disabled Button Style */
+.nppp-button.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+/* Make the submit container sticky at the bottom */
+.submit {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    z-index: 1000;
+    background-color: #fff;
+    padding: 10px;
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Make the submit button itself full-width */
+.submit input[type="submit"] {
+    width: 100%;
+    padding: 5px;
+    background-color: #0073aa;
+    color: #fff;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 15px;
+}
+
+/* Button hover effect */
+.submit input[type="submit"]:hover {
+    background-color: #006799;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 600px) {
+    .submit {
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        padding: 10px 10px;
+    }
+
+    .submit input[type="submit"] {
+        font-size: 15px;
+        padding: 12px;
+    }
+}
+
+/* Target the specific submit button */
+.submit input[type="submit"].button-primary:focus {
+    box-shadow: none;
+    outline: none;
+}
+
+p.description {
+    font-size: 14px;
+    color: #646970;
+    margin: 2px 0 5px;
+    font-style: normal;
+}
+
+/* Style settings tab submenu items */
+.nppp-submenu {
+    margin-bottom: 20px;
+}
+
+.nppp-submenu ul {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    gap: 15px;
+    margin-left: -12px;
+    margin-top: 0px;
+    border: 2px dotted #FFA500;
+    max-width: max-content;
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-top: 10px;
+    padding-bottom: 5px;
+}
+
+.nppp-submenu ul li {
+    display: inline;
+}
+
+.nppp-submenu ul li a {
+    text-decoration: none;
+    color: #0073aa;
+    font-weight: 600;
+}
+
+.nppp-submenu ul li a:hover {
+    color: #00a0d2;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 600px) {
+    .nppp-submenu ul {
+        flex-direction: column;
+        align-items: center;
+        margin-left: 0;
+        margin: 0 auto;
+        max-width: 100%;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .nppp-button-link {
+        width: 100%;
+    }
+
+    .nppp-submenu ul li a:focus {
+        background-color: peachpuff !important;
+    }
+}
+
+/* Responsive Adjustments for Tablets */
+@media (min-width: 601px) and (max-width: 769px) {
+    .nppp-submenu ul {
+        flex-direction: column;
+        align-items: center;
+        margin-left: 0;
+        margin: 0 auto;
+        max-width: 100%;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .nppp-button-link {
+        width: 100%;
+    }
+
+    .nppp-submenu ul li a:focus {
+        background-color: peachpuff !important;
+    }
+}
+
+/* Style form submit button changes */
+.nppp-submit-changed {
+    background-color: #a70000 !important;
+    color: white !important;
+}
+
+/* Add transition for smooth color change */
+#nppp-settings-form input[type="submit"].nppp-submit-changed {
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom style for jQuery UI theme */
+.ui-widget {
+    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;
+    font-size: 1em;
 }

@@ -2,7 +2,7 @@
 /**
  * Nginx config parser functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Nginx config parser functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -21,7 +21,11 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
         $wp_filesystem = nppp_initialize_wp_filesystem();
 
         if ($wp_filesystem === false) {
-            return false;
+            nppp_display_admin_notice(
+                'error',
+                'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            );
+            return;
         }
     }
 
@@ -72,7 +76,7 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
             }
         }
     }
-    
+
     // Return empty if no Nginx cache paths are found
     if (empty($cache_paths)) {
         return ['cache_paths' => []];
@@ -113,7 +117,11 @@ function nppp_is_service_file_exists() {
 
     // Check if WP Filesystem initialization failed
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     $systemd_file = '/etc/systemd/system/npp-wordpress.service';

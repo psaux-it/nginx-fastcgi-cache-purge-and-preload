@@ -2,7 +2,7 @@
 /**
  * WP Admin Bar code for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Admin Bar code for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -48,22 +48,28 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     ));
 
     // Add single purge and preload submenu only if not in wp-admin
-    if (strpos($_SERVER['REQUEST_URI'], 'wp-admin') === false) {
-        // Add child menu items - Add purge single submenu
-        $wp_admin_bar->add_menu(array(
-            'parent' => 'fastcgi-cache-operations',
-            'id' => 'purge-cache-single',
-            'title' => 'Purge This Page',
-            'href'  => wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache_single'), 'purge_cache_nonce'),
-        ));
+    if (isset($_SERVER['REQUEST_URI']) && !empty($_SERVER['REQUEST_URI'])) {
+        // Unslash and sanitize the REQUEST_URI
+        $request_uri = sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']));
 
-        // Add child menu items - Add preload single submenu
-        $wp_admin_bar->add_menu(array(
-            'parent' => 'fastcgi-cache-operations',
-            'id' => 'preload-cache-single',
-            'title' => 'Preload This Page',
-            'href'  => wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache_single'), 'preload_cache_nonce'),
-        ));
+        // Check if the URI does not contain 'wp-admin'
+        if (strpos($request_uri, 'wp-admin') === false) {
+            // Add child menu items - Add purge single submenu
+            $wp_admin_bar->add_menu(array(
+                'parent' => 'fastcgi-cache-operations',
+                'id' => 'purge-cache-single',
+                'title' => 'Purge This Page',
+                'href'  => wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache_single'), 'purge_cache_nonce'),
+            ));
+
+            // Add child menu items - Add preload single submenu
+            $wp_admin_bar->add_menu(array(
+                'parent' => 'fastcgi-cache-operations',
+                'id' => 'preload-cache-single',
+                'title' => 'Preload This Page',
+                'href'  => wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache_single'), 'preload_cache_nonce'),
+            ));
+        }
     }
 
     // Add status submenu
@@ -134,7 +140,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
 
     switch ($_GET['action']) {
         case 'nppp_purge_cache':
-            nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true);
+            nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, false);
             $nppp_single_action = false;
             break;
         case 'nppp_preload_cache':

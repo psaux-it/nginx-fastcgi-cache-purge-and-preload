@@ -2,7 +2,7 @@
 /**
  * Preload action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains preload action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -19,7 +19,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Check if there is an ongoing preload process active
@@ -35,6 +39,8 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $default_wait_time = 1;
+    $default_reject_extension = nppp_fetch_default_reject_extension();
+    $nginx_cache_reject_extension = isset($nginx_cache_settings['nginx_cache_reject_extension']) ? $nginx_cache_settings['nginx_cache_reject_extension'] : $default_reject_extension;
     $nginx_cache_wait = isset($nginx_cache_settings['nginx_cache_wait_request']) ? $nginx_cache_settings['nginx_cache_wait_request'] : $default_wait_time;
 
     // Here we check where preload request comes from. We have several routes.
@@ -70,7 +76,16 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
             //    speeding up cache preloading via reducing latency we use --no-check-certificate .
             //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-            $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=$nginx_cache_wait --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
+            $command = "nohup wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
+                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
+                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-P \"$tmp_path\" " .
+                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
+                "--wait=$nginx_cache_wait " .
+                "--reject-regex='\"$nginx_cache_reject_regex\"' " .
+                "--reject='\"$nginx_cache_reject_extension\"' " .
+                "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
+                "\"$fdomain\" >/dev/null 2>&1 & echo \$!";
             $output = shell_exec($command);
 
             // Get the process ID
@@ -100,7 +115,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
                     // Start cpulimit if it is exist
                     if ($cpulimit === 1) {
-                        $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" >/dev/null 2>&1 &";
+                        $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
                         shell_exec($command);
                     }
 
@@ -167,7 +182,16 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
         //    speeding up cache preloading via reducing latency we use --no-check-certificate .
         //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-        $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -m -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --wait=$nginx_cache_wait --timeout=5 --tries=1 -e robots=off \"$fdomain\" >/dev/null 2>&1 & echo \$!";
+        $command = "nohup wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
+                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
+                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-P \"$tmp_path\" " .
+                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
+                "--wait=$nginx_cache_wait " .
+                "--reject-regex='\"$nginx_cache_reject_regex\"' " .
+                "--reject='\"$nginx_cache_reject_extension\"' " .
+                "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
+                "\"$fdomain\" >/dev/null 2>&1 & echo \$!";
         $output = shell_exec($command);
 
         // Get the process ID
@@ -197,7 +221,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
                 // Start cpulimit if it is exist
                 if ($cpulimit === 1) {
-                    $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" >/dev/null 2>&1 &";
+                    $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
                     shell_exec($command);
                 }
 
@@ -219,12 +243,16 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     }
 }
 
-// single page preload
+// Single page preload
 function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Check if there is an ongoing preload process active
@@ -271,9 +299,17 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
     //    speeding up cache preloading via reducing latency we use --no-check-certificate .
     //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-    // 3. -m (--mirror) removed here that we need single URL request
-    // 4. -w (--wait) removed we need single HTTP request
-    $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --timeout=5 --tries=1 -e robots=off \"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+    // 3. --recursive removed here that we need single URL request
+    // 4. --wait removed we need single HTTP request
+    // 5. --reject-regex removed that preload URL already verified
+    // 6. --reject removed that we don't use --recursive
+    $command = "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
+                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
+                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-P \"$tmp_path\" " .
+                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
+                "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
+                "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
     $output = shell_exec($command);
 
     // Get the process ID
@@ -301,11 +337,15 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 // Only triggers conditionally if Auto Purge & Auto Preload enabled at the same time
 // Only preloads cache for single post/page if Auto Purge triggered before for this modified/updated post/page
 // This functions not trgiggers after On-Page purge actions
-function nppp_preload_cache_on_update($current_page_url) {
+function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Get the plugin options
@@ -314,12 +354,10 @@ function nppp_preload_cache_on_update($current_page_url) {
     // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';
     $default_limit_rate = 1024;
-    $default_reject_regex = nppp_fetch_default_reject_regex();
 
     // Get the necessary data for preload action from plugin options
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
     $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
-    $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
 
     // Extra data for preload action
     $this_script_path = dirname(plugin_dir_path(__FILE__));
@@ -346,9 +384,17 @@ function nppp_preload_cache_on_update($current_page_url) {
     // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
     //    speeding up cache preloading via reducing latency we use --no-check-certificate .
     //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-    // 3. -m (--mirror) removed here that we need single URL request
-    // 4. -w (--wait) removed we need single HTTP request
-    $command = "wget --limit-rate=\"$nginx_cache_limit_rate\"k -q -p -E -k -P \"$tmp_path\" --user-agent=\"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'\" --no-dns-cache --no-check-certificate --reject-regex '\"$nginx_cache_reject_regex\"' --no-use-server-timestamps --timeout=5 --tries=1 -e robots=off \"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+    // 3. --recursive removed here that we need single URL request
+    // 4. --wait removed we need single HTTP request
+    // 5. --reject-regex removed that preload URL already verified
+    // 6. --reject removed that we don't use --recursive
+    $command = "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
+                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
+                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-P \"$tmp_path\" " .
+                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
+                "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
+                "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
     $output = shell_exec($command);
 
     // Get the process ID
@@ -359,16 +405,40 @@ function nppp_preload_cache_on_update($current_page_url) {
         // Check if the process is still running
         $isRunning = posix_kill($pid, 0);
 
-        // let's continue if process still alive
+        // Check if the process is still alive
         if ($isRunning) {
             // Write process ID to file
             nppp_perform_file_operation($PIDFILE, 'write', $pid);
-            $default_success_message = "SUCCESS ADMIN: Cache purged and auto preloading started for page $current_page_url";
-            nppp_display_admin_notice('success', $default_success_message);
+
+            // Determine the success message based on auto purge status
+            if ($found) {
+                $success_message = "SUCCESS ADMIN: Auto purge cache completed, Auto preload started for page $current_page_url";
+            } else {
+                $success_message = "SUCCESS ADMIN: Auto purge cache attempted but page not found in cache, Auto preload started for page $current_page_url";
+            }
+
+            // Display the success message
+            nppp_display_admin_notice('success', $success_message);
         } else {
-            nppp_display_admin_notice('error', "ERROR COMMAND: Cache purged, but unable to start auto preloading for $current_page_url. Please report this issue on the plugin support page.");
+            // Determine the error message based on auto purge status
+            if ($found) {
+                $error_message = "ERROR COMMAND: Auto purge cache completed, but unable to start Auto preload for $current_page_url. Please report this issue on the plugin support page.";
+            } else {
+                $error_message = "ERROR COMMAND: Auto purge cache attempted but page not found in cache, unable to start Auto preload. Please report this issue on the plugin support page.";
+            }
+
+            // Display the error message
+            nppp_display_admin_notice('error', $error_message);
         }
     } else {
-        nppp_display_admin_notice('error', "ERROR COMMAND: Cache purged, but unable to start auto preloading for $current_page_url. Please report this issue on the plugin support page.");
+        // Determine the error message based on auto purge status
+        if ($found) {
+            $error_message = "ERROR COMMAND: Auto purge cache completed, but unable to start Auto preload for $current_page_url. Please report this issue on the plugin support page.";
+        } else {
+            $error_message = "ERROR COMMAND: Auto purge cache attempted but page not found in cache, unable to start Auto preload. Please report this issue on the plugin support page.";
+        }
+
+        // Display the error message
+        nppp_display_admin_notice('error', $error_message);
     }
 }

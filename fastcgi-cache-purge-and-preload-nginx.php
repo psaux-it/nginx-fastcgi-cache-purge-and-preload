@@ -3,7 +3,7 @@
  * Plugin Name:       FastCGI Cache Purge and Preload for Nginx
  * Plugin URI:        https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload
  * Description:       Manage FastCGI Cache Purge and Preload for Nginx operations directly from your WordPress admin dashboard.
- * Version:           2.0.3
+ * Version:           2.0.4
  * Author:            Hasan ÇALIŞIR
  * Author URI:        https://www.psauxit.com/
  * Author Email:      hasan.calisir@psauxit.com
@@ -19,14 +19,13 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Retrieve API option statuses.
-$options = get_option('nginx_cache_settings');
-$api_status = isset($options['nginx_cache_api']) ? $options['nginx_cache_api'] : '';
-
-require_once plugin_dir_path(__FILE__) . 'admin/fastcgi-cache-purge-and-preload-nginx-admin.php';
-if ($api_status === 'yes') {
-    require_once plugin_dir_path(__FILE__) . 'includes/rest-api-helper.php';
+// Define the plugin main file path
+if (! defined('NPPP_PLUGIN_FILE')) {
+    define('NPPP_PLUGIN_FILE', __FILE__);
 }
+
+// Load NPP
+require_once plugin_dir_path(__FILE__) . 'admin/fastcgi-cache-purge-and-preload-nginx-admin.php';
 
 // Register activation and deactivation hooks
 register_activation_hook( __FILE__, 'nppp_defaults_on_plugin_activation' );

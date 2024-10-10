@@ -1,14 +1,20 @@
 /**
  * JavaScript for FastCGI Cache Purge and Preload for Nginx
  * Description: This JavaScript file contains functions to manage FastCGI Cache Purge and Preload for Nginx plugin and interact with WordPress admin dashboard.
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
  */
 
-jQuery(document).ready(function($) {
+// Immediately Invoked Function Expression (IIFE)
+// Prevent interfere with core wp and other plugin code
+(function($, window, document, undefined) {
+    'use strict';
+
+// Main plugin admin side  js code
+$(document).ready(function() {
     // Function to adjust the status tab table layout for mobile
     function adjustTableForMobile() {
         const mobileBreakpoint = 480;
@@ -65,45 +71,106 @@ jQuery(document).ready(function($) {
     // Initial call to adjust the layout on page load
     adjustTableForMobile();
 
-    // Initialize jQuery UI tabs
+    // Cache jQuery selectors for better performance and easier reference
+    const $preloader = $('#nppp-loader-overlay');
+    const $settingsPlaceholder = $('#settings-content-placeholder');
+    const $statusPlaceholder = $('#status-content-placeholder');
+    const $premiumPlaceholder = $('#premium-content-placeholder');
+
+    // Function to show the preloader overlay
+    // Adds the 'active' class and fades in the preloader over 50 milliseconds
+    function showPreloader() {
+        // Adjust the `.nppp-loader-fill` animation duration
+        $('.nppp-loader-fill').css({
+            'animation': 'nppp-fill 2s ease-in-out infinite'
+        });
+
+        // Remove backdrop filters from `#nppp-loader-overlay` by setting them to 'none'
+        $('#nppp-loader-overlay').css({
+            'backdrop-filter': 'none',
+            '-webkit-backdrop-filter': 'none',
+            'transition': 'none'
+        });
+
+        // Add 'active' class and fade in the preloader
+        $preloader.addClass('active').fadeIn(50);
+    }
+
+    // Function to hide the preloader overlay
+    // Removes the 'active' class and fades out the preloader over 50 milliseconds
+    function hidePreloader() {
+        $preloader.removeClass('active').fadeOut(50);
+
+        // Reset the `.nppp-loader-fill` animation duration back
+        $('.nppp-loader-fill').css({
+            'animation': 'nppp-fill 5s ease-in-out infinite'
+        });
+
+        // Re-apply backdrop filters to `#nppp-loader-overlay` with original values
+        $('#nppp-loader-overlay').css({
+            'backdrop-filter': 'blur(1px)',
+            '-webkit-backdrop-filter': 'blur(1px)',
+            'transition': 'opacity 0.3s ease, visibility 0.3s ease'
+        });
+    }
+
+    // Initialize jQuery UI tabs on the element with ID 'nppp-nginx-tabs'
     $('#nppp-nginx-tabs').tabs({
         activate: function(event, ui) {
             var tabId = ui.newPanel.attr('id');
+            // Show the preloader when a new tab is activated
+            if (tabId !== 'help') {
+                showPreloader();
+            }
+
+            // Hide all content placeholders to ensure only the active tab's content is visible
+            $settingsPlaceholder.hide();
+            $statusPlaceholder.hide();
+            $premiumPlaceholder.hide();
 
             // Handle specific actions for each tab
             if (tabId === 'settings') {
-                // Check if the Settings tab is already active
+                // Check if the Settings tab panel does not have the 'ui-tabs-active' class
                 if (!ui.newPanel.hasClass('ui-tabs-active')) {
-                    $('#settings-content-placeholder').html('<div class="nppp-loading-spinner"></div>');
-
                     // Reload the settings page to create cache
                     location.reload();
+                } else {
+                    // If the Settings tab is already active, hide the preloader
+                    hidePreloader();
                 }
             } else if (tabId === 'status') {
+                // Load content for the 'Status' tab via AJAX
                 loadStatusTabContent();
+                // Adjust table layout for mobile devices if necessary
                 adjustTableForMobile();
             } else if (tabId === 'premium') {
+                // Load content for the 'Premium' tab via AJAX
                 loadPremiumTabContent();
             }
         },
         beforeLoad: function(event, ui) {
+            // Attach a fail handler to the AJAX request associated with the tab
             ui.jqXHR.fail(function() {
                 ui.panel.html("Couldn't load this tab. We'll try to fix this as soon as possible.");
+                // Hide the preloader since loading failed
+                hidePreloader();
             });
         }
     });
 
-    // Load status content if user comes from wordpress admin bar directly
+    // Check if the user navigated directly to the 'Status' tab via URL hash (e.g., yoursite.com/page#status)
     if (window.location.hash === '#status') {
+        // Show the preloader when loading the Status tab directly
+        showPreloader();
+        // Load content for the 'Status' tab via AJAX
         loadStatusTabContent();
+        // Adjust table layout for mobile devices if necessary
         adjustTableForMobile();
     }
 
     // Function to load content for the 'Status' tab via AJAX
+    // Sends a POST request to the server to fetch the Status tab content
     function loadStatusTabContent() {
-        // Show loading spinner
-        $('#status-content-placeholder').html('<div class="nppp-loading-spinner"></div>');
-
         // AJAX request for the "Status" tab content
         $.ajax({
             url: nppp_admin_data.ajaxurl,
@@ -114,13 +181,28 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.trim() !== '') {
-                    // Replace loading spinner with content
-                    $('#status-content-placeholder').html(response).show();
+                    // Insert the response HTML into the Status tab placeholder
+                    // Set initial opacity to 0 for fade-in effect and show the element
+                    $statusPlaceholder.html(response).css('opacity', 0).show();
 
-                    // Update status metrics after the content is inserted into the DOM
+                    // Update status metrics or perform additional initialization after content is loaded
                     npppupdateStatus();
+
+                    // Hide the preloader now that content is loaded
+                    hidePreloader();
+
+                    // Animate the opacity to 1 over 100 milliseconds for a fade-in effect
+                    $statusPlaceholder.animate({ opacity: 1 }, 100);
                 } else {
                     console.error('Empty response received');
+                    // Hide the preloader since loading failed
+                    hidePreloader();
+                    // Replace placeholder with proper error message
+                    $statusPlaceholder.html(`
+                        <h2>Error Displaying Tab Content</h2>
+                        <p class="nppp-advanced-error-message">Failed to initialize the Status TAB.</p>
+                    `);
+                    $statusPlaceholder.show();
                 }
 
                 // Recalculate scroll positions and sizes
@@ -128,15 +210,21 @@ jQuery(document).ready(function($) {
             },
             error: function(xhr, status, error) {
                 console.error(error);
+                // Hide the preloader since loading failed
+                hidePreloader();
+                // Replace placeholder with proper error message
+                $statusPlaceholder.html(`
+                    <h2>Error Displaying Tab Content</h2>
+                    <p class="nppp-advanced-error-message">Failed to initialize the Status TAB.</p>
+                `);
+                $statusPlaceholder.show();
             }
         });
     }
 
     // Function to load content for the 'Premium' tab via AJAX
+    // Sends a POST request to the server to fetch the Advanced tab content
     function loadPremiumTabContent() {
-        // Show loading spinner
-        $('#premium-content-placeholder').html('<div class="nppp-loading-spinner"></div>');
-
         // AJAX request for the "Premium" tab content
         $.ajax({
             url: nppp_admin_data.ajaxurl,
@@ -146,23 +234,47 @@ jQuery(document).ready(function($) {
                 _wpnonce: nppp_admin_data.premium_content_nonce
             },
             success: function(response) {
-                // Replace loading spinner with content
-                $('#premium-content-placeholder').html(response);
+                if (response.trim() !== '') {
+                    // Insert the response HTML into the Advanced tab placeholder
+                    // Set initial opacity to 0 for fade-in effect
+                    $premiumPlaceholder.html(response).css('opacity', 0).show();
 
-                // Initialize DataTables.js for premium table
-                initializePremiumTable();
+                    // Initialize DataTables.js for the advanced table within the loaded content
+                    initializePremiumTable();
 
-                // Recalculate column widths for responsive layout
-                $('#nppp-premium-table').DataTable().responsive.recalc();
+                    // Recalculate column widths for responsive layout
+                    $('#nppp-premium-table').DataTable().responsive.recalc();
 
-                // Show the content
-                $('#premium-content-placeholder').show();
+                    // Hide the preloader now that content is loaded
+                    hidePreloader();
+
+                    // Animate the opacity to 1 over 200 milliseconds for a fade-in effect
+                    $premiumPlaceholder.animate({ opacity: 1 }, 100);
+                } else {
+                    console.error(status + ': ' + error);
+                    // Hide the preloader since loading failed
+                    hidePreloader();
+                    // Replace placeholder with proper error message
+                    $premiumPlaceholder.html(`
+                        <h2>Error Displaying Tab Content</h2>
+                        <p class="nppp-advanced-error-message">Failed to initialize the Advanced TAB.</p>
+                    `);
+                    $premiumPlaceholder.show();
+                }
 
                 // Recalculate scroll positions and sizes
                 $(window).trigger('resize').trigger('scroll');
             },
             error: function(xhr, status, error) {
                 console.error(status + ': ' + error);
+                // Hide the preloader since loading failed
+                hidePreloader();
+                // Replace placeholder with proper error message
+                $premiumPlaceholder.html(`
+                    <h2>Error Displaying Tab Content</h2>
+                    <p class="nppp-advanced-error-message">Failed to initialize the Advanced TAB.</p>
+                `);
+                $premiumPlaceholder.show();
             }
         });
     }
@@ -810,8 +922,36 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 // Check if AJAX request was successful
                 if (response.success) {
-                    // Update input field with the new API key
+                    // Update input field with the default reject regex
                     $('#nginx_cache_reject_regex').val(response.data);
+                } else {
+                    // Display error message if AJAX request failed
+                    console.error(response.data);
+                }
+            },
+            error: function(xhr, status, error) {
+                // Display error message if AJAX request encounters an error
+                console.error(error);
+            }
+        });
+    });
+
+    // Make AJAX request to update default reject extension
+    $('#nginx-extension-reset-defaults').on('click', function(event) {
+        event.preventDefault();
+
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'nppp_update_default_reject_extension_option',
+                _wpnonce: nppp_admin_data.reject_extension_nonce
+            },
+            success: function(response) {
+                // Check if AJAX request was successful
+                if (response.success) {
+                    // Update input field with the default reject extension
+                    $('#nginx_cache_reject_extension').val(response.data);
                 } else {
                     // Display error message if AJAX request failed
                     console.error(response.data);
@@ -1047,7 +1187,7 @@ jQuery(document).ready(function($) {
 
     // Function to initialize DataTables.js for premium table
     function initializePremiumTable() {
-        $('#nppp-premium-table').DataTable({
+        var table = $('#nppp-premium-table').DataTable({
             autoWidth: false,
             responsive: true,
             paging: true,
@@ -1072,18 +1212,114 @@ jQuery(document).ready(function($) {
 
             // Set column widths
             columnDefs: [
-                { width: "30%", targets: 0 },
-                { width: "40%", targets: 1 },
-                { width: "15%", targets: 2 },
-                { width: "15%", targets: 3 },
-                { responsivePriority: 1, targets: 0 },
-                { responsivePriority: 2, targets: -1 },
-                { defaultContent: "", targets: "_all" }
-            ]
+                { width: "28%", targets: 0, className: 'text-left' }, // Cached URL
+                { width: "30%", targets: 1, className: 'text-left' }, // Cache Path
+                { width: "10%", targets: 2, className: 'text-left' }, // Content Category
+                { width: "10%", targets: 3, className: 'text-left' }, // Cache Method
+                { width: "10%", targets: 4, className: 'text-left' }, // Cache Date
+                { width: "12%", targets: 5, className: 'text-left' }, // Actions
+                { responsivePriority: 1, targets: 0 }, // Cached URL gets priority for responsiveness
+                { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] }, // Collapse all in first row on mobile, hide actions always
+                //{ responsivePriority: 2, targets: -1 }, // Action column gets second priority on mobile
+                { defaultContent: "", targets: "_all" } // Ensures all columns render even if empty
+            ],
+
+            // Ensure callback on table draw for initial load
+            initComplete: function() {
+                applyCategoryStyles();
+                hideEmptyCells();
+            }
         });
 
-        // Hide empty cells
-        hideEmptyCells();
+        // Apply styles whenever the table is redrawn (e.g., after pagination)
+        table.on('draw', function() {
+            applyCategoryStyles();
+            hideEmptyCells();
+        });
+    }
+
+    // Function to apply custom styles based on Content Category column
+    function applyCategoryStyles() {
+        $('#nppp-premium-table tbody tr').each(function() {
+            var $cell = $(this).find('td').eq(2);
+
+            // Get the text of the Content Category column
+            var category = $cell.text().trim();
+
+            // Apply different CSS styles based on the category
+            switch (category) {
+                case 'POST':
+                    $cell.css({
+                        'color': 'fuchsia',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'AUTHOR':
+                    $cell.css({
+                        'color': 'orange',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'PAGE':
+                    $cell.css({
+                        'color': 'green',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'TAG':
+                    $cell.css({
+                        'color': 'blue',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'CATEGORY':
+                    $cell.css({
+                        'color': 'mediumslateblue',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'DAILY_ARCHIVE':
+                    $cell.css({
+                        'color': 'red',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'MONTHLY_ARCHIVE':
+                    $cell.css({
+                        'color': 'brown',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'YEARLY_ARCHIVE':
+                    $cell.css({
+                        'color': 'darkblue',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'DATE_ARCHIVE':
+                    $cell.css({
+                        'color': 'darkmagenta',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                case 'PRODUCT':
+                    $cell.css({
+                        'color': 'coral',
+                        'font-weight': 'bold'
+                    });
+                    break;
+                default:
+                    $cell.css({
+                        'color': 'burlywood',
+                        'font-weight': 'bold'
+                    });
+            }
+            // Apply styles to the Cache Method column (4th column)
+            var $cacheMethodCell = $(this).find('td').eq(3);
+            $cacheMethodCell.css({
+                'color': 'green'
+            });
+        });
     }
 
     // Function to hide empty cells
@@ -1097,7 +1333,8 @@ jQuery(document).ready(function($) {
             var cells = [
                 row.querySelector('td:nth-child(2)'),
                 row.querySelector('td:nth-child(3)'),
-                row.querySelector('td:nth-child(4)')
+                row.querySelector('td:nth-child(4)'),
+                row.querySelector('td:nth-child(5)')
             ];
 
             // Loop through each cell
@@ -1498,20 +1735,221 @@ jQuery(document).ready(function($) {
         $('.nppp-cron-event-select option[value=""][disabled]').hide();
     });
 
+    // Set cache button behaviours
     $('#nppp-purge-button, #nppp-preload-button').on('click', function(event) {
-    // Prevent the default click behavior
-    event.preventDefault();
+        // Prevent the default click behavior
+        event.preventDefault();
 
-    // Disable the clicked button
-    $(this).prop('disabled', true);
+        // Disable the clicked button
+        $(this).prop('disabled', true).addClass('disabled');
 
-    // Store the URL of the button's destination
-    var url = $(this).attr('href');
+        // Show the preloader
+        $('#nppp-loader-overlay').addClass('active').fadeIn(200);
 
-    // Set a timeout to reload the page after 2 seconds
-    setTimeout(function() {
-        window.location.href = url; // Reload the page with the stored URL
-    }, 2000); // 2000 milliseconds = 2 seconds
+        // Store the URL of the button's destination
+        var url = $(this).attr('href');
+
+        // Set a timeout to reload the page after 2 seconds
+        setTimeout(function() {
+            window.location.href = url;
+        }, 2000);
+    });
+
+    // Start masking API key on front-end
+    var nppApiKeyInput = $('#nginx_cache_api_key');
+    var nppGenerateButton = $('#api-key-button');
+
+    // Function to mask the first 10 characters of the API key
+    function nppMaskApiKey(apiKey) {
+        if (apiKey.length <= 10) {
+            return '*'.repeat(apiKey.length);
+        }
+        return '*'.repeat(10) + apiKey.slice(10);
+    }
+
+    // Function to set the API key and apply masking
+    function nppSetApiKey(apiKey) {
+        nppApiKeyInput.data('original-key', apiKey);
+        nppApiKeyInput.val(nppMaskApiKey(apiKey));
+    }
+
+    // Function to unmask the API key on focus
+    function nppUnmaskApiKey() {
+        var originalKey = nppApiKeyInput.data('original-key');
+        nppApiKeyInput.val(originalKey);
+    }
+
+    // Function to remask the API key on blur
+    function nppRemaskApiKey() {
+        var originalKey = nppApiKeyInput.data('original-key');
+        nppApiKeyInput.val(nppMaskApiKey(originalKey));
+    }
+
+    // Handles manual input by updating the stored original key.
+    function nppHandleManualInput() {
+        var currentVal = nppApiKeyInput.val();
+        nppApiKeyInput.data('original-key', currentVal);
+    }
+
+    // Initial masking on page load
+    var nppInitialApiKey = nppApiKeyInput.val();
+    nppSetApiKey(nppInitialApiKey);
+
+    // Bind focus and blur events to handle masking and unmasking
+    nppApiKeyInput.on('focus', nppUnmaskApiKey);
+    nppApiKeyInput.on('blur', nppRemaskApiKey);
+
+    // Bind input event to handle manual changes
+    nppApiKeyInput.on('input', nppHandleManualInput);
+
+    // Handle the "Generate API Key" button click
+    nppGenerateButton.on('click', function() {
+        setTimeout(function() {
+            // Backend has updated the input field with the new API key
+            var newApiKey = nppApiKeyInput.val();
+            nppSetApiKey(newApiKey);
+        }, 700);
+    });
+
+    // Find the closest form that contains the API key input
+    var nppForm = nppApiKeyInput.closest('form');
+
+    // Check if the form exists
+    if (nppForm.length) {
+        // Attach a submit event handler to the form
+        nppForm.on('submit', function(event) {
+            // Retrieve the original (unmasked) API key from data attribute
+            var originalKey = nppApiKeyInput.data('original-key');
+
+            // Replace the masked value with the original API key
+            nppApiKeyInput.val(originalKey);
+        });
+    }
+
+    // Handle click events on sub-menu links
+    $('.nppp-submenu a').on('click', function(e){
+        e.preventDefault();
+
+        var target = $(this).attr('href');
+
+        // Check if the target exists
+        if ($(target).length) {
+            // Animate scrolling to the target section
+            $('html, body').animate({
+                scrollTop: $(target).offset().top - 30
+            }, 500);
+        }
+    });
+
+    // Select the submit button within the form
+    var $submitButton = $('#nppp-settings-form input[type="submit"]');
+
+    // Store the original button text
+    var originalText = $submitButton.val();
+
+    // Object to store original values of monitored fields
+    var originalValues = {};
+
+    // List of field selectors to monitor
+    var fieldsToMonitor = [
+        '#nginx_cache_path',
+        '#nginx_cache_cpu_limit',
+        '#nginx_cache_reject_regex',
+        '#nginx_cache_reject_extension',
+        '#nginx_cache_limit_rate',
+        '#nginx_cache_wait_request',
+        '#nginx_cache_email',
+        '#nginx_cache_tracking_opt_in',
+        '#nginx_cache_api_key'
+    ];
+
+    // Initialize originalValues with current field values
+    fieldsToMonitor.forEach(function(selector) {
+        var $field = $(selector);
+        if ($field.attr('type') === 'checkbox') {
+            originalValues[selector] = $field.is(':checked');
+        } else {
+            originalValues[selector] = $field.val();
+        }
+    });
+
+    // Function to check if any field has changed
+    function checkForChanges() {
+        var hasChanged = false;
+
+        fieldsToMonitor.forEach(function(selector) {
+            var $field = $(selector);
+            var originalValue = originalValues[selector];
+            var currentValue;
+
+            if ($field.attr('type') === 'checkbox') {
+                currentValue = $field.is(':checked');
+            } else {
+                currentValue = $field.val();
+            }
+
+            if (currentValue !== originalValue) {
+                hasChanged = true;
+            }
+        });
+
+        if (hasChanged) {
+            markFormChanged();
+        } else {
+            resetButtonState();
+        }
+    }
+
+    // Function to mark the form as changed
+    function markFormChanged() {
+        if (!$submitButton.hasClass('nppp-submit-changed')) {
+            $submitButton.addClass('nppp-submit-changed');
+            $submitButton.val('Save Settings Now');
+        }
+    }
+
+    // Function to reset the button to its original state
+    function resetButtonState() {
+        if ($submitButton.hasClass('nppp-submit-changed')) {
+            $submitButton.removeClass('nppp-submit-changed');
+            $submitButton.val(originalText);
+        }
+    }
+
+    // Attach event listeners to the specified fields
+    $(fieldsToMonitor.join(', ')).on('input change', function() {
+        checkForChanges();
+    });
+
+    // Reset the button state when the form is submitted
+    $('#nppp-settings-form').on('submit', function() {
+        resetButtonState();
+        // Update originalValues to the new values after submission
+        fieldsToMonitor.forEach(function(selector) {
+            var $field = $(selector);
+            if ($field.attr('type') === 'checkbox') {
+                originalValues[selector] = $field.is(':checked');
+            } else {
+                originalValues[selector] = $field.val();
+            }
+        });
+    });
+
+    // Reset the button state if there's a reset button
+    $('#nppp-settings-form').on('reset', function() {
+        // Delay the reset to allow the form to reset first
+        setTimeout(function() {
+            resetButtonState();
+            // Update originalValues to the reset values
+            fieldsToMonitor.forEach(function(selector) {
+                var $field = $(selector);
+                if ($field.attr('type') === 'checkbox') {
+                    originalValues[selector] = $field.is(':checked');
+                } else {
+                    originalValues[selector] = $field.val();
+                }
+            });
+        }, 0);
     });
 });
 
@@ -1553,10 +1991,10 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 });
 
-// trim trailing leading white spaces from inputs
+// Trim trailing leading white spaces from inputs, sanitize nginx cache path on client side
 document.addEventListener('DOMContentLoaded', function () {
     // IDs of input fields to apply trimming
-    const inputIds = ['#nginx_cache_path', '#nginx_cache_email', '#nginx_cache_reject_regex', '#nginx_cache_api_key'];
+    const inputIds = ['#nginx_cache_path', '#nginx_cache_email', '#nginx_cache_reject_regex', '#nginx_cache_api_key', '#nginx_cache_reject_extension'];
 
     inputIds.forEach(function(inputId) {
         const inputField = document.querySelector(inputId);
@@ -1565,6 +2003,32 @@ document.addEventListener('DOMContentLoaded', function () {
             // Function to trim the input value
             function trimInputValue() {
                 inputField.value = inputField.value.trim();
+            }
+
+            // Function to remove trailing slash and prevent special characters for Linux directory paths
+            function sanitizeNginxCachePath() {
+                let oldValue;
+                do {
+                    oldValue = inputField.value;
+
+                    // Remove all invalid characters for Linux directory paths (allow /, -, _, ., a-z, A-Z, 0-9)
+                    inputField.value = inputField.value.replace(/[^a-zA-Z0-9\/\-_\.]/g, '');
+
+                    // Replace multiple consecutive slashes with a single slash
+                    inputField.value = inputField.value.replace(/\/{2,}/g, '/');
+
+                    // Remove folder names made up of only underscores or hyphens (e.g., __ or -- or ___)
+                    inputField.value = inputField.value.replace(/\/(?:[_\-]+)(\/|$)/g, '/');
+
+                    // Remove trailing slashes (if any)
+                    inputField.value = inputField.value.replace(/\/+$/, '');
+
+                } while (oldValue !== inputField.value);
+            }
+
+            // Apply specific logic for #nginx_cache_path
+            if (inputId === '#nginx_cache_path') {
+                inputField.addEventListener('blur', sanitizeNginxCachePath);
             }
 
             // Trim the input value when the user leaves the input field (on blur)
@@ -1578,7 +2042,12 @@ document.addEventListener('DOMContentLoaded', function () {
             // Trim the input value just before the form is submitted
             const form = inputField.closest('form');
             if (form) {
-                form.addEventListener('submit', trimInputValue);
+                form.addEventListener('submit', function() {
+                    trimInputValue();
+                    if (inputId === '#nginx_cache_path') {
+                        sanitizeNginxCachePath(); // Ensure it's sanitized before submission
+                    }
+                });
             }
         }
     });
@@ -1616,14 +2085,14 @@ function npppupdateStatus() {
     var npppphpFpmStatusSpan = document.getElementById("npppphpFpmStatus");
     var npppphpFpmStatus = npppphpFpmStatusSpan.textContent.trim();
 
-    // Log the fetched status to debug
-    console.log("Fetched status:", npppphpFpmStatus);
-
     npppphpFpmStatusSpan.textContent = npppphpFpmStatus;
     npppphpFpmStatusSpan.style.fontSize = "14px";
     if (npppphpFpmStatus === "false") {
         npppphpFpmStatusSpan.style.color = "red";
         npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Required (Check Help)';
+    } else if (npppphpFpmStatus === "Not Found") {
+        npppphpFpmStatusSpan.style.color = "orange";
+        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
     } else {
         npppphpFpmStatusSpan.style.color = "green";
         npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Not Required';
@@ -1639,6 +2108,9 @@ function npppupdateStatus() {
     } else if (npppcacheInPageSpanValue === "0") {
         npppcacheInPageSpan.style.color = "orange";
         npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppcacheInPageSpanValue;
+    } else if (npppcacheInPageSpanValue === "Not Found") {
+        npppcacheInPageSpan.style.color = "orange";
+        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
     } else {
         npppcacheInPageSpan.style.color = "green";
         npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppcacheInPageSpanValue;
@@ -1799,3 +2271,48 @@ function npppupdateStatus() {
         });
     });
 }
+
+// This ensures that the preloader is shown when the form is being processed.
+document.addEventListener('DOMContentLoaded', function() {
+    // Get the settings form by its ID
+    var npppNginxForm = document.getElementById('nppp-settings-form');
+
+    // Check if the form exists on the page
+    if (npppNginxForm) {
+        // Add a submit event listener to the form
+        npppNginxForm.addEventListener('submit', function() {
+            // Get the preloader overlay by its ID
+            var npppOverlay = document.getElementById('nppp-loader-overlay');
+
+            // If the overlay exists, add the "active" class to display it
+            if (npppOverlay) {
+                npppOverlay.classList.add('active');
+            }
+        });
+    }
+});
+
+// Adjust width of submit button according to it's container nppp-nginx-tabs
+document.addEventListener('DOMContentLoaded', function() {
+    const tabsContainer = document.getElementById('nppp-nginx-tabs');
+    const submitContainer = document.querySelector('.submit');
+
+    function updateSubmitPosition() {
+        const containerRect = tabsContainer.getBoundingClientRect();
+
+        // Set the width and position of the submit button to match the container
+        submitContainer.style.left = `${containerRect.left}px`;
+        submitContainer.style.width = `${containerRect.width}px`;
+
+        // Remove any extra padding or margins on the button that could cause overflow
+        submitContainer.style.margin = '0';
+        submitContainer.style.padding = '0';
+    }
+
+    // Initial update on page load
+    updateSubmitPosition();
+
+    // Update the position when the window is resized
+    window.addEventListener('resize', updateSubmitPosition);
+});
+})(jQuery, window, document);

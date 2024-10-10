@@ -2,7 +2,7 @@
 /**
  * SVG icon code for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains svg icon code for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -17,8 +17,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Display an SVG icon
 function nppp_svg_icon_shortcode($atts) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
+
     if ($wp_filesystem === false) {
-        return false; // Return false if WP_Filesystem initialization failed
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Shortcode attributes
@@ -36,7 +41,7 @@ function nppp_svg_icon_shortcode($atts) {
     $size = sanitize_text_field($atts['size']);
 
     // Path to the SVG icons directory
-    $icons_directory = plugin_dir_path(__FILE__) . '../admin/img/icons/';
+    $icons_directory = dirname(__FILE__) . '/../admin/img/icons/';
 
     // Check if the icon file exists
     $icon_path = $icons_directory . $icon . '.svg';

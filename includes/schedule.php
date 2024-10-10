@@ -2,7 +2,7 @@
 /**
  * Preload action related schedule cron events for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains preload action related schedule cron events functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -229,7 +229,7 @@ function nppp_create_scheduled_events($cron_expression) {
     if ($existing_timestamp) {
         $cleared = wp_clear_scheduled_hook('npp_cache_preload_event');
         if (!$cleared) {
-            error_log('Failed to unschedule existing event.');
+            nppp_custom_error_log('Failed to unschedule existing event.');
             return;
         }
     }
@@ -242,7 +242,7 @@ function nppp_create_scheduled_events($cron_expression) {
     $scheduled = wp_schedule_event($next_execution_timestamp, $recurrence, 'npp_cache_preload_event');
 
     if (!$scheduled) {
-        error_log('Failed to schedule new event.');
+        nppp_custom_error_log('Failed to schedule new event.');
         return;
     }
 
@@ -278,13 +278,18 @@ function nppp_create_scheduled_event_preload_status($start_time) {
 // So first we need the first scheduled time of event
 function nppp_get_preload_start_time() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
+
     if ($wp_filesystem === false) {
-        return null;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Define a constant for the log file path
     if ( ! defined( 'NGINX_CACHE_LOG_FILE' ) ) {
-        define( 'NGINX_CACHE_LOG_FILE', plugin_dir_path( __FILE__ ) . '../fastcgi_ops.log' );
+        define('NGINX_CACHE_LOG_FILE', dirname(__FILE__) . '/../fastcgi_ops.log');
     }
 
     // Check if the log file constant is defined
@@ -349,8 +354,13 @@ function nppp_get_preload_start_time() {
 // Function to check the status of the background process
 function nppp_create_scheduled_event_preload_status_callback() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
+
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Get scheduled time
@@ -361,7 +371,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
     $scheduled_time = DateTime::createFromFormat('Y-m-d H:i:s', $scheduled_time_str, $wordpress_timezone);
 
     // get preload pid file
-    $PIDFILE = dirname(plugin_dir_path(__FILE__)) . '/cache_preload.pid';
+    $PIDFILE = dirname(__FILE__) . '/../cache_preload.pid';
 
     // Check if there is an ongoing preload process active
     if ($wp_filesystem->exists($PIDFILE)) {

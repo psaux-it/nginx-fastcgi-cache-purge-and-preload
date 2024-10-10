@@ -2,7 +2,7 @@
 /**
  * Purge action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -19,7 +19,11 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     if ($wp_filesystem->is_dir($tmp_path)) {
@@ -57,7 +61,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     // Get the PIDFILE location
@@ -105,7 +113,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     nppp_display_admin_notice('error', "ERROR PERMISSION: Cache purge failed for page $current_page_url due to permission issue. Refer to -Help- tab for guidance.");
                     return;
                 }
-                
+
                 // Read file contents
                 $content = $wp_filesystem->get_contents($file->getPathname());
 
@@ -147,7 +155,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                              nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
                          } else {
                              if ($nppp_auto_purge && $nppp_auto_preload) {
-                                 nppp_preload_cache_on_update($current_page_url);
+                                 nppp_preload_cache_on_update($current_page_url, true);
                              } elseif ($nppp_auto_purge) {
                                  nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
                              } elseif ($nppp_auto_preload) {
@@ -166,13 +174,20 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         return;
     }
 
-    // If the URL is not found in the cache
+    // If the URL is not found in the cache, check auto preload status
     if (!$found) {
-        nppp_display_admin_notice('info', "INFO ADMIN: Cache purge attempted, but the page $current_page_url is not currently found in the cache.");
+        // Check if auto preload is enabled
+        if ($nppp_auto_preload) {
+            // Trigger the preload function
+            nppp_preload_cache_on_update($current_page_url, false);
+        } else {
+            // Display admin notice if auto preload is not enabled
+            nppp_display_admin_notice('info', "INFO ADMIN: Cache purge attempted, but the page $current_page_url is not currently found in the cache.");
+        }
     }
 }
 
-// Auto Purge
+// Auto Purge (Single)
 // Purge cache automatically for updated content (post/page)
 // This function hooks into the 'save_post' action
 function nppp_purge_cache_on_update($post_id) {
@@ -208,8 +223,32 @@ function nppp_purge_cache_on_update($post_id) {
     }
 }
 
-// Auto Purge
-// Purge cache automatically when a comment status changes (post/page)
+// Auto Purge (Entire)
+// Purge entire cache automatically for plugin or theme updates.
+// This function hooks into the 'upgrader_process_complete' action
+function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
+    // Retrieve plugin settings
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Check if auto purge on update is enabled
+    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+        // Determine the type of update: plugin or theme
+        if (isset($hook_extra['type']) && in_array($hook_extra['type'], array('plugin', 'theme'), true)) {
+            // Retrieve necessary options for purge actions
+            $default_cache_path = '/dev/shm/change-me-now';
+            $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+            $this_script_path = dirname(plugin_dir_path(__FILE__));
+            $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+            $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+
+            // Trigger purge action
+            nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
+        }
+    }
+}
+
+// Auto Purge (Single)
+// Purge cache automatically when a new comment exists (post/page)
 // This function hooks into the 'wp_insert_comment' action
 function nppp_purge_cache_on_comment($comment_id, $comment) {
     $oldstatus = '';
@@ -232,7 +271,7 @@ function nppp_purge_cache_on_comment($comment_id, $comment) {
     nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment);
 }
 
-// Auto Purge
+// Auto Purge (Single)
 // Purge cache automatically when a comment status changes (post/page)
 // This function hooks into the 'transition_comment_status' action
 function nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment) {
@@ -276,11 +315,15 @@ function nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment) {
 }
 
 // Purge cache operation
-function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = false, $nppp_is_admin_bar = false) {
+function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = false, $nppp_is_admin_bar = false, $nppp_is_auto_purge = false) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return false;
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
     }
 
     $options = get_option('nginx_cache_settings');
@@ -433,7 +476,11 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
     // Display the admin notice
     if (!empty($message_type) && !empty($message_content)) {
-        nppp_display_admin_notice($message_type, $message_content);
+        if ($nppp_is_auto_purge) {
+            nppp_display_admin_notice($message_type, $message_content, true, false);
+        } else {
+            nppp_display_admin_notice($message_type, $message_content);
+        }
     }
 
     // Check if there was an error during the cache purge process
