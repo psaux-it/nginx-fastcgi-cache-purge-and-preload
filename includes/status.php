@@ -342,8 +342,9 @@ function nppp_get_in_cache_page_count() {
                 // Read file contents
                 $content = $wp_filesystem->get_contents($file->getPathname());
 
-                // Exclude URLs with status 301 Moved Permanently
-                if (strpos($content, 'Status: 301 Moved Permanently') !== false) {
+                // Exclude URLs with status 301 or 302
+                if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
+                    strpos($content, 'Status: 302 Found') !== false) {
                     continue;
                 }
 
