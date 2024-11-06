@@ -36,6 +36,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_purge_on_update', 'Purge Cache on Post/Page Update', 'nppp_nginx_cache_purge_on_update_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_wait_request', 'Per Request Wait Time', 'nppp_nginx_cache_wait_request_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_tracking_opt_in', 'Enable Tracking', 'nppp_nginx_cache_tracking_opt_in_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_key_custom_regex', 'Enable Custom regex', 'nppp_nginx_cache_key_custom_regex_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -247,7 +248,7 @@ function nppp_nginx_cache_settings_page() {
                                  <p class="description">Default: 0 second, Disabled <br></p>
                             </td>
                         </tr>
-                        <!-- Start Advanced Options Section -->
+                        <!-- Start Schedule Options Section -->
                         <tr valign="top">
                             <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="schedule-options" style="margin: 0; padding: 0;">Schedule Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
@@ -316,6 +317,29 @@ function nppp_nginx_cache_settings_page() {
                                     <li><strong>X-Api-Key Header:</strong><code>X-Api-Key: YOUR_API_KEY</code></li>
                                     <li><strong>Request Body or Query String Parameter:</strong><code>api_key=YOUR_API_KEY</code></li>
                                 </ul>
+                            </td>
+                        </tr>
+                        <!-- Start Advanced Options Section -->
+                        <tr valign="top">
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="mail-options" style="margin: 0; padding: 0;">Advanced Options</h3></th>
+                            <td style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row"><span class="dashicons dashicons-edit"></span> Cache Key Regex</th>
+                            <td>
+                                <?php nppp_nginx_cache_key_custom_regex_callback(); ?>
+                                <p class="description">Enter a regex pattern to parse cached URLs based on your custom <code>fastcgi_cache_key</code> format.</p>
+                                <p class="description">The default regex pattern is compatible with the standard cache key format: <code>'$scheme$request_method$host$request_uri'</code>.</p>
+                                <p class="description">If you use a non-standard or complex <code>fastcgi_cache_key</code> format, you must define a matching regex pattern to parse cached URL to ensure proper plugin functionality.</p>
+                                <p class="description">For example, if your custom key format is <code>'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args'</code>, provide a corresponding regex pattern here.</p><br>
+                                <p class="description">📌 Guidelines for creating a compatible regex to match URLs in your cache based on your <code>fastcgi_cache_key</code> format:</p>
+                                <p class="description">📣 Ensure your regex pattern targets only URLs for <code>GET</code> requests, as <code>HEAD</code> requests do not represent cached content and cause duplicates.</p>
+                                <p class="description">📣 Parse URL without the <code>http://</code> or <code>https://</code> prefixes, as the plugin automatically handles these.</p>
+                                <button id="nginx-key-regex-reset-defaults" class="button nginx-reset-key-regex-button">Reset Default</button>
+                                <p class="description">Click the button to reset defaults.<br>After plugin updates, it's best to reset first to apply the latest changes, then reapply your custom rules.</p>
                             </td>
                         </tr>
                         <!-- Start Mail Options Section -->
@@ -843,6 +867,29 @@ function nppp_update_default_reject_extension_option() {
     wp_send_json_success($default_reject_extension);
 }
 
+// AJAX callback function to update default cache key regex option
+function nppp_update_default_cache_key_regex_option() {
+    // Verify nonce
+    check_ajax_referer('nppp-update-default-cache-key-regex-option', '_wpnonce');
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to update this option.');
+    }
+
+    // Get default reject extension
+    $default_cache_key_regex = nppp_fetch_default_regex_for_cache_key();
+    // Get the current options
+    $current_options = get_option('nginx_cache_settings');
+    // Update the specific option within the array
+    $current_options['nginx_cache_key_custom_regex'] = $default_cache_key_regex;
+    // Save the option
+    update_option('nginx_cache_settings', $current_options);
+
+    // Return the new extension set as the AJAX response
+    wp_send_json_success($default_cache_key_regex);
+}
+
 // AJAX callback function to copy rest api curl purge url
 function nppp_rest_api_purge_url_copy() {
     // Verify nonce
@@ -1075,6 +1122,15 @@ function nppp_nginx_cache_reject_regex_callback() {
     echo "<textarea id='nginx_cache_reject_regex' name='nginx_cache_settings[nginx_cache_reject_regex]' rows='3' cols='50' class='large-text'>" . esc_textarea($reject_regex) . "</textarea>";
 }
 
+// Callback function to display the custom Regex field for fastcgi_cache_key
+function nppp_nginx_cache_key_custom_regex_callback() {
+    $options = get_option('nginx_cache_settings');
+    $default_reject_regex = nppp_fetch_default_regex_for_cache_key();
+    $default_reject_regex = isset($options['nginx_cache_key_custom_regex']) ? $options['nginx_cache_key_custom_regex'] : $default_reject_regex;
+    $reject_regex = preg_replace('/\\\\+/', '\\', $default_reject_regex);
+    echo "<textarea id='nginx_cache_key_custom_regex' name='nginx_cache_settings[nginx_cache_key_custom_regex]' rows='1' cols='50' class='large-text'>" . esc_textarea($reject_regex) . "</textarea>";
+}
+
 // Callback function to display the Reject extension field
 function nppp_nginx_cache_reject_extension_callback() {
     $options = get_option('nginx_cache_settings');
@@ -1164,6 +1220,31 @@ function nppp_fetch_default_reject_regex() {
     if ($wp_filesystem->exists($rr_txt_file)) {
         $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
         $regex_match = preg_match('/\$reject_regex\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
+        if ($regex_match && isset($matches[1])) {
+            return $matches[1];
+        }
+    } else {
+        wp_die('File does not exist: ' . esc_html($rr_txt_file));
+    }
+    return '';
+}
+
+// Fetch default regex for fastcgi cache key
+function nppp_fetch_default_regex_for_cache_key() {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
+    }
+
+    $rr_txt_file = dirname(__FILE__) . '/reject_regex.txt';
+    if ($wp_filesystem->exists($rr_txt_file)) {
+        $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
+        $regex_match = preg_match('/\$regex_for_cache_key\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
         if ($regex_match && isset($matches[1])) {
             return $matches[1];
         }
@@ -1355,6 +1436,11 @@ function nppp_nginx_cache_settings_sanitize($input) {
     // Sanitize Reject Regex field
     if (!empty($input['nginx_cache_reject_regex'])) {
         $sanitized_input['nginx_cache_reject_regex'] = preg_replace('/\\\\+/', '\\', $input['nginx_cache_reject_regex']);
+    }
+
+    // Sanitize custom regex for cache key field
+    if (!empty($input['nginx_cache_key_custom_regex'])) {
+        $sanitized_input['nginx_cache_key_custom_regex'] = preg_replace('/\\\\+/', '\\', $input['nginx_cache_key_custom_regex']);
     }
 
     // Sanitize Reject extension field
@@ -1555,6 +1641,7 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_cpu_limit' => 80,
         'nginx_cache_reject_extension' => nppp_fetch_default_reject_extension(),
         'nginx_cache_reject_regex' => nppp_fetch_default_reject_regex(),
+        'nginx_cache_key_custom_regex' => nppp_fetch_default_regex_for_cache_key(),
         'nginx_cache_wait_request' => 0,
         'nginx_cache_limit_rate' => 5120,
         'nginx_cache_tracking_opt_in' => '1',
