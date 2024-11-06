@@ -48,7 +48,7 @@ function nppp_premium_html($nginx_cache_path) {
     } else {
         // Output error message if cache keys are found
         if (!empty($config_data['cache_keys'])) {
-            echo '<div class="nppp-premium-wrap"><p class="nppp-advanced-error-message">WARNING: Custom FastCGI cache key detected !</p></div>';
+            echo '<div class="nppp-premium-wrap"><p class="nppp-advanced-error-message">WARNING: Custom FastCGI cache key (fastcgi_cache_key) detected !</p></div>';
         }
     }
 
@@ -57,7 +57,14 @@ function nppp_premium_html($nginx_cache_path) {
 
     // Check for errors from nppp_extract_cached_urls()
     if (isset($extractedUrls['error'])) {
-        return '<div class="nppp-premium-wrap"><h2>Displaying Cached Content</h2><p class="nppp-advanced-error-message">' . esc_html($extractedUrls['error']) . '</p></div>';
+        // Check for errors from nppp_extract_cached_urls()
+        $error_message = esc_html($extractedUrls['error']);
+        return '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <p style="margin: 0; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                        ' . $error_message . '
+                    </p>
+                </div>';
     }
 
     // Output the premium tab content
@@ -449,14 +456,14 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     } catch (Exception $e) {
         // Handle exceptions and return an error message
         return [
-            'error' => 'An error occurred while accessing the cache directory. Please try again.'
+            'error' => 'An error occurred while accessing the Nginx Cache Directory. Please try again.'
         ];
     }
 
     // Check if any URLs were extracted
     if (empty($urls)) {
         return [
-            'error' => 'No cached content available yet. Consider Preload Cache now.'
+            'error' => 'No cached content found. Please try Preload All cache first and check again. If you still encounter this error, please read and set the "Cache Key Regex" option in the plugin Advanced Options section.'
         ];
     }
 
