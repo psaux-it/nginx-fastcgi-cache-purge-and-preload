@@ -161,6 +161,11 @@
     margin-top: 10px !important;
 }
 
+/* Reset cache key regex button styles */
+.nginx-reset-key-regex-button {
+    margin-top: 10px !important;
+}
+
 /* Generate API Key button styles */
 .nginx-api-key-button {
     display: block !important;
