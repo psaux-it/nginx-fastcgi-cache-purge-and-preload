@@ -318,19 +318,6 @@ function nppp_get_in_cache_page_count() {
         return 'Undetermined';
     }
 
-    // Check NGINX Cache Key format is in supported format
-    // If not we can not get the pages in cache count
-    $config_data = nppp_parse_nginx_cache_key();
-
-    if ($config_data === false) {
-        return 'Not Found';
-    } else {
-        // Output error message if cache keys are found
-        if (!empty($config_data['cache_keys'])) {
-            return 'Not Found';
-        }
-    }
-
     try {
         $cache_iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
@@ -384,6 +371,27 @@ function nppp_my_status_html() {
         $nppp_isolation_status = 'Not Isolated';
     } else {
         $nppp_isolation_status = 'Isolated';
+    }
+
+    // Check NGINX Cache Key format is in supported format
+    // If not we can not get the pages in cache count
+    $config_data = nppp_parse_nginx_cache_key();
+
+    if ($config_data === false) {
+        return 'Not Found';
+    } else {
+        // Output error message if cache keys are found
+        if (!empty($config_data['cache_keys'])) {
+            echo '<div class="nppp-status-wrap">
+                      <p class="nppp-advanced-error-message">WARNING: Custom FastCGI cache key (fastcgi_cache_key) detected !</p>
+                  </div>
+                  <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                      <p style="margin: 0; align-items: center;">
+                          <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                          If <strong>Pages In Cache Count</strong> is always <strong>0</strong>, please read and set <strong>Cache Key Regex</strong> option in plugin Advanced settings section.
+                      </p>
+                  </div>';
+        }
     }
 
     // Format the status string
