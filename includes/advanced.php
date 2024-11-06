@@ -211,6 +211,11 @@ function nppp_purge_cache_premium_callback() {
     $options = get_option('nginx_cache_settings');
     $nginx_cache_path = isset($options['nginx_cache_path']) ? $options['nginx_cache_path'] : '';
 
+    // Retrieve user-defined cache key regex from the db, with a hardcoded fallback
+    $regex = isset($options['nginx_cache_key_custom_regex'])
+             ? $options['nginx_cache_key_custom_regex']
+             : nppp_fetch_default_regex_for_cache_key();
+
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -270,7 +275,7 @@ function nppp_purge_cache_premium_callback() {
     // Get the purged URL
     $https_enabled = wp_is_using_https();
     $content = $wp_filesystem->get_contents($file_path);
-    if (preg_match('/KEY:\s+httpsGET(.+)/', $content, $matches)) {
+    if (preg_match($regex, $content, $matches)) {
         $url = trim($matches[1]);
         $sanitized_url = filter_var($url, FILTER_SANITIZE_URL);
         $final_url = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
@@ -392,7 +397,6 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
 
     // Retrieve user-defined cache key regex from the database, with a hardcoded fallback
     $nginx_cache_settings = get_option('nginx_cache_settings');
-    $default_cache_key_regex = nppp_fetch_default_regex_for_cache_key();
     $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
              ? $nginx_cache_settings['nginx_cache_key_custom_regex']
              : nppp_fetch_default_regex_for_cache_key();
