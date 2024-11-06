@@ -48,7 +48,7 @@ function nppp_premium_html($nginx_cache_path) {
     } else {
         // Output error message if cache keys are found
         if (!empty($config_data['cache_keys'])) {
-            return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR CACHE KEY: Nginx cache key format is not suitable for the plugin. Refer to the Help tab for guidance.</p></div>';
+            echo '<div class="nppp-premium-wrap"><p class="nppp-advanced-error-message">WARNING: Custom FastCGI cache key detected !</p></div>';
         }
     }
 
@@ -66,7 +66,7 @@ function nppp_premium_html($nginx_cache_path) {
     <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
         <p style="margin: 0; display: flex; align-items: center;">
             <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-            <strong>Note:</strong> If the table is not visible or appears broken, please ensure that the <strong>fastcgi_cache_key</strong> format is correctly <code>$scheme$request_method$host$request_uri</code> configured.
+            If the table is not visible or appears broken, please ensure that the <strong>fastcgi_cache_key</strong> format is correctly <code>$scheme$request_method$host$request_uri</code> configured.
         </p>
     </div>
     <h2></h2>
@@ -390,6 +390,13 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // Determine if HTTPS is enabled
     $https_enabled = wp_is_using_https();
 
+    // Retrieve user-defined cache key regex from the database, with a hardcoded fallback
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $default_cache_key_regex = nppp_fetch_default_regex_for_cache_key();
+    $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
+             ? $nginx_cache_settings['nginx_cache_key_custom_regex']
+             : nppp_fetch_default_regex_for_cache_key();
+
     try {
         // Traverse the cache directory and its subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
@@ -409,7 +416,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                 }
 
                 // Extract URLs using regex
-                if (preg_match('/KEY:\s+httpsGET(.+)/', $content, $matches)) {
+                if (preg_match($regex, $content, $matches)) {
                     $url = trim($matches[1]);
 
                     // Sanitize and validate the URL
