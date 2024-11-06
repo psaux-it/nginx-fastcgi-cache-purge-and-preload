@@ -338,6 +338,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">📌 Guidelines for creating a compatible regex to match URLs in your cache based on your <code>fastcgi_cache_key</code> format:</p>
                                 <p class="description">📣 Ensure your regex pattern targets only URLs for <code>GET</code> requests, as <code>HEAD</code> requests do not represent cached content and cause duplicates.</p>
                                 <p class="description">📣 Parse URL without the <code>http://</code> or <code>https://</code> prefixes, as the plugin automatically handles these.</p>
+                                <p class="description">📣 Make sure the regex pattern is wrapped inside slashes (//), as required by <code>preg_match</code></p>
                                 <button id="nginx-key-regex-reset-defaults" class="button nginx-reset-key-regex-button">Reset Default</button>
                                 <p class="description">Click the button to reset defaults.<br>After plugin updates, it's best to reset first to apply the latest changes, then reapply your custom rules.</p>
                             </td>
