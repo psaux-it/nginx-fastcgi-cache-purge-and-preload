@@ -119,6 +119,7 @@ function nppp_nginx_cache_settings_page() {
                         <li><a href="#purge-options">Purge Options</a></li>
                         <li><a href="#preload-options">Preload Options</a></li>
                         <li><a href="#schedule-options">Schedule Options</a></li>
+                        <li><a href="#advanced-options">Advanced Options</a></li>
                         <li><a href="#mail-options">Mail Options</a></li>
                         <li><a href="#logging-options">Logging Options</a></li>
                     </ul>
@@ -321,7 +322,7 @@ function nppp_nginx_cache_settings_page() {
                         </tr>
                         <!-- Start Advanced Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="mail-options" style="margin: 0; padding: 0;">Advanced Options</h3></th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="advanced-options" style="margin: 0; padding: 0;">Advanced Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
