@@ -148,6 +148,14 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">It is crucial that the <strong>PHP process owner</strong> has both read and write permissions to this directory.</p>
                                 <p class="description">Without these permissions, the plugin will be unable to purge or preload the cache effectively.</p>
                                 <p class="cache-path-plugin-note">
+                                    <span style="color: red;">IMPORTANT:</span> If you used the provided one-liner bash script for the initial setup, <br class="line-break">
+                                    please ensure that you add <strong>-npp</strong> suffix to the your original NGINX cache path. <br class="line-break">
+                                    For instance, if your original NGINX cache path is <strong>/dev/shm/fastcgi-cache-psauxit</strong> <br class="line-break">
+                                    You must specify it here as <strong>/dev/shm/fastcgi-cache-psauxit-npp</strong>. <br class="line-break">
+                                    This adjustment is essential only if you used one-liner bash script for the initial setup via &nbsp;&nbsp;&nbsp;&nbsp;<br class="line-break">
+                                    <code>bash <(curl -Ss https://psaux-it.github.io/install.sh)</code>
+                                </p>
+                                <p class="cache-path-plugin-note">
                                     <span style="color: red;">NOTE:</span> The plugin author explicitly disclaims any liability for unintended deletions resulting
                                     <br class="line-break">
                                     from incorrect directory entries. Users are solely responsible for verifying the directory's
@@ -333,9 +341,11 @@ function nppp_nginx_cache_settings_page() {
                             <td>
                                 <?php nppp_nginx_cache_key_custom_regex_callback(); ?>
                                 <p class="description">Enter a regex pattern to parse cached URLs based on your custom <code>fastcgi_cache_key</code> format.</p>
-                                <p class="description">The default regex pattern is compatible with the standard cache key format: <code>'$scheme$request_method$host$request_uri'</code>.</p>
-                                <p class="description">If you use a non-standard or complex <code>fastcgi_cache_key</code> format, you must define a matching regex pattern to parse cached URL to ensure proper plugin functionality.</p>
-                                <p class="description">For example, if your custom key format is <code>'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args'</code>, provide a corresponding regex pattern here.</p><br>
+                                <p class="description">The default regex pattern is only compatible with the supported standart cache key format: <code>'$scheme$request_method$host$request_uri'</code>.</p>
+                                <p class="description">If you use a non-standard or complex <code>fastcgi_cache_key</code> format, you must define a matching regex pattern to parse the URL correctly</p>
+                                <p class="description">to ensure proper plugin functionality.</p>
+                                <p class="description">For example, if your custom key format is <code>'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args'</code></p>
+                                <p class="description">provide a corresponding regex pattern here to parse the URL correctly.</p><br>
                                 <p class="description">📌 Guidelines for creating a compatible regex to match URLs in your cache based on your <code>fastcgi_cache_key</code> format:</p>
                                 <p class="description">📣 Ensure your regex pattern targets only URLs for <code>GET</code> requests, as <code>HEAD</code> requests do not represent cached content and cause duplicates.</p>
                                 <p class="description">📣 Parse URL without the <code>http://</code> or <code>https://</code> prefixes, as the plugin automatically handles these.</p>
