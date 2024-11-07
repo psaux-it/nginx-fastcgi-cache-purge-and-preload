@@ -177,11 +177,13 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <p class="description">Enabling this feature ensures that whenever you make changes to the content of a <strong>POST/PAGE</strong><br></p>
-                                <p class="description">or when <strong>COMMENT</strong> are approved or their status is changed, the cached version of that <strong>POST/PAGE</strong> is automatically cleared.<br></p>
-                                <p class="description">Additionally, if the <strong>Auto Preload</strong> option is enabled, the cache for the <strong>POST/PAGE</strong> will be automatically preloaded after the cache is purged.</p>
+                                <p class="description">or when <strong>COMMENT</strong> are approved or their status is changed, the cached version of that <span style="color: orange;"><strong>single</strong></span> <strong>POST/PAGE</strong> is automatically cleared.<br></p>
+                                <p class="description">If <strong>Auto Preload</strong> is enabled, the cache for the <span style="color: orange;"><strong>single</strong></span> <strong>POST/PAGE</strong> will be automatically preloaded after the cache is purged.</p>
                                 <br>
-                                <p class="description"><strong>New Feature:</strong> The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when a <strong>THEME</strong> or <strong>PLUGIN</strong> is updated, manually or automatically.<br></p>
-                                <p class="description">If <strong>Auto Preload</strong> is enabled, the <span style="color: orange;"><strong>entire cache</strong></span> will also be automatically preloaded after the the cache is purged,<br></p>
+                                <p class="description">The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when a <strong>THEME</strong> or <strong>PLUGIN</strong> is updated, manually or automatically.<br></p>
+                                <p class="description">The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when compatible caching plugins,
+                                <p class="description"><strong>WP Rocket, W3 Total Cache, LiteSpeed Cache, WP Super Cache, or Swift Performance</strong>, purge their cache.</p><br>
+                                <p class="description">If <strong>Auto Preload</strong> is enabled, the <span style="color: orange;"><strong>entire cache</strong></span> will be automatically preloaded after the the cache is purged,<br></p>
                                 <p class="description">ensuring your site always serves the latest content.</p>
                             </td>
                         </tr>
