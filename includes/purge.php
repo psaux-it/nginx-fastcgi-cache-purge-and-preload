@@ -520,3 +520,19 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, true, $preload_is_rest_api, false, $preload_is_admin_bar);
     }
 }
+
+// Callback function to trigger Purge All
+function nppp_purge_callback() {
+    // Get the plugin options
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Get the necessary data for purge action from plugin options
+    $default_cache_path = '/dev/shm/change-me-now';
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+    $this_script_path = dirname(plugin_dir_path(__FILE__));
+    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+
+    // Call the main purge function
+    nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, false, true);
+}
