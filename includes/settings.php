@@ -1524,7 +1524,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     }
 
     // Validate the path
-    $pattern = '/^\/(?:[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)+)\/?$/';
+    $pattern = '/^\/(?:[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*)\/?$/';
 
     // Define critical system directories
     $critical_directories = array('/bin','/boot','/etc','/lib','/lib64','/media','/proc','/root','/sbin','/srv','/sys','/usr','/home','/mnt');
