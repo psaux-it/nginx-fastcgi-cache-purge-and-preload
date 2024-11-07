@@ -14,6 +14,95 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Function to execute a shell command and get the output
+function nppp_get_command_output($command) {
+    return trim(shell_exec($command));
+}
+
+// Function to get the latest release from GitHub API using wp_remote_get
+function nppp_get_latest_version_git($url) {
+    $response = wp_remote_get($url, [
+        'timeout'   => 3,
+        'httpversion' => '1.1',
+        'user-agent' => 'PHP',
+    ]);
+
+    if (is_wp_error($response)) {
+        return 'Not Determined';
+    }
+
+    $body = wp_remote_retrieve_body($response);
+    return $body ? json_decode($body, true) : null;
+}
+
+// Function to check bindfs version
+function nppp_check_bindfs_version() {
+    $bindfs_repo_url = "https://api.github.com/repos/mpartel/bindfs/git/refs/tags";
+
+    // Check if bindfs is installed
+    if (nppp_get_command_output('command -v bindfs')) {
+        $installed_version = nppp_get_command_output('bindfs --version | head -n1 | awk \'{print $2}\'');
+
+        // Get latest version info from GitHub API
+        $response = nppp_get_latest_version_git($bindfs_repo_url);
+        if ($response) {
+            // Assign array_map result to a variable to avoid passing by reference warning
+            $mapped_refs = array_map(function($ref) {
+                return preg_replace('/^refs\/tags\//', '', $ref['ref']);
+            }, $response);
+
+            $latest_version = end($mapped_refs);
+
+            if (version_compare($installed_version, $latest_version, '<')) {
+                return "$installed_version ($latest_version)";
+            } else {
+                return "$installed_version";
+            }
+        } else {
+            return 'Not Determined';
+        }
+    } else {
+        return "Not Installed";
+    }
+}
+
+// Function to check libfuse version
+function nppp_check_libfuse_version() {
+    $libfuse_repo_url = "https://api.github.com/repos/libfuse/libfuse/releases/latest";
+
+    // Get latest version info from GitHub API
+    $response = nppp_get_latest_version_git($libfuse_repo_url);
+    $latest_version = $response ? str_replace('fuse-', '', $response['tag_name']) : null;
+
+    if ($latest_version) {
+        // Check for FUSE 3
+        if (nppp_get_command_output('command -v fusermount3')) {
+            $installed_version = preg_replace('/version:\s*/', '', nppp_get_command_output('fusermount3 -V | grep -oP \'version:\s*\K[0-9.]+\''));
+
+            if (version_compare($installed_version, $latest_version, '<')) {
+                return "$installed_version ($latest_version)";
+            } else {
+                return "$installed_version";
+            }
+        // Check for FUSE 2
+        } elseif (nppp_get_command_output('command -v fusermount')) {
+            $installed_version = preg_replace('/version:\s*/', '', nppp_get_command_output('fusermount -V | grep -oP \'version:\s*\K[0-9.]+\''));
+
+            if (version_compare($installed_version, $latest_version, '<')) {
+                return "$installed_version ($latest_version)";
+            } else {
+                return "$installed_version";
+            }
+        } else {
+            // Neither fusermount nor fusermount3 is found
+            return "Not Installed";
+        }
+    } else {
+        // Latest version could not be determined
+        return "Not Determined";
+    }
+}
+
 // Function to parse the Nginx configuration file with included paths
 // for Nginx Cache Paths
 function nppp_parse_nginx_config($file, $wp_filesystem = null) {
@@ -195,6 +284,29 @@ function nppp_generate_html($cache_paths, $nginx_info) {
                                     </tbody>
                                 </table>
                             <?php endif; ?>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+        <section class="nginx-status">
+            <h2 style="margin-top: 45px; !important">FUSE STATUS</h2>
+            <table>
+                <tbody>
+                    <tr>
+                        <td class="action">libfuse Version</td>
+                        <td class="status" id="npppLibfuseVersion">
+                            <?php
+                            echo esc_html(nppp_check_libfuse_version());
+                            ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="action">bindfs Version</td>
+                        <td class="status" id="npppBindfsVersion">
+                            <?php
+                            echo esc_html(nppp_check_bindfs_version());
+                            ?>
                         </td>
                     </tr>
                 </tbody>
