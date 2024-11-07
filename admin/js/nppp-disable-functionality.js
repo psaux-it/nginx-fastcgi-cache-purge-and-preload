@@ -89,6 +89,12 @@ jQuery(document).ready(function($) {
         // disable reset regex button
         $('#nginx-regex-reset-defaults').prop('disabled', true);
 
+        // disable reset file extension button
+        $('#nginx-extension-reset-defaults').prop('disabled', true);
+
+        // disable reset cache key regex button
+        $('#nginx-key-regex-reset-defaults').prop('disabled', true);
+
         // disable clear logs button
         $('#clear-logs-button').prop('disabled', true);
 
@@ -112,6 +118,6 @@ jQuery(document).ready(function($) {
         });
 
         // disable main form submit button
-        $('input[type="submit"][name="submit"].button-primary').prop('disabled', true);
+        $('input[type="submit"][name="nppp_submit"].button-primary').prop('disabled', true);
     }
 });
