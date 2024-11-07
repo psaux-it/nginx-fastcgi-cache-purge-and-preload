@@ -130,8 +130,12 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
         $required_sequence = '\$scheme\s*\$request_method\s*\$host\s*\$request_uri';
         $pattern = '/'. $required_sequence .'/';
 
-        if (!preg_match($pattern, $unquoted_value)) {
-            // The cache key does NOT contain the required sequence
+        // Check if the user cache key does not match the required sequence
+        // or is not exactly equal to default supported key format
+        $supported_key_format = '$scheme$request_method$host$request_uri';
+
+        if (!preg_match($pattern, $unquoted_value) || $unquoted_value !== $supported_key_format) {
+            // Detected unsupported fastcgi cache key format
             $cache_keys[] = $value;
         }
     }
