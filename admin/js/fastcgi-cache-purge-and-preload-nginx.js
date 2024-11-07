@@ -2264,6 +2264,42 @@ function npppupdateStatus() {
         npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
     }
 
+    // Update the FUSE status for libfuse
+    var npppLibfuseVersionSpan = document.getElementById("npppLibfuseVersion");
+    var npppLibfuseVersion = npppLibfuseVersionSpan.textContent.trim();
+    npppLibfuseVersionSpan.style.fontSize = "14px";
+    npppLibfuseVersionSpan.style.fontWeight = "bold";
+    if (npppLibfuseVersion.includes("(")) {
+        npppLibfuseVersionSpan.style.color = "orange";
+        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppLibfuseVersion;
+    } else if (npppLibfuseVersion === "Not Installed") {
+        npppLibfuseVersionSpan.style.color = "red";
+        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-no"></span> ' + npppLibfuseVersion;
+    } else if (npppLibfuseVersion === "Not Determined") {
+        npppLibfuseVersionSpan.style.color = "grey";
+    } else {
+        npppLibfuseVersionSpan.style.color = "green";
+        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppLibfuseVersion;
+    }
+
+    // Update the FUSE status for bindfs
+    var npppBindfsVersionSpan = document.getElementById("npppBindfsVersion");
+    var npppBindfsVersion = npppBindfsVersionSpan.textContent.trim();
+    npppBindfsVersionSpan.style.fontSize = "14px";
+    npppBindfsVersionSpan.style.fontWeight = "bold";
+    if (npppBindfsVersion.includes("(")) {
+        npppBindfsVersionSpan.style.color = "orange";
+        npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppBindfsVersion;
+    } else if (npppBindfsVersion === "Not Installed") {
+        npppBindfsVersionSpan.style.color = "red";
+        npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-no"></span> ' + npppBindfsVersion;
+    } else if (npppBindfsVersion === "Not Determined") {
+        npppBindfsVersionSpan.style.color = "grey";
+    } else {
+        npppBindfsVersionSpan.style.color = "green";
+        npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppBindfsVersion;
+    }
+
     // Fetch and update permission isolation status
     var nppppermIsolationSpan = document.getElementById("nppppermIsolation");
     var nppppermIsolation = nppppermIsolationSpan.textContent.trim();
