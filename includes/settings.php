@@ -342,8 +342,8 @@ function nppp_nginx_cache_settings_page() {
                             <th scope="row"><span class="dashicons dashicons-edit"></span> Cache Key Regex</th>
                             <td>
                                 <?php nppp_nginx_cache_key_custom_regex_callback(); ?>
-                                <p class="description">Enter a regex pattern to parse URL <code>'$host$request_uri'</code> based on your custom <code>fastcgi_cache_key</code> format.</p><br>
-                                <p class="description">⚡The default regex pattern is designed to parse only the <code>'$host$request_uri'</code> portion from the</p>
+                                <p class="description">Enter a <code>preg_match</code> PHP regex pattern to parse URL <code>'$host$request_uri'</code> based on your custom <code>fastcgi_cache_key</code> format.</p><br>
+                                <p class="description">⚡The default regex pattern is designed to parse the <code>'$host$request_uri'</code> portion from the only</p>
                                 <p class="description">&nbsp;standard cache key format <strong>supported by the plugin:</strong> <code>'$scheme$request_method$host$request_uri'</code>.</p><br>
                                 <p class="description">⚡If you use a non-standard or complex <code>fastcgi_cache_key</code> format, you must define a custom regex pattern</p>
                                 <p class="description">&nbsp;to correctly parse <code>'$host$request_uri'</code> portion in order to ensure proper plugin functionality.</p><br>
