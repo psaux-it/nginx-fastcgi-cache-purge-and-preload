@@ -76,9 +76,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     $options = get_option('nginx_cache_settings');
     $nppp_auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
 
-    // Pattern to match 'KEY:' value
-    // This pattern compatible with all fastcgi_cache_key formats
-    $pattern = '/^KEY:\s*(.*)$/m';
+    // Retrieve user-defined cache key regex from the database, with a hardcoded fallback
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
+             ? $nginx_cache_settings['nginx_cache_key_custom_regex']
+             : nppp_fetch_default_regex_for_cache_key();
 
     // First, check if any active cache preloading action is in progress.
     // Purging the cache for a single page or post, whether done manually (Fonrtpage) or automatically (Auto Purge) after content updates,
@@ -127,11 +129,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     continue;
                 }
 
-                // Extract the 'KEY:' value first
-                preg_match($pattern, $content, $matches);
+                // Extract the in cache URL from fastcgi_cache_key
+                preg_match($regex, $content, $matches);
 
-                // Search URL in KEY value to get correct file path to delete it from cache
-                if (preg_match('/' . preg_quote($url_to_search_exact, '/') . '/', $matches[1])) {
+                // Check extracted URL from fastcgi_cache_key and the URL attempted to purge is equal
+                if (trim($matches[1]) === $url_to_search_exact) {
                     $cache_path = $file->getPathname();
                     $found = true;
 
