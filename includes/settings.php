@@ -342,16 +342,17 @@ function nppp_nginx_cache_settings_page() {
                             <th scope="row"><span class="dashicons dashicons-edit"></span> Cache Key Regex</th>
                             <td>
                                 <?php nppp_nginx_cache_key_custom_regex_callback(); ?>
-                                <p class="description">Enter a regex pattern to parse cached URLs based on your custom <code>fastcgi_cache_key</code> format.</p>
-                                <p class="description">The default regex pattern is only compatible with the supported standart cache key format: <code>'$scheme$request_method$host$request_uri'</code>.</p>
-                                <p class="description">If you use a non-standard or complex <code>fastcgi_cache_key</code> format, you must define a matching regex pattern to parse the URL correctly</p>
-                                <p class="description">to ensure proper plugin functionality.</p>
-                                <p class="description">For example, if your custom key format is <code>'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args'</code></p>
-                                <p class="description">provide a corresponding regex pattern here to parse the URL correctly.</p><br>
-                                <p class="description">📌 Guidelines for creating a compatible regex to match URLs in your cache based on your <code>fastcgi_cache_key</code> format:</p>
-                                <p class="description">📣 Ensure your regex pattern targets only URLs for <code>GET</code> requests, as <code>HEAD</code> requests do not represent cached content and cause duplicates.</p>
-                                <p class="description">📣 Parse URL without the <code>http://</code> or <code>https://</code> prefixes, as the plugin automatically handles these.</p>
-                                <p class="description">📣 Make sure the regex pattern is wrapped inside slashes (//), as required by <code>preg_match</code></p>
+                                <p class="description">Enter a regex pattern to parse URL <code>'$host$request_uri'</code> based on your custom <code>fastcgi_cache_key</code> format.</p><br>
+                                <p class="description">⚡The default regex pattern is designed to parse only the <code>'$host$request_uri'</code> portion from the</p>
+                                <p class="description">&nbsp;standard cache key format <strong>supported by the plugin:</strong> <code>'$scheme$request_method$host$request_uri'</code>.</p><br>
+                                <p class="description">⚡If you use a non-standard or complex <code>fastcgi_cache_key</code> format, you must define a custom regex pattern</p>
+                                <p class="description">&nbsp;to correctly parse <code>'$host$request_uri'</code> portion in order to ensure proper plugin functionality.</p><br>
+                                <p class="description">⚡For example, if your custom key format is <code>'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args'</code></p>
+                                <p class="description">&nbsp;you will need to provide a corresponding regex pattern that accurately captures the <code>'$host$request_uri'</code> part.</p><br>
+                                <p class="description">📌 Guidelines for Creating a Compatible Regex <strong>(For Advanced Users)</strong>:</p>
+                                <p class="description">📣 Ensure your regex pattern targets only <code>GET</code> requests, as <code>HEAD</code> requests do not represent cached content and cause duplicates.</p>
+                                <p class="description">📣 The regex must capture the exact <code>'$host$request_uri'</code> part from your custom <code>fastcgi_cache_key</code> format.</p>
+                                <p class="description">📣 The regex pattern must return the URL <code>'$host$request_uri'</code> in <strong>capture group 1</strong>. as the plugin process only <strong>matches[1]</strong></p>
                                 <button id="nginx-key-regex-reset-defaults" class="button nginx-reset-key-regex-button">Reset Default</button>
                                 <p class="description">Click the button to reset defaults.<br>After plugin updates, it's best to reset first to apply the latest changes, then reapply your custom rules.</p>
                             </td>
