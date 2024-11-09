@@ -336,9 +336,29 @@ function nppp_pre_checks() {
         return;
     }
 
-    // Check cache is empty
-    $files = $wp_filesystem->dirlist($nginx_cache_path);
-    if (empty($files)) {
+    // Use RecursiveDirectoryIterator to scan the cache directory and all subdirectories
+    $cache_iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+    );
+
+    $has_files = false;
+    foreach ($cache_iterator as $file) {
+        // Check if the current item is a file
+        if ($wp_filesystem->is_file($file->getPathname())) {
+            // Read file content
+            $file_content = $wp_filesystem->get_contents($file->getPathname());
+
+            // Check if the content contains a line with 'KEY:' (case-sensitive)
+            if (preg_match('/^KEY:/m', $file_content)) {
+                $has_files = true;
+                break;
+            }
+        }
+    }
+
+    // If no files are found or if files don't contain 'KEY:', display a warning
+    if (!$has_files) {
         nppp_display_pre_check_warning('GLOBAL WARNING CACHE: Cache is empty. For immediate cache creation consider utilizing the preload action now!');
         return;
     }
