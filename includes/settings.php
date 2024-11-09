@@ -353,6 +353,10 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">📣 Ensure your regex pattern targets only <code>GET</code> requests, as <code>HEAD</code> requests do not represent cached content and cause duplicates.</p>
                                 <p class="description">📣 The regex must capture the exact <code>'$host$request_uri'</code> part from your custom <code>fastcgi_cache_key</code> format.</p>
                                 <p class="description">📣 The regex pattern must return the URL <code>'$host$request_uri'</code> in <strong>capture group 1</strong>. as the plugin process only <strong>matches[1]</strong></p>
+                                <p class="description">📣 Checks for excessive lookaheads, catastrophic backtracking. (limit to 3).</p>
+                                <p class="description">📣 Don't use greedy quantifiers inside lookaheads.</p>
+                                <p class="description">📣 Checks <code>.*</code> quantifiers. (limit to 1).</p>
+                                <p class="description">📣 Checks for excessively long regex patterns. (limit length to 100 characters).</p>
                                 <button id="nginx-key-regex-reset-defaults" class="button nginx-reset-key-regex-button">Reset Default</button>
                                 <p class="description">Click the button to reset defaults.<br>After plugin updates, it's best to reset first to apply the latest changes, then reapply your custom rules.</p>
                             </td>
