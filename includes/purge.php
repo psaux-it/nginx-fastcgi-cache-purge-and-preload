@@ -76,10 +76,10 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     $options = get_option('nginx_cache_settings');
     $nppp_auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
 
-    // Retrieve user-defined cache key regex from the database, with a hardcoded fallback
+    // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
-             ? $nginx_cache_settings['nginx_cache_key_custom_regex']
+             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
     // First, check if any active cache preloading action is in progress.
