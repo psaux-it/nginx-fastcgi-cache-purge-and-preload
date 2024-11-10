@@ -383,7 +383,7 @@ function nppp_my_status_html() {
         // Output error message if cache keys are found
         if (!empty($config_data['cache_keys'])) {
             echo '<div class="nppp-status-wrap">
-                      <p class="nppp-advanced-error-message">WARNING: Custom FastCGI cache key (fastcgi_cache_key) detected !</p>
+                      <p class="nppp-advanced-error-message">WARNING: Not supported FastCGI cache key (fastcgi_cache_key) detected !</p>
                   </div>
                   <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                       <p style="margin: 0; align-items: center;">
