@@ -459,8 +459,8 @@ function nppp_handle_nginx_cache_settings_submission() {
                     // Retrieve existing options before sanitizing the input
                     $existing_options = get_option('nginx_cache_settings');
 
-                    // Make sure we unslash and sanitize immediately
-                    $nginx_cache_settings = array_map('sanitize_text_field', wp_unslash($_POST['nginx_cache_settings']));
+                    // Ignored PCP warning because we will implement custom sanitization via 'nppp_nginx_cache_settings_sanitize()'.
+                    $nginx_cache_settings = wp_unslash($_POST['nginx_cache_settings']);
 
                     // This is a pre-check to catch sanitization errors early, before calling update_option, to ensure proper redirection
                     // 'nppp_nginx_cache_settings_sanitize' already registered for 'update_option' action via 'register_setting'
@@ -1157,7 +1157,7 @@ function nppp_nginx_cache_key_custom_regex_callback() {
     $default_cache_key_regex = nppp_fetch_default_regex_for_cache_key();
     $cache_key_regex = isset($options['nginx_cache_key_custom_regex']) ? base64_decode($options['nginx_cache_key_custom_regex']) : $default_cache_key_regex;
     // Use wp_kses() with an empty array to allow raw text without HTML sanitization
-    echo "<textarea id='nginx_cache_key_custom_regex' name='nginx_cache_settings[nginx_cache_key_custom_regex]' rows='1' cols='50' class='large-text'>" . wp_kses($cache_key_regex, array()) . "</textarea>";
+    echo "<textarea id='nginx_cache_key_custom_regex' name='nginx_cache_settings[nginx_cache_key_custom_regex]' rows='1' cols='50' class='large-text'>" . esc_textarea($cache_key_regex) . "</textarea>";
 }
 
 // Callback function to display the Reject extension field
