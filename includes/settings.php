@@ -349,10 +349,12 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">&nbsp;to correctly parse <code>'$host$request_uri'</code> portion in order to ensure proper plugin functionality.</p><br>
                                 <p class="description">⚡For example, if your custom key format is <code>'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args'</code></p>
                                 <p class="description">&nbsp;you will need to provide a corresponding regex pattern that accurately captures the <code>'$host$request_uri'</code> part.</p><br>
-                                <p class="description">📌 Guidelines for Creating a Compatible Regex <strong>(For Advanced Users)</strong>:</p>
-                                <p class="description">📣 Ensure your regex pattern targets only <code>GET</code> requests, as <code>HEAD</code> requests do not represent cached content and cause duplicates.</p>
-                                <p class="description">📣 The regex must capture the exact <code>'$host$request_uri'</code> part from your custom <code>fastcgi_cache_key</code> format.</p>
-                                <p class="description">📣 The regex pattern must return the URL <code>'$host$request_uri'</code> in <strong>capture group 1</strong>. as the plugin process only <strong>matches[1]</strong></p>
+                                <p class="description">📌 <strong>Guidelines for creating a compatible regex</strong>:</p>
+                                <p class="description">📣 Ensure your regex pattern targets only <code>GET</code> requests, as <code>HEAD</code> or anyother requests do not represent cached content and cause duplicates.</p>
+                                <p class="description">📣 Ensure that your regex pattern includes delimiters. (e.g., /your-regex/ - #your-regex#)
+                                <p class="description">📣 The regex must capture the exact URL <code>'$host$request_uri'</code> part from your custom <code>fastcgi_cache_key</code> format.</p>
+                                <p class="description">📣 The regex pattern must return the full URL <code>'$host$request_uri'</code> in <strong>capture group 1</strong>. as the plugin process only <strong>matches[1]</strong></p><br>
+                                <p class="description">🚨 <strong>You need to follow these security guidelines for your regex pattern:</strong>:</p>
                                 <p class="description">📣 Checks for excessive lookaheads, catastrophic backtracking. (limit to 3).</p>
                                 <p class="description">📣 Don't use greedy quantifiers inside lookaheads.</p>
                                 <p class="description">📣 Checks <code>.*</code> quantifiers. (limit to 1).</p>
