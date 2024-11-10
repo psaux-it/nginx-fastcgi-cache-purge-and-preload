@@ -1478,33 +1478,28 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
         // Validate the regex
         if (@preg_match($regex, "") === false) {
-            // If the regex is invalid
             $error_message_regex = 'ERROR REGEX: The custom cache key regex is invalid check syntax and test before use it.';
         }
 
         // Check for excessive lookaheads (limit to 3)
         $lookahead_count = preg_match_all('/(\(\?=.*\))/i', $regex);
         if ($lookahead_count > 3) {
-            // If there are too many lookaheads
             $error_message_regex = 'ERROR REGEX: The custom cache key regex contains more than 3 lookaheads, which is not allowed.';
         }
 
         // Check for greedy quantifiers inside lookaheads
         if (preg_match('/\(\?=.*\.\*\)/', $regex)) {
-            // Limit greedy quantifiers (may still allow simpler use cases)
             $error_message_regex = 'ERROR REGEX: The custom cache key regex contains a greedy quantifier inside a lookahead, which is not allowed.';
         }
 
         // Allow only a single ".*" in the regex
         $greedy_count = preg_match_all('/\.\*/', $regex);
         if ($greedy_count > 1) {
-            // If there are multiple ".*" quantifiers
             $error_message_regex = 'ERROR REGEX: The custom cache key regex contains more than one ".*" quantifier, which is not allowed.';
         }
 
         // Check for excessively long regex patterns (limit length to 100 characters)
         if (strlen($regex) > 100) {
-            // Reject overly long regex patterns
             $error_message_regex = 'ERROR REGEX: The custom cache key regex exceeds the allowed length of 100 characters.';
         }
 
