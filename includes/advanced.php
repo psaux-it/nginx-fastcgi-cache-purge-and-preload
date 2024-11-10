@@ -48,7 +48,7 @@ function nppp_premium_html($nginx_cache_path) {
     } else {
         // Output error message if cache keys are found
         if (!empty($config_data['cache_keys'])) {
-            echo '<div class="nppp-premium-wrap"><p class="nppp-advanced-error-message">WARNING: Custom FastCGI cache key (fastcgi_cache_key) detected !</p></div>';
+            echo '<div class="nppp-premium-wrap"><p class="nppp-advanced-error-message">WARNING: Not supported FastCGI cache key (fastcgi_cache_key) detected !</p></div>';
         }
     }
 
