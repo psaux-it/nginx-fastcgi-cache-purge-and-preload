@@ -218,7 +218,7 @@ function nppp_purge_cache_premium_callback() {
     $options = get_option('nginx_cache_settings');
     $nginx_cache_path = isset($options['nginx_cache_path']) ? $options['nginx_cache_path'] : '';
 
-    // Retrieve user-defined cache key regex from the db, with a hardcoded fallback
+    // Retrieve and decode user-defined cache key regex from the db, with a hardcoded fallback
     $regex = isset($options['nginx_cache_key_custom_regex'])
              ? base64_decode($options['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
@@ -402,10 +402,10 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // Determine if HTTPS is enabled
     $https_enabled = wp_is_using_https();
 
-    // Retrieve user-defined cache key regex from the database, with a hardcoded fallback
+    // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
-             ? base64_decode($options['nginx_cache_key_custom_regex'])
+             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
     try {
