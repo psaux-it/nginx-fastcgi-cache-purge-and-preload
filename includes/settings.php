@@ -460,7 +460,10 @@ function nppp_handle_nginx_cache_settings_submission() {
                     // Make sure we unslash and sanitize immediately
                     $nginx_cache_settings = array_map('sanitize_text_field', wp_unslash($_POST['nginx_cache_settings']));
 
-                    // Validate the submitted values
+                    // This is a pre-check to catch sanitization errors early, before calling update_option, to ensure proper redirection
+                    // 'nppp_nginx_cache_settings_sanitize' already registered for 'update_option' action via 'register_setting'
+                    // Note: If validation and sanitization are successful for the 'nginx_cache_key_custom_regex'
+                    // It menas we have a base_64 encoded 'nginx_cache_key_custom_regex' option now
                     $new_settings = nppp_nginx_cache_settings_sanitize($nginx_cache_settings);
 
                     // Check if there are any settings errors
@@ -484,7 +487,12 @@ function nppp_handle_nginx_cache_settings_submission() {
                         // Add small delay for transient operation
                         usleep(500000);
 
-                        // Update the settings with the new values
+                        // Decode 'nginx_cache_key_custom_regex' to prepare auto sanitization via 'update_option' again
+                        $decoded_regex = base64_decode($new_settings['nginx_cache_key_custom_regex']);
+                        $new_settings['nginx_cache_key_custom_regex'] = $decoded_regex;
+
+                        // Update the settings
+                        // Note: This will re-encode 'nginx_cache_key_custom_regex'
                         update_option('nginx_cache_settings', $new_settings);
 
                         // Compare old and new opt-in values
@@ -1145,7 +1153,7 @@ function nppp_nginx_cache_reject_regex_callback() {
 function nppp_nginx_cache_key_custom_regex_callback() {
     $options = get_option('nginx_cache_settings');
     $default_cache_key_regex = nppp_fetch_default_regex_for_cache_key();
-    $cache_key_regex = isset($options['nginx_cache_key_custom_regex']) ? $options['nginx_cache_key_custom_regex'] : $default_cache_key_regex;
+    $cache_key_regex = isset($options['nginx_cache_key_custom_regex']) ? base64_decode($options['nginx_cache_key_custom_regex']) : $default_cache_key_regex;
     // Use wp_kses() with an empty array to allow raw text without HTML sanitization
     echo "<textarea id='nginx_cache_key_custom_regex' name='nginx_cache_settings[nginx_cache_key_custom_regex]' rows='1' cols='50' class='large-text'>" . wp_kses($cache_key_regex, array()) . "</textarea>";
 }
@@ -1470,62 +1478,57 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
         // Validate the regex
         if (@preg_match($regex, "") === false) {
-            // If the regex is invalid, use the default regex
-            $regex = nppp_fetch_default_regex_for_cache_key();
-            $error_message = 'ERROR REGEX: The custom cache key regex is invalid check syntax and test before use it. Falling back to the default regex.';
+            // If the regex is invalid
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex is invalid check syntax and test before use it.';
         }
 
         // Check for excessive lookaheads (limit to 3)
         $lookahead_count = preg_match_all('/(\(\?=.*\))/i', $regex);
         if ($lookahead_count > 3) {
-            // If there are too many lookaheads, fall back to the default regex
-            $regex = nppp_fetch_default_regex_for_cache_key();
-            $error_message = 'ERROR REGEX: The custom cache key regex contains more than 3 lookaheads, which is not allowed. Falling back to the default regex.';
+            // If there are too many lookaheads
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex contains more than 3 lookaheads, which is not allowed.';
         }
 
         // Check for greedy quantifiers inside lookaheads
         if (preg_match('/\(\?=.*\.\*\)/', $regex)) {
-            // Warn or limit greedy quantifiers (may still allow simpler use cases)
-            $regex = nppp_fetch_default_regex_for_cache_key();
-            $error_message = 'ERROR REGEX: The custom cache key regex contains a greedy quantifier inside a lookahead, which is not allowed. Falling back to the default regex.';
+            // Limit greedy quantifiers (may still allow simpler use cases)
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex contains a greedy quantifier inside a lookahead, which is not allowed.';
         }
 
         // Allow only a single ".*" in the regex
         $greedy_count = preg_match_all('/\.\*/', $regex);
         if ($greedy_count > 1) {
-            // If there are multiple ".*" quantifiers, reject the regex
-            $regex = nppp_fetch_default_regex_for_cache_key();
-            $error_message = 'ERROR REGEX: The custom cache key regex contains more than one ".*" quantifier, which is not allowed. Falling back to the default regex.';
+            // If there are multiple ".*" quantifiers
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex contains more than one ".*" quantifier, which is not allowed.';
         }
 
         // Check for excessively long regex patterns (limit length to 100 characters)
         if (strlen($regex) > 100) {
-            // Reject overly long regex patterns to prevent performance issues
-            $regex = nppp_fetch_default_regex_for_cache_key();
-            $error_message = 'ERROR REGEX: The custom cache key regex exceeds the allowed length of 100 characters. Falling back to the default regex.';
+            // Reject overly long regex patterns
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex exceeds the allowed length of 100 characters.';
         }
 
         // If an error message was set, trigger the error and log it
-        if (isset($error_message)) {
+        if (isset($error_message_regex)) {
             // Add settings error
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid_regex',
-                $error_message,
+                $error_message_regex,
                 'error'
             );
 
             // Log error message
-            $log_message = $error_message;
+            $log_message = $error_message_regex;
             $log_file_path = NGINX_CACHE_LOG_FILE;
             nppp_perform_file_operation($log_file_path, 'create');
             if (!empty($log_file_path)) {
                 nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
             }
+        } else {
+            // Sanitization & validation the regex completed, safely store regex in db
+            $sanitized_input['nginx_cache_key_custom_regex'] = base64_encode($regex);
         }
-
-        // Sanitizing completed
-        $sanitized_input['nginx_cache_key_custom_regex'] = $regex;
     }
 
     // Sanitize Reject extension field
@@ -1726,7 +1729,7 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_cpu_limit' => 80,
         'nginx_cache_reject_extension' => nppp_fetch_default_reject_extension(),
         'nginx_cache_reject_regex' => nppp_fetch_default_reject_regex(),
-        'nginx_cache_key_custom_regex' => nppp_fetch_default_regex_for_cache_key(),
+        'nginx_cache_key_custom_regex' => base64_encode(nppp_fetch_default_regex_for_cache_key()),
         'nginx_cache_wait_request' => 0,
         'nginx_cache_limit_rate' => 5120,
         'nginx_cache_tracking_opt_in' => '1',
