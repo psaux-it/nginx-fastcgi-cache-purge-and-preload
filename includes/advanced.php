@@ -79,7 +79,7 @@ function nppp_premium_html($nginx_cache_path) {
     <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
         <p style="margin: 0; display: flex; align-items: center;">
             <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-            If the table is broken or <strong>Cached URL's</strong> or any metric are wrong, please correctly set <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section.
+            If the table is broken or <strong>Cached URL's</strong> or any metric are wrong, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
         </p>
     </div>
     <h2></h2>
@@ -469,7 +469,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // Check if any URLs were extracted
     if (empty($urls)) {
         return [
-            'error' => 'No cached content found. Please try <strong>Preload All</strong> cache first and check again. If you still encounter this error, please read and set the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section.'
+            'error' => 'No cached content found. Please <strong>Preload All</strong> cache first and try again. If you still encounter this error, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and try again.'
         ];
     }
 
