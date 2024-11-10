@@ -220,7 +220,7 @@ function nppp_purge_cache_premium_callback() {
 
     // Retrieve user-defined cache key regex from the db, with a hardcoded fallback
     $regex = isset($options['nginx_cache_key_custom_regex'])
-             ? $options['nginx_cache_key_custom_regex']
+             ? base64_decode($options['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
     // Initialize WordPress filesystem
@@ -405,7 +405,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // Retrieve user-defined cache key regex from the database, with a hardcoded fallback
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
-             ? $nginx_cache_settings['nginx_cache_key_custom_regex']
+             ? base64_decode($options['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
     try {
