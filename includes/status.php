@@ -388,7 +388,7 @@ function nppp_my_status_html() {
                   <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                       <p style="margin: 0; align-items: center;">
                           <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                          If <strong>Pages In Cache Count</strong> is always <strong>0</strong>, please read and set <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section.
+                          If <strong>Pages In Cache Count</strong> is always <strong>0</strong>, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
                       </p>
                   </div>';
         }
