@@ -285,9 +285,9 @@ function nppp_get_in_cache_page_count() {
     $default_cache_path = '/dev/shm/change-me-now';
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
-    // Retrieve user-defined cache key regex from the database, with a hardcoded fallback
+    // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
     $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
-             ? $nginx_cache_settings['nginx_cache_key_custom_regex']
+             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
     $urls_count = 0;
