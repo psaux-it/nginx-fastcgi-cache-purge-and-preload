@@ -459,7 +459,7 @@ function nppp_handle_nginx_cache_settings_submission() {
                     // Retrieve existing options before sanitizing the input
                     $existing_options = get_option('nginx_cache_settings');
 
-                    // Ignored PCP warning because we will implement custom sanitization via 'nppp_nginx_cache_settings_sanitize()'.
+                    // Ignored PCP warning because we use custom sanitization via 'nppp_nginx_cache_settings_sanitize()'.
                     $nginx_cache_settings = wp_unslash($_POST['nginx_cache_settings']);
 
                     // This is a pre-check to catch sanitization errors early, before calling update_option, to ensure proper redirection
@@ -489,12 +489,8 @@ function nppp_handle_nginx_cache_settings_submission() {
                         // Add small delay for transient operation
                         usleep(500000);
 
-                        // Decode 'nginx_cache_key_custom_regex' to prepare auto sanitization via 'update_option' again
-                        $decoded_regex = base64_decode($new_settings['nginx_cache_key_custom_regex']);
-                        $new_settings['nginx_cache_key_custom_regex'] = $decoded_regex;
-
                         // Update the settings
-                        // Note: This will re-encode 'nginx_cache_key_custom_regex'
+                        // Note: This will re-encode 'nginx_cache_key_custom_regex' via sanitization
                         update_option('nginx_cache_settings', $new_settings);
 
                         // Compare old and new opt-in values
@@ -1064,14 +1060,14 @@ function nppp_nginx_cache_email_callback() {
 // Callback function to display the input field for CPU Usage Limit setting
 function nppp_nginx_cache_cpu_limit_callback() {
     $options = get_option('nginx_cache_settings');
-    $default_cpu_limit = 50;
+    $default_cpu_limit = 80;
     echo "<input type='number' id='nginx_cache_cpu_limit' name='nginx_cache_settings[nginx_cache_cpu_limit]' min='10' max='100' value='" . esc_attr($options['nginx_cache_cpu_limit'] ?? $default_cpu_limit) . "' class='small-text' />";
 }
 
 // Callback function to display the input field for Per Request Wait Time setting
 function nppp_nginx_cache_wait_request_callback() {
     $options = get_option('nginx_cache_settings');
-    $default_wait_time = 1;
+    $default_wait_time = 0;
     echo "<input type='number' id='nginx_cache_wait_request' name='nginx_cache_settings[nginx_cache_wait_request]' min='0' max='60' value='" . esc_attr($options['nginx_cache_wait_request'] ?? $default_wait_time) . "' class='small-text' />";
 }
 
@@ -1229,8 +1225,8 @@ function nppp_nginx_cache_logs_callback() {
 // Callback function to display the input field for Limit Rate setting.
 function nppp_nginx_cache_limit_rate_callback() {
     $options = get_option('nginx_cache_settings');
-    $default_limit_rate = 1024;
-    echo "<input type='number' id='nginx_cache_limit_rate' name='nginx_cache_settings[nginx_cache_limit_rate]' value='" . esc_attr($options['nginx_cache_limit_rate'] ?? $default_limit_rate) . "' class='small-text' />";
+    $default_limit_rate = 5120;
+    echo "<input type='number' id='nginx_cache_limit_rate' name='nginx_cache_settings[nginx_cache_limit_rate]' min='1' max='102400' value='" . esc_attr($options['nginx_cache_limit_rate'] ?? $default_limit_rate) . "' class='small-text' />";
 }
 
 // Fetch default reject regex
@@ -1342,6 +1338,20 @@ function nppp_nginx_cache_api_callback() {
     <?php
 }
 
+// Log error messages
+function nppp_log_error_message($message) {
+    $log_message = esc_html($message);
+    $log_file_path = NGINX_CACHE_LOG_FILE;
+
+    // Create log file if not exist
+    nppp_perform_file_operation($log_file_path, 'create');
+
+    // Check if the log path is valid and writable
+    if (!empty($log_file_path)) {
+        nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
+    }
+}
+
 // Sanitize inputs
 function nppp_nginx_cache_settings_sanitize($input) {
     $sanitized_input = array();
@@ -1380,13 +1390,8 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 'error'
             );
 
-            // Log error message
-            $log_message = $error_message;
-            $log_file_path = NGINX_CACHE_LOG_FILE;
-            nppp_perform_file_operation($log_file_path, 'create');
-            if (!empty($log_file_path)) {
-                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
-            }
+            // Log the error message
+            nppp_log_error_message($error_message);
         }
     }
 
@@ -1404,61 +1409,77 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 'ERROR OPTION: Please enter a valid email address.',
                 'error'
             );
-            // Log error message
-            $log_message = 'ERROR OPTION: Please enter a valid email address.';
-            $log_file_path = NGINX_CACHE_LOG_FILE;
-            nppp_perform_file_operation($log_file_path, 'create');
-            if (!empty($log_file_path)) {
-                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
-            }
+
+            // Log the error message
+            nppp_log_error_message('ERROR OPTION: Please enter a valid email address.');
         }
     }
 
     // Sanitize and validate CPU limit
     if (!empty($input['nginx_cache_cpu_limit'])) {
-        // Validate CPU limit
-        $cpu_limit = intval($input['nginx_cache_cpu_limit']);
-        if ($cpu_limit >= 10 && $cpu_limit <= 100) {
-            $sanitized_input['nginx_cache_cpu_limit'] = $cpu_limit;
+        // Check if the input is numeric to prevent non-numeric strings from passing through
+        if (is_numeric($input['nginx_cache_cpu_limit'])) {
+            // Convert to integer
+            $cpu_limit = intval($input['nginx_cache_cpu_limit']);
+            // Validate range
+            if ($cpu_limit >= 10 && $cpu_limit <= 100) {
+                $sanitized_input['nginx_cache_cpu_limit'] = $cpu_limit;
+            } else {
+                // CPU limit is not within range, add error message
+                add_settings_error(
+                    'nppp_nginx_cache_settings_group',
+                    'invalid-cpu-limit',
+                    'Please enter a CPU limit between 10 and 100.',
+                    'error'
+                );
+
+                // Log the error message
+                nppp_log_error_message('ERROR OPTION: Please enter a CPU limit between 10 and 100.');
+            }
         } else {
-            // CPU limit is not within range, add error message
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
-                'invalid-cpu-limit',
-                'Please enter a CPU limit between 10 and 100.',
+                'invalid-cpu-limit-format',
+                'CPU limit must be a numeric value.',
                 'error'
             );
-            // Log error message
-            $log_message = 'ERROR: Please enter a CPU limit between 10 and 100.';
-            $log_file_path = NGINX_CACHE_LOG_FILE;
-            nppp_perform_file_operation($log_file_path, 'create');
-            if (!empty($log_file_path)) {
-                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
-            }
+
+            // Log the error message
+            nppp_log_error_message('ERROR OPTION: CPU limit must be a numeric value.');
         }
     }
 
     // Sanitize and validate Per Request Wait Time
     if (isset($input['nginx_cache_wait_request'])) {
-        // Validate Wait Time
-        $wait_time = intval($input['nginx_cache_wait_request']);
-        if ($wait_time >= 0 && $wait_time <= 60) {
-            $sanitized_input['nginx_cache_wait_request'] = $wait_time;
+        // Check if the input is numeric to prevent non-numeric strings from passing through
+        if (is_numeric($input['nginx_cache_wait_request'])) {
+            // Convert to integer
+            $wait_time = intval($input['nginx_cache_wait_request']);
+            // Validate range
+            if ($wait_time >= 0 && $wait_time <= 60) {
+                $sanitized_input['nginx_cache_wait_request'] = $wait_time;
+            } else {
+                // Wait Time is not within range, add error message
+                add_settings_error(
+                    'nppp_nginx_cache_settings_group',
+                    'invalid-wait-time',
+                    'Please enter a Per Request Wait Time between 0 and 60 seconds.',
+                    'error'
+                );
+
+                // Log the error message
+                nppp_log_error_message('ERROR OPTION: Please enter a per request wait time between 0 and 60 seconds.');
+            }
         } else {
-            // Wait Time is not within range, add error message
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
-                'invalid-wait-time',
-                'Please enter a Per Request Wait Time between 0 and 60 seconds.',
+                'invalid-wait-time-format',
+                'Wait time must be a numeric value.',
                 'error'
             );
-            // Log error message
-            $log_message = 'ERROR: Please enter a Per Request Wait Time between 0 and 60 seconds.';
-            $log_file_path = NGINX_CACHE_LOG_FILE;
-            nppp_perform_file_operation($log_file_path, 'create');
-            if (!empty($log_file_path)) {
-                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
-            }
+
+            // Log the error message
+            nppp_log_error_message('ERROR OPTION: Wait time must be a numeric value.');
         }
     }
 
@@ -1469,8 +1490,15 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize & validate custom cache key regex
     if (!empty($input['nginx_cache_key_custom_regex'])) {
-        // Retrieve the user-defined regex
-        $regex = $input['nginx_cache_key_custom_regex'];
+        // Decode the base64-encoded regex if it's being passed encoded
+        $decoded_regex = base64_decode($input['nginx_cache_key_custom_regex'], true);
+        if ($decoded_regex !== false) {
+            // Retrieve the decoded regex
+            $regex = $decoded_regex;
+        } else {
+            // If decoding fails, use the input directly
+            $regex = $input['nginx_cache_key_custom_regex'];
+        }
 
         // ####################################################################
         // Validate & Sanitize the regex
@@ -1500,9 +1528,9 @@ function nppp_nginx_cache_settings_sanitize($input) {
             $error_message_regex = 'ERROR REGEX: The custom cache key regex contains more than one ".*" quantifier, which is not allowed.';
         }
 
-        // Check for excessively long regex patterns (limit length to 100 characters)
-        if (strlen($regex) > 100) {
-            $error_message_regex = 'ERROR REGEX: The custom cache key regex exceeds the allowed length of 100 characters.';
+        // Check for excessively long regex patterns (limit length to 300 characters)
+        if (strlen($regex) > 300) {
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex exceeds the allowed length of 300 characters.';
         }
 
         // If an error message was set, trigger the error and log it
@@ -1514,14 +1542,8 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 $error_message_regex,
                 'error'
             );
-
-            // Log error message
-            $log_message = $error_message_regex;
-            $log_file_path = NGINX_CACHE_LOG_FILE;
-            nppp_perform_file_operation($log_file_path, 'create');
-            if (!empty($log_file_path)) {
-                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
-            }
+            // Log the error message
+            nppp_log_error_message($error_message_regex);
         } else {
             // Sanitization & validation the regex completed, safely store regex in db
             $sanitized_input['nginx_cache_key_custom_regex'] = base64_encode($regex);
@@ -1551,9 +1573,38 @@ function nppp_nginx_cache_settings_sanitize($input) {
     // Sanitize Opt-in
     $sanitized_input['nginx_cache_tracking_opt_in'] = isset($input['nginx_cache_tracking_opt_in']) && $input['nginx_cache_tracking_opt_in'] == '1' ? '1' : '0';
 
-    // Sanitize Limit Rate
+    // Sanitize and validate cache limit rate
     if (!empty($input['nginx_cache_limit_rate'])) {
-        $sanitized_input['nginx_cache_limit_rate'] = sanitize_text_field($input['nginx_cache_limit_rate']);
+        // Check if the input is numeric to prevent non-numeric strings from passing through
+        if (is_numeric($input['nginx_cache_limit_rate'])) {
+            // Convert to integer
+            $limit_rate = intval($input['nginx_cache_limit_rate']);
+            // Validate range: 1 KB to 102400 KB (100 MB)
+            if ($limit_rate >= 1 && $limit_rate <= 102400) {
+                $sanitized_input['nginx_cache_limit_rate'] = $limit_rate;
+            } else {
+                // Limit rate is not within range, add error message
+                add_settings_error(
+                    'nppp_nginx_cache_settings_group',
+                    'invalid-limit-rate',
+                    'Please enter a limit rate between 1 KB/sec and 100 MB/sec.',
+                    'error'
+                );
+
+                // Log the error message
+                nppp_log_error_message('ERROR OPTION: Please enter a limit rate between 1 MB/sec and 100 MB/sec in KB/sec.');
+            }
+        } else {
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'invalid-limit-rate-format',
+                'Limit rate must be a numeric value in KB/sec.',
+                'error'
+            );
+
+            // Log the error message
+           nppp_log_error_message('ERROR OPTION: Limit rate must be a numeric value in KB/sec.');
+        }
     }
 
     // Sanitize REST API Key
@@ -1572,13 +1623,9 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 'ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.',
                 'error'
             );
-            // Log error message
-            $log_message = 'ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.';
-            $log_file_path = NGINX_CACHE_LOG_FILE;
-            nppp_perform_file_operation($log_file_path, 'create');
-            if (!empty($log_file_path)) {
-                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
-            }
+
+            // Log the error message
+            nppp_log_error_message('ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.');
         }
     }
 
