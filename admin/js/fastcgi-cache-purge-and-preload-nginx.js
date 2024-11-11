@@ -1836,6 +1836,8 @@ $(document).ready(function() {
             // Backend has updated the input field with the new API key
             var newApiKey = nppApiKeyInput.val();
             nppSetApiKey(newApiKey);
+            // Update the original value in the originalValues object for API key
+            originalValues['#nginx_cache_api_key'] = nppApiKeyInput.data('original-key');
         }, 700);
     });
 
@@ -1895,7 +1897,10 @@ $(document).ready(function() {
     // Initialize originalValues with current field values
     fieldsToMonitor.forEach(function(selector) {
         var $field = $(selector);
-        if ($field.attr('type') === 'checkbox') {
+        if (selector === '#nginx_cache_api_key') {
+            // For the API key, use the unmasked value (original key)
+            originalValues[selector] = nppApiKeyInput.data('original-key');
+        } else if ($field.attr('type') === 'checkbox') {
             originalValues[selector] = $field.is(':checked');
         } else {
             originalValues[selector] = $field.val();
@@ -1911,7 +1916,10 @@ $(document).ready(function() {
             var originalValue = originalValues[selector];
             var currentValue;
 
-            if ($field.attr('type') === 'checkbox') {
+            if (selector === '#nginx_cache_api_key') {
+                // For the API key, compare the unmasked value (original key)
+                currentValue = nppApiKeyInput.data('original-key');
+            } else if ($field.attr('type') === 'checkbox') {
                 currentValue = $field.is(':checked');
             } else {
                 currentValue = $field.val();
