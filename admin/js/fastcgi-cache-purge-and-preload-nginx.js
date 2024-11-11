@@ -2023,7 +2023,7 @@ document.addEventListener("DOMContentLoaded", function() {
 // Trim trailing leading white spaces from inputs, sanitize nginx cache path on client side
 document.addEventListener('DOMContentLoaded', function () {
     // IDs of input fields to apply trimming
-    const inputIds = ['#nginx_cache_path', '#nginx_cache_email', '#nginx_cache_reject_regex', '#nginx_cache_api_key', '#nginx_cache_reject_extension'];
+    const inputIds = ['#nginx_cache_path', '#nginx_cache_email', '#nginx_cache_reject_regex', '#nginx_cache_api_key', '#nginx_cache_reject_extension', '#nginx_cache_key_custom_regex'];
 
     inputIds.forEach(function(inputId) {
         const inputField = document.querySelector(inputId);
