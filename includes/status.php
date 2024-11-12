@@ -54,16 +54,39 @@ function nppp_check_permissions_recursive_with_cache() {
 
 // Function to clear all transients related to the plugin
 function nppp_clear_plugin_cache() {
-    // Define the static key base used in transient names
+    // Static key base
     $static_key_base = 'nppp';
 
-    // Generate the transient key for the permissions check
-    $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
-
-    // List of static transients to clear
+    // Transients to clear
     $transients = array(
-        $transient_key_permissions_check,
+        'nppp_cache_keys_wpfilesystem_error',
+        'nppp_nginx_conf_not_found',
+        'nppp_cache_keys_not_found',
+        'nppp_cache_keys_' . md5($static_key_base),
+        'nppp_bindfs_version_' . md5($static_key_base),
+        'nppp_libfuse_version_' . md5($static_key_base),
+        'nppp_permissions_check_' . md5($static_key_base),
     );
+
+    // Category-related transients based on the URL cache
+    $url_cache_pattern = 'nppp_category_';
+
+    // Rate limit transients
+    $rate_limit_pattern = 'nppp_rate_limit_';
+
+    // Get all transients
+    $all_transients = wp_cache_get('alloptions', 'options');
+    foreach ($all_transients as $transient_key => $value) {
+        // Match the category-based transients
+        if (strpos($transient_key, $url_cache_pattern) !== false) {
+            $transients[] = $transient_key;
+        }
+
+        // Match the rate limit-related transients
+        if (strpos($transient_key, $rate_limit_pattern) !== false) {
+            $transients[] = $transient_key;
+        }
+    }
 
     // Attempt to delete all transients
     foreach ($transients as $transient) {
