@@ -64,6 +64,7 @@ function nppp_get_nginx_conf_paths($wp_filesystem) {
 function nppp_parse_nginx_cache_key() {
     static $parsed_files = [];
     $cache_keys = [];
+    $found_keys = 0;
 
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -72,13 +73,28 @@ function nppp_parse_nginx_cache_key() {
             'error',
             'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
         );
+        // Store error state in cache also
+        set_transient('nppp_cache_keys_wpfilesystem_error', true, MINUTE_IN_SECONDS);
         return false;
+    }
+
+    // Transient caching mechanism
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_cache_keys_' . md5($static_key_base);
+
+    // Check for cached result first
+    $cached_result = get_transient($transient_key);
+    if ($cached_result !== false) {
+        // Return the cached result if available
+        return $cached_result;
     }
 
     $conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
 
     if (empty($conf_paths)) {
         // Could not find any nginx.conf files
+        // Store error state in cache also
+        set_transient('nppp_nginx_conf_not_found', true, MINUTE_IN_SECONDS);
         return false;
     }
 
@@ -88,10 +104,38 @@ function nppp_parse_nginx_cache_key() {
 
         if ($result !== false && isset($result['cache_keys'])) {
             $cache_keys = array_merge($cache_keys, $result['cache_keys']);
+            // Count the number of keys parsed from this file
+            $found_keys += count($result['cache_keys']);
         }
     }
 
-    // Return only found fastcgi_cache_key values
+    // If no fastcgi_cache_key directives found
+    if ($found_keys === 0) {
+        set_transient('nppp_cache_keys_not_found', true, MINUTE_IN_SECONDS);
+        return ['cache_keys' => ['Not Found']];
+    }
+
+    // Supported key format to be removed from array
+    $supported_key_format = '$scheme$request_method$host$request_uri';
+
+    // Remove all occurrences of the supported key format and re-index the array
+    $cache_keys = array_values(array_filter($cache_keys, function($key) use ($supported_key_format) {
+        // Remove surrounding quotes, if any
+        $unquoted_value = trim($key, "'\"");
+
+        // Check if the unquoted value matches the supported key format
+        return $unquoted_value !== $supported_key_format;
+    }));
+
+    // Save the result to transient for future use
+    set_transient($transient_key, ['cache_keys' => $cache_keys], MINUTE_IN_SECONDS);
+
+    // Reset the error transients
+    delete_transient('nppp_cache_keys_wpfilesystem_error');
+    delete_transient('nppp_nginx_conf_not_found');
+    delete_transient('nppp_cache_keys_not_found');
+
+    // Return only unsupported cache keys
     return ['cache_keys' => $cache_keys];
 }
 
@@ -125,19 +169,7 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
 
         // Strip leading and trailing quotes
         $unquoted_value = trim($value, "'\"");
-
-        // Check if the unquoted value contains the required sequence in order
-        $required_sequence = '\$scheme\s*\$request_method\s*\$host\s*\$request_uri';
-        $pattern = '/'. $required_sequence .'/';
-
-        // Check if the user cache key does not match the required sequence
-        // or is not exactly equal to default supported key format
-        $supported_key_format = '$scheme$request_method$host$request_uri';
-
-        if (!preg_match($pattern, $unquoted_value) || $unquoted_value !== $supported_key_format) {
-            // Detected unsupported fastcgi cache key format
-            $cache_keys[] = $value;
-        }
+        $cache_keys[] = $unquoted_value;
     }
 
     // Regex to match include directives
