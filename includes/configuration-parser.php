@@ -250,7 +250,7 @@ function nppp_is_service_file_exists() {
 }
 
 // Function to generate HTML output
-function nppp_generate_html($cache_paths, $nginx_info) {
+function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
     // Check if the systemd service file exists
     $service_file_exists = nppp_is_service_file_exists();
 
@@ -298,8 +298,9 @@ function nppp_generate_html($cache_paths, $nginx_info) {
                             <?php endif; ?>
                         </td>
                     </tr>
+                    <!-- Section for Nginx Cache Paths -->
                     <tr>
-                        <td class="action">Active Nginx Cache Paths</td>
+                        <td class="action">Nginx Cache Paths</td>
                         <td class="status">
                             <?php if (empty($cache_paths)): ?>
                                 <p style="color: red; font-weight: bold;"><span class="dashicons dashicons-no-alt"></span> Not Found</p>
@@ -309,9 +310,51 @@ function nppp_generate_html($cache_paths, $nginx_info) {
                                         <?php foreach ($cache_paths as $values): ?>
                                             <?php foreach ($values as $value): ?>
                                                 <tr>
-                                                    <td><span class="dashicons dashicons-arrow-right-alt" style="color: green; font-size: 17px !important;"></span>&nbsp;<span style="color: teal; font-size: 14px;"><?php echo esc_html($value); ?></span></td>
+                                                    <td><span class="dashicons dashicons-yes" style="color: green; font-size: 20px !important;"></span>&nbsp;<span style="color: teal; font-size: 13px; font-weight: bold;"><?php echo esc_html($value); ?></span></td>
                                                 </tr>
                                             <?php endforeach; ?>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <!-- Section for FastCGI Cache Keys -->
+                    <tr>
+                        <td class="action">FastCGI Cache Keys</td>
+                        <td class="status">
+                            <?php if ($cache_keys === 'Not Found'): ?>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: bold !important;"></span>
+                                <span style="color: red; font-size: 14px; font-weight: bold;">Not Found</span>
+                            <?php elseif ($cache_keys === 'Filesystem Error'): ?>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: bold !important;"></span>
+                                <span style="color: red; font-size: 14px; font-weight: bold">Filesystem Error</span>
+                            <?php elseif ($cache_keys === 'Conf Not Found'): ?>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: bold !important;"></span>
+                                <span style="color: red; font-size: 14px; font-weight: bold;">Conf Not Found</span>
+                            <?php elseif ($cache_keys === 'Key Not Found'): ?>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: bold !important;"></span>
+                                <span style="color: red; font-size: 14px; font-weight: bold;">No Keys Found</span>
+                            <?php elseif ($cache_keys === '$scheme$request_method$host$request_uri'): ?>
+                                <span class="dashicons dashicons-yes" style="color: green !important; font-size: 20px;"></span>
+                                <span style="color: teal; font-weight: bold; font-size: 13px;">
+                                    <?php $key_no_quotes = trim($cache_keys, '"'); echo esc_html($key_no_quotes); ?>
+                                </span>
+                            <?php else: ?>
+                                <table class="nginx-config-table">
+                                    <tbody>
+                                        <?php foreach ($cache_keys as $key): ?>
+                                            <tr>
+                                                <td>
+                                                    <span class="dashicons dashicons-warning" style="color: crimson; font-size: 20px !important;"></span>
+                                                    <span style="color: teal; font-size: 13px; font-weight: bold;">
+                                                        <?php
+                                                        $key_no_quotes = trim($key, '"');
+                                                        echo esc_html($key_no_quotes);
+                                                        ?>
+                                                    </span>
+                                                </td>
+                                            </tr>
                                         <?php endforeach; ?>
                                     </tbody>
                                 </table>
@@ -430,23 +473,70 @@ function nppp_nginx_config_shortcode() {
         return '<p>Failed to initialize filesystem.</p>';
     }
 
-    // Path to Nginx configuration file
-    // Check if Nginx configuration file exists
-    $config_file = '/etc/nginx/nginx.conf';
-    if (!$wp_filesystem->exists($config_file)) {
+    // Use the nppp_get_nginx_conf_paths function to find Nginx configuration paths
+    $conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
+
+    // Check if Nginx configuration file found
+    if (empty($conf_paths)) {
         return '<p>Nginx configuration file not found.</p>';
     }
 
-    // Parse Nginx configuration file
+    // Parse Nginx configuration file for Nginx Cache Paths
     // Check if parsing the configuration file failed
+    $config_file = $conf_paths[0];
     $config_data = nppp_parse_nginx_config($config_file, $wp_filesystem);
     if ($config_data === false) {
         return '<p>Failed to parse Nginx configuration file.</p>';
+    }
+
+    // Get cache keys from cache as status &advanced tab already parsed them
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_cache_keys_' . md5($static_key_base);
+
+    // Attempt to retrieve the cached result
+    $cached_result = get_transient($transient_key);
+
+    // Attempt to retrieve the error status
+    $error_conf = get_transient('nppp_nginx_conf_not_found');
+    $error_parse = get_transient('nppp_cache_keys_not_found');
+    $error_wpfilesystem = get_transient('nppp_cache_keys_wpfilesystem_error');
+
+    // Handle return cases
+    if ($cached_result === false) {
+        // Case 1: Transient not found
+
+        if ($error_wpfilesystem) {
+            // Check if there was a filesystem error
+            $cache_keys = 'Filesystem Error';
+        } elseif ($error_conf) {
+            // If no nginx.conf files were found
+           $cache_keys = 'Conf Not Found';
+        } elseif ($error_parse) {
+            // Check if no cache keys were found
+           $cache_keys = 'Key Not Found';
+        } else {
+            $cache_keys = 'Not Found';
+        }
+    } else {
+        // Case 2: Transient found
+
+        // 2.1: Array is empty, return a default fastcgi_cache_key
+        if (empty($cached_result['cache_keys'])) {
+            $cache_keys = '$scheme$request_method$host$request_uri';
+        } else {
+            // Case 2.2: Unsupported Cache keys exist
+            $cache_keys = $cached_result['cache_keys'];
+
+            // Trim whitespace from all elements in the cache_keys array
+            if (is_array($cache_keys)) {
+                $cache_keys = array_map('trim', $cache_keys);
+            }
+        }
     }
 
     // Get Nginx version, OpenSSL version, and other info
     $nginx_info = nppp_get_nginx_info();
 
     // Generate HTML output based on parsed data and Nginx info
-    return nppp_generate_html($config_data['cache_paths'], $nginx_info);
+    return nppp_generate_html($config_data['cache_paths'], $nginx_info, $cache_keys);
 }
