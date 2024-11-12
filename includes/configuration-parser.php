@@ -37,6 +37,17 @@ function nppp_get_latest_version_git($url) {
 
 // Function to check bindfs version
 function nppp_check_bindfs_version() {
+    // Ask result in cache first
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_bindfs_version_' . md5($static_key_base);
+    $cached_result = get_transient($transient_key);
+
+    // Return cached result if available
+    if ($cached_result !== false) {
+        return $cached_result;
+    }
+
+    // Set repo URL
     $bindfs_repo_url = "https://api.github.com/repos/mpartel/bindfs/git/refs/tags";
 
     // Check if bindfs is installed
@@ -54,20 +65,36 @@ function nppp_check_bindfs_version() {
             $latest_version = end($mapped_refs);
 
             if (version_compare($installed_version, $latest_version, '<')) {
-                return "$installed_version ($latest_version)";
+                $result = "$installed_version ($latest_version)";
             } else {
-                return "$installed_version";
+                $result = "$installed_version";
             }
         } else {
-            return 'Not Determined';
+            $result = "Not Determined";
         }
     } else {
-        return "Not Installed";
+        $result = "Not Installed";
     }
+
+    // Store the result in the cache 1 day
+    set_transient($transient_key, $result, DAY_IN_SECONDS);
+
+    return $result;
 }
 
 // Function to check libfuse version
 function nppp_check_libfuse_version() {
+    // Ask result in cache first
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_libfuse_version_' . md5($static_key_base);
+    $cached_result = get_transient($transient_key);
+
+    // Return cached result if available
+    if ($cached_result !== false) {
+        return $cached_result;
+    }
+
+    // Set repo URL
     $libfuse_repo_url = "https://api.github.com/repos/libfuse/libfuse/releases/latest";
 
     // Get latest version info from GitHub API
@@ -80,27 +107,32 @@ function nppp_check_libfuse_version() {
             $installed_version = preg_replace('/version:\s*/', '', nppp_get_command_output('fusermount3 -V | grep -oP \'version:\s*\K[0-9.]+\''));
 
             if (version_compare($installed_version, $latest_version, '<')) {
-                return "$installed_version ($latest_version)";
+                $result = "$installed_version ($latest_version)";
             } else {
-                return "$installed_version";
+                $result = "$installed_version";
             }
         // Check for FUSE 2
         } elseif (nppp_get_command_output('command -v fusermount')) {
             $installed_version = preg_replace('/version:\s*/', '', nppp_get_command_output('fusermount -V | grep -oP \'version:\s*\K[0-9.]+\''));
 
             if (version_compare($installed_version, $latest_version, '<')) {
-                return "$installed_version ($latest_version)";
+                $result = "$installed_version ($latest_version)";
             } else {
-                return "$installed_version";
+                $result = "$installed_version";
             }
         } else {
             // Neither fusermount nor fusermount3 is found
-            return "Not Installed";
+            $result = "Not Installed";
         }
     } else {
         // Latest version could not be determined
-        return "Not Determined";
+        $result = "Not Determined";
     }
+
+    // Store the result in the cache 1 day
+    set_transient($transient_key, $result, DAY_IN_SECONDS);
+
+    return $result;
 }
 
 // Function to parse the Nginx configuration file with included paths
