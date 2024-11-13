@@ -2337,3 +2337,47 @@ p.description {
         margin-top: 60px;
     }
 }
+
+/* style table header elements */
+#nppp-nginx-info .check-header {
+    text-transform: uppercase !important;
+    font-size: 14px !important;
+    color: #0073e6 !important;
+    background-color: #F0F0F0 !important;
+    padding: 8px 10px !important;
+}
+
+#nppp-nginx-info .status-header {
+    text-transform: uppercase !important;
+    font-size: 14px !important;
+    color: #0073e6 !important;
+    background-color: #F0F0F0 !important;
+    padding: 8px 10px !important;
+}
+
+/* Ensure the table occupies full width */
+.nginx-status table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+/* Set width for table header cells */
+.nginx-status thead th {
+    width: 50%;
+}
+
+/* Set width for table data cells */
+.nginx-status td.action,
+.nginx-status td.status {
+    width: 50%;
+}
+
+/* Allow wrapping for long text in status cells on mobile */
+@media (max-width: 768px) {
+    .nginx-status td.action,
+    .nginx-status td.status {
+        word-wrap: break-word;
+        white-space: normal;
+    }
+}
