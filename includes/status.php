@@ -402,7 +402,7 @@ function nppp_my_status_html() {
 
     if ($config_data === false || (get_transient('nppp_nginx_conf_not_found') !== false || get_transient('nppp_cache_keys_wpfilesystem_error') !== false)) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">ERROR CONF: Unable to locate the nginx.conf configuration file!</p>
+                  <p class="nppp-advanced-error-message">ERROR CONF: Unable to locate the <span style="color: #f0c36d;">nginx.conf</span> configuration file!</p>
               </div>
               <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                   <p style="margin: 0; align-items: center;">
@@ -412,7 +412,7 @@ function nppp_my_status_html() {
               </div>';
     } elseif ($config_data['cache_keys'] === ['Not Found'] || get_transient('nppp_cache_keys_not_found') !== false) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">ERROR SETUP: FastCGI cache key (fastcgi_cache_key) not found!</p>
+                  <p class="nppp-advanced-error-message">ERROR SETUP: FastCGI cache key <span style="color: #f0c36d;">fastcgi_cache_key</span> not found!</p>
               </div>
               <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                   <p style="margin: 0; align-items: center;">
@@ -424,7 +424,7 @@ function nppp_my_status_html() {
         // Output error message if cache keys are found
         if (!empty($config_data['cache_keys'])) {
             echo '<div class="nppp-status-wrap">
-                      <p class="nppp-advanced-error-message">WARNING: Not supported FastCGI cache key (fastcgi_cache_key) detected !</p>
+                      <p class="nppp-advanced-error-message">WARNING: <span style="color: #f0c36d;">Not supported</span> FastCGI cache key <span style="color: #f0c36d;">fastcgi_cache_key</span> found !</p>
                   </div>
                   <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                       <p style="margin: 0; align-items: center;">
