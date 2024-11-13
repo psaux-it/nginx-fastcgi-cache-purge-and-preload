@@ -437,6 +437,12 @@ function nppp_my_status_html() {
                 <section class="status-summary">
                     <h2>Status Summary</h2>
                     <table>
+                        <thead>
+                            <tr>
+                                <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
+                                <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             <tr>
                                 <td class="action">
