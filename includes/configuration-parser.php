@@ -140,7 +140,7 @@ function nppp_check_libfuse_version() {
 function nppp_parse_nginx_config($file, $wp_filesystem = null) {
     // Ask result in cache first
     $static_key_base = 'nppp';
-    $transient_key = 'nppp_fuse_paths_' . md5($static_key_base);
+    $transient_key = 'nppp_cache_paths_' . md5($static_key_base);
 
     $cached_result = get_transient($transient_key);
     // Return cached result if available
