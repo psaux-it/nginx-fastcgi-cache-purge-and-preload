@@ -2381,3 +2381,28 @@ p.description {
         white-space: normal;
     }
 }
+
+/* Set size of checkbox For mobile devices */
+@media (max-width: 768px) {
+    #nginx_cache_tracking_opt_in {
+        transform: scale(0.8);
+    }
+}
+
+/* Ensure the table occupies full width */
+.status-summary table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+/* Set width for table header cells */
+.status-summary thead th {
+    width: 50%;
+}
+
+/* Set width for table data cells */
+.status-summary td.action,
+.status-summary td.status {
+    width: 50%;
+}
