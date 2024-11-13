@@ -400,8 +400,26 @@ function nppp_my_status_html() {
     // If not we can not get the pages in cache count
     $config_data = nppp_parse_nginx_cache_key();
 
-    if ($config_data === false) {
-        return 'Not Found';
+    if ($config_data === false || (get_transient('nppp_nginx_conf_not_found') !== false || get_transient('nppp_cache_keys_wpfilesystem_error') !== false)) {
+        echo '<div class="nppp-status-wrap">
+                  <p class="nppp-advanced-error-message">ERROR CONF: Unable to locate the nginx.conf configuration file!</p>
+              </div>
+              <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                  <p style="margin: 0; align-items: center;">
+                      <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                      The <strong>nginx.conf</strong> file was not detected in the <strong>default system paths</strong>. This may indicate a custom Nginx setup with a non-standard configuration location. If you still encounter this error, please file a bug!
+                  </p>
+              </div>';
+    } elseif ($config_data['cache_keys'] === ['Not Found'] || get_transient('nppp_cache_keys_not_found') !== false) {
+        echo '<div class="nppp-status-wrap">
+                  <p class="nppp-advanced-error-message">ERROR SETUP: FastCGI cache key (fastcgi_cache_key) not found!</p>
+              </div>
+              <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                  <p style="margin: 0; align-items: center;">
+                      <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                      No <strong>fastcgi_cache_key</strong> directive was found in your Nginx configuration. Please review your <strong>Nginx FastCGI cache setup</strong> to ensure that the cache key is correctly defined. If you still encounter this error, please file a bug!
+                  </p>
+              </div>';
     } else {
         // Output error message if cache keys are found
         if (!empty($config_data['cache_keys'])) {
@@ -411,7 +429,7 @@ function nppp_my_status_html() {
                   <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                       <p style="margin: 0; align-items: center;">
                           <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                          If <strong>Pages In Cache Count</strong> is always <strong>0</strong>, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
+                          If <strong>Pages In Cache Count</strong> is always <strong>0</strong> or wrong, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
                       </p>
                   </div>';
         }
