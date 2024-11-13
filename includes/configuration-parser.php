@@ -77,7 +77,7 @@ function nppp_check_bindfs_version() {
     }
 
     // Store the result in the cache 1 day
-    set_transient($transient_key, $result, DAY_IN_SECONDS);
+    set_transient($transient_key, $result, MONTH_IN_SECONDS);
 
     return $result;
 }
@@ -130,7 +130,7 @@ function nppp_check_libfuse_version() {
     }
 
     // Store the result in the cache 1 day
-    set_transient($transient_key, $result, DAY_IN_SECONDS);
+    set_transient($transient_key, $result, MONTH_IN_SECONDS);
 
     return $result;
 }
@@ -210,12 +210,12 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
 
     // Return empty if no Nginx cache paths are found
     if (empty($cache_paths)) {
-        set_transient('nppp_cache_path_not_found', true, MINUTE_IN_SECONDS);
+        set_transient('nppp_cache_path_not_found', true, MONTH_IN_SECONDS);
         return ['cache_paths' => []];
     }
 
     // Store the result in the cache before returning
-    set_transient($transient_key, ['cache_paths' => $cache_paths], MINUTE_IN_SECONDS);
+    set_transient($transient_key, ['cache_paths' => $cache_paths], MONTH_IN_SECONDS);
 
     // Reset the error transients
     delete_transient('nppp_cache_path_not_found');
