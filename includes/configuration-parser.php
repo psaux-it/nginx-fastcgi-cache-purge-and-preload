@@ -376,6 +376,12 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
         <section class="nginx-status">
             <h2 style="margin-top: 45px; !important">FUSE STATUS</h2>
             <table>
+                <thead>
+                    <tr>
+                        <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
+                        <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                    </tr>
+                </thead>
                 <tbody>
                     <tr>
                         <td class="action">libfuse Version</td>
