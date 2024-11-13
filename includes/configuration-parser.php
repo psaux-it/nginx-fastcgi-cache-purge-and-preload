@@ -355,7 +355,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
                                         <?php foreach ($cache_keys as $key): ?>
                                             <tr>
                                                 <td>
-                                                    <span class="dashicons dashicons-warning" style="color: crimson; font-size: 20px !important;"></span>
+                                                    <span class="dashicons dashicons-warning" style="color: crimson; font-size: 18px !important;"></span>
                                                     <span style="color: teal; font-size: 13px; font-weight: bold;">
                                                         <?php
                                                         $key_no_quotes = trim($key, '"');
