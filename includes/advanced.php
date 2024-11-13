@@ -61,18 +61,18 @@ function nppp_premium_html($nginx_cache_path) {
     if ($config_data === false || (get_transient('nppp_nginx_conf_not_found') !== false || get_transient('nppp_cache_keys_wpfilesystem_error') !== false)) {
         return '<div class="nppp-premium-wrap">
                     <h2>Error Displaying Cached Content</h2>
-                    <p class="nppp-advanced-error-message">ERROR CONF: The <span style="color: gold;">nginx.conf</span> file was not detected in the <span style="color: gold;">default system paths</span>. This may indicate a <span style="color: gold;">custom Nginx setup with a non-standard configuration</span> location. If you still encounter this error, please file a bug!</p>
+                    <p class="nppp-advanced-error-message">ERROR CONF: The <span style="color: #f0c36d;">nginx.conf</span> file was not detected in the <span style="color: #f0c36d;">default system paths</span>. This may indicate a <span style="color: #f0c36d;">custom Nginx setup with a non-standard configuration</span> location. If you still encounter this error, please file a bug!</p>
                </div>';
     } elseif ($config_data['cache_keys'] === ['Not Found'] || get_transient('nppp_cache_keys_not_found') !== false) {
         return '<div class="nppp-premium-wrap">
                     <h2>Error Displaying Cached Content</h2>
-                    <p class="nppp-advanced-error-message">ERROR SETUP: No <span style="color: gold;">fastcgi_cache_key</span> directive was found in your Nginx configuration. Please review your <span style="color: gold;">Nginx FastCGI cache setup</span> to ensure that the cache key is correctly defined. If you still encounter this error, please file a bug!</p>
+                    <p class="nppp-advanced-error-message">ERROR SETUP: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found in your Nginx configuration. Please review your <span style="color: #f0c36d;">Nginx FastCGI cache setup</span> to ensure that the cache key is correctly defined. If you still encounter this error, please file a bug!</p>
                 </div>';
     } else {
         // Output error message if cache keys are found
         if (!empty($config_data['cache_keys'])) {
             echo '<div class="nppp-premium-wrap">
-                      <p class="nppp-advanced-error-message">WARNING: <span style="color: gold;">Not supported</span> FastCGI cache key <span style="color: gold;">fastcgi_cache_key</span> found !</p>
+                      <p class="nppp-advanced-error-message">WARNING: <span style="color: #f0c36d;">Not supported</span> FastCGI cache key <span style="color: #f0c36d;">fastcgi_cache_key</span> found !</p>
                   </div>';
         }
     }
