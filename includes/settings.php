@@ -475,7 +475,7 @@ function nppp_handle_nginx_cache_settings_submission() {
                         $old_opt_in = isset($existing_options['nginx_cache_tracking_opt_in']) ? $existing_options['nginx_cache_tracking_opt_in'] : '1';
                         $new_opt_in = isset($new_settings['nginx_cache_tracking_opt_in']) ? $new_settings['nginx_cache_tracking_opt_in'] : '1';
 
-                        // Always delete the plugin cache when the form is submitted
+                        // Always delete the plugin permission cache when the form is submitted
                         $static_key_base = 'nppp';
                         $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
                         $transients = array($transient_key_permissions_check);
