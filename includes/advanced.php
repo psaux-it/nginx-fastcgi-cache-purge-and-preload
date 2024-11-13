@@ -20,7 +20,7 @@ function nppp_premium_html($nginx_cache_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">Failed to initialize the WordPress filesystem.</p></div>';
+        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">Failed to initialize the WordPress filesystem. Please file a bug on plugin support page (ERROR 1070)</p></div>';
     }
 
     // Handle case where settings option doesn't exist
@@ -40,11 +40,13 @@ function nppp_premium_html($nginx_cache_path) {
         return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</p></div>';
     }
 
-    // Check NGINX Cache Key format is in supported format If not ADVANCED tab fail
+    // Check FastCGI Cache Key
     $config_data = nppp_parse_nginx_cache_key();
 
     if ($config_data === false) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR CONF: Unable to locate the nginx.conf file in the specified paths or encountered a parsing error.</p></div>';
+        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR CONF: Unable to locate the nginx.conf file in the specified paths to parse fastcgi_cache_key directives. Please file a bug !</p></div>';
+    } elseif ($config_data['cache_keys'] === ['Not Found']) {
+        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR SETUP: No fastcgi_cache_key directives found. Please check your Nginx FastCGI cache setup and try again. If you still encounter this error, please file a bug !</p></div>';
     } else {
         // Output error message if cache keys are found
         if (!empty($config_data['cache_keys'])) {
