@@ -138,6 +138,16 @@ function nppp_check_libfuse_version() {
 // Function to parse the Nginx configuration file with included paths
 // for Nginx Cache Paths
 function nppp_parse_nginx_config($file, $wp_filesystem = null) {
+    // Ask result in cache first
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_fuse_paths_' . md5($static_key_base);
+
+    $cached_result = get_transient($transient_key);
+    // Return cached result if available
+    if ($cached_result !== false) {
+        return $cached_result;
+    }
+
     if (is_null($wp_filesystem)) {
         $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -200,8 +210,15 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
 
     // Return empty if no Nginx cache paths are found
     if (empty($cache_paths)) {
+        set_transient('nppp_cache_path_not_found', true, MINUTE_IN_SECONDS);
         return ['cache_paths' => []];
     }
+
+    // Store the result in the cache before returning
+    set_transient($transient_key, ['cache_paths' => $cache_paths], MINUTE_IN_SECONDS);
+
+    // Reset the error transients
+    delete_transient('nppp_cache_path_not_found');
 
     // Return found active Nginx Cache Paths
     return ['cache_paths' => $cache_paths];
@@ -310,7 +327,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
                     <tr>
                         <td class="action">Nginx Cache Paths</td>
                         <td class="status">
-                            <?php if (empty($cache_paths)): ?>
+                            <?php if (empty($cache_paths) || get_transient('nppp_cache_path_not_found') !== false): ?>
                                 <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span style="color: red; font-size: 13px; font-weight: bold;"> Not Found</span>
                             <?php else: ?>
@@ -355,7 +372,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
                                         <?php foreach ($cache_keys as $key): ?>
                                             <tr>
                                                 <td>
-                                                    <span class="dashicons dashicons-warning" style="color: crimson; font-size: 18px !important;"></span>
+                                                    <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
                                                     <span style="color: teal; font-size: 13px; font-weight: bold;">
                                                         <?php
                                                         $key_no_quotes = trim($key, '"');
