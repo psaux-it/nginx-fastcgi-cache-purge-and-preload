@@ -532,7 +532,7 @@ function nppp_categorize_url($url) {
         $category = 'EXTERNAL';
         // Cache the result
         $url_cache[$url] = $category;
-        set_transient($cache_key, $category, DAY_IN_SECONDS);
+        set_transient($cache_key, $category, MONTH_IN_SECONDS);
         return $category;
     }
 
@@ -564,7 +564,7 @@ function nppp_categorize_url($url) {
 
         // Cache the result
         $url_cache[$url] = $category;
-        set_transient($cache_key, $category, DAY_IN_SECONDS);
+        set_transient($cache_key, $category, MONTH_IN_SECONDS);
         return $category;
     } else {
         global $wp_rewrite;
@@ -697,7 +697,7 @@ function nppp_categorize_url($url) {
 
         // Cache the result
         $url_cache[$url] = $category;
-        set_transient($cache_key, $category, DAY_IN_SECONDS);
+        set_transient($cache_key, $category, MONTH_IN_SECONDS);
 
         return $category;
     }
