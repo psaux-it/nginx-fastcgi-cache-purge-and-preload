@@ -475,7 +475,7 @@ function nppp_handle_nginx_cache_settings_submission() {
                         $old_opt_in = isset($existing_options['nginx_cache_tracking_opt_in']) ? $existing_options['nginx_cache_tracking_opt_in'] : '1';
                         $new_opt_in = isset($new_settings['nginx_cache_tracking_opt_in']) ? $new_settings['nginx_cache_tracking_opt_in'] : '1';
 
-                        // Always delete the plugin cache when the form is submitted, regardless of whether the cache path has changed or not
+                        // Always delete the plugin cache when the form is submitted
                         $static_key_base = 'nppp';
                         $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
                         $transients = array($transient_key_permissions_check);
@@ -485,7 +485,7 @@ function nppp_handle_nginx_cache_settings_submission() {
                         }
 
                         // Add small delay for transient operation
-                        usleep(500000);
+                        usleep(100000);
 
                         // Update the settings
                         // Note: This will re-encode 'nginx_cache_key_custom_regex' via sanitization
@@ -499,7 +499,7 @@ function nppp_handle_nginx_cache_settings_submission() {
 
                         // Redirect with success message
                         wp_redirect(add_query_arg(array(
-                            'status_message' => urlencode('Plugin cache cleared, settings saved successfully!'),
+                            'status_message' => urlencode('Plugin cache (permission) cleared, settings saved successfully!'),
                             'message_type' => 'success',
                             'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
                         ), admin_url('options-general.php?page=nginx_cache_settings')));
