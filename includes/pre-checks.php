@@ -85,7 +85,7 @@ function nppp_parse_nginx_cache_key() {
             'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
         );
         // Store error state in cache also
-        set_transient('nppp_cache_keys_wpfilesystem_error', true, MINUTE_IN_SECONDS);
+        set_transient('nppp_cache_keys_wpfilesystem_error', true, MONTH_IN_SECONDS);
         return false;
     }
 
@@ -94,7 +94,7 @@ function nppp_parse_nginx_cache_key() {
     if (empty($conf_paths)) {
         // Could not find any nginx.conf files
         // Store error state in cache also
-        set_transient('nppp_nginx_conf_not_found', true, MINUTE_IN_SECONDS);
+        set_transient('nppp_nginx_conf_not_found', true, MONTH_IN_SECONDS);
         return false;
     }
 
@@ -111,7 +111,7 @@ function nppp_parse_nginx_cache_key() {
 
     // If no fastcgi_cache_key directives found
     if ($found_keys === 0) {
-        set_transient('nppp_cache_keys_not_found', true, MINUTE_IN_SECONDS);
+        set_transient('nppp_cache_keys_not_found', true, MONTH_IN_SECONDS);
         return ['cache_keys' => ['Not Found']];
     }
 
@@ -128,7 +128,7 @@ function nppp_parse_nginx_cache_key() {
     }));
 
     // Save the result to transient for future use
-    set_transient($transient_key, ['cache_keys' => $cache_keys], MINUTE_IN_SECONDS);
+    set_transient($transient_key, ['cache_keys' => $cache_keys], MONTH_IN_SECONDS);
 
     // Reset the error transients
     delete_transient('nppp_cache_keys_wpfilesystem_error');
