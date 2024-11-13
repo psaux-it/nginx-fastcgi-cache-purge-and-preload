@@ -20,37 +20,60 @@ function nppp_premium_html($nginx_cache_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">Failed to initialize the WordPress filesystem. Please file a bug on plugin support page (ERROR 1070)</p></div>';
+        return '<div class="nppp-premium-wrap">
+                    <h2>Error Displaying Cached Content</h2>
+                    <p class="nppp-advanced-error-message">Failed to initialize the WordPress filesystem. Please file a bug on plugin support page (ERROR 1070)</p>
+                </div>';
     }
 
     // Handle case where settings option doesn't exist
     if (empty($nginx_cache_path)) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR CRITICAL: Please file a bug on plugin support page (ERROR 1071)</p></div>';
+        return '<div class="nppp-premium-wrap">
+                    <h2>Error Displaying Cached Content</h2>
+                    <p class="nppp-advanced-error-message">ERROR CRITICAL: Please file a bug on plugin support page (ERROR 1071)</p>
+                </div>';
     }
 
     // Handle case where directory doesn't exist
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR PATH: Cache directory not found. Please ensure the cache directory path is correct in plugin settings.</p></div>';
+        return '<div class="nppp-premium-wrap">
+                    <h2>Error Displaying Cached Content</h2>
+                    <p class="nppp-advanced-error-message">ERROR PATH: Cache directory not found. Please ensure the cache directory path is correct in plugin settings.</p>
+                </div>';
     }
 
     // Check if the directory and its contents are readable softly and recursive
     if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</p></div>';
+        return '<div class="nppp-premium-wrap">
+                    <h2>Error Displaying Cached Content</h2>
+                    <p class="nppp-advanced-error-message">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</p>
+                </div>';
     } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</p></div>';
+        return '<div class="nppp-premium-wrap">
+                    <h2>Error Displaying Cached Content</h2>
+                    <p class="nppp-advanced-error-message">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</p>
+                </div>';
     }
 
     // Check FastCGI Cache Key
     $config_data = nppp_parse_nginx_cache_key();
 
-    if ($config_data === false) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR CONF: Unable to locate the nginx.conf file in the specified paths to parse fastcgi_cache_key directives. Please file a bug !</p></div>';
-    } elseif ($config_data['cache_keys'] === ['Not Found']) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR SETUP: No fastcgi_cache_key directives found. Please check your Nginx FastCGI cache setup and try again. If you still encounter this error, please file a bug !</p></div>';
+    if ($config_data === false || (get_transient('nppp_nginx_conf_not_found') !== false || get_transient('nppp_cache_keys_wpfilesystem_error') !== false)) {
+        return '<div class="nppp-premium-wrap">
+                    <h2>Error Displaying Cached Content</h2>
+                    <p class="nppp-advanced-error-message">ERROR CONF: The <span style="color: gold;">nginx.conf</span> file was not detected in the <span style="color: gold;">default system paths</span>. This may indicate a <span style="color: gold;">custom Nginx setup with a non-standard configuration</span> location. If you still encounter this error, please file a bug!</p>
+               </div>';
+    } elseif ($config_data['cache_keys'] === ['Not Found'] || get_transient('nppp_cache_keys_not_found') !== false) {
+        return '<div class="nppp-premium-wrap">
+                    <h2>Error Displaying Cached Content</h2>
+                    <p class="nppp-advanced-error-message">ERROR SETUP: No <span style="color: gold;">fastcgi_cache_key</span> directive was found in your Nginx configuration. Please review your <span style="color: gold;">Nginx FastCGI cache setup</span> to ensure that the cache key is correctly defined. If you still encounter this error, please file a bug!</p>
+                </div>';
     } else {
         // Output error message if cache keys are found
         if (!empty($config_data['cache_keys'])) {
-            echo '<div class="nppp-premium-wrap"><p class="nppp-advanced-error-message">WARNING: Not supported FastCGI cache key (fastcgi_cache_key) detected !</p></div>';
+            echo '<div class="nppp-premium-wrap">
+                      <p class="nppp-advanced-error-message">WARNING: <span style="color: gold;">Not supported</span> FastCGI cache key <span style="color: gold;">fastcgi_cache_key</span> found !</p>
+                  </div>';
         }
     }
 
