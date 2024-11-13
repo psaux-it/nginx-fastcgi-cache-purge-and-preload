@@ -273,7 +273,14 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
         <section class="nginx-status">
             <h2>NGINX STATUS</h2>
             <table>
+                <thead>
+                    <tr>
+                        <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
+                        <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                    </tr>
+                </thead>
                 <tbody>
+                    <!-- Section for Nginx Version -->
                     <tr>
                         <td class="action">Nginx Version</td>
                         <td class="status" id="npppNginxVersion">
@@ -286,6 +293,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
                             <?php endif; ?>
                         </td>
                     </tr>
+                    <!-- Section for OpenSSL Version -->
                     <tr>
                         <td class="action">OpenSSL Version</td>
                         <td class="status" id="npppOpenSSLVersion">
@@ -303,7 +311,8 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
                         <td class="action">Nginx Cache Paths</td>
                         <td class="status">
                             <?php if (empty($cache_paths)): ?>
-                                <p style="color: red; font-weight: bold;"><span class="dashicons dashicons-no-alt"></span> Not Found</p>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;"> Not Found</span>
                             <?php else: ?>
                                 <table class="nginx-config-table">
                                     <tbody>
@@ -324,17 +333,17 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
                         <td class="action">FastCGI Cache Keys</td>
                         <td class="status">
                             <?php if ($cache_keys === 'Not Found'): ?>
-                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: bold !important;"></span>
-                                <span style="color: red; font-size: 14px; font-weight: bold;">Not Found</span>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;">Not Found</span>
                             <?php elseif ($cache_keys === 'Filesystem Error'): ?>
-                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: bold !important;"></span>
-                                <span style="color: red; font-size: 14px; font-weight: bold">Filesystem Error</span>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 13px; font-weight: bold">System Error</span>
                             <?php elseif ($cache_keys === 'Conf Not Found'): ?>
-                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: bold !important;"></span>
-                                <span style="color: red; font-size: 14px; font-weight: bold;">Conf Not Found</span>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;">Conf Error</span>
                             <?php elseif ($cache_keys === 'Key Not Found'): ?>
-                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: bold !important;"></span>
-                                <span style="color: red; font-size: 14px; font-weight: bold;">No Keys Found</span>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;">Not Found</span>
                             <?php elseif ($cache_keys === '$scheme$request_method$host$request_uri'): ?>
                                 <span class="dashicons dashicons-yes" style="color: green !important; font-size: 20px;"></span>
                                 <span style="color: teal; font-weight: bold; font-size: 13px;">
