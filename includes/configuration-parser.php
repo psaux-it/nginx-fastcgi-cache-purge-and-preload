@@ -347,7 +347,23 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
                     </tr>
                     <!-- Section for FastCGI Cache Keys -->
                     <tr>
-                        <td class="action">FastCGI Cache Keys</td>
+                        <td class="action">
+                            FastCGI Cache Keys
+                            <?php
+                            if (
+                                $cache_keys !== 'Not Found' &&
+                                $cache_keys !== 'Filesystem Error' &&
+                                $cache_keys !== 'Conf Not Found' &&
+                                $cache_keys !== 'Key Not Found'
+                            ):
+                                if ($cache_keys === '$scheme$request_method$host$request_uri'):
+                            ?>
+                                    <br><span style="font-size: 13px; color: green;">Supported</span>
+                                <?php else: ?>
+                                    <br><span style="font-size: 13px; color: #f0c36d;">Unsupported</span>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        </td>
                         <td class="status">
                             <?php if ($cache_keys === 'Not Found'): ?>
                                 <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
