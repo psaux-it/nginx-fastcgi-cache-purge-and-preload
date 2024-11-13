@@ -46,7 +46,7 @@ function nppp_check_permissions_recursive_with_cache() {
         $result = $result ? 'true' : 'false';
 
         // Cache the result for 1 hour
-        set_transient($transient_key, $result, 3600);
+        set_transient($transient_key, $result, MONTH_IN_SECONDS);
     }
 
     return $result;
