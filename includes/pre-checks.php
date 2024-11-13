@@ -66,18 +66,6 @@ function nppp_parse_nginx_cache_key() {
     $cache_keys = [];
     $found_keys = 0;
 
-    $wp_filesystem = nppp_initialize_wp_filesystem();
-
-    if ($wp_filesystem === false) {
-        nppp_display_admin_notice(
-            'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
-        );
-        // Store error state in cache also
-        set_transient('nppp_cache_keys_wpfilesystem_error', true, MINUTE_IN_SECONDS);
-        return false;
-    }
-
     // Transient caching mechanism
     $static_key_base = 'nppp';
     $transient_key = 'nppp_cache_keys_' . md5($static_key_base);
@@ -89,8 +77,20 @@ function nppp_parse_nginx_cache_key() {
         return $cached_result;
     }
 
-    $conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
+    // Initialize wp_filesystem
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        // Store error state in cache also
+        set_transient('nppp_cache_keys_wpfilesystem_error', true, MINUTE_IN_SECONDS);
+        return false;
+    }
 
+    // Get Nginx config file
+    $conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
     if (empty($conf_paths)) {
         // Could not find any nginx.conf files
         // Store error state in cache also
