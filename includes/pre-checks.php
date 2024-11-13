@@ -139,7 +139,6 @@ function nppp_parse_nginx_cache_key() {
     return ['cache_keys' => $cache_keys];
 }
 
-
 // Helper function to parse individual Nginx configuration files.
 function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) {
     if (in_array($file, $parsed_files)) {
