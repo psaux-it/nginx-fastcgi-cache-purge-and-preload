@@ -24,11 +24,13 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_nginx_conf_not_found',
         'nppp_cache_keys_not_found',
         'nppp_cache_path_not_found',
+        'nppp_fuse_path_not_found',
         'nppp_cache_keys_' . md5($static_key_base),
         'nppp_bindfs_version_' . md5($static_key_base),
         'nppp_libfuse_version_' . md5($static_key_base),
         'nppp_permissions_check_' . md5($static_key_base),
         'nppp_cache_paths_' . md5($static_key_base),
+        'nppp_fuse_paths_' . md5($static_key_base),
     );
 
     // Category-related transients based on the URL cache
