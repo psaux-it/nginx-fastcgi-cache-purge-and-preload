@@ -2406,3 +2406,9 @@ p.description {
 .status-summary td.status {
     width: 50%;
 }
+
+.nginx-status td.action,
+.nginx-status td.status {
+    word-wrap: break-word;
+    white-space: normal;
+}
