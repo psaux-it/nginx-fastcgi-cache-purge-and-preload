@@ -31,7 +31,7 @@ function nppp_get_nginx_conf_paths($wp_filesystem) {
             // Look for '--conf-path=' in the output
             if (preg_match('/--conf-path=(\S+)/', $output_str, $matches)) {
                 $conf_path = $matches[1];
-                if ($wp_filesystem->exists($conf_path)) {
+                if ($wp_filesystem->exists($conf_path) && $wp_filesystem->is_readable($conf_path)) {
                     $conf_paths[] = $conf_path;
                 }
             }
@@ -51,7 +51,7 @@ function nppp_get_nginx_conf_paths($wp_filesystem) {
         ];
 
         foreach ($possible_paths as $path) {
-            if ($wp_filesystem->exists($path)) {
+            if ($wp_filesystem->exists($path) && $wp_filesystem->is_readable($path)) {
                 $conf_paths[] = $path;
             }
         }
