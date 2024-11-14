@@ -449,7 +449,7 @@ function nppp_my_status_html() {
                     </p>
                 </div>';
     }
-    
+
     $perm_in_cache_status_purge = nppp_check_perm_in_cache(true, false, false);
     $perm_in_cache_status_fpm = nppp_check_perm_in_cache(false, false, true);
     $perm_in_cache_status_perm = nppp_check_perm_in_cache(false, true, false);
