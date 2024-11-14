@@ -423,6 +423,33 @@ function nppp_get_in_cache_page_count() {
 
 // Generate HTML for status tab
 function nppp_my_status_html() {
+    // Initialize wp_filesystem
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
+    }
+
+    // Status tab metrics heavily depends nginx.conf file
+    // Try to get it first
+    $conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
+
+    // Exit early if unable to find or read the nginx.conf file
+    if (empty($conf_paths)) {
+        return '<div class="nppp-status-wrap">
+                    <p class="nppp-advanced-error-message">ERROR CONF: Unable to locate the <span style="color: #f0c36d;">nginx.conf</span> configuration file!</p>
+                </div>
+                <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <p style="margin: 0; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                        The <strong>nginx.conf</strong> file was not found in the <strong>default paths</strong>. This may indicate a <strong>custom Nginx setup with a non-standard configuration file location or permission issue</strong>. If you still encounter this error, please get help from plugin support forum!
+                    </p>
+                </div>';
+    }
+    
     $perm_in_cache_status_purge = nppp_check_perm_in_cache(true, false, false);
     $perm_in_cache_status_fpm = nppp_check_perm_in_cache(false, false, true);
     $perm_in_cache_status_perm = nppp_check_perm_in_cache(false, true, false);
