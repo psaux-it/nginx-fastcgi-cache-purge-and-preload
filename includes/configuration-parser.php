@@ -135,6 +135,56 @@ function nppp_check_libfuse_version() {
     return $result;
 }
 
+// Function to check nginx cache path fuse mount points
+function nppp_check_fuse_cache_paths($cache_paths) {
+    // Ask result in cache first
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_fuse_paths_' . md5($static_key_base);
+
+    // Return cached result if available
+    $cached_result = get_transient($transient_key);
+    // Return cached result if available
+    if ($cached_result !== false) {
+        return $cached_result;
+    }
+
+    $fuse_paths = [];
+
+    // Loop through the cache paths to check their mount points
+    foreach ($cache_paths as $directive => $paths) {
+        foreach ($paths as $path) {
+            if (!empty($path)) {
+                // Execute a shell command to get the mount point for the given path
+                $command = "mount | grep " . escapeshellarg($path);
+                $output = shell_exec($command);
+
+                // If a valid output is found, extract the fuse mount point
+                if ($output) {
+                    // Extract the FUSE mount point
+                    if (preg_match('/on\s+([^\s]+)\s+type\s+fuse/', $output, $matches)) {
+                        $fuse_paths[] = $matches[1];
+                    }
+                }
+            }
+        }
+    }
+
+    // If no fuse mount point found return empty array before setting transient
+    if (empty($fuse_paths)) {
+        set_transient('nppp_fuse_path_not_found', true, MONTH_IN_SECONDS);
+        return ['fuse_paths' => []];
+    }
+
+    // Store the result in the cache before returning
+    set_transient($transient_key, ['fuse_paths' => $fuse_paths], MONTH_IN_SECONDS);
+
+    // Reset the error transients
+    delete_transient('nppp_fuse_path_not_found');
+
+    // Return the array of mount points
+    return ['fuse_paths' => $fuse_paths];
+}
+
 // Function to parse the Nginx configuration file with included paths
 // for Nginx Cache Paths
 function nppp_parse_nginx_config($file, $wp_filesystem = null) {
@@ -148,6 +198,7 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
         return $cached_result;
     }
 
+    // Initialize wp_filesystem
     if (is_null($wp_filesystem)) {
         $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -160,6 +211,7 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
         }
     }
 
+    // Check nginx.conf found
     if (!$wp_filesystem->exists($file)) {
         return false;
     }
@@ -169,15 +221,17 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
     $included_files = [];
 
     // Regex to match cache path directives
-    preg_match_all('/^\s*(?!#\s*)(proxy_cache_path|fastcgi_cache_path|scgi_cache_path|uwsgi_cache_path)\s+([^;]+);/m', $config, $cache_directives, PREG_SET_ORDER);
+    preg_match_all('/^\s*(?!#\s*)(fastcgi_cache_path)\s+([^;]+);/m', $config, $cache_directives, PREG_SET_ORDER);
 
     foreach ($cache_directives as $cache_directive) {
-        $directive = $cache_directive[1];
-        $value = trim(preg_replace('/\s.*$/', '', $cache_directive[2]));
-        if (!isset($cache_paths[$directive])) {
-            $cache_paths[$directive] = [];
+        if (isset($cache_directive[1]) && isset($cache_directive[2])) {
+            $directive = $cache_directive[1];
+            $value = trim(preg_replace('/\s.*$/', '', $cache_directive[2]));
+            if (!isset($cache_paths[$directive])) {
+                $cache_paths[$directive] = [];
+            }
+            $cache_paths[$directive][] = $value;
         }
-        $cache_paths[$directive][] = $value;
     }
 
     // Regex to match include directives
@@ -267,7 +321,7 @@ function nppp_is_service_file_exists() {
 }
 
 // Function to generate HTML output
-function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
+function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths) {
     // Check if the systemd service file exists
     $service_file_exists = nppp_is_service_file_exists();
 
@@ -406,6 +460,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
                 </tbody>
             </table>
         </section>
+        <!-- Section for FUSE Status -->
         <section class="nginx-status">
             <h2 style="margin-top: 45px; !important">FUSE STATUS</h2>
             <table>
@@ -430,6 +485,26 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys) {
                             <?php
                             echo esc_html(nppp_check_bindfs_version());
                             ?>
+                        </td>
+                    </tr>
+                    <!-- Section for FUSE Cache Paths -->
+                    <tr>
+                        <td class="action">Nginx Cache Paths<br><span style="font-size: 13px; color: green;">FUSE Mount Point</span></td>
+                        <td class="status">
+                            <?php if (empty($fuse_paths['fuse_paths']) || get_transient('nppp_cache_path_not_found') !== false): ?>
+                                <span class="dashicons dashicons-clock" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: orange; font-size: 13px; font-weight: bold;">Not Found</span>
+                            <?php else: ?>
+                                <table class="nginx-config-table">
+                                    <tbody>
+                                        <?php foreach ($fuse_paths['fuse_paths'] as $fuse_path): ?>
+                                            <tr>
+                                                <td><span class="dashicons dashicons-yes" style="color: green; font-size: 20px !important;"></span>&nbsp;<span style="color: teal; font-size: 13px; font-weight: bold;"><?php echo esc_html($fuse_path); ?></span></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 </tbody>
@@ -585,6 +660,9 @@ function nppp_nginx_config_shortcode() {
     // Get Nginx version, OpenSSL version, and other info
     $nginx_info = nppp_get_nginx_info();
 
+    // Get fuse paths if exists
+    $fuse_paths = nppp_check_fuse_cache_paths($config_data['cache_paths']);
+
     // Generate HTML output based on parsed data and Nginx info
-    return nppp_generate_html($config_data['cache_paths'], $nginx_info, $cache_keys);
+    return nppp_generate_html($config_data['cache_paths'], $nginx_info, $cache_keys, $fuse_paths);
 }
