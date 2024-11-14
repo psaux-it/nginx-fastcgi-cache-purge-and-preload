@@ -277,32 +277,67 @@ function nppp_get_website_user() {
 
 // Function to get webserver user
 function nppp_get_webserver_user() {
+    // Ask result in cache first
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_webserver_user_' . md5($static_key_base);
+    $cached_result = get_transient($transient_key);
+
+    // Return cached result if available
+    if ($cached_result !== false) {
+        return $cached_result;
+    }
+
+    // Initialize wp_filesystem
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
+    }
+
+    // Find nginx.conf
+    $conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
+    $config_file = !empty($conf_paths) ? $conf_paths[0] : '/etc/nginx/nginx.conf';
+
+    // Check if the config file exists
+    if (!$wp_filesystem->exists($config_file)) {
+        set_transient($transient_key, "Not Determined", MONTH_IN_SECONDS);
+        return "Not Determined";
+    }
+
     // Check the running processes for Nginx
     $nginx_user_process = shell_exec("ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v 'root' | awk '{print $1}' | sort | uniq");
     // Convert the process output to an array and filter out empty values
     $process_users = array_filter(array_unique(array_map('trim', explode("\n", $nginx_user_process))));
     // Try to get the user from the Nginx configuration file
-    $nginx_user_conf = shell_exec("grep -i '^user' /etc/nginx/nginx.conf | awk '{print $2}'");
+    $nginx_user_conf = shell_exec("grep -i '^\s*user\s\+' $config_file | grep -v '^\s*#' | awk '{print $2}'");
 
     // If both sources provide a user, check for consistency
     if (!empty($nginx_user_conf) && !empty($process_users)) {
         // Check if the configuration user is among the process users
         if (in_array($nginx_user_conf, $process_users)) {
+            set_transient($transient_key, $nginx_user_conf, MONTH_IN_SECONDS);
             return $nginx_user_conf;
         }
     }
 
     // If only the configuration user is found, return it
     if (!empty($nginx_user_conf)) {
+        set_transient($transient_key, $nginx_user_conf, MONTH_IN_SECONDS);
         return $nginx_user_conf;
     }
 
     // If only the process user is found, return it
     if (!empty($process_users)) {
-        return reset($process_users);
+        $user = reset($process_users);
+        set_transient($transient_key, $user, MONTH_IN_SECONDS);
+        return $user;
     }
 
     // If no user is found, return "Not Determined"
+    set_transient($transient_key, "Not Determined", MONTH_IN_SECONDS);
     return "Not Determined";
 }
 
