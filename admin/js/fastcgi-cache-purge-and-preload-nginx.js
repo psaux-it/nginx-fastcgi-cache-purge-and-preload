@@ -2115,8 +2115,34 @@ document.addEventListener('DOMContentLoaded', function() {
     history.replaceState(null, document.title, updatedUrl);
 });
 
-// update status tab metrics
+// Update status tab metrics
 function npppupdateStatus() {
+    // Elements we need ready on DOM
+    const elementsToCheck = [
+        "#npppphpFpmStatus",
+        "#npppphpPagesInCache",
+        "#npppphpProcessOwner",
+        "#npppphpWebServer",
+        "#npppcachePath",
+        "#nppppurgeStatus",
+        "#npppshellExec",
+        "#npppaclStatus",
+        "#nppppreloadStatus",
+        "#npppwgetStatus",
+        "#npppLibfuseVersion",
+        "#npppBindfsVersion",
+        "#nppppermIsolation",
+        "#npppcpulimitStatus"
+    ];
+
+    // Verify all elements are in the DOM
+    const allElementsExist = elementsToCheck.every(selector => document.querySelector(selector));
+
+    // If all elements are found, proceed to run the code
+    if (!allElementsExist) {
+        return;
+    }
+
     // Fetch and update php fpm status
     var phpFpmRow = document.querySelector("#npppphpFpmStatus").closest("tr");
     var npppphpFpmStatusSpan = document.getElementById("npppphpFpmStatus");
