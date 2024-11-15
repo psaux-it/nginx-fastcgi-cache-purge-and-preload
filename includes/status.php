@@ -440,7 +440,7 @@ function nppp_my_status_html() {
     // Exit early if unable to find or read the nginx.conf file
     if (empty($conf_paths)) {
         return '<div class="nppp-status-wrap">
-                    <p class="nppp-advanced-error-message">ERROR CONF: Unable to locate the <span style="color: #f0c36d;">nginx.conf</span> configuration file!</p>
+                    <p class="nppp-advanced-error-message">ERROR CONF: Unable to read or locate the <span style="color: #f0c36d;">nginx.conf</span> configuration file!</p>
                 </div>
                 <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                     <p style="margin: 0; align-items: center;">
@@ -467,17 +467,7 @@ function nppp_my_status_html() {
     // If not we can not get the pages in cache count
     $config_data = nppp_parse_nginx_cache_key();
 
-    if ($config_data === false || (get_transient('nppp_nginx_conf_not_found') !== false || get_transient('nppp_cache_keys_wpfilesystem_error') !== false)) {
-        echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">ERROR CONF: Unable to locate the <span style="color: #f0c36d;">nginx.conf</span> configuration file!</p>
-              </div>
-              <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                  <p style="margin: 0; align-items: center;">
-                      <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                      The <strong>nginx.conf</strong> file was not detected in the <strong>default system paths</strong>. This may indicate a custom Nginx setup with a non-standard configuration location. If you still encounter this error, please file a bug!
-                  </p>
-              </div>';
-    } elseif ($config_data['cache_keys'] === ['Not Found'] || get_transient('nppp_cache_keys_not_found') !== false) {
+    if ($config_data['cache_keys'] === ['Not Found'] || get_transient('nppp_cache_keys_not_found') !== false) {
         echo '<div class="nppp-status-wrap">
                   <p class="nppp-advanced-error-message">ERROR SETUP: FastCGI cache key <span style="color: #f0c36d;">fastcgi_cache_key</span> not found!</p>
               </div>
