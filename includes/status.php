@@ -480,12 +480,12 @@ function nppp_my_status_html() {
     // Warn about the unsupported fastcgi cache keys
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">INFO: <span style="color: #f0c36d;">Not supported</span> FastCGI cache key <span style="color: #f0c36d;">fastcgi_cache_key</span> found !</p>
+                  <p class="nppp-advanced-error-message">INFO: <span style="color: #f0c36d;">Unsupported</span> FastCGI cache keys found!</p>
               </div>
               <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                   <p style="margin: 0; align-items: center;">
                       <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                      If <strong>Pages In Cache Count</strong> is always <strong>0</strong> or wrong, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
+                      If <strong>Pages In Cache Count</strong> is always <strong>0</strong> or incorrect, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
                   </p>
               </div>';
     }
