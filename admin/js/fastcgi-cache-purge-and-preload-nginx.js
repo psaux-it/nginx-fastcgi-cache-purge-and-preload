@@ -1066,7 +1066,7 @@ $(document).ready(function() {
                             location.reload();
                         }
                     }, 300);
-                }, 1200);
+                }, 1700);
             },
             error: function(xhr, status, error) {
                 // Remove the loading spinner
@@ -1174,8 +1174,13 @@ $(document).ready(function() {
                     notification.style.opacity = '0';
                     setTimeout(function() {
                         document.body.removeChild(notification);
+
+                        // Reload settings page to see updated fuse mount status
+                        if (response.success) {
+                            location.reload();
+                        }
                     }, 300);
-                }, 2000);
+                }, 1700);
             },
             error: function() {
                 // Remove the loading spinner
