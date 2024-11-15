@@ -110,7 +110,7 @@ function nppp_premium_html($nginx_cache_path) {
     // Warn about the unsupported cache keys
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
         echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">INFO CACHE KEY: <span style="color: #f0c36d;">Not supported</span> FastCGI cache key <span style="color: #f0c36d;">fastcgi_cache_key</span> found!</p>
+                  <p class="nppp-advanced-error-message">INFO CACHE KEY: <span style="color: #f0c36d;">Unsupported</span> FastCGI cache keys found!</p>
               </div>';
     }
 
