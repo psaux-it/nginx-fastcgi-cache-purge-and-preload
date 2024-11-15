@@ -467,14 +467,14 @@ function nppp_my_status_html() {
     // If not we can not get the pages in cache count
     $config_data = nppp_parse_nginx_cache_key();
 
-    if ($config_data['cache_keys'] === ['Not Found'] || get_transient('nppp_cache_keys_not_found') !== false) {
+    if ($config_data['cache_keys'] === ['Not Found']) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">ERROR SETUP: FastCGI cache key <span style="color: #f0c36d;">fastcgi_cache_key</span> not found!</p>
+                  <p class="nppp-advanced-error-message">WARNING SETUP: FastCGI cache key <span style="color: #f0c36d;">fastcgi_cache_key</span> not found!</p>
               </div>
               <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                   <p style="margin: 0; align-items: center;">
                       <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                      No <strong>fastcgi_cache_key</strong> directive was found in your Nginx configuration. Please review your <strong>Nginx FastCGI cache setup</strong> to ensure that the cache key is correctly defined. If you still encounter this error, please file a bug!
+                      No <strong>fastcgi_cache_key</strong> directive was found in your Nginx configuration. Please review your <strong>Nginx FastCGI cache setup</strong> to ensure that the cache key is correctly defined. If you still encounter this error, please get help from plugin support forum!
                   </p>
               </div>';
     } else {
