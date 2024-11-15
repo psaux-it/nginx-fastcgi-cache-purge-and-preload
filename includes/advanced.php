@@ -20,67 +20,64 @@ function nppp_premium_html($nginx_cache_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return '<div class="nppp-premium-wrap">
-                    <h2>Error Displaying Cached Content</h2>
-                    <p class="nppp-advanced-error-message">Failed to initialize the WordPress filesystem. Please file a bug on plugin support page (ERROR 1070)</p>
+        return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <p style="margin: 0; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
+                        <span style="font-size: 14px;">ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1070)</span>
+                    </p>
                 </div>';
     }
 
-    // Handle case where settings option doesn't exist
+    // Handle case where option doesn't exist
     if (empty($nginx_cache_path)) {
-        return '<div class="nppp-premium-wrap">
-                    <h2>Error Displaying Cached Content</h2>
-                    <p class="nppp-advanced-error-message">ERROR CRITICAL: Please file a bug on plugin support page (ERROR 1071)</p>
+        return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <p style="margin: 0; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
+                        <span style="font-size: 14px;">ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1071)</span>
+                    </p>
                 </div>';
     }
 
-    // Handle case where directory doesn't exist
+    // Handle case where cache directory doesn't exist
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
-        return '<div class="nppp-premium-wrap">
-                    <h2>Error Displaying Cached Content</h2>
-                    <p class="nppp-advanced-error-message">ERROR PATH: Cache directory not found. Please ensure the cache directory path is correct in plugin settings.</p>
+        return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <p style="margin: 0; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
+                        <span style="font-size: 14px;">ERROR CACHE PATH: The specified Nginx cache directory could not be found. Please verify the path in the plugin settings.</span>
+                    </p>
                 </div>';
     }
 
     // Check if the directory and its contents are readable softly and recursive
     if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
-        return '<div class="nppp-premium-wrap">
-                    <h2>Error Displaying Cached Content</h2>
-                    <p class="nppp-advanced-error-message">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</p>
+        return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <p style="margin: 0; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
+                        <span style="font-size: 14px;">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</span>
+                    </p>
                 </div>';
+
     } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
-        return '<div class="nppp-premium-wrap">
-                    <h2>Error Displaying Cached Content</h2>
-                    <p class="nppp-advanced-error-message">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</p>
+        return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <p style="margin: 0; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
+                        <span style="font-size: 14px;">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</span>
+                    </p>
                 </div>';
     }
 
     // Check FastCGI Cache Key
     $config_data = nppp_parse_nginx_cache_key();
 
-    if ($config_data === false || (get_transient('nppp_nginx_conf_not_found') !== false || get_transient('nppp_cache_keys_wpfilesystem_error') !== false)) {
-        return '<div class="nppp-premium-wrap">
-                    <h2>Error Displaying Cached Content</h2>
-                    <p class="nppp-advanced-error-message">ERROR CONF: The <span style="color: #f0c36d;">nginx.conf</span> file was not detected in the <span style="color: #f0c36d;">default system paths</span>. This may indicate a <span style="color: #f0c36d;">custom Nginx setup with a non-standard configuration</span> location. If you still encounter this error, please file a bug!</p>
-               </div>';
-    } elseif ($config_data['cache_keys'] === ['Not Found'] || get_transient('nppp_cache_keys_not_found') !== false) {
-        return '<div class="nppp-premium-wrap">
-                    <h2>Error Displaying Cached Content</h2>
-                    <p class="nppp-advanced-error-message">ERROR SETUP: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found in your Nginx configuration. Please review your <span style="color: #f0c36d;">Nginx FastCGI cache setup</span> to ensure that the cache key is correctly defined. If you still encounter this error, please file a bug!</p>
-                </div>';
-    } else {
-        // Output error message if cache keys are found
-        if (!empty($config_data['cache_keys'])) {
-            echo '<div class="nppp-premium-wrap">
-                      <p class="nppp-advanced-error-message">WARNING: <span style="color: #f0c36d;">Not supported</span> FastCGI cache key <span style="color: #f0c36d;">fastcgi_cache_key</span> found !</p>
-                  </div>';
-        }
-    }
-
     // Get extracted URLs
     $extractedUrls = nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path);
 
-    // Check for errors from nppp_extract_cached_urls()
+    // Check for errors
     if (isset($extractedUrls['error'])) {
         // Sanitize and allow specific HTML tags
         $error_message = wp_kses(
@@ -90,12 +87,31 @@ function nppp_premium_html($nginx_cache_path) {
             )
         );
 
+        // Stop execution if no cached content is found due to an empty cache or cache key regex error.
         return '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <h2>&nbsp;Displaying Cached Content</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                        ' . $error_message . '
+                        <span style="font-size: 14px;">' . $error_message . '</span>
                     </p>
                 </div>';
+    }
+
+    // Warn about cache keys not found
+    if ($config_data === false) {
+        echo '<div class="nppp-premium-wrap">
+                  <p class="nppp-advanced-error-message">INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.</p>
+              </div>';
+    // Warn about cache keys not found
+    } elseif (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
+        echo '<div class="nppp-premium-wrap">
+                  <p class="nppp-advanced-error-message">INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.</p>
+              </div>';
+    // Warn about the unsupported cache keys
+    } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
+        echo '<div class="nppp-premium-wrap">
+                  <p class="nppp-advanced-error-message">INFO CACHE KEY: <span style="color: #f0c36d;">Not supported</span> FastCGI cache key <span style="color: #f0c36d;">fastcgi_cache_key</span> found!</p>
+              </div>';
     }
 
     // Output the premium tab content
@@ -494,7 +510,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // Check if any URLs were extracted
     if (empty($urls)) {
         return [
-            'error' => 'No cached content found. Please <strong>Preload All</strong> cache first and try again. If you still encounter this error, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and try again.'
+            'error' => 'No cached content found. Please <strong>Preload All</strong> cache first and try again. If you still are unable to see the content, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and try again.'
         ];
     }
 
