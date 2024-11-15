@@ -489,11 +489,11 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     </tr>
                     <!-- Section for FUSE Cache Paths -->
                     <tr>
-                        <td class="action">Nginx Cache Paths<br><span style="font-size: 13px; color: green;">FUSE Mount Point</span></td>
+                        <td class="action">Nginx Cache Paths<br><span style="font-size: 13px; color: green;">FUSE Mounts</span></td>
                         <td class="status">
                             <?php if (empty($fuse_paths['fuse_paths']) || get_transient('nppp_cache_path_not_found') !== false): ?>
                                 <span class="dashicons dashicons-clock" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: orange; font-size: 13px; font-weight: bold;">Not Found</span>
+                                <span style="color: orange; font-size: 13px; font-weight: bold;">Not Mounted</span>
                             <?php else: ?>
                                 <table class="nginx-config-table">
                                     <tbody>
