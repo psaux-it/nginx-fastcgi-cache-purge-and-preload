@@ -2414,4 +2414,92 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update the position when the window is resized
     window.addEventListener('resize', updateSubmitPosition);
 });
+
+// Warn the user if a systemd service restart is required due to missing fuse cache path mounts
+document.addEventListener('DOMContentLoaded', function () {
+    let currentObserver = null;
+
+    // Function to handle the "Status" tab content updates
+    function npponTabActivated(event, ui) {
+        const tabId = ui.newPanel.attr('id');
+
+        // Check if the "Status" tab is activated
+        if (tabId === 'status') {
+            // Only observe if not already observing
+            if (!currentObserver) {
+                nppobserveFuseStatusChange(ui.newPanel[0]);
+            }
+        } else {
+            // Disconnect observer when switching away from Status tab
+            nppdisconnectObserver();
+        }
+    }
+
+    // Function to observe changes in the status panel and insert the warning icon
+    function nppobserveFuseStatusChange(tabContent) {
+        // Create a MutationObserver to observe the status content
+        const observer = new MutationObserver((mutationsList, observer) => {
+            const fuseStatusSpan = document.querySelector('#npppFuseMountStatus span:last-of-type');
+            if (fuseStatusSpan) {
+                // Compare the trimmed text
+                if (fuseStatusSpan.textContent.trim() === 'Not Mounted') {
+                    nppinsertWarningIcon(tabContent);
+                }
+                // Disconnect the observer after finding the status
+                observer.disconnect();
+            }
+        });
+
+        // Store the observer to be cleaned up later
+        currentObserver = observer;
+        // Start observing the tab content for changes in the DOM
+        observer.observe(tabContent, { childList: true, subtree: true });
+    }
+
+    // Function to insert the warning icon into the "Status" tab
+    function nppinsertWarningIcon(tabContent) {
+        try {
+            // Create the warning icon
+            const attentionIcon = document.createElement('span');
+            attentionIcon.className = 'dashicons dashicons-warning';
+            attentionIcon.style.cssText = 'color: orange; margin-left: 8px; font-size: 28px;';
+
+            // Ensure the restart button exists before inserting the icon
+            const restartButton = document.querySelector('#nppp-restart-systemd-service-btn');
+            if (restartButton) {
+                restartButton.parentNode.insertBefore(attentionIcon, restartButton.nextSibling);
+
+                // Apply blink effect
+                const blinkEffect = attentionIcon.animate([
+                    { opacity: 1 },
+                    { opacity: 0 }
+                 ], {
+                    duration: 500,
+                    iterations: Infinity,
+                    direction: 'alternate'
+                });
+
+                // Stop blinking after 2 seconds
+                setTimeout(() => {
+                    blinkEffect.cancel();
+                }, 2000);
+            }
+        } catch (error) {
+            console.error('Error in warning icon insertion:', error);
+        }
+    }
+
+    // Function to disconnect the observer when no longer needed
+    function nppdisconnectObserver() {
+        if (currentObserver) {
+            currentObserver.disconnect();
+            currentObserver = null;
+        }
+    }
+
+    // Attach the npponTabActivated function to the 'tabsactivate' event only on the Status tab
+    $('#nppp-nginx-tabs').on('tabsactivate', function(event, ui) {
+        npponTabActivated(event, ui);
+    });
+});
 })(jQuery, window, document);
