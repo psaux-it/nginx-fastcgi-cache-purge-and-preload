@@ -469,12 +469,12 @@ function nppp_my_status_html() {
     // Warn about not found fastcgi cache keys
     if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">WARNING SETUP: FastCGI cache key <span style="color: #f0c36d;">fastcgi_cache_key</span> not found!</p>
+                  <p class="nppp-advanced-error-message">WARNING SETUP: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found.</p>
               </div>
               <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                   <p style="margin: 0; align-items: center;">
                       <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                      No <strong>fastcgi_cache_key</strong> directive was found in your Nginx configuration. Please review your <strong>Nginx FastCGI cache setup</strong> to ensure that the cache key is correctly defined. If you still encounter this error, please get help from plugin support forum!
+                      Please review your <strong>Nginx FastCGI cache setup</strong> to ensure that the <strong>fastcgi_cache_key</strong> is correctly defined. If you continue to encounter this error, this may indicate a <strong>parsing error</strong> and can be safely ignored.
                   </p>
               </div>';
     // Warn about the unsupported fastcgi cache keys
