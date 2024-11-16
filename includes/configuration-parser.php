@@ -389,7 +389,8 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                         if (!(
                                             (isset($path_parts[0]) && $path_parts[0] === 'dev' && isset($path_parts[1])) ||
                                             (isset($path_parts[0]) && $path_parts[0] === 'var' && isset($path_parts[1])) ||
-                                            (isset($path_parts[0]) && $path_parts[0] === 'opt' && isset($path_parts[1]))
+                                            (isset($path_parts[0]) && $path_parts[0] === 'opt' && isset($path_parts[1])) ||
+                                            (isset($path_parts[0]) && $path_parts[0] === 'tmp' && isset($path_parts[1]))
                                         )) {
                                            $all_supported = false;
                                            break 2;
@@ -418,7 +419,8 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                                     $is_supported = (
                                                         (isset($path_parts[0]) && $path_parts[0] === 'dev' && isset($path_parts[1])) ||
                                                         (isset($path_parts[0]) && $path_parts[0] === 'var' && isset($path_parts[1])) ||
-                                                        (isset($path_parts[0]) && $path_parts[0] === 'opt' && isset($path_parts[1]))
+                                                        (isset($path_parts[0]) && $path_parts[0] === 'opt' && isset($path_parts[1])) ||
+                                                        (isset($path_parts[0]) && $path_parts[0] === 'tmp' && isset($path_parts[1]))
                                                     );
                                                     ?>
                                                     <td>
