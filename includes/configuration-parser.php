@@ -327,7 +327,6 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
 
     ob_start();
     //img url's
-    $image_url_bar = plugins_url('/admin/img/bar.png', dirname(__FILE__));
     $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
     ?>
     <header></header>
@@ -513,11 +512,6 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
     </main>
     <div class="nppp-premium-widget">
         <div id="nppp-ad" style="margin-top: 20px; margin-bottom: 0; margin-left: 0; margin-right: 0;">
-            <div class="textcenter">
-                <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="open-nppp-upsell-top" data-pro-ad="sidebar-logo">
-                    <img src="<?php echo esc_url($image_url_bar); ?>" alt="Nginx Cache Purge & Preload PRO" title="Nginx Cache Purge & Preload PRO" style="width: 60px !important;">
-                </a>
-            </div>
             <h3 class="textcenter">Hope you are enjoying NPP! Do you still need assistance with the server side integration? Get our server integration service now and optimize your website's caching performance!</h3>
             <p class="textcenter">
                 <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="open-nppp-upsell" data-pro-ad="sidebar-logo">
