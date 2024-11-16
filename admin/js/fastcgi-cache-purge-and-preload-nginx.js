@@ -2444,6 +2444,9 @@ document.addEventListener('DOMContentLoaded', function () {
     function nppobserveFuseStatusChange(tabContent) {
         // Create a MutationObserver to observe the status content
         const observer = new MutationObserver((mutationsList, observer) => {
+            // Call nppSetHeight
+            nppSetHeight();
+
             const fuseStatusSpan = document.querySelector('#npppFuseMountStatus span:last-of-type');
             if (fuseStatusSpan) {
                 // Compare the trimmed text
@@ -2491,6 +2494,38 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (error) {
             console.error('Error in warning icon insertion:', error);
+        }
+    }
+
+    // Set position of status tab sections
+    function nppSetHeight() {
+        // Run the code only on wider screens
+        if (window.innerWidth > 768) { // Example breakpoint for mobile
+            // Select the first element directly by ID
+            const npp_system_check_section = document.getElementById('nppp-system-checks');
+            const npp_fuse_status = Array.from(document.querySelectorAll('section.nginx-status')).find(section => {
+                const h2 = section.querySelector('h2');
+                return h2 && h2.textContent.trim() === 'FUSE STATUS';
+            });
+
+            // Ensure both elements were found
+            if (npp_system_check_section && npp_fuse_status) {
+                // Get positions relative to the document
+                const pos1 = npp_system_check_section.getBoundingClientRect().top + window.scrollY;
+                const pos2 = npp_fuse_status.getBoundingClientRect().top + window.scrollY;
+
+                // Calculate the difference
+                const difference = pos1 - pos2;
+
+                // Apply the margin adjustment to make their positions equal
+                if (difference > 0) {
+                    npp_fuse_status.style.marginTop = (parseFloat(window.getComputedStyle(npp_fuse_status).marginTop) + difference) + "px";
+                } else if (difference < 0) {
+                    npp_system_check_section.style.marginTop = (parseFloat(window.getComputedStyle(npp_system_check_section).marginTop) - difference) + "px";
+                }
+            } else {
+                console.error('Could not find one or both elements.');
+            }
         }
     }
 
