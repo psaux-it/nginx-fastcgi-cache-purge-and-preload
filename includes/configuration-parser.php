@@ -383,12 +383,16 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                             <?php
                             if (!empty($cache_paths) && get_transient('nppp_cache_path_not_found') === false):
                                 $all_supported = true;
-
                                 foreach ($cache_paths as $values) {
                                     foreach ($values as $value) {
-                                        if (strpos($value, '/dev/shm') !== 0 && strpos($value, '/var/cache') !== 0) {
-                                            $all_supported = false;
-                                            break 2;
+                                        $path_parts = explode('/', trim($value, '/'));
+                                        if (!(
+                                            (isset($path_parts[0]) && $path_parts[0] === 'dev' && isset($path_parts[1])) ||
+                                            (isset($path_parts[0]) && $path_parts[0] === 'var' && isset($path_parts[1])) ||
+                                            (isset($path_parts[0]) && $path_parts[0] === 'opt' && isset($path_parts[1]))
+                                        )) {
+                                           $all_supported = false;
+                                           break 2;
                                         }
                                     }
                                 }
@@ -410,7 +414,12 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                             <?php foreach ($values as $value): ?>
                                                 <tr>
                                                     <?php
-                                                    $is_supported = (strpos($value, '/dev/shm') === 0 || strpos($value, '/var/cache') === 0);
+                                                    $path_parts = explode('/', trim($value, '/'));
+                                                    $is_supported = (
+                                                        (isset($path_parts[0]) && $path_parts[0] === 'dev' && isset($path_parts[1])) ||
+                                                        (isset($path_parts[0]) && $path_parts[0] === 'var' && isset($path_parts[1])) ||
+                                                        (isset($path_parts[0]) && $path_parts[0] === 'opt' && isset($path_parts[1]))
+                                                    );
                                                     ?>
                                                     <td>
                                                         <?php if ($is_supported): ?>
