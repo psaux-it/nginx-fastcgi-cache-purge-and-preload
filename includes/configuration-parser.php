@@ -341,7 +341,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
             </button>
         </section>
         <section class="nginx-status">
-            <h2>NGINX STATUS</h2>
+            <h2>NGINX & FUSE STATUS</h2>
             <table>
                 <thead>
                     <tr>
@@ -461,14 +461,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
         </section>
         <!-- Section for FUSE Status -->
         <section class="nginx-status">
-            <h2>FUSE STATUS</h2>
             <table>
-                <thead>
-                    <tr>
-                        <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
-                        <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
-                    </tr>
-                </thead>
                 <tbody>
                     <tr>
                         <td class="action">libfuse Version</td>
