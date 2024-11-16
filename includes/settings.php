@@ -1655,7 +1655,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     $pattern = '/^\/(?:[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*)\/?$/';
 
     // Define critical system directories
-    $critical_directories = array('/bin','/boot','/etc','/lib','/lib64','/media','/proc','/root','/sbin','/srv','/sys','/usr','/home','/mnt');
+    $critical_directories = array('/bin','/boot','/etc','/lib','/lib64','/media','/proc','/root','/sbin','/srv','/sys','/usr','/home','/mnt','/var/log','/var/spool','/libexec','/run','/var/run');
 
     // Check if the path starts with any critical directory
     foreach ($critical_directories as $dir) {
@@ -1666,6 +1666,12 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
 
     // Check if the path matches correct format
     if (!preg_match($pattern, $path)) {
+        return 'critical_path';
+    }
+
+    // Also supported paths (/dev /var /opt /tmp) can not be first level directory
+    $path_parts = explode('/', trim($path, '/'));
+    if (in_array($path_parts[0], ['dev', 'var', 'opt', 'tmp']) && count($path_parts) < 2) {
         return 'critical_path';
     }
 
