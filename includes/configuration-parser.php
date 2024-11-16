@@ -378,7 +378,27 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     </tr>
                     <!-- Section for Nginx Cache Paths -->
                     <tr>
-                        <td class="action">Nginx Cache Paths</td>
+                        <td class="action">
+                            Nginx Cache Paths
+                            <?php
+                            if (!empty($cache_paths) && get_transient('nppp_cache_path_not_found') === false):
+                                $all_supported = true;
+
+                                foreach ($cache_paths as $values) {
+                                    foreach ($values as $value) {
+                                        if (strpos($value, '/dev/shm') !== 0 && strpos($value, '/var/cache') !== 0) {
+                                            $all_supported = false;
+                                            break 2;
+                                        }
+                                    }
+                                }
+                                if ($all_supported): ?>
+                                    <br><span style="font-size: 13px; color: green;">Supported</span>
+                                <?php else: ?>
+                                    <br><span style="font-size: 13px; color: #f0c36d;">Found Unsupported</span>
+                                <?php endif;
+                            endif; ?>
+                        </td>
                         <td class="status">
                             <?php if (empty($cache_paths) || get_transient('nppp_cache_path_not_found') !== false): ?>
                                 <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
@@ -389,7 +409,17 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                         <?php foreach ($cache_paths as $values): ?>
                                             <?php foreach ($values as $value): ?>
                                                 <tr>
-                                                    <td><span class="dashicons dashicons-yes" style="color: green; font-size: 20px !important;"></span>&nbsp;<span style="color: teal; font-size: 13px; font-weight: bold;"><?php echo esc_html($value); ?></span></td>
+                                                    <?php
+                                                    $is_supported = (strpos($value, '/dev/shm') === 0 || strpos($value, '/var/cache') === 0);
+                                                    ?>
+                                                    <td>
+                                                        <?php if ($is_supported): ?>
+                                                            <span class="dashicons dashicons-yes" style="color: green; font-size: 18px !important;"></span>
+                                                        <?php else: ?>
+                                                            <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
+                                                        <?php endif; ?>
+                                                        <span style="color: <?php echo $is_supported ? 'teal' : 'orange'; ?>; font-size: 13px; font-weight: bold;"><?php echo esc_html($value); ?></span>
+                                                    </td>
                                                 </tr>
                                             <?php endforeach; ?>
                                         <?php endforeach; ?>
@@ -413,7 +443,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                             ?>
                                     <br><span style="font-size: 13px; color: green;">Supported</span>
                                 <?php else: ?>
-                                    <br><span style="font-size: 13px; color: #f0c36d;">Unsupported</span>
+                                    <br><span style="font-size: 13px; color: #f0c36d;">Found Unsupported</span>
                                 <?php endif; ?>
                             <?php endif; ?>
                         </td>
@@ -464,16 +494,16 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
             <table>
                 <tbody>
                     <tr>
-                        <td class="action">libfuse Version</td>
-                        <td class="status" id="npppLibfuseVersion">
+                        <td class="action highlight-metric">libfuse Version</td>
+                        <td class="status highlight-metric" id="npppLibfuseVersion">
                             <?php
                             echo esc_html(nppp_check_libfuse_version());
                             ?>
                         </td>
                     </tr>
                     <tr>
-                        <td class="action">bindfs Version</td>
-                        <td class="status" id="npppBindfsVersion">
+                        <td class="action highlight-metric">bindfs Version</td>
+                        <td class="status highlight-metric" id="npppBindfsVersion">
                             <?php
                             echo esc_html(nppp_check_bindfs_version());
                             ?>
@@ -481,8 +511,8 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     </tr>
                     <!-- Section for FUSE Cache Paths -->
                     <tr>
-                        <td class="action">Nginx Cache Paths<br><span style="font-size: 13px; color: green;">FUSE Mounts</span></td>
-                        <td class="status" id="npppFuseMountStatus">
+                        <td class="action highlight-metric">Nginx Cache Paths<br><span style="font-size: 13px; color: green;">FUSE Mounts</span></td>
+                        <td class="status highlight-metric" id="npppFuseMountStatus">
                             <?php if (empty($fuse_paths['fuse_paths']) || get_transient('nppp_cache_path_not_found') !== false): ?>
                                 <span class="dashicons dashicons-clock" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span style="color: orange; font-size: 13px; font-weight: bold;">Not Mounted</span>
@@ -491,7 +521,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                     <tbody>
                                         <?php foreach ($fuse_paths['fuse_paths'] as $fuse_path): ?>
                                             <tr>
-                                                <td><span class="dashicons dashicons-yes" style="color: green; font-size: 20px !important;"></span>&nbsp;<span style="color: teal; font-size: 13px; font-weight: bold;"><?php echo esc_html($fuse_path); ?></span></td>
+                                                <td class="highlight-metric"><span class="dashicons dashicons-yes" style="color: green; font-size: 20px !important;"></span>&nbsp;<span style="color: teal; font-size: 13px; font-weight: bold;"><?php echo esc_html($fuse_path); ?></span></td>
                                             </tr>
                                         <?php endforeach; ?>
                                     </tbody>
