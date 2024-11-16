@@ -226,6 +226,12 @@ function nppp_check_permissions_recursive($path) {
         return;
     }
 
+    // First check if the main path is readable and writable
+    if (!$wp_filesystem->is_readable($path) || !$wp_filesystem->is_writable($path)) {
+        return false;
+    }
+
+    // Recursively check permission for all files in nginx cache path
     try {
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
