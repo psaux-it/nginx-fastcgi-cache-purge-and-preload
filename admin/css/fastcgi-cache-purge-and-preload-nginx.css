@@ -2331,13 +2331,6 @@ p.description {
     font-size: 1em;
 }
 
-/* Margin-top of 60px on wider screens */
-@media (min-width: 1024px) {
-    #nppp-status-tab > main > section.system-checks {
-        margin-top: 60px;
-    }
-}
-
 /* style table header elements */
 #nppp-nginx-info .check-header {
     text-transform: uppercase !important;
