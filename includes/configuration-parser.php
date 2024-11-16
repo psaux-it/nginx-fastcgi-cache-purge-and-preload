@@ -462,7 +462,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
         </section>
         <!-- Section for FUSE Status -->
         <section class="nginx-status">
-            <h2 style="margin-top: 45px; !important">FUSE STATUS</h2>
+            <h2>FUSE STATUS</h2>
             <table>
                 <thead>
                     <tr>
