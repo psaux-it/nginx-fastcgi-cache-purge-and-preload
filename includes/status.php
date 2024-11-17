@@ -557,7 +557,7 @@ function nppp_my_status_html() {
                         </tbody>
                     </table>
                 </section>
-                <section class="system-checks">
+                <section id="nppp-system-checks" class="system-checks">
                     <h2>System Checks</h2>
                     <table>
                         <thead>
