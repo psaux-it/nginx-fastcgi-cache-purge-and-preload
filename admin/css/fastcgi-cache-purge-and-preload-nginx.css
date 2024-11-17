@@ -2405,3 +2405,49 @@ p.description {
     word-wrap: break-word;
     white-space: normal;
 }
+
+.highlight-metric {
+    background-color: mintcream;
+}
+
+.cache-paths-info {
+    max-width: 500px;
+    color: #722F37;
+    background-color: mintcream;
+    border-left: 4px solid orange;
+    padding: 10px;
+    font-size: 12px !important;
+    margin-top: 8px !important;
+}
+
+.cache-paths-info h4 {
+    font-size: 1.1em;
+    color: #333;
+    margin-bottom: 8px;
+    margin-top: 0;
+}
+
+.cache-paths-info p {
+    font-size: 12px !important;
+    color: #722F37;
+    margin-bottom: 10px;
+}
+
+.cache-paths-info code {
+    background-color: #EDEDED;
+    font-size: 12px !important;
+}
+
+/* Show line breaks on screens wider than 768px (e.g., tablets and desktops) */
+@media (min-width: 768px) {
+    .cache-paths-info .line-break {
+        display: inline;
+    }
+}
+
+/* Hide line breaks on screens narrower than 768px (e.g., mobile devices) */
+@media (max-width: 767px) {
+    .cache-paths-info .line-break {
+        display: none;
+    }
+}
