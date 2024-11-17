@@ -150,7 +150,7 @@ Here's the short changelog for version 2.0.5, with contributors proudly mentione
 * Use FUSE mount system instead of inotifywait/setfacl to manage permission issues in the bash helper script (@coldrealms65)
 * New FUSE Status in the STATUS tab showing FUSE mount related metrics
 * Added new allowed Nginx Cache Paths for flexibility: /tmp for RAM-based and /opt for persistent disk caches
-* Added purge hook to allow other plugins to use it for auto cache purging
+* Added nppp_purged_all hook for other plugins to trigger their cache purge after all Nginx cache purged
 * Improved nginx cache path validation
 * Improved empty cache detection
 * Improved permission check logic
