@@ -145,6 +145,8 @@ Here's the short changelog for version 2.0.5, with contributors proudly mentione
 * Fixed the 'dot' issue in the cache path (@coldrealms65)
 * Support for auto purge when compatible caching plugins trigger purge (@coldrealms65)
 * Added support for custom fastcgi_cache_key formats with user-defined regex under the new Advanced Options section (@coldrealms65)
+* Execution no longer stops in the Advanced tab if an unsupported fastcgi_cache_key is found (@mrj0b)
+* Execution stops in the Status tab if nginx.conf is not found or readable
 * Use FUSE mount system instead of inotifywait/setfacl to manage permission issues in the bash helper script (@coldrealms65)
 * New FUSE Status in the STATUS tab showing FUSE mount related metrics
 * Added new allowed Nginx Cache Paths for flexibility: /tmp for RAM-based and /opt for persistent disk caches
