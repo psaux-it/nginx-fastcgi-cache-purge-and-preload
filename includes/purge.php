@@ -498,6 +498,9 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         return;
     }
 
+    // Fire the 'nppp_purged' action, triggering any other plugin actions that are hooked into this event
+    do_action('nppp_purged');
+
     // If set call preload immediately after purge
     if ($auto_preload) {
         // Get the plugin options
