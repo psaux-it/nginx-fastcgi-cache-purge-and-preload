@@ -140,7 +140,7 @@ function nppp_nginx_cache_settings_page() {
                         </tr>
                         <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-admin-site"></span> Nginx Cache Directory</th>
-                             <td>
+                            <td>
                                 <?php nppp_nginx_cache_path_callback(); ?>
                                 <p class="description">Provide the full NGINX cache directory path for plugin operation.</p>
                                 <p class="description">The directory must be configured in NGINX and accessible by the PHP process,</p>
