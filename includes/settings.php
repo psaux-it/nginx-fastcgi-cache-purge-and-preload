@@ -140,32 +140,24 @@ function nppp_nginx_cache_settings_page() {
                         </tr>
                         <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-admin-site"></span> Nginx Cache Directory</th>
-                            <td>
+                             <td>
                                 <?php nppp_nginx_cache_path_callback(); ?>
-                                <p class="description">Please provide the complete NGINX cache directory path required for plugin operations.</p>
-                                <p class="description">The properly configured NGINX cache directory, which must be set in the server-side NGINX configuration,</p>
-                                <p class="description">is essential for the effective functioning of cache purge and preload actions.</p>
-                                <p class="description">It is crucial that the <strong>PHP process owner</strong> has both read and write permissions to this directory.</p>
-                                <p class="description">Without these permissions, the plugin will be unable to purge or preload the cache effectively.</p>
-                                <p class="cache-path-plugin-note">
-                                    <span style="color: red;">IMPORTANT:</span> If you used the provided one-liner bash script for the initial setup, <br class="line-break">
-                                    please ensure that you add <strong>-npp</strong> suffix to the your original NGINX cache path. <br class="line-break">
-                                    For instance, if your original NGINX cache path is <strong>/dev/shm/fastcgi-cache-psauxit</strong> <br class="line-break">
-                                    You must specify it here as <strong>/dev/shm/fastcgi-cache-psauxit-npp</strong>. <br class="line-break">
-                                    This adjustment is essential only if you used one-liner bash script for the initial setup via &nbsp;&nbsp;&nbsp;&nbsp;<br class="line-break">
-                                    <code>bash <(curl -Ss https://psaux-it.github.io/install.sh)</code>
-                                </p>
-                                <p class="cache-path-plugin-note">
-                                    <span style="color: red;">NOTE:</span> The plugin author explicitly disclaims any liability for unintended deletions resulting
-                                    <br class="line-break">
-                                    from incorrect directory entries. Users are solely responsible for verifying the directory's
-                                    <br class="line-break">
-                                    accuracy prior to deletion. For safety, paths such as <strong>'/home'</strong> and other <strong>critical system paths</strong>
-                                    <br class="line-break">
-                                    are prohibited in default. Best practice using directories like <strong>'/dev/shm/'</strong>
-                                    <br class="line-break">
-                                    or <strong>'/var/cache/'</strong>. Please refer HELP section for detailed information.
-                                </p>
+                                <p class="description">Provide the full NGINX cache directory path for plugin operation.</p>
+                                <p class="description">The directory must be configured in NGINX and accessible by the PHP process,</p>
+                                <p class="description">with read and write permissions for cache purge and preload to function properly.</p>
+                                <div class="cache-paths-info">
+                                    <h4>Allowed Cache Paths</h4>
+                                    <p><strong>For RAM-based:</strong> Use directories under <code>/dev/</code> | <code>/tmp/</code> | <code>/var/</code></p>
+                                    <p><strong>For persistent disk:</strong> Use directories under <code>/opt/</code></p>
+                                    <p><strong>Important:</strong> Paths must be one level deeper (e.g. <code>/var/cache</code>).<br class="line-break">
+                                    Critical system paths are prohibited in default. Please ensure accuracy to avoid unintended deletions.</p>
+                                </div>
+                                <div class="cache-paths-info">
+                                    <h4>Important Setup Information</h4>
+                                    <p>If you used the one-liner bash script, add the <code>-npp</code> suffix to your original NGINX cache path.</p>
+                                    <p>This is required only if you used the following setup command:<br class="line-break">
+                                    <code>bash <(curl -Ss https://psaux-it.github.io/install.sh)</code></p>
+                                </div>
                             </td>
                         </tr>
                         <tr valign="top">
