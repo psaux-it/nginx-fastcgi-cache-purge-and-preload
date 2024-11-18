@@ -150,7 +150,7 @@ function nppp_nginx_cache_settings_page() {
                                     <p><strong>For RAM-based:</strong> Use directories under <code>/dev/</code> | <code>/tmp/</code> | <code>/var/</code></p>
                                     <p><strong>For persistent disk:</strong> Use directories under <code>/opt/</code></p>
                                     <p><strong>Important:</strong> Paths must be one level deeper (e.g. <code>/var/cache</code>).<br class="line-break">
-                                    Critical system paths are prohibited in default. Please ensure accuracy to avoid unintended deletions.</p>
+                                    Critical system paths are prohibited in default to ensure accuracy to avoid unintended deletions.</p>
                                 </div>
                                 <div class="cache-paths-info">
                                     <h4>Important Setup Information</h4>
