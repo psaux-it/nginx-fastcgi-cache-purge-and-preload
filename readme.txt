@@ -17,9 +17,13 @@ This plugin allows WordPress users to manage Nginx Cache Purge and Preload opera
 
 == Important ==
 
-For detailed steps and guidance, visit the [main development repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload), and refer to the FAQ or the plugin's Help tab.
+For detailed integration steps and guidance, visit the [main development repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload), and refer to the **FAQ** or the plugin's **Help tab**.
 
 == Why NPP? ==
+
+Because NPP does not depend on external Nginx modules, It provides a simpler and more flexible solution for Nginx cache purge operations. **NPP also supports Nginx cache Preloading**
+
+Here's why:"
 
 🔧 **Ease of Setup**: Simple to implement once permissions are set correctly. No need for Nginx recompilation, making the setup straightforward.
 🔑 **Granularity**: Can be controlled at a file level. Offers flexibility in managing cache and other resources for better fine-tuning.
@@ -87,7 +91,20 @@ None.
 
 = Is this plugin compatible with other Wordpress cache plugins? =
 
-Certainly! Nginx FastCGI cache operates differently from traditional WordPress cache plugins, functioning at the server level by storing fully generated HTML pages. As such, it can be used alongside other WordPress cache plugins without any compatibility issues.
+When using NPP alongside other WordPress caching plugins, It's important to disable page caching in the other plugins to avoid conflicts and redundancy. These plugins can still be used for frontend optimizations. Here's how:
+
+== To prevent conflicts, configure other caching plugins correctly: ==
+
+1. **Disable the Page Caching Feature**  
+   Turn off the page caching option in any caching plugin you're using (e.g., WP Rocket, W3 Total Cache, LiteSpeed Cache).
+
+2. **Keep Other Frontend Optimization Features Active**  
+   - **CSS/JS Optimization**: Minify and combine stylesheets and scripts.
+   - **Lazy Loading**: Improve page load speed by loading images and videos only when needed.
+   - **Database Cleanup**: Optimize your WordPress database to reduce bloat.
+   - **CDN Integration**: Seamlessly deliver static files from a content delivery network.
+
+By using NPP for server-side page caching and other plugins solely for frontend optimizations, you ensure a streamlined, high-performance system without redundant caching layers and conflicts.
 
 = How do I configure the plugin settings? =
 
@@ -121,9 +138,7 @@ Important: Paths must be one level deeper (e.g. /var/cache).
 
 = What is different about this plugin compared to other Nginx Cache Plugins? =
 
-This plugin directly traverses the cache directory and deletes cache files If the PHP-FPM-USER (website-user or PHP process owner) has read and write permissions granted to the Nginx cache path. Note that, NPP also supports Nginx cache preloading with a simple direct approach, with the help of **wget**.
-
-There are many cases where the external Nginx modules works fine for cache purge operations, but integrating the module with Nginx can be challenging for non-technical or regular WordPress users.
+Because NPP does not depend on external Nginx modules, It provides a simpler and more flexible solution. This plugin directly traverses the cache directory and deletes cache files If the PHP-FPM-USER (website-user or PHP process owner) has read and write permissions granted to the Nginx cache path. Note that, NPP also supports Nginx cache preloading with a simple direct approach, with the help of **wget**.
 
 = I am still encountering difficulties. Do you provide server-side integration services? =
 
@@ -161,6 +176,7 @@ Here's the short changelog for version 2.0.5, with contributors proudly mentione
 * Improved nginx cache path validation
 * Improved empty cache detection
 * Improved permission check logic
+* Improved Help tab tutorials
 * Improved Status tab to accurately highlight supported and unsupported results for UX/UI
 * Store more expensive key performance metrics in cache to enhance performance
 * Updated feature descriptions for clarity
