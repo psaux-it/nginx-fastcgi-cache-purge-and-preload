@@ -67,16 +67,16 @@ function nppp_my_faq_html() {
                 <h3 class="nppp-question">Why plugin not functional on my environment?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
-                        <p>This WordPress plugin is compatible exclusively with Nginx web servers running on Linux-powered systems. Additionally, the <strong>shell_exec</strong> function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native <strong>Linux commands</strong> are blocked from running via PHP.</p>
-                        <p>Moreover, granting the correct permissions to the PHP process owner (<strong>PHP-FPM-USER</strong>) is essential for the proper functioning of the purge and preload operations. This is necessary in isolated user environments that have two distinct user roles: the <strong>WEBSERVER-USER</strong> (nginx or www-data) and the <strong>PHP-FPM-USER</strong>.</p>
-                        <p>📌 If you see warnings or if any plugin settings or tabs are disabled, this could indicate permission issues, an unsupported environment, or missing dependencies that the plugin requires to function properly.</p>
+                        <p style="font-size: 14px;">This WordPress plugin is compatible exclusively with Nginx web servers running on Linux-powered systems. Additionally, the <strong>shell_exec</strong> function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native <strong>Linux commands</strong> are blocked from running via PHP.</p>
+                        <p style="font-size: 14px;">Moreover, granting the correct permissions to the PHP process owner (<strong>PHP-FPM-USER</strong>) is essential for the proper functioning of the purge and preload operations. This is necessary in isolated user environments that have two distinct user roles: the <strong>WEBSERVER-USER</strong> (nginx or www-data) and the <strong>PHP-FPM-USER</strong>.</p>
+                        <p style="font-size: 14px;">📌 If you see warnings or if any plugin settings or tabs are disabled, this could indicate permission issues, an unsupported environment, or missing dependencies that the plugin requires to function properly.</p>
                     </div>
                 </div>
 
                 <h3 class="nppp-question">What Linux commands are required for the preload action?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
-                        <p>For the preload action to work properly, the server must have the <code>wget</code> command installed, as the plugin uses it to preload the cache by fetching pages. Additionally, it is recommended to have the <code>cpulimit</code> command installed to effectively manage <code>wget</code> process server load during the preload action.</p>
+                        <p style="font-size: 14px;">For the preload action to work properly, the server must have the <code>wget</code> command installed, as the plugin uses it to preload the cache by fetching pages. Additionally, it is recommended to have the <code>cpulimit</code> command installed to effectively manage <code>wget</code> process server load during the preload action.</p>
                     </div>
                 </div>
 
@@ -84,19 +84,19 @@ function nppp_my_faq_html() {
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <ol class="nginx-list">
-                            <p><strong>Technical Background:</strong></p>
-                            <p>In properly configured Nginx servers, it is not strictly necessary to have separate <code>PHP-FPM-USER</code> (as known WEBSITE-USER) and <code>WEBSERVER-USER</code> (commonly, nginx or www-data), but there are scenarios where separating these users can enhance security and performance. Here’s why:</p>
+                            <p style="font-size: 14px;"><strong>Technical Background:</strong></p>
+                            <p style="font-size: 14px;">In properly configured Nginx servers, it is not strictly necessary to have separate <code>PHP-FPM-USER</code> (as known WEBSITE-USER) and <code>WEBSERVER-USER</code> (commonly, nginx or www-data), but there are scenarios where separating these users can enhance security and performance. Here’s why:</p>
                             <ul>
                                 <li><strong>Security:</strong> By running the PHP-FPM process under a different user than the Nginx web server, you reduce the risk of privilege escalation. If one process is compromised, the attacker does not automatically gain control over the other process.</li>
                                 <li><strong>Permission Management:</strong> Having separate users allows for more granular permission settings. For example, PHP scripts can be restricted to only the directories they need to access, while the web server user can be given more restrictive permissions on other parts of the filesystem.</li>
                                 <li><strong>Resource Management:</strong> Separate users can help with resource management and monitoring, as it becomes easier to track resource usage per user.</li>
                             </ul>
-                            <p><strong>Problem Statement:</strong></p>
+                            <p style="font-size: 14px;"><strong>Problem Statement:</strong></p>
                             <ul>
                                 <li>The issue with <strong>Nginx cache</strong> purging often arises in environments where two distinct users are involved.</li>
                                 <li>The <code>WEBSERVER-USER</code> is responsible for creating cache folders and files with strict permissions, while the <code>PHP-FPM-USER</code> handles cache purge & preload operations but lacks necessary privileges.</li>
                             </ul>
-                            <p>This plugin also addresses the challenge of automating cache purging and preloading in Nginx environments that involve two distinct users, <code>WEBSERVER-USER</code> and <code>PHP-FPM-USER</code>, by offering a pre-made bash script.</p>
+                            <p style="font-size: 14px;">This plugin also addresses the challenge of automating cache purging and preloading in Nginx environments that involve two distinct users, <code>WEBSERVER-USER</code> and <code>PHP-FPM-USER</code>, by offering a pre-made bash script.</p>
                         </ol>
                     </div>
                 </div>
@@ -104,7 +104,7 @@ function nppp_my_faq_html() {
                 <h3 class="nppp-question">What is the solution for the permission issues?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
-                        <p>In environments with two distinct user roles the <strong>WEBSERVER-USER</strong> (nginx or www-data) and the <strong>PHP-FPM-USER</strong> the pre-made bash script automates the management of <strong>Nginx Cache Paths</strong>. It utilizes <strong>bindfs</strong> to create a FUSE mount of the original Nginx Cache Paths, enabling the <strong>PHP-FPM-USER</strong> to write to these directories with the necessary permissions. This approach resolves permission conflicts by granting the <strong>PHP-FPM-USER</strong> access to a new mount point, while keeping the original Nginx Cache Paths intact and synchronized.</p>
+                        <p style="font-size: 14px;">In environments with two distinct user roles the <strong>WEBSERVER-USER</strong> (nginx or www-data) and the <strong>PHP-FPM-USER</strong> the pre-made bash script automates the management of <strong>Nginx Cache Paths</strong>. It utilizes <strong>bindfs</strong> to create a FUSE mount of the original Nginx Cache Paths, enabling the <strong>PHP-FPM-USER</strong> to write to these directories with the necessary permissions. This approach resolves permission conflicts by granting the <strong>PHP-FPM-USER</strong> access to a new mount point, while keeping the original Nginx Cache Paths intact and synchronized.</p>
 
                         <p><strong>Shortly:</strong></p>
                         <ol class="nginx-list">
@@ -137,11 +137,11 @@ function nppp_my_faq_html() {
                             </ul>
 
                             <h4>Tip</h4>
-                            <p>Furthermore, if you're hosting multiple WordPress sites each with their own Nginx cache paths and associated PHP-FPM pool users on the same host, you'll find that deploying just one instance of this script effectively manages all WordPress instances using the NPP plugin. This streamlined approach centralizes cache management tasks, ensuring optimal efficiency and simplified maintenance throughout your server environment.</p>
+                            <p style="font-size: 14px;">Furthermore, if you're hosting multiple WordPress sites each with their own Nginx cache paths and associated PHP-FPM pool users on the same host, you'll find that deploying just one instance of this script effectively manages all WordPress instances using the NPP plugin. This streamlined approach centralizes cache management tasks, ensuring optimal efficiency and simplified maintenance throughout your server environment.</p>
 
-                            <p>If auto-detection does not work for you, for proper matching, please ensure that your Nginx Cache Path includes the associated PHP-FPM-USER username.</p>
+                            <p style="font-size: 14px;">If auto-detection does not work for you, for proper matching, please ensure that your Nginx Cache Path includes the associated PHP-FPM-USER username.</p>
 
-                            <p>For example, assuming your PHP-FPM-USER = <code>psauxit</code>, the following example <code>fastcgi_cache_path</code> naming formats will match perfectly with your PHP-FPM-USER and be detected by the script automatically:</p>
+                            <p style="font-size: 14px;">For example, assuming your PHP-FPM-USER = <code>psauxit</code>, the following example <code>fastcgi_cache_path</code> naming formats will match perfectly with your PHP-FPM-USER and be detected by the script automatically:</p>
                             <ul>
                                 <li><code>fastcgi_cache_path /dev/shm/fastcgi-cache-psauxit</code></li>
                                 <li><code>fastcgi_cache_path /dev/shm/cache-psauxit</code></li>
@@ -156,8 +156,8 @@ function nppp_my_faq_html() {
                 <h3 class="nppp-question">Why can’t I use my preferred path for the Nginx Cache Directory?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
-                        <p>The Nginx Cache Directory option has restrictions on the paths you can use to prevent accidental deletions or harm to critical system files. By default, certain paths, like ‘/home’ and other vital system directories, are blocked to safeguard your system’s stability and prevent data loss.</p>
-                        <p>While this might limit your options, it ensures your system’s security. Recommended directories to choose from, such as ‘/dev/shm/’ or ‘/var/cache/’, which are commonly used for caching purposes and are generally safer.</p>
+                        <p style="font-size: 14px;">The Nginx Cache Directory option has restrictions on the paths you can use to prevent accidental deletions or harm to critical system files. By default, certain paths, like ‘/home’ and other vital system directories, are blocked to safeguard your system’s stability and prevent data loss.</p>
+                        <p style="font-size: 14px;">While this might limit your options, it ensures your system’s security. Recommended directories to choose from, such as ‘/dev/shm/’ or ‘/var/cache/’, which are commonly used for caching purposes and are generally safer.</p>
                         <h4>Allowed Cache Paths:</h4>
                         <ul>
                             <li><strong>For RAM-based:</strong> Use directories under <code>/dev/</code>, <code>/tmp/</code>, or <code>/var/</code>.</li>
@@ -211,6 +211,87 @@ function nppp_my_faq_html() {
                             </tr>
                           </tbody>
                       </table>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">What is different about Nginx server-side caching compared to traditional WordPress page caching?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <table class="responsive-table">
+                          <thead>
+                            <tr>
+                              <th>Aspect</th>
+                              <th>Traditional WordPress Page Caching</th>
+                              <th>Nginx Server-Side Caching</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>Setup Complexity</td>
+                              <td>Requires installation and configuration of PHP-based caching plugins (e.g., WP Rocket, W3 Total Cache).</td>
+                              <td>Requires Nginx configuration at the server level, but no PHP-based plugins are needed.</td>
+                            </tr>
+                            <tr>
+                              <td>Cache Location</td>
+                              <td>Cache is stored on the filesystem, usually in a dedicated folder, and requires PHP processing to serve cached content.</td>
+                              <td>Cache is stored directly at the server level (e.g., in memory or disk), bypassing PHP entirely for faster access.</td>
+                            </tr>
+                            <tr>
+                              <td>Speed</td>
+                              <td>Cached pages are served through PHP, which introduces overhead, making it slower compared to direct server-level caching.</td>
+                              <td>Pages are served directly from Nginx's cache, resulting in faster page load times as there is no PHP overhead involved.</td>
+                            </tr>
+                            <tr>
+                              <td>Resource Usage</td>
+                              <td>Requires PHP to process and serve cached content, consuming more server resources (CPU, RAM).</td>
+                              <td>Uses minimal resources as Nginx serves cached files directly, significantly reducing CPU and memory usage, especially under high traffic.</td>
+                            </tr>
+                            <tr>
+                              <td>Cache Invalidation</td>
+                              <td>Cache invalidation requires interaction with PHP-based cache purging mechanisms (e.g., through plugin settings or custom rules), which may take time.</td>
+                              <td>Cache is invalidated quickly and efficiently at the server level, often via direct cache purging commands without involving PHP.</td>
+                            </tr>
+                            <tr>
+                              <td>Integration</td>
+                              <td>Integrated within the WordPress environment, relying on the WordPress plugin ecosystem to manage page caching.</td>
+                              <td>Operates independently of WordPress, with caching occurring directly at the server level, making it more versatile for various types of content.</td>
+                            </tr>
+                            <tr>
+                              <td>Scalability</td>
+                              <td>As traffic grows, PHP-based page caching can consume more resources, potentially slowing down site performance under high load.</td>
+                              <td>Highly scalable as Nginx handles large numbers of concurrent requests with minimal resources, making it ideal for handling high-traffic sites.</td>
+                            </tr>
+                            <tr>
+                              <td>Redundancy</td>
+                              <td>Can lead to redundant caching layers if combined with other caching mechanisms (e.g., object caching or server-side caching), increasing complexity.</td>
+                              <td>Eliminates redundancy by serving static cached content directly from Nginx, offering a more efficient and streamlined caching solution.</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">How can I use NPP with other caching plugins?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <p style="font-size: 14px;">When using NPP alongside other WordPress caching plugins, it's important to <strong>disable page caching</strong> in the other plugins to avoid conflicts and redundancy. They  can still be used for frontend optimizations. Here's how:</p>
+
+                        <h4>To prevent conflicts, configure Other Caching Plugins correctly:</h4>
+                        <ol class="nginx-list">
+                        <ul>
+                            <li><strong>While Disabling the Page Caching Feature</strong><br> Turn off the page caching option in any caching plugin you're using (e.g., WP Rocket, W3 Total Cache, LiteSpeed Cache).</li>
+                            <li><strong>Keep Other Frontend Optimization Features Active</strong><br>
+                                <ul>
+                                    <p style="font-size: 14px;"><code>CSS/JS Optimization</code>: Minify and combine stylesheets and scripts.</p>
+                                    <p style="font-size: 14px;"><code>Lazy Loading</code>: Improve page load speed by loading images and videos only when needed.</p>
+                                    <p style="font-size: 14px;"><code>Database Cleanup</code>: Optimize your WordPress database to reduce bloat.</p>
+                                    <p style="font-size: 14px;"><code>CDN Integration</code>: Seamlessly deliver static files from a content delivery network.</p>
+                                </ul>
+                            </li>
+                        </ul>
+                        </ol>
+
+                        <p style="font-size: 14px;">By using NPP for server side page caching and other plugins solely for frontend optimizations, you ensure a streamlined, high-performance system without redundant caching layers and conflicts.</p>
                     </div>
                 </div>
 
