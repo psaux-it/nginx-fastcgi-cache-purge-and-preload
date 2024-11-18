@@ -1700,7 +1700,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
                 // Display error message for non-existent directory
                 return 'directory_not_exist_or_readable';
             } else {
-                // Restart the npp-wordpress systemd service to apply setfacl to the created Nginx cache path.
+                // Restart the npp-wordpress systemd service to re-mount FUSE Nginx cache path
                 // This code block depends on the npp-wordpress.service and will only run
                 // if the plugin's initial setup was done using the following one-liner script:
                 // [ bash <(curl -Ss https://psaux-it.github.io/install.sh) ]
