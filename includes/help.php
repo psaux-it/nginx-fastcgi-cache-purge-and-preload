@@ -21,22 +21,62 @@ function nppp_my_faq_html() {
     $image_url_bar = plugins_url('/admin/img/bar.png', dirname(__FILE__));
     $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
     ?>
+
+    <style>
+      .responsive-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        font-size: 14px;
+        text-align: left;
+      }
+
+      .responsive-table th, .responsive-table td {
+        border: 1px solid #ddd;
+        padding: 12px;
+      }
+
+      .responsive-table th {
+        background-color: #f4f4f4;
+        font-weight: bold;
+      }
+
+      .responsive-table tr:nth-child(even) {
+        background-color: #f9f9f9;
+      }
+
+      .responsive-table tr:hover {
+        background-color: #f1f1f1;
+      }
+
+      .responsive-table td:nth-child(1) {
+        font-weight: bold;
+        color: #333;
+      }
+
+      @media (max-width: 768px) {
+        .responsive-table {
+          font-size: 14px;
+        }
+      }
+    </style>
+
     <div class="nppp-premium-container">
         <div class="nppp-premium-wrap">
             <div id="nppp-accordion" class="accordion">
                 <h3 class="nppp-question">Why plugin not functional on my environment?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
-                        <p>This plugin is compatible exclusively with <strong>Nginx web servers</strong> running on <strong>Linux-powered</strong> systems. Additionally, the <strong>shell_exec</strong> function must be enabled and unrestricted. Consequently, the plugin may not operate fully on <strong>shared hosting</strong> environments where native <strong>Linux commands</strong> are blocked from running via PHP.</p>
-                        <p>Moreover, a correctly configured PHP-FPM and Nginx setup is essential for the purge and preload operations to function properly. Otherwise, permission issues may arise.</p>
-                        <p>If warnings appear or plugin settings/tabs disabled, they may indicate permission issues, an unsupported environment, or missing dependencies required for cache operations.</p>
+                        <p>This WordPress plugin is compatible exclusively with Nginx web servers running on Linux-powered systems. Additionally, the <strong>shell_exec</strong> function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native <strong>Linux commands</strong> are blocked from running via PHP.</p>
+                        <p>Moreover, granting the correct permissions to the PHP process owner (<strong>PHP-FPM-USER</strong>) is essential for the proper functioning of the purge and preload operations. This is necessary in isolated user environments that have two distinct user roles: the <strong>WEBSERVER-USER</strong> (nginx or www-data) and the <strong>PHP-FPM-USER</strong>.</p>
+                        <p>📌 If you see warnings or if any plugin settings or tabs are disabled, this could indicate permission issues, an unsupported environment, or missing dependencies that the plugin requires to function properly.</p>
                     </div>
                 </div>
 
                 <h3 class="nppp-question">What Linux commands are required for the preload action?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
-                        <p>For the preload action to work properly, the server needs to have the <code>wget</code> command installed. The plugin uses <code>wget</code> to preload cache by fetching pages. Additionally, it’s highly recommended to have the <code>cpulimit</code> command installed to manage server load effectively during the cache preloading action.</p>
+                        <p>For the preload action to work properly, the server must have the <code>wget</code> command installed, as the plugin uses it to preload the cache by fetching pages. Additionally, it is recommended to have the <code>cpulimit</code> command installed to effectively manage <code>wget</code> process server load during the preload action.</p>
                     </div>
                 </div>
 
@@ -55,10 +95,8 @@ function nppp_my_faq_html() {
                             <ul>
                                 <li>The issue with <strong>Nginx cache</strong> purging often arises in environments where two distinct users are involved.</li>
                                 <li>The <code>WEBSERVER-USER</code> is responsible for creating cache folders and files with strict permissions, while the <code>PHP-FPM-USER</code> handles cache purge & preload operations but lacks necessary privileges.</li>
-                                <li>Even when <code>PHP-FPM-USER</code> is added to the <code>WEBSERVER-GROUP</code>, permission conflicts persist.</li>
-                                <li>This is because Nginx overrides default setfacl settings, ignoring Access Control Lists (ACLs) and creating cache folders and files with strict permissions.</li>
                             </ul>
-                            <p>This plugin also addresses the challenge of automating cache purging and preloading in Nginx environments that involve two distinct users, <code>WEBSERVER-USER</code> and <code>PHP-FPM-USER</code>, by offering an alternative simple approach. It accomplishes this with the help of server-side tools <code>inotifywait</code> and <code>setfacl</code>.</p>
+                            <p>This plugin also addresses the challenge of automating cache purging and preloading in Nginx environments that involve two distinct users, <code>WEBSERVER-USER</code> and <code>PHP-FPM-USER</code>, by offering a pre-made bash script.</p>
                         </ol>
                     </div>
                 </div>
@@ -66,13 +104,14 @@ function nppp_my_faq_html() {
                 <h3 class="nppp-question">What is the solution for the permission issues?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
-                        <p>In case your current web server setup involves two distinct users, <strong>WEBSERVER-USER</strong> and <strong>PHP-FPM-USER</strong>, the solution proposed by this plugin involves combining Linux server side tools <strong>inotifywait</strong> with <strong>setfacl</strong> to automatically grant write permissions to the <strong>PHP-FPM-USER</strong> for the corresponding <strong>Nginx Cache Paths</strong>, facilitated by server-side bash scripting. Users need to manage <strong>inotifywait</strong> and <strong>setfacl</strong> operations manually or use the provided basic bash script for fully functional purge and preload actions provided by this plugin. If you prefer to use the pre-made automation bash script, you can find the necessary information below.</p>
+                        <p>In environments with two distinct user roles the <strong>WEBSERVER-USER</strong> (nginx or www-data) and the <strong>PHP-FPM-USER</strong> the pre-made bash script automates the management of <strong>Nginx Cache Paths</strong>. It utilizes <strong>bindfs</strong> to create a FUSE mount of the original Nginx Cache Paths, enabling the <strong>PHP-FPM-USER</strong> to write to these directories with the necessary permissions. This approach resolves permission conflicts by granting the <strong>PHP-FPM-USER</strong> access to a new mount point, while keeping the original Nginx Cache Paths intact and synchronized.</p>
+
                         <p><strong>Shortly:</strong></p>
                         <ol class="nginx-list">
-                            <li>Solution involves combining <strong>inotifywait</strong> with <strong>setfacl</strong> under <strong>root</strong>.</li>
-                            <li>Additional step required to make cache purge & preload operation work seamlessly.</li>
-                            <li>We need to grant write permission to the <code>PHP-FPM-USER</code> for the Nginx Cache folder.</li>
-                            <li>This task can be facilitated by automation.</li>
+                            <li>Solution utilizes <strong>bindfs</strong> to create a FUSE mount of the Nginx Cache Paths.</li>
+                            <li>PHP-FPM-USER is granted write access to the mount point without altering the original cache paths.</li>
+                            <li>This resolves permission conflicts and enables seamless cache purge and preload operations.</li>
+                            <li>Automates the task, eliminating manual configuration of permissions or file access management.</li>
                         </ol>
                     </div>
                 </div>
@@ -82,19 +121,22 @@ function nppp_my_faq_html() {
                     <div class="nppp-answer-content">
                         <ol class="nginx-list">
                             <pre><code>bash &lt;(curl -Ss https://psaux-it.github.io/install.sh)</code></pre>
-                            <li>🎉 This Bash script automates the management of <strong>inotify/setfacl</strong> operations to grant write permission to the <code>PHP-FPM-USER</code> for the Nginx cache folder, ensuring efficiency and security. It enhances the efficiency and security of cache management tasks by automating the setup and configuration processes.</li>
-                            <li>The <code>install.sh</code> script serves as a wrapper that facilitates the execution of the main <code>fastcgi_ops_root.sh</code> script from <a href="https://psaux-it.github.io">psaux-it.github.io</a>. It acts as a convenient entry point for users to initiate the setup and configuration procedures seamlessly. Rest assured, this solution is entirely safe to use, providing a reliable and straightforward method for managing Nginx cache operations.</li>
-                            <h3>Features:</h3>
+                            <li>The <code>install.sh</code> script serves as a wrapper for executing the main <code>fastcgi_ops_root.sh</code> script from <a href="https://psaux-it.github.io">psaux-it.github.io</a>. This bash script is designed for the FastCGI Cache Purge and Preload for Nginx WordPress plugin (NPP).</li>
+                            <li>The script first attempts to automatically identify the <strong>PHP-FPM-USER</strong> (also known as the PHP process owner or website user) along with their associated Nginx Cache Paths.</li>
+                            <li>If it cannot automatically match the PHP-FPM-USER with their respective Nginx Cache Path, it provides an easy manual setup option using the <code>manual-configs.nginx</code> file.</li>
+                            <li>According to matches this script automates the management of Nginx Cache Paths. It utilizes <strong>bindfs</strong> to create a FUSE mount of the original Nginx Cache Paths, enabling the <strong>PHP-FPM-USER</strong> to write to these directories with the necessary permissions automatically.</li>
+                            <li>After the setup (whether automatic or manual) is completed, the script creates an <code>npp-wordpress</code> systemd service that can be managed from the WordPress admin dashboard under the NPP plugin <strong>STATUS</strong> tab.</li>
+                            <li>Additionally, NPP users have the flexibility to manage FUSE mount and unmount operations for the original Nginx Cache Path directly from the WP admin dashboard, effectively preventing unexpected permission issues and maintaining consistent cache stability.</li>
+
+                            <h4>Features:</h4>
                             <ul>
-                                <li><strong>Automated Setup:</strong> Quickly sets up Nginx cache paths and associated PHP-FPM users.</li>
+                                <li><strong>Automated Detection:</strong> Quickly sets up Nginx Cache Paths and associated PHP-FPM-USERS.</li>
                                 <li><strong>Dynamic Configuration:</strong> Detects Nginx configuration dynamically for seamless integration.</li>
-                                <li><strong>ACL Verification:</strong> Ensures filesystem ACL configuration for proper functionality.</li>
-                                <li><strong>Systemd Integration:</strong> Generates and enables systemd service for continuous operation.</li>
-                                <li><strong>Manual Configuration Support:</strong> Allows manual configuration for customized setups.</li>
-                                <li><strong>Inotify Operations:</strong> Listens to Nginx cache folder events for real-time updates.</li>
+                                <li><strong>Systemd Integration:</strong> Generates and enables the <code>npp-wordpress</code> systemd service for managing FUSE mount operations.</li>
+                                <li><strong>Manual Configuration Support:</strong> Allows manual configuration via the <code>manual-configs.nginx</code> file.</li>
                             </ul>
 
-                            <h3>Tip</h3>
+                            <h4>Tip</h4>
                             <p>Furthermore, if you're hosting multiple WordPress sites each with their own Nginx cache paths and associated PHP-FPM pool users on the same host, you'll find that deploying just one instance of this script effectively manages all WordPress instances using the NPP plugin. This streamlined approach centralizes cache management tasks, ensuring optimal efficiency and simplified maintenance throughout your server environment.</p>
 
                             <p>If auto-detection does not work for you, for proper matching, please ensure that your Nginx Cache Path includes the associated PHP-FPM-USER username.</p>
@@ -116,17 +158,59 @@ function nppp_my_faq_html() {
                     <div class="nppp-answer-content">
                         <p>The Nginx Cache Directory option has restrictions on the paths you can use to prevent accidental deletions or harm to critical system files. By default, certain paths, like ‘/home’ and other vital system directories, are blocked to safeguard your system’s stability and prevent data loss.</p>
                         <p>While this might limit your options, it ensures your system’s security. Recommended directories to choose from, such as ‘/dev/shm/’ or ‘/var/cache/’, which are commonly used for caching purposes and are generally safer.</p>
+                        <h4>Allowed Cache Paths:</h4>
+                        <ul>
+                            <li><strong>For RAM-based:</strong> Use directories under <code>/dev/</code>, <code>/tmp/</code>, or <code>/var/</code>.</li>
+                            <li><strong>For persistent disk:</strong> Use directories under <code>/opt/</code>.</li>
+                            <li><strong>Important:</strong> Paths must be one level deeper (e.g., <code>/var/cache</code>).</li>
+                        </ul>
                     </div>
                 </div>
 
                 <h3 class="nppp-question">What is different about this plugin compared to other Nginx Cache Plugins?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
-                        <p>NPP offers a more direct solution without any external NGINX module such as <strong>Cache Purge module</strong>. This plugin directly traverses the cache directory and clears cache if PHP-FPM and WEBSERVER user permissions are adjusted properly. To automate and fix these permission issues, there is a pre-made bash script that works on the server side.</p>
-                        <pre><code>bash &lt;(curl -Ss https://psaux-it.github.io/install.sh)</code></pre>
-                        <p>Note that NPP also supports Nginx cache preloading with a simple direct approach, with the help of <code>wget</code>. This feature is missing in other Nginx Cache plugins.</p>
-                        <p>There are many cases where the external Nginx modules work fine for cache purge operations, but integrating the module with Nginx can be challenging for non-technical or regular WordPress users. Not every Linux distro packages this module or has outdated module versions, so users may need to follow extra steps to integrate it, which becomes more complicated.</p>
-                        <p>Also, there are other cases where even bleeding-edge module versions are easily installed and integrated with Nginx by users, but purge operations do not work as expected. This is what I faced before and decided to develop NPP.</p>
+                        <table class="responsive-table">
+                          <thead>
+                            <tr>
+                              <th>Aspect</th>
+                              <th>Nginx Cache Purge Module</th>
+                              <th>NPP</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>Ease of Setup</td>
+                              <td>Requires module installation and Nginx recompilation.</td>
+                              <td>Simple to implement once permissions are set correctly, no need for Nginx recompilation.</td>
+                            </tr>
+                            <tr>
+                              <td>Granularity</td>
+                              <td>Allows precise cache purging based on URLs or cache keys.</td>
+                              <td>Can be controlled at a file level, offering flexibility in managing cache and other resources.</td>
+                            </tr>
+                            <tr>
+                              <td>Security</td>
+                              <td>Built-in access control via HTTP request.</td>
+                              <td>Offers greater security control by leveraging existing filesystem permissions.</td>
+                            </tr>
+                            <tr>
+                              <td>Performance</td>
+                              <td>Efficient, handled by Nginx.</td>
+                              <td>Direct deletion is faster in certain cases when targeting specific files, with no need to rely on Nginx processing.</td>
+                            </tr>
+                            <tr>
+                              <td>Integration</td>
+                              <td>Seamless integration with Nginx’s cache system.</td>
+                              <td>Works independently of Nginx and can be adapted for various cache systems, offering broader application.</td>
+                            </tr>
+                            <tr>
+                              <td>Automation</td>
+                              <td>Simple automation via HTTP request (e.g., `PURGE` request).</td>
+                              <td>Highly customizable with scripts to manage cache purging, allowing greater automation and flexibility.</td>
+                            </tr>
+                          </tbody>
+                      </table>
                     </div>
                 </div>
 
