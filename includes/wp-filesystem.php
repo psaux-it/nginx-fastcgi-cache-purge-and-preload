@@ -110,7 +110,8 @@ function nppp_wp_purge($directory_path) {
         return;
     }
 
-    // Check for read and write permissions using WP_Filesystem
+    // Check for read and write permissions early,
+    // --if ($contents === false)-- not handle correctly
     if (!$wp_filesystem->is_readable($directory_path) || !$wp_filesystem->is_writable($directory_path)) {
         return new WP_Error('permission_error', 'Permission denied while accessing or writing to directory: ' . $directory_path);
     }
