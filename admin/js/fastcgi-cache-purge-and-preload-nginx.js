@@ -2173,6 +2173,9 @@ function npppupdateStatus() {
     if (npppcacheInPageSpanValue === "Undetermined") {
         npppcacheInPageSpan.style.color = "red";
         npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Permission Issue';
+    } else if (npppcacheInPageSpanValue === "RegexError") {
+        npppcacheInPageSpan.style.color = "red";
+        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Regex Error';
     } else if (npppcacheInPageSpanValue === "0") {
         npppcacheInPageSpan.style.color = "orange";
         npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppcacheInPageSpanValue;
