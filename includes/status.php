@@ -387,6 +387,7 @@ function nppp_get_in_cache_page_count() {
             RecursiveIteratorIterator::SELF_FIRST
         );
 
+        $regex_tested = false;
         foreach ($cache_iterator as $file) {
             if ($wp_filesystem->is_file($file->getPathname())) {
                 // Check if the file is readable
