@@ -112,6 +112,8 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         );
 
         $found = false;
+        $regex_tested = false;
+
         foreach ($cache_iterator as $file) {
             if ($wp_filesystem->is_file($file->getPathname())) {
                 // Check read and write permissions for each file
@@ -132,6 +134,16 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 // Skip all request methods except GET
                 if (!preg_match('/KEY:\s.*GET/', $content)) {
                     continue;
+                }
+
+                // Test regex at least once
+                if (!$regex_tested) {
+                    if (preg_match($regex, $content, $matches)) {
+                        $regex_tested = true;
+                    } else {
+                        nppp_display_admin_notice('error', "ERROR REGEX: Auto purge cache failed. Please check the Cache Key Regex option in the plugin Advanced options section.");
+                        return;
+                    }
                 }
 
                 // Extract the in cache URL from fastcgi_cache_key
