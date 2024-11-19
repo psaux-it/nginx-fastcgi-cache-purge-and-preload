@@ -403,6 +403,11 @@ function nppp_get_in_cache_page_count() {
                     continue;
                 }
 
+                // Skip all request methods except GET
+                if (!preg_match('/KEY:\s.*GET/', $content)) {
+                    continue;
+                }
+
                 // Extract URLs using regex
                 if (preg_match($regex, $content, $matches)) {
                     $url = trim($matches[1]);
