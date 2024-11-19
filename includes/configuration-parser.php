@@ -2,7 +2,7 @@
 /**
  * Nginx config parser functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Nginx config parser functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.4
+ * Version: 2.0.5
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -14,9 +14,191 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Function to execute a shell command and get the output
+function nppp_get_command_output($command) {
+    return trim(shell_exec($command));
+}
+
+// Function to get the latest release from GitHub API using wp_remote_get
+function nppp_get_latest_version_git($url) {
+    $response = wp_remote_get($url, [
+        'timeout'   => 3,
+        'httpversion' => '1.1',
+        'user-agent' => 'PHP',
+    ]);
+
+    if (is_wp_error($response)) {
+        return 'Not Determined';
+    }
+
+    $body = wp_remote_retrieve_body($response);
+    return $body ? json_decode($body, true) : null;
+}
+
+// Function to check bindfs version
+function nppp_check_bindfs_version() {
+    // Ask result in cache first
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_bindfs_version_' . md5($static_key_base);
+    $cached_result = get_transient($transient_key);
+
+    // Return cached result if available
+    if ($cached_result !== false) {
+        return $cached_result;
+    }
+
+    // Set repo URL
+    $bindfs_repo_url = "https://api.github.com/repos/mpartel/bindfs/git/refs/tags";
+
+    // Check if bindfs is installed
+    if (nppp_get_command_output('command -v bindfs')) {
+        $installed_version = nppp_get_command_output('bindfs --version | head -n1 | awk \'{print $2}\'');
+
+        // Get latest version info from GitHub API
+        $response = nppp_get_latest_version_git($bindfs_repo_url);
+        if ($response) {
+            // Assign array_map result to a variable to avoid passing by reference warning
+            $mapped_refs = array_map(function($ref) {
+                return preg_replace('/^refs\/tags\//', '', $ref['ref']);
+            }, $response);
+
+            $latest_version = end($mapped_refs);
+
+            if (version_compare($installed_version, $latest_version, '<')) {
+                $result = "$installed_version ($latest_version)";
+            } else {
+                $result = "$installed_version";
+            }
+        } else {
+            $result = "Not Determined";
+        }
+    } else {
+        $result = "Not Installed";
+    }
+
+    // Store the result in the cache 1 day
+    set_transient($transient_key, $result, MONTH_IN_SECONDS);
+
+    return $result;
+}
+
+// Function to check libfuse version
+function nppp_check_libfuse_version() {
+    // Ask result in cache first
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_libfuse_version_' . md5($static_key_base);
+    $cached_result = get_transient($transient_key);
+
+    // Return cached result if available
+    if ($cached_result !== false) {
+        return $cached_result;
+    }
+
+    // Set repo URL
+    $libfuse_repo_url = "https://api.github.com/repos/libfuse/libfuse/releases/latest";
+
+    // Get latest version info from GitHub API
+    $response = nppp_get_latest_version_git($libfuse_repo_url);
+    $latest_version = $response ? str_replace('fuse-', '', $response['tag_name']) : null;
+
+    if ($latest_version) {
+        // Check for FUSE 3
+        if (nppp_get_command_output('command -v fusermount3')) {
+            $installed_version = preg_replace('/version:\s*/', '', nppp_get_command_output('fusermount3 -V | grep -oP \'version:\s*\K[0-9.]+\''));
+
+            if (version_compare($installed_version, $latest_version, '<')) {
+                $result = "$installed_version ($latest_version)";
+            } else {
+                $result = "$installed_version";
+            }
+        // Check for FUSE 2
+        } elseif (nppp_get_command_output('command -v fusermount')) {
+            $installed_version = preg_replace('/version:\s*/', '', nppp_get_command_output('fusermount -V | grep -oP \'version:\s*\K[0-9.]+\''));
+
+            if (version_compare($installed_version, $latest_version, '<')) {
+                $result = "$installed_version ($latest_version)";
+            } else {
+                $result = "$installed_version";
+            }
+        } else {
+            // Neither fusermount nor fusermount3 is found
+            $result = "Not Installed";
+        }
+    } else {
+        // Latest version could not be determined
+        $result = "Not Determined";
+    }
+
+    // Store the result in the cache 1 day
+    set_transient($transient_key, $result, MONTH_IN_SECONDS);
+
+    return $result;
+}
+
+// Function to check nginx cache path fuse mount points
+function nppp_check_fuse_cache_paths($cache_paths) {
+    // Ask result in cache first
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_fuse_paths_' . md5($static_key_base);
+
+    // Return cached result if available
+    $cached_result = get_transient($transient_key);
+    // Return cached result if available
+    if ($cached_result !== false) {
+        return $cached_result;
+    }
+
+    $fuse_paths = [];
+
+    // Loop through the cache paths to check their mount points
+    foreach ($cache_paths as $directive => $paths) {
+        foreach ($paths as $path) {
+            if (!empty($path)) {
+                // Execute a shell command to get the mount point for the given path
+                $command = "mount | grep " . escapeshellarg($path);
+                $output = shell_exec($command);
+
+                // If a valid output is found, extract the fuse mount point
+                if ($output) {
+                    // Extract the FUSE mount point
+                    if (preg_match('/on\s+([^\s]+)\s+type\s+fuse/', $output, $matches)) {
+                        $fuse_paths[] = $matches[1];
+                    }
+                }
+            }
+        }
+    }
+
+    // If no fuse mount point found return empty array before setting transient
+    if (empty($fuse_paths)) {
+        set_transient('nppp_fuse_path_not_found', true, MONTH_IN_SECONDS);
+        return ['fuse_paths' => []];
+    }
+
+    // Store the result in the cache before returning
+    set_transient($transient_key, ['fuse_paths' => $fuse_paths], MONTH_IN_SECONDS);
+
+    // Reset the error transients
+    delete_transient('nppp_fuse_path_not_found');
+
+    // Return the array of mount points
+    return ['fuse_paths' => $fuse_paths];
+}
+
 // Function to parse the Nginx configuration file with included paths
 // for Nginx Cache Paths
 function nppp_parse_nginx_config($file, $wp_filesystem = null) {
+    // Ask result in cache first
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_cache_paths_' . md5($static_key_base);
+
+    $cached_result = get_transient($transient_key);
+    // Return cached result if available
+    if ($cached_result !== false) {
+        return $cached_result;
+    }
+
+    // Initialize wp_filesystem
     if (is_null($wp_filesystem)) {
         $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -29,6 +211,7 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
         }
     }
 
+    // Check nginx.conf found
     if (!$wp_filesystem->exists($file)) {
         return false;
     }
@@ -38,15 +221,17 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
     $included_files = [];
 
     // Regex to match cache path directives
-    preg_match_all('/^\s*(?!#\s*)(proxy_cache_path|fastcgi_cache_path|scgi_cache_path|uwsgi_cache_path)\s+([^;]+);/m', $config, $cache_directives, PREG_SET_ORDER);
+    preg_match_all('/^\s*(?!#\s*)(fastcgi_cache_path)\s+([^;]+);/m', $config, $cache_directives, PREG_SET_ORDER);
 
     foreach ($cache_directives as $cache_directive) {
-        $directive = $cache_directive[1];
-        $value = trim(preg_replace('/\s.*$/', '', $cache_directive[2]));
-        if (!isset($cache_paths[$directive])) {
-            $cache_paths[$directive] = [];
+        if (isset($cache_directive[1]) && isset($cache_directive[2])) {
+            $directive = $cache_directive[1];
+            $value = trim(preg_replace('/\s.*$/', '', $cache_directive[2]));
+            if (!isset($cache_paths[$directive])) {
+                $cache_paths[$directive] = [];
+            }
+            $cache_paths[$directive][] = $value;
         }
-        $cache_paths[$directive][] = $value;
     }
 
     // Regex to match include directives
@@ -79,8 +264,15 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
 
     // Return empty if no Nginx cache paths are found
     if (empty($cache_paths)) {
+        set_transient('nppp_cache_path_not_found', true, MONTH_IN_SECONDS);
         return ['cache_paths' => []];
     }
+
+    // Store the result in the cache before returning
+    set_transient($transient_key, ['cache_paths' => $cache_paths], MONTH_IN_SECONDS);
+
+    // Reset the error transients
+    delete_transient('nppp_cache_path_not_found');
 
     // Return found active Nginx Cache Paths
     return ['cache_paths' => $cache_paths];
@@ -129,13 +321,12 @@ function nppp_is_service_file_exists() {
 }
 
 // Function to generate HTML output
-function nppp_generate_html($cache_paths, $nginx_info) {
+function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths) {
     // Check if the systemd service file exists
     $service_file_exists = nppp_is_service_file_exists();
 
     ob_start();
     //img url's
-    $image_url_bar = plugins_url('/admin/img/bar.png', dirname(__FILE__));
     $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
     ?>
     <header></header>
@@ -150,9 +341,16 @@ function nppp_generate_html($cache_paths, $nginx_info) {
             </button>
         </section>
         <section class="nginx-status">
-            <h2>NGINX STATUS</h2>
+            <h2>NGINX & FUSE STATUS</h2>
             <table>
+                <thead>
+                    <tr>
+                        <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
+                        <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                    </tr>
+                </thead>
                 <tbody>
+                    <!-- Section for Nginx Version -->
                     <tr>
                         <td class="action">Nginx Version</td>
                         <td class="status" id="npppNginxVersion">
@@ -165,6 +363,7 @@ function nppp_generate_html($cache_paths, $nginx_info) {
                             <?php endif; ?>
                         </td>
                     </tr>
+                    <!-- Section for OpenSSL Version -->
                     <tr>
                         <td class="action">OpenSSL Version</td>
                         <td class="status" id="npppOpenSSLVersion">
@@ -177,20 +376,164 @@ function nppp_generate_html($cache_paths, $nginx_info) {
                             <?php endif; ?>
                         </td>
                     </tr>
+                    <!-- Section for Nginx Cache Paths -->
                     <tr>
-                        <td class="action">Active Nginx Cache Paths</td>
+                        <td class="action">
+                            Nginx Cache Paths
+                            <?php
+                            if (!empty($cache_paths) && get_transient('nppp_cache_path_not_found') === false):
+                                $all_supported = true;
+                                foreach ($cache_paths as $values) {
+                                    foreach ($values as $value) {
+                                        $path_parts = explode('/', trim($value, '/'));
+                                        if (!(
+                                            (isset($path_parts[0]) && $path_parts[0] === 'dev' && isset($path_parts[1])) ||
+                                            (isset($path_parts[0]) && $path_parts[0] === 'var' && isset($path_parts[1])) ||
+                                            (isset($path_parts[0]) && $path_parts[0] === 'opt' && isset($path_parts[1])) ||
+                                            (isset($path_parts[0]) && $path_parts[0] === 'tmp' && isset($path_parts[1]))
+                                        )) {
+                                           $all_supported = false;
+                                           break 2;
+                                        }
+                                    }
+                                }
+                                if ($all_supported): ?>
+                                    <br><span style="font-size: 13px; color: green;">Supported</span>
+                                <?php else: ?>
+                                    <br><span style="font-size: 13px; color: #f0c36d;">Found Unsupported</span>
+                                <?php endif;
+                            endif; ?>
+                        </td>
                         <td class="status">
-                            <?php if (empty($cache_paths)): ?>
-                                <p style="color: red; font-weight: bold;"><span class="dashicons dashicons-no-alt"></span> Not Found</p>
+                            <?php if (empty($cache_paths) || get_transient('nppp_cache_path_not_found') !== false): ?>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;"> Not Found</span>
                             <?php else: ?>
                                 <table class="nginx-config-table">
                                     <tbody>
                                         <?php foreach ($cache_paths as $values): ?>
                                             <?php foreach ($values as $value): ?>
                                                 <tr>
-                                                    <td><span class="dashicons dashicons-arrow-right-alt" style="color: green; font-size: 17px !important;"></span>&nbsp;<span style="color: teal; font-size: 14px;"><?php echo esc_html($value); ?></span></td>
+                                                    <?php
+                                                    $path_parts = explode('/', trim($value, '/'));
+                                                    $is_supported = (
+                                                        (isset($path_parts[0]) && $path_parts[0] === 'dev' && isset($path_parts[1])) ||
+                                                        (isset($path_parts[0]) && $path_parts[0] === 'var' && isset($path_parts[1])) ||
+                                                        (isset($path_parts[0]) && $path_parts[0] === 'opt' && isset($path_parts[1])) ||
+                                                        (isset($path_parts[0]) && $path_parts[0] === 'tmp' && isset($path_parts[1]))
+                                                    );
+                                                    ?>
+                                                    <td>
+                                                        <?php if ($is_supported): ?>
+                                                            <span class="dashicons dashicons-yes" style="color: green; font-size: 18px !important;"></span>
+                                                        <?php else: ?>
+                                                            <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
+                                                        <?php endif; ?>
+                                                        <span style="color: <?php echo $is_supported ? 'teal' : 'orange'; ?>; font-size: 13px; font-weight: bold;"><?php echo esc_html($value); ?></span>
+                                                    </td>
                                                 </tr>
                                             <?php endforeach; ?>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <!-- Section for FastCGI Cache Keys -->
+                    <tr>
+                        <td class="action">
+                            FastCGI Cache Keys
+                            <?php
+                            if (
+                                $cache_keys !== 'Not Found' &&
+                                $cache_keys !== 'Filesystem Error' &&
+                                $cache_keys !== 'Conf Not Found' &&
+                                $cache_keys !== 'Key Not Found'
+                            ):
+                                if ($cache_keys === '$scheme$request_method$host$request_uri'):
+                            ?>
+                                    <br><span style="font-size: 13px; color: green;">Supported</span>
+                                <?php else: ?>
+                                    <br><span style="font-size: 13px; color: #f0c36d;">Found Unsupported</span>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        </td>
+                        <td class="status">
+                            <?php if ($cache_keys === 'Not Found'): ?>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;">Not Found</span>
+                            <?php elseif ($cache_keys === 'Filesystem Error'): ?>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 13px; font-weight: bold">System Error</span>
+                            <?php elseif ($cache_keys === 'Conf Not Found'): ?>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;">Conf Error</span>
+                            <?php elseif ($cache_keys === 'Key Not Found'): ?>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;">Not Found</span>
+                            <?php elseif ($cache_keys === '$scheme$request_method$host$request_uri'): ?>
+                                <span class="dashicons dashicons-yes" style="color: green !important; font-size: 20px;"></span>
+                                <span style="color: teal; font-weight: bold; font-size: 13px;">
+                                    <?php $key_no_quotes = trim($cache_keys, '"'); echo esc_html($key_no_quotes); ?>
+                                </span>
+                            <?php else: ?>
+                                <table class="nginx-config-table">
+                                    <tbody>
+                                        <?php foreach ($cache_keys as $key): ?>
+                                            <tr>
+                                                <td>
+                                                    <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
+                                                    <span style="color: teal; font-size: 13px; font-weight: bold;">
+                                                        <?php
+                                                        $key_no_quotes = trim($key, '"');
+                                                        echo esc_html($key_no_quotes);
+                                                        ?>
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+        <!-- Section for FUSE Status -->
+        <section class="nginx-status">
+            <table>
+                <tbody>
+                    <tr>
+                        <td class="action highlight-metric">libfuse Version</td>
+                        <td class="status highlight-metric" id="npppLibfuseVersion">
+                            <?php
+                            echo esc_html(nppp_check_libfuse_version());
+                            ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="action highlight-metric">bindfs Version</td>
+                        <td class="status highlight-metric" id="npppBindfsVersion">
+                            <?php
+                            echo esc_html(nppp_check_bindfs_version());
+                            ?>
+                        </td>
+                    </tr>
+                    <!-- Section for FUSE Cache Paths -->
+                    <tr>
+                        <td class="action highlight-metric">Nginx Cache Paths<br><span style="font-size: 13px; color: green;">FUSE Mounts</span></td>
+                        <td class="status highlight-metric" id="npppFuseMountStatus">
+                            <?php if (empty($fuse_paths['fuse_paths']) || get_transient('nppp_cache_path_not_found') !== false): ?>
+                                <span class="dashicons dashicons-clock" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: orange; font-size: 13px; font-weight: bold;">Not Mounted</span>
+                            <?php else: ?>
+                                <table class="nginx-config-table">
+                                    <tbody>
+                                        <?php foreach ($fuse_paths['fuse_paths'] as $fuse_path): ?>
+                                            <tr>
+                                                <td class="highlight-metric"><span class="dashicons dashicons-yes" style="color: green; font-size: 20px !important;"></span>&nbsp;<span style="color: teal; font-size: 13px; font-weight: bold;"><?php echo esc_html($fuse_path); ?></span></td>
+                                            </tr>
                                         <?php endforeach; ?>
                                     </tbody>
                                 </table>
@@ -203,11 +546,6 @@ function nppp_generate_html($cache_paths, $nginx_info) {
     </main>
     <div class="nppp-premium-widget">
         <div id="nppp-ad" style="margin-top: 20px; margin-bottom: 0; margin-left: 0; margin-right: 0;">
-            <div class="textcenter">
-                <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="open-nppp-upsell-top" data-pro-ad="sidebar-logo">
-                    <img src="<?php echo esc_url($image_url_bar); ?>" alt="Nginx Cache Purge & Preload PRO" title="Nginx Cache Purge & Preload PRO" style="width: 60px !important;">
-                </a>
-            </div>
             <h3 class="textcenter">Hope you are enjoying NPP! Do you still need assistance with the server side integration? Get our server integration service now and optimize your website's caching performance!</h3>
             <p class="textcenter">
                 <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="open-nppp-upsell" data-pro-ad="sidebar-logo">
@@ -286,23 +624,73 @@ function nppp_nginx_config_shortcode() {
         return '<p>Failed to initialize filesystem.</p>';
     }
 
-    // Path to Nginx configuration file
-    // Check if Nginx configuration file exists
-    $config_file = '/etc/nginx/nginx.conf';
-    if (!$wp_filesystem->exists($config_file)) {
+    // Use the nppp_get_nginx_conf_paths function to find Nginx configuration paths
+    $conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
+
+    // Check if Nginx configuration file found
+    if (empty($conf_paths)) {
         return '<p>Nginx configuration file not found.</p>';
     }
 
-    // Parse Nginx configuration file
+    // Parse Nginx configuration file for Nginx Cache Paths
     // Check if parsing the configuration file failed
+    $config_file = $conf_paths[0];
     $config_data = nppp_parse_nginx_config($config_file, $wp_filesystem);
     if ($config_data === false) {
         return '<p>Failed to parse Nginx configuration file.</p>';
     }
 
+    // Get cache keys from cache as status &advanced tab already parsed them
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_cache_keys_' . md5($static_key_base);
+
+    // Attempt to retrieve the cached result
+    $cached_result = get_transient($transient_key);
+
+    // Attempt to retrieve the error status
+    $error_conf = get_transient('nppp_nginx_conf_not_found');
+    $error_parse = get_transient('nppp_cache_keys_not_found');
+    $error_wpfilesystem = get_transient('nppp_cache_keys_wpfilesystem_error');
+
+    // Handle return cases
+    if ($cached_result === false) {
+        // Case 1: Transient not found
+
+        if ($error_wpfilesystem) {
+            // Check if there was a filesystem error
+            $cache_keys = 'Filesystem Error';
+        } elseif ($error_conf) {
+            // If no nginx.conf files were found
+           $cache_keys = 'Conf Not Found';
+        } elseif ($error_parse) {
+            // Check if no cache keys were found
+           $cache_keys = 'Key Not Found';
+        } else {
+            $cache_keys = 'Not Found';
+        }
+    } else {
+        // Case 2: Transient found
+
+        // 2.1: Array is empty, return a default fastcgi_cache_key
+        if (empty($cached_result['cache_keys'])) {
+            $cache_keys = '$scheme$request_method$host$request_uri';
+        } else {
+            // Case 2.2: Unsupported Cache keys exist
+            $cache_keys = $cached_result['cache_keys'];
+
+            // Trim whitespace from all elements in the cache_keys array
+            if (is_array($cache_keys)) {
+                $cache_keys = array_map('trim', $cache_keys);
+            }
+        }
+    }
+
     // Get Nginx version, OpenSSL version, and other info
     $nginx_info = nppp_get_nginx_info();
 
+    // Get fuse paths if exists
+    $fuse_paths = nppp_check_fuse_cache_paths($config_data['cache_paths']);
+
     // Generate HTML output based on parsed data and Nginx info
-    return nppp_generate_html($config_data['cache_paths'], $nginx_info);
+    return nppp_generate_html($config_data['cache_paths'], $nginx_info, $cache_keys, $fuse_paths);
 }

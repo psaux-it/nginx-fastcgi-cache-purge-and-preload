@@ -2,7 +2,7 @@
 /**
  * Status page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains functions which shows information about FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.4
+ * Version: 2.0.5
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -46,7 +46,7 @@ function nppp_check_permissions_recursive_with_cache() {
         $result = $result ? 'true' : 'false';
 
         // Cache the result for 1 hour
-        set_transient($transient_key, $result, 3600);
+        set_transient($transient_key, $result, MONTH_IN_SECONDS);
     }
 
     return $result;
@@ -54,16 +54,44 @@ function nppp_check_permissions_recursive_with_cache() {
 
 // Function to clear all transients related to the plugin
 function nppp_clear_plugin_cache() {
-    // Define the static key base used in transient names
+    // Static key base
     $static_key_base = 'nppp';
 
-    // Generate the transient key for the permissions check
-    $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
-
-    // List of static transients to clear
+    // Transients to clear
     $transients = array(
-        $transient_key_permissions_check,
+        'nppp_cache_keys_wpfilesystem_error',
+        'nppp_nginx_conf_not_found',
+        'nppp_cache_keys_not_found',
+        'nppp_cache_path_not_found',
+        'nppp_fuse_path_not_found',
+        'nppp_cache_keys_' . md5($static_key_base),
+        'nppp_bindfs_version_' . md5($static_key_base),
+        'nppp_libfuse_version_' . md5($static_key_base),
+        'nppp_permissions_check_' . md5($static_key_base),
+        'nppp_cache_paths_' . md5($static_key_base),
+        'nppp_fuse_paths_' . md5($static_key_base),
+        'nppp_webserver_user_' . md5($static_key_base),
     );
+
+    // Category-related transients based on the URL cache
+    $url_cache_pattern = 'nppp_category_';
+
+    // Rate limit transients
+    $rate_limit_pattern = 'nppp_rate_limit_';
+
+    // Get all transients
+    $all_transients = wp_cache_get('alloptions', 'options');
+    foreach ($all_transients as $transient_key => $value) {
+        // Match the category-based transients
+        if (strpos($transient_key, $url_cache_pattern) !== false) {
+            $transients[] = $transient_key;
+        }
+
+        // Match the rate limit-related transients
+        if (strpos($transient_key, $rate_limit_pattern) !== false) {
+            $transients[] = $transient_key;
+        }
+    }
 
     // Attempt to delete all transients
     foreach ($transients as $transient) {
@@ -250,32 +278,67 @@ function nppp_get_website_user() {
 
 // Function to get webserver user
 function nppp_get_webserver_user() {
+    // Ask result in cache first
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_webserver_user_' . md5($static_key_base);
+    $cached_result = get_transient($transient_key);
+
+    // Return cached result if available
+    if ($cached_result !== false) {
+        return $cached_result;
+    }
+
+    // Initialize wp_filesystem
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
+    }
+
+    // Find nginx.conf
+    $conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
+    $config_file = !empty($conf_paths) ? $conf_paths[0] : '/etc/nginx/nginx.conf';
+
+    // Check if the config file exists
+    if (!$wp_filesystem->exists($config_file)) {
+        set_transient($transient_key, "Not Determined", MONTH_IN_SECONDS);
+        return "Not Determined";
+    }
+
     // Check the running processes for Nginx
     $nginx_user_process = shell_exec("ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v 'root' | awk '{print $1}' | sort | uniq");
     // Convert the process output to an array and filter out empty values
     $process_users = array_filter(array_unique(array_map('trim', explode("\n", $nginx_user_process))));
     // Try to get the user from the Nginx configuration file
-    $nginx_user_conf = shell_exec("grep -i '^user' /etc/nginx/nginx.conf | awk '{print $2}'");
+    $nginx_user_conf = shell_exec("grep -i '^\s*user\s\+' $config_file | grep -v '^\s*#' | awk '{print $2}'");
 
     // If both sources provide a user, check for consistency
     if (!empty($nginx_user_conf) && !empty($process_users)) {
         // Check if the configuration user is among the process users
         if (in_array($nginx_user_conf, $process_users)) {
+            set_transient($transient_key, $nginx_user_conf, MONTH_IN_SECONDS);
             return $nginx_user_conf;
         }
     }
 
     // If only the configuration user is found, return it
     if (!empty($nginx_user_conf)) {
+        set_transient($transient_key, $nginx_user_conf, MONTH_IN_SECONDS);
         return $nginx_user_conf;
     }
 
     // If only the process user is found, return it
     if (!empty($process_users)) {
-        return reset($process_users);
+        $user = reset($process_users);
+        set_transient($transient_key, $user, MONTH_IN_SECONDS);
+        return $user;
     }
 
     // If no user is found, return "Not Determined"
+    set_transient($transient_key, "Not Determined", MONTH_IN_SECONDS);
     return "Not Determined";
 }
 
@@ -284,6 +347,11 @@ function nppp_get_in_cache_page_count() {
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $default_cache_path = '/dev/shm/change-me-now';
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+
+    // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
+    $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
+             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
+             : nppp_fetch_default_regex_for_cache_key();
 
     $urls_count = 0;
 
@@ -313,19 +381,6 @@ function nppp_get_in_cache_page_count() {
         return 'Undetermined';
     }
 
-    // Check NGINX Cache Key format is in supported format
-    // If not we can not get the pages in cache count
-    $config_data = nppp_parse_nginx_cache_key();
-
-    if ($config_data === false) {
-        return 'Not Found';
-    } else {
-        // Output error message if cache keys are found
-        if (!empty($config_data['cache_keys'])) {
-            return 'Not Found';
-        }
-    }
-
     try {
         $cache_iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
@@ -342,13 +397,14 @@ function nppp_get_in_cache_page_count() {
                 // Read file contents
                 $content = $wp_filesystem->get_contents($file->getPathname());
 
-                // Exclude URLs with status 301 Moved Permanently
-                if (strpos($content, 'Status: 301 Moved Permanently') !== false) {
+                // Exclude URLs with status 301 or 302
+                if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
+                    strpos($content, 'Status: 302 Found') !== false) {
                     continue;
                 }
 
                 // Extract URLs using regex
-                if (preg_match('/KEY:\s+httpsGET(.+)/', $content, $matches)) {
+                if (preg_match($regex, $content, $matches)) {
                     $url = trim($matches[1]);
 
                     // Increment count
@@ -367,6 +423,33 @@ function nppp_get_in_cache_page_count() {
 
 // Generate HTML for status tab
 function nppp_my_status_html() {
+    // Initialize wp_filesystem
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
+    }
+
+    // Status tab metrics heavily depends nginx.conf file
+    // Try to get it first
+    $conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
+
+    // Exit early if unable to find or read the nginx.conf file
+    if (empty($conf_paths)) {
+        return '<div class="nppp-status-wrap">
+                    <p class="nppp-advanced-error-message">ERROR CONF: Unable to read or locate the <span style="color: #f0c36d;">nginx.conf</span> configuration file!</p>
+                </div>
+                <div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <p style="margin: 0; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
+                        The <strong>nginx.conf</strong> file was not found in the <strong>default paths</strong>. This may indicate a <strong>custom Nginx setup</strong> with a non-standard configuration file location or permission issue. If you still encounter this error, please get help from plugin support forum!
+                    </p>
+                </div>';
+    }
+
     $perm_in_cache_status_purge = nppp_check_perm_in_cache(true, false, false);
     $perm_in_cache_status_fpm = nppp_check_perm_in_cache(false, false, true);
     $perm_in_cache_status_perm = nppp_check_perm_in_cache(false, true, false);
@@ -378,6 +461,33 @@ function nppp_my_status_html() {
         $nppp_isolation_status = 'Not Isolated';
     } else {
         $nppp_isolation_status = 'Isolated';
+    }
+
+    // Check NGINX FastCGI Cache Key
+    $config_data = nppp_parse_nginx_cache_key();
+
+    // Warn about not found fastcgi cache keys
+    if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
+        echo '<div class="nppp-status-wrap">
+                  <p class="nppp-advanced-error-message">WARNING SETUP: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found.</p>
+              </div>
+              <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                  <p style="margin: 0; align-items: center;">
+                      <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                      Please review your <strong>Nginx FastCGI cache setup</strong> to ensure that the <strong>fastcgi_cache_key</strong> is correctly defined. If you continue to encounter this error, this may indicate a <strong>parsing error</strong> and can be safely ignored.
+                  </p>
+              </div>';
+    // Warn about the unsupported fastcgi cache keys
+    } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
+        echo '<div class="nppp-status-wrap">
+                  <p class="nppp-advanced-error-message">INFO: <span style="color: #f0c36d;">Unsupported</span> FastCGI cache keys found!</p>
+              </div>
+              <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                  <p style="margin: 0; align-items: center;">
+                      <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                      If <strong>Pages In Cache Count</strong> is always <strong>0</strong> or incorrect, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
+                  </p>
+              </div>';
     }
 
     // Format the status string
@@ -400,6 +510,12 @@ function nppp_my_status_html() {
                 <section class="status-summary">
                     <h2>Status Summary</h2>
                     <table>
+                        <thead>
+                            <tr>
+                                <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
+                                <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             <tr>
                                 <td class="action">
@@ -441,7 +557,7 @@ function nppp_my_status_html() {
                         </tbody>
                     </table>
                 </section>
-                <section class="system-checks">
+                <section id="nppp-system-checks" class="system-checks">
                     <h2>System Checks</h2>
                     <table>
                         <thead>

@@ -1,7 +1,7 @@
 /**
  * JavaScript for FastCGI Cache Purge and Preload for Nginx
  * Description: This JavaScript file contains functions to manage FastCGI Cache Purge and Preload for Nginx plugin and interact with WordPress admin dashboard.
- * Version: 2.0.4
+ * Version: 2.0.5
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -964,6 +964,34 @@ $(document).ready(function() {
         });
     });
 
+    // Make AJAX request to update default cache key regex
+    $('#nginx-key-regex-reset-defaults').on('click', function(event) {
+        event.preventDefault();
+
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'nppp_update_default_cache_key_regex_option',
+                _wpnonce: nppp_admin_data.cache_key_regex_nonce
+            },
+            success: function(response) {
+                // Check if AJAX request was successful
+                if (response.success) {
+                    // Update input field with the default reject extension
+                    $('#nginx_cache_key_custom_regex').val(response.data);
+                } else {
+                    // Display error message if AJAX request failed
+                    console.error(response.data);
+                }
+            },
+            error: function(xhr, status, error) {
+                // Display error message if AJAX request encounters an error
+                console.error(error);
+            }
+        });
+    });
+
     // Event handler for the clear plugin cache button
     $(document).off('click', '#nppp-clear-plugin-cache-btn').on('click', '#nppp-clear-plugin-cache-btn', function(e) {
         e.preventDefault();
@@ -1038,7 +1066,7 @@ $(document).ready(function() {
                             location.reload();
                         }
                     }, 300);
-                }, 1200);
+                }, 1700);
             },
             error: function(xhr, status, error) {
                 // Remove the loading spinner
@@ -1146,8 +1174,13 @@ $(document).ready(function() {
                     notification.style.opacity = '0';
                     setTimeout(function() {
                         document.body.removeChild(notification);
+
+                        // Reload settings page to see updated fuse mount status
+                        if (response.success) {
+                            location.reload();
+                        }
                     }, 300);
-                }, 2000);
+                }, 1700);
             },
             error: function() {
                 // Remove the loading spinner
@@ -1808,6 +1841,8 @@ $(document).ready(function() {
             // Backend has updated the input field with the new API key
             var newApiKey = nppApiKeyInput.val();
             nppSetApiKey(newApiKey);
+            // Update the original value in the originalValues object for API key
+            originalValues['#nginx_cache_api_key'] = nppApiKeyInput.data('original-key');
         }, 700);
     });
 
@@ -1860,13 +1895,17 @@ $(document).ready(function() {
         '#nginx_cache_wait_request',
         '#nginx_cache_email',
         '#nginx_cache_tracking_opt_in',
-        '#nginx_cache_api_key'
+        '#nginx_cache_api_key',
+        '#nginx_cache_key_custom_regex'
     ];
 
     // Initialize originalValues with current field values
     fieldsToMonitor.forEach(function(selector) {
         var $field = $(selector);
-        if ($field.attr('type') === 'checkbox') {
+        if (selector === '#nginx_cache_api_key') {
+            // For the API key, use the unmasked value (original key)
+            originalValues[selector] = nppApiKeyInput.data('original-key');
+        } else if ($field.attr('type') === 'checkbox') {
             originalValues[selector] = $field.is(':checked');
         } else {
             originalValues[selector] = $field.val();
@@ -1882,7 +1921,10 @@ $(document).ready(function() {
             var originalValue = originalValues[selector];
             var currentValue;
 
-            if ($field.attr('type') === 'checkbox') {
+            if (selector === '#nginx_cache_api_key') {
+                // For the API key, compare the unmasked value (original key)
+                currentValue = nppApiKeyInput.data('original-key');
+            } else if ($field.attr('type') === 'checkbox') {
                 currentValue = $field.is(':checked');
             } else {
                 currentValue = $field.val();
@@ -1994,7 +2036,7 @@ document.addEventListener("DOMContentLoaded", function() {
 // Trim trailing leading white spaces from inputs, sanitize nginx cache path on client side
 document.addEventListener('DOMContentLoaded', function () {
     // IDs of input fields to apply trimming
-    const inputIds = ['#nginx_cache_path', '#nginx_cache_email', '#nginx_cache_reject_regex', '#nginx_cache_api_key', '#nginx_cache_reject_extension'];
+    const inputIds = ['#nginx_cache_path', '#nginx_cache_email', '#nginx_cache_reject_regex', '#nginx_cache_api_key', '#nginx_cache_reject_extension', '#nginx_cache_key_custom_regex'];
 
     inputIds.forEach(function(inputId) {
         const inputField = document.querySelector(inputId);
@@ -2078,8 +2120,34 @@ document.addEventListener('DOMContentLoaded', function() {
     history.replaceState(null, document.title, updatedUrl);
 });
 
-// update status tab metrics
+// Update status tab metrics
 function npppupdateStatus() {
+    // Elements we need ready on DOM
+    const elementsToCheck = [
+        "#npppphpFpmStatus",
+        "#npppphpPagesInCache",
+        "#npppphpProcessOwner",
+        "#npppphpWebServer",
+        "#npppcachePath",
+        "#nppppurgeStatus",
+        "#npppshellExec",
+        "#npppaclStatus",
+        "#nppppreloadStatus",
+        "#npppwgetStatus",
+        "#npppLibfuseVersion",
+        "#npppBindfsVersion",
+        "#nppppermIsolation",
+        "#npppcpulimitStatus"
+    ];
+
+    // Verify all elements are in the DOM
+    const allElementsExist = elementsToCheck.every(selector => document.querySelector(selector));
+
+    // If all elements are found, proceed to run the code
+    if (!allElementsExist) {
+        return;
+    }
+
     // Fetch and update php fpm status
     var phpFpmRow = document.querySelector("#npppphpFpmStatus").closest("tr");
     var npppphpFpmStatusSpan = document.getElementById("npppphpFpmStatus");
@@ -2235,6 +2303,42 @@ function npppupdateStatus() {
         npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
     }
 
+    // Update the FUSE status for libfuse
+    var npppLibfuseVersionSpan = document.getElementById("npppLibfuseVersion");
+    var npppLibfuseVersion = npppLibfuseVersionSpan.textContent.trim();
+    npppLibfuseVersionSpan.style.fontSize = "14px";
+    npppLibfuseVersionSpan.style.fontWeight = "bold";
+    if (npppLibfuseVersion.includes("(")) {
+        npppLibfuseVersionSpan.style.color = "orange";
+        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppLibfuseVersion;
+    } else if (npppLibfuseVersion === "Not Installed") {
+        npppLibfuseVersionSpan.style.color = "red";
+        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-no"></span> ' + npppLibfuseVersion;
+    } else if (npppLibfuseVersion === "Not Determined") {
+        npppLibfuseVersionSpan.style.color = "grey";
+    } else {
+        npppLibfuseVersionSpan.style.color = "green";
+        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppLibfuseVersion;
+    }
+
+    // Update the FUSE status for bindfs
+    var npppBindfsVersionSpan = document.getElementById("npppBindfsVersion");
+    var npppBindfsVersion = npppBindfsVersionSpan.textContent.trim();
+    npppBindfsVersionSpan.style.fontSize = "14px";
+    npppBindfsVersionSpan.style.fontWeight = "bold";
+    if (npppBindfsVersion.includes("(")) {
+        npppBindfsVersionSpan.style.color = "orange";
+        npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppBindfsVersion;
+    } else if (npppBindfsVersion === "Not Installed") {
+        npppBindfsVersionSpan.style.color = "red";
+        npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-no"></span> ' + npppBindfsVersion;
+    } else if (npppBindfsVersion === "Not Determined") {
+        npppBindfsVersionSpan.style.color = "grey";
+    } else {
+        npppBindfsVersionSpan.style.color = "green";
+        npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppBindfsVersion;
+    }
+
     // Fetch and update permission isolation status
     var nppppermIsolationSpan = document.getElementById("nppppermIsolation");
     var nppppermIsolation = nppppermIsolationSpan.textContent.trim();
@@ -2314,5 +2418,93 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Update the position when the window is resized
     window.addEventListener('resize', updateSubmitPosition);
+});
+
+// Warn the user if a systemd service restart is required due to missing fuse cache path mounts
+document.addEventListener('DOMContentLoaded', function () {
+    let currentObserver = null;
+
+    // Function to handle the "Status" tab content updates
+    function npponTabActivated(event, ui) {
+        const tabId = ui.newPanel.attr('id');
+
+        // Check if the "Status" tab is activated
+        if (tabId === 'status') {
+            // Only observe if not already observing
+            if (!currentObserver) {
+                nppobserveFuseStatusChange(ui.newPanel[0]);
+            }
+        } else {
+            // Disconnect observer when switching away from Status tab
+            nppdisconnectObserver();
+        }
+    }
+
+    // Function to observe changes in the status panel and insert the warning icon
+    function nppobserveFuseStatusChange(tabContent) {
+        // Create a MutationObserver to observe the status content
+        const observer = new MutationObserver((mutationsList, observer) => {
+            const fuseStatusSpan = document.querySelector('#npppFuseMountStatus span:last-of-type');
+            if (fuseStatusSpan) {
+                // Compare the trimmed text
+                if (fuseStatusSpan.textContent.trim() === 'Not Mounted') {
+                    nppinsertWarningIcon(tabContent);
+                }
+                // Disconnect the observer after finding the status
+                observer.disconnect();
+            }
+        });
+
+        // Store the observer to be cleaned up later
+        currentObserver = observer;
+        // Start observing the tab content for changes in the DOM
+        observer.observe(tabContent, { childList: true, subtree: true });
+    }
+
+    // Function to insert the warning icon into the "Status" tab
+    function nppinsertWarningIcon(tabContent) {
+        try {
+            // Create the warning icon
+            const attentionIcon = document.createElement('span');
+            attentionIcon.className = 'dashicons dashicons-warning';
+            attentionIcon.style.cssText = 'color: orange; margin-left: 8px; font-size: 28px;';
+
+            // Ensure the restart button exists before inserting the icon
+            const restartButton = document.querySelector('#nppp-restart-systemd-service-btn');
+            if (restartButton) {
+                restartButton.parentNode.insertBefore(attentionIcon, restartButton.nextSibling);
+
+                // Apply blink effect
+                const blinkEffect = attentionIcon.animate([
+                    { opacity: 1 },
+                    { opacity: 0 }
+                 ], {
+                    duration: 500,
+                    iterations: Infinity,
+                    direction: 'alternate'
+                });
+
+                // Stop blinking after 2 seconds
+                setTimeout(() => {
+                    blinkEffect.cancel();
+                }, 2000);
+            }
+        } catch (error) {
+            console.error('Error in warning icon insertion:', error);
+        }
+    }
+
+    // Function to disconnect the observer when no longer needed
+    function nppdisconnectObserver() {
+        if (currentObserver) {
+            currentObserver.disconnect();
+            currentObserver = null;
+        }
+    }
+
+    // Attach the npponTabActivated function to the 'tabsactivate' event only on the Status tab
+    $('#nppp-nginx-tabs').on('tabsactivate', function(event, ui) {
+        npponTabActivated(event, ui);
+    });
 });
 })(jQuery, window, document);

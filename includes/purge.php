@@ -2,7 +2,7 @@
 /**
  * Purge action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.4
+ * Version: 2.0.5
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -76,6 +76,12 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     $options = get_option('nginx_cache_settings');
     $nppp_auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
 
+    // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
+             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
+             : nppp_fetch_default_regex_for_cache_key();
+
     // First, check if any active cache preloading action is in progress.
     // Purging the cache for a single page or post, whether done manually (Fonrtpage) or automatically (Auto Purge) after content updates,
     // can cause issues if there is an active cache preloading process.
@@ -117,13 +123,17 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 // Read file contents
                 $content = $wp_filesystem->get_contents($file->getPathname());
 
-                // Exclude URLs with status 301 Moved Permanently
-                if (strpos($content, 'Status: 301 Moved Permanently') !== false) {
+                // Exclude URLs with status 301 or 302
+                if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
+                    strpos($content, 'Status: 302 Found') !== false) {
                     continue;
                 }
 
-                // Check for the URL after 'KEY: httpsGET'
-                if (preg_match('/^KEY:\s+https?GET' . preg_quote($url_to_search_exact, '/') . '$/m', $content)) {
+                // Extract the in cache URL from fastcgi_cache_key
+                preg_match($regex, $content, $matches);
+
+                // Check extracted URL from fastcgi_cache_key and the URL attempted to purge is equal
+                if (trim($matches[1]) === $url_to_search_exact) {
                     $cache_path = $file->getPathname();
                     $found = true;
 
@@ -488,6 +498,10 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         return;
     }
 
+    // Fire the 'nppp_purged' action, triggering any other plugin actions that are hooked into this event
+    // If auto preload is enabled this hook will create both NPP cache and compatible plugin cache at the same time
+    do_action('nppp_purged_all');
+
     // If set call preload immediately after purge
     if ($auto_preload) {
         // Get the plugin options
@@ -519,4 +533,20 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         // This is the only route that auto preload passes "true" to preload action
         nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, true, $preload_is_rest_api, false, $preload_is_admin_bar);
     }
+}
+
+// Callback function to trigger Purge All
+function nppp_purge_callback() {
+    // Get the plugin options
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Get the necessary data for purge action from plugin options
+    $default_cache_path = '/dev/shm/change-me-now';
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+    $this_script_path = dirname(plugin_dir_path(__FILE__));
+    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+
+    // Call the main purge function
+    nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, false, true);
 }

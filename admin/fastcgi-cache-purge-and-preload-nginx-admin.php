@@ -3,7 +3,7 @@
  * Plugin Name:       FastCGI Cache Purge and Preload for Nginx
  * Plugin URI:        https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload
  * Description:       Manage FastCGI Cache Purge and Preload for Nginx operations directly from your WordPress admin dashboard.
- * Version:           2.0.4
+ * Version:           2.0.5
  * Author:            Hasan ÇALIŞIR
  * Author URI:        https://www.psauxit.com/
  * Author Email:      hasan.calisir@psauxit.com
@@ -49,6 +49,24 @@ require_once dirname(__DIR__) . '/includes/rest-api-helper.php';
 require_once dirname(__DIR__) . '/includes/plugin-tracking.php';
 require_once dirname(__DIR__) . '/includes/update.php';
 
+// Get the status of Auto Purge option
+$options = get_option('nginx_cache_settings');
+$nppp_auto_purge = isset($options['nginx_cache_purge_on_update']) && $options['nginx_cache_purge_on_update'] === 'yes';
+
+// Add support on well known Cache Plugins
+$page_cache_purge_actions = array(
+    'after_rocket_clean_domain',                // WP Rocket
+    'hyper_cache_purged',                       // Hyper Cache
+    'w3tc_flush_all',                           // W3 Total Cache
+    'ce_action_cache_cleared',                  // Cache Enabler
+    'comet_cache_wipe_cache',                   // Comet Cache
+    'wp_cache_cleared',                         // WP Super Cache
+    'wpfc_delete_cache',                        // WP Fastest Cache
+    'swift_performance_after_clear_all_cache',  // Swift Performance
+    'wpo_cache_flush',                          // AutoOptimize
+    'litespeed_purged_all'                      // LiteSpeed Cache
+);
+
 // Add actions and filters
 add_action('load-settings_page_nginx_cache_settings', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_check_for_plugin_update');
@@ -91,6 +109,10 @@ add_action('wp_insert_comment', 'nppp_purge_cache_on_comment', 200, 2);
 add_action('transition_comment_status', 'nppp_purge_cache_on_comment_change', 200, 3);
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
 add_action('upgrader_process_complete', 'nppp_purge_cache_on_theme_plugin_update', 10, 2);
+add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_default_cache_key_regex_option');
+$nppp_auto_purge
+    ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions)
+    : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions);
 add_action('nppp_plugin_admin_notices', function($type, $message, $log_message, $display_notice) {
     // Check if admin notice should be displayed
     if (!$display_notice) {

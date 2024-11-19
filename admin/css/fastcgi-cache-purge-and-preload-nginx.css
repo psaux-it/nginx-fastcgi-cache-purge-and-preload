@@ -1,7 +1,7 @@
 /**
  * Styles for FastCGI Cache Purge and Preload for Nginx
  * Description: This CSS file contains styles for the FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.4
+ * Version: 2.0.5
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -158,6 +158,11 @@
 
 /* Reset extension button styles */
 .nginx-reset-extension-button {
+    margin-top: 10px !important;
+}
+
+/* Reset cache key regex button styles */
+.nginx-reset-key-regex-button {
     margin-top: 10px !important;
 }
 
@@ -1141,6 +1146,11 @@ button.nppp-preload-btn[disabled] {
 
 /* Set max width of reject extension field */
 #nginx_cache_reject_extension {
+    max-width: 978px;
+}
+
+/* Set max width of cache key regex field */
+#nginx_cache_key_custom_regex {
     max-width: 978px;
 }
 
@@ -2319,4 +2329,125 @@ p.description {
 .ui-widget {
     font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;
     font-size: 1em;
+}
+
+/* style table header elements */
+#nppp-nginx-info .check-header {
+    text-transform: uppercase !important;
+    font-size: 14px !important;
+    color: #0073e6 !important;
+    background-color: #F0F0F0 !important;
+    padding: 8px 10px !important;
+}
+
+#nppp-nginx-info .status-header {
+    text-transform: uppercase !important;
+    font-size: 14px !important;
+    color: #0073e6 !important;
+    background-color: #F0F0F0 !important;
+    padding: 8px 10px !important;
+}
+
+/* Ensure the table occupies full width */
+.nginx-status table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+/* Set width for table header cells */
+.nginx-status thead th {
+    width: 50%;
+}
+
+/* Set width for table data cells */
+.nginx-status td.action,
+.nginx-status td.status {
+    width: 50%;
+}
+
+/* Allow wrapping for long text in status cells on mobile */
+@media (max-width: 768px) {
+    .nginx-status td.action,
+    .nginx-status td.status {
+        word-wrap: break-word;
+        white-space: normal;
+    }
+}
+
+/* Set size of checkbox For mobile devices */
+@media (max-width: 768px) {
+    #nginx_cache_tracking_opt_in {
+        transform: scale(0.8);
+    }
+}
+
+/* Ensure the table occupies full width */
+.status-summary table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+/* Set width for table header cells */
+.status-summary thead th {
+    width: 50%;
+}
+
+/* Set width for table data cells */
+.status-summary td.action,
+.status-summary td.status {
+    width: 50%;
+}
+
+.nginx-status td.action,
+.nginx-status td.status {
+    word-wrap: break-word;
+    white-space: normal;
+}
+
+.highlight-metric {
+    background-color: mintcream;
+}
+
+.cache-paths-info {
+    max-width: 500px;
+    color: #722F37;
+    background-color: mintcream;
+    border-left: 4px solid orange;
+    padding: 10px;
+    font-size: 12px !important;
+    margin-top: 8px !important;
+}
+
+.cache-paths-info h4 {
+    font-size: 1.1em;
+    color: #333;
+    margin-bottom: 8px;
+    margin-top: 0;
+}
+
+.cache-paths-info p {
+    font-size: 12px !important;
+    color: #722F37;
+    margin-bottom: 10px;
+}
+
+.cache-paths-info code {
+    background-color: #EDEDED;
+    font-size: 12px !important;
+}
+
+/* Show line breaks on screens wider than 768px (e.g., tablets and desktops) */
+@media (min-width: 768px) {
+    .cache-paths-info .line-break {
+        display: inline;
+    }
+}
+
+/* Hide line breaks on screens narrower than 768px (e.g., mobile devices) */
+@media (max-width: 767px) {
+    .cache-paths-info .line-break {
+        display: none;
+    }
 }

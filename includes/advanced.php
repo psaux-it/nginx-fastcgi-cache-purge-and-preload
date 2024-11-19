@@ -2,7 +2,7 @@
 /**
  * Advanced table for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains advanced table functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.4
+ * Version: 2.0.5
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -20,44 +20,98 @@ function nppp_premium_html($nginx_cache_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">Failed to initialize the WordPress filesystem.</p></div>';
+        return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <p style="margin: 0; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
+                        <span style="font-size: 14px;">ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1070)</span>
+                    </p>
+                </div>';
     }
 
-    // Handle case where settings option doesn't exist
+    // Handle case where option doesn't exist
     if (empty($nginx_cache_path)) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR CRITICAL: Please file a bug on plugin support page (ERROR 1071)</p></div>';
+        return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <p style="margin: 0; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
+                        <span style="font-size: 14px;">ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1071)</span>
+                    </p>
+                </div>';
     }
 
-    // Handle case where directory doesn't exist
+    // Handle case where cache directory doesn't exist
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR PATH: Cache directory not found. Please ensure the cache directory path is correct in plugin settings.</p></div>';
+        return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <p style="margin: 0; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
+                        <span style="font-size: 14px;">ERROR CACHE PATH: The specified Nginx cache directory could not be found. Please verify the path in the plugin settings.</span>
+                    </p>
+                </div>';
     }
 
     // Check if the directory and its contents are readable softly and recursive
     if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</p></div>';
+        return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <p style="margin: 0; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
+                        <span style="font-size: 14px;">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</span>
+                    </p>
+                </div>';
+
     } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</p></div>';
+        return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <p style="margin: 0; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
+                        <span style="font-size: 14px;">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</span>
+                    </p>
+                </div>';
     }
 
-    // Check NGINX Cache Key format is in supported format If not ADVANCED tab fail
+    // Check FastCGI Cache Key
     $config_data = nppp_parse_nginx_cache_key();
-
-    if ($config_data === false) {
-        return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR CONF: Unable to locate the nginx.conf file in the specified paths or encountered a parsing error.</p></div>';
-    } else {
-        // Output error message if cache keys are found
-        if (!empty($config_data['cache_keys'])) {
-            return '<div class="nppp-premium-wrap"><h2>Error Displaying Cached Content</h2><p class="nppp-advanced-error-message">ERROR CACHE KEY: Nginx cache key format is not suitable for the plugin. Refer to the Help tab for guidance.</p></div>';
-        }
-    }
 
     // Get extracted URLs
     $extractedUrls = nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path);
 
-    // Check for errors from nppp_extract_cached_urls()
+    // Check for errors
     if (isset($extractedUrls['error'])) {
-        return '<div class="nppp-premium-wrap"><h2>Displaying Cached Content</h2><p class="nppp-advanced-error-message">' . esc_html($extractedUrls['error']) . '</p></div>';
+        // Sanitize and allow specific HTML tags
+        $error_message = wp_kses(
+            $extractedUrls['error'],
+            array(
+                'strong' => array(),
+            )
+        );
+
+        // Stop execution if no cached content is found due to an empty cache or cache key regex error.
+        return '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                    <h2>&nbsp;Displaying Cached Content</h2>
+                    <p style="margin: 0; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                        <span style="font-size: 14px;">' . $error_message . '</span>
+                    </p>
+                </div>';
+    }
+
+    // Warn about cache keys not found
+    if ($config_data === false) {
+        echo '<div class="nppp-premium-wrap">
+                  <p class="nppp-advanced-error-message">INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.</p>
+              </div>';
+    // Warn about cache keys not found
+    } elseif (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
+        echo '<div class="nppp-premium-wrap">
+                  <p class="nppp-advanced-error-message">INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.</p>
+              </div>';
+    // Warn about the unsupported cache keys
+    } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
+        echo '<div class="nppp-premium-wrap">
+                  <p class="nppp-advanced-error-message">INFO CACHE KEY: <span style="color: #f0c36d;">Unsupported</span> FastCGI cache keys found!</p>
+              </div>';
     }
 
     // Output the premium tab content
@@ -66,7 +120,7 @@ function nppp_premium_html($nginx_cache_path) {
     <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
         <p style="margin: 0; display: flex; align-items: center;">
             <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-            <strong>Note:</strong> If the table is not visible or appears broken, please ensure that the <strong>fastcgi_cache_key</strong> format is correctly <code>$scheme$request_method$host$request_uri</code> configured.
+            If the table is broken or <strong>Cached URL's</strong> or any metric are wrong, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
         </p>
     </div>
     <h2></h2>
@@ -211,6 +265,11 @@ function nppp_purge_cache_premium_callback() {
     $options = get_option('nginx_cache_settings');
     $nginx_cache_path = isset($options['nginx_cache_path']) ? $options['nginx_cache_path'] : '';
 
+    // Retrieve and decode user-defined cache key regex from the db, with a hardcoded fallback
+    $regex = isset($options['nginx_cache_key_custom_regex'])
+             ? base64_decode($options['nginx_cache_key_custom_regex'])
+             : nppp_fetch_default_regex_for_cache_key();
+
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -270,7 +329,7 @@ function nppp_purge_cache_premium_callback() {
     // Get the purged URL
     $https_enabled = wp_is_using_https();
     $content = $wp_filesystem->get_contents($file_path);
-    if (preg_match('/KEY:\s+httpsGET(.+)/', $content, $matches)) {
+    if (preg_match($regex, $content, $matches)) {
         $url = trim($matches[1]);
         $sanitized_url = filter_var($url, FILTER_SANITIZE_URL);
         $final_url = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
@@ -390,6 +449,12 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // Determine if HTTPS is enabled
     $https_enabled = wp_is_using_https();
 
+    // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
+             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
+             : nppp_fetch_default_regex_for_cache_key();
+
     try {
         // Traverse the cache directory and its subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
@@ -409,7 +474,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                 }
 
                 // Extract URLs using regex
-                if (preg_match('/KEY:\s+httpsGET(.+)/', $content, $matches)) {
+                if (preg_match($regex, $content, $matches)) {
                     $url = trim($matches[1]);
 
                     // Sanitize and validate the URL
@@ -438,14 +503,14 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     } catch (Exception $e) {
         // Handle exceptions and return an error message
         return [
-            'error' => 'An error occurred while accessing the cache directory. Please try again.'
+            'error' => 'An error occurred while accessing the Nginx Cache Directory. Please try again.'
         ];
     }
 
     // Check if any URLs were extracted
     if (empty($urls)) {
         return [
-            'error' => 'No cached content available yet. Consider Preload Cache now.'
+            'error' => 'No cached content found. Please <strong>Preload All</strong> cache first and try again. If you still are unable to see the content, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and try again.'
         ];
     }
 
@@ -483,7 +548,7 @@ function nppp_categorize_url($url) {
         $category = 'EXTERNAL';
         // Cache the result
         $url_cache[$url] = $category;
-        set_transient($cache_key, $category, DAY_IN_SECONDS);
+        set_transient($cache_key, $category, MONTH_IN_SECONDS);
         return $category;
     }
 
@@ -515,7 +580,7 @@ function nppp_categorize_url($url) {
 
         // Cache the result
         $url_cache[$url] = $category;
-        set_transient($cache_key, $category, DAY_IN_SECONDS);
+        set_transient($cache_key, $category, MONTH_IN_SECONDS);
         return $category;
     } else {
         global $wp_rewrite;
@@ -648,7 +713,7 @@ function nppp_categorize_url($url) {
 
         // Cache the result
         $url_cache[$url] = $category;
-        set_transient($cache_key, $category, DAY_IN_SECONDS);
+        set_transient($cache_key, $category, MONTH_IN_SECONDS);
 
         return $category;
     }

@@ -2,7 +2,7 @@
 /**
  * Settings page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains settings page functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.4
+ * Version: 2.0.5
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -36,6 +36,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_purge_on_update', 'Purge Cache on Post/Page Update', 'nppp_nginx_cache_purge_on_update_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_wait_request', 'Per Request Wait Time', 'nppp_nginx_cache_wait_request_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_tracking_opt_in', 'Enable Tracking', 'nppp_nginx_cache_tracking_opt_in_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_key_custom_regex', 'Enable Custom regex', 'nppp_nginx_cache_key_custom_regex_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -118,6 +119,7 @@ function nppp_nginx_cache_settings_page() {
                         <li><a href="#purge-options">Purge Options</a></li>
                         <li><a href="#preload-options">Preload Options</a></li>
                         <li><a href="#schedule-options">Schedule Options</a></li>
+                        <li><a href="#advanced-options">Advanced Options</a></li>
                         <li><a href="#mail-options">Mail Options</a></li>
                         <li><a href="#logging-options">Logging Options</a></li>
                     </ul>
@@ -140,22 +142,23 @@ function nppp_nginx_cache_settings_page() {
                             <th scope="row"><span class="dashicons dashicons-admin-site"></span> Nginx Cache Directory</th>
                             <td>
                                 <?php nppp_nginx_cache_path_callback(); ?>
-                                <p class="description">Please provide the complete NGINX cache directory path required for plugin operations.</p>
-                                <p class="description">The properly configured NGINX cache directory, which must be set in the server-side NGINX configuration,</p>
-                                <p class="description">is essential for the effective functioning of cache purge and preload actions.</p>
-                                <p class="description">It is crucial that the <strong>PHP process owner</strong> has both read and write permissions to this directory.</p>
-                                <p class="description">Without these permissions, the plugin will be unable to purge or preload the cache effectively.</p>
-                                <p class="cache-path-plugin-note">
-                                    <span style="color: red;">NOTE:</span> The plugin author explicitly disclaims any liability for unintended deletions resulting
-                                    <br class="line-break">
-                                    from incorrect directory entries. Users are solely responsible for verifying the directory's
-                                    <br class="line-break">
-                                    accuracy prior to deletion. For safety, paths such as <strong>'/home'</strong> and other <strong>critical system paths</strong>
-                                    <br class="line-break">
-                                    are prohibited in default. Best practice using directories like <strong>'/dev/shm/'</strong>
-                                    <br class="line-break">
-                                    or <strong>'/var/cache/'</strong>. Please refer HELP section for detailed information.
-                                </p>
+                                <p class="description">Provide the full NGINX cache directory path for plugin operation.</p>
+                                <p class="description">The directory must be configured in NGINX and accessible by the PHP process,</p>
+                                <p class="description">with read and write permissions for cache purge and preload to function properly.</p>
+                                <div class="cache-paths-info">
+                                    <h4>Allowed Cache Paths</h4>
+                                    <p><strong>For RAM-based:</strong> Use directories under <code>/dev/</code> | <code>/tmp/</code> | <code>/var/</code></p>
+                                    <p><strong>For persistent disk:</strong> Use directories under <code>/opt/</code></p>
+                                    <p><strong>Important:</strong> Paths must be one level deeper (e.g. <code>/var/cache</code>).<br class="line-break">
+                                    Critical system paths are prohibited in default to ensure accuracy to avoid unintended deletions.</p>
+                                </div>
+                                <div class="cache-paths-info">
+                                    <h4>Info</h4>
+                                    <p>If you used the one-liner bash script, you can use the original Nginx cache path here. It will be replaced with a FUSE mount path automatically having the <code>-npp</code> suffix.</p>
+                                    <p>If you did not use the one-liner bash script, and manually created the FUSE mount, you will need to enter the new FUSE mount path instead of the original Nginx cache path.</p>
+                                    <p>This automation is only supported if you used the one-liner bash script for the initial setup:<br class="line-break">
+                                    <code>bash <(curl -Ss https://psaux-it.github.io/install.sh)</code></p>
+                                </div>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -167,12 +170,12 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <p class="description">Enabling this feature ensures that whenever you make changes to the content of a <strong>POST/PAGE</strong><br></p>
-                                <p class="description">or when <strong>COMMENT</strong> are approved or their status is changed, the cached version of that <strong>POST/PAGE</strong> is automatically cleared.<br></p>
-                                <p class="description">Additionally, if the <strong>Auto Preload</strong> option is enabled, the cache for the <strong>POST/PAGE</strong> will be automatically preloaded after the cache is purged.</p>
+                                <p class="description">or when <strong>COMMENT</strong> are approved or their status is changed, the cached version of that <span style="color: orange;"><strong>single</strong></span> <strong>POST/PAGE</strong> is automatically cleared.<br></p>
+                                <p class="description">If <strong>Auto Preload</strong> is enabled, the cache for the <span style="color: orange;"><strong>single</strong></span> <strong>POST/PAGE</strong> will be automatically preloaded after the cache is purged.</p>
                                 <br>
-                                <p class="description"><strong>New Feature:</strong> The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when a <strong>THEME</strong> or <strong>PLUGIN</strong> is updated, manually or automatically.<br></p>
-                                <p class="description">If <strong>Auto Preload</strong> is enabled, the <span style="color: orange;"><strong>entire cache</strong></span> will also be automatically preloaded after the the cache is purged,<br></p>
-                                <p class="description">ensuring your site always serves the latest content.</p>
+                                <p class="description">The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when a <strong>THEME</strong> or <strong>PLUGIN</strong> is updated.<br></p>
+                                <p class="description">The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when compatible <strong>Caching Plugins</strong> (e.g. WP Rocket, W3 Total Cache) trigger a cache purge.</p>
+                                <p class="description">If <strong>Auto Preload</strong> is enabled, the <span style="color: orange;"><strong>entire cache</strong></span> will be automatically preloaded after the the cache is purged.<br></p>
                             </td>
                         </tr>
                         <!-- Start Preload Options Section -->
@@ -247,7 +250,7 @@ function nppp_nginx_cache_settings_page() {
                                  <p class="description">Default: 0 second, Disabled <br></p>
                             </td>
                         </tr>
-                        <!-- Start Advanced Options Section -->
+                        <!-- Start Schedule Options Section -->
                         <tr valign="top">
                             <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="schedule-options" style="margin: 0; padding: 0;">Schedule Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
@@ -316,6 +319,39 @@ function nppp_nginx_cache_settings_page() {
                                     <li><strong>X-Api-Key Header:</strong><code>X-Api-Key: YOUR_API_KEY</code></li>
                                     <li><strong>Request Body or Query String Parameter:</strong><code>api_key=YOUR_API_KEY</code></li>
                                 </ul>
+                            </td>
+                        </tr>
+                        <!-- Start Advanced Options Section -->
+                        <tr valign="top">
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="advanced-options" style="margin: 0; padding: 0;">Advanced Options</h3></th>
+                            <td style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row"><span class="dashicons dashicons-edit"></span> Cache Key Regex</th>
+                            <td>
+                                <?php nppp_nginx_cache_key_custom_regex_callback(); ?>
+                                <p class="description">Enter a <code>preg_match</code> PHP regex pattern to parse URL <code>'$host$request_uri'</code> based on your custom <code>fastcgi_cache_key</code> format.</p><br>
+                                <p class="description">⚡The default regex pattern is designed to parse the <code>'$host$request_uri'</code> portion from the only</p>
+                                <p class="description">&nbsp;standard cache key format <strong>supported by the plugin:</strong> <code>'$scheme$request_method$host$request_uri'</code>.</p><br>
+                                <p class="description">⚡If you use a non-standard or complex <code>fastcgi_cache_key</code> format, you must define a custom regex pattern</p>
+                                <p class="description">&nbsp;to correctly parse <code>'$host$request_uri'</code> portion in order to ensure proper plugin functionality.</p><br>
+                                <p class="description">⚡For example, if your custom key format is <code>'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args'</code></p>
+                                <p class="description">&nbsp;you will need to provide a corresponding regex pattern that accurately captures the <code>'$host$request_uri'</code> part.</p><br>
+                                <p class="description">📌 <strong>Guidelines for creating a compatible regex</strong>:</p>
+                                <p class="description">📣 Ensure your regex pattern targets only <code>GET</code> requests, as <code>HEAD</code> or anyother requests do not represent cached content and cause duplicates.</p>
+                                <p class="description">📣 Ensure that your regex pattern includes delimiters. (e.g., /your-regex/ - #your-regex#)
+                                <p class="description">📣 The regex must capture the exact URL <code>'$host$request_uri'</code> part from your custom <code>fastcgi_cache_key</code> format.</p>
+                                <p class="description">📣 The regex pattern must return the full URL <code>'$host$request_uri'</code> in <strong>capture group 1</strong>. as the plugin process only <strong>matches[1]</strong></p><br>
+                                <p class="description">🚨 <strong>You need to follow these security guidelines for your regex pattern:</strong>:</p>
+                                <p class="description">📣 Checks for excessive lookaheads, catastrophic backtracking. (limit to 3).</p>
+                                <p class="description">📣 Don't use greedy quantifiers inside lookaheads.</p>
+                                <p class="description">📣 Checks <code>.*</code> quantifiers. (limit to 1).</p>
+                                <p class="description">📣 Checks for excessively long regex patterns. (limit length to 100 characters).</p>
+                                <button id="nginx-key-regex-reset-defaults" class="button nginx-reset-key-regex-button">Reset Default</button>
+                                <p class="description">Click the button to reset defaults.<br>After plugin updates, it's best to reset first to apply the latest changes, then reapply your custom rules.</p>
                             </td>
                         </tr>
                         <!-- Start Mail Options Section -->
@@ -414,10 +450,13 @@ function nppp_handle_nginx_cache_settings_submission() {
                     // Retrieve existing options before sanitizing the input
                     $existing_options = get_option('nginx_cache_settings');
 
-                    // Make sure we unslash and sanitize immediately
-                    $nginx_cache_settings = array_map('sanitize_text_field', wp_unslash($_POST['nginx_cache_settings']));
+                    // Ignored PCP warning because we use custom sanitization via 'nppp_nginx_cache_settings_sanitize()'.
+                    $nginx_cache_settings = wp_unslash($_POST['nginx_cache_settings']);
 
-                    // Validate the submitted values
+                    // This is a pre-check to catch sanitization errors early, before calling update_option, to ensure proper redirection
+                    // 'nppp_nginx_cache_settings_sanitize' already registered for 'update_option' action via 'register_setting'
+                    // Note: If validation and sanitization are successful for the 'nginx_cache_key_custom_regex'
+                    // It menas we have a base_64 encoded 'nginx_cache_key_custom_regex' option now
                     $new_settings = nppp_nginx_cache_settings_sanitize($nginx_cache_settings);
 
                     // Check if there are any settings errors
@@ -429,19 +468,13 @@ function nppp_handle_nginx_cache_settings_submission() {
                         $old_opt_in = isset($existing_options['nginx_cache_tracking_opt_in']) ? $existing_options['nginx_cache_tracking_opt_in'] : '1';
                         $new_opt_in = isset($new_settings['nginx_cache_tracking_opt_in']) ? $new_settings['nginx_cache_tracking_opt_in'] : '1';
 
-                        // Always delete the plugin cache when the form is submitted, regardless of whether the cache path has changed or not
+                        // Always delete the plugin permission cache when the form is submitted
                         $static_key_base = 'nppp';
                         $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
-                        $transients = array($transient_key_permissions_check);
+                        delete_transient($transient_key_permissions_check);
 
-                        foreach ($transients as $transient) {
-                            delete_transient($transient);
-                        }
-
-                        // Add small delay for transient operation
-                        usleep(500000);
-
-                        // Update the settings with the new values
+                        // Update the settings
+                        // Note: This will re-encode 'nginx_cache_key_custom_regex' via sanitization
                         update_option('nginx_cache_settings', $new_settings);
 
                         // Compare old and new opt-in values
@@ -452,7 +485,7 @@ function nppp_handle_nginx_cache_settings_submission() {
 
                         // Redirect with success message
                         wp_redirect(add_query_arg(array(
-                            'status_message' => urlencode('Plugin cache cleared, settings saved successfully!'),
+                            'status_message' => urlencode('Plugin cache (permission) cleared, settings saved successfully!'),
                             'message_type' => 'success',
                             'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
                         ), admin_url('options-general.php?page=nginx_cache_settings')));
@@ -843,6 +876,29 @@ function nppp_update_default_reject_extension_option() {
     wp_send_json_success($default_reject_extension);
 }
 
+// AJAX callback function to update default cache key regex option
+function nppp_update_default_cache_key_regex_option() {
+    // Verify nonce
+    check_ajax_referer('nppp-update-default-cache-key-regex-option', '_wpnonce');
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to update this option.');
+    }
+
+    // Get default reject extension
+    $default_cache_key_regex = nppp_fetch_default_regex_for_cache_key();
+    // Get the current options
+    $current_options = get_option('nginx_cache_settings');
+    // Update the specific option within the array
+    $current_options['nginx_cache_key_custom_regex'] = $default_cache_key_regex;
+    // Save the option
+    update_option('nginx_cache_settings', $current_options);
+
+    // Return the new extension set as the AJAX response
+    wp_send_json_success($default_cache_key_regex);
+}
+
 // AJAX callback function to copy rest api curl purge url
 function nppp_rest_api_purge_url_copy() {
     // Verify nonce
@@ -988,14 +1044,14 @@ function nppp_nginx_cache_email_callback() {
 // Callback function to display the input field for CPU Usage Limit setting
 function nppp_nginx_cache_cpu_limit_callback() {
     $options = get_option('nginx_cache_settings');
-    $default_cpu_limit = 50;
+    $default_cpu_limit = 80;
     echo "<input type='number' id='nginx_cache_cpu_limit' name='nginx_cache_settings[nginx_cache_cpu_limit]' min='10' max='100' value='" . esc_attr($options['nginx_cache_cpu_limit'] ?? $default_cpu_limit) . "' class='small-text' />";
 }
 
 // Callback function to display the input field for Per Request Wait Time setting
 function nppp_nginx_cache_wait_request_callback() {
     $options = get_option('nginx_cache_settings');
-    $default_wait_time = 1;
+    $default_wait_time = 0;
     echo "<input type='number' id='nginx_cache_wait_request' name='nginx_cache_settings[nginx_cache_wait_request]' min='0' max='60' value='" . esc_attr($options['nginx_cache_wait_request'] ?? $default_wait_time) . "' class='small-text' />";
 }
 
@@ -1075,6 +1131,15 @@ function nppp_nginx_cache_reject_regex_callback() {
     echo "<textarea id='nginx_cache_reject_regex' name='nginx_cache_settings[nginx_cache_reject_regex]' rows='3' cols='50' class='large-text'>" . esc_textarea($reject_regex) . "</textarea>";
 }
 
+// Callback function to display the custom Regex field for fastcgi_cache_key
+function nppp_nginx_cache_key_custom_regex_callback() {
+    $options = get_option('nginx_cache_settings');
+    $default_cache_key_regex = nppp_fetch_default_regex_for_cache_key();
+    $cache_key_regex = isset($options['nginx_cache_key_custom_regex']) ? base64_decode($options['nginx_cache_key_custom_regex']) : $default_cache_key_regex;
+    // Use wp_kses() with an empty array to allow raw text without HTML sanitization
+    echo "<textarea id='nginx_cache_key_custom_regex' name='nginx_cache_settings[nginx_cache_key_custom_regex]' rows='1' cols='50' class='large-text'>" . esc_textarea($cache_key_regex) . "</textarea>";
+}
+
 // Callback function to display the Reject extension field
 function nppp_nginx_cache_reject_extension_callback() {
     $options = get_option('nginx_cache_settings');
@@ -1144,8 +1209,8 @@ function nppp_nginx_cache_logs_callback() {
 // Callback function to display the input field for Limit Rate setting.
 function nppp_nginx_cache_limit_rate_callback() {
     $options = get_option('nginx_cache_settings');
-    $default_limit_rate = 1024;
-    echo "<input type='number' id='nginx_cache_limit_rate' name='nginx_cache_settings[nginx_cache_limit_rate]' value='" . esc_attr($options['nginx_cache_limit_rate'] ?? $default_limit_rate) . "' class='small-text' />";
+    $default_limit_rate = 5120;
+    echo "<input type='number' id='nginx_cache_limit_rate' name='nginx_cache_settings[nginx_cache_limit_rate]' min='1' max='102400' value='" . esc_attr($options['nginx_cache_limit_rate'] ?? $default_limit_rate) . "' class='small-text' />";
 }
 
 // Fetch default reject regex
@@ -1164,6 +1229,31 @@ function nppp_fetch_default_reject_regex() {
     if ($wp_filesystem->exists($rr_txt_file)) {
         $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
         $regex_match = preg_match('/\$reject_regex\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
+        if ($regex_match && isset($matches[1])) {
+            return $matches[1];
+        }
+    } else {
+        wp_die('File does not exist: ' . esc_html($rr_txt_file));
+    }
+    return '';
+}
+
+// Fetch default regex for fastcgi cache key
+function nppp_fetch_default_regex_for_cache_key() {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
+    }
+
+    $rr_txt_file = dirname(__FILE__) . '/reject_regex.txt';
+    if ($wp_filesystem->exists($rr_txt_file)) {
+        $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
+        $regex_match = preg_match('/\$regex_for_cache_key\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
         if ($regex_match && isset($matches[1])) {
             return $matches[1];
         }
@@ -1232,6 +1322,20 @@ function nppp_nginx_cache_api_callback() {
     <?php
 }
 
+// Log error messages
+function nppp_log_error_message($message) {
+    $log_message = esc_html($message);
+    $log_file_path = NGINX_CACHE_LOG_FILE;
+
+    // Create log file if not exist
+    nppp_perform_file_operation($log_file_path, 'create');
+
+    // Check if the log path is valid and writable
+    if (!empty($log_file_path)) {
+        nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
+    }
+}
+
 // Sanitize inputs
 function nppp_nginx_cache_settings_sanitize($input) {
     $sanitized_input = array();
@@ -1248,6 +1352,15 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
         // Check the validation result
         if ($validation_result === true) {
+            // Check one-liner automatiion bash script used in initial setup
+            $service_name = 'npp-wordpress.service';
+            $service_path = '/etc/systemd/system/' . $service_name;
+            if (file_exists($service_path)) {
+                if (substr($input['nginx_cache_path'], -strlen('-npp')) !== '-npp') {
+                    // Change original Nginx cache path with FUSE mounted automatically
+                    $input['nginx_cache_path'] .= '-npp';
+                }
+            }
             $sanitized_input['nginx_cache_path'] = sanitize_text_field($input['nginx_cache_path']);
         } else {
             // Handle different validation outcomes
@@ -1270,13 +1383,8 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 'error'
             );
 
-            // Log error message
-            $log_message = $error_message;
-            $log_file_path = NGINX_CACHE_LOG_FILE;
-            nppp_perform_file_operation($log_file_path, 'create');
-            if (!empty($log_file_path)) {
-                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
-            }
+            // Log the error message
+            nppp_log_error_message($error_message);
         }
     }
 
@@ -1294,67 +1402,145 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 'ERROR OPTION: Please enter a valid email address.',
                 'error'
             );
-            // Log error message
-            $log_message = 'ERROR OPTION: Please enter a valid email address.';
-            $log_file_path = NGINX_CACHE_LOG_FILE;
-            nppp_perform_file_operation($log_file_path, 'create');
-            if (!empty($log_file_path)) {
-                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
-            }
+
+            // Log the error message
+            nppp_log_error_message('ERROR OPTION: Please enter a valid email address.');
         }
     }
 
     // Sanitize and validate CPU limit
     if (!empty($input['nginx_cache_cpu_limit'])) {
-        // Validate CPU limit
-        $cpu_limit = intval($input['nginx_cache_cpu_limit']);
-        if ($cpu_limit >= 10 && $cpu_limit <= 100) {
-            $sanitized_input['nginx_cache_cpu_limit'] = $cpu_limit;
+        // Check if the input is numeric to prevent non-numeric strings from passing through
+        if (is_numeric($input['nginx_cache_cpu_limit'])) {
+            // Convert to integer
+            $cpu_limit = intval($input['nginx_cache_cpu_limit']);
+            // Validate range
+            if ($cpu_limit >= 10 && $cpu_limit <= 100) {
+                $sanitized_input['nginx_cache_cpu_limit'] = $cpu_limit;
+            } else {
+                // CPU limit is not within range, add error message
+                add_settings_error(
+                    'nppp_nginx_cache_settings_group',
+                    'invalid-cpu-limit',
+                    'Please enter a CPU limit between 10 and 100.',
+                    'error'
+                );
+
+                // Log the error message
+                nppp_log_error_message('ERROR OPTION: Please enter a CPU limit between 10 and 100.');
+            }
         } else {
-            // CPU limit is not within range, add error message
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
-                'invalid-cpu-limit',
-                'Please enter a CPU limit between 10 and 100.',
+                'invalid-cpu-limit-format',
+                'CPU limit must be a numeric value.',
                 'error'
             );
-            // Log error message
-            $log_message = 'ERROR: Please enter a CPU limit between 10 and 100.';
-            $log_file_path = NGINX_CACHE_LOG_FILE;
-            nppp_perform_file_operation($log_file_path, 'create');
-            if (!empty($log_file_path)) {
-                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
-            }
+
+            // Log the error message
+            nppp_log_error_message('ERROR OPTION: CPU limit must be a numeric value.');
         }
     }
 
     // Sanitize and validate Per Request Wait Time
     if (isset($input['nginx_cache_wait_request'])) {
-        // Validate Wait Time
-        $wait_time = intval($input['nginx_cache_wait_request']);
-        if ($wait_time >= 0 && $wait_time <= 60) {
-            $sanitized_input['nginx_cache_wait_request'] = $wait_time;
+        // Check if the input is numeric to prevent non-numeric strings from passing through
+        if (is_numeric($input['nginx_cache_wait_request'])) {
+            // Convert to integer
+            $wait_time = intval($input['nginx_cache_wait_request']);
+            // Validate range
+            if ($wait_time >= 0 && $wait_time <= 60) {
+                $sanitized_input['nginx_cache_wait_request'] = $wait_time;
+            } else {
+                // Wait Time is not within range, add error message
+                add_settings_error(
+                    'nppp_nginx_cache_settings_group',
+                    'invalid-wait-time',
+                    'Please enter a Per Request Wait Time between 0 and 60 seconds.',
+                    'error'
+                );
+
+                // Log the error message
+                nppp_log_error_message('ERROR OPTION: Please enter a per request wait time between 0 and 60 seconds.');
+            }
         } else {
-            // Wait Time is not within range, add error message
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
-                'invalid-wait-time',
-                'Please enter a Per Request Wait Time between 0 and 60 seconds.',
+                'invalid-wait-time-format',
+                'Wait time must be a numeric value.',
                 'error'
             );
-            // Log error message
-            $log_message = 'ERROR: Please enter a Per Request Wait Time between 0 and 60 seconds.';
-            $log_file_path = NGINX_CACHE_LOG_FILE;
-            nppp_perform_file_operation($log_file_path, 'create');
-            if (!empty($log_file_path)) {
-                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
-            }
+
+            // Log the error message
+            nppp_log_error_message('ERROR OPTION: Wait time must be a numeric value.');
         }
     }
 
     // Sanitize Reject Regex field
     if (!empty($input['nginx_cache_reject_regex'])) {
         $sanitized_input['nginx_cache_reject_regex'] = preg_replace('/\\\\+/', '\\', $input['nginx_cache_reject_regex']);
+    }
+
+    // Sanitize & validate custom cache key regex
+    if (!empty($input['nginx_cache_key_custom_regex'])) {
+        // Decode the base64-encoded regex if it's being passed encoded
+        $decoded_regex = base64_decode($input['nginx_cache_key_custom_regex'], true);
+        if ($decoded_regex !== false) {
+            // Retrieve the decoded regex
+            $regex = $decoded_regex;
+        } else {
+            // If decoding fails, use the input directly
+            $regex = $input['nginx_cache_key_custom_regex'];
+        }
+
+        // ####################################################################
+        // Validate & Sanitize the regex
+        // Limit catastrophic backtracking, greedy quantifiers inside lookaheads
+        // excessively long regex patterns to prevent ReDoS attacks
+        // ####################################################################
+
+        // Validate the regex
+        if (@preg_match($regex, "") === false) {
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex is invalid check syntax and test before use it.';
+        }
+
+        // Check for excessive lookaheads (limit to 3)
+        $lookahead_count = preg_match_all('/(\(\?=.*\))/i', $regex);
+        if ($lookahead_count > 3) {
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex contains more than 3 lookaheads, which is not allowed.';
+        }
+
+        // Check for greedy quantifiers inside lookaheads
+        if (preg_match('/\(\?=.*\.\*\)/', $regex)) {
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex contains a greedy quantifier inside a lookahead, which is not allowed.';
+        }
+
+        // Allow only a single ".*" in the regex
+        $greedy_count = preg_match_all('/\.\*/', $regex);
+        if ($greedy_count > 1) {
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex contains more than one ".*" quantifier, which is not allowed.';
+        }
+
+        // Check for excessively long regex patterns (limit length to 300 characters)
+        if (strlen($regex) > 300) {
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex exceeds the allowed length of 300 characters.';
+        }
+
+        // If an error message was set, trigger the error and log it
+        if (isset($error_message_regex)) {
+            // Add settings error
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'invalid_regex',
+                $error_message_regex,
+                'error'
+            );
+            // Log the error message
+            nppp_log_error_message($error_message_regex);
+        } else {
+            // Sanitization & validation the regex completed, safely store regex in db
+            $sanitized_input['nginx_cache_key_custom_regex'] = base64_encode($regex);
+        }
     }
 
     // Sanitize Reject extension field
@@ -1380,9 +1566,38 @@ function nppp_nginx_cache_settings_sanitize($input) {
     // Sanitize Opt-in
     $sanitized_input['nginx_cache_tracking_opt_in'] = isset($input['nginx_cache_tracking_opt_in']) && $input['nginx_cache_tracking_opt_in'] == '1' ? '1' : '0';
 
-    // Sanitize Limit Rate
+    // Sanitize and validate cache limit rate
     if (!empty($input['nginx_cache_limit_rate'])) {
-        $sanitized_input['nginx_cache_limit_rate'] = sanitize_text_field($input['nginx_cache_limit_rate']);
+        // Check if the input is numeric to prevent non-numeric strings from passing through
+        if (is_numeric($input['nginx_cache_limit_rate'])) {
+            // Convert to integer
+            $limit_rate = intval($input['nginx_cache_limit_rate']);
+            // Validate range: 1 KB to 102400 KB (100 MB)
+            if ($limit_rate >= 1 && $limit_rate <= 102400) {
+                $sanitized_input['nginx_cache_limit_rate'] = $limit_rate;
+            } else {
+                // Limit rate is not within range, add error message
+                add_settings_error(
+                    'nppp_nginx_cache_settings_group',
+                    'invalid-limit-rate',
+                    'Please enter a limit rate between 1 KB/sec and 100 MB/sec.',
+                    'error'
+                );
+
+                // Log the error message
+                nppp_log_error_message('ERROR OPTION: Please enter a limit rate between 1 MB/sec and 100 MB/sec in KB/sec.');
+            }
+        } else {
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'invalid-limit-rate-format',
+                'Limit rate must be a numeric value in KB/sec.',
+                'error'
+            );
+
+            // Log the error message
+           nppp_log_error_message('ERROR OPTION: Limit rate must be a numeric value in KB/sec.');
+        }
     }
 
     // Sanitize REST API Key
@@ -1401,13 +1616,9 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 'ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.',
                 'error'
             );
-            // Log error message
-            $log_message = 'ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.';
-            $log_file_path = NGINX_CACHE_LOG_FILE;
-            nppp_perform_file_operation($log_file_path, 'create');
-            if (!empty($log_file_path)) {
-                nppp_perform_file_operation($log_file_path, 'append', '[' . current_time('Y-m-d H:i:s') . '] ' . $log_message);
-            }
+
+            // Log the error message
+            nppp_log_error_message('ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.');
         }
     }
 
@@ -1436,10 +1647,10 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     }
 
     // Validate the path
-    $pattern = '/^\/(?:[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)+)\/?$/';
+    $pattern = '/^\/(?:[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*)\/?$/';
 
     // Define critical system directories
-    $critical_directories = array('/bin','/boot','/etc','/lib','/lib64','/media','/proc','/root','/sbin','/srv','/sys','/usr','/home','/mnt');
+    $critical_directories = array('/bin','/boot','/etc','/lib','/lib64','/media','/proc','/root','/sbin','/srv','/sys','/usr','/home','/mnt','/var/log','/var/spool','/libexec','/run','/var/run');
 
     // Check if the path starts with any critical directory
     foreach ($critical_directories as $dir) {
@@ -1450,6 +1661,12 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
 
     // Check if the path matches correct format
     if (!preg_match($pattern, $path)) {
+        return 'critical_path';
+    }
+
+    // Also supported paths (/dev /var /opt /tmp) can not be first level directory
+    $path_parts = explode('/', trim($path, '/'));
+    if (in_array($path_parts[0], ['dev', 'var', 'opt', 'tmp']) && count($path_parts) < 2) {
         return 'critical_path';
     }
 
@@ -1474,38 +1691,42 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
             // was done using the following one-liner script:
             // [ bash <(curl -Ss https://psaux-it.github.io/install.sh) ]
             if (function_exists('exec') && function_exists('shell_exec')) {
-                if (!empty($nginx_path) && !empty($sudo_path)) {
-                    // Construct and execute the 'nginx -T' command using 'echo "" | sudo -S' to prevent hang during  password prompt
-                    $nginx_command = "echo '' | sudo -S " . escapeshellcmd($nginx_path) . " -T > /dev/null 2>&1";
-                    exec($nginx_command, $output, $return_var);
+                if ($wp_filesystem->exists($service_path)) {
+                    if (!empty($nginx_path) && !empty($sudo_path)) {
+                        if (substr($path, -strlen('-npp')) !== '-npp') {
+                            // Construct and execute the 'nginx -T' command using 'echo "" | sudo -S' to prevent hang during password prompt
+                            $nginx_command = "echo '' | sudo -S " . escapeshellcmd($nginx_path) . " -T > /dev/null 2>&1";
+                            exec($nginx_command, $output, $return_var);
+                            usleep(300000);
+                        }
+                    }
                 }
             }
 
             // Re-check if directory exists
             if (!$wp_filesystem->is_dir($path)) {
-                // Display error message for non-existent directory
-                return 'directory_not_exist_or_readable';
-            } else {
-                // Restart the npp-wordpress systemd service to apply setfacl to the created Nginx cache path.
-                // This code block depends on the npp-wordpress.service and will only run
-                // if the plugin's initial setup was done using the following one-liner script:
-                // [ bash <(curl -Ss https://psaux-it.github.io/install.sh) ]
-                if (!empty($systemctl_path) && !empty($sudo_path)) {
-                    if ($wp_filesystem->exists($service_path)) {
-                        // Construct and execute the restart command
-                        $restart_command = "echo '' | sudo -S " . escapeshellcmd($systemctl_path) . " restart " . escapeshellcmd($service_name);
-                        exec($restart_command . ' 2>&1', $output, $return_var);
+                if (substr($path, -strlen('-npp')) === '-npp') {
+                    if (!empty($systemctl_path) && !empty($sudo_path)) {
+                        if ($wp_filesystem->exists($service_path)) {
+                            // Construct and execute the restart command
+                            $restart_command = "echo '' | sudo -S " . escapeshellcmd($systemctl_path) . " restart " . escapeshellcmd($service_name);
+                            exec($restart_command . ' 2>&1', $output, $return_var);
+
+                            if ($return_var === 0) {
+                                $static_key_base = 'nppp';
+                                $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
+                                delete_transient($transient_key_permissions_check);
+                                sleep(1);
+                                return true;
+                            } else {
+                                return 'directory_not_exist_or_readable';
+                            }
+                        }
                     }
                 }
-                // Clear recursive permission plugin cache
-                $static_key_base = 'nppp';
-                $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
-                $transients = array($transient_key_permissions_check);
-                foreach ($transients as $transient) {
-                    delete_transient($transient);
-                }
-                // Add small delay
-                usleep(500000);
+
+                // Display error message for non-existent directory
+                return 'directory_not_exist_or_readable';
             }
         }
     }
@@ -1555,6 +1776,7 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_cpu_limit' => 80,
         'nginx_cache_reject_extension' => nppp_fetch_default_reject_extension(),
         'nginx_cache_reject_regex' => nppp_fetch_default_reject_regex(),
+        'nginx_cache_key_custom_regex' => base64_encode(nppp_fetch_default_regex_for_cache_key()),
         'nginx_cache_wait_request' => 0,
         'nginx_cache_limit_rate' => 5120,
         'nginx_cache_tracking_opt_in' => '1',
