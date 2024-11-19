@@ -2,7 +2,7 @@
 /**
  * Settings page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains settings page functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.5
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -153,9 +153,10 @@ function nppp_nginx_cache_settings_page() {
                                     Critical system paths are prohibited in default to ensure accuracy to avoid unintended deletions.</p>
                                 </div>
                                 <div class="cache-paths-info">
-                                    <h4>Important Setup Information</h4>
-                                    <p>If you used the one-liner bash script, add the <code>-npp</code> suffix to your original NGINX cache path.</p>
-                                    <p>This is required only if you used the following setup command:<br class="line-break">
+                                    <h4>Info</h4>
+                                    <p>If you used the one-liner bash script, you can use the original Nginx cache path here. It will be replaced with a FUSE mount path automatically having the <code>-npp</code> suffix.</p>
+                                    <p>If you did not use the one-liner bash script, and manually created the FUSE mount, you will need to enter the new FUSE mount path instead of the original Nginx cache path.</p>
+                                    <p>This automation is only supported if you used the one-liner bash script for the initial setup:<br class="line-break">
                                     <code>bash <(curl -Ss https://psaux-it.github.io/install.sh)</code></p>
                                 </div>
                             </td>
@@ -470,14 +471,7 @@ function nppp_handle_nginx_cache_settings_submission() {
                         // Always delete the plugin permission cache when the form is submitted
                         $static_key_base = 'nppp';
                         $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
-                        $transients = array($transient_key_permissions_check);
-
-                        foreach ($transients as $transient) {
-                            delete_transient($transient);
-                        }
-
-                        // Add small delay for transient operation
-                        usleep(100000);
+                        delete_transient($transient_key_permissions_check);
 
                         // Update the settings
                         // Note: This will re-encode 'nginx_cache_key_custom_regex' via sanitization
@@ -1358,6 +1352,15 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
         // Check the validation result
         if ($validation_result === true) {
+            // Check one-liner automatiion bash script used in initial setup
+            $service_name = 'npp-wordpress.service';
+            $service_path = '/etc/systemd/system/' . $service_name;
+            if (file_exists($service_path)) {
+                if (substr($input['nginx_cache_path'], -strlen('-npp')) !== '-npp') {
+                    // Change original Nginx cache path with FUSE mounted automatically
+                    $input['nginx_cache_path'] .= '-npp';
+                }
+            }
             $sanitized_input['nginx_cache_path'] = sanitize_text_field($input['nginx_cache_path']);
         } else {
             // Handle different validation outcomes
@@ -1688,38 +1691,42 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
             // was done using the following one-liner script:
             // [ bash <(curl -Ss https://psaux-it.github.io/install.sh) ]
             if (function_exists('exec') && function_exists('shell_exec')) {
-                if (!empty($nginx_path) && !empty($sudo_path)) {
-                    // Construct and execute the 'nginx -T' command using 'echo "" | sudo -S' to prevent hang during  password prompt
-                    $nginx_command = "echo '' | sudo -S " . escapeshellcmd($nginx_path) . " -T > /dev/null 2>&1";
-                    exec($nginx_command, $output, $return_var);
+                if ($wp_filesystem->exists($service_path)) {
+                    if (!empty($nginx_path) && !empty($sudo_path)) {
+                        if (substr($path, -strlen('-npp')) !== '-npp') {
+                            // Construct and execute the 'nginx -T' command using 'echo "" | sudo -S' to prevent hang during password prompt
+                            $nginx_command = "echo '' | sudo -S " . escapeshellcmd($nginx_path) . " -T > /dev/null 2>&1";
+                            exec($nginx_command, $output, $return_var);
+                            usleep(300000);
+                        }
+                    }
                 }
             }
 
             // Re-check if directory exists
             if (!$wp_filesystem->is_dir($path)) {
-                // Display error message for non-existent directory
-                return 'directory_not_exist_or_readable';
-            } else {
-                // Restart the npp-wordpress systemd service to re-mount FUSE Nginx cache path
-                // This code block depends on the npp-wordpress.service and will only run
-                // if the plugin's initial setup was done using the following one-liner script:
-                // [ bash <(curl -Ss https://psaux-it.github.io/install.sh) ]
-                if (!empty($systemctl_path) && !empty($sudo_path)) {
-                    if ($wp_filesystem->exists($service_path)) {
-                        // Construct and execute the restart command
-                        $restart_command = "echo '' | sudo -S " . escapeshellcmd($systemctl_path) . " restart " . escapeshellcmd($service_name);
-                        exec($restart_command . ' 2>&1', $output, $return_var);
+                if (substr($path, -strlen('-npp')) === '-npp') {
+                    if (!empty($systemctl_path) && !empty($sudo_path)) {
+                        if ($wp_filesystem->exists($service_path)) {
+                            // Construct and execute the restart command
+                            $restart_command = "echo '' | sudo -S " . escapeshellcmd($systemctl_path) . " restart " . escapeshellcmd($service_name);
+                            exec($restart_command . ' 2>&1', $output, $return_var);
+
+                            if ($return_var === 0) {
+                                $static_key_base = 'nppp';
+                                $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
+                                delete_transient($transient_key_permissions_check);
+                                sleep(1);
+                                return true;
+                            } else {
+                                return 'directory_not_exist_or_readable';
+                            }
+                        }
                     }
                 }
-                // Clear recursive permission plugin cache
-                $static_key_base = 'nppp';
-                $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
-                $transients = array($transient_key_permissions_check);
-                foreach ($transients as $transient) {
-                    delete_transient($transient);
-                }
-                // Add small delay
-                usleep(500000);
+
+                // Display error message for non-existent directory
+                return 'directory_not_exist_or_readable';
             }
         }
     }
