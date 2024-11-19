@@ -152,13 +152,6 @@ function nppp_nginx_cache_settings_page() {
                                     <p><strong>Important:</strong> Paths must be one level deeper (e.g. <code>/var/cache</code>).<br class="line-break">
                                     Critical system paths are prohibited in default to ensure accuracy to avoid unintended deletions.</p>
                                 </div>
-                                <div class="cache-paths-info">
-                                    <h4>Info</h4>
-                                    <p>If you used the one-liner bash script, you can use the original Nginx cache path here. It will be replaced with a FUSE mount path automatically having the <code>-npp</code> suffix.</p>
-                                    <p>If you did not use the one-liner bash script, and manually created the FUSE mount, you will need to enter the new FUSE mount path instead of the original Nginx cache path.</p>
-                                    <p>This automation is only supported if you used the one-liner bash script for the initial setup:<br class="line-break">
-                                    <code>bash <(curl -Ss https://psaux-it.github.io/install.sh)</code></p>
-                                </div>
                             </td>
                         </tr>
                         <tr valign="top">
