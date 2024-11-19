@@ -201,8 +201,8 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 // Purge cache automatically for updated content (post/page)
 // This function hooks into the 'save_post' action
 function nppp_purge_cache_on_update($post_id) {
-    // Check if this is an autosave or a post revision
-    if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+    // Ignore auto-saves, post revisions, and newly created posts (auto-draft or not published)
+    if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id) || get_post_status($post_id) !== 'publish') {
         return;
     }
 
