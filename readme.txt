@@ -159,6 +159,7 @@ Release date: 2024-11-19
 * Fix permission check on purge
 * Fix styling issue on Status tab
 * Force create Nginx cache path on load settings page
+* Drop redundant info may confuse user
 
 = 2.0.5 =
 
