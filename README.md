@@ -26,12 +26,13 @@ Moreover, granting the correct permissions to the PHP process owner (PHP-FPM-USE
 
 🚀**Purge All Nginx Cache**: Completely clear all cached data stored by Nginx.<br/>
 🚀**Preload All Nginx Cache**: Populate the Nginx cache with the most recent data for the entire website.<br/>
-🚀**Auto Preload Nginx Cache**: Automatically preload the cache after purging, ensuring fast page load times by caching content proactively. This feature is triggered when Auto Purge is enabled for a single POST/PAGE or when the Purge All cache action is used.<br/>
-🚀**Auto Purge Nginx Cache**: This feature automatically purges the cached version of a POST or PAGE when its content is updated, when new COMMENTS are approved, or when comment statuses change. If the Auto Preload option is enabled, the cache for the POST or PAGE is reloaded after purging. Additionally, the entire cache is purged automatically upon updating a THEME or PLUGIN, whether manually or automatically. If Auto Preload is enabled, the entire cache will also be reloaded after the purge, ensuring your site serves the latest content.<br/>
+🚀**Auto Preload Nginx Cache**: Automatically preload the cache after purging, ensuring fast page load times by caching content proactively. This feature is triggered when `Auto Purge` is enabled for a single `post/page` or when the `Purge All` cache action is used.<br/>
+🚀**Auto Purge Nginx Cache**: Purge on `post/page` content changes, `comment` status updates or approvals, `theme/plugin` updates, or when compatible `cache plugins` trigger a purge. Cache is preloaded automatically if `Auto Preload` is enabled (for entire or single).<br/>
 🚀**Schedule Cache Purge & Preload via WP Cron**: Automate the purge and preload process using WordPress Cron jobs.<br/>
-🚀**Remote Nginx Cache Purge & Preload via REST API**: Remotely trigger cache purging and preloading through REST API endpoints.<br/>
+🚀**Remote Nginx Cache Purge & Preload via REST API**: Remotely trigger cache purging and preloading through `REST API` endpoints.<br/>
 🚀**Manual Nginx Cache Purge & Preload**: Allow manual purging and preloading of cache through the table view in Advanced Tab.<br/>
 🚀**On-Page Nginx Cache Purge & Preload**: Manually purge and preload Nginx cache for the currently visited page directly from the frontend.<br/>
+🚀**Custom Cache Key Support**: Define a regex pattern to parse URLs based on your custom `fastcgi_cache_key` format.<br/>
 🚀**Optimized Nginx Cache Preload**: Enhance Nginx cache preload performance with options to limit server resource usage, via exclude endpoints, exclude file extensions, wait retrievals and rate limiting.<br/>
 🚀**Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, cache preload status, and Nginx status from the Status tab.<br/>
 🚀**User-Friendly Interface**: Easy-to-use AJAX-powered settings, integrated into the WordPress admin bar for quick access.<br/>
@@ -42,7 +43,7 @@ Moreover, granting the correct permissions to the PHP process owner (PHP-FPM-USE
 
 ### Overview
 
-This project addresses the challenge of automating Nginx FastCGI cache purging and preloading (WordPress) in Nginx environments where two distinct users, WEBSERVER-USER and PHP-FPM-USER, are involved. NPP offers a more direct solution without requiring any external NGINX modules, such as the Cache Purge module. This plugin directly traverses the cache directory and clears the cache when the permissions are properly granted for the PHP-FPM-USER to access the Nginx Cache Directory. To automate the granting of necessary permissions to PHP-FPM-USER, a pre-made bash script is provided that must be run manually on the host server under the **root**.
+This project addresses the challenge of automating Nginx FastCGI cache purging and preloading (WordPress) in Nginx environments where two distinct users, WEBSERVER-USER and PHP-FPM-USER, are involved. NPP offers a more direct solution without requiring any external NGINX modules, such as the Cache Purge module. This plugin directly traverses the cache directory and clears the cache when the permissions are properly granted for the PHP-FPM-USER to access the Nginx cache directory. To automate the granting of necessary permissions to PHP-FPM-USER, a pre-made bash script is provided that must be run manually on the host server under the **root**.
 
 ### Problem Statement
 
