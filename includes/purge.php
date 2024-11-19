@@ -129,6 +129,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     continue;
                 }
 
+                // Skip all request methods except GET
+                if (!preg_match('/KEY:\s.*GET/', $content)) {
+                    continue;
+                }
+
                 // Extract the in cache URL from fastcgi_cache_key
                 preg_match($regex, $content, $matches);
 
