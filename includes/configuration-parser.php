@@ -425,7 +425,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                                     ?>
                                                     <td>
                                                         <?php if ($is_supported): ?>
-                                                            <span class="dashicons dashicons-yes" style="color: green; font-size: 18px !important;"></span>
+                                                            <span class="dashicons dashicons-yes" style="color: green; font-size: 20px !important;"></span>
                                                         <?php else: ?>
                                                             <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
                                                         <?php endif; ?>
