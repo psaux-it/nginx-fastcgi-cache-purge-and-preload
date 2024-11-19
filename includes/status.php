@@ -408,11 +408,17 @@ function nppp_get_in_cache_page_count() {
                     continue;
                 }
 
+                // Test regex at least once
+                if (!$regex_tested) {
+                    if (preg_match($regex, $content, $matches)) {
+                        $regex_tested = true;
+                    } else {
+                        return 'RegexError';
+                    }
+                }
+
                 // Extract URLs using regex
                 if (preg_match($regex, $content, $matches)) {
-                    $url = trim($matches[1]);
-
-                    // Increment count
                     $urls_count++;
                 }
             }
