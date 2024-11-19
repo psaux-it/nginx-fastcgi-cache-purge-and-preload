@@ -2,7 +2,7 @@
 /**
  * Pre-checks for FastCGI Cache Purge and Preload for Nginx
  * Description: This pre-check file contains several critical checks for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.5
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -309,52 +309,8 @@ function nppp_pre_checks() {
 
     // Check if cache directory exists if not force to create it
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
-        // Assign necessary variables
-        $service_name = 'npp-wordpress.service';
-        $service_path = '/etc/systemd/system/' . $service_name;
-        $nginx_path = trim(shell_exec('command -v nginx'));
-        $sudo_path = trim(shell_exec('command -v sudo'));
-        $systemctl_path = trim(shell_exec('command -v systemctl'));
-
-        // Force to create the nginx cache path that if defined in conf already
-        // This code block will only run if the plugin's initial setup
-        // was done using the following one-liner script:
-        // [ bash <(curl -Ss https://psaux-it.github.io/install.sh) ]
-        if (function_exists('exec') && function_exists('shell_exec')) {
-            if (!empty($nginx_path) && !empty($sudo_path)) {
-                // Construct and execute the 'nginx -T' command using 'echo "" | sudo -S' to prevent hang during  password prompt
-                $nginx_command = "echo '' | sudo -S " . escapeshellcmd($nginx_path) . " -T > /dev/null 2>&1";
-                exec($nginx_command, $output, $return_var);
-            }
-        }
-
-        // Re-check if directory exists
-        if (!$wp_filesystem->is_dir($nginx_cache_path)) {
-            // Display error message for non-existent directory
-            nppp_display_pre_check_warning('GLOBAL ERROR PATH: The specified Nginx Cache Directory is default one or does not exist anymore. Please check your Nginx Cache Directory.');
-            return;
-        } else {
-            // Restart the npp-wordpress systemd service to apply setfacl to the created Nginx cache path.
-            // This code block depends on the npp-wordpress.service and will only run
-            // if the plugin's initial setup was done using the following one-liner script:
-            // [ bash <(curl -Ss https://psaux-it.github.io/install.sh) ]
-            if (!empty($systemctl_path) && !empty($sudo_path)) {
-                if ($wp_filesystem->exists($service_path)) {
-                    // Construct and execute the restart command
-                    $restart_command = "echo '' | sudo -S " . escapeshellcmd($systemctl_path) . " restart " . escapeshellcmd($service_name);
-                    exec($restart_command . ' 2>&1', $output, $return_var);
-                }
-            }
-            // Clear recursive permission plugin cache
-            $static_key_base = 'nppp';
-            $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
-            $transients = array($transient_key_permissions_check);
-            foreach ($transients as $transient) {
-                delete_transient($transient);
-            }
-            // Add small delay
-            usleep(500000);
-        }
+        nppp_display_pre_check_warning('GLOBAL ERROR PATH: The specified Nginx Cache Directory is default one or does not exist anymore. Please check your Nginx Cache Directory.');
+        return;
     }
 
     // Optimize performance by caching results of recursive permission checks
