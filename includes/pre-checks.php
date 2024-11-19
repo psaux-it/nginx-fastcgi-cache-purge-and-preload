@@ -2,7 +2,7 @@
 /**
  * Pre-checks for FastCGI Cache Purge and Preload for Nginx
  * Description: This pre-check file contains several critical checks for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.5
+ * Version: 2.0.4
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -319,7 +319,7 @@ function nppp_pre_checks() {
 
     if ($nppp_permissions_check_result === 'false') {
         // Handle the case where permissions are not sufficient
-        nppp_display_pre_check_warning('GLOBAL ERROR PERMISSION: Insufficient permissions for Nginx Cache Path. Consult the Help tab for guidance. After making changes, clear the plugin cache in the Status tab to refresh the status.');
+        nppp_display_pre_check_warning('GLOBAL ERROR PERMISSION: Insufficient permissions for Nginx Cache Path. Please consult the Help tab for guidance.');
         return;
     }
 
