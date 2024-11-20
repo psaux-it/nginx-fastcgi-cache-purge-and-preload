@@ -270,6 +270,9 @@ function nppp_purge_cache_premium_callback() {
              ? base64_decode($options['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
+    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
+    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
+
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -329,10 +332,14 @@ function nppp_purge_cache_premium_callback() {
     // Get the purged URL
     $https_enabled = wp_is_using_https();
     $content = $wp_filesystem->get_contents($file_path);
+
+    $final_url = '';
     if (preg_match($regex, $content, $matches)) {
-        $url = trim($matches[1]);
-        $sanitized_url = filter_var($url, FILTER_SANITIZE_URL);
-        $final_url = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
+        if (!empty($matches[1]) && preg_match($second_regex, trim($matches[1]), $second_matches)) {
+            $url = trim($matches[1]);
+            $sanitized_url = filter_var($url, FILTER_SANITIZE_URL);
+            $final_url = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
+        }
     }
 
     // Sanitize and validate the file path again deeply before purge cache
