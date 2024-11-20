@@ -353,6 +353,9 @@ function nppp_get_in_cache_page_count() {
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
+    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
+    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
+
     $urls_count = 0;
 
     // Initialize WordPress filesystem
@@ -412,7 +415,11 @@ function nppp_get_in_cache_page_count() {
                 // Test regex at least once
                 if (!$regex_tested) {
                     if (preg_match($regex, $content, $matches)) {
-                        $regex_tested = true;
+                        if (!empty($matches[1]) && preg_match($second_regex, trim($matches[1]), $second_matches)) {
+                            $regex_tested = true;
+                        } else {
+                            return 'RegexError';
+                        }
                     } else {
                         return 'RegexError';
                     }
