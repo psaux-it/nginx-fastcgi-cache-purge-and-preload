@@ -62,22 +62,24 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         }
     }
 
-    // If this is a REST API request prevent admin notices
+    // If this is a AJAX prevent admin notices
+    if (defined('DOING_AJAX') && DOING_AJAX) {
+        return;
+    }
+
+    // If this is a REST API
     if (function_exists('wp_doing_rest') && wp_doing_rest()) {
         echo '<p>' . esc_html($sanitized_message) . '</p>';
         return;
     } elseif (defined('REST_REQUEST') && REST_REQUEST) {
-        // Fallback for older WordPress versions
         echo '<p>' . esc_html($sanitized_message) . '</p>';
         return;
     }
 
-    // If this is a WP CRON request prevent admin notices
+    // If this is a WP CRON prevent admin notices
     if (function_exists('wp_doing_cron') && wp_doing_cron()) {
-        // If this is a cron job, don't display or return any message
         return '';
     } elseif (defined('DOING_CRON') && DOING_CRON) {
-        // Fallback for older WordPress versions
         return '';
     }
 
