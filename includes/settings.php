@@ -167,7 +167,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">If <strong>Auto Preload</strong> is enabled, the cache for the <span style="color: orange;"><strong>single</strong></span> <strong>POST/PAGE</strong> will be automatically preloaded after the cache is purged.</p>
                                 <br>
                                 <p class="description">The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when a <strong>THEME</strong> or <strong>PLUGIN</strong> is updated.<br></p>
-                                <p class="description">The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when compatible <strong>Caching Plugins</strong> (e.g. WP Rocket, W3 Total Cache) trigger a cache purge.</p>
+                                <p class="description">The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when compatible <strong>Caching Plugins</strong> trigger a cache purge.</p>
                                 <p class="description">If <strong>Auto Preload</strong> is enabled, the <span style="color: orange;"><strong>entire cache</strong></span> will be automatically preloaded after the the cache is purged.<br></p>
                             </td>
                         </tr>
