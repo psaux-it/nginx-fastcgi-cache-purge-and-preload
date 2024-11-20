@@ -451,9 +451,14 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
 
     // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
     $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // User defined regex in Cache Key Regex option
     $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
+
+    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
+    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
 
     try {
         // Traverse the cache directory and its subdirectories
@@ -482,10 +487,16 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                 // Test regex at least once
                 if (!$regex_tested) {
                     if (preg_match($regex, $content, $matches)) {
-                        $regex_tested = true;
+                        if (preg_match($second_regex, $matches[1], $second_matches)) {
+                            $regex_tested = true;
+                        } else {
+                            return [
+                                'error' => 'ERROR REGEX: Please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>$host$request_uri</strong> portion correctly.'
+                            ];
+                        }
                     } else {
                         return [
-                            'error' => 'ERROR REGEX: Please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and try again.'
+                            'error' => 'ERROR REGEX: Please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.'
                         ];
                     }
                 }
