@@ -462,6 +462,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             RecursiveIteratorIterator::SELF_FIRST
         );
 
+        $regex_tested = false;
         foreach ($cache_iterator as $file) {
             if ($wp_filesystem->is_file($file->getPathname())) {
                 // Read file contents
@@ -476,6 +477,17 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                 // Skip all request methods except GET
                 if (!preg_match('/KEY:\s.*GET/', $content)) {
                     continue;
+                }
+
+                // Test regex at least once
+                if (!$regex_tested) {
+                    if (preg_match($regex, $content, $matches)) {
+                        $regex_tested = true;
+                    } else {
+                        return [
+                            'error' => 'ERROR REGEX: Please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and try again.'
+                        ];
+                    }
                 }
 
                 // Extract URLs using regex
@@ -515,7 +527,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // Check if any URLs were extracted
     if (empty($urls)) {
         return [
-            'error' => 'No cached content found. Please <strong>Preload All</strong> cache first and try again. If you still are unable to see the content, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and try again.'
+            'error' => 'No cached content found. Please <strong>Preload All</strong> cache first and try again.'
         ];
     }
 
