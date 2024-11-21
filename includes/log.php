@@ -62,9 +62,40 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         }
     }
 
-    // If this is a AJAX prevent admin notices
+    // Allow admin notices only for NPP AJAX actions
+    // to prevent interfere with core WP AJAX
+    // while Auto purge triggers for COMMENT, POST/PAGE.
     if (defined('DOING_AJAX') && DOING_AJAX) {
-        return;
+        $allowed_actions = [
+            'nppp_clear_nginx_cache_logs',
+            'nppp_get_nginx_cache_logs',
+            'nppp_update_send_mail_option',
+            'nppp_update_auto_preload_option',
+            'nppp_update_auto_purge_option',
+            'nppp_cache_status',
+            'nppp_load_premium_content',
+            'nppp_purge_cache_premium',
+            'nppp_preload_cache_premium',
+            'nppp_update_api_key_option',
+            'nppp_update_default_reject_regex_option',
+            'nppp_update_default_reject_extension_option',
+            'nppp_update_api_option',
+            'nppp_update_api_key_copy_value',
+            'nppp_rest_api_purge_url_copy',
+            'nppp_rest_api_preload_url_copy',
+            'nppp_get_save_cron_expression',
+            'nppp_update_cache_schedule_option',
+            'nppp_cancel_scheduled_event',
+            'nppp_get_active_cron_events_ajax',
+            'nppp_clear_plugin_cache',
+            'nppp_restart_systemd_service',
+            'nppp_update_default_cache_key_regex_option',
+        ];
+
+        $action = isset($_REQUEST['action']) ? sanitize_text_field(wp_unslash($_REQUEST['action'])) : '';
+        if (empty($action) || !in_array($action, $allowed_actions, true)) {
+            return;
+        }
     }
 
     // If this is a REST API
