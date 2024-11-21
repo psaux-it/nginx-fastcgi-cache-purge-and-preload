@@ -147,11 +147,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                         if (!empty($matches[1]) && preg_match($second_regex, trim($matches[1]), $second_matches)) {
                             $regex_tested = true;
                         } else {
-                            nppp_display_admin_notice('error', 'ERROR REGEX: Auto purge cache failed. Please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>$host$request_uri</strong> portion correctly.', true, false);
+                            nppp_display_admin_notice('error', "ERROR REGEX: Cache purge failed for page $current_page_url, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\$host\$request_uri</strong> portion correctly.", true, false);
                             return;
                         }
                     } else {
-                        nppp_display_admin_notice('error', "ERROR REGEX: Auto purge cache failed. Please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.", true, false);
+                        nppp_display_admin_notice('error', "ERROR REGEX: Cache purge failed for page $current_page_url, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.", true, false);
                         return;
                     }
                 }
