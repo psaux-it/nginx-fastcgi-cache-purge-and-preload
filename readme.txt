@@ -154,12 +154,15 @@ Yes, please refer to the plugin settings **Help** tab.
 
 = 2.0.6 =
 
-Release date: 2024-11-19
+Release date: 2024-11-21
 
-* Fix permission check on purge
-* Fix styling issue on Status tab
-* Force create Nginx cache path on load settings page
-* Drop redundant info may confuse user
+* Fix permission checks during cache purge
+* Resolve styling issue on the Status tab
+* Fix auto-purging cache for unpublished posts/pages
+* Prevent admin notices from interfering with core WP AJAX responses
+* Fix page cache count to process only GET request methods
+* Fix cache key regex validation
+* Improve compatibility with Autoptimize plugin
 
 = 2.0.5 =
 
