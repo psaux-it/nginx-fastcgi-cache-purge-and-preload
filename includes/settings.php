@@ -2,7 +2,7 @@
 /**
  * Settings page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains settings page functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.5
+ * Version: 2.0.6
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -152,13 +152,6 @@ function nppp_nginx_cache_settings_page() {
                                     <p><strong>Important:</strong> Paths must be one level deeper (e.g. <code>/var/cache</code>).<br class="line-break">
                                     Critical system paths are prohibited in default to ensure accuracy to avoid unintended deletions.</p>
                                 </div>
-                                <div class="cache-paths-info">
-                                    <h4>Info</h4>
-                                    <p>If you used the one-liner bash script, you can use the original Nginx cache path here. It will be replaced with a FUSE mount path automatically having the <code>-npp</code> suffix.</p>
-                                    <p>If you did not use the one-liner bash script, and manually created the FUSE mount, you will need to enter the new FUSE mount path instead of the original Nginx cache path.</p>
-                                    <p>This automation is only supported if you used the one-liner bash script for the initial setup:<br class="line-break">
-                                    <code>bash <(curl -Ss https://psaux-it.github.io/install.sh)</code></p>
-                                </div>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -174,7 +167,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">If <strong>Auto Preload</strong> is enabled, the cache for the <span style="color: orange;"><strong>single</strong></span> <strong>POST/PAGE</strong> will be automatically preloaded after the cache is purged.</p>
                                 <br>
                                 <p class="description">The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when a <strong>THEME</strong> or <strong>PLUGIN</strong> is updated.<br></p>
-                                <p class="description">The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when compatible <strong>Caching Plugins</strong> (e.g. WP Rocket, W3 Total Cache) trigger a cache purge.</p>
+                                <p class="description">The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when compatible <strong>Caching Plugins</strong> trigger a cache purge.</p>
                                 <p class="description">If <strong>Auto Preload</strong> is enabled, the <span style="color: orange;"><strong>entire cache</strong></span> will be automatically preloaded after the the cache is purged.<br></p>
                             </td>
                         </tr>

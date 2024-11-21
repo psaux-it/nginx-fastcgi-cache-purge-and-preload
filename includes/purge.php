@@ -2,7 +2,7 @@
 /**
  * Purge action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.5
+ * Version: 2.0.6
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -78,9 +78,14 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
     // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
     $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // User defined regex in Cache Key Regex option
     $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
+
+    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
+    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
 
     // First, check if any active cache preloading action is in progress.
     // Purging the cache for a single page or post, whether done manually (Fonrtpage) or automatically (Auto Purge) after content updates,
@@ -112,6 +117,8 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         );
 
         $found = false;
+        $regex_tested = false;
+
         foreach ($cache_iterator as $file) {
             if ($wp_filesystem->is_file($file->getPathname())) {
                 // Check read and write permissions for each file
@@ -127,6 +134,26 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
                     strpos($content, 'Status: 302 Found') !== false) {
                     continue;
+                }
+
+                // Skip all request methods except GET
+                if (!preg_match('/KEY:\s.*GET/', $content)) {
+                    continue;
+                }
+
+                // Test regex at least once
+                if (!$regex_tested) {
+                    if (preg_match($regex, $content, $matches)) {
+                        if (!empty($matches[1]) && preg_match($second_regex, trim($matches[1]), $second_matches)) {
+                            $regex_tested = true;
+                        } else {
+                            nppp_display_admin_notice('error', "ERROR REGEX: Cache purge failed for page $current_page_url, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\$host\$request_uri</strong> portion correctly.", true, false);
+                            return;
+                        }
+                    } else {
+                        nppp_display_admin_notice('error', "ERROR REGEX: Cache purge failed for page $current_page_url, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.", true, false);
+                        return;
+                    }
                 }
 
                 // Extract the in cache URL from fastcgi_cache_key
@@ -161,16 +188,16 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     // Perform the purge action (delete the file)
                     $deleted = $wp_filesystem->delete($cache_path);
                     if ($deleted) {
-                         if (!$nppp_auto_purge && !$nppp_auto_preload) {
-                             nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
-                         } else {
-                             if ($nppp_auto_purge && $nppp_auto_preload) {
-                                 nppp_preload_cache_on_update($current_page_url, true);
-                             } elseif ($nppp_auto_purge) {
-                                 nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
-                             } elseif ($nppp_auto_preload) {
-                                  nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
-                             }
+                        if (!$nppp_auto_purge && !$nppp_auto_preload) {
+                            nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
+                        } else {
+                            if ($nppp_auto_purge && $nppp_auto_preload) {
+                                nppp_preload_cache_on_update($current_page_url, true);
+                            } elseif ($nppp_auto_purge) {
+                                nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
+                            } elseif ($nppp_auto_preload) {
+                                nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
+                            }
                         }
                     } else {
                         nppp_display_admin_notice('error', "ERROR UNKNOWN: An unexpected error occurred while purging cache for page $current_page_url. Please file a bug on plugin support page.");
@@ -201,8 +228,8 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 // Purge cache automatically for updated content (post/page)
 // This function hooks into the 'save_post' action
 function nppp_purge_cache_on_update($post_id) {
-    // Check if this is an autosave or a post revision
-    if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+    // Ignore auto-saves, post revisions, and newly created posts (auto-draft or not published)
+    if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id) || get_post_status($post_id) !== 'publish') {
         return;
     }
 

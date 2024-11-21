@@ -2,7 +2,7 @@
 /**
  * WP_Filesytem functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains WP_Filesytem functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.5
+ * Version: 2.0.6
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -108,6 +108,12 @@ function nppp_wp_purge($directory_path) {
             'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
         );
         return;
+    }
+
+    // Check for read and write permissions early,
+    // --if ($contents === false)-- not handle correctly
+    if (!$wp_filesystem->is_readable($directory_path) || !$wp_filesystem->is_writable($directory_path)) {
+        return new WP_Error('permission_error', 'Permission denied while accessing or writing to directory: ' . $directory_path);
     }
 
     // Check if the directory exists before attempting to remove its contents

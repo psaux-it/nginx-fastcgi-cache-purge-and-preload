@@ -2,7 +2,7 @@
 /**
  * Logging & WP admin notices function for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contain logging & wp admin notices function for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.5
+ * Version: 2.0.6
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -62,22 +62,55 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         }
     }
 
-    // If this is a REST API request prevent admin notices
+    // Allow admin notices only for NPP AJAX actions
+    // to prevent interfere with core WP AJAX
+    // while Auto purge triggers for COMMENT, POST/PAGE.
+    if (defined('DOING_AJAX') && DOING_AJAX) {
+        $allowed_actions = [
+            'nppp_clear_nginx_cache_logs',
+            'nppp_get_nginx_cache_logs',
+            'nppp_update_send_mail_option',
+            'nppp_update_auto_preload_option',
+            'nppp_update_auto_purge_option',
+            'nppp_cache_status',
+            'nppp_load_premium_content',
+            'nppp_purge_cache_premium',
+            'nppp_preload_cache_premium',
+            'nppp_update_api_key_option',
+            'nppp_update_default_reject_regex_option',
+            'nppp_update_default_reject_extension_option',
+            'nppp_update_api_option',
+            'nppp_update_api_key_copy_value',
+            'nppp_rest_api_purge_url_copy',
+            'nppp_rest_api_preload_url_copy',
+            'nppp_get_save_cron_expression',
+            'nppp_update_cache_schedule_option',
+            'nppp_cancel_scheduled_event',
+            'nppp_get_active_cron_events_ajax',
+            'nppp_clear_plugin_cache',
+            'nppp_restart_systemd_service',
+            'nppp_update_default_cache_key_regex_option',
+        ];
+
+        $action = isset($_REQUEST['action']) ? sanitize_text_field(wp_unslash($_REQUEST['action'])) : '';
+        if (empty($action) || !in_array($action, $allowed_actions, true)) {
+            return;
+        }
+    }
+
+    // If this is a REST API
     if (function_exists('wp_doing_rest') && wp_doing_rest()) {
         echo '<p>' . esc_html($sanitized_message) . '</p>';
         return;
     } elseif (defined('REST_REQUEST') && REST_REQUEST) {
-        // Fallback for older WordPress versions
         echo '<p>' . esc_html($sanitized_message) . '</p>';
         return;
     }
 
-    // If this is a WP CRON request prevent admin notices
+    // If this is a WP CRON prevent admin notices
     if (function_exists('wp_doing_cron') && wp_doing_cron()) {
-        // If this is a cron job, don't display or return any message
         return '';
     } elseif (defined('DOING_CRON') && DOING_CRON) {
-        // Fallback for older WordPress versions
         return '';
     }
 

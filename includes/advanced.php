@@ -2,7 +2,7 @@
 /**
  * Advanced table for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains advanced table functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.5
+ * Version: 2.0.6
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -120,7 +120,7 @@ function nppp_premium_html($nginx_cache_path) {
     <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
         <p style="margin: 0; display: flex; align-items: center;">
             <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-            If the table is broken or <strong>Cached URL's</strong> or any metric are wrong, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
+            If the <strong>Cached URL's</strong> are incorrect <strong>Preload</strong> will not works as expected. Please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section, ensure the regex is configured correctly, and try again.
         </p>
     </div>
     <h2></h2>
@@ -270,6 +270,9 @@ function nppp_purge_cache_premium_callback() {
              ? base64_decode($options['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
+    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
+    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
+
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -329,10 +332,14 @@ function nppp_purge_cache_premium_callback() {
     // Get the purged URL
     $https_enabled = wp_is_using_https();
     $content = $wp_filesystem->get_contents($file_path);
+
+    $final_url = '';
     if (preg_match($regex, $content, $matches)) {
-        $url = trim($matches[1]);
-        $sanitized_url = filter_var($url, FILTER_SANITIZE_URL);
-        $final_url = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
+        if (!empty($matches[1]) && preg_match($second_regex, trim($matches[1]), $second_matches)) {
+            $url = trim($matches[1]);
+            $sanitized_url = filter_var($url, FILTER_SANITIZE_URL);
+            $final_url = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
+        }
     }
 
     // Sanitize and validate the file path again deeply before purge cache
@@ -451,9 +458,14 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
 
     // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
     $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // User defined regex in Cache Key Regex option
     $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
+
+    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
+    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
 
     try {
         // Traverse the cache directory and its subdirectories
@@ -462,6 +474,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             RecursiveIteratorIterator::SELF_FIRST
         );
 
+        $regex_tested = false;
         foreach ($cache_iterator as $file) {
             if ($wp_filesystem->is_file($file->getPathname())) {
                 // Read file contents
@@ -471,6 +484,28 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                 if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
                     strpos($content, 'Status: 302 Found') !== false) {
                     continue;
+                }
+
+                // Skip all request methods except GET
+                if (!preg_match('/KEY:\s.*GET/', $content)) {
+                    continue;
+                }
+
+                // Test regex at least once
+                if (!$regex_tested) {
+                    if (preg_match($regex, $content, $matches)) {
+                        if (preg_match($second_regex, $matches[1], $second_matches)) {
+                            $regex_tested = true;
+                        } else {
+                            return [
+                                'error' => 'ERROR REGEX: Please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>$host$request_uri</strong> portion correctly.'
+                            ];
+                        }
+                    } else {
+                        return [
+                            'error' => 'ERROR REGEX: Please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.'
+                        ];
+                    }
                 }
 
                 // Extract URLs using regex
@@ -510,7 +545,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // Check if any URLs were extracted
     if (empty($urls)) {
         return [
-            'error' => 'No cached content found. Please <strong>Preload All</strong> cache first and try again. If you still are unable to see the content, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and try again.'
+            'error' => 'No cached content found. Please <strong>Preload All</strong> cache first and try again.'
         ];
     }
 

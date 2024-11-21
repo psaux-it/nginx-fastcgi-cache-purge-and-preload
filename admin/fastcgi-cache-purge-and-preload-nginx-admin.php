@@ -3,7 +3,7 @@
  * Plugin Name:       FastCGI Cache Purge and Preload for Nginx
  * Plugin URI:        https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload
  * Description:       Manage FastCGI Cache Purge and Preload for Nginx operations directly from your WordPress admin dashboard.
- * Version:           2.0.5
+ * Version:           2.0.6
  * Author:            Hasan ÇALIŞIR
  * Author URI:        https://www.psauxit.com/
  * Author Email:      hasan.calisir@psauxit.com
@@ -63,7 +63,6 @@ $page_cache_purge_actions = array(
     'wp_cache_cleared',                         // WP Super Cache
     'wpfc_delete_cache',                        // WP Fastest Cache
     'swift_performance_after_clear_all_cache',  // Swift Performance
-    'wpo_cache_flush',                          // AutoOptimize
     'litespeed_purged_all'                      // LiteSpeed Cache
 );
 
@@ -113,6 +112,9 @@ add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_de
 $nppp_auto_purge
     ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions)
     : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions);
+$nppp_auto_purge
+    ? (class_exists('autoptimizeCache') && add_action('autoptimize_action_cachepurged', 'nppp_purge_callback'))
+    : (class_exists('autoptimizeCache') && remove_action('autoptimize_action_cachepurged', 'nppp_purge_callback'));
 add_action('nppp_plugin_admin_notices', function($type, $message, $log_message, $display_notice) {
     // Check if admin notice should be displayed
     if (!$display_notice) {

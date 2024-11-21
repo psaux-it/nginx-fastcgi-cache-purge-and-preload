@@ -2,7 +2,7 @@
 /**
  * Status page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains functions which shows information about FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.5
+ * Version: 2.0.6
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -353,6 +353,9 @@ function nppp_get_in_cache_page_count() {
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
+    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
+    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
+
     $urls_count = 0;
 
     // Initialize WordPress filesystem
@@ -387,6 +390,7 @@ function nppp_get_in_cache_page_count() {
             RecursiveIteratorIterator::SELF_FIRST
         );
 
+        $regex_tested = false;
         foreach ($cache_iterator as $file) {
             if ($wp_filesystem->is_file($file->getPathname())) {
                 // Check if the file is readable
@@ -403,11 +407,26 @@ function nppp_get_in_cache_page_count() {
                     continue;
                 }
 
+                // Skip all request methods except GET
+                if (!preg_match('/KEY:\s.*GET/', $content)) {
+                    continue;
+                }
+
+                // Test regex at least once
+                if (!$regex_tested) {
+                    if (preg_match($regex, $content, $matches)) {
+                        if (!empty($matches[1]) && preg_match($second_regex, trim($matches[1]), $second_matches)) {
+                            $regex_tested = true;
+                        } else {
+                            return 'RegexError';
+                        }
+                    } else {
+                        return 'RegexError';
+                    }
+                }
+
                 // Extract URLs using regex
                 if (preg_match($regex, $content, $matches)) {
-                    $url = trim($matches[1]);
-
-                    // Increment count
                     $urls_count++;
                 }
             }
@@ -485,7 +504,7 @@ function nppp_my_status_html() {
               <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                   <p style="margin: 0; align-items: center;">
                       <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                      If <strong>Pages In Cache Count</strong> is always <strong>0</strong> or incorrect, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
+                      If <strong>Pages In Cache Count</strong> indicates <strong>Regex Error</strong>, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
                   </p>
               </div>';
     }
