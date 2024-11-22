@@ -162,13 +162,26 @@ function nppp_nginx_cache_settings_page() {
                                         <?php nppp_nginx_cache_purge_on_update_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description">Enabling this feature ensures that whenever you make changes to the content of a <strong>POST/PAGE</strong><br></p>
-                                <p class="description">or when <strong>COMMENT</strong> are approved or their status is changed, the cached version of that <span style="color: orange;"><strong>single</strong></span> <strong>POST/PAGE</strong> is automatically cleared.<br></p>
-                                <p class="description">If <strong>Auto Preload</strong> is enabled, the cache for the <span style="color: orange;"><strong>single</strong></span> <strong>POST/PAGE</strong> will be automatically preloaded after the cache is purged.</p>
-                                <br>
-                                <p class="description">The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when a <strong>THEME</strong> or <strong>PLUGIN</strong> is updated.<br></p>
-                                <p class="description">The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when compatible <strong>Caching Plugins</strong> trigger a cache purge.</p>
-                                <p class="description">If <strong>Auto Preload</strong> is enabled, the <span style="color: orange;"><strong>entire cache</strong></span> will be automatically preloaded after the the cache is purged.<br></p>
+                                <p class="description">This feature ensures automatic cache purging for both individual posts/pages and<br>
+                                                       the entire site whenever specific changes are made, ensuring up-to-date content.<br>
+                                                       It also supports auto preloading of the cache after purging for enhanced performance.
+                                </p>
+                                <div class="cache-paths-info">
+                                    <h4>The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when:</h4>
+                                    <p>
+                                        <strong>THEME</strong> (active) is switched or updated.<br>
+                                        <strong>PLUGIN</strong> is activated, updated, or deactivated.<br>
+                                        Compatible <strong>caching plugins</strong> trigger a cache purge.
+                                    </p><br>
+                                    <h4>The cache for a <span style="color: orange;"><strong>POST/PAGE</strong></span> is automatically purged when:</h4>
+                                    <p>
+                                        Changes are made to the content of the <strong>POST/PAGE</strong>.<br>
+                                        A new <strong>COMMENT</strong> is approved or its status is changed.
+                                    </p><br>
+                                    <p>
+                                        If <strong>Auto Preload</strong> is enabled, the cache for the <span style="color: orange;"><strong>single</strong></span> <strong>POST/PAGE</strong> or the <span style="color: orange;"><strong>entire cache</strong></span> will be automatically preloaded after the cache is purged.
+                                    </p>
+                                </div>
                             </td>
                         </tr>
                         <!-- Start Preload Options Section -->
