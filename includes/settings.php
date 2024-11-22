@@ -162,10 +162,9 @@ function nppp_nginx_cache_settings_page() {
                                         <?php nppp_nginx_cache_purge_on_update_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description">This feature ensures automatic cache purging for both individual posts/pages and<br>
-                                                       the entire site whenever specific changes are made, ensuring up-to-date content.<br>
-                                                       It also supports auto preloading of the cache after purging for enhanced performance.
-                                </p>
+                                <p class="description">This feature ensures automatic cache purging for both individual posts/pages and</p>
+                                <p class="description">the entire site whenever specific changes are made, ensuring up-to-date content.</p>
+                                <p class="description">It also supports auto preloading of the cache after purging for enhanced performance.</p>
                                 <div class="cache-paths-info">
                                     <h4>The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when:</h4>
                                     <p>
