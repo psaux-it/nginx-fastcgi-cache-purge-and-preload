@@ -24,6 +24,11 @@ if (! defined('NPPP_PLUGIN_FILE')) {
     define('NPPP_PLUGIN_FILE', __FILE__);
 }
 
+// Ensure SIGTERM is defined for cross-platform compatibility
+if (!defined('SIGTERM')) {
+    define('SIGTERM', 15);
+}
+
 // Load NPP
 require_once plugin_dir_path(__FILE__) . 'admin/fastcgi-cache-purge-and-preload-nginx-admin.php';
 
