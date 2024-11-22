@@ -262,15 +262,31 @@ function nppp_pre_checks_critical() {
         return 'GLOBAL ERROR SERVER: Plugin is not functional on your environment. The plugin requires Nginx web server.';
     }
 
-    // Check if shell_exec is enabled
-    if (function_exists('shell_exec')) {
-        // Attempt to execute a harmless command
-        $output = shell_exec('echo "Test"');
-        if (trim($output) !== "Test") {
-            return 'GLOBAL ERROR SHELL: Plugin is not functional on your environment. The function php shell_exec() is restricted. Please check your server php settings.';
+    // Check if either shell_exec or exec is enabled
+    if (function_exists('shell_exec') || function_exists('exec')) {
+        // Attempt to execute a harmless command with shell_exec if available
+        if (function_exists('shell_exec')) {
+            $output = shell_exec('echo "Test"');
+            if (trim($output) !== "Test") {
+                return 'GLOBAL ERROR EXEC: Plugin is not functional on your environment. The shell functions (shell_exec) are required but not enabled. Please enable them in your server\'s PHP configuration.';
+            }
+        }
+
+        // Fallback: Attempt to execute with exec if shell_exec is not available
+        if (function_exists('exec')) {
+            $output = exec('echo "Test"');
+            if (trim($output) !== "Test") {
+                return 'GLOBAL ERROR EXEC: Plugin is not functional on your environment. The shell functions (exec) are required but not enabled. Please enable them in your server\'s PHP configuration.';
+            }
         }
     } else {
-        return 'GLOBAL ERROR SHELL: Plugin is not functional on your environment. The function shell_exec() is not enabled. Please check your server php settings.';
+        // If neither shell_exec nor exec are available
+        return 'GLOBAL ERROR EXEC: Plugin is not functional on your environment. The shell functions (shell_exec or exec) are required but not enabled. Please enable them in your server\'s PHP configuration.';
+    }
+
+    // Check if POSIX extension functions are available
+    if (!function_exists('posix_kill')) {
+        return 'GLOBAL ERROR POSIX: Plugin is not functional on your environment. The PHP POSIX extension is required but not enabled. Please install or enable POSIX on your server.';
     }
 
     // Check if wget is available
