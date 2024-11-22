@@ -2,7 +2,7 @@
 /**
  * Purge action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.6
+ * Version: 2.0.7
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -225,27 +225,25 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 }
 
 // Auto Purge (Single)
-// Purge cache automatically for updated content (post/page)
+// Purge cache automatically for updated (post/page)
 // This function hooks into the 'save_post' action
-function nppp_purge_cache_on_update($post_id) {
-    // Ignore auto-saves, post revisions, and newly created posts (auto-draft or not published)
-    if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id) || get_post_status($post_id) !== 'publish') {
-        return;
-    }
-
-    // Verify if the current user can edit the post
-    if (!current_user_can('edit_post', $post_id)) {
-        return;
-    }
-
+function nppp_purge_cache_on_update($post_id, $post, $update) {
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
-    // Check if the purge cache on update setting is enabled
+    // Check if auto-purge is enabled
     if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
-        // Get the URL of the post/page from $post_id which should return a well-formed URL
-        // no extra sanitization applied such as esc_url_raw here
-        // also in nppp_purge_single function we already use FILTER_VALIDATE_URL
+        // Ignore auto-saves, post revisions, and newly created posts (auto-draft or not published)
+        if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id) || get_post_status($post_id) !== 'publish') {
+            return;
+        }
+
+        // Verify if the current user can edit the post
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+
+        // Get the URL of the post/page
         $post_url = get_permalink($post_id);
 
         // Set default cache path to prevent any errors if the option is not set
@@ -254,33 +252,96 @@ function nppp_purge_cache_on_update($post_id) {
         // Get the nginx cache path from the plugin options, or use the default path if not set
         $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
-        // Purge the cache for the updated post/page
-        // Auto Purge true
-        nppp_purge_single($nginx_cache_path, $post_url, true);
+        // Check if this is an update (not a new post)
+        if ($update) {
+            // Unhook the function to avoid infinite loop
+            remove_action('save_post', 'nppp_purge_cache_on_update');
+
+            // Purge the cache for the updated post/page
+            nppp_purge_single($nginx_cache_path, $post_url, true);
+
+            // Re-hook the function
+            add_action('save_post', 'nppp_purge_cache_on_update', 10, 3);
+        }
     }
 }
 
 // Auto Purge (Entire)
-// Purge entire cache automatically for plugin or theme updates.
+// Purge entire cache automatically for plugin or theme (active) updates.
 // This function hooks into the 'upgrader_process_complete' action
 function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
     // Retrieve plugin settings
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
-    // Check if auto purge on update is enabled
+    // Check if auto-purge is enabled
     if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
-        // Determine the type of update: plugin or theme
-        if (isset($hook_extra['type']) && in_array($hook_extra['type'], array('plugin', 'theme'), true)) {
-            // Retrieve necessary options for purge actions
-            $default_cache_path = '/dev/shm/change-me-now';
-            $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
-            $this_script_path = dirname(plugin_dir_path(__FILE__));
-            $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
-            $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+        // Retrieve necessary options for purge actions
+        $default_cache_path = '/dev/shm/change-me-now';
+        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+        $this_script_path = dirname(plugin_dir_path(__FILE__));
+        $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+        $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
-            // Trigger purge action
+        // Check for the theme update
+        if (isset($hook_extra['type']) && $hook_extra['type'] === 'theme' &&
+            isset($hook_extra['themes']) && is_array($hook_extra['themes']) && !empty($hook_extra['themes'])) {
+            // Get the active theme
+            $active_theme = wp_get_theme()->get_stylesheet();
+
+            // Check if the active theme is being updated
+            if (in_array($active_theme, $hook_extra['themes'], true)) {
+                // Purge cache for only active theme update
+                nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
+            }
+        }
+
+        // Check for the plugin update
+        if (isset($hook_extra['type']) && $hook_extra['type'] === 'plugin' &&
+            isset($hook_extra['plugins']) && is_array($hook_extra['plugins']) && !empty($hook_extra['plugins'])) {
+
+            // Purge cache for plugin updates
             nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
         }
+    }
+}
+
+// Auto Purge (Entire)
+// Purge entire cache automatically for plugin activation & deactivation.
+// This function hooks into the 'activated_plugin-deactivated_plugin' action
+function nppp_purge_cache_plugin_activation_deactivation() {
+    // Retrieve plugin settings
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Check if auto-purge is enabled
+    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+        $default_cache_path = '/dev/shm/change-me-now';
+        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+        $this_script_path = dirname(plugin_dir_path(__FILE__));
+        $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+        $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+
+        // Purge cache for plugin activation - deactivation
+        nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
+    }
+}
+
+// Auto Purge (Entire)
+// Purge entire cache automatically for THEME switchs.
+// This function hooks into the 'switch_theme' action
+function nppp_purge_cache_on_theme_switch($old_name, $old_theme) {
+    // Retrieve plugin settings
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Check if auto-purge is enabled
+    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+        $default_cache_path = '/dev/shm/change-me-now';
+        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+        $this_script_path = dirname(plugin_dir_path(__FILE__));
+        $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+        $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+
+        // Trigger the purge action
+        nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
     }
 }
 
@@ -288,66 +349,71 @@ function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
 // Purge cache automatically when a new comment exists (post/page)
 // This function hooks into the 'wp_insert_comment' action
 function nppp_purge_cache_on_comment($comment_id, $comment) {
-    $oldstatus = '';
-    $approved  = $comment->comment_approved;
+    // Get the plugin options
+    $nginx_cache_settings = get_option('nginx_cache_settings');
 
-    if ( null === $approved ) {
-        $newstatus = false;
-    } elseif ( '1' === $approved ) {
-        $newstatus = 'approved';
-    } elseif ( '0' === $approved ) {
-        $newstatus = 'unapproved';
-    } elseif ( 'spam' === $approved ) {
-        $newstatus = 'spam';
-    } elseif ( 'trash' === $approved ) {
-        $newstatus = 'trash';
-    } else {
-        $newstatus = false;
+    // Check if auto-purge is enabled
+    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+        $oldstatus = '';
+        $approved  = $comment->comment_approved;
+
+        if ( null === $approved ) {
+            $newstatus = false;
+        } elseif ( '1' === $approved ) {
+            $newstatus = 'approved';
+        } elseif ( '0' === $approved ) {
+            $newstatus = 'unapproved';
+        } elseif ( 'spam' === $approved ) {
+            $newstatus = 'spam';
+        } elseif ( 'trash' === $approved ) {
+            $newstatus = 'trash';
+        } else {
+            $newstatus = false;
+        }
+
+        nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment);
     }
-
-    nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment);
 }
 
 // Auto Purge (Single)
 // Purge cache automatically when a comment status changes (post/page)
 // This function hooks into the 'transition_comment_status' action
 function nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment) {
-    // Get the post ID associated with the comment
-    $post_id = $comment->comment_post_ID;
-
-    // Verify if the current user can edit the post
-    if (!current_user_can('edit_post', $post_id)) {
-        return;
-    }
-
-    // Get the URL of the post/page from $post_id
-    $post_url = get_permalink($post_id);
-
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
-    // Set default cache path to prevent any errors if the option is not set
-    $default_cache_path = '/dev/shm/change-me-now';
+    // Check if auto-purge is enabled
+    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+        // Get the post ID associated with the comment
+        $post_id = $comment->comment_post_ID;
 
-    // Get the nginx cache path from the plugin options, or use the default path if not set
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+        // Verify if the current user can edit the post
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
 
-    switch ( $newstatus ) {
-        case 'approved':
-            if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+        // Get the URL of the post/page from $post_id
+        $post_url = get_permalink($post_id);
+
+        // Set default cache path to prevent any errors if the option is not set
+        $default_cache_path = '/dev/shm/change-me-now';
+
+        // Get the nginx cache path from the plugin options, or use the default path if not set
+        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+
+        switch ( $newstatus ) {
+            case 'approved':
                 // Purge the cache when comment status change for the post/page
                 nppp_purge_single($nginx_cache_path, $post_url, true);
-            }
-            break;
+                break;
 
-        case 'spam':
-        case 'unapproved':
-        case 'trash':
-            if ( 'approved' === $oldstatus && isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+            case 'spam':
+            case 'unapproved':
+            case 'trash':
                 // Purge the cache when comment status change for the post/page
                 nppp_purge_single($nginx_cache_path, $post_url, true);
-            }
-            break;
+                break;
+        }
     }
 }
 
@@ -380,8 +446,17 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         // Check if the preload process is alive
         if ($pid > 0 && posix_kill($pid, 0)) {
             // If process is alive, kill it
-            posix_kill($pid, SIGTERM);
-            usleep(50000);
+
+            // Use posix_kill if available
+            if (defined('SIGTERMM')) {
+                posix_kill($pid, SIGTERM);
+            } else {
+                // Fallback: Use shell_exec to kill the process
+                $kill_path = trim(shell_exec('command -v kill'));
+                if (!empty($kill_path)) {
+                    shell_exec("$kill_path -9 $pid");
+                }
+            }
 
             // If on-going preload action halted via purge
             // that means user restrictly wants to purge cache
