@@ -2,7 +2,7 @@
 /**
  * Plugin update check and routines for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains functions to check for plugin updates and run necessary update routines for FastCGI Cache Purge and Preload for Nginx.
- * Version: 2.0.6
+ * Version: 2.0.7
  * Author: Hasan ÇALIŞIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
