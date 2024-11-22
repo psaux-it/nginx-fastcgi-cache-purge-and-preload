@@ -195,15 +195,38 @@ function nppp_plugin_requirements_met() {
 
         // Check if the web server is Nginx
         if (strpos($server_software, 'nginx') !== false) {
+            // Initialize a flag to track the success functions
+            $shell_functions_enabled = true;
+
             // Check if shell_exec is enabled
             if (function_exists('shell_exec')) {
                 // Attempt to execute a harmless command
                 $output = shell_exec('echo "Test"');
 
                 // Check if the command executed successfully
-                if (trim($output) === "Test") {
-                    $nppp_met = true;
+                if (trim($output) !== "Test") {
+                    $shell_functions_enabled = false;
                 }
+            } else {
+                $shell_functions_enabled = false;
+            }
+
+            // Check if exec is enabled
+            if (function_exists('exec')) {
+                // Attempt to execute a harmless command with exec
+                $output = exec('echo "Test"');
+
+                // Check if the command executed successfully
+                if (trim($output) !== "Test") {
+                    $shell_functions_enabled = false;
+                }
+            } else {
+                $shell_functions_enabled = false;
+            }
+
+            // NPP ready to go
+            if ($shell_functions_enabled && function_exists('posix_kill')) {
+                $nppp_met = true;
             }
         }
     }
