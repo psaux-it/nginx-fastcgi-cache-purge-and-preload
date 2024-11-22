@@ -60,4 +60,8 @@ function nppp_run_update_routines($old_version, $new_version) {
             true
         );
     }
+
+    // Clear plugin cache after update
+    // Triggers on all updates
+    nppp_clear_plugin_cache();
 }
