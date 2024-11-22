@@ -159,7 +159,7 @@ Release date: 2024-11-22
 * Add support for a fallback mechanism to kill the ongoing preload process if SIGTERM is not defined (mrj0b)
 * Add support for auto purge entire cache on plugin activation and deactivation
 * Add support for auto purge entire cache when the active theme is switched
-* Add support on clear plugin cache on updates
+* Add support on clear plugin cache on NPP updates
 * Fix auto purge entire cache triggers multiple times for bulk actions
 * Fix the webserver user parsing issue with semicolons (mrj0b)
 * Fix permission isolation status indicate incorrect in Status tab (mrj0b)
@@ -167,6 +167,7 @@ Release date: 2024-11-22
 * Fix POSIX extension is not a hard dependency
 * Fix auto purge to triggers for all theme updates, not just the active one
 * Fix 'Not a valid JSON response' error on Auto Purge (mrj0b)
+* Update Auto Purge feature description for clarity
 * Tested up to: 6.7.1
 
 = 2.0.6 =
