@@ -313,7 +313,7 @@ function nppp_get_webserver_user() {
     // Convert the process output to an array and filter out empty values
     $process_users = array_filter(array_unique(array_map('trim', explode("\n", $nginx_user_process))));
     // Try to get the user from the Nginx configuration file
-    $nginx_user_conf = shell_exec("grep -i '^\s*user\s\+' $config_file | grep -v '^\s*#' | awk '{print $2}'");
+    $nginx_user_conf = shell_exec("grep -i '^\s*user\s\+' $config_file | grep -v '^\s*#' | awk '{print $2}' | sed 's/;.*//;s/\s*$//'");
 
     // If both sources provide a user, check for consistency
     if (!empty($nginx_user_conf) && !empty($process_users)) {
