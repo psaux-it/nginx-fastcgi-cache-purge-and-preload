@@ -25,8 +25,10 @@ if (!defined('NPPP_PLUGIN_FILE')) {
 }
 
 // Ensure SIGTERM is defined for cross-platform compatibility
-if (!defined('SIGTERM')) {
-    define('SIGTERM', 15);
+if (function_exists('posix_kill')) {
+    if (!defined('SIGTERM')) {
+        define('SIGTERM', 15);
+    }
 }
 
 // Load NPP
