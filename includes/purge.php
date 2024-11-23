@@ -445,17 +445,38 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
         // Check if the preload process is alive
         if ($pid > 0 && posix_kill($pid, 0)) {
-            // If process is alive, kill it
+            // Try to kill the process with SIGTERM
+            if (@posix_kill($pid, SIGTERM) === false) {
+                // Log if SIGTERM is failed
+                nppp_display_admin_notice('info', "INFO PROCESS: Failed to send SIGTERM to Preload process PID: $pid", true, false);
+                sleep(1);
 
-            // Use posix_kill if available
-            if (defined('SIGTERMM')) {
-                posix_kill($pid, SIGTERM);
-            } else {
-                // Fallback: Use shell_exec to kill the process
-                $kill_path = trim(shell_exec('command -v kill'));
-                if (!empty($kill_path)) {
-                    shell_exec("$kill_path -9 $pid");
+                // Check again if the process is still alive after SIGTERM
+                if (posix_kill($pid, 0)) {
+                    // Fallback: Use shell_exec to send SIGKILL
+                    $kill_path = trim(shell_exec('command -v kill'));
+                    if (!empty($kill_path)) {
+                        shell_exec(escapeshellcmd("$kill_path -9 $pid"));
+                        usleep(400000);
+
+                        // Check again if the process is still alive after SIGKILL
+                        if (!posix_kill($pid, 0)) {
+                            // Log success after SIGKILL
+                            nppp_display_admin_notice('success', "SUCCESS PROCESS: Fallback - SIGKILL sent to Preload process PID: $pid", true, false);
+                        } else {
+                            // Log failure if fallback didn't work
+                            nppp_display_admin_notice('error', "ERROR PROCESS: Unable to stop the ongoing Preload process. Please wait for the Preload process to complete and try Purge All again.", true, false);
+                            return;
+                        }
+                    } else {
+                        // Log failure if the kill command is not found
+                        nppp_display_admin_notice('error', "ERROR PROCESS: Unable to stop the ongoing Preload process. Please wait for the Preload process to complete and try Purge All again.", true, false);
+                        return;
+                    }
                 }
+            } else {
+                // Log if SIGTERM is successfully sent
+                nppp_display_admin_notice('success', "SUCCESS PROCESS: Successfully sent SIGTERM to Preload process with PID: $pid", true, false);
             }
 
             // If on-going preload action halted via purge
