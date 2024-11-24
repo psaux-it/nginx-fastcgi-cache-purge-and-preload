@@ -1,8 +1,8 @@
 /**
  * Frontend JavaScript for FastCGI Cache Purge and Preload for Nginx
  * Description: This JavaScript file contains functions that shows on-page purge & preload actions messages for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.7
- * Author: Hasan ÇALIŞIR
+ * Version: 2.0.8
+ * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
