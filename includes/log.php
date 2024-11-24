@@ -115,10 +115,48 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     }
 
     // Perform the permission check for admin actions
-    if (is_admin()) {
-        if (! current_user_can('manage_options')) {
-            echo '<div class="notice notice-error"><p>You do not have sufficient permissions to access this page.</p></div>';
-            return;
+    if (is_admin() && !current_user_can('manage_options')) {
+        echo '<div class="notice notice-error"><p>You do not have sufficient permissions to access this page.</p></div>';
+        return;
+    }
+
+    // Define the array of WP screen IDs
+    $screen_ids = array(
+        'dashboard',
+        'post',
+        'edit-post',
+        'page',
+        'edit-page',
+        'upload',
+        'edit-comments',
+        'themes',
+        'themes-network',
+        'widgets',
+        'menus',
+        'customize',
+        'plugins',
+        'plugin-install',
+        'users',
+        'tools',
+        'general',
+        'writing',
+        'reading',
+        'discussion',
+        'media',
+        'permalink',
+        'update',
+        'edit-category',
+        'edit-post_tag',
+        'import',
+        'export'
+    );
+
+    // Prevent NPP admin notices interfere with core WP screens
+    if (function_exists('get_current_screen')) {
+        $screen = get_current_screen();
+        // Check if the current screen ID is in the array
+        if ($screen && in_array($screen->id, $screen_ids)) {
+            return false;
         }
     }
 
