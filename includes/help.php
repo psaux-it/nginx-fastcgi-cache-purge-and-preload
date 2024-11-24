@@ -2,8 +2,8 @@
 /**
  * FAQ for FastCGI Cache Purge and Preload for Nginx
  * Description: This help file contains informations about FastCGI Cache Purge and Preload for Nginx plugin usage.
- * Version: 2.0.7
- * Author: Hasan ÇALIŞIR
+ * Version: 2.0.8
+ * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
