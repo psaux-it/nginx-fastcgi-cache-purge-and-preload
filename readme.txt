@@ -5,7 +5,7 @@ Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 6.7.1
-Stable tag: 2.0.7
+Stable tag: 2.0.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -151,6 +151,14 @@ Yes, please refer to the plugin settings **Help** tab.
 8. Front-end Admin Bar
 
 == Changelog ==
+
+= 2.0.8 =
+
+Release date: 2024-11-24
+
+* Fix the plugin does not have a valid header error
+* Fix admin notices interfere with core WP screens
+* Add support for logging the Preload process handling
 
 = 2.0.7 =
 
