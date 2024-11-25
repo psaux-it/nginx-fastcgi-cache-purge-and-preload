@@ -169,7 +169,7 @@ function nppp_check_preload_status() {
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
-        if ($pid > 0 && posix_kill($pid, 0)) {
+        if ($pid > 0 && nppp_is_process_alive($pid)) {
             return 'progress';;
         }
     }
