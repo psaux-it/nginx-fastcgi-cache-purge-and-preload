@@ -289,7 +289,7 @@ function nppp_purge_cache_premium_callback() {
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
-        // Check if posix_kill function exists
+        // Check process is alive
         if ($pid > 0 && nppp_is_process_alive($pid)) {
             $error_message = "INFO ADMIN: Purge cache halted due to ongoing cache preloading. You can stop cache preloading anytime via Purge All.";
             nppp_log_and_send_error($error_message, $log_file_path);
