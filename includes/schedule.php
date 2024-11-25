@@ -377,8 +377,8 @@ function nppp_create_scheduled_event_preload_status_callback() {
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
-        // process is alive
-        while ($pid > 0 && posix_kill($pid, 0)) {
+        // Process is alive
+        while ($pid > 0 && nppp_is_process_alive($pid)) {
             // Sleep for a short duration before checking again
             sleep(5);
 
