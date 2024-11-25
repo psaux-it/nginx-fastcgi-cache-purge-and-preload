@@ -93,7 +93,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
-        if ($pid > 0 && posix_kill($pid, 0)) {
+        if ($pid > 0 && nppp_is_process_alive($pid)) {
             nppp_display_admin_notice('info', "INFO: Auto Purge for page $current_page_url halted due to ongoing cache preloading. You can stop cache preloading anytime via Purge All.");
             return;
         }
@@ -444,7 +444,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
         // Check if the preload process is alive
-        if ($pid > 0 && posix_kill($pid, 0)) {
+        if ($pid > 0 && nppp_is_process_alive($pid)) {
             // Try to kill the process with SIGTERM
             if (@posix_kill($pid, SIGTERM) === false) {
                 // Log if SIGTERM is failed
@@ -452,7 +452,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 sleep(1);
 
                 // Check again if the process is still alive after SIGTERM
-                if (posix_kill($pid, 0)) {
+                if (nppp_is_process_alive($pid)) {
                     // Fallback: Use shell_exec to send SIGKILL
                     $kill_path = trim(shell_exec('command -v kill'));
                     if (!empty($kill_path)) {
@@ -460,7 +460,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                         usleep(400000);
 
                         // Check again if the process is still alive after SIGKILL
-                        if (!posix_kill($pid, 0)) {
+                        if (!nppp_is_process_alive($pid)) {
                             // Log success after SIGKILL
                             nppp_display_admin_notice('success', "SUCCESS PROCESS: Fallback - SIGKILL sent to Preload process PID: $pid", true, false);
                         } else {
