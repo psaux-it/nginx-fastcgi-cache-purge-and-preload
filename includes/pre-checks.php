@@ -14,21 +14,30 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Check if the process is alive by checking the existence of the /proc/$pid directory
+// Check if the process is alive
 function nppp_is_process_alive($pid) {
-    // Initialize WordPress filesystem
-    $wp_filesystem = nppp_initialize_wp_filesystem();
-
-    if ($wp_filesystem === false) {
-        nppp_display_admin_notice(
-            'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
-        );
-        return;
+    // Validate that $pid
+    if (!is_numeric($pid) || $pid <= 0 || intval($pid) != $pid) {
+        return false;
     }
 
-    // Check if /proc/$pid exists
-    return $wp_filesystem->exists("/proc/$pid");
+    // Get the site URL
+    $ps_path = trim(shell_exec('command -v ps'));
+
+    // Escape the PID and the site URL to avoid shell injection
+    $escaped_pid = escapeshellarg($pid);
+    $escaped_ps_path = escapeshellarg($ps_path);
+
+    // Execute the ps aux command to check if wget with the site URL is running
+    exec("$escaped_ps_path aux | grep $escaped_pid | grep -v 'grep'", $output);
+
+    // If there's output, process running
+    if (!empty($output)) {
+        return true;
+    }
+
+    // Otherwise, the process is not running
+    return false;
 }
 
 // Tries to determine the nginx.conf path using 'nginx -V'.
