@@ -446,7 +446,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         // Check if the preload process is alive
         if ($pid > 0 && nppp_is_process_alive($pid)) {
             // Try to kill the process with SIGTERM
-            if (@posix_kill($pid, SIGTERM) === false) {
+            if (defined('SIGTERM') && @posix_kill($pid, SIGTERM) === false) {
                 // Log if SIGTERM is failed
                 nppp_display_admin_notice('info', "INFO PROCESS: Failed to send SIGTERM to Preload process PID: $pid", true, false);
                 sleep(1);
