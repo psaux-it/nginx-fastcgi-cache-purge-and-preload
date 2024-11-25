@@ -30,7 +30,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
-        if ($pid > 0 && posix_kill($pid, 0)) {
+        if ($pid > 0 && nppp_is_process_alive($pid)) {
             nppp_display_admin_notice('info', 'INFO: FastCGI cache preloading is already running. If you want to stop it please use Purge All!');
             return;
         }
@@ -97,7 +97,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 sleep(1);
 
                 // Check if the process is still running
-                $isRunning = posix_kill($pid, 0);
+                $isRunning = nppp_is_process_alive($pid);
 
                 // we did not get immediate exit from process
                 if ($isRunning) {
@@ -203,7 +203,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             sleep(1);
 
             // Check if the process is still running
-            $isRunning = posix_kill($pid, 0);
+            $isRunning = nppp_is_process_alive($pid);
 
             // We did not get immediate exit from process
             if ($isRunning) {
@@ -259,7 +259,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
-        if ($pid > 0 && posix_kill($pid, 0)) {
+        if ($pid > 0 && nppp_is_process_alive($pid)) {
             nppp_display_admin_notice('info', 'INFO: FastCGI cache preloading is already running. If you want to stop it please use Purge All!');
             return;
         }
@@ -318,7 +318,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         $pid = end($parts);
 
         // Check if the process is still running
-        $isRunning = posix_kill($pid, 0);
+        $isRunning = nppp_is_process_alive($pid);
 
         // let's continue if process still alive
         if ($isRunning) {
@@ -403,7 +403,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         $pid = end($parts);
 
         // Check if the process is still running
-        $isRunning = posix_kill($pid, 0);
+        $isRunning = nppp_is_process_alive($pid);
 
         // Check if the process is still alive
         if ($isRunning) {
