@@ -14,6 +14,23 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Check if the process is alive by checking the existence of the /proc/$pid directory
+function nppp_is_process_alive($pid) {
+    // Initialize WordPress filesystem
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+        );
+        return;
+    }
+
+    // Check if /proc/$pid exists
+    return $wp_filesystem->exists("/proc/$pid");
+}
+
 // Tries to determine the nginx.conf path using 'nginx -V'.
 // If that fails, falls back to checking common paths.
 function nppp_get_nginx_conf_paths($wp_filesystem) {
