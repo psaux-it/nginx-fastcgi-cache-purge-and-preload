@@ -37,6 +37,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_wait_request', 'Per Request Wait Time', 'nppp_nginx_cache_wait_request_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_tracking_opt_in', 'Enable Tracking', 'nppp_nginx_cache_tracking_opt_in_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_key_custom_regex', 'Enable Custom regex', 'nppp_nginx_cache_key_custom_regex_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_auto_preload_mobile', 'Auto Preload Mobile', 'nppp_nginx_cache_auto_preload_mobile_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -203,6 +204,21 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">When enabled, your website's cache will preload with the latest content automatically after purge, ensuring quick loading times even for uncached pages.</p>
                                 <p class="description">This feature is particularly useful for dynamic websites with frequently changing content.</p>
                                 <p class="description">This feature triggers when either <strong>Auto Purge</strong> feature is enabled or when the <strong>Purge All</strong> cache action is used manually.</p>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row"><span class="dashicons dashicons-smartphone"></span> Preload Mobile</th>
+                            <td>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-preload-mobile">
+                                        <?php nppp_nginx_cache_auto_preload_mobile_callback(); ?>
+                                    </div>
+                                </div>
+                                <p class="description">Preload also the <code>Mobile</code> Nginx cache separately. This ensures fast loading for <code>Mobile</code> visitors.</p>
+                                <p class="description">Useful if you have different content, themes or configurations for <code>Mobile</code> and <code>Desktop</code> devices and need to warm the cache for both.</p>
+                                <p class="description">If enabled, this feature always triggers automatically when <strong>Preload</strong> actions are called via <code>Rest, Cron or Admin</code>, regardless of whether <strong>Auto Preload</strong> or <strong>Auto Purge</strong> are enabled.</p>
+                                <p class="description">If only <strong>Auto Preload</strong> is enabled, it also triggers automatically after <strong>Purge</strong> actions are called via <code>Rest, Admin</code>.</p>
+                                <p class="description">When both <strong>Auto Purge</strong> and <strong>Auto Preload</strong> are enabled, it triggers automatically when the <span style="color: orange;"><strong>entire cache</strong></span> is purged through <strong>Auto Purge</strong> conditions or when <br><strong>Purge</strong> actions are called via <code>Rest or Admin</code>.</p>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -1127,6 +1143,23 @@ function nppp_nginx_cache_purge_on_update_callback() {
     <?php
 }
 
+// Callback function for the nginx_cache_auto_preload_mobile field
+function nppp_nginx_cache_auto_preload_mobile_callback() {
+    $options = get_option('nginx_cache_settings');
+    $auto_preload_mobile_checked = isset($options['nginx_cache_auto_preload_mobile']) && $options['nginx_cache_auto_preload_mobile'] === 'yes' ? 'checked="checked"' : '';
+
+    ?>
+    <input type="checkbox" name="nginx_cache_settings[nginx_cache_auto_preload_mobile]" class="nppp-onoffswitch-checkbox-preload-mobile" value="yes" id="nginx_cache_auto_preload_mobile" <?php echo esc_attr($auto_preload_mobile_checked); ?>>
+    <label class="nppp-onoffswitch-label-preload-mobile" for="nginx_cache_auto_preload_mobile">
+        <span class="nppp-onoffswitch-inner-preload-mobile">
+            <span class="nppp-off-preload-mobile">OFF</span>
+            <span class="nppp-on-preload-mobile">ON</span>
+        </span>
+        <span class="nppp-onoffswitch-switch-preload-mobile"></span>
+    </label>
+    <?php
+}
+
 // Callback function to display the Reject Regex field
 function nppp_nginx_cache_reject_regex_callback() {
     $options = get_option('nginx_cache_settings');
@@ -1558,6 +1591,9 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize Auto Preload
     $sanitized_input['nginx_cache_auto_preload'] = isset($input['nginx_cache_auto_preload']) && $input['nginx_cache_auto_preload'] === 'yes' ? 'yes' : 'no';
+
+    // Sanitize Auto Preload Mobile
+    $sanitized_input['nginx_cache_auto_preload_mobile'] = isset($input['nginx_cache_auto_preload_mobile']) && $input['nginx_cache_auto_preload_mobile'] === 'yes' ? 'yes' : 'no';
 
     // Sanitize Auto Purge
     $sanitized_input['nginx_cache_purge_on_update'] = isset($input['nginx_cache_purge_on_update']) && $input['nginx_cache_purge_on_update'] === 'yes' ? 'yes' : 'no';
