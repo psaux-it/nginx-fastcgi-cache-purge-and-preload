@@ -1494,6 +1494,39 @@ $(document).ready(function() {
         }
     });
 
+    // Toggle switch rules for preload mobile
+    var isChecked = $('#nginx_cache_auto_preload_mobile').prop('checked');
+    // Update the toggle switch based on the checkbox state
+    if (isChecked) {
+        // Checkbox is checked, toggle switch to On
+        $('.nppp-onoffswitch-switch-preload-mobile').css('background', '#66b317');
+        $('.nppp-on-preload-mobile').css('color', '#ffffff');
+        $('.nppp-off-preload-mobile').css('color', '#000000');
+    } else {
+        // Checkbox is unchecked, toggle switch to Off
+        $('.nppp-onoffswitch-switch-preload-mobile').css('background', '#ea1919');
+        $('.nppp-on-preload-mobile').css('color', '#000000');
+        $('.nppp-off-preload-mobile').css('color', '#ffffff');
+    }
+
+    // Add event listener to the original checkbox
+    $('#nginx_cache_auto_preload_mobile').change(function() {
+        // Check if the checkbox is checked
+        var isChecked = $(this).prop('checked');
+        // Update the toggle switch based on the checkbox state
+        if (isChecked) {
+            // Checkbox is checked, toggle switch to On
+            $('.nppp-onoffswitch-switch-preload-mobile').css('background', '#66b317');
+            $('.nppp-on-preload-mobile').css('color', '#ffffff');
+            $('.nppp-off-preload-mobile').css('color', '#000000');
+        } else {
+            // Checkbox is unchecked, toggle switch to Off
+            $('.nppp-onoffswitch-switch-preload-mobile').css('background', '#ea1919');
+            $('.nppp-on-preload-mobile').css('color', '#000000');
+            $('.nppp-off-preload-mobile').css('color', '#ffffff');
+        }
+    });
+
     // Toggle switch rules for REST API
     var isChecked = $('#nginx_cache_api').prop('checked');
     // Update the toggle switch based on the checkbox state
