@@ -513,6 +513,53 @@ $(document).ready(function() {
         });
     });
 
+    // Update preload mobile status when state changes
+    $('#nginx_cache_auto_preload_mobile').change(function() {
+        var mobilePreloadElement = jQuery(this);
+        var clickToCopySpanMobilePreload = mobilePreloadElement.next('.nppp-onoffswitch-label-preload-mobile');
+        var clickToCopySpanOffsetMobilePreload = clickToCopySpanMobilePreload.offset();
+        var notificationLeftMobilePreload = clickToCopySpanOffsetMobilePreload.left + clickToCopySpanMobilePreload.outerWidth() + 10;
+        var notificationTopMobilePreload = clickToCopySpanOffsetMobilePreload.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action: 'nppp_update_auto_preload_mobile_option',
+            preload_mobile: isChecked,
+            _wpnonce: nppp_admin_data.auto_preload_mobile_nonce
+        }, function(response) {
+            // Handle response
+            if (response.success) {
+                // Show a small notification indicating successfully saved option
+                var notification = document.createElement('div');
+                notification.textContent = 'Saved';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftMobilePreload + 'px';
+                notification.style.top = notificationTopMobilePreload + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
+            } else {
+                // Error updating option, revert checkbox
+                $('#nginx_cache_auto_preload_mobile').prop('checked', !$('#nginx_cache_auto_preload_mobile').prop('checked'));
+                alert('Error updating option!');
+            }
+        });
+    });
+
     // Update auto purge status when state changes
     $('#nginx_cache_purge_on_update').change(function() {
         // Calculate the notification position
