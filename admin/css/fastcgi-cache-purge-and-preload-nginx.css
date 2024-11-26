@@ -2451,3 +2451,90 @@ p.description {
         display: none;
     }
 }
+
+/* Style for the toggle switch preload mobile container */
+.nppp-onoffswitch-preload-mobile {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default preload mobile checkbox */
+.nppp-onoffswitch-checkbox-preload-mobile {
+    display: none;
+}
+
+/* Style for the preload mobile toggle switch label */
+.nppp-onoffswitch-label-preload-mobile {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* Style for preload mobile text labels (On and Off) */
+.nppp-onoffswitch-inner-preload-mobile .nppp-on-preload-mobile,
+.nppp-onoffswitch-inner-preload-mobile .nppp-off-preload-mobile {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-preload-mobile .nppp-on-preload-mobile {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-preload-mobile .nppp-off-preload-mobile {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Style for the toggle switch handle preload mobile */
+.nppp-onoffswitch-switch-preload-mobile {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #66b317;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Adjust styles based on preload mobile checkbox state */
+#nginx_cache_auto_preload_mobile:checked + .nppp-onoffswitch-label-preload-mobile .nppp-onoffswitch-inner-preload-mobile .nppp-on-preload-mobile {
+    color: #23282d;
+}
+
+#nginx_cache_auto_preload_mobile:checked + .nppp-onoffswitch-label-preload-mobile .nppp-onoffswitch-switch-preload-mobile {
+    width: 55px;
+    transform: translateX(60px);
+    background: #ea1919;
+}
+
+/* Show the Off label preload mobile*/
+.nppp-onoffswitch-checkbox-preload-mobile + .nppp-onoffswitch-label-preload-mobile .nppp-off-preload-mobile {
+    display: block;
+}
+
+/* Hide the original preload mobile checkbox */
+#nginx_cache_auto_preload_mobile {
+    position: absolute;
+    left: -99em;
+}
+
+/* style disabled preload mobile settings accordingly */
+.nppp-onoffswitch-checkbox-preload-mobile[disabled] + .nppp-onoffswitch-label-preload-mobile {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
