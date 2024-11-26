@@ -659,6 +659,43 @@ function nppp_update_auto_preload_option() {
     }
 }
 
+// AJAX callback function to update preload mobile option
+function nppp_update_auto_preload_mobile_option() {
+    // Verify nonce
+    if (isset($_POST['_wpnonce'])) {
+        $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
+        if (!wp_verify_nonce($nonce, 'nppp-update-auto-preload-mobile-option')) {
+            wp_send_json_error('Nonce verification failed.');
+        }
+    } else {
+        wp_send_json_error('Nonce is missing.');
+    }
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to update this option.');
+    }
+
+    // Get the posted option value and sanitize it
+    $preload_mobile = isset($_POST['preload_mobile']) ? sanitize_text_field(wp_unslash($_POST['preload_mobile'])) : '';
+
+    // Get the current options
+    $current_options = get_option('nginx_cache_settings', array());
+
+    // Update the specific option within the array
+    $current_options['nginx_cache_auto_preload_mobile'] = $preload_mobile;
+
+    // Save the updated options
+    $updated = update_option('nginx_cache_settings', $current_options);
+
+    // Check if option is updated successfully
+    if ($updated) {
+        wp_send_json_success('Option updated successfully.');
+    } else {
+        wp_send_json_error('Error updating option.');
+    }
+}
+
 // AJAX callback function to update auto purge option
 function nppp_update_auto_purge_option() {
     // Verify nonce
