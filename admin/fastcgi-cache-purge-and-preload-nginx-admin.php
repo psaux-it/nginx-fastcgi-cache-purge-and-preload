@@ -117,6 +117,7 @@ add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_de
 add_action('switch_theme', 'nppp_purge_cache_on_theme_switch', 10, 3);
 add_action('activated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
 add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
+add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_preload_mobile_option');
 $nppp_auto_purge
     ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions)
     : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions);
