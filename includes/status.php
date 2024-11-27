@@ -414,8 +414,14 @@ function nppp_get_in_cache_page_count() {
 
                 // Test regex at least once
                 if (!$regex_tested) {
-                    if (preg_match($regex, $content, $matches)) {
-                        if (!empty($matches[1]) && preg_match($second_regex, trim($matches[1]), $second_matches)) {
+                    if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
+                        // Build the URL
+                        $host = trim($matches[1]);
+                        $request_uri = trim($matches[2]);
+                        $constructed_url = $host . $request_uri;
+
+                        // Test if the URL is in the expected format
+                        if ($constructed_url !== '' && preg_match($second_regex, $constructed_url, $second_matches)) {
                             $regex_tested = true;
                         } else {
                             return 'RegexError';
