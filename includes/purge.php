@@ -141,10 +141,19 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     continue;
                 }
 
-                // Test regex at least once
+                // Test regex only once
+                // Regex operations can be computationally expensive,
+                // especially when iterating over multiple files.
+                // So here we test regex only once
                 if (!$regex_tested) {
-                    if (preg_match($regex, $content, $matches)) {
-                        if (!empty($matches[1]) && preg_match($second_regex, trim($matches[1]), $second_matches)) {
+                    if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
+                        // Build the URL
+                        $host = trim($matches[1]);
+                        $request_uri = trim($matches[2]);
+                        $constructed_url = $host . $request_uri;
+
+                        // Test if the URL is in the expected format
+                        if ($constructed_url !== '' && preg_match($second_regex, $constructed_url, $second_matches)) {
                             $regex_tested = true;
                         } else {
                             nppp_display_admin_notice('error', "ERROR REGEX: Cache purge failed for page $current_page_url, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\$host\$request_uri</strong> portion correctly.", true, false);
@@ -159,8 +168,13 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 // Extract the in cache URL from fastcgi_cache_key
                 preg_match($regex, $content, $matches);
 
+                // Build the URL
+                $host = trim($matches[1]);
+                $request_uri = trim($matches[2]);
+                $constructed_url = $host . $request_uri;
+
                 // Check extracted URL from fastcgi_cache_key and the URL attempted to purge is equal
-                if (trim($matches[1]) === $url_to_search_exact) {
+                if ($constructed_url === $url_to_search_exact) {
                     $cache_path = $file->getPathname();
                     $found = true;
 
