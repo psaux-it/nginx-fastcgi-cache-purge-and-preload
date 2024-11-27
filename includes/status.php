@@ -412,7 +412,10 @@ function nppp_get_in_cache_page_count() {
                     continue;
                 }
 
-                // Test regex at least once
+                // Test regex only once
+                // Regex operations can be computationally expensive,
+                // especially when iterating over multiple files.
+                // So here we test regex only once
                 if (!$regex_tested) {
                     if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
                         // Build the URL
