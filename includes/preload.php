@@ -236,7 +236,6 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
             // Sleep for 1 seconds to check background process status again
             sleep(1);
-            error_log("Checking process: $pid");
 
             // Check if the process is still running
             $isRunning = nppp_is_process_alive($pid);
