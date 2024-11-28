@@ -5,7 +5,7 @@ Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 6.7.1
-Stable tag: 2.0.8
+Stable tag: 2.0.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -151,6 +151,20 @@ Yes, please refer to the plugin settings **Help** tab.
 8. Front-end Admin Bar
 
 == Changelog ==
+
+= 2.0.9 =
+
+Release date: 2024-11-28
+
+Now more powerful with cache preloading for Mobile devices.
+
+* Add support for preloading cache separately for Mobile devices
+* Resolved issue with auto cache purge when switching themes (incorrect hook corrected)
+* Resolved issues with fetching the latest libfuse and bindfs versions on the Status tab
+* Replaced posix_kill with a pure shell check to determine if a process is running
+* Relaxed cache key regex options to allow parsing into two capture groups for increased flexibility (Tiago Bega)
+* Forced update of the default cache key regex to support the new structure
+* Update plugin feature descriptions
 
 = 2.0.8 =
 
