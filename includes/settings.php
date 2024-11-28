@@ -359,17 +359,32 @@ function nppp_nginx_cache_settings_page() {
                             <td>
                                 <?php nppp_nginx_cache_key_custom_regex_callback(); ?>
                                 <p class="description">Enter a <code>preg_match</code> PHP regex pattern to parse URL <code>'$host$request_uri'</code> based on your custom <code>fastcgi_cache_key</code> format.</p><br>
-                                <p class="description">⚡The default regex pattern is designed to parse the <code>'$host$request_uri'</code> portion from the only</p>
+                                <p class="description">⚡The default regex pattern is designed to parse the <code>'$host'</code> and <code>'$request_uri'</code> portions from the only</p>
                                 <p class="description">&nbsp;standard cache key format <strong>supported by the plugin:</strong> <code>'$scheme$request_method$host$request_uri'</code>.</p><br>
                                 <p class="description">⚡If you use a non-standard or complex <code>fastcgi_cache_key</code> format, you must define a custom regex pattern</p>
-                                <p class="description">&nbsp;to correctly parse <code>'$host$request_uri'</code> portion in order to ensure proper plugin functionality.</p><br>
+                                <p class="description">&nbsp;to correctly parse <code>'$host'</code> and <code>'$request_uri'</code> portions in order to ensure proper plugin functionality.</p><br>
                                 <p class="description">⚡For example, if your custom key format is <code>'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args'</code></p>
-                                <p class="description">&nbsp;you will need to provide a corresponding regex pattern that accurately captures the <code>'$host$request_uri'</code> part.</p><br>
+                                <p class="description">&nbsp;you will need to provide a corresponding regex pattern that accurately captures the <code>'$host'</code> and <code>'$request_uri'</code> parts.</p><br>
                                 <p class="description">📌 <strong>Guidelines for creating a compatible regex</strong>:</p>
-                                <p class="description">📣 Ensure your regex pattern targets only <code>GET</code> requests, as <code>HEAD</code> or anyother requests do not represent cached content and cause duplicates.</p>
-                                <p class="description">📣 Ensure that your regex pattern includes delimiters. (e.g., /your-regex/ - #your-regex#)
-                                <p class="description">📣 The regex must capture the exact URL <code>'$host$request_uri'</code> part from your custom <code>fastcgi_cache_key</code> format.</p>
-                                <p class="description">📣 The regex pattern must return the full URL <code>'$host$request_uri'</code> in <strong>capture group 1</strong>. as the plugin process only <strong>matches[1]</strong></p><br>
+                                <p class="description">📣 Ensure your regex pattern targets only <code>GET</code> requests, as <code>HEAD</code> or any other request methods do not represent cached content and cause duplicates.</p>
+                                <p class="description">📣 Ensure that your regex pattern is entered with delimiters. (e.g., /your-regex/ - #your-regex#)
+                                <p class="description">📣 The regex must capture the <code>'$host'</code> in <strong>capture group 1</strong> as <strong>matches[1]</strong> and <code>'$request_uri'</code> in <strong>capture group 2</strong> as <strong>matches[2]</strong> from your custom <code>fastcgi_cache_key</code></p><br>
+                                <div class="cache-paths-info">
+                                    <h4>Example</h4>
+                                    fastcgi_cache_key "$scheme$request_method$host$device$request_uri"<br>
+                                    KEY: httpsGETexample.com.trMOBILE/category/nginx-cache/2024<br>
+                                    <br>
+                                    <p>This example demonstrates how the regex must captures the <code>$host</code> and <code>$request_uri</code> in two separate groups.<br>
+                                    <br>
+                                    <div>
+                                        <h4>Matches</h4>
+
+                                        0  =>  KEY: httpsGETexample.com.trMOBILE/category/nginx-cache/2024<br>
+                                        1  =>  example.com.tr<br>
+                                        2  =>  /category/nginx-cache/2024
+                                    </div>
+                                </div>
+                                <br>
                                 <p class="description">🚨 <strong>You need to follow these security guidelines for your regex pattern:</strong>:</p>
                                 <p class="description">📣 Checks for excessive lookaheads, catastrophic backtracking. (limit to 3).</p>
                                 <p class="description">📣 Don't use greedy quantifiers inside lookaheads.</p>
