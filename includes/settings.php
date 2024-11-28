@@ -214,11 +214,11 @@ function nppp_nginx_cache_settings_page() {
                                         <?php nppp_nginx_cache_auto_preload_mobile_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description">Preload also Nginx cache for <code>Mobile</code> devices separately. This ensures fast loading for <code>Mobile</code> visitors.</p>
+                                <p class="description">Preload also Nginx cache for <code>Mobile</code> devices separately. This feature supports for both <strong>entire</strong> and <strong>single POST/PAGE</strong> cache events.</p>
                                 <p class="description">Only enable if you have different content, themes or configurations for <code>Mobile</code> and <code>Desktop</code> devices and need to warm the cache for both.</p>
                                 <p class="description">If enabled, this feature always triggers automatically when <strong>Preload</strong> actions are called via <code>Rest, Cron or Admin</code>, regardless of whether <strong>Auto Preload</strong> or <strong>Auto Purge</strong> are enabled.</p>
                                 <p class="description">If only <strong>Auto Preload</strong> is enabled, it also triggers automatically after <strong>Purge</strong> actions are called via <code>Rest, Admin</code>.</p>
-                                <p class="description">When both <strong>Auto Purge</strong> and <strong>Auto Preload</strong> are enabled, it triggers automatically when the <span style="color: orange;"><strong>entire cache</strong></span> is purged through <strong>Auto Purge</strong> conditions or when <br><strong>Purge</strong> actions are called via <code>Rest or Admin</code>.</p>
+                                <p class="description">When both <strong>Auto Purge</strong> and <strong>Auto Preload</strong> are enabled, it triggers automatically when the cache is purged through <strong>Auto Purge</strong> conditions or when <br><strong>Purge</strong> actions are called via <code>Rest or Admin</code>.</p>
                                 <div class="cache-paths-info">
                                     <h4><strong>Note:</strong></h4>
                                     <p>The Mobile Preload action will begin after the main Preload process completes via the WordPress Cron job. As a result, the Mobile Preload action may start with a delay. To track the status of this process, please refer to the log section of the plugin.</p>
