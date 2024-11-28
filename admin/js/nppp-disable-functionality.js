@@ -80,6 +80,9 @@ jQuery(document).ready(function($) {
         // disable auto preload checkbox
         $('#nginx_cache_auto_preload').prop('disabled', true);
 
+        // disable preload mobile checkbox
+        $('#nginx_cache_auto_preload_mobile').prop('disabled', true);
+
         // disable send mail checkbox
         $('#nginx_cache_send_mail').prop('disabled', true);
 
