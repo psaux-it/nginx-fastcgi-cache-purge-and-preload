@@ -56,13 +56,13 @@ function nppp_check_bindfs_version() {
         return $cached_result;
     }
 
-    // Set repo URL
+    // Fetch latest version
     $bindfs_repo_url = "https://api.github.com/repos/mpartel/bindfs/git/refs/tags";
     $response = nppp_get_latest_version_git($bindfs_repo_url);
-    $latest_version = is_array($response) && !empty($response) ?
-                      end(array_map(function($ref) {
-                          return preg_replace('/^refs\/tags\//', '', $ref['ref']);
-                      }, $response)) : 'Not Determined';
+    $mapped_response = array_map(function($ref) {
+        return preg_replace('/^refs\/tags\//', '', $ref['ref']);
+    }, $response);
+    $latest_version = !empty($mapped_response) ? end($mapped_response) : 'Not Determined';
 
     // Check if bindfs is installed
     if (nppp_get_command_output('command -v bindfs')) {
