@@ -2419,7 +2419,7 @@ function npppupdateStatus() {
         npppLibfuseVersionSpan.style.color = "green";
         npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> ' + npppLibfuseVersion;
     }
-    
+
     // Update the FUSE status for bindfs
     var npppBindfsVersionSpan = document.getElementById("npppBindfsVersion");
     var npppBindfsVersion = npppBindfsVersionSpan.textContent.trim();
