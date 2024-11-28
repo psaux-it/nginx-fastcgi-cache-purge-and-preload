@@ -1,7 +1,7 @@
 /**
  * JavaScript for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains disable functionality for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.8
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
