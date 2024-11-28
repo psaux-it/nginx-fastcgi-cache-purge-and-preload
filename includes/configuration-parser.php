@@ -63,8 +63,10 @@ function nppp_check_bindfs_version() {
     $latest_version = 'Not Determined';
     if (is_array($response) && !empty($response)) {
         $mapped_response = array_map(function($ref) {
-            return preg_replace('/^refs\/tags\//', '', $ref['ref']);
+            return isset($ref['ref']) ? preg_replace('/^refs\/tags\//', '', $ref['ref']) : '';
         }, $response);
+        // Filter out any empty results after the map
+        $mapped_response = array_filter($mapped_response);
         $latest_version = !empty($mapped_response) ? end($mapped_response) : 'Not Determined';
     }
 
