@@ -2389,21 +2389,37 @@ function npppupdateStatus() {
     // Update the FUSE status for libfuse
     var npppLibfuseVersionSpan = document.getElementById("npppLibfuseVersion");
     var npppLibfuseVersion = npppLibfuseVersionSpan.textContent.trim();
+
     npppLibfuseVersionSpan.style.fontSize = "14px";
     npppLibfuseVersionSpan.style.fontWeight = "bold";
-    if (npppLibfuseVersion.includes("(")) {
-        npppLibfuseVersionSpan.style.color = "orange";
-        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppLibfuseVersion;
-    } else if (npppLibfuseVersion === "Not Installed") {
-        npppLibfuseVersionSpan.style.color = "red";
-        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-no"></span> ' + npppLibfuseVersion;
-    } else if (npppLibfuseVersion === "Not Determined") {
-        npppLibfuseVersionSpan.style.color = "grey";
-    } else {
-        npppLibfuseVersionSpan.style.color = "green";
-        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppLibfuseVersion;
-    }
 
+    if (npppLibfuseVersion === "Not Installed") {
+        npppLibfuseVersionSpan.style.color = "orange";
+        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-warning" style="color:orange; font-size:18px;"></span> ' + npppLibfuseVersion;
+    }
+    else if (npppLibfuseVersion.includes("(Not Determined)")) {
+        var installedVersion = npppLibfuseVersion.split(" ")[0];
+        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> <span style="color:green;">' + installedVersion + '</span> <span style="color:orange;">(Not Determined)</span>';
+    }
+    else if (npppLibfuseVersion.includes("(")) {
+        var versions = npppLibfuseVersion.match(/(\d+\.\d+\.\d+)\s\((\d+\.\d+\.\d+)\)/);
+        if (versions) {
+            var installedVersion = versions[1];
+            var latestVersion = versions[2];
+
+            if (installedVersion === latestVersion) {
+                npppLibfuseVersionSpan.style.color = "green";
+                npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> ' + installedVersion + ' (' + latestVersion + ')';
+            } else {
+                npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-update" style="color:orange; font-size:18px;"></span> <span style="color:orange;">' + installedVersion + '</span> <span style="color:green;">(' + latestVersion + ')</span>';
+            }
+        }
+    }
+    else {
+        npppLibfuseVersionSpan.style.color = "green";
+        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> ' + npppLibfuseVersion;
+    }
+    
     // Update the FUSE status for bindfs
     var npppBindfsVersionSpan = document.getElementById("npppBindfsVersion");
     var npppBindfsVersion = npppBindfsVersionSpan.textContent.trim();
