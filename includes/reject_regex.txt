@@ -1,7 +1,7 @@
 /**
  * Default wget reject regex and file extension rules for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains default wget reject regex, reject file extension rules and regex for fastcgi_cache_key for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.0.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
