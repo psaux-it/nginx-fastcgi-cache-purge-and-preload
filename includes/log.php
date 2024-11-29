@@ -2,7 +2,7 @@
 /**
  * Logging & WP admin notices function for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contain logging & wp admin notices function for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.0.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -70,36 +70,60 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
 
     // Allow admin notices only for NPP AJAX actions
     // To prevent interfere with core WP AJAX
+    // Verify nonce for WP Admin Notices
     if (defined('DOING_AJAX') && DOING_AJAX) {
         $allowed_actions = [
-            'nppp_clear_nginx_cache_logs',
-            'nppp_get_nginx_cache_logs',
-            'nppp_update_send_mail_option',
-            'nppp_update_auto_preload_option',
-            'nppp_update_auto_purge_option',
-            'nppp_cache_status',
-            'nppp_load_premium_content',
-            'nppp_purge_cache_premium',
-            'nppp_preload_cache_premium',
-            'nppp_update_api_key_option',
-            'nppp_update_default_reject_regex_option',
-            'nppp_update_default_reject_extension_option',
-            'nppp_update_api_option',
-            'nppp_update_api_key_copy_value',
-            'nppp_rest_api_purge_url_copy',
-            'nppp_rest_api_preload_url_copy',
-            'nppp_get_save_cron_expression',
-            'nppp_update_cache_schedule_option',
-            'nppp_cancel_scheduled_event',
-            'nppp_get_active_cron_events_ajax',
-            'nppp_clear_plugin_cache',
-            'nppp_restart_systemd_service',
-            'nppp_update_default_cache_key_regex_option',
-            'nppp_update_auto_preload_mobile_option',
+            'nppp_clear_nginx_cache_logs' => 'nppp-clear-nginx-cache-logs',
+            'nppp_get_nginx_cache_logs' => 'nppp-clear-nginx-cache-logs',
+            'nppp_update_send_mail_option' => 'nppp-update-send-mail-option',
+            'nppp_update_auto_preload_option' => 'nppp-update-auto-preload-option',
+            'nppp_update_auto_purge_option' => 'nppp-update-auto-purge-option',
+            'nppp_cache_status' => 'cache-status',
+            'nppp_load_premium_content' => 'load_premium_content_nonce',
+            'nppp_purge_cache_premium' => 'purge_cache_premium_nonce',
+            'nppp_preload_cache_premium' => 'preload_cache_premium_nonce',
+            'nppp_update_api_key_option' => 'nppp-update-api-key-option',
+            'nppp_update_default_reject_regex_option' => 'nppp-update-default-reject-regex-option',
+            'nppp_update_default_reject_extension_option' => 'nppp-update-default-reject-extension-option',
+            'nppp_update_api_option' => 'nppp-update-api-option',
+            'nppp_update_api_key_copy_value' => 'nppp-update-api-key-copy-value',
+            'nppp_rest_api_purge_url_copy' => 'nppp-rest-api-purge-url-copy',
+            'nppp_rest_api_preload_url_copy' => 'nppp-rest-api-preload-url-copy',
+            'nppp_get_save_cron_expression' => 'nppp-get-save-cron-expression',
+            'nppp_update_cache_schedule_option' => 'nppp-update-cache-schedule-option',
+            'nppp_cancel_scheduled_event' => 'nppp-cancel-scheduled-event',
+            'nppp_get_active_cron_events_ajax' => 'nppp-get-save-cron-expression',
+            'nppp_clear_plugin_cache' => 'nppp-clear-plugin-cache-action',
+            'nppp_restart_systemd_service' => 'nppp-restart-systemd-service',
+            'nppp_update_default_cache_key_regex_option' => 'nppp-update-default-cache-key-regex-option',
+            'nppp_update_auto_preload_mobile_option' => 'nppp-update-auto-preload-mobile-option',
         ];
 
+        // Get the current AJAX action
         $action = isset($_REQUEST['action']) ? sanitize_text_field(wp_unslash($_REQUEST['action'])) : '';
-        if (empty($action) || !in_array($action, $allowed_actions, true)) {
+
+        // Only continue if the action comes from NPP
+        // Do nonce verification for Admin Notices
+        if (!empty($action) && array_key_exists($action, $allowed_actions)) {
+            // Check if nonce is set and is valid
+            if (!isset($_REQUEST['_wpnonce'])) {
+                wp_die('Nonce is missing.');
+            }
+
+            // Sanitize nonce
+            $nonce = sanitize_text_field(wp_unslash($_REQUEST['_wpnonce']));
+            $expected_nonce = $allowed_actions[$action];
+
+            // Verify nonce for WP Admin Notices
+            if (!wp_verify_nonce($nonce, $expected_nonce)) {
+                wp_die('Invalid nonce. Request could not be verified.');
+            }
+
+            // Further security check to verify the user’s capability
+            if (!current_user_can('manage_options')) {
+                wp_die('Permission denied');
+            }
+        } else {
             return;
         }
     }
