@@ -2,7 +2,7 @@
 /**
  * Status page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains functions which shows information about FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.0.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -353,9 +353,6 @@ function nppp_get_in_cache_page_count() {
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
-    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
-    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
-
     $urls_count = 0;
 
     // Initialize WordPress filesystem
@@ -415,7 +412,7 @@ function nppp_get_in_cache_page_count() {
                 // Test regex only once
                 // Regex operations can be computationally expensive,
                 // especially when iterating over multiple files.
-                // So here we test regex only once
+                // So here we test cache key regex only once
                 if (!$regex_tested) {
                     if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
                         // Build the URL
@@ -423,8 +420,12 @@ function nppp_get_in_cache_page_count() {
                         $request_uri = trim($matches[2]);
                         $constructed_url = $host . $request_uri;
 
+                        // Test parsed URL via regex with FILTER_VALIDATE_URL
+                        // We need to add prefix here
+                        $constructed_url_test = 'https://' . $constructed_url;
+
                         // Test if the URL is in the expected format
-                        if ($constructed_url !== '' && preg_match($second_regex, $constructed_url, $second_matches)) {
+                        if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
                             $regex_tested = true;
                         } else {
                             return 'RegexError';
