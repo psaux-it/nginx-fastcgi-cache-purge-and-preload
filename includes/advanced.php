@@ -270,9 +270,6 @@ function nppp_purge_cache_premium_callback() {
              ? base64_decode($options['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
-    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
-    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
-
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -336,7 +333,11 @@ function nppp_purge_cache_premium_callback() {
         $request_uri = trim($matches[2]);
         $constructed_url = $host . $request_uri;
 
-        if ($constructed_url !== '' && preg_match($second_regex, $constructed_url, $second_matches)) {
+        // Test parsed URL via regex with FILTER_VALIDATE_URL
+        // We need to add prefix here
+        $constructed_url_test = 'https://' . $constructed_url;
+
+        if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
             $sanitized_url = filter_var($constructed_url, FILTER_SANITIZE_URL);
             $final_url = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
         }
@@ -464,9 +465,6 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
-    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
-    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
-
     try {
         // Traverse the cache directory and its subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
@@ -502,8 +500,12 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                         $request_uri = trim($matches[2]);
                         $constructed_url = $host . $request_uri;
 
+                        // Test parsed URL via regex with FILTER_VALIDATE_URL
+                        // We need to add prefix here
+                        $constructed_url_test = 'https://' . $constructed_url;
+
                         // Test if the URL is in the expected format
-                        if ($constructed_url !== '' && preg_match($second_regex, $constructed_url, $second_matches)) {
+                        if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
                             $regex_tested = true;
                         } else {
                             return [
