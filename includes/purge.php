@@ -2,7 +2,7 @@
 /**
  * Purge action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.0.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -84,9 +84,6 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
-    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
-    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
-
     // First, check if any active cache preloading action is in progress.
     // Purging the cache for a single page or post, whether done manually (Fonrtpage) or automatically (Auto Purge) after content updates,
     // can cause issues if there is an active cache preloading process.
@@ -152,8 +149,12 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                         $request_uri = trim($matches[2]);
                         $constructed_url = $host . $request_uri;
 
+                        // Test parsed URL via regex with FILTER_VALIDATE_URL
+                        // We need to add prefix here
+                        $constructed_url_test = 'https://' . $constructed_url;
+
                         // Test if the URL is in the expected format
-                        if ($constructed_url !== '' && preg_match($second_regex, $constructed_url, $second_matches)) {
+                        if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
                             $regex_tested = true;
                         } else {
                             nppp_display_admin_notice('error', "ERROR REGEX: Cache purge failed for page $current_page_url, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\$host\$request_uri</strong> portion correctly.", true, false);
