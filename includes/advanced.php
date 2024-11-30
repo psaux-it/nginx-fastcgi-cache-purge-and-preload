@@ -2,7 +2,7 @@
 /**
  * Advanced table for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains advanced table functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.8
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -270,9 +270,6 @@ function nppp_purge_cache_premium_callback() {
              ? base64_decode($options['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
-    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
-    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
-
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -289,14 +286,10 @@ function nppp_purge_cache_premium_callback() {
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
-        // Check if posix_kill function exists
-        if (function_exists('posix_kill')) {
-            if ($pid > 0 && posix_kill($pid, 0)) {
-                $error_message = "INFO ADMIN: Purge cache halted due to ongoing cache preloading. You can stop cache preloading anytime via Purge All.";
-                nppp_log_and_send_error($error_message, $log_file_path);
-            }
-        } else {
-            wp_send_json_error('Cannot check process status on this server.');
+        // Check process is alive
+        if ($pid > 0 && nppp_is_process_alive($pid)) {
+            $error_message = "INFO ADMIN: Purge cache halted due to ongoing cache preloading. You can stop cache preloading anytime via Purge All.";
+            nppp_log_and_send_error($error_message, $log_file_path);
         }
     }
 
@@ -334,10 +327,18 @@ function nppp_purge_cache_premium_callback() {
     $content = $wp_filesystem->get_contents($file_path);
 
     $final_url = '';
-    if (preg_match($regex, $content, $matches)) {
-        if (!empty($matches[1]) && preg_match($second_regex, trim($matches[1]), $second_matches)) {
-            $url = trim($matches[1]);
-            $sanitized_url = filter_var($url, FILTER_SANITIZE_URL);
+    if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
+        // Build the URL
+        $host = trim($matches[1]);
+        $request_uri = trim($matches[2]);
+        $constructed_url = $host . $request_uri;
+
+        // Test parsed URL via regex with FILTER_VALIDATE_URL
+        // We need to add prefix here
+        $constructed_url_test = 'https://' . $constructed_url;
+
+        if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
+            $sanitized_url = filter_var($constructed_url, FILTER_SANITIZE_URL);
             $final_url = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
         }
     }
@@ -464,9 +465,6 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
-    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
-    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
-
     try {
         // Traverse the cache directory and its subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
@@ -491,10 +489,23 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                     continue;
                 }
 
-                // Test regex at least once
+                // Test regex only once
+                // Regex operations can be computationally expensive,
+                // especially when iterating over multiple files.
+                // So here we test regex only once
                 if (!$regex_tested) {
-                    if (preg_match($regex, $content, $matches)) {
-                        if (preg_match($second_regex, $matches[1], $second_matches)) {
+                    if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
+                        // Build the URL
+                        $host = trim($matches[1]);
+                        $request_uri = trim($matches[2]);
+                        $constructed_url = $host . $request_uri;
+
+                        // Test parsed URL via regex with FILTER_VALIDATE_URL
+                        // We need to add prefix here
+                        $constructed_url_test = 'https://' . $constructed_url;
+
+                        // Test if the URL is in the expected format
+                        if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
                             $regex_tested = true;
                         } else {
                             return [
@@ -510,10 +521,13 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
 
                 // Extract URLs using regex
                 if (preg_match($regex, $content, $matches)) {
-                    $url = trim($matches[1]);
+                    // Build the URL
+                    $host = trim($matches[1]);
+                    $request_uri = trim($matches[2]);
+                    $constructed_url = $host . $request_uri;
 
                     // Sanitize and validate the URL
-                    $sanitized_url = filter_var($url, FILTER_SANITIZE_URL);
+                    $sanitized_url = filter_var($constructed_url, FILTER_SANITIZE_URL);
                     $final_url = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
 
                     if (filter_var($final_url, FILTER_VALIDATE_URL) !== false) {

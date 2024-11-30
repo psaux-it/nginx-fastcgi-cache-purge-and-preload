@@ -3,7 +3,7 @@
  * Plugin Name:       FastCGI Cache Purge and Preload for Nginx
  * Plugin URI:        https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload
  * Description:       Manage FastCGI Cache Purge and Preload for Nginx operations directly from your WordPress admin dashboard.
- * Version:           2.0.8
+ * Version:           2.0.9
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
  * Author Email:      hasan.calisir@psauxit.com
@@ -24,9 +24,14 @@ if (! defined('NGINX_CACHE_LOG_FILE')) {
     define('NGINX_CACHE_LOG_FILE', dirname(__DIR__) . '/fastcgi_ops.log');
 }
 
-// Define a constant for the user agent
+// Define a constant for the desktop user agent
 if (!defined('NPPP_USER_AGENT')) {
     define('NPPP_USER_AGENT', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36');
+}
+
+// Define a constant for the mobile user agent
+if (!defined('NPPP_USER_AGENT_MOBILE')) {
+    define('NPPP_USER_AGENT_MOBILE', 'Mozilla/5.0 (Linux; Android 15; SM-G960U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.81 Mobile Safari/537.36');
 }
 
 // Include plugin files
@@ -103,15 +108,16 @@ add_action('npp_cache_preload_status_event', 'nppp_create_scheduled_event_preloa
 add_action('wp_ajax_nppp_get_active_cron_events_ajax', 'nppp_get_active_cron_events_ajax');
 add_action('wp_ajax_nppp_clear_plugin_cache', 'nppp_clear_plugin_cache_callback');
 add_action('wp_ajax_nppp_restart_systemd_service', 'nppp_restart_systemd_service');
-add_action('save_post', 'nppp_purge_cache_on_update', 10, 3);
+add_action('transition_post_status', 'nppp_purge_cache_on_update', 10, 3);
 add_action('wp_insert_comment', 'nppp_purge_cache_on_comment', 200, 2);
 add_action('transition_comment_status', 'nppp_purge_cache_on_comment_change', 200, 3);
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
 add_action('upgrader_process_complete', 'nppp_purge_cache_on_theme_plugin_update', 10, 2);
 add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_default_cache_key_regex_option');
-add_action('switch_theme', 'nppp_purge_cache_on_theme_switch', 10, 3);
+add_action('after_switch_theme', 'nppp_purge_cache_on_theme_switch', 10, 2);
 add_action('activated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
 add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
+add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_preload_mobile_option');
 $nppp_auto_purge
     ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions)
     : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions);

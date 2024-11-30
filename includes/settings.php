@@ -2,7 +2,7 @@
 /**
  * Settings page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains settings page functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.8
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -37,6 +37,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_wait_request', 'Per Request Wait Time', 'nppp_nginx_cache_wait_request_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_tracking_opt_in', 'Enable Tracking', 'nppp_nginx_cache_tracking_opt_in_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_key_custom_regex', 'Enable Custom regex', 'nppp_nginx_cache_key_custom_regex_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_auto_preload_mobile', 'Auto Preload Mobile', 'nppp_nginx_cache_auto_preload_mobile_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -206,6 +207,25 @@ function nppp_nginx_cache_settings_page() {
                             </td>
                         </tr>
                         <tr valign="top">
+                            <th scope="row"><span class="dashicons dashicons-smartphone"></span> Preload Mobile</th>
+                            <td>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-preload-mobile">
+                                        <?php nppp_nginx_cache_auto_preload_mobile_callback(); ?>
+                                    </div>
+                                </div>
+                                <p class="description">Preload also Nginx cache for <code>Mobile</code> devices separately. This feature supports for both <strong>entire</strong> and <strong>single POST/PAGE</strong> cache events.</p>
+                                <p class="description">Only enable if you have different content, themes or configurations for <code>Mobile</code> and <code>Desktop</code> devices and need to warm the cache for both.</p>
+                                <p class="description">If enabled, this feature always triggers automatically when <strong>Preload</strong> actions are called via <code>Rest, Cron or Admin</code>, regardless of whether <strong>Auto Preload</strong> or <strong>Auto Purge</strong> are enabled.</p>
+                                <p class="description">If only <strong>Auto Preload</strong> is enabled, it also triggers automatically after <strong>Purge</strong> actions are called via <code>Rest, Admin</code>.</p>
+                                <p class="description">When both <strong>Auto Purge</strong> and <strong>Auto Preload</strong> are enabled, it triggers automatically when the cache is purged through <strong>Auto Purge</strong> conditions or when <br><strong>Purge</strong> actions are called via <code>Rest or Admin</code>.</p>
+                                <div class="cache-paths-info">
+                                    <h4><strong>Note:</strong></h4>
+                                    <p>The Mobile Preload action will begin after the main Preload process completes via the WordPress Cron job. As a result, the Mobile Preload action may start with a delay. To track the status of this process, please refer to the log section of the plugin.</p>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr valign="top">
                             <th scope="row"><span class="dashicons dashicons-dashboard"></span> CPU Usage Limit (%)</th>
                             <td>
                                 <?php nppp_nginx_cache_cpu_limit_callback(); ?>
@@ -339,17 +359,32 @@ function nppp_nginx_cache_settings_page() {
                             <td>
                                 <?php nppp_nginx_cache_key_custom_regex_callback(); ?>
                                 <p class="description">Enter a <code>preg_match</code> PHP regex pattern to parse URL <code>'$host$request_uri'</code> based on your custom <code>fastcgi_cache_key</code> format.</p><br>
-                                <p class="description">⚡The default regex pattern is designed to parse the <code>'$host$request_uri'</code> portion from the only</p>
+                                <p class="description">⚡The default regex pattern is designed to parse the <code>'$host'</code> and <code>'$request_uri'</code> portions from the only</p>
                                 <p class="description">&nbsp;standard cache key format <strong>supported by the plugin:</strong> <code>'$scheme$request_method$host$request_uri'</code>.</p><br>
                                 <p class="description">⚡If you use a non-standard or complex <code>fastcgi_cache_key</code> format, you must define a custom regex pattern</p>
-                                <p class="description">&nbsp;to correctly parse <code>'$host$request_uri'</code> portion in order to ensure proper plugin functionality.</p><br>
+                                <p class="description">&nbsp;to correctly parse <code>'$host'</code> and <code>'$request_uri'</code> portions in order to ensure proper plugin functionality.</p><br>
                                 <p class="description">⚡For example, if your custom key format is <code>'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args'</code></p>
-                                <p class="description">&nbsp;you will need to provide a corresponding regex pattern that accurately captures the <code>'$host$request_uri'</code> part.</p><br>
+                                <p class="description">&nbsp;you will need to provide a corresponding regex pattern that accurately captures the <code>'$host'</code> and <code>'$request_uri'</code> parts.</p><br>
                                 <p class="description">📌 <strong>Guidelines for creating a compatible regex</strong>:</p>
-                                <p class="description">📣 Ensure your regex pattern targets only <code>GET</code> requests, as <code>HEAD</code> or anyother requests do not represent cached content and cause duplicates.</p>
-                                <p class="description">📣 Ensure that your regex pattern includes delimiters. (e.g., /your-regex/ - #your-regex#)
-                                <p class="description">📣 The regex must capture the exact URL <code>'$host$request_uri'</code> part from your custom <code>fastcgi_cache_key</code> format.</p>
-                                <p class="description">📣 The regex pattern must return the full URL <code>'$host$request_uri'</code> in <strong>capture group 1</strong>. as the plugin process only <strong>matches[1]</strong></p><br>
+                                <p class="description">📣 Ensure your regex pattern targets only <code>GET</code> requests, as <code>HEAD</code> or any other request methods do not represent cached content and cause duplicates.</p>
+                                <p class="description">📣 Ensure that your regex pattern is entered with delimiters. (e.g., /your-regex/ - #your-regex#)
+                                <p class="description">📣 The regex must capture the <code>'$host'</code> in <strong>capture group 1</strong> as <strong>matches[1]</strong> and <code>'$request_uri'</code> in <strong>capture group 2</strong> as <strong>matches[2]</strong> from your custom <code>fastcgi_cache_key</code></p><br>
+                                <div class="cache-paths-info">
+                                    <h4>Example</h4>
+                                    fastcgi_cache_key "$scheme$request_method$host$device$request_uri"<br>
+                                    KEY: httpsGETexample.com.trMOBILE/category/nginx-cache/2024<br>
+                                    <br>
+                                    <p>This example demonstrates how the regex must captures the <code>$host</code> and <code>$request_uri</code> in two separate groups.<br>
+                                    <br>
+                                    <div>
+                                        <h4>Matches</h4>
+
+                                        0  =>  KEY: httpsGETexample.com.trMOBILE/category/nginx-cache/2024<br>
+                                        1  =>  example.com.tr<br>
+                                        2  =>  /category/nginx-cache/2024
+                                    </div>
+                                </div>
+                                <br>
                                 <p class="description">🚨 <strong>You need to follow these security guidelines for your regex pattern:</strong>:</p>
                                 <p class="description">📣 Checks for excessive lookaheads, catastrophic backtracking. (limit to 3).</p>
                                 <p class="description">📣 Don't use greedy quantifiers inside lookaheads.</p>
@@ -631,6 +666,43 @@ function nppp_update_auto_preload_option() {
 
     // Update the specific option within the array
     $current_options['nginx_cache_auto_preload'] = $auto_preload;
+
+    // Save the updated options
+    $updated = update_option('nginx_cache_settings', $current_options);
+
+    // Check if option is updated successfully
+    if ($updated) {
+        wp_send_json_success('Option updated successfully.');
+    } else {
+        wp_send_json_error('Error updating option.');
+    }
+}
+
+// AJAX callback function to update preload mobile option
+function nppp_update_auto_preload_mobile_option() {
+    // Verify nonce
+    if (isset($_POST['_wpnonce'])) {
+        $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
+        if (!wp_verify_nonce($nonce, 'nppp-update-auto-preload-mobile-option')) {
+            wp_send_json_error('Nonce verification failed.');
+        }
+    } else {
+        wp_send_json_error('Nonce is missing.');
+    }
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to update this option.');
+    }
+
+    // Get the posted option value and sanitize it
+    $preload_mobile = isset($_POST['preload_mobile']) ? sanitize_text_field(wp_unslash($_POST['preload_mobile'])) : '';
+
+    // Get the current options
+    $current_options = get_option('nginx_cache_settings', array());
+
+    // Update the specific option within the array
+    $current_options['nginx_cache_auto_preload_mobile'] = $preload_mobile;
 
     // Save the updated options
     $updated = update_option('nginx_cache_settings', $current_options);
@@ -1127,6 +1199,23 @@ function nppp_nginx_cache_purge_on_update_callback() {
     <?php
 }
 
+// Callback function for the nginx_cache_auto_preload_mobile field
+function nppp_nginx_cache_auto_preload_mobile_callback() {
+    $options = get_option('nginx_cache_settings');
+    $auto_preload_mobile_checked = isset($options['nginx_cache_auto_preload_mobile']) && $options['nginx_cache_auto_preload_mobile'] === 'yes' ? 'checked="checked"' : '';
+
+    ?>
+    <input type="checkbox" name="nginx_cache_settings[nginx_cache_auto_preload_mobile]" class="nppp-onoffswitch-checkbox-preload-mobile" value="yes" id="nginx_cache_auto_preload_mobile" <?php echo esc_attr($auto_preload_mobile_checked); ?>>
+    <label class="nppp-onoffswitch-label-preload-mobile" for="nginx_cache_auto_preload_mobile">
+        <span class="nppp-onoffswitch-inner-preload-mobile">
+            <span class="nppp-off-preload-mobile">OFF</span>
+            <span class="nppp-on-preload-mobile">ON</span>
+        </span>
+        <span class="nppp-onoffswitch-switch-preload-mobile"></span>
+    </label>
+    <?php
+}
+
 // Callback function to display the Reject Regex field
 function nppp_nginx_cache_reject_regex_callback() {
     $options = get_option('nginx_cache_settings');
@@ -1558,6 +1647,9 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize Auto Preload
     $sanitized_input['nginx_cache_auto_preload'] = isset($input['nginx_cache_auto_preload']) && $input['nginx_cache_auto_preload'] === 'yes' ? 'yes' : 'no';
+
+    // Sanitize Auto Preload Mobile
+    $sanitized_input['nginx_cache_auto_preload_mobile'] = isset($input['nginx_cache_auto_preload_mobile']) && $input['nginx_cache_auto_preload_mobile'] === 'yes' ? 'yes' : 'no';
 
     // Sanitize Auto Purge
     $sanitized_input['nginx_cache_purge_on_update'] = isset($input['nginx_cache_purge_on_update']) && $input['nginx_cache_purge_on_update'] === 'yes' ? 'yes' : 'no';

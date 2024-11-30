@@ -5,7 +5,7 @@ Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 6.7.1
-Stable tag: 2.0.8
+Stable tag: 2.0.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -151,6 +151,26 @@ Yes, please refer to the plugin settings **Help** tab.
 8. Front-end Admin Bar
 
 == Changelog ==
+
+= 2.0.9 =
+
+Release date: 2024-11-30
+
+Milestone: Add support for preloading cache separately for Mobile devices
+Milestone: Resolved the long-standing issue prior to version 2.0.5,
+where users encountered a "Not a valid JSON response" error.
+
+* Add support for preloading cache separately for Mobile devices
+* Add support for auto purge also on POST/PAGE status changes (draft, publish, trash e.g)
+* Resolved issue with cache purge when switching themes
+* Resolved issues with fetching the latest libfuse and bindfs versions on the Status tab
+* Resolved issue with NPP admin notices interfering with core wp REST actions (mrj0b)
+* Resolved stopping auto-preloading during concurrent auto-purge actions
+* Replaced posix_kill with shell_exec to determine if a process is running efficiently
+* Replaced custom URL validation regex with PHP's built-in FILTER_VALIDATE_URL for improved efficiency
+* Relaxed cache key regex options to allow parsing into two capture groups for increased flexibility (Tiago Bega)
+* Forced update of the default cache key regex to support the new structure
+* Update plugin feature descriptions on settings page
 
 = 2.0.8 =
 

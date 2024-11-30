@@ -2,7 +2,7 @@
 /**
  * Purge action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.8
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -84,16 +84,13 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
-    // Validation regex that user defined regex correctly parses '$host$request_uri' from fastcgi_cache_key
-    $second_regex = '#^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.(?:[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?)(\/[a-zA-Z0-9\-\/\?&=%\#_]*)?(\?[a-zA-Z0-9=&\-]*)?$#';
-
     // First, check if any active cache preloading action is in progress.
     // Purging the cache for a single page or post, whether done manually (Fonrtpage) or automatically (Auto Purge) after content updates,
     // can cause issues if there is an active cache preloading process.
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
-        if ($pid > 0 && posix_kill($pid, 0)) {
+        if ($pid > 0 && nppp_is_process_alive($pid)) {
             nppp_display_admin_notice('info', "INFO: Auto Purge for page $current_page_url halted due to ongoing cache preloading. You can stop cache preloading anytime via Purge All.");
             return;
         }
@@ -141,10 +138,23 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     continue;
                 }
 
-                // Test regex at least once
+                // Test regex only once
+                // Regex operations can be computationally expensive,
+                // especially when iterating over multiple files.
+                // So here we test regex only once
                 if (!$regex_tested) {
-                    if (preg_match($regex, $content, $matches)) {
-                        if (!empty($matches[1]) && preg_match($second_regex, trim($matches[1]), $second_matches)) {
+                    if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
+                        // Build the URL
+                        $host = trim($matches[1]);
+                        $request_uri = trim($matches[2]);
+                        $constructed_url = $host . $request_uri;
+
+                        // Test parsed URL via regex with FILTER_VALIDATE_URL
+                        // We need to add prefix here
+                        $constructed_url_test = 'https://' . $constructed_url;
+
+                        // Test if the URL is in the expected format
+                        if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
                             $regex_tested = true;
                         } else {
                             nppp_display_admin_notice('error', "ERROR REGEX: Cache purge failed for page $current_page_url, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\$host\$request_uri</strong> portion correctly.", true, false);
@@ -159,8 +169,13 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 // Extract the in cache URL from fastcgi_cache_key
                 preg_match($regex, $content, $matches);
 
+                // Build the URL
+                $host = trim($matches[1]);
+                $request_uri = trim($matches[2]);
+                $constructed_url = $host . $request_uri;
+
                 // Check extracted URL from fastcgi_cache_key and the URL attempted to purge is equal
-                if (trim($matches[1]) === $url_to_search_exact) {
+                if ($constructed_url === $url_to_search_exact) {
                     $cache_path = $file->getPathname();
                     $found = true;
 
@@ -225,43 +240,59 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 }
 
 // Auto Purge (Single)
-// Purge cache automatically for updated (post/page)
-// This function hooks into the 'save_post' action
-function nppp_purge_cache_on_update($post_id, $post, $update) {
+// Purge cache automatically for update (post/page)
+// Purge cache automatically for status changes (post/page)
+// This function hooks into the 'transition_post_status' action
+function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
     // Check if auto-purge is enabled
     if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
-        // Ignore auto-saves, post revisions, and newly created posts (auto-draft or not published)
-        if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id) || get_post_status($post_id) !== 'publish') {
+
+        // Ensure we are not working with revisions, auto-saves, or newly created posts
+        if (wp_is_post_revision($post) || wp_is_post_autosave($post) || $new_status === 'auto-draft') {
             return;
         }
 
-        // Verify if the current user can edit the post
-        if (!current_user_can('edit_post', $post_id)) {
+        // Only purge if a post is actually being saved
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
             return;
         }
 
-        // Get the URL of the post/page
-        $post_url = get_permalink($post_id);
+        // Prevent transition_post_status runs twice
+        // cause cache purge also runs twice
+        if (defined('REST_REQUEST') && REST_REQUEST) {
+            return;
+        }
 
-        // Set default cache path to prevent any errors if the option is not set
-        $default_cache_path = '/dev/shm/change-me-now';
+        // Priority 1: Handle Status Changes (publish from trash, draft, or pending)
+        if ('publish' === $new_status) {
+            // If the post was moved from trash to publish, purge the cache
+            if ('trash' === $old_status) {
+                $post_url = get_permalink($post->ID);
+                $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : '/dev/shm/change-me-now';
+                nppp_purge_single($nginx_cache_path, $post_url, true);
+                return;
+            }
 
-        // Get the nginx cache path from the plugin options, or use the default path if not set
-        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+            // If the post is published from draft, pending, or any other state, purge the cache
+            if ('publish' !== $old_status) {
+                $post_url = get_permalink($post->ID);
+                $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : '/dev/shm/change-me-now';
+                nppp_purge_single($nginx_cache_path, $post_url, true);
+                return;
+            }
+        }
 
-        // Check if this is an update (not a new post)
-        if ($update) {
-            // Unhook the function to avoid infinite loop
-            remove_action('save_post', 'nppp_purge_cache_on_update');
-
-            // Purge the cache for the updated post/page
-            nppp_purge_single($nginx_cache_path, $post_url, true);
-
-            // Re-hook the function
-            add_action('save_post', 'nppp_purge_cache_on_update', 10, 3);
+        // Priority 2: Handle Content Updates (publish to publish with content change)
+        if ('publish' === $new_status && 'publish' === $old_status) {
+            // Check if the content was updated (modified time differs from the original post time)
+            if (get_post_modified_time('U', true, $post) > get_post_time('U', true, $post)) {
+                $post_url = get_permalink($post->ID);
+                $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : '/dev/shm/change-me-now';
+                nppp_purge_single($nginx_cache_path, $post_url, true);
+            }
         }
     }
 }
@@ -444,15 +475,15 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
         // Check if the preload process is alive
-        if ($pid > 0 && posix_kill($pid, 0)) {
+        if ($pid > 0 && nppp_is_process_alive($pid)) {
             // Try to kill the process with SIGTERM
-            if (@posix_kill($pid, SIGTERM) === false) {
+            if (defined('SIGTERM') && @posix_kill($pid, SIGTERM) === false) {
                 // Log if SIGTERM is failed
                 nppp_display_admin_notice('info', "INFO PROCESS: Failed to send SIGTERM to Preload process PID: $pid", true, false);
                 sleep(1);
 
                 // Check again if the process is still alive after SIGTERM
-                if (posix_kill($pid, 0)) {
+                if (nppp_is_process_alive($pid)) {
                     // Fallback: Use shell_exec to send SIGKILL
                     $kill_path = trim(shell_exec('command -v kill'));
                     if (!empty($kill_path)) {
@@ -460,7 +491,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                         usleep(400000);
 
                         // Check again if the process is still alive after SIGKILL
-                        if (!posix_kill($pid, 0)) {
+                        if (!nppp_is_process_alive($pid)) {
                             // Log success after SIGKILL
                             nppp_display_admin_notice('success', "SUCCESS PROCESS: Fallback - SIGKILL sent to Preload process PID: $pid", true, false);
                         } else {
@@ -484,7 +515,13 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             // If auto preload feature enabled this will cause recursive preload action
             // So if ongoing preload action halted by purge action set auto-reload false
             // to prevent recursive preload loop
-            $auto_preload = false;
+            // v2.0.9: CAUTION
+            // If triggered by auto-purge,
+            // always rely on the actual status of the option to prevent
+            // stopping auto-preloading actions during concurrent auto-purge actions.
+            if (!$nppp_is_auto_purge) {
+                $auto_preload = false;
+            }
 
             // Call purge_helper to delete cache contents and get status
             $status = nppp_purge_helper($nginx_cache_path, $tmp_path);

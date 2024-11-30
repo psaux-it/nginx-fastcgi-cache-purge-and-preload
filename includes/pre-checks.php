@@ -2,7 +2,7 @@
 /**
  * Pre-checks for FastCGI Cache Purge and Preload for Nginx
  * Description: This pre-check file contains several critical checks for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.8
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -12,6 +12,32 @@
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
+}
+
+// Check if the process is alive
+function nppp_is_process_alive($pid) {
+    // Validate that $pid
+    if (!is_numeric($pid) || $pid <= 0 || intval($pid) != $pid) {
+        return false;
+    }
+
+    // Get the site URL
+    $ps_path = trim(shell_exec('command -v ps'));
+
+    // Escape the PID and the site URL to avoid shell injection
+    $escaped_pid = escapeshellarg($pid);
+    $escaped_ps_path = escapeshellarg($ps_path);
+
+    // Execute the ps aux command to check if wget with the site URL is running
+    exec("$escaped_ps_path aux | grep $escaped_pid | grep -v 'grep'", $output);
+
+    // If there's output, process running
+    if (!empty($output)) {
+        return true;
+    }
+
+    // Otherwise, the process is not running
+    return false;
 }
 
 // Tries to determine the nginx.conf path using 'nginx -V'.

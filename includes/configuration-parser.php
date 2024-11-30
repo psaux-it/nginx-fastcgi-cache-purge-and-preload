@@ -2,7 +2,7 @@
 /**
  * Nginx config parser functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Nginx config parser functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.8
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -27,12 +27,21 @@ function nppp_get_latest_version_git($url) {
         'user-agent' => 'PHP',
     ]);
 
+    // Check if the response has an error
     if (is_wp_error($response)) {
         return 'Not Determined';
     }
 
+    // Get the response body and decode the JSON
     $body = wp_remote_retrieve_body($response);
-    return $body ? json_decode($body, true) : null;
+    $data = $body ? json_decode($body, true) : null;
+
+    // Ensure $data is an array before proceeding
+    if (is_array($data)) {
+        return $data;
+    } else {
+        return 'Not Determined';
+    }
 }
 
 // Function to check bindfs version
@@ -47,36 +56,39 @@ function nppp_check_bindfs_version() {
         return $cached_result;
     }
 
-    // Set repo URL
+    // Fetch latest version
     $bindfs_repo_url = "https://api.github.com/repos/mpartel/bindfs/git/refs/tags";
+    $response = nppp_get_latest_version_git($bindfs_repo_url);
+
+    $latest_version = 'Not Determined';
+    if (is_array($response) && !empty($response)) {
+        $mapped_response = array_map(function($ref) {
+            return isset($ref['ref']) ? preg_replace('/^refs\/tags\//', '', $ref['ref']) : '';
+        }, $response);
+        // Filter out any empty results after the map
+        $mapped_response = array_filter($mapped_response);
+        $latest_version = !empty($mapped_response) ? end($mapped_response) : 'Not Determined';
+    }
 
     // Check if bindfs is installed
     if (nppp_get_command_output('command -v bindfs')) {
         $installed_version = nppp_get_command_output('bindfs --version | head -n1 | awk \'{print $2}\'');
+    } else {
+        $installed_version = null;
+    }
 
-        // Get latest version info from GitHub API
-        $response = nppp_get_latest_version_git($bindfs_repo_url);
-        if ($response) {
-            // Assign array_map result to a variable to avoid passing by reference warning
-            $mapped_refs = array_map(function($ref) {
-                return preg_replace('/^refs\/tags\//', '', $ref['ref']);
-            }, $response);
-
-            $latest_version = end($mapped_refs);
-
-            if (version_compare($installed_version, $latest_version, '<')) {
-                $result = "$installed_version ($latest_version)";
-            } else {
-                $result = "$installed_version";
-            }
+    // Decide the result based on install status and API fetch success
+    if ($installed_version) {
+        if ($latest_version && version_compare($installed_version, $latest_version, '<')) {
+            $result = "$installed_version ($latest_version)";
         } else {
-            $result = "Not Determined";
+            $result = "$installed_version ($latest_version)";
         }
     } else {
         $result = "Not Installed";
     }
 
-    // Store the result in the cache 1 day
+    // Store the result in the cache 1 month
     set_transient($transient_key, $result, MONTH_IN_SECONDS);
 
     return $result;
@@ -94,42 +106,34 @@ function nppp_check_libfuse_version() {
         return $cached_result;
     }
 
-    // Set repo URL
+    // Attempt to fetch the latest version
     $libfuse_repo_url = "https://api.github.com/repos/libfuse/libfuse/releases/latest";
-
-    // Get latest version info from GitHub API
     $response = nppp_get_latest_version_git($libfuse_repo_url);
-    $latest_version = $response ? str_replace('fuse-', '', $response['tag_name']) : null;
+    $latest_version = is_array($response) && isset($response['tag_name'])
+                      ? str_replace('fuse-', '', $response['tag_name'])
+                      : 'Not Determined';
 
-    if ($latest_version) {
-        // Check for FUSE 3
-        if (nppp_get_command_output('command -v fusermount3')) {
-            $installed_version = preg_replace('/version:\s*/', '', nppp_get_command_output('fusermount3 -V | grep -oP \'version:\s*\K[0-9.]+\''));
-
-            if (version_compare($installed_version, $latest_version, '<')) {
-                $result = "$installed_version ($latest_version)";
-            } else {
-                $result = "$installed_version";
-            }
-        // Check for FUSE 2
-        } elseif (nppp_get_command_output('command -v fusermount')) {
-            $installed_version = preg_replace('/version:\s*/', '', nppp_get_command_output('fusermount -V | grep -oP \'version:\s*\K[0-9.]+\''));
-
-            if (version_compare($installed_version, $latest_version, '<')) {
-                $result = "$installed_version ($latest_version)";
-            } else {
-                $result = "$installed_version";
-            }
-        } else {
-            // Neither fusermount nor fusermount3 is found
-            $result = "Not Installed";
-        }
+    // Check for FUSE 3 or FUSE 2
+    if (nppp_get_command_output('command -v fusermount3')) {
+        $installed_version = preg_replace('/version:\s*/', '', nppp_get_command_output('fusermount3 -V | grep -oP \'version:\s*\K[0-9.]+\''));
+    } elseif (nppp_get_command_output('command -v fusermount')) {
+        $installed_version = preg_replace('/version:\s*/', '', nppp_get_command_output('fusermount -V | grep -oP \'version:\s*\K[0-9.]+\''));
     } else {
-        // Latest version could not be determined
-        $result = "Not Determined";
+        $installed_version = null;
     }
 
-    // Store the result in the cache 1 day
+    // Decide the result based on API fetch success
+    if ($installed_version) {
+        if ($latest_version && version_compare($installed_version, $latest_version, '<')) {
+            $result = "$installed_version ($latest_version)";
+        } else {
+            $result = "$installed_version ($latest_version)";
+        }
+    } else {
+        $result = "Not Installed";
+    }
+
+    // Store the result in the cache 1 month
     set_transient($transient_key, $result, MONTH_IN_SECONDS);
 
     return $result;

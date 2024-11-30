@@ -1,7 +1,7 @@
 /**
  * Default wget reject regex and file extension rules for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains default wget reject regex, reject file extension rules and regex for fastcgi_cache_key for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.8
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -9,5 +9,5 @@
  */
 
 $reject_regex = "/wp-admin/(.*)|/wp-content/(.*)|/wp-includes/(.*)|/wp-json/(.*)|/xmlrpc.php|/wp-.*.php|/cart/(.*)|/checkout/(.*)|/wc-ajax/(.*)|/my-account/(.*)|/wc-api/(.*)|/robots.txt|/sitemap(_index)?.xml|[a-z0-9_-]+-sitemap([0-9]+)?.xml|\?|\=|\&|\#";
-$reject_extension = "*.css,*.js,*.png,*.jpg,*.jpeg,*.gif,*.ico,*.mp4,*.MP4,*.webm,*.WEBM,*.mov,*.MOV,*.avi,*.AVI,*.mkv,*.MKV,*.flv,*.FLV,*.wmv,*.WMV,*.mpeg,*.MPEG,*.mpg,*.MPG,*.m4v,*.M4V,*.3gp,*.3GP,*.woff,*.woff2,*.ttf,*.eot,*.svg,*.bmp,*.pdf,*.doc,*.docx,*.xls,*.xlsx,*.ppt,*.pptx,*.zip,*.rar,*.tar,*.gz,*.bz2,*.7z";
-$regex_for_cache_key = "/^KEY:\s+https?(?:GET)?([^\s?]+)/m";
+$reject_extension = "*.css,*.js,*.png,*.jpg,*.jpeg,*.gif,*.ico,*.mp4,*.MP4,*.webm,*.WEBM,*.mov,*.MOV,*.avi,*.AVI,*.mkv,*.MKV,*.flv,*.FLV,*.wmv,*.WMV,*.mpeg,*.MPEG,*.mpg,*.MPG,*.m4v,*.M4V,*.3gp,*.3GP,*.woff,*.woff2,*.ttf,*.eot,*.svg,*.bmp,*.pdf,*.doc,*.docx,*.xls,*.xlsx,*.ppt,*.pptx,*.zip,*.rar,*.tar,*.gz,*.bz2,*.7z,*.xml,*.txt,*.sql,*.log,*.ini,*.conf,*.json,*.bak,*.old,*.tmp,*.swp,*.md,*.rst,*.py,*.sh,*.iso,*.crt,*.key,*.pem,*.out";
+$regex_for_cache_key = "/^KEY:\s+https?(?:GET)?([^\/]+)(\/[^\s]*)/m";
