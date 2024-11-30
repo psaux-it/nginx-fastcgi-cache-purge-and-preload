@@ -2,7 +2,7 @@
 /**
  * Purge action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.0.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -515,7 +515,13 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             // If auto preload feature enabled this will cause recursive preload action
             // So if ongoing preload action halted by purge action set auto-reload false
             // to prevent recursive preload loop
-            $auto_preload = false;
+            // v2.0.9: CAUTION
+            // If triggered by auto-purge,
+            // always rely on the actual status of the option to prevent
+            // stopping auto-preloading actions during concurrent auto-purge actions.
+            if (!$nppp_is_auto_purge) {
+                $auto_preload = false;
+            }
 
             // Call purge_helper to delete cache contents and get status
             $status = nppp_purge_helper($nginx_cache_path, $tmp_path);
