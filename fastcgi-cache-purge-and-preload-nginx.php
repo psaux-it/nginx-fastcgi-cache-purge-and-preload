@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Load plugin text domain
+// Load text domain
 function nppp_load_i18n() {
     $plugin_rel_path = basename(dirname(__FILE__)) . '/languages';
     load_plugin_textdomain('fastcgi-cache-purge-and-preload-nginx', false, $plugin_rel_path);
