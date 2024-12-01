@@ -72,6 +72,7 @@ $page_cache_purge_actions = array(
 );
 
 // Add actions and filters
+add_action('init', 'nppp_load_i18n');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_check_for_plugin_update');
 add_action('admin_enqueue_scripts', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets');
