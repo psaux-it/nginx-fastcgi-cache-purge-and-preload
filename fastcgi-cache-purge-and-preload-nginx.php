@@ -10,6 +10,7 @@
  * License:           GPL-2.0+
  * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
  * Text Domain:       fastcgi-cache-purge-and-preload-nginx
+ * Domain Path:       /languages
  * Requires at least: 6.3
  * Requires PHP:      7.4
  */
@@ -17,6 +18,12 @@
 // Exit if accessed directly.
 if (!defined('ABSPATH')) {
     exit;
+}
+
+// Load plugin text domain
+function nppp_load_i18n() {
+    $plugin_rel_path = basename(dirname(__FILE__)) . '/languages';
+    load_plugin_textdomain('fastcgi-cache-purge-and-preload-nginx', false, $plugin_rel_path);
 }
 
 // Define the plugin main file path
