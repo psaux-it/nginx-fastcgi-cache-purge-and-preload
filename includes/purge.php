@@ -559,12 +559,12 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                     break;
                 case 3:
                     $message_type = 'error';
-                    // Translators: %s is the FastCGI cache path
-                    $message_content = sprintf( __( 'ERROR PATH: Your FastCGI cache path (%s) was not found. Please check your FastCGI cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
+                    // Translators: %s is the Nginx cache path
+                    $message_content = sprintf( __( 'ERROR PATH: Nginx cache path (%s) was not found. Please check your cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
                     break;
                 case 4:
                     $message_type = 'error';
-                    $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while purging the FastCGI cache. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' );
+                    $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while purging the cache. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' );
                     break;
             }
 
@@ -604,12 +604,12 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                     break;
                 case 3:
                     $message_type = 'error';
-                    // Translators: %s is the FastCGI cache path
-                    $message_content = sprintf( __( 'ERROR PATH: Your FastCGI cache PATH (%s) is not found. Please check your FastCGI cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
+                    // Translators: %s is the Nginx cache path
+                    $message_content = sprintf( __( 'ERROR PATH: Nginx cache path (%s) was not found. Please check your cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
                     break;
                 case 4:
                     $message_type = 'error';
-                    $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while purging the FastCGI cache. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' );
+                    $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while purging the cache. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' );
                     break;
             }
 
@@ -650,12 +650,12 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 break;
             case 3:
                 $message_type = 'error';
-                // Translators: %s is the FastCGI cache path
-                $message_content = sprintf( __( 'ERROR PATH: Your FastCGI cache path (%s) was not found. Please check your FastCGI cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
+                // Translators: %s is the Nginx cache path
+                $message_content = sprintf( __( 'ERROR PATH: Nginx cache path (%s) was not found. Please check your cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
                 break;
             case 4:
                 $message_type = 'error';
-                $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while purging the FastCGI cache. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' );
+                $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while purging the cache. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
         }
     }
