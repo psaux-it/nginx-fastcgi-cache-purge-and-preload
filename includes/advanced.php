@@ -127,12 +127,12 @@ function nppp_premium_html($nginx_cache_path) {
     <table id="nppp-premium-table" class="display">
         <thead>
             <tr>
-                <th>Cached URL</th>
-                <th>Cache Path</th>
-                <th>Content Category</th>
-                <th>Cache Method</th>
-                <th>Cache Date</th>
-                <th>Action</th>
+                <th><?php esc_html_e( 'Cached URL', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Cache Path', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Content Category', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Cache Method', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Cache Date', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Action', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
             </tr>
         </thead>
         <tbody>
@@ -147,8 +147,8 @@ function nppp_premium_html($nginx_cache_path) {
                         <td>GET</td>
                         <td><?php echo esc_html($urlData['cache_date']); ?></td>
                         <td>
-                            <button class="nppp-purge-btn" data-file="<?php echo esc_attr($urlData['file_path']); ?>">Purge</button>
-                            <button class="nppp-preload-btn" data-url="<?php echo esc_attr($urlData['url']); ?>">Preload</button>
+                            <button class="nppp-purge-btn" data-file="<?php echo esc_attr($urlData['file_path']); ?>"><?php echo esc_html__( 'Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
+                            <button class="nppp-preload-btn" data-url="<?php echo esc_attr($urlData['url']); ?>"><?php echo esc_html__( 'Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
                         </td>
                     </tr>
                 <?php endforeach;
