@@ -100,17 +100,17 @@ function nppp_premium_html($nginx_cache_path) {
     // Warn about cache keys not found
     if ($config_data === false) {
         echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">' . esc_html__( 'INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ). '</p>
+                   <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
               </div>';
     // Warn about cache keys not found
     } elseif (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
         echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">' . esc_html__( 'INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ). '</p>
+                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
               </div>';
     // Warn about the unsupported cache keys
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
         echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">' . esc_html__( 'INFO CACHE KEY: <span style="color: #f0c36d;">Unsupported</span> cache keys found!', 'fastcgi-cache-purge-and-preload-nginx' ). '</p>
+                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO CACHE KEY: <span style="color: #f0c36d;">Unsupported</span> cache keys found!', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
               </div>';
     }
 
@@ -120,7 +120,7 @@ function nppp_premium_html($nginx_cache_path) {
     <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
         <p style="margin: 0; display: flex; align-items: center;">
             <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-            <?php echo esc_html__( 'If the <strong>Cached URL\'s</strong> are incorrect, <strong>Preload</strong> will not work as expected. Please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section, ensure the regex is configured correctly, and try again.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            <?php echo wp_kses_post( __( 'If the <strong>Cached URL\'s</strong> are incorrect, <strong>Preload</strong> will not work as expected. Please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section, ensure the regex is configured correctly, and try again.', 'fastcgi-cache-purge-and-preload-nginx' ) ); ?>
         </p>
     </div>
     <h2></h2>
