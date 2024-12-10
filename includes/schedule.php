@@ -20,7 +20,6 @@ function nppp_get_active_cron_events() {
     $events = _get_cron_array();
 
     // npp plugin's schedule event hook name
-    //$plugin_hooks = array('npp_cache_preload_event', 'npp_cache_preload_status_event');
     $plugin_hook = 'npp_cache_preload_event';
 
     // Initialize a flag to track if events are found
@@ -56,7 +55,6 @@ function nppp_get_active_cron_events() {
             foreach ($cron as $hook => $args) {
                 // Check if the hook matches the npp's hook name
                 if ($hook === $plugin_hook) {
-                //if (in_array($hook, $plugin_hooks)) {
                     // Set the flag to indicate that events are found
                     $has_events = true;
 
@@ -229,7 +227,7 @@ function nppp_create_scheduled_events($cron_expression) {
     if ($existing_timestamp) {
         $cleared = wp_clear_scheduled_hook('npp_cache_preload_event');
         if (!$cleared) {
-            nppp_custom_error_log('Failed to unschedule existing event.');
+            nppp_custom_error_log( __( 'Failed to unschedule existing event.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
     }
@@ -242,7 +240,7 @@ function nppp_create_scheduled_events($cron_expression) {
     $scheduled = wp_schedule_event($next_execution_timestamp, $recurrence, 'npp_cache_preload_event');
 
     if (!$scheduled) {
-        nppp_custom_error_log('Failed to schedule new event.');
+        nppp_custom_error_log( __( 'Failed to schedule new event.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         return;
     }
 
@@ -282,7 +280,7 @@ function nppp_get_preload_start_time() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
@@ -358,7 +356,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
@@ -487,9 +485,11 @@ function nppp_create_scheduled_event_preload_status_callback() {
 
         // Display admin notice for completed preload
         if ($mobile_enabled) {
-            nppp_display_admin_notice('success', "SUCCESS: Nginx FastCGI cache preload completed for both Mobile and Desktop in $elapsed_time_str.", true, false);
+            // Translators: %s is the elapsed time.
+            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed for both Mobile and Desktop in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
         } else {
-            nppp_display_admin_notice('success', "SUCCESS: Nginx FastCGI cache preload completed in $elapsed_time_str.", true, false);
+            // Translators: %s is the elapsed time.
+            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
         }
     }
     exit(0);
