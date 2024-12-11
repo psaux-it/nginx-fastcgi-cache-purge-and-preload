@@ -225,7 +225,7 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
     $included_files = [];
 
     // Regex to match cache path directives
-    preg_match_all('/^\s*(?!#\s*)(fastcgi_cache_path)\s+([^;]+);/m', $config, $cache_directives, PREG_SET_ORDER);
+    preg_match_all('/^\s*(?!#\s*)(proxy_cache_path|fastcgi_cache_path|scgi_cache_path|uwsgi_cache_path)\s+([^;]+);/m', $config, $cache_directives, PREG_SET_ORDER);
 
     foreach ($cache_directives as $cache_directive) {
         if (isset($cache_directive[1]) && isset($cache_directive[2])) {
