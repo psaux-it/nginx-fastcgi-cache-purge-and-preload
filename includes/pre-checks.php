@@ -186,8 +186,8 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
     $included_files = [];
     $current_dir = dirname($file);
 
-    // Regex to match fastcgi_cache_key directives
-    preg_match_all('/^\s*(?!#)\s*fastcgi_cache_key\s+([^;]+);/m', $config_content, $cache_key_directives, PREG_SET_ORDER);
+    // Regex to match (proxy,scgi,uwsgi,fastcgi)_cache_key directives
+    preg_match_all('/^\s*(?!#)\s*(?:proxy_cache_key|fastcgi_cache_key|scgi_cache_key|uwsgi_cache_key)\s+([\'"]?(?:\s*\$?[^\';"\s]+)+[\'"]?)\s*;/m', $config_content, $cache_key_directives, PREG_SET_ORDER);
 
     foreach ($cache_key_directives as $cache_key_directive) {
         $value = trim($cache_key_directive[1]);
