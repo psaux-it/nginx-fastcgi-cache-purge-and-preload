@@ -32,18 +32,18 @@ function nppp_get_active_cron_events() {
     if (empty($timezone_string)) {
         // Format the scheduled event information
         echo '<div class="nppp-scheduled-event">';
-        echo '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
-        echo '<div class="nppp-scheduled-event" style="padding-right: 45px;">Please set your Timezone in Wordpress - Options/General!</div>';
+        echo '<h3 class="nppp-active-cron-heading">' . esc_html__('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') . '</h3>';
+        echo '<div class="nppp-scheduled-event" style="padding-right: 45px;">' . esc_html__('Please set your Timezone in WordPress - Options/General!', 'fastcgi-cache-purge-and-preload-nginx') . '</div>';
         echo '</div>';
         return;
     }
 
     // Check events are empty
     if (empty($events)) {
-         // Format the scheduled event information
+        // Format the scheduled event information
         echo '<div class="nppp-scheduled-event">';
-        echo '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
-        echo '<div class="nppp-scheduled-event" style="padding-right: 45px;">No active scheduled events found!</div>';
+        echo '<h3 class="nppp-active-cron-heading">' . esc_html__('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') . '</h3>';
+        echo '<div class="nppp-scheduled-event" style="padding-right: 45px;">' . esc_html__('No active scheduled events found!', 'fastcgi-cache-purge-and-preload-nginx') . '</div>';
         echo '</div>';
         return;
     }
@@ -69,13 +69,21 @@ function nppp_get_active_cron_events() {
 
                     // Format the scheduled event information
                     echo '<div class="nppp-scheduled-event">';
-                    echo '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
+                    echo '<h3 class="nppp-active-cron-heading">' . esc_html__('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') . '</h3>';
                     echo '<div class="nppp-cron-info">';
-                    echo '<span class="nppp-hook-name">Cron Name: <strong>' . esc_html($hook) . '</strong></span> - ';
-                    echo '<span class="nppp-next-run">Next Run: <strong>' . esc_html($next_run_formatted) . '</strong></span>';
+                    echo '<span class="nppp-hook-name">' . sprintf(
+                        /* Translators: %s is the cron hook name */
+                        esc_html__('Cron Name: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        '<strong>' . esc_html($hook) . '</strong>'
+                    ) . '</span> - ';
+                    echo '<span class="nppp-next-run">' . sprintf(
+                        /* Translators: %s is the formatted next run time */
+                        esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        '<strong>' . esc_html($next_run_formatted) . '</strong>'
+                    ) . '</span>';
                     echo '</div>';
                     echo '<div class="nppp-cancel-btn-container">';
-                    echo '<button class="nppp-cancel-btn" data-hook="' . esc_attr($hook) . '">Cancel</button>';
+                    echo '<button class="nppp-cancel-btn" data-hook="' . esc_attr($hook) . '">' . esc_html__('Cancel', 'fastcgi-cache-purge-and-preload-nginx') . '</button>';
                     echo '</div>';
                     echo '</div>';
                 }
@@ -86,8 +94,8 @@ function nppp_get_active_cron_events() {
     // If no events are found for the plugin, add a message to the output
     if (!$has_events) {
         echo '<div class="nppp-scheduled-event">';
-        echo '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
-        echo '<div class="nppp-scheduled-event" style="padding-right: 45px;">No active scheduled events found!</div>';
+        echo '<h3 class="nppp-active-cron-heading">' . esc_html__('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') . '</h3>';
+        echo '<div class="nppp-scheduled-event" style="padding-right: 45px;">' . esc_html__('No active scheduled events found!', 'fastcgi-cache-purge-and-preload-nginx') . '</div>';
         echo '</div>';
     }
 }
@@ -140,7 +148,7 @@ function nppp_get_active_cron_events_ajax() {
     // If no events are found for the plugin, add a message to the event data
     if (empty($event_data)) {
         $event_data[] = array(
-            'hook_name' => 'No active scheduled events found for NPP',
+            'hook_name' => __('No active scheduled events found for NPP', 'fastcgi-cache-purge-and-preload-nginx'),
             'next_run' => ''
         );
     }
