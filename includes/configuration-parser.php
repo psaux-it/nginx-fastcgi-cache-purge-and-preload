@@ -209,7 +209,7 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
         if ($wp_filesystem === false) {
             nppp_display_admin_notice(
                 'error',
-                'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+                __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
             );
             return;
         }
@@ -315,7 +315,7 @@ function nppp_is_service_file_exists() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
