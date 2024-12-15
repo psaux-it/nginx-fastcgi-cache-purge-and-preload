@@ -443,10 +443,10 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                             <?php endif; ?>
                         </td>
                     </tr>
-                    <!-- Section for FastCGI Cache Keys -->
+                    <!-- Section for Nginx Cache Keys -->
                     <tr>
                         <td class="action">
-                            <?php esc_html_e('FastCGI Cache Keys', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                            <?php esc_html_e('Nginx Cache Keys', 'fastcgi-cache-purge-and-preload-nginx'); ?>
                             <?php
                             if (
                                 $cache_keys !== 'Not Found' &&
