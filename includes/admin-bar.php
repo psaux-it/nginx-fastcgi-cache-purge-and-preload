@@ -24,7 +24,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     // Add a parent menu item for FastCGI cache operations
     $wp_admin_bar->add_menu(array(
         'id' => 'fastcgi-cache-operations',
-        'title' => '<img style="height: 20px; margin-bottom: -4px; padding-right: 3px;" src="' . plugin_dir_url(__FILE__) . '../admin/img/bar.png" alt="NPP" title="NPP"> FastCGI Cache',
+        'title' => '<img style="height: 20px; margin-bottom: -4px; padding-right: 3px;" src="' . plugin_dir_url(__FILE__) . '../admin/img/bar.png" alt="NPP" title="NPP"> Nginx Cache',
         'href' => '#',
         'meta' => array(
             'class' => 'npp-icon',
@@ -35,7 +35,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'purge-cache',
-        'title' => 'Purge All',
+        'title' => __('Purge All', 'fastcgi-cache-purge-and-preload-nginx'),
         'href'   => wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce'),
     ));
 
@@ -43,7 +43,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'preload-cache',
-        'title' => 'Preload All',
+        'title' => __('Preload All', 'fastcgi-cache-purge-and-preload-nginx'),
         'href' => wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce'),
     ));
 
@@ -58,7 +58,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
             $wp_admin_bar->add_menu(array(
                 'parent' => 'fastcgi-cache-operations',
                 'id' => 'purge-cache-single',
-                'title' => 'Purge This Page',
+                'title' => __('Purge This Page', 'fastcgi-cache-purge-and-preload-nginx'),
                 'href'  => wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache_single'), 'purge_cache_nonce'),
             ));
 
@@ -66,7 +66,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
             $wp_admin_bar->add_menu(array(
                 'parent' => 'fastcgi-cache-operations',
                 'id' => 'preload-cache-single',
-                'title' => 'Preload This Page',
+                'title' => __('Preload This Page', 'fastcgi-cache-purge-and-preload-nginx'),
                 'href'  => wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache_single'), 'preload_cache_nonce'),
             ));
         }
@@ -76,7 +76,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'fastcgi-cache-status',
-        'title' => 'Cache Status',
+        'title' => __('Cache Status', 'fastcgi-cache-purge-and-preload-nginx'),
         'href' => admin_url('options-general.php?page=nginx_cache_settings#status'),
     ));
 
@@ -84,7 +84,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'fastcgi-cache-settings',
-        'title' => 'Cache Settings',
+        'title' => __('Cache Settings', 'fastcgi-cache-purge-and-preload-nginx'),
         'href' => admin_url('options-general.php?page=nginx_cache_settings'),
     ));
 }
