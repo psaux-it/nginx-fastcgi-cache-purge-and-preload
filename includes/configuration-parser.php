@@ -336,27 +336,27 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
     <header></header>
     <main>
         <section class="nginx-status" style="background-color: mistyrose;">
-            <h2>Systemd Service Management</h2>
+            <h2><?php esc_html_e('Systemd Service Management', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
             <p style="padding-left: 10px; font-weight: 500;">
-                In case you used the one-liner automation bash script for the initial setup, you can restart the systemd service here. Restarting the service may help to fix permission issues and keep cache consistency stable. The automation script assigns passwordless sudo permissions to the PHP process owner specifically for managing the npp-wordpress service directly from the frontend.
+                <?php esc_html_e('In case you used the one-liner automation bash script for the initial setup, you can restart the systemd service here. Restarting the service may help to fix permission issues and keep cache consistency stable. The automation script assigns passwordless sudo permissions to the PHP process owner specifically for managing the npp-wordpress service directly from the frontend.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
             </p>
             <button id="nppp-restart-systemd-service-btn" class="button button-primary <?php echo !$service_file_exists ? 'disabled' : ''; ?>" style="margin-left: 10px; margin-bottom: 15px; background-color: #2271b1 !important; color: white !important;">
-                Restart Service
+                <?php esc_html_e('Restart Service', 'fastcgi-cache-purge-and-preload-nginx'); ?>
             </button>
         </section>
         <section class="nginx-status">
-            <h2>NGINX & FUSE STATUS</h2>
+            <h2><?php esc_html_e('NGINX & FUSE STATUS', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
             <table>
                 <thead>
                     <tr>
-                        <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
-                        <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                        <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e('Check', 'fastcgi-cache-purge-and-preload-nginx'); ?></th>
+                        <th class="status-header"><span class="dashicons dashicons-info"></span> <?php esc_html_e('Status', 'fastcgi-cache-purge-and-preload-nginx'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
                     <!-- Section for Nginx Version -->
                     <tr>
-                        <td class="action">Nginx Version</td>
+                        <td class="action"><?php esc_html_e('Nginx Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppNginxVersion">
                             <?php if ($nginx_info['nginx_version'] === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
@@ -369,7 +369,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     </tr>
                     <!-- Section for OpenSSL Version -->
                     <tr>
-                        <td class="action">OpenSSL Version</td>
+                        <td class="action"><?php esc_html_e('OpenSSL Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppOpenSSLVersion">
                             <?php if ($nginx_info['openssl_version'] === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
@@ -383,7 +383,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     <!-- Section for Nginx Cache Paths -->
                     <tr>
                         <td class="action">
-                            Nginx Cache Paths
+                            <?php esc_html_e('Nginx Cache Paths', 'fastcgi-cache-purge-and-preload-nginx'); ?>
                             <?php
                             if (!empty($cache_paths) && get_transient('nppp_cache_path_not_found') === false):
                                 $all_supported = true;
@@ -402,16 +402,16 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                     }
                                 }
                                 if ($all_supported): ?>
-                                    <br><span style="font-size: 13px; color: green;">Supported</span>
+                                    <br><span style="font-size: 13px; color: green;"><?php esc_html_e('Supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                 <?php else: ?>
-                                    <br><span style="font-size: 13px; color: #f0c36d;">Found Unsupported</span>
+                                    <br><span style="font-size: 13px; color: #f0c36d;"><?php esc_html_e('Found Unsupported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                 <?php endif;
                             endif; ?>
                         </td>
                         <td class="status">
                             <?php if (empty($cache_paths) || get_transient('nppp_cache_path_not_found') !== false): ?>
                                 <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: red; font-size: 13px; font-weight: bold;"> Not Found</span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;"><?php esc_html_e('Not Found', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                             <?php else: ?>
                                 <table class="nginx-config-table">
                                     <tbody>
@@ -446,7 +446,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     <!-- Section for FastCGI Cache Keys -->
                     <tr>
                         <td class="action">
-                            FastCGI Cache Keys
+                            <?php esc_html_e('FastCGI Cache Keys', 'fastcgi-cache-purge-and-preload-nginx'); ?>
                             <?php
                             if (
                                 $cache_keys !== 'Not Found' &&
@@ -456,25 +456,25 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                             ):
                                 if ($cache_keys === '$scheme$request_method$host$request_uri'):
                             ?>
-                                    <br><span style="font-size: 13px; color: green;">Supported</span>
+                                    <br><span style="font-size: 13px; color: green;"><?php esc_html_e('Supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                 <?php else: ?>
-                                    <br><span style="font-size: 13px; color: #f0c36d;">Found Unsupported</span>
+                                    <br><span style="font-size: 13px; color: #f0c36d;"><?php esc_html_e('Found Unsupported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                 <?php endif; ?>
                             <?php endif; ?>
                         </td>
                         <td class="status">
                             <?php if ($cache_keys === 'Not Found'): ?>
                                 <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: red; font-size: 13px; font-weight: bold;">Not Found</span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;"><?php esc_html_e('Not Found', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                             <?php elseif ($cache_keys === 'Filesystem Error'): ?>
                                 <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: red; font-size: 13px; font-weight: bold">System Error</span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;"><?php esc_html_e('System Error', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                             <?php elseif ($cache_keys === 'Conf Not Found'): ?>
                                 <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: red; font-size: 13px; font-weight: bold;">Conf Error</span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;"><?php esc_html_e('Conf Error', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                             <?php elseif ($cache_keys === 'Key Not Found'): ?>
                                 <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: red; font-size: 13px; font-weight: bold;">Not Found</span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;"><?php esc_html_e('Not Found', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                             <?php elseif ($cache_keys === '$scheme$request_method$host$request_uri'): ?>
                                 <span class="dashicons dashicons-yes" style="color: green !important; font-size: 20px;"></span>
                                 <span style="color: teal; font-weight: bold; font-size: 13px;">
@@ -509,7 +509,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
             <table>
                 <tbody>
                     <tr>
-                        <td class="action highlight-metric">libfuse Version</td>
+                        <td class="action highlight-metric"><?php esc_html_e('libfuse Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status highlight-metric" id="npppLibfuseVersion">
                             <?php
                             echo esc_html(nppp_check_libfuse_version());
@@ -517,7 +517,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                         </td>
                     </tr>
                     <tr>
-                        <td class="action highlight-metric">bindfs Version</td>
+                        <td class="action highlight-metric"><?php esc_html_e('bindfs Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status highlight-metric" id="npppBindfsVersion">
                             <?php
                             echo esc_html(nppp_check_bindfs_version());
@@ -526,11 +526,11 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     </tr>
                     <!-- Section for FUSE Cache Paths -->
                     <tr>
-                        <td class="action highlight-metric">Nginx Cache Paths<br><span style="font-size: 13px; color: green;">FUSE Mounts</span></td>
+                        <td class="action highlight-metric"><?php esc_html_e('Nginx Cache Paths', 'fastcgi-cache-purge-and-preload-nginx'); ?><br><span style="font-size: 13px; color: green;"><?php esc_html_e('FUSE Mounts', 'fastcgi-cache-purge-and-preload-nginx'); ?></span></td>
                         <td class="status highlight-metric" id="npppFuseMountStatus">
                             <?php if (empty($fuse_paths['fuse_paths']) || get_transient('nppp_cache_path_not_found') !== false): ?>
                                 <span class="dashicons dashicons-clock" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: orange; font-size: 13px; font-weight: bold;">Not Mounted</span>
+                                <span style="color: orange; font-size: 13px; font-weight: bold;"><?php esc_html_e('Not Mounted', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                             <?php else: ?>
                                 <table class="nginx-config-table">
                                     <tbody>
@@ -550,13 +550,15 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
     </main>
     <div class="nppp-premium-widget">
         <div id="nppp-ad" style="margin-top: 20px; margin-bottom: 0; margin-left: 0; margin-right: 0;">
-            <h3 class="textcenter">Hope you are enjoying NPP! Do you still need assistance with the server side integration? Get our server integration service now and optimize your website's caching performance!</h3>
+            <h3 class="textcenter"><?php esc_html_e('Hope you are enjoying NPP! Do you still need assistance with the server-side integration? Get our server integration service now and optimize your website\'s speed!', 'fastcgi-cache-purge-and-preload-nginx'); ?></h3>
             <p class="textcenter">
                 <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="open-nppp-upsell" data-pro-ad="sidebar-logo">
-                    <img src="<?php echo esc_url($image_url_ad); ?>" alt="Nginx Cache Purge & Preload PRO" title="Nginx Cache Purge & Preload Pro">
+                    <img src="<?php echo esc_url($image_url_ad); ?>" alt="<?php esc_attr_e('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>" title="<?php esc_attr_e('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>">
                 </a>
             </p>
-            <p class="textcenter"><a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="button button-primary button-large open-nppp-upsell" data-pro-ad="sidebar-button">Get Service</a></p>
+            <p class="textcenter">
+                <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="button button-primary button-large open-nppp-upsell" data-pro-ad="sidebar-button"><?php esc_html_e('Get Service', 'fastcgi-cache-purge-and-preload-nginx'); ?></a>
+            </p>
         </div>
     </div>
     <?php
@@ -625,7 +627,11 @@ function nppp_nginx_config_shortcode() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        return '<p>Failed to initialize filesystem.</p>';
+        nppp_display_admin_notice(
+            'error',
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return '<p>' . esc_html__('Failed to initialize filesystem.', 'fastcgi-cache-purge-and-preload-nginx') . '</p>';
     }
 
     // Use the nppp_get_nginx_conf_paths function to find Nginx configuration paths
@@ -633,7 +639,7 @@ function nppp_nginx_config_shortcode() {
 
     // Check if Nginx configuration file found
     if (empty($conf_paths)) {
-        return '<p>Nginx configuration file not found.</p>';
+        return '<p>' . esc_html__('Nginx configuration file not found.', 'fastcgi-cache-purge-and-preload-nginx') . '</p>';
     }
 
     // Parse Nginx configuration file for Nginx Cache Paths
@@ -641,7 +647,7 @@ function nppp_nginx_config_shortcode() {
     $config_file = $conf_paths[0];
     $config_data = nppp_parse_nginx_config($config_file, $wp_filesystem);
     if ($config_data === false) {
-        return '<p>Failed to parse Nginx configuration file.</p>';
+        return '<p>' . esc_html__('Failed to parse Nginx configuration file.', 'fastcgi-cache-purge-and-preload-nginx') . '</p>';
     }
 
     // Get cache keys from cache as status &advanced tab already parsed them
