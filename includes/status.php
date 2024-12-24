@@ -450,6 +450,48 @@ function nppp_get_in_cache_page_count() {
     return $urls_count > 0 ? $urls_count : 0;
 }
 
+// Function to check for same Nginx cache path for multiple instance
+function nppp_check_duplicate_nginx_cache_paths($file, $wp_filesystem) {
+    // Retrieve the cached result from the transient
+    $transient_key = 'nppp_cache_paths_' . md5('nppp');
+    $cached_result = get_transient($transient_key);
+
+    // Check if cached result exists else parse config
+    if ($cached_result === false || empty($cached_result['cache_paths'])) {
+        nppp_parse_nginx_config($file, $wp_filesystem);
+
+        // Retrieve again the cached result
+        $cached_result = get_transient($transient_key);
+    }
+
+    // Extract cache paths from the cached result
+    $cache_paths = $cached_result['cache_paths'];
+
+    // Find duplicates
+    $unique_paths = [];
+    $duplicates = [];
+
+    foreach ($cache_paths as $directive => $paths) {
+        foreach ($paths as $path) {
+            // Normalize the path
+            $normalized_path = rtrim(strtolower($path), '/');
+
+            if (in_array($path, $unique_paths)) {
+                $duplicates[] = $path;
+            } else {
+                $unique_paths[] = $path;
+            }
+        }
+    }
+
+    // Return duplicates
+    if (!empty($duplicates)) {
+        return $duplicates;
+    }
+
+    return false;
+}
+
 // Generate HTML for status tab
 function nppp_my_status_html() {
     // Initialize wp_filesystem
@@ -495,26 +537,53 @@ function nppp_my_status_html() {
     // Check NGINX FastCGI Cache Key
     $config_data = nppp_parse_nginx_cache_key();
 
-    // Warn about not found fastcgi cache keys
+    // Check same Nginx cache path for multiple instance
+    $config_file = $conf_paths[0];
+    $duplicates = nppp_check_duplicate_nginx_cache_paths($config_file, $wp_filesystem);
+
+    // Warn about not found cache key
     if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">WARNING SETUP: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found.</p>
-              </div>
-              <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                  <p style="margin: 0; align-items: center;">
-                      <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                      Please review your <strong>Nginx FastCGI cache setup</strong> to ensure that the <strong>fastcgi_cache_key</strong> is correctly defined. If you continue to encounter this error, this may indicate a <strong>parsing error</strong> and can be safely ignored.
-                  </p>
+                  <p class="nppp-advanced-error-message">INFO: No <span style="color: #FFDEAD;">cache key</span> directive was found.</p>
               </div>';
-    // Warn about the unsupported fastcgi cache keys
+    // Warn about the unsupported cache key
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">INFO: <span style="color: #f0c36d;">Unsupported</span> FastCGI cache keys found!</p>
-              </div>
-              <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                  <p class="nppp-advanced-error-message">INFO: <span style="color: #FFDEAD;">Unsupported</span> cache key found!</p>
+              </div>';
+    }
+
+    // Warn about same Nginx cache path for multiple instance
+    if ($duplicates !== false) {
+        echo '<div class="nppp-status-wrap">
+                  <p class="nppp-advanced-error-message">INFO: <span style="color: #FFDEAD;">Same</span> Nginx cache path found!</p>
+              </div>';
+    }
+
+    // Details about not found cache key
+    if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
+        echo '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                  <p style="margin: 0; align-items: center;">
+                      <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                      Please check your <strong>Nginx cache setup</strong> to ensure that the <strong>cache key</strong> directive is defined. If you continue to encounter this error, this may indicate a <strong>parsing error</strong> and can be safely ignored.
+                  </p>
+              </div>';
+    // Details about the unsupported cache key
+    } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
+        echo '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                   <p style="margin: 0; align-items: center;">
                       <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
                       If <strong>Pages In Cache Count</strong> indicates <strong>Regex Error</strong>, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
+                  </p>
+              </div>';
+    }
+
+    // Details about same Nginx cache path for multiple instance
+    if ($duplicates !== false) {
+        echo '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                  <p style="margin: 0; align-items: center;">
+                      <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                      <strong>Same</strong> Nginx cache path may used for multiple WP instances. Please ensure <strong>unique Nginx cache paths</strong> are configured for each WP instance to avoid conflicts.
                   </p>
               </div>';
     }
