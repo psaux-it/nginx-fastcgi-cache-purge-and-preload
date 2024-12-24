@@ -108,7 +108,7 @@ function nppp_parse_nginx_cache_key() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
         );
         // Store error state in cache also
         set_transient('nppp_cache_keys_wpfilesystem_error', true, MONTH_IN_SECONDS);
@@ -240,7 +240,7 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
 function nppp_pre_checks_critical() {
     // Check if the operating system is Linux and the web server is nginx
     if (!nppp_is_linux()) {
-        return 'GLOBAL ERROR OPT: Plugin is not functional on your environment. The plugin requires Linux operating system.';
+        return __('GLOBAL ERROR OPT: Plugin is not functional on your environment. The plugin requires Linux operating system.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Initialize $server_software variable
@@ -285,7 +285,7 @@ function nppp_pre_checks_critical() {
 
     // Check if the web server is Nginx
     if (strpos($server_software, 'nginx') === false) {
-        return 'GLOBAL ERROR SERVER: Plugin is not functional on your environment. The plugin requires Nginx web server.';
+        return __('GLOBAL ERROR SERVER: Plugin is not functional on your environment. The plugin requires Nginx web server.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Check if either shell_exec or exec is enabled
@@ -294,7 +294,7 @@ function nppp_pre_checks_critical() {
         if (function_exists('shell_exec')) {
             $output = shell_exec('echo "Test"');
             if (trim($output) !== "Test") {
-                return 'GLOBAL ERROR EXEC: Plugin is not functional on your environment. The shell functions (shell_exec) are required but not enabled. Please enable them in your server\'s PHP configuration.';
+                return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "shell_exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
             }
         }
 
@@ -302,23 +302,23 @@ function nppp_pre_checks_critical() {
         if (function_exists('exec')) {
             $output = exec('echo "Test"');
             if (trim($output) !== "Test") {
-                return 'GLOBAL ERROR EXEC: Plugin is not functional on your environment. The shell functions (exec) are required but not enabled. Please enable them in your server\'s PHP configuration.';
+                return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
             }
         }
     } else {
         // If neither shell_exec nor exec are available
-        return 'GLOBAL ERROR EXEC: Plugin is not functional on your environment. The shell functions (shell_exec or exec) are required but not enabled. Please enable them in your server\'s PHP configuration.';
+        return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "shell_exec" or "exec" functions are required but not enabled. Please enable them in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Check if POSIX extension functions are available
     if (!function_exists('posix_kill')) {
-        return 'GLOBAL ERROR POSIX: Plugin is not functional on your environment. The PHP POSIX extension is required but not enabled. Please install or enable POSIX on your server.';
+        return __('GLOBAL ERROR POSIX: Plugin is not functional on your environment. The PHP POSIX extension is required but not enabled. Please install or enable POSIX on your server.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Check if wget is available
     $output = shell_exec('command -v wget');
     if (empty($output)) {
-        return 'GLOBAL ERROR COMMAND: wget is not available. Please ensure "wget" is installed on your server. Preload action is not functional on your environment.';
+        return __('GLOBAL ERROR COMMAND: The "wget" utility is not available. Please ensure "wget" is installed on your server. The preload action is not functional in your environment.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // All requirements met
@@ -332,7 +332,7 @@ function nppp_pre_checks() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
         );
         return;
     }
@@ -351,7 +351,7 @@ function nppp_pre_checks() {
 
     // Check if cache directory exists if not force to create it
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
-        nppp_display_pre_check_warning('GLOBAL ERROR PATH: The specified Nginx Cache Directory is default one or does not exist anymore. Please check your Nginx Cache Directory.');
+        nppp_display_pre_check_warning(__('GLOBAL ERROR PATH: The specified Nginx cache directory is default one or does not exist anymore. Please check your Nginx cache directory.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
@@ -361,7 +361,7 @@ function nppp_pre_checks() {
 
     if ($nppp_permissions_check_result === 'false') {
         // Handle the case where permissions are not sufficient
-        nppp_display_pre_check_warning('GLOBAL ERROR PERMISSION: Insufficient permissions for Nginx Cache Path. Please consult the Help tab for guidance.');
+        nppp_display_pre_check_warning(__('GLOBAL ERROR PERMISSION: Insufficient permissions for Nginx cache directory. Please consult the Help tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
@@ -392,7 +392,7 @@ function nppp_pre_checks() {
 
     // If no files are found or if files don't contain 'KEY:', display a warning
     if ($has_files !== 'found' && $has_files !== 'error') {
-        nppp_display_pre_check_warning('GLOBAL WARNING CACHE: Cache is empty. For immediate cache creation consider utilizing the preload action now!');
+        nppp_display_pre_check_warning(__('GLOBAL WARNING CACHE: The Nginx cache is empty. Consider preloading the Nginx cache now!', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 }
