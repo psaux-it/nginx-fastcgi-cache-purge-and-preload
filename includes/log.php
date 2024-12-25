@@ -55,10 +55,12 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
 
             if (!$append_result) {
-                nppp_custom_error_log("Error appending to log file at " . $sanitized_path);
+                // Translators: %s is the path to the log file.
+                nppp_custom_error_log(sprintf(__('Error appending to log file at %s', 'fastcgi-cache-purge-and-preload-nginx'), $sanitized_path));
             }
         } else {
-            nppp_custom_error_log("Invalid or inaccessible log file directory: " . $log_file_dir);
+            // Translators: %s is the path to the log file.
+            nppp_custom_error_log(sprintf(__('Invalid or inaccessible log file directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $log_file_dir));
         }
     }
 
@@ -107,7 +109,8 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         if (!empty($action) && array_key_exists($action, $allowed_actions)) {
             // Check if nonce is set and is valid
             if (!isset($_REQUEST['_wpnonce'])) {
-                wp_die('Nonce is missing.');
+                // Translators: This message appears when a required nonce is missing.
+                wp_die(__('Nonce is missing.', 'fastcgi-cache-purge-and-preload-nginx'));
             }
 
             // Sanitize nonce
@@ -116,12 +119,14 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
 
             // Verify nonce for WP Admin Notices
             if (!wp_verify_nonce($nonce, $expected_nonce)) {
-                wp_die('Invalid nonce. Request could not be verified.');
+                // Translators: This message appears when the provided nonce is invalid.
+                wp_die(__('Invalid nonce. Request could not be verified.', 'fastcgi-cache-purge-and-preload-nginx'));
             }
 
             // Further security check to verify the user’s capability
             if (!current_user_can('manage_options')) {
-                wp_die('Permission denied');
+                // Translators: This message appears when a user does not have the required permissions.
+                wp_die(__('Permission denied', 'fastcgi-cache-purge-and-preload-nginx'));
             }
         } else {
             return;
@@ -167,7 +172,10 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
 
     // Perform the permission check for admin actions
     if (is_admin() && !current_user_can('manage_options')) {
-        echo '<div class="notice notice-error"><p>You do not have sufficient permissions to access this page.</p></div>';
+        echo '<div class="notice notice-error"><p>' . esc_html__(
+                 'You do not have sufficient permissions to access this page.',
+                 'fastcgi-cache-purge-and-preload-nginx'
+             ) . '</p></div>';
         return;
     }
 
