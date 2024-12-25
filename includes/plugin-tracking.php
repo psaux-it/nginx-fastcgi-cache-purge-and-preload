@@ -82,7 +82,7 @@ function nppp_plugin_tracking($status = 'active') {
     $plugin_version = $plugin_data['Version'];
 
     if (empty($plugin_name) || empty($plugin_version)) {
-        nppp_custom_error_log('Plugin data not available. API call aborted.');
+        nppp_custom_error_log(__('Plugin data not available. API call aborted.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
@@ -119,11 +119,13 @@ function nppp_plugin_tracking($status = 'active') {
 
             // Log tracking failure
             if (is_wp_error($tracking_response)) {
-                nppp_custom_error_log('Plugin tracking request failed: ' . $tracking_response->get_error_message());
+                // Translators: This message appears when the plugin tracking request fails.
+                nppp_custom_error_log(sprintf(__('Plugin tracking request failed: %s', 'fastcgi-cache-purge-and-preload-nginx'), $tracking_response->get_error_message()));
             }
         }
     } else {
-        nppp_custom_error_log('Failed to retrieve JWT token: ' . $response->get_error_message());
+        // Translators: This message appears when JWT token retrieval fails.
+        nppp_custom_error_log(sprintf(__('Failed to retrieve JWT token: %s', 'fastcgi-cache-purge-and-preload-nginx'), $response->get_error_message()));
     }
 }
 
@@ -158,7 +160,7 @@ function nppp_schedule_plugin_tracking_event($status = false) {
     if (!wp_next_scheduled('npp_plugin_tracking_event')) {
         $scheduled = wp_schedule_event($next_execution_timestamp, $recurrence, 'npp_plugin_tracking_event');
         if (!$scheduled) {
-            nppp_custom_error_log('Failed to schedule plugin tracking event.');
+            nppp_custom_error_log(__('Failed to schedule plugin tracking event.', 'fastcgi-cache-purge-and-preload-nginx'));
         }
     }
 
