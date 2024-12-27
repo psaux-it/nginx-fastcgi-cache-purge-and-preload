@@ -21,12 +21,21 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         return;
     }
 
-    // Add a parent menu item for FastCGI cache operations
+    // Add a parent menu item for Nginx cache operations
     $wp_admin_bar->add_menu(array(
-        'id' => 'fastcgi-cache-operations',
-        'title' => '<img style="height: 20px; margin-bottom: -4px; padding-right: 3px;" src="' . plugin_dir_url(__FILE__) . '../admin/img/bar.png" alt="NPP" title="NPP"> Nginx Cache',
-        'href' => '#',
-        'meta' => array(
+        'id'    => 'fastcgi-cache-operations',
+        'title' => sprintf(
+            '<img style="height: 20px; margin-bottom: -4px; padding-right: 3px;" src="%s" alt="%s" title="%s"> %s',
+            esc_url(plugin_dir_url(__FILE__) . '../admin/img/bar.png'),
+            /* Translators: This is the alt text for the menu icon */
+            esc_attr__('NPP', 'fastcgi-cache-purge-and-preload-nginx'),
+            /* Translators: This is the tooltip text for the menu icon */
+            esc_attr__('NPP', 'fastcgi-cache-purge-and-preload-nginx'),
+            /* Translators: This is the menu title for the Nginx cache operations */
+            esc_html__('Nginx Cache', 'fastcgi-cache-purge-and-preload-nginx')
+        ),
+        'href'  => '#',
+        'meta'  => array(
             'class' => 'npp-icon',
         ),
     ));
