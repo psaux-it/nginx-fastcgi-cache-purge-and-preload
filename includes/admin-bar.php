@@ -113,35 +113,46 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         return;
     }
 
+    // Validate actions
+    $allowed_actions = ['nppp_purge_cache', 'nppp_preload_cache', 'nppp_purge_cache_single', 'nppp_preload_cache_single'];
+    if (!in_array($action, $allowed_actions, true)) {
+        return;
+    }
+
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
-    // Set default options to prevent any error
+    // Set default data for purge & preload actions
     $default_cache_path = '/dev/shm/change-me-now';
     $default_limit_rate = 1280;
     $default_cpu_limit = 50;
     $default_reject_regex = nppp_fetch_default_reject_regex();
 
-    // Get the necessary data for actions from plugin options
+    // Get the necessary data for purge & preload actions
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
     $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
     $nginx_cache_cpu_limit = isset($nginx_cache_settings['nginx_cache_cpu_limit']) ? $nginx_cache_settings['nginx_cache_cpu_limit'] : $default_cpu_limit;
     $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
 
-    // Extra data for actions
+    // Get extra data for purge & preload actions
     $fdomain = get_site_url();
     $this_script_path = dirname(plugin_dir_path(__FILE__));
     $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
-    // get the current page url for purge & preload front
-    // also this is the redirect URL
+    // Get the current page url for purge & preload front-end actions
     if (empty($_SERVER['HTTP_REFERER'])) {
         $clean_current_page_url = home_url();
     } else {
-        // Sanitize and remove slashes from the URL
+        // Sanitize the URL
         $current_page_url = sanitize_text_field(wp_unslash($_SERVER['HTTP_REFERER']));
         $clean_current_page_url = filter_var($current_page_url, FILTER_SANITIZE_URL);
+
+        // Validate the URL
+        if (!filter_var($clean_current_page_url, FILTER_VALIDATE_URL)) {
+            // Fallback to home URL if invalid
+            $clean_current_page_url = home_url();
+        }
     }
 
     // Start output buffering to capture the output of the actions
@@ -203,8 +214,8 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         $redirect_url = add_query_arg(
             array(
                 'page' => 'nginx_cache_settings',
-                'status_message' => urlencode($status_message),
-                'message_type' => urlencode($message_type),
+                'status_message' => esc_html(urlencode($status_message)),
+                'message_type' => esc_html(urlencode($message_type)),
                 'redirect_nonce' => $nonce_redirect,
             ),
             admin_url('options-general.php')
