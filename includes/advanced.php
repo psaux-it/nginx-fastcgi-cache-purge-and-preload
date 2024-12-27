@@ -46,7 +46,7 @@ function nppp_premium_html($nginx_cache_path) {
                     <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
-                        <span style="font-size: 14px;">' . esc_html__( 'ERROR CACHE PATH: The specified Nginx cache directory could not be found. Please verify the path in the plugin settings.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
+                        <span style="font-size: 14px;">' . esc_html__( 'ERROR CACHE PATH: The specified Nginx cache path was not found. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
                     </p>
                 </div>';
     }
@@ -288,7 +288,7 @@ function nppp_purge_cache_premium_callback() {
 
         // Check process is alive
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            $error_message = __( 'INFO ADMIN: Nginx purge cache halted due to ongoing cache preloading. You can stop cache preloading anytime via Purge All.', 'fastcgi-cache-purge-and-preload-nginx' );
+            $error_message = __( 'INFO ADMIN: Nginx cache purge has been halted due to ongoing cache preloading. You can stop Nginx cache preloading anytime via the "Purge All" option.', 'fastcgi-cache-purge-and-preload-nginx' );
             nppp_log_and_send_error($error_message, $log_file_path);
         }
     }
@@ -302,23 +302,23 @@ function nppp_purge_cache_premium_callback() {
     if ($path_check !== true) {
         switch ($path_check) {
             case 'file_not_found':
-                $error_message = __( 'Nginx cache purge attempted, but the page is not currently cached.', 'fastcgi-cache-purge-and-preload-nginx' );
+                $error_message = __( 'Nginx cache purge attempted, but no cache entry was found.', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
             case 'invalid_cache_directory':
-                $error_message = __( 'Nginx cache purge failed because the cache directory is invalid.', 'fastcgi-cache-purge-and-preload-nginx' );
+                $error_message = __( 'Nginx cache purge failed because the Nginx cache directory is invalid.', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
             case 'outside_cache_directory':
-                $error_message = __( 'The attempt to purge the Nginx cache was forbidden for security reasons.', 'fastcgi-cache-purge-and-preload-nginx' );
+                $error_message = __( 'The attempt to purge the Nginx cache was blocked due to security restrictions.', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
             default:
-                $error_message = __( 'Nginx cache purge failed due to an unexpected error. Please try again later.', 'fastcgi-cache-purge-and-preload-nginx' );
+                $error_message = __( 'An unexpected error occurred while attempting to purge the Nginx cache. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' );
         }
         nppp_log_and_send_error($error_message, $log_file_path);
     }
 
     // Check permissions before purge cache
     if (!$wp_filesystem->is_readable($file_path) || !$wp_filesystem->is_writable($file_path)) {
-        $error_message = __( 'ERROR PERMISSION: Nginx cache purge failed due to permission issue. Refer to -Help- tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
+        $error_message = __( 'ERROR PERMISSION: The Nginx cache purge failed due to permission issue. Refer to "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
         nppp_log_and_send_error($error_message, $log_file_path);
     }
 
@@ -352,13 +352,13 @@ function nppp_purge_cache_premium_callback() {
         // Handle different validation outcomes
         switch ($validation_result) {
             case 'critical_path':
-                $error_message = __( 'ERROR PATH: The cache path appears to be a critical system directory or a first-level directory. Cannot purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
+                $error_message = __( 'ERROR PATH: The Nginx cache path appears to be a critical system directory or a first-level directory. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
             case 'file_not_found_or_not_readable':
-                $error_message = __( 'ERROR PATH: The specified Nginx cache path does not exist. Cannot purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
+                $error_message = __( 'ERROR PATH: The specified Nginx cache path was not found. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
             default:
-                $error_message = __( 'ERROR PATH: An invalid Nginx cache path was provided. Cannot purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
+                $error_message = __( 'ERROR PATH: An invalid Nginx cache path was provided. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
         }
         nppp_log_and_send_error($error_message, $log_file_path);
     }
@@ -555,14 +555,14 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     } catch (Exception $e) {
         // Handle exceptions and return an error message
         return [
-            'error' => __( 'An error occurred while accessing the Nginx Cache Directory. Please try again.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'error' => __( 'An error occurred while accessing the Nginx cache directory. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         ];
     }
 
     // Check if any URLs were extracted
     if (empty($urls)) {
         return [
-            'error' => __( 'No cached content found. Please <strong>Preload All</strong> cache first and try again.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'error' => __( 'No cached content found. Please use <strong>Preload All</strong> to warm Nginx cache first and try again.', 'fastcgi-cache-purge-and-preload-nginx' )
         ];
     }
 
