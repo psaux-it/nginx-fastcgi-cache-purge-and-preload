@@ -194,10 +194,10 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                                 $error_message = __( 'ERROR PATH: The Nginx cache path appears to be a critical system directory or a first-level directory. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
                                 break;
                             case 'file_not_found_or_not_readable':
-                                $error_message = __( 'ERROR PATH: The specified Nginx cache path was not found. Failed to purge Nginx cache', 'fastcgi-cache-purge-and-preload-nginx' );
+                                $error_message = __( 'ERROR PATH: The specified Nginx cache path was not found. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
                                 break;
                             default:
-                                $error_message = __( 'ERROR PATH: An invalid Nginx cache path was provided. Failed to purge Nginx cache', 'fastcgi-cache-purge-and-preload-nginx' );
+                                $error_message = __( 'ERROR PATH: An invalid Nginx cache path was provided. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
                         }
                         nppp_display_admin_notice('error', $error_message);
                         return;
