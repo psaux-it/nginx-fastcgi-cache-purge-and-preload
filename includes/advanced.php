@@ -46,7 +46,7 @@ function nppp_premium_html($nginx_cache_path) {
                     <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
-                        <span style="font-size: 14px;">' . esc_html__( 'ERROR CACHE PATH: The specified Nginx cache path was not found. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
+                        <span style="font-size: 14px;">' . esc_html__( 'ERROR PATH: The specified Nginx cache path was not found. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
                     </p>
                 </div>';
     }
