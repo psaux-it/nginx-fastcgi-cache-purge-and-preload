@@ -10,7 +10,7 @@
 
 // Immediately Invoked Function Expression (IIFE)
 // Prevent interfere with core wp and other plugin code
-(function($, window, document, undefined) {
+(function($, window, document) {
     'use strict';
 
 // Main plugin admin side  js code
