@@ -2235,114 +2235,200 @@ function npppupdateStatus() {
 
     npppphpFpmStatusSpan.textContent = npppphpFpmStatus;
     npppphpFpmStatusSpan.style.fontSize = "14px";
+
+    let iconSpanFpm = document.createElement('span');
+    let fpmStatusText = '';
+
     if (npppphpFpmStatus === "false") {
         npppphpFpmStatusSpan.style.color = "red";
-        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Required (Check Help)';
+        iconSpanFpm.classList.add("dashicons", "dashicons-no");
+        fpmStatusText = ' Required (Check Help)';
     } else if (npppphpFpmStatus === "Not Found") {
         npppphpFpmStatusSpan.style.color = "orange";
-        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
+        iconSpanFpm.classList.add("dashicons", "dashicons-clock");
+        fpmStatusText = ' Not Determined';
     } else {
         npppphpFpmStatusSpan.style.color = "green";
-        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Not Required';
+        iconSpanFpm.classList.add("dashicons", "dashicons-yes");
+        fpmStatusText = ' Not Required';
     }
+
+    npppphpFpmStatusSpan.textContent = '';
+    npppphpFpmStatusSpan.appendChild(iconSpanFpm);
+    npppphpFpmStatusSpan.append(fpmStatusText);
 
     // Fetch and update pages in cache count
     var npppcacheInPageSpan = document.getElementById("npppphpPagesInCache");
     var npppcacheInPageSpanValue = npppcacheInPageSpan.textContent.trim();
     npppcacheInPageSpan.style.fontSize = "14px";
+
+    let iconSpanCache = document.createElement('span');
+    let cacheStatusText = '';
+
     if (npppcacheInPageSpanValue === "Undetermined") {
         npppcacheInPageSpan.style.color = "red";
-        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Permission Issue';
+        iconSpanCache.classList.add("dashicons", "dashicons-no");
+        cacheStatusText = ' Permission Issue';
     } else if (npppcacheInPageSpanValue === "RegexError") {
         npppcacheInPageSpan.style.color = "red";
-        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Regex Error';
+        iconSpanCache.classList.add("dashicons", "dashicons-no");
+        cacheStatusText = ' Regex Error';
     } else if (npppcacheInPageSpanValue === "0") {
         npppcacheInPageSpan.style.color = "orange";
-        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppcacheInPageSpanValue;
+        iconSpanCache.classList.add("dashicons", "dashicons-clock");
+        cacheStatusText = ' ' + npppcacheInPageSpanValue;
     } else if (npppcacheInPageSpanValue === "Not Found") {
         npppcacheInPageSpan.style.color = "orange";
-        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
+        iconSpanCache.classList.add("dashicons", "dashicons-clock");
+        cacheStatusText = ' Not Determined';
     } else {
         npppcacheInPageSpan.style.color = "green";
-        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppcacheInPageSpanValue;
+        iconSpanCache.classList.add("dashicons", "dashicons-yes");
+        cacheStatusText = ' ' + npppcacheInPageSpanValue;
     }
+
+    npppcacheInPageSpan.textContent = '';
+    npppcacheInPageSpan.appendChild(iconSpanCache);
+    npppcacheInPageSpan.append(cacheStatusText);
 
     // Fetch and update php process owner
     // PHP-FPM (website user)
     var npppphpProcessOwnerSpan = document.getElementById("npppphpProcessOwner");
     var npppphpProcessOwner = npppphpProcessOwnerSpan.textContent.trim();
-    npppphpProcessOwnerSpan.textContent = npppphpProcessOwner;
+
     npppphpProcessOwnerSpan.style.fontSize = "14px";
     npppphpProcessOwnerSpan.style.color = "green";
-    npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-arrow-right-alt" style="font-size: 16px;"></span> ' + npppphpProcessOwner;
+    npppphpProcessOwnerSpan.textContent = '';
+
+    let iconSpanProcessOwner = document.createElement('span');
+    iconSpanProcessOwner.classList.add("dashicons", "dashicons-arrow-right-alt");
+    iconSpanProcessOwner.style.fontSize = "16px";
+
+    npppphpProcessOwnerSpan.appendChild(iconSpanProcessOwner);
+    npppphpProcessOwnerSpan.append(' ' + npppphpProcessOwner);
 
     // Fetch and update web server user
     // WEB-SERVER (webserver user)
     var npppphpWebServerSpan = document.getElementById("npppphpWebServer");
     var npppphpWebServer = npppphpWebServerSpan.textContent.trim();
-    npppphpWebServerSpan.textContent = npppphpWebServer;
+
     npppphpWebServerSpan.style.fontSize = "14px";
     npppphpWebServerSpan.style.color = "green";
-    npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-arrow-right-alt" style="font-size: 16px;"></span> ' + npppphpWebServer;
+    npppphpWebServerSpan.textContent = '';
+
+    let iconSpanWebServer = document.createElement('span');
+    iconSpanWebServer.classList.add("dashicons", "dashicons-arrow-right-alt");
+    iconSpanWebServer.style.fontSize = "16px";
+
+    npppphpWebServerSpan.appendChild(iconSpanWebServer);
+    npppphpWebServerSpan.append(' ' + npppphpWebServer);
 
     // Fetch and update nginx cache path status
     var npppcachePathSpan = document.getElementById("npppcachePath");
     var npppcachePath = npppcachePathSpan.textContent.trim();
-    npppcachePathSpan.textContent = npppcachePath;
+
     npppcachePathSpan.style.fontSize = "14px";
+    npppcachePathSpan.textContent = '';
+
+    let iconSpanCachePath = document.createElement('span');
+    iconSpanCachePath.style.fontSize = "20px";
+
     if (npppcachePath === "Found") {
         npppcachePathSpan.style.color = "green";
-        npppcachePathSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Found';
+        iconSpanCachePath.classList.add("dashicons", "dashicons-yes");
+        npppcachePathSpan.appendChild(iconSpanCachePath);
+        npppcachePathSpan.append(' Found');
     } else if (npppcachePath === "Not Found") {
         npppcachePathSpan.style.color = "red";
-        npppcachePathSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Found';
+        iconSpanCachePath.classList.add("dashicons", "dashicons-no");
+        npppcachePathSpan.appendChild(iconSpanCachePath);
+        npppcachePathSpan.append(' Not Found');
     }
 
     // Fetch and update purge action status
     var nppppurgeStatusSpan = document.getElementById("nppppurgeStatus");
     var nppppurgeStatus = nppppurgeStatusSpan.textContent.trim();
-    nppppurgeStatusSpan.textContent = nppppurgeStatus;
+
     nppppurgeStatusSpan.style.fontSize = "14px";
+    nppppurgeStatusSpan.textContent = '';
+
+    let iconSpanPurgeStatus = document.createElement('span');
+    iconSpanPurgeStatus.style.fontSize = "20px";
+
     if (nppppurgeStatus === "true") {
         nppppurgeStatusSpan.style.color = "green";
-        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
+        iconSpanPurgeStatus.classList.add("dashicons", "dashicons-yes");
+        nppppurgeStatusSpan.appendChild(iconSpanPurgeStatus);
+        nppppurgeStatusSpan.append(' Ready');
     } else if (nppppurgeStatus === "false") {
         nppppurgeStatusSpan.style.color = "red";
-        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
+        iconSpanPurgeStatus.classList.add("dashicons", "dashicons-no");
+        nppppurgeStatusSpan.appendChild(iconSpanPurgeStatus);
+        nppppurgeStatusSpan.append(' Not Ready');
     } else {
         nppppurgeStatusSpan.style.color = "orange";
-        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
+        iconSpanPurgeStatus.classList.add("dashicons", "dashicons-clock");
+        nppppurgeStatusSpan.appendChild(iconSpanPurgeStatus);
+        nppppurgeStatusSpan.append(' Not Determined');
     }
 
-    // Fetch and update purge shell_exec status
+    // Fetch and update shell_exec status
     var npppshellExecSpan = document.getElementById("npppshellExec");
     var npppshellExec = npppshellExecSpan.textContent.trim();
-    npppshellExecSpan.textContent = npppshellExec;
+
     npppshellExecSpan.style.fontSize = "14px";
+    npppshellExecSpan.textContent = '';
+
+    let iconSpanShellExec = document.createElement('span');
+    iconSpanShellExec.style.fontSize = "20px";
+
     if (npppshellExec === "Ok") {
-        npppshellExecSpan.style.color =  "green";
-        npppshellExecSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Allowed';
+        npppshellExecSpan.style.color = "green";
+        iconSpanShellExec.classList.add("dashicons", "dashicons-yes");
+        npppshellExecSpan.appendChild(iconSpanShellExec);
+        npppshellExecSpan.append(' Allowed');
     } else if (npppshellExec === "Not Ok") {
         npppshellExecSpan.style.color = "red";
-        npppshellExecSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Allowed';
+        iconSpanShellExec.classList.add("dashicons", "dashicons-no");
+        npppshellExecSpan.appendChild(iconSpanShellExec);
+        npppshellExecSpan.append(' Not Allowed');
     }
 
     // Fetch and update ACLs status
     var npppaclStatusSpan = document.getElementById("npppaclStatus");
     var npppaclStatus = npppaclStatusSpan.textContent.trim();
-    npppaclStatusSpan.textContent = npppaclStatus;
+    npppaclStatusSpan.textContent = '';
     npppaclStatusSpan.style.fontSize = "14px";
+
+    let iconSpanAcl = document.createElement('span');
+    let aclStatusText = '';
+    let processOwnerSpan = document.createElement('span');
+
     if (npppaclStatus.includes("Granted")) {
         npppaclStatusSpan.style.color = "green";
-        // Extract and display the process owner information if present
+        iconSpanAcl.classList.add("dashicons", "dashicons-yes");
+        aclStatusText = ' Granted ';
+
         var processOwner = npppaclStatus.replace("Granted", "").trim();
-        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Granted ' + (processOwner ? `<span style="color:darkorange;">${processOwner}</span>` : '');
+        if (processOwner) {
+            processOwnerSpan.textContent = processOwner;
+            processOwnerSpan.style.color = "darkorange";
+        }
+
     } else if (npppaclStatus.includes("Need Action")) {
         npppaclStatusSpan.style.color = "red";
-        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Need Action (Check Help)';
+        iconSpanAcl.classList.add("dashicons", "dashicons-no");
+        aclStatusText = ' Need Action (Check Help)';
     } else {
         npppaclStatusSpan.style.color = "orange";
-        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
+        iconSpanAcl.classList.add("dashicons", "dashicons-clock");
+        aclStatusText = ' Not Determined';
+    }
+
+    npppaclStatusSpan.appendChild(iconSpanAcl);
+    npppaclStatusSpan.append(aclStatusText);
+    if (processOwnerSpan.textContent) {
+        npppaclStatusSpan.appendChild(processOwnerSpan);
     }
 
     // Fetch and update preload action status
@@ -2350,19 +2436,26 @@ function npppupdateStatus() {
     var nppppreloadStatusCell = nppppreloadStatusRow.querySelector("#nppppreloadStatus");
     var nppppreloadStatusSpan = document.getElementById("nppppreloadStatus");
     var nppppreloadStatus = nppppreloadStatusSpan.textContent.trim();
-    nppppreloadStatusSpan.textContent = nppppreloadStatus;
+    nppppreloadStatusSpan.textContent = '';
     nppppreloadStatusSpan.style.fontSize = "14px";
+
+    let iconSpanPreload = document.createElement('span');
+    let preloadStatusText = '';
+
     if (nppppreloadStatus === "true") {
         nppppreloadStatusSpan.style.color = "green";
-        nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
+        iconSpanPreload.classList.add("dashicons", "dashicons-yes");
+        preloadStatusText = ' Ready';
     } else if (nppppreloadStatus === "false") {
         nppppreloadStatusSpan.style.color = "red";
-        nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
+        iconSpanPreload.classList.add("dashicons", "dashicons-no");
+        preloadStatusText = ' Not Ready';
     } else {
         nppppreloadStatusSpan.style.color = "orange";
-        nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> In Progress';
+        iconSpanPreload.classList.add("dashicons", "dashicons-clock");
+        preloadStatusText = ' In Progress';
         nppppreloadStatusCell.style.backgroundColor = "lightgreen";
-        // Blink animation
+
         nppppreloadStatusCell.animate([
             { backgroundColor: 'inherit' },
             { backgroundColor: '#90ee90' }
@@ -2373,18 +2466,30 @@ function npppupdateStatus() {
         });
     }
 
+    nppppreloadStatusSpan.appendChild(iconSpanPreload);
+    nppppreloadStatusSpan.append(preloadStatusText);
+
     // Fetch and update wget command status
     var npppwgetStatusSpan = document.getElementById("npppwgetStatus");
     var npppwgetStatus = npppwgetStatusSpan.textContent.trim();
-    npppwgetStatusSpan.textContent = npppwgetStatus;
+    npppwgetStatusSpan.textContent = '';
     npppwgetStatusSpan.style.fontSize = "14px";
+
+    let iconSpanWget = document.createElement('span');
+    let wgetStatusText = '';
+
     if (npppwgetStatus === "Installed") {
         npppwgetStatusSpan.style.color = "green";
-        npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
+        iconSpanWget.classList.add("dashicons", "dashicons-yes");
+        wgetStatusText = ' Installed';
     } else if (npppwgetStatus === "Not Installed") {
         npppwgetStatusSpan.style.color = "red";
-        npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
+        iconSpanWget.classList.add("dashicons", "dashicons-no");
+        wgetStatusText = ' Not Installed';
     }
+
+    npppwgetStatusSpan.appendChild(iconSpanWget);
+    npppwgetStatusSpan.append(wgetStatusText);
 
     // Update the FUSE status for libfuse
     var npppLibfuseVersionSpan = document.getElementById("npppLibfuseVersion");
@@ -2392,16 +2497,23 @@ function npppupdateStatus() {
 
     npppLibfuseVersionSpan.style.fontSize = "14px";
     npppLibfuseVersionSpan.style.fontWeight = "bold";
+    npppLibfuseVersionSpan.textContent = '';
+
+    let iconSpanLibfuse = document.createElement('span');
+    let libfuseStatusText = '';
 
     if (npppLibfuseVersion === "Not Installed") {
         npppLibfuseVersionSpan.style.color = "orange";
-        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-warning" style="color:orange; font-size:18px;"></span> ' + npppLibfuseVersion;
-    }
-    else if (npppLibfuseVersion.includes("(Not Determined)")) {
+        iconSpanLibfuse.classList.add("dashicons", "dashicons-warning");
+        iconSpanLibfuse.style.fontSize = "18px";
+        libfuseStatusText = ' ' + npppLibfuseVersion;
+    } else if (npppLibfuseVersion.includes("(Not Determined)")) {
         var installedVersion = npppLibfuseVersion.split(" ")[0];
-        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> <span style="color:green;">' + installedVersion + '</span> <span style="color:orange;">(Not Determined)</span>';
-    }
-    else if (npppLibfuseVersion.includes("(")) {
+        iconSpanLibfuse.classList.add("dashicons", "dashicons-yes");
+        iconSpanLibfuse.style.fontSize = "20px";
+        iconSpanLibfuse.style.color = "green";
+        libfuseStatusText = ` ${installedVersion} <span style="color:orange;">(Not Determined)</span>`;
+    } else if (npppLibfuseVersion.includes("(")) {
         var versions = npppLibfuseVersion.match(/(\d+\.\d+\.\d+)\s\((\d+\.\d+\.\d+)\)/);
         if (versions) {
             var installedVersion = versions[1];
@@ -2409,16 +2521,27 @@ function npppupdateStatus() {
 
             if (installedVersion === latestVersion) {
                 npppLibfuseVersionSpan.style.color = "green";
-                npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> ' + installedVersion + ' (' + latestVersion + ')';
+                iconSpanLibfuse.classList.add("dashicons", "dashicons-yes");
+                iconSpanLibfuse.style.fontSize = "20px";
+                iconSpanLibfuse.style.color = "green";
+                libfuseStatusText = ` ${installedVersion} (${latestVersion})`;
             } else {
-                npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-update" style="color:orange; font-size:18px;"></span> <span style="color:orange;">' + installedVersion + '</span> <span style="color:green;">(' + latestVersion + ')</span>';
+                iconSpanLibfuse.classList.add("dashicons", "dashicons-update");
+                iconSpanLibfuse.style.fontSize = "18px";
+                iconSpanLibfuse.style.color = "orange";
+                libfuseStatusText = `<span style="color:orange;">${installedVersion}</span> <span style="color:green;">(${latestVersion})</span>`;
             }
         }
-    }
-    else {
+    } else {
         npppLibfuseVersionSpan.style.color = "green";
-        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> ' + npppLibfuseVersion;
+        iconSpanLibfuse.classList.add("dashicons", "dashicons-yes");
+        iconSpanLibfuse.style.fontSize = "20px";
+        iconSpanLibfuse.style.color = "green";
+        libfuseStatusText = ' ' + npppLibfuseVersion;
     }
+
+    npppLibfuseVersionSpan.appendChild(iconSpanLibfuse);
+    npppLibfuseVersionSpan.append(libfuseStatusText);
 
     // Update the FUSE status for bindfs
     var npppBindfsVersionSpan = document.getElementById("npppBindfsVersion");
@@ -2426,16 +2549,23 @@ function npppupdateStatus() {
 
     npppBindfsVersionSpan.style.fontSize = "14px";
     npppBindfsVersionSpan.style.fontWeight = "bold";
+    npppBindfsVersionSpan.textContent = '';
+
+    let iconSpanBindfs = document.createElement('span');
+    let bindfsStatusText = '';
 
     if (npppBindfsVersion === "Not Installed") {
         npppBindfsVersionSpan.style.color = "orange";
-        npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-warning" style="color:orange; font-size:18px;"></span> ' + npppBindfsVersion;
-    }
-    else if (npppBindfsVersion.includes("(Not Determined)")) {
+        iconSpanBindfs.classList.add("dashicons", "dashicons-warning");
+        iconSpanBindfs.style.fontSize = "18px";
+        bindfsStatusText = ' ' + npppBindfsVersion;
+    } else if (npppBindfsVersion.includes("(Not Determined)")) {
         var installedVersion = npppBindfsVersion.split(" ")[0];
-        npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> <span style="color:green;">' + installedVersion + '</span> <span style="color:orange;">(Not Determined)</span>';
-    }
-    else if (npppBindfsVersion.includes("(")) {
+        iconSpanBindfs.classList.add("dashicons", "dashicons-yes");
+        iconSpanBindfs.style.fontSize = "20px";
+        iconSpanBindfs.style.color = "green";
+        bindfsStatusText = ` ${installedVersion} <span style="color:orange;">(Not Determined)</span>`;
+    } else if (npppBindfsVersion.includes("(")) {
         var versions = npppBindfsVersion.match(/(\d+\.\d+\.\d+)\s\((\d+\.\d+\.\d+)\)/);
         if (versions) {
             var installedVersion = versions[1];
@@ -2443,42 +2573,71 @@ function npppupdateStatus() {
 
             if (installedVersion === latestVersion) {
                 npppBindfsVersionSpan.style.color = "green";
-                npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> ' + installedVersion + ' (' + latestVersion + ')';
+                iconSpanBindfs.classList.add("dashicons", "dashicons-yes");
+                iconSpanBindfs.style.fontSize = "20px";
+                iconSpanBindfs.style.color = "green";
+                bindfsStatusText = ` ${installedVersion} (${latestVersion})`;
             } else {
-                npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-update" style="color:orange; font-size:18px;"></span> <span style="color:orange;">' + installedVersion + '</span> <span style="color:green;">(' + latestVersion + ')</span>';
+                iconSpanBindfs.classList.add("dashicons", "dashicons-update");
+                iconSpanBindfs.style.fontSize = "18px";
+                iconSpanBindfs.style.color = "orange";
+                bindfsStatusText = `<span style="color:orange;">${installedVersion}</span> <span style="color:green;">(${latestVersion})</span>`;
             }
         }
-    }
-    else {
+    } else {
         npppBindfsVersionSpan.style.color = "green";
-        npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> ' + npppBindfsVersion;
+        iconSpanBindfs.classList.add("dashicons", "dashicons-yes");
+        iconSpanBindfs.style.fontSize = "20px";
+        iconSpanBindfs.style.color = "green";
+        bindfsStatusText = ' ' + npppBindfsVersion;
     }
+
+    npppBindfsVersionSpan.appendChild(iconSpanBindfs);
+    npppBindfsVersionSpan.append(bindfsStatusText);
 
     // Fetch and update permission isolation status
     var nppppermIsolationSpan = document.getElementById("nppppermIsolation");
     var nppppermIsolation = nppppermIsolationSpan.textContent.trim();
-    nppppermIsolationSpan.textContent = nppppermIsolation;
+    nppppermIsolationSpan.textContent = '';
     nppppermIsolationSpan.style.fontSize = "14px";
+
+    let iconSpanPermIsolation = document.createElement('span');
+    let permIsolationStatusText = '';
+
     if (nppppermIsolation === "Isolated") {
         nppppermIsolationSpan.style.color = "green";
-        nppppermIsolationSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + nppppermIsolation;
+        iconSpanPermIsolation.classList.add("dashicons", "dashicons-yes");
+        permIsolationStatusText = ' ' + nppppermIsolation;
     } else if (nppppermIsolation === "Not Isolated") {
         nppppermIsolationSpan.style.color = "orange";
-        nppppermIsolationSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + nppppermIsolation;
+        iconSpanPermIsolation.classList.add("dashicons", "dashicons-clock");
+        permIsolationStatusText = ' ' + nppppermIsolation;
     }
+
+    nppppermIsolationSpan.appendChild(iconSpanPermIsolation);
+    nppppermIsolationSpan.append(permIsolationStatusText);
 
     // Fetch and update cpulimit command status
     var npppcpulimitStatusSpan = document.getElementById("npppcpulimitStatus");
     var npppcpulimitStatus = npppcpulimitStatusSpan.textContent.trim();
-    npppcpulimitStatusSpan.textContent = npppcpulimitStatus;
+    npppcpulimitStatusSpan.textContent = '';
     npppcpulimitStatusSpan.style.fontSize = "14px";
+
+    let iconSpanCpulimit = document.createElement('span');
+    let cpulimitStatusText = '';
+
     if (npppcpulimitStatus === "Installed") {
         npppcpulimitStatusSpan.style.color = "green";
-        npppcpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
+        iconSpanCpulimit.classList.add("dashicons", "dashicons-yes");
+        cpulimitStatusText = ' Installed';
     } else if (npppcpulimitStatus === "Not Installed") {
         npppcpulimitStatusSpan.style.color = "red";
-        npppcpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
+        iconSpanCpulimit.classList.add("dashicons", "dashicons-no");
+        cpulimitStatusText = ' Not Installed';
     }
+
+    npppcpulimitStatusSpan.appendChild(iconSpanCpulimit);
+    npppcpulimitStatusSpan.append(cpulimitStatusText);
 
     // Add spin effect to icons
     document.querySelectorAll('.status').forEach(status => {
