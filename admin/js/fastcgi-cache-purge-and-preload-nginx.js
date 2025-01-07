@@ -2092,7 +2092,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 decades:false,
                 hours:true,
                 minutes:true,
-                seconds:false,
+                seconds:false
             },
             icons: {
                 time: 'dashicons dashicons-arrow-up-alt2',
@@ -2104,7 +2104,7 @@ document.addEventListener("DOMContentLoaded", function() {
         },
         localization: {
             dateFormats: {
-                LT: 'HH:mm',
+                LT: 'HH:mm'
             },
             hourCycle: 'h23',
             format: 'LT'
