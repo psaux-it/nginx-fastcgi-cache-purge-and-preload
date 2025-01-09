@@ -1,4 +1,4 @@
-# Nginx FastCGI Cache Purge & Preload Plugin for Wordpress (NPP)
+# Nginx Cache Purge & Preload for Wordpress (NPP)
 
 🚀 **Support this project!** If NPP has improved your workflow, consider giving it a ⭐ to help us grow:  
 🚀 **Need help with server-side integration?** Check out our tailored services:
@@ -7,11 +7,11 @@
 [![GitHub Release](https://img.shields.io/github/v/release/psaux-it/nginx-fastcgi-cache-purge-and-preload?logo=github)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases) [![Donate](https://img.shields.io/badge/Wordpress_SVN-v2.0.9-blue?style=flat&logo=wordpress)](https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/) [![Donate](https://img.shields.io/badge/Donate-PayTR-blue?style=flat&logo=visa)](https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/) [![Donate](https://img.shields.io/badge/Check-Services-blue?style=flat&logo=Linux)](https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/)
 
 > [!NOTE]
-> This plugin allows WordPress users to manage Nginx Cache Purge and Preload operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.
+> NPP allows WordPress users to manage Nginx Cache operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.  NPP supports Nginx **FastCGI**, **Proxy**, **SCGI**, and **UWSGI** cache purge and preload operations, making it the most comprehensive solution for managing Nginx Cache from your WordPress dashboard.
 
 ### Requirements
 
-This wordpress plugin is compatible exclusively with **Nginx web servers** running on **Linux-powered** systems. Additionally, the **shell_exec** function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native Linux commands are blocked from running via PHP.
+NPP is compatible exclusively with **Nginx web servers** running on **Linux-powered** systems. Additionally, the **shell_exec** function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native Linux commands are blocked from running via PHP.
 
 Moreover, granting the correct permissions to the PHP process owner (PHP-FPM-USER) is essential for the proper functioning of the purge and preload operations. This is necessary in isolated user environments that have two distinct user roles: the WEBSERVER-USER (nginx or www-data) and the PHP-FPM-USER.
 
@@ -33,7 +33,7 @@ Moreover, granting the correct permissions to the PHP process owner (PHP-FPM-USE
 🚀**Remote Nginx Cache Purge & Preload via REST API**: Remotely trigger cache purging and preloading through `REST API` endpoints.<br/>
 🚀**Manual Nginx Cache Purge & Preload**: Allow manual purging and preloading of cache through the table view in Advanced Tab.<br/>
 🚀**On-Page Nginx Cache Purge & Preload**: Manually purge and preload Nginx cache for the currently visited page directly from the frontend.<br/>
-🚀**Custom Cache Key Support**: Define a regex pattern to parse URLs based on your custom `fastcgi_cache_key` format.<br/>
+🚀**Custom Cache Key Support**: Define a regex pattern to parse URLs based on your custom `(fastcgi|proxy|uwsgi|scgi)_cache_key` format.<br/>
 🚀**Optimized Nginx Cache Preload**: Enhance Nginx cache preload performance with options to limit server resource usage, via exclude endpoints, exclude file extensions, wait retrievals and rate limiting.<br/>
 🚀**Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, cache preload status, and Nginx status from the Status tab.<br/>
 🚀**User-Friendly Interface**: Easy-to-use AJAX-powered settings, integrated into the WordPress admin bar for quick access.<br/>
@@ -44,7 +44,9 @@ Moreover, granting the correct permissions to the PHP process owner (PHP-FPM-USE
 
 ### Overview
 
-This project addresses the challenge of automating Nginx FastCGI cache purging and preloading (WordPress) in Nginx environments where two distinct users, WEBSERVER-USER and PHP-FPM-USER, are involved. NPP offers a more direct solution without requiring any external NGINX modules, such as the Cache Purge module. This plugin directly traverses the cache directory and clears the cache when the permissions are properly granted for the PHP-FPM-USER to access the Nginx cache directory. To automate the granting of necessary permissions to PHP-FPM-USER, a pre-made bash script is provided that must be run manually on the host server under the **root**.
+This project addresses the challenge of automating Nginx cache purging and preloading in WordPress environments where two distinct users, WEBSERVER-USER and PHP-FPM-USER, are involved. NPP provides a direct solution without relying on external Nginx modules, such as the Cache Purge module. Instead, NPP traverses the cache directory and clears the cache, provided the PHP-FPM-USER has the necessary permissions to access the Nginx cache directory.
+
+To facilitate this, a pre-configured bash script is included, which must be run manually on the host server under the **root** user to grant the required permissions to the PHP-FPM-USER.
 
 ### Problem Statement
 
@@ -58,7 +60,6 @@ This project addresses the challenge of automating Nginx FastCGI cache purging a
 
 ### Solution
 
-~~Solution involves combining **inotifywait** with **setfacl**:~~ ❗️This approach is deprecated.<br/>
 Use **bindfs** to create a FUSE mount of the original Nginx Cache Path, granting read and write permissions to the PHP-FPM-USER.
 
 ## Installation Instructions
@@ -70,17 +71,6 @@ To implement this solution:
 ### What does install.sh do?
 
 The `install.sh` script serves as a wrapper for executing the main `fastcgi_ops_root.sh` script from [psaux-it.github.io](https://github.com/psaux-it/psaux-it.github.io). This script is designed for the **FastCGI Cache Purge and Preload for Nginx** WordPress plugin (NPP), which can be found at [Official WordPress Plugin Repository](https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/).<br/>
-
-----
-
-❗️This approach is deprecated.
-
-~~Mainly, in case your current web server setup involves two distinct users, **WEBSERVER-USER** (nginx or www-data) and **PHP-FPM-USER**, the solution proposed by this script involves combining Linux server side tools
-**inotifywait** with **setfacl** to automatically grant write permissions to the **PHP-FPM-USER** for the corresponding **Nginx Cache Paths**, which are matched either automatically or via a manual configuration file.~~
-
-----
-
-📣 **New Approach**
 
 The script first attempts to automatically identify the PHP-FPM-USER (also known as the PHP process owner or website user) along with their associated Nginx Cache Paths. If it cannot automatically match the PHP-FPM-USER with their respective Nginx Cache Path, it provides an easy manual setup option using the `manual-configs.nginx` file.
 
@@ -109,6 +99,66 @@ fastcgi_cache_path /dev/shm/psauxit
 fastcgi_cache_path /var/cache/psauxit-fastcgi
 fastcgi_cache_path /var/cache/website-psauxit.com
 ```
+
+### Scriptless Setup Instructions  
+
+These instructions guide you through setting up the NPP plugin in environments where `PHP-FPM-USER` and `WEBSERVER-USER` are distinct, manually, without the automation script **install.sh**  
+
+#### Prerequisites  
+- **Web Server:** `NGINX` configured with caching.  
+- **Example Users:**  
+  - `PHP-FPM-USER` (PHP process owner, e.g., `psauxit`).  
+  - `WEBSERVER-USER` (commonly `nginx` or `www-data`).  
+- **Tools:** A Linux-based server with **bindfs** installed.  
+
+#### Example Environment  
+- **Original Nginx Cache Path:** `/dev/shm/fastcgi-cache-psauxit`  
+- **FUSE Mount Point:** `/dev/shm/fastcgi-cache-psauxit-mnt`  
+  - This mount path will be used as the Nginx Cache Path in the NPP plugin settings.  
+
+---
+
+#### Steps  
+
+##### 1. Install bindfs  
+Install **bindfs** using your Linux distribution's package manager:  
+```bash
+# For Gentoo
+emerge --ask sys-fs/bindfs
+
+# For Debian/Ubuntu
+sudo apt install bindfs
+
+# For Red Hat/CentOS
+sudo yum install bindfs
+```
+
+##### 2. Create the FUSE Mount Directory  
+Create a new directory for the FUSE mount:  
+```bash
+mkdir /dev/shm/fastcgi-cache-psauxit-mnt
+```
+
+##### 3. Set Up the bindfs Mount  
+Mount the original Nginx cache path to the FUSE mount directory with the appropriate permissions for `psauxit`:  
+```bash
+bindfs -u psauxit -g psauxit --perms=u=rwx:g=rx:o= /dev/shm/fastcgi-cache-psauxit /dev/shm/fastcgi-cache-psauxit-mnt
+```
+
+To make the mount persistent, add the following line to `/etc/fstab`:  
+```bash
+bindfs#/dev/shm/fastcgi-cache-psauxit /dev/shm/fastcgi-cache-psauxit-mnt fuse force-user=psauxit,force-group=psauxit,perms=u=rwx:g=rx:o= 0 0
+```
+
+After editing `/etc/fstab`, apply the changes:  
+```bash
+mount -a
+```
+
+##### 4. Configure NPP Plugin  
+1. Go to the **NPP plugin settings** page in your WordPress dashboard.  
+2. Set `/dev/shm/fastcgi-cache-psauxit-mnt` as the **Nginx Cache Path**.  
+3. Check the plugin **Status** tab for any warnings.
 
 ## Visuals
 
