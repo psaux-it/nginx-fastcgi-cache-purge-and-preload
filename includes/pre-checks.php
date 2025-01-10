@@ -361,7 +361,7 @@ function nppp_pre_checks() {
 
     if ($nppp_permissions_check_result === 'false') {
         // Handle the case where permissions are not sufficient
-        nppp_display_pre_check_warning(__('GLOBAL ERROR PERMISSION: Insufficient permissions for Nginx cache directory. Please consult the Help tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'));
+        nppp_display_pre_check_warning(__('GLOBAL ERROR PERMISSION: Insufficient permissions for Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
