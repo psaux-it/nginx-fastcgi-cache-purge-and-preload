@@ -57,7 +57,7 @@ function nppp_premium_html($nginx_cache_path) {
                     <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
-                        <span style="font-size: 14px;">' . esc_html__( 'ERROR PERMISSION: Please ensure proper permissions are set for the Nginx cache directory. Refer to the Help tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
+                        <span style="font-size: 14px;">' . esc_html__( 'ERROR PERMISSION: Please ensure proper permissions are set for the Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
                     </p>
                 </div>';
 
@@ -66,7 +66,7 @@ function nppp_premium_html($nginx_cache_path) {
                     <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
-                        <span style="font-size: 14px;">' . esc_html__( 'ERROR PERMISSION: Please ensure proper permissions are set for the Nginx cache directory. Refer to the Help tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
+                        <span style="font-size: 14px;">' . esc_html__( 'ERROR PERMISSION: Please ensure proper permissions are set for the Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
                     </p>
                 </div>';
     }
@@ -318,7 +318,7 @@ function nppp_purge_cache_premium_callback() {
 
     // Check permissions before purge cache
     if (!$wp_filesystem->is_readable($file_path) || !$wp_filesystem->is_writable($file_path)) {
-        $error_message = __( 'ERROR PERMISSION: The Nginx cache purge failed due to permission issue. Refer to "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
+        $error_message = __( 'ERROR PERMISSION: The Nginx cache purge failed due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
         nppp_log_and_send_error($error_message, $log_file_path);
     }
 
