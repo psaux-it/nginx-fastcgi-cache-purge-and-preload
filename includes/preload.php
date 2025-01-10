@@ -184,7 +184,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 nppp_display_admin_notice('error', __( 'ERROR COMMAND: Cannot start Nginx cache Preloading! Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ));
             }
         } elseif ($status === 1) {
-            nppp_display_admin_notice('error', __( 'ERROR PERMISSION: Cannot Purge Nginx cache to start cache Preloading. Please read help section of the plugin.', 'fastcgi-cache-purge-and-preload-nginx' ));
+            nppp_display_admin_notice('error', __( 'ERROR PERMISSION: Cannot Purge Nginx cache to start cache Preloading. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ));
         } elseif ($status === 3) {
             // Translators: %s is the Nginx cache path
             nppp_display_admin_notice('error', sprintf( __( 'ERROR PATH: Nginx cache path (%s) was not found. Please check your cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path ));
