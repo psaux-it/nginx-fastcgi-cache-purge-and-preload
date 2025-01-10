@@ -122,7 +122,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 // Check read and write permissions for each file
                 if (!$wp_filesystem->is_readable($file->getPathname()) || !$wp_filesystem->is_writable($file->getPathname())) {
                     // Translators: %s is the page URL
-                    nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+                    nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
                     return;
                 }
 
@@ -230,7 +230,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         }
     } catch (Exception $e) {
         // Translators: %s is the page URL
-        nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+        nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
         return;
     }
 
@@ -592,7 +592,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                     break;
                 case 1:
                     $message_type = 'error';
-                    $message_content = __( 'ERROR PERMISSION: The Nginx cache purge failed due to permission issue. Refer to "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
+                    $message_content = __( 'ERROR PERMISSION: The Nginx cache purge failed due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
                     break;
                 case 2:
                     // Check auto preload status and defer message accordingly
@@ -638,7 +638,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 break;
             case 1:
                 $message_type = 'error';
-                $message_content = __( 'ERROR PERMISSION: The Nginx cache purge failed due to permission issue. Refer to "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
+                $message_content = __( 'ERROR PERMISSION: The Nginx cache purge failed due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
             case 2:
                 // Check auto preload status and defer message accordingly
