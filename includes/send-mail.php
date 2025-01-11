@@ -32,7 +32,8 @@ function nppp_send_mail_now($mail_message, $elapsed_time_str) {
         $site_url_parts = wp_parse_url($site_url);
         $domain = str_replace('www.', '', $site_url_parts['host']);
         // Mail subject
-        $mail_subject = "NPP Wordpress Report";
+        // Translators: NPP is the plugin shortname
+        $mail_subject = __('NPP Wordpress Report', 'fastcgi-cache-purge-and-preload-nginx');
         // Get the path to the email template file
         $template_file = __DIR__ . '/mail.html';
         // get the mail image URL
@@ -45,7 +46,7 @@ function nppp_send_mail_now($mail_message, $elapsed_time_str) {
         if ($wp_filesystem === false) {
             nppp_display_admin_notice(
                 'error',
-                'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+                __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
             );
             return;
         }
