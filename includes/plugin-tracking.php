@@ -135,11 +135,6 @@ function nppp_schedule_plugin_tracking_event($status = false) {
     if ($status === true) {
         // Clear the scheduled event
         wp_clear_scheduled_hook('npp_plugin_tracking_event');
-
-        // Remove the action that is tied to the event
-        remove_action('npp_plugin_tracking_event', 'nppp_plugin_tracking');
-
-        // Log the event clearing (optional)
         return;
     }
 
@@ -156,17 +151,16 @@ function nppp_schedule_plugin_tracking_event($status = false) {
     // Set recurrence
     $recurrence = 'daily';
 
+    // Prepare arguments
+    $args = array('active');
+
     // Check if the event is already scheduled
     if (!wp_next_scheduled('npp_plugin_tracking_event')) {
-        $scheduled = wp_schedule_event($next_execution_timestamp, $recurrence, 'npp_plugin_tracking_event');
+        $scheduled = wp_schedule_event($next_execution_timestamp, $recurrence, 'npp_plugin_tracking_event', $args);
+
         if (!$scheduled) {
             nppp_custom_error_log(__('Failed to schedule plugin tracking event.', 'fastcgi-cache-purge-and-preload-nginx'));
         }
-    }
-
-    // Register the callback function for the scheduled event
-    if (!has_action('npp_plugin_tracking_event', 'nppp_plugin_tracking')) {
-        add_action('npp_plugin_tracking_event', 'nppp_plugin_tracking');
     }
 }
 
@@ -176,7 +170,7 @@ function nppp_handle_opt_in_change($opt_in_value) {
     if ($opt_in_value == '1') {
         // User opted in
         nppp_plugin_tracking('active');
-        nppp_schedule_plugin_tracking_event();
+        nppp_schedule_plugin_tracking_event(false);
     } else {
         // User opted out
         nppp_plugin_tracking('opt-out');
