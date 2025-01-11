@@ -21,7 +21,7 @@ function nppp_svg_icon_shortcode($atts) {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
@@ -96,6 +96,6 @@ function nppp_svg_icon_shortcode($atts) {
         return ob_get_clean();
     } else {
         // Icon file not found
-        return '<p>Icon not found</p>';
+        return '<p>' . __('Icon not found', 'fastcgi-cache-purge-and-preload-nginx') . '</p>';
     }
 }
