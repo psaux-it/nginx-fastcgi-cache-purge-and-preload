@@ -317,28 +317,44 @@ function nppp_get_preload_start_time() {
             $options = get_option('nginx_cache_settings');
             $auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
 
-            // Iterate through each line to find the latest relevant entry
-            foreach ($log_lines as $line) {
+            // Define the translated strings for the different variations of the preload initiation message
+            $auto_preload_messages = [
+                __( 'SUCCESS REST: Nginx cache purged successfully. Auto preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'SUCCESS ADMIN: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'SUCCESS: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' )
+            ];
+
+            // Define the translated strings for the manual preload messages
+            $manual_preload_messages = [
+                __( 'SUCCESS: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'SUCCESS REST: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'SUCCESS CRON: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'SUCCESS ADMIN: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' )
+            ];
+
+            // Iterate through each line in the log to find the latest preload initiation time
+            foreach (array_reverse($log_lines) as $line) {
                 if ($auto_preload) {
-                    if (strpos($line, 'Auto preload initiated in the background') !== false) {
-                        // Extract the timestamp part from the line
-                        preg_match('/\[(.*?)\]/', $line, $match);
-                        if (isset($match[1])) {
-                            // Update $latest_timestamp only if the current timestamp is later than the previous one
-                            if ($latest_timestamp === null || $match[1] > $latest_timestamp) {
+                    // Check for any of the "auto preload" initiation messages
+                    foreach ($auto_preload_messages as $auto_preload_message) {
+                        if (strpos($line, $auto_preload_message) !== false) {
+                            // Extract the timestamp part from the line
+                            preg_match('/\[(.*?)\]/', $line, $match);
+                            if (isset($match[1])) {
                                 $latest_timestamp = $match[1];
+                                return $latest_timestamp;
                             }
                         }
                     }
                 } else {
-                    // Check for manual preload initiation
-                    if (strpos($line, 'Cache preloading has started in the background') !== false) {
-                        // Extract the timestamp part from the line
-                        preg_match('/\[(.*?)\]/', $line, $match);
-                        if (isset($match[1])) {
-                            // Update $latest_timestamp only if the current timestamp is later than the previous one
-                            if ($latest_timestamp === null || $match[1] > $latest_timestamp) {
+                    // Check for any of the "manual preload" initiation messages
+                    foreach ($manual_preload_messages as $manual_preload_message) {
+                        if (strpos($line, $manual_preload_message) !== false) {
+                            // Extract the timestamp part from the line
+                            preg_match('/\[(.*?)\]/', $line, $match);
+                            if (isset($match[1])) {
                                 $latest_timestamp = $match[1];
+                                return $latest_timestamp;
                             }
                         }
                     }
@@ -346,7 +362,7 @@ function nppp_get_preload_start_time() {
             }
 
             // Return the latest timestamp found
-            return $latest_timestamp;
+            return null;
         } else {
             // Log file doesn't exist
             return null;
