@@ -134,7 +134,7 @@ function nppp_schedule_plugin_tracking_event($status = false) {
     // If status is true, clear the scheduled hook and remove the action
     if ($status === true) {
         // Clear the scheduled event
-        wp_clear_scheduled_hook('npp_plugin_tracking_event');
+        wp_clear_scheduled_hook('npp_plugin_tracking_event', array('active'));
         return;
     }
 
