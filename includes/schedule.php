@@ -396,7 +396,11 @@ function nppp_create_scheduled_event_preload_status_callback() {
 
     // Convert the scheduled time string to a DateTime object
     $wordpress_timezone = new DateTimeZone(wp_timezone_string());
-    $scheduled_time = DateTime::createFromFormat('Y-m-d H:i:s', $scheduled_time_str, $wordpress_timezone);
+
+    // Check if the scheduled time string is not null
+    if ($scheduled_time_str !== null) {
+        $scheduled_time = DateTime::createFromFormat('Y-m-d H:i:s', $scheduled_time_str, $wordpress_timezone);
+    }
 
     // Get preload pid file
     $PIDFILE = dirname(__FILE__) . '/../cache_preload.pid';
@@ -498,16 +502,21 @@ function nppp_create_scheduled_event_preload_status_callback() {
         $current_time = new DateTime('now', $wordpress_timezone);
 
         // Calculate elapsed time
-        $elapsed_time = $current_time->diff($scheduled_time);
+        if (isset($scheduled_time) && $scheduled_time instanceof DateTime) {
+            $elapsed_time = $current_time->diff($scheduled_time);
 
-        // Format elapsed time as a string
-        $elapsed_time_str = $elapsed_time->format('%h hours, %i minutes, and %s seconds');
+            // Format elapsed time as a string
+            $elapsed_time_str = $elapsed_time->format('%h hours, %i minutes, and %s seconds');
+        } else {
+            // Process complete time can not calculated
+            $elapsed_time_str = __( 'Unable to calculate elapsed time', 'fastcgi-cache-purge-and-preload-nginx' );
+        }
 
         // Send Mail
-        $mail_message = "The Nginx FastCGI Cache Preload operation has been completed";
+        $mail_message = __('The Nginx cache preload operation has been completed', 'fastcgi-cache-purge-and-preload-nginx');
         nppp_send_mail_now($mail_message, $elapsed_time_str);
 
-        // Display admin notice for completed preload
+        // Log the preload process status
         if ($mobile_enabled) {
             // Translators: %s is the elapsed time.
             nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed for both Mobile and Desktop in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
@@ -516,6 +525,8 @@ function nppp_create_scheduled_event_preload_status_callback() {
             nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
         }
     }
+
+    // Gracefully exit from wp cron job
     exit(0);
 }
 
