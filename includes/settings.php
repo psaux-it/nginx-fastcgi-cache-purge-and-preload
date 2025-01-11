@@ -150,7 +150,7 @@ function nppp_nginx_cache_settings_page() {
                                     <h4>Allowed Cache Paths</h4>
                                     <p><strong>For RAM-based:</strong> Use directories under <code>/dev/</code> | <code>/tmp/</code> | <code>/var/</code></p>
                                     <p><strong>For persistent disk:</strong> Use directories under <code>/opt/</code></p>
-                                    <p><strong>Important:</strong> Paths must be one level deeper (e.g. <code>/var/cache</code>).<br class="line-break">
+                                    <p><strong>Important:</strong> Paths must be at least one level deeper (e.g. <code>/var/cache</code>).<br class="line-break">
                                     Critical system paths are prohibited in default to ensure accuracy to avoid unintended deletions.</p>
                                 </div>
                             </td>
@@ -1913,6 +1913,6 @@ function nppp_defaults_on_plugin_activation() {
         nppp_plugin_tracking('active');
 
         // Schedule cron for plugin status check
-        nppp_schedule_plugin_tracking_event();
+        nppp_schedule_plugin_tracking_event(false);
     }
 }
