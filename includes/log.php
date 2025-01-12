@@ -110,7 +110,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             // Check if nonce is set and is valid
             if (!isset($_REQUEST['_wpnonce'])) {
                 // Translators: This message appears when a required nonce is missing.
-                wp_die(__('Nonce is missing.', 'fastcgi-cache-purge-and-preload-nginx'));
+                wp_die(esc_html__('Nonce is missing.', 'fastcgi-cache-purge-and-preload-nginx'));
             }
 
             // Sanitize nonce
@@ -120,13 +120,13 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             // Verify nonce for WP Admin Notices
             if (!wp_verify_nonce($nonce, $expected_nonce)) {
                 // Translators: This message appears when the provided nonce is invalid.
-                wp_die(__('Invalid nonce. Request could not be verified.', 'fastcgi-cache-purge-and-preload-nginx'));
+                wp_die(esc_html__('Invalid nonce. Request could not be verified.', 'fastcgi-cache-purge-and-preload-nginx'));
             }
 
             // Further security check to verify the user’s capability
             if (!current_user_can('manage_options')) {
                 // Translators: This message appears when a user does not have the required permissions.
-                wp_die(__('Permission denied', 'fastcgi-cache-purge-and-preload-nginx'));
+                wp_die(esc_html__('Permission denied', 'fastcgi-cache-purge-and-preload-nginx'));
             }
         } else {
             return;
