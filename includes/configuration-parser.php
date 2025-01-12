@@ -553,7 +553,12 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
             <h3 class="textcenter"><?php esc_html_e('Hope you are enjoying NPP! Do you still need assistance with the server-side integration? Get our server integration service now and optimize your website\'s speed!', 'fastcgi-cache-purge-and-preload-nginx'); ?></h3>
             <p class="textcenter">
                 <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="open-nppp-upsell" data-pro-ad="sidebar-logo">
-                    <img src="<?php echo esc_url($image_url_ad); ?>" alt="<?php esc_attr_e('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>" title="<?php esc_attr_e('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>">
+                    <img
+                        src="<?php echo esc_url($image_url_ad); ?>"
+                        alt="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
+                        title="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
+                        width="90"
+                        height="90">
                 </a>
             </p>
             <p class="textcenter">
