@@ -402,7 +402,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                     }
                                 }
                                 if ($all_supported): ?>
-                                    <br><span style="font-size: 13px; color: green;"><?php esc_html_e('Supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                    <br><span style="font-size: 13px; color: green;"><?php esc_html_e('All Supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                 <?php else: ?>
                                     <br><span style="font-size: 13px; color: #f0c36d;"><?php esc_html_e('Found Unsupported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                 <?php endif;
@@ -456,7 +456,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                             ):
                                 if ($cache_keys === '$scheme$request_method$host$request_uri'):
                             ?>
-                                    <br><span style="font-size: 13px; color: green;"><?php esc_html_e('Supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                    <br><span style="font-size: 13px; color: green;"><?php esc_html_e('All Supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                 <?php else: ?>
                                     <br><span style="font-size: 13px; color: #f0c36d;"><?php esc_html_e('Found Unsupported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                 <?php endif; ?>
@@ -526,7 +526,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     </tr>
                     <!-- Section for FUSE Cache Paths -->
                     <tr>
-                        <td class="action highlight-metric"><?php esc_html_e('Nginx Cache Paths', 'fastcgi-cache-purge-and-preload-nginx'); ?><br><span style="font-size: 13px; color: green;"><?php esc_html_e('FUSE Mounts', 'fastcgi-cache-purge-and-preload-nginx'); ?></span></td>
+                        <td class="action highlight-metric"><?php esc_html_e('FUSE Mounts', 'fastcgi-cache-purge-and-preload-nginx'); ?><br><span style="font-size: 13px; color: green;"><?php esc_html_e('Nginx Cache Paths', 'fastcgi-cache-purge-and-preload-nginx'); ?></span></td>
                         <td class="status highlight-metric" id="npppFuseMountStatus">
                             <?php if (empty($fuse_paths['fuse_paths']) || get_transient('nppp_cache_path_not_found') !== false): ?>
                                 <span class="dashicons dashicons-clock" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
