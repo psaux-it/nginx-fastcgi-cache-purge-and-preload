@@ -90,7 +90,11 @@ function nppp_nginx_cache_settings_page() {
         </div>
         <div class="nppp-header-content">
             <div class="nppp-img-container">
-                <img src="<?php echo esc_url( plugins_url( '../admin/img/logo.png', __FILE__ ) ); ?>">
+                <img
+                    src="<?php echo esc_url(plugins_url('../admin/img/logo.png', __FILE__)); ?>"
+                    width="90"
+                    height="90"
+                    alt="<?php echo esc_attr__('Plugin Logo', 'fastcgi-cache-purge-and-preload-nginx'); ?>">
             </div>
             <div class="nppp-buttons-wrapper">
                 <div class="nppp-cache-buttons">
