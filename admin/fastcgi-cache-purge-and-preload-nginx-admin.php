@@ -53,6 +53,7 @@ require_once dirname(__DIR__) . '/includes/schedule.php';
 require_once dirname(__DIR__) . '/includes/rest-api-helper.php';
 require_once dirname(__DIR__) . '/includes/plugin-tracking.php';
 require_once dirname(__DIR__) . '/includes/update.php';
+require_once dirname(__DIR__) . '/includes/dashboard-widget.php';
 
 // Get the status of Auto Purge option
 $options = get_option('nginx_cache_settings');
@@ -120,6 +121,7 @@ add_action('activated_plugin', 'nppp_purge_cache_plugin_activation_deactivation'
 add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
 add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_preload_mobile_option');
 add_action('npp_plugin_tracking_event', 'nppp_plugin_tracking', 10, 1);
+add_action('wp_dashboard_setup', 'nppp_add_dashboard_widget');
 $nppp_auto_purge
     ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions)
     : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions);
