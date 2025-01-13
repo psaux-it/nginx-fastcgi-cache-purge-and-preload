@@ -14,33 +14,25 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Add buttons to WordPress admin bar
+// Add NPP menu to WordPress admin-bar
 function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     // Check if the user has permissions to manage options
     if (!current_user_can('manage_options')) {
         return;
     }
 
-    // Add a parent menu item for Nginx cache operations
+    // Add top admin-bar menu for NPP
     $wp_admin_bar->add_menu(array(
         'id'    => 'fastcgi-cache-operations',
         'title' => sprintf(
-            '<img style="height: 20px; margin-bottom: -4px; padding-right: 3px;" src="%s" alt="%s" title="%s"> %s',
+            '<img style="height: 20px; margin-bottom: -4px; width: 20px;" src="%s"> %s',
             esc_url(plugin_dir_url(__FILE__) . '../admin/img/bar.png'),
-            /* Translators: This is the alt text for the menu icon */
-            esc_attr__('NPP', 'fastcgi-cache-purge-and-preload-nginx'),
-            /* Translators: This is the tooltip text for the menu icon */
-            esc_attr__('NPP', 'fastcgi-cache-purge-and-preload-nginx'),
-            /* Translators: This is the menu title for the Nginx cache operations */
             esc_html__('Nginx Cache', 'fastcgi-cache-purge-and-preload-nginx')
         ),
-        'href'  => '#',
-        'meta'  => array(
-            'class' => 'npp-icon',
-        ),
+        'href' => admin_url('options-general.php?page=nginx_cache_settings'),
     ));
 
-    // Add purge submenu
+    // Add "Purge All" admin-bar parent menu for NPP 
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'purge-cache',
@@ -48,7 +40,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         'href'   => wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce'),
     ));
 
-    // Add preload submenu
+    // Add "Preload All" admin-bar parent menu for NPP 
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'preload-cache',
@@ -56,14 +48,13 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         'href' => wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce'),
     ));
 
-    // Add single purge and preload submenu only if not in wp-admin
+    // Add single "Purge" and "Preload" admin-bar parent menus for front-end
     if (isset($_SERVER['REQUEST_URI']) && !empty($_SERVER['REQUEST_URI'])) {
-        // Unslash and sanitize the REQUEST_URI
         $request_uri = sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']));
 
         // Check if the URI does not contain 'wp-admin'
         if (strpos($request_uri, 'wp-admin') === false) {
-            // Add child menu items - Add purge single submenu
+            // Purge
             $wp_admin_bar->add_menu(array(
                 'parent' => 'fastcgi-cache-operations',
                 'id' => 'purge-cache-single',
@@ -71,7 +62,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
                 'href'  => wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache_single'), 'purge_cache_nonce'),
             ));
 
-            // Add child menu items - Add preload single submenu
+            // Preload
             $wp_admin_bar->add_menu(array(
                 'parent' => 'fastcgi-cache-operations',
                 'id' => 'preload-cache-single',
@@ -81,7 +72,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         }
     }
 
-    // Add status submenu
+    // Add "Status" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'fastcgi-cache-status',
@@ -89,7 +80,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         'href' => admin_url('options-general.php?page=nginx_cache_settings#status'),
     ));
 
-    // Add settings submenu
+    // Add "Settings" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'fastcgi-cache-settings',
