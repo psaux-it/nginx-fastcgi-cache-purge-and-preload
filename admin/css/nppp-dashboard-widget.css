@@ -130,3 +130,13 @@
         font-size: 1.2em;
     }
 }
+
+/* Disable focus styles for your NPP dashboard widget buttons */
+#nppp_dashboard_widget a:focus,
+#nppp_dashboard_widget a:focus .gravatar,
+#nppp_dashboard_widget a:focus .media-icon img,
+#nppp_dashboard_widget a:focus .plugin-icon {
+    color: inherit !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
