@@ -58,6 +58,9 @@ jQuery(document).ready(function($) {
         });
     }
 
+    // Disable WP dashboard widget buttons
+    $('.nppp-action-button').addClass('disabled').removeAttr('href');
+
     // Check if we're on the plugin settings page and disable plugin functionality
     if ($('#nppp-nginx-tabs').length > 0) {
         // Disable Purge and Preload buttons on settings page
