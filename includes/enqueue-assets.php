@@ -242,6 +242,16 @@ function nppp_plugin_requirements_met() {
 function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
     $nppp_met = nppp_plugin_requirements_met();
 
+    // Enqueue the NPP WP admin dashboard JS
+    if (!wp_script_is('nppp-dashboard-widget-js', 'enqueued')) {
+        wp_enqueue_script('nppp-dashboard-widget-js', plugins_url('../admin/js/nppp-dashboard-widget.js', __FILE__), array('jquery'), '2.0.9', true);
+    }
+
+    // Enqueue the NPP WP admin dashboard CSS
+    if (!wp_style_is('nppp-dashboard-widget-css', 'enqueued')) {
+        wp_enqueue_style('nppp-dashboard-widget-css', plugins_url('../admin/css/nppp-dashboard-widget.css', __FILE__), array(), '2.0.9');
+    }
+
     // Check if wget command exists
     if ($nppp_met) {
         $output = shell_exec('command -v wget');
@@ -260,7 +270,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
     }
 }
 
-// Enqueue CSS and JavaScript files for admin logged-in front-end
+// Enqueue CSS and JavaScript files for admin, logged-in, front-end
 function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
     if (is_user_logged_in() && current_user_can('administrator') && isset($_GET['nppp_front'])) {
         $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
