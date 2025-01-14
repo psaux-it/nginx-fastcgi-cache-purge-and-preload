@@ -140,3 +140,10 @@
     box-shadow: none !important;
     outline: none !important;
 }
+
+/* Buttons dsabled */
+.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
