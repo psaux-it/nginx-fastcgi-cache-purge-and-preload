@@ -241,15 +241,29 @@ function nppp_plugin_requirements_met() {
 // Check plugin requirements and limit the functionality accordingly on admin side
 function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
     $nppp_met = nppp_plugin_requirements_met();
+    $current_screen = get_current_screen();
 
-    // Enqueue the NPP WP admin dashboard JS
-    if (!wp_script_is('nppp-dashboard-widget-js', 'enqueued')) {
-        wp_enqueue_script('nppp-dashboard-widget-js', plugins_url('../admin/js/nppp-dashboard-widget.js', __FILE__), array('jquery'), '2.0.9', true);
-    }
+    // Handle assets while switching wp admin area and NPP plugin settings page to prevent conflicts.
+    if ($current_screen->base === 'dashboard') {
+        // Enqueue the NPP WP admin dashboard JS
+        if (!wp_script_is('nppp-dashboard-widget-js', 'enqueued')) {
+            wp_enqueue_script('nppp-dashboard-widget-js', plugins_url('../admin/js/nppp-dashboard-widget.js', __FILE__), array('jquery'), '2.0.9', true);
+        }
 
-    // Enqueue the NPP WP admin dashboard CSS
-    if (!wp_style_is('nppp-dashboard-widget-css', 'enqueued')) {
-        wp_enqueue_style('nppp-dashboard-widget-css', plugins_url('../admin/css/nppp-dashboard-widget.css', __FILE__), array(), '2.0.9');
+        // Enqueue the NPP WP admin dashboard CSS
+        if (!wp_style_is('nppp-dashboard-widget-css', 'enqueued')) {
+            wp_enqueue_style('nppp-dashboard-widget-css', plugins_url('../admin/css/nppp-dashboard-widget.css', __FILE__), array(), '2.0.9');
+        }
+    } elseif ($current_screen->id === 'settings_page_nginx_cache_settings') {
+        // Dequeue the NPP WP admin dashboard JS
+        if (wp_script_is('nppp-dashboard-widget-js', 'enqueued')) {
+            wp_dequeue_script('nppp-dashboard-widget-js');
+        }
+
+        // Dequeue the NPP WP admin dashboard CSS
+        if (wp_style_is('nppp-dashboard-widget-css', 'enqueued')) {
+            wp_dequeue_style('nppp-dashboard-widget-css');
+        }
     }
 
     // Check if wget command exists
