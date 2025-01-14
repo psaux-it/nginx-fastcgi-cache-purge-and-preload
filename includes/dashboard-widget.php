@@ -59,7 +59,7 @@ function nppp_dashboard_widget() {
     ];
 
     // Output the widget content with buttons
-    echo '<div style="border: 1px solid #e5e5e5;">';
+    echo '<div id="nppp-widget-placeholder" style="border: 1px solid #e5e5e5;">';
         // Output the preloader HTML
         echo '<div id="nppp-loader-overlay" aria-live="assertive" aria-busy="true">
                 <div class="nppp-spinner-container">
