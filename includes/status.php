@@ -100,12 +100,12 @@ function nppp_clear_plugin_cache() {
 
         // Check if the transient still exists
         if (get_transient($transient) !== false) {
-            return 'An error occurred while clearing the plugin cache.';
+            return __('An error occurred while clearing the plugin cache.', 'fastcgi-cache-purge-and-preload-nginx');
         }
     }
 
     // Notify the user if all transients were cleared successfully
-    return 'Plugin cache cleared successfully. Refreshing the Status..';
+    return __('Plugin cache cleared successfully. Refreshing the Status..', 'fastcgi-cache-purge-and-preload-nginx');
 }
 
 // Check server side action need for cache path permissions.
