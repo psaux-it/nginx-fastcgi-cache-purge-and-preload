@@ -511,13 +511,22 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                             $regex_tested = true;
                         } else {
                             return [
-                                // Translators: $host$request_uri is string
-                                'error' => __( 'ERROR REGEX: Please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing the string <strong>\$host\$request_uri</strong> correctly.', 'fastcgi-cache-purge-and-preload-nginx')
+                                'error' => sprintf(
+                                    /* Translators: %1$s and %2$s are dynamic strings, $host$request_uri is string */
+                                    __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is parsing the string <strong>\$host\$request_uri</strong> correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
+                                    __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'),
+                                    __( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx')
+                                )
                             ];
                         }
                     } else {
                         return [
-                            'error' => __( 'ERROR REGEX: Please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx' )
+                            'error' => sprintf(
+                                /* Translators: %1$s and %2$s are dynamic strings */
+                                __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
+                                __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'),
+                                __( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx')
+                            )
                         ];
                     }
                 }
