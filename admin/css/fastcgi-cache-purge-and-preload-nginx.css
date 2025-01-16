@@ -664,7 +664,7 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
 /* Very cool button style */
 .nppp-button {
     display: inline-block;
-    padding: 8px 16px;
+    padding: 8px 10px;
     border-radius: 5px;
     background-color: #007BFF;
     color: white;
@@ -2537,4 +2537,25 @@ p.description {
     pointer-events: none;
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* style for settings page actions button */
+#nppp-purge-button.nppp-button {
+    background-color: #d9534f;
+    color: white;
+}
+
+#nppp-purge-button.nppp-button:hover {
+    background-color: #c9302c;
+    color: white;
+}
+
+#nppp-preload-button.nppp-button {
+    background-color: #3CB371;
+    color: white;
+}
+
+#nppp-preload-button.nppp-button:hover {
+    background-color: #2e8b57;
+    color: white;
 }
