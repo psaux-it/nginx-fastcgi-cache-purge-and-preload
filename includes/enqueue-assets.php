@@ -270,11 +270,11 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
     if ($nppp_met) {
         $output = shell_exec('command -v wget');
         if (empty($output)) {
-            // Wget is not available
-            wp_enqueue_script('preload-button-disable', plugins_url('../admin/js/preload-button-disable.js', __FILE__), array('jquery'), '2.0.9', true);
+            // wget is not available
+            wp_enqueue_script('nppp-disable-preload', plugins_url('../admin/js/nppp-disable-preload.js', __FILE__), array('jquery'), '2.0.9', true);
         } else {
-            // Wget is available, dequeue the preload-button-disable.js if it's already enqueued
-            wp_dequeue_script('preload-button-disable');
+            // wget is available, dequeue the "nppp-disable-preload.js" if it's already enqueued
+            wp_dequeue_script('nppp-disable-preload');
         }
         wp_dequeue_script('nppp-disable-functionality');
     } else {
