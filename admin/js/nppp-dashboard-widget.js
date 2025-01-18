@@ -10,6 +10,8 @@
 
 // NPP WP dashboard widget preloader
 (function ($) {
+    'use strict';
+    
     $(document).ready(function () {
         const $preloader = $('#nppp-loader-overlay');
 
@@ -31,13 +33,11 @@
             $preloader.addClass('active').fadeIn(50);
         }
 
-        // Show preloader on widget actions
+        // Handle click events on widget action buttons
         $('.nppp-action-button').on('click', function (e) {
             const action = $(this).data('action');
 
-            if (action === 'nppp-widget-purge') {
-                showPreloader();
-            } else if (action === 'nppp-widget-preload') {
+            if (action === 'nppp-widget-purge' || action === 'nppp-widget-preload') {
                 showPreloader();
             }
         });
