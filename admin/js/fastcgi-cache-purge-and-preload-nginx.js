@@ -74,6 +74,7 @@ $(document).ready(function() {
     const $settingsPlaceholder = $('#settings-content-placeholder');
     const $statusPlaceholder = $('#status-content-placeholder');
     const $premiumPlaceholder = $('#premium-content-placeholder');
+    const $helpPlaceholder = $('.nppp-premium-container');
 
     // Function to show the preloader overlay
     // Adds the 'active' class and fades in the preloader over 50 milliseconds
@@ -116,34 +117,37 @@ $(document).ready(function() {
     $('#nppp-nginx-tabs').tabs({
         activate: function(event, ui) {
             var tabId = ui.newPanel.attr('id');
+            
             // Show the preloader when a new tab is activated
-            if (tabId !== 'help') {
-                showPreloader();
-            }
+            showPreloader();
 
             // Hide all content placeholders to ensure only the active tab's content is visible
             $settingsPlaceholder.hide();
             $statusPlaceholder.hide();
             $premiumPlaceholder.hide();
+            $helpPlaceholder.hide();
 
             // Handle specific actions for each tab
-            if (tabId === 'settings') {
-                // Check if the Settings tab panel does not have the 'ui-tabs-active' class
-                if (!ui.newPanel.hasClass('ui-tabs-active')) {
-                    // Reload the settings page to create cache
-                    location.reload();
-                } else {
-                    // If the Settings tab is already active, hide the preloader
-                    hidePreloader();
-                }
-            } else if (tabId === 'status') {
-                // Load content for the 'Status' tab via AJAX
-                loadStatusTabContent();
-                // Adjust table layout for mobile devices if necessary
-                adjustTableForMobile();
-            } else if (tabId === 'premium') {
-                // Load content for the 'Premium' tab via AJAX
-                loadPremiumTabContent();
+            switch (tabId) {
+                case 'settings':
+                    setTimeout(function() {
+                        hidePreloader();
+                        $settingsPlaceholder.show();
+                    }, 500);
+                    break;
+                case 'status':
+                    loadStatusTabContent();
+                    adjustTableForMobile();
+                    break;
+                case 'premium':
+                    loadPremiumTabContent();
+                    break;
+                case 'help':
+                    setTimeout(function() {
+                        hidePreloader();
+                        $helpPlaceholder.show();
+                    }, 500);
+                    break;
             }
         },
         beforeLoad: function(event, ui) {
@@ -155,16 +159,6 @@ $(document).ready(function() {
             });
         }
     });
-
-    // Check if the user navigated directly to the 'Status' tab via URL hash (e.g., yoursite.com/page#status)
-    if (window.location.hash === '#status') {
-        // Show the preloader when loading the Status tab directly
-        showPreloader();
-        // Load content for the 'Status' tab via AJAX
-        loadStatusTabContent();
-        // Adjust table layout for mobile devices if necessary
-        adjustTableForMobile();
-    }
 
     // Function to load content for the 'Status' tab via AJAX
     // Sends a POST request to the server to fetch the Status tab content
