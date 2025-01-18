@@ -1,6 +1,6 @@
 /**
  * JavaScript for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains code to restrict functionality on unsupported environments for FastCGI Cache Purge and Preload for Nginx
+ * Description: This file contains code to restrict functionality in unsupported environments for FastCGI Cache Purge and Preload for Nginx
  * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
@@ -8,7 +8,7 @@
  * License: GPL-2.0+
  */
 
-// Restrict NPP functionality on unsupported environments
+// Restrict NPP functionality in unsupported environments
 (function($) {
     'use strict';
 
