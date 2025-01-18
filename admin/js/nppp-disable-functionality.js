@@ -8,8 +8,10 @@
  * License: GPL-2.0+
  */
 
-// Disable NPP functionality on unsupported environments
+// Restrict NPP functionality on unsupported environments
 (function($) {
+    'use strict';
+
     $(document).ready(function() {
         // Select the buttons in the admin bar
         var preloadButton = $('#wp-admin-bar-preload-cache');
