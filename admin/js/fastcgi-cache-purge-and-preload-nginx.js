@@ -117,7 +117,7 @@ $(document).ready(function() {
     $('#nppp-nginx-tabs').tabs({
         activate: function(event, ui) {
             var tabId = ui.newPanel.attr('id');
-            
+
             // Show the preloader when a new tab is activated
             showPreloader();
 
