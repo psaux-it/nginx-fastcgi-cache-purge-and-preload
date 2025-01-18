@@ -8,12 +8,10 @@
  * License: GPL-2.0+
  */
 
-// Immediately Invoked Function Expression (IIFE)
-// Prevent interfere with core wp and other plugin code
-(function($, window, document) {
+// NPP plugin admin side main js code
+(function ($) {
     'use strict';
 
-// Main plugin admin side  js code
 $(document).ready(function() {
     // Function to adjust the status tab table layout for mobile
     function adjustTableForMobile() {
@@ -2780,4 +2778,4 @@ document.addEventListener('DOMContentLoaded', function () {
         npponTabActivated(event, ui);
     });
 });
-})(jQuery, window, document);
+})(jQuery);
