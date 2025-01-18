@@ -8,35 +8,38 @@
  * License: GPL-2.0+
  */
 
-jQuery(document).ready(function ($) {
-    const $preloader = $('#nppp-loader-overlay');
+// NPP WP dashboard widget preloader
+(function ($) {
+    $(document).ready(function () {
+        const $preloader = $('#nppp-loader-overlay');
 
-    // Function to show the preloader overlay
-    // Adds the 'active' class and fades in the preloader over 50 milliseconds
-    function showPreloader() {
-        $('.nppp-loader-fill').css({
-            'animation': 'nppp-fill 2s ease-in-out infinite'
-        });
+        // Function to show the preloader overlay
+        // Adds the 'active' class and fades in the preloader over 50 milliseconds
+        function showPreloader() {
+            $('.nppp-loader-fill').css({
+                'animation': 'nppp-fill 2s ease-in-out infinite'
+            });
 
-        // Remove backdrop filters from `#nppp-loader-overlay` by setting them to 'none'
-        $('#nppp-loader-overlay').css({
-            'backdrop-filter': 'none',
-            '-webkit-backdrop-filter': 'none',
-            'transition': 'none'
-        });
+            // Remove backdrop filters from `#nppp-loader-overlay` by setting them to 'none'
+            $('#nppp-loader-overlay').css({
+                'backdrop-filter': 'none',
+                '-webkit-backdrop-filter': 'none',
+                'transition': 'none'
+            });
 
-        // Add 'active' class and fade in the preloader
-        $preloader.addClass('active').fadeIn(50);
-    }
-
-    // Show preloader on widget actions
-    $('.nppp-action-button').on('click', function (e) {
-        const action = $(this).data('action');
-
-        if (action === 'nppp-widget-purge') {
-            showPreloader();
-        } else if (action === 'nppp-widget-preload') {
-            showPreloader();
+            // Add 'active' class and fade in the preloader
+            $preloader.addClass('active').fadeIn(50);
         }
+
+        // Show preloader on widget actions
+        $('.nppp-action-button').on('click', function (e) {
+            const action = $(this).data('action');
+
+            if (action === 'nppp-widget-purge') {
+                showPreloader();
+            } else if (action === 'nppp-widget-preload') {
+                showPreloader();
+            }
+        });
     });
-});
+})(jQuery);
