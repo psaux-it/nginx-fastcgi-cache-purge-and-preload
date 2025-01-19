@@ -107,7 +107,7 @@ function nppp_get_active_cron_events_ajax() {
 
     // Check user capability
     if (!current_user_can('manage_options')) {
-        wp_die('You do not have permission to call this action.');
+        wp_die(esc_html__('You do not have permission to call this action.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
     // Get all scheduled events
