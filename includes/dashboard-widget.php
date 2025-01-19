@@ -14,6 +14,78 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Show Next Run: Scheduled event in widget
+function nppp_get_active_cron_events_widget() {
+    // Get all scheduled events
+    $events = _get_cron_array();
+
+    // npp plugin's schedule event hook name
+    $plugin_hook = 'npp_cache_preload_event';
+
+    // Initialize a flag to track if events are found
+    $has_events = false;
+
+    // Get the WordPress timezone string
+    $timezone_string = wp_timezone_string();
+
+    // Check if there are any scheduled events for npp
+    if (!empty($events) && !empty($timezone_string)) {
+        // Loop through each scheduled event
+        foreach ($events as $timestamp => $cron) {
+            foreach ($cron as $hook => $args) {
+                // Check if the hook matches the npp's hook name
+                if ($hook === $plugin_hook) {
+                    // Set the flag to indicate that events are found
+                    $has_events = true;
+
+                    // Convert the timestamp to a DateTime object
+                    $next_run_datetime = new DateTime('@' . $timestamp);
+
+                    // Set the timezone to the WordPress timezone
+                    $next_run_datetime->setTimezone(new DateTimeZone(wp_timezone_string()));
+
+                    // Format the DateTime object
+                    $next_run_formatted = $next_run_datetime->format('Y-m-d H:i:s');
+
+                    // Format the scheduled event information
+                    echo '<div class="nppp-scheduled-event">';
+                        echo '<div class="nppp-cron-info">';
+                            echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-left: 23px;"></span>';
+                            echo '<span class="nppp-next-run">' . sprintf(
+                                /* Translators: %s is the formatted next run time */
+                                esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                                '<strong style="color: #2196f3; font-size: 12px;">' . esc_html($next_run_formatted) . '</strong>'
+                            ) . '</span>';
+                        echo '</div>';
+                    echo '</div>';
+
+                    // Exit the inner loop
+                    break;
+                }
+            }
+
+            // Exit the outer loop
+            if ($has_events) {
+                break;
+            }
+        }
+    }
+
+    // If no matching event was found
+    if (!$has_events) {
+        echo '<div class="nppp-scheduled-event">';
+            echo '<div class="nppp-cron-info">';
+                echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-left: 23px;"></span>';
+                echo '<span class="nppp-next-run">' . sprintf(
+                    /* Translators: %s is the formatted next run time */
+                    esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                    '<strong style="color: #2196f3; font-size: 12px;">' . esc_html__('No event found', 'fastcgi-cache-purge-and-preload-nginx') . '</strong>'
+                ) . '</span>';
+            echo '</div>';
+        echo '</div>';
+    }
+}
+
 // NPP dashboard widget content
 function nppp_dashboard_widget() {
     // Fetch the NPP plugin settings from the database
@@ -109,6 +181,16 @@ function nppp_dashboard_widget() {
                         echo '<span class="dashicons ' . esc_attr( $status_icon ) . '" style="color: ' . esc_attr( $status_color ) . '; font-size: 18px;"></span>';
                     echo '</td>';
                 echo '</tr>';
+
+                // If "Scheduled Cache" is enabled, show the next scheduled event
+                if ($key === 'scheduled_cache' && $status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) {
+                    echo '<tr style="border-bottom: 1px solid #f1f1f1;">';
+                        echo '<td colspan="2" style="padding: 6px 15px;">';
+                            // Call the function to display the next scheduled event
+                            nppp_get_active_cron_events_widget();
+                        echo '</td>';
+                    echo '</tr>';
+                }
             }
         echo '</table>';
 
