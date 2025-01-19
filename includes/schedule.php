@@ -86,12 +86,20 @@ function nppp_get_active_cron_events() {
                     echo '<button class="nppp-cancel-btn" data-hook="' . esc_attr($hook) . '">' . esc_html__('Cancel', 'fastcgi-cache-purge-and-preload-nginx') . '</button>';
                     echo '</div>';
                     echo '</div>';
+
+                    // Exit the inner loop
+                    break;
                 }
+            }
+
+            // Exit the outer loop
+            if ($has_events) {
+                break;
             }
         }
     }
 
-    // If no events are found for the plugin, add a message to the output
+    // If no matching cron event is found
     if (!$has_events) {
         echo '<div class="nppp-scheduled-event">';
         echo '<h3 class="nppp-active-cron-heading">' . esc_html__('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') . '</h3>';
