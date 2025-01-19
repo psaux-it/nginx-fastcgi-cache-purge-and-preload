@@ -2251,11 +2251,13 @@ p.description {
     margin-left: -12px;
     margin-top: 0px;
     border: 2px dotted #FFA500;
-    max-width: max-content;
     padding-left: 5px;
     padding-right: 5px;
     padding-top: 10px;
     padding-bottom: 5px;
+    overflow-x: auto;
+    justify-content: flex-start;
+    max-width: max-content;
 }
 
 .nppp-submenu ul li {
@@ -2289,7 +2291,7 @@ p.description {
     }
 
     .nppp-submenu ul li a:focus {
-        background-color: peachpuff !important;
+        background-color: white !important;
     }
 }
 
@@ -2310,7 +2312,7 @@ p.description {
     }
 
     .nppp-submenu ul li a:focus {
-        background-color: peachpuff !important;
+        background-color: white !important;
     }
 }
 
@@ -2558,4 +2560,72 @@ p.description {
 #nppp-preload-button.nppp-button:hover {
     background-color: #2e8b57;
     color: white;
+}
+
+/* Submenu Items */
+.nppp-submenu ul li {
+    position: relative !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+}
+
+/* Submenu Links */
+.nppp-submenu ul li a {
+    text-decoration: none !important;
+    padding: 5px 0 !important;
+    transition: color 0.2s ease !important;
+    position: relative !important;
+}
+
+/* Hover and Active Underline */
+.nppp-submenu ul li a::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -5px;
+    height: 3px;
+    background-color: transparent;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+    transform: scaleX(0);
+    transform-origin: left;
+}
+
+/* Submenu Underline Colors */
+.nppp-submenu ul li:nth-child(1) a::after {
+    background-color: #0073aa;
+}
+.nppp-submenu ul li:nth-child(2) a::after {
+    background-color: #ff5722;
+}
+.nppp-submenu ul li:nth-child(3) a::after {
+    background-color: #4caf50;
+}
+.nppp-submenu ul li:nth-child(4) a::after {
+    background-color: #9c27b0;
+}
+.nppp-submenu ul li:nth-child(5) a::after {
+    background-color: #ff9800;
+}
+.nppp-submenu ul li:nth-child(6) a::after {
+    background-color: #2196f3;
+}
+
+/* Hover Effect */
+.nppp-submenu ul li a:hover::after,
+.nppp-submenu ul li a.active::after {
+    transform: scaleX(1);
+}
+
+/* Active Link */
+.nppp-submenu ul li a.active {
+    background-color: #fff !important;
+    color: #0073aa;
+    font-weight: bold;
+}
+
+/* Persistent Underline for Active Link */
+.nppp-submenu ul li a.active::after {
+    transform: scaleX(1);
 }
