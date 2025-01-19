@@ -1,6 +1,6 @@
 /**
- * WP dashboard widget, NPP preloader styles for FastCGI Cache Purge and Preload for Nginx
- * Description: This CSS file contains WP dashboard widget, NPP preloader styles for the FastCGI Cache Purge and Preload for Nginx
+ * Styles for FastCGI Cache Purge and Preload for Nginx
+ * Description: This file contains WP dashboard widget styles for the FastCGI Cache Purge and Preload for Nginx
  * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
@@ -141,9 +141,30 @@
     outline: none !important;
 }
 
-/* Buttons dsabled */
+/* Buttons disabled */
 .disabled {
     pointer-events: none;
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* Hover effects for the widget buttons */
+.nppp-action-button[data-action="nppp-widget-purge"]:hover {
+    color: white !important;
+    background-color: #c9302c !important;
+}
+
+.nppp-action-button[data-action="nppp-widget-preload"]:hover {
+    color: white !important;
+    background-color: #2e8b57 !important;
+}
+
+.nppp-settings-button:hover {
+    color: white !important;
+    background-color: #006099 !important;
+}
+
+.nppp-give-star-button:hover {
+    color: indigo !important;
+    background-color: #e6b800 !important;
 }
