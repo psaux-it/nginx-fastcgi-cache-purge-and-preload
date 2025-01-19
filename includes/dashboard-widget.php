@@ -115,14 +115,14 @@ function nppp_dashboard_widget() {
         // Output the "Give Star" and "Configure Settings" bottom buttons
         echo '<div style="display: flex; justify-content: space-between; align-items: center;">';
             // Output the "Give Star" button
-            echo '<a href="' . esc_url( 'https://wordpress.org/support/plugin/fastcgi-cache-purge-and-preload-nginx/reviews/#new-post' ) . '" target="_blank" style="font-size: 14px; color: indigo; background-color: #ffcc00; padding: 8px 12px; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; transition: background-color 0.3s ease; flex: 48%;">';
+            echo '<a href="' . esc_url( 'https://wordpress.org/support/plugin/fastcgi-cache-purge-and-preload-nginx/reviews/#new-post' ) . '" target="_blank" class="nppp-give-star-button" style="font-size: 14px; color: indigo; background-color: #ffcc00; padding: 8px 12px; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; transition: background-color 0.3s ease; flex: 48%;">';
                 echo '<span class="dashicons dashicons-star-filled" style="font-size: 16px; margin-right: 0px; color: #fff;"></span>';
                 echo '<span class="dashicons dashicons-star-filled" style="font-size: 16px; margin-right: 0px; color: #fff;"></span>';
                 echo '<span class="dashicons dashicons-star-filled" style="font-size: 16px; margin-right: 3px; color: #fff;"></span>' . esc_html__( 'Give Star', 'fastcgi-cache-purge-and-preload-nginx' );
             echo '</a>';
 
             // Output the "Configure Settings" button
-            echo '<a href="' . esc_url( 'options-general.php?page=nginx_cache_settings' ) . '" style="text-decoration: none; background-color: #0073aa; color: white; padding: 8px; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; transition: background-color 0.3s ease; flex: 48%; text-align: center;">';
+            echo '<a href="' . esc_url( 'options-general.php?page=nginx_cache_settings' ) . '" class="nppp-settings-button" style="text-decoration: none; background-color: #0073aa; color: white; padding: 8px; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; transition: background-color 0.3s ease; flex: 48%; text-align: center;">';
                 echo '<span class="dashicons dashicons-admin-generic" style="font-size: 16px; margin-right: 3px; color: #fff;"></span>' . esc_html__( 'Configure Settings', 'fastcgi-cache-purge-and-preload-nginx' );
             echo '</a>';
         echo '</div>';
