@@ -1,6 +1,6 @@
 /**
  * JavaScript for FastCGI Cache Purge and Preload for Nginx
- * Description: This JavaScript file contains functions to manage FastCGI Cache Purge and Preload for Nginx plugin and interact with WordPress admin dashboard.
+ * Description: This file contains code to manage the plugin's admin interface for FastCGI Cache Purge and Preload for Nginx
  * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
