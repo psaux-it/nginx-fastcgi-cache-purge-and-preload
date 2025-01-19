@@ -29,9 +29,6 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Enqueue CSS files for Nginx FastCGI Cache Purge and Preload Plugin
     wp_enqueue_style('nppp_admin-css', plugins_url('../admin/css/fastcgi-cache-purge-and-preload-nginx.min.css', __FILE__), array(), '2.0.9');
 
-    // Enqueue the default-passive-events polyfill
-    wp_enqueue_script('nppp_default-event-js', plugins_url('../admin/js/default-passive-events.min.js', __FILE__), array(), '2.0.0', false);
-
     // Enqueue jQuery UI core, jQuery UI Tabs, jQuery UI Accordion
     wp_enqueue_script('jquery-ui-core');
     wp_enqueue_script('jquery-ui-tabs');
