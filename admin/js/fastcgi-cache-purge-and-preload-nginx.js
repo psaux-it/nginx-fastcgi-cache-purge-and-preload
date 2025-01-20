@@ -2772,4 +2772,25 @@ document.addEventListener('DOMContentLoaded', function () {
         npponTabActivated(event, ui);
     });
 });
+
+// Track the currently active link for the submenu
+let npppActiveLink = null;
+
+// Add event listener to the parent <ul> for event delegation
+document.querySelector('.nppp-submenu ul').addEventListener('click', function(npppEvent) {
+    // Check if the clicked element is an <a> inside the submenu
+    const npppClickedLink = npppEvent.target.closest('a');
+    if (!npppClickedLink) return;
+
+    // Remove 'active' class from the previously active link
+    if (npppActiveLink) {
+        npppActiveLink.classList.remove('active');
+    }
+
+    // Add 'active' class to the clicked link
+    npppClickedLink.classList.add('active');
+
+    // Update the active link reference
+    npppActiveLink = npppClickedLink;
+});
 })(jQuery);
