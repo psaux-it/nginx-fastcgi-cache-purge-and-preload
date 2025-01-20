@@ -69,15 +69,18 @@ $(document).ready(function() {
     // Initial call to adjust the layout on page load
     adjustTableForMobile();
 
-    // Cache jQuery selectors for better performance and easier reference
+    // Cache jQuery selectors
     const $preloader = $('#nppp-loader-overlay');
     const $settingsPlaceholder = $('#settings-content-placeholder');
     const $statusPlaceholder = $('#status-content-placeholder');
     const $premiumPlaceholder = $('#premium-content-placeholder');
     const $helpPlaceholder = $('.nppp-premium-container');
 
+    // Cache the jQuery UI tabs container and links inside the tabs
+    const $nppTabs = $('#nppp-nginx-tabs');
+    const $nppTabsLinks = $nppTabs.find('a');
+
     // Function to show the preloader overlay
-    // Adds the 'active' class and fades in the preloader over 50 milliseconds
     function showPreloader() {
         // Adjust the `.nppp-loader-fill` animation duration
         $('.nppp-loader-fill').css({
@@ -96,7 +99,6 @@ $(document).ready(function() {
     }
 
     // Function to hide the preloader overlay
-    // Removes the 'active' class and fades out the preloader over 50 milliseconds
     function hidePreloader() {
         $preloader.removeClass('active').fadeOut(50);
 
@@ -113,51 +115,107 @@ $(document).ready(function() {
         });
     }
 
-    // Initialize jQuery UI tabs on the element with ID 'nppp-nginx-tabs'
-    $('#nppp-nginx-tabs').tabs({
-        activate: function(event, ui) {
-            var tabId = ui.newPanel.attr('id');
+    // Initialize jQuery UI tabs
+    if (!$nppTabs.hasClass('ui-tabs')) {
+        $nppTabs.tabs({
+            activate: function(event, ui) {
+                var tabId = ui.newPanel.attr('id');
 
-            // Show the preloader when a new tab is activated
-            showPreloader();
+                // Update the URL hash to match the active tab
+                if (tabId) {
+                    window.history.replaceState(null, null, `#${tabId}`);
+                }
 
-            // Hide all content placeholders to ensure only the active tab's content is visible
+                // Show the preloader when a new tab is activated
+                showPreloader();
+
+                // Hide all content placeholders to ensure only the active tab's content is visible
+                $settingsPlaceholder.hide();
+                $statusPlaceholder.hide();
+                $premiumPlaceholder.hide();
+                $helpPlaceholder.hide();
+
+                // Handle specific actions for each tab
+                switch (tabId) {
+                    case 'settings':
+                        setTimeout(function() {
+                            hidePreloader();
+                            $settingsPlaceholder.show();
+                        }, 500);
+                        break;
+                    case 'status':
+                        loadStatusTabContent();
+                        adjustTableForMobile();
+                        break;
+                    case 'premium':
+                        loadPremiumTabContent();
+                        break;
+                    case 'help':
+                        setTimeout(function() {
+                            hidePreloader();
+                            $helpPlaceholder.show();
+                        }, 500);
+                        break;
+                }
+            },
+            beforeLoad: function(event, ui) {
+                // Attach a fail handler to the AJAX request associated with the tab
+                ui.jqXHR.fail(function() {
+                    ui.panel.html("Couldn't load this tab. We'll try to fix this as soon as possible.");
+                    // Hide the preloader since loading failed
+                    hidePreloader();
+                });
+            }
+        });
+    }
+
+    // Deep linking jQuery UI tabs
+    // Automatically activate the tab based on the URL hash
+    function activateTabFromHash() {
+        var hash = window.location.hash;
+        if (hash) {
+            // Hide all content placeholders
             $settingsPlaceholder.hide();
             $statusPlaceholder.hide();
             $premiumPlaceholder.hide();
             $helpPlaceholder.hide();
 
-            // Handle specific actions for each tab
-            switch (tabId) {
-                case 'settings':
-                    setTimeout(function() {
+            // Find the corresponding tab index and activate it
+            var index = $nppTabsLinks.filter(`[href="${hash}"]`).parent().index();
+            if (index !== -1) {
+                $nppTabs.tabs("option", "active", index);
+
+                // Show the preloader when a new tab is activated
+                showPreloader();
+
+                // Show the content of the directly linked tab
+                switch (hash.replace('#', '')) {
+                    case 'settings':
                         hidePreloader();
                         $settingsPlaceholder.show();
-                    }, 500);
-                    break;
-                case 'status':
-                    loadStatusTabContent();
-                    adjustTableForMobile();
-                    break;
-                case 'premium':
-                    loadPremiumTabContent();
-                    break;
-                case 'help':
-                    setTimeout(function() {
+                        break;
+                    case 'status':
+                        loadStatusTabContent();
+                        adjustTableForMobile();
+                        break;
+                    case 'premium':
+                        loadPremiumTabContent();
+                        break;
+                    case 'help':
                         hidePreloader();
                         $helpPlaceholder.show();
-                    }, 500);
-                    break;
+                        break;
+                }
             }
-        },
-        beforeLoad: function(event, ui) {
-            // Attach a fail handler to the AJAX request associated with the tab
-            ui.jqXHR.fail(function() {
-                ui.panel.html("Couldn't load this tab. We'll try to fix this as soon as possible.");
-                // Hide the preloader since loading failed
-                hidePreloader();
-            });
         }
+    }
+
+    // Call on page load to handle deep linking (activate tab based on URL hash)
+    activateTabFromHash();
+
+    // Listen for hash changes (URL changes) and re-activate the correct tab
+    $(window).on('hashchange', function() {
+        activateTabFromHash();
     });
 
     // Function to load content for the 'Status' tab via AJAX
