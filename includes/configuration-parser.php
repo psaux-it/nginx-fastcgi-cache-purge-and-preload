@@ -621,7 +621,10 @@ function nppp_restart_systemd_service() {
 
     // Return response based on the service status
     if ($status === 'active') {
-        wp_send_json_success('Systemd service restarted and is active.');
+        // Service is active, clear plugin cache
+        $cache_cleared_message = nppp_clear_plugin_cache();
+
+        wp_send_json_success('Systemd service restarted and is active. ' . $cache_cleared_message);
     } else {
         wp_send_json_error('Restart completed but the service is not active. Status: ' . $status);
     }
