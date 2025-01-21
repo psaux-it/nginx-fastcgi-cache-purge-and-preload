@@ -352,32 +352,32 @@ td.action, td.check {
 
 /* Style the nppp-purge-btn button */
 .nppp-purge-btn {
-    background-color: #007bff;
+    background-color: #d9534f;
     color: #fff;
     border: none;
-    padding: 8px 16px;
+    padding: 8px 12px;
     border-radius: 4px;
     cursor: pointer;
 }
 
 /* Style the nppp-purge-btn button */
 .nppp-preload-btn {
-    background-color: #007bff;
+    background-color: #3CB371;
     color: #fff;
     border: none;
-    padding: 8px 16px;
+    padding: 8px 12px;
     border-radius: 4px;
     cursor: pointer;
 }
 
 /* Hover effect for nppp-purge-btn button */
 .nppp-purge-btn:hover {
-    background-color: #0056b3;
+    background-color: #c9302c;
 }
 
 /* Hover effect for nppp-purge-btn button */
 .nppp-preload-btn:hover {
-    background-color: #0056b3;
+    background-color: #2e8b57;
 }
 
 /* Style the length menu dropdown */
