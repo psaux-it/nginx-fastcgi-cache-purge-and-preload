@@ -147,8 +147,8 @@ function nppp_premium_html($nginx_cache_path) {
                         <td>GET</td>
                         <td><?php echo esc_html($urlData['cache_date']); ?></td>
                         <td>
-                            <button class="nppp-purge-btn" data-file="<?php echo esc_attr($urlData['file_path']); ?>"><?php echo esc_html__( 'Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
-                            <button class="nppp-preload-btn" data-url="<?php echo esc_attr($urlData['url']); ?>"><?php echo esc_html__( 'Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
+                            <button class="nppp-purge-btn" data-file="<?php echo esc_attr($urlData['file_path']); ?>"><span class="dashicons dashicons-trash" style="font-size: 14px; margin: 0; padding: 0;"></span> <?php echo esc_html__( 'Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
+                            <button class="nppp-preload-btn" data-url="<?php echo esc_attr($urlData['url']); ?>"><span class="dashicons dashicons-update" style="font-size: 14px; margin: 0; padding: 0;"></span> <?php echo esc_html__( 'Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
                         </td>
                     </tr>
                 <?php endforeach;
