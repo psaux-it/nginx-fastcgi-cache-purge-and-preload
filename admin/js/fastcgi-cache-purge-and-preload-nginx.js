@@ -76,7 +76,7 @@ $(document).ready(function() {
     const $premiumPlaceholder = $('#premium-content-placeholder');
     const $helpPlaceholder = $('.nppp-premium-container');
 
-    // Cache the jQuery UI tabs container and links inside the tabs
+    // Cache the jQuery UI tabs container and links
     const $nppTabs = $('#nppp-nginx-tabs');
     const $nppTabsLinks = $nppTabs.find('a');
 
@@ -115,97 +115,85 @@ $(document).ready(function() {
         });
     }
 
+    // Flag to prevent the duplicate call to npppActivateTab()
+    let isTabChangeFromHash = false;
+
+    // Function to handle tab content activation
+    function npppActivateTab(tabId) {
+        // Hide all content placeholders
+        $settingsPlaceholder.hide();
+        $statusPlaceholder.hide();
+        $premiumPlaceholder.hide();
+        $helpPlaceholder.hide();
+
+        // Show the preloader when a new tab is activated
+        showPreloader();
+
+        // Handle specific tab actions
+        switch (tabId) {
+            case 'settings':
+                setTimeout(() => {
+                    hidePreloader();
+                    $settingsPlaceholder.show();
+                }, 500);
+                break;
+            case 'status':
+                loadStatusTabContent();
+                adjustTableForMobile();
+                break;
+            case 'premium':
+                loadPremiumTabContent();
+                break;
+            case 'help':
+                setTimeout(() => {
+                    hidePreloader();
+                    $helpPlaceholder.show();
+                }, 500);
+                break;
+        }
+    }
+
     // Initialize jQuery UI tabs
     if (!$nppTabs.hasClass('ui-tabs')) {
         $nppTabs.tabs({
             activate: function(event, ui) {
-                var tabId = ui.newPanel.attr('id');
-
-                // Update the URL hash to match the active tab
-                if (tabId) {
-                    window.history.replaceState(null, null, `#${tabId}`);
+                // Only trigger if it's a internal interaction (not direct link)
+                if (!isTabChangeFromHash) {
+                    const tabId = ui.newPanel.attr('id');
+                    if (tabId) {
+                        window.history.replaceState(null, null, `#${tabId}`);
+                        npppActivateTab(tabId);
+                    }
                 }
 
-                // Show the preloader when a new tab is activated
-                showPreloader();
-
-                // Hide all content placeholders to ensure only the active tab's content is visible
-                $settingsPlaceholder.hide();
-                $statusPlaceholder.hide();
-                $premiumPlaceholder.hide();
-                $helpPlaceholder.hide();
-
-                // Handle specific actions for each tab
-                switch (tabId) {
-                    case 'settings':
-                        setTimeout(function() {
-                            hidePreloader();
-                            $settingsPlaceholder.show();
-                        }, 500);
-                        break;
-                    case 'status':
-                        loadStatusTabContent();
-                        adjustTableForMobile();
-                        break;
-                    case 'premium':
-                        loadPremiumTabContent();
-                        break;
-                    case 'help':
-                        setTimeout(function() {
-                            hidePreloader();
-                            $helpPlaceholder.show();
-                        }, 500);
-                        break;
-                }
+                // Reset the flag after activation
+                isTabChangeFromHash = false;
             },
             beforeLoad: function(event, ui) {
-                // Attach a fail handler to the AJAX request associated with the tab
-                ui.jqXHR.fail(function() {
-                    ui.panel.html("Couldn't load this tab. We'll try to fix this as soon as possible.");
-                    // Hide the preloader since loading failed
-                    hidePreloader();
-                });
+                // Cancel the default load action for inactive tabs
+                if (!ui.tab.hasClass('active')) {
+                    ui.jqXHR.abort();
+                    ui.panel.html("");
+                }
             }
         });
     }
 
     // Deep linking jQuery UI tabs
-    // Automatically activate the tab based on the URL hash
     function activateTabFromHash() {
-        var hash = window.location.hash;
-        if (hash) {
-            // Hide all content placeholders
-            $settingsPlaceholder.hide();
-            $statusPlaceholder.hide();
-            $premiumPlaceholder.hide();
-            $helpPlaceholder.hide();
+        const hash = window.location.hash;
 
-            // Find the corresponding tab index and activate it
-            var index = $nppTabsLinks.filter(`[href="${hash}"]`).parent().index();
+        if (hash) {
+            // Set the flag to true because the tab change is triggered by the direct URL
+            isTabChangeFromHash = true;
+
+            const index = $nppTabsLinks.filter(`[href="${hash}"]`).parent().index();
             if (index !== -1) {
                 $nppTabs.tabs("option", "active", index);
+                npppActivateTab(hash.replace('#', ''));
 
-                // Show the preloader when a new tab is activated
-                showPreloader();
-
-                // Show the content of the directly linked tab
-                switch (hash.replace('#', '')) {
-                    case 'settings':
-                        hidePreloader();
-                        $settingsPlaceholder.show();
-                        break;
-                    case 'status':
-                        loadStatusTabContent();
-                        adjustTableForMobile();
-                        break;
-                    case 'premium':
-                        loadPremiumTabContent();
-                        break;
-                    case 'help':
-                        hidePreloader();
-                        $helpPlaceholder.show();
-                        break;
-                }
+                // Reset the flag after handling hash activation
+                isTabChangeFromHash = false;
             }
         }
     }
@@ -2725,6 +2713,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitContainer = document.querySelector('.submit');
 
     function updateSubmitPosition() {
+        if (!tabsContainer || !submitContainer) {
+            return;
+        }
+
         const containerRect = tabsContainer.getBoundingClientRect();
 
         // Set the width and position of the submit button to match the container
