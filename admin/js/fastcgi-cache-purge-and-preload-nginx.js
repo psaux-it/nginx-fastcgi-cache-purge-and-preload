@@ -170,8 +170,9 @@ $(document).ready(function() {
                 isTabChangeFromHash = false;
             },
             beforeLoad: function(event, ui) {
+                const isActive = ui.tab.attr('aria-selected') === 'true' || ui.tab.closest('.ui-tabs-active').length > 0;
                 // Cancel the default load action for inactive tabs
-                if (!ui.tab.hasClass('active')) {
+                if (!isActive) {
                     ui.jqXHR.abort();
                     ui.panel.html("");
                 }
