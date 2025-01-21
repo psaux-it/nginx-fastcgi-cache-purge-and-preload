@@ -127,21 +127,17 @@ $(document).ready(function() {
         $premiumPlaceholder.hide();
         $helpPlaceholder.hide();
 
-        // Show the preloader when a new tab is activated
-        showPreloader();
-
         // Handle specific tab actions
         switch (tabId) {
             case 'settings':
                 nppdisconnectObserver();
-                setTimeout(() => {
-                    hidePreloader();
-                    $settingsPlaceholder.show();
-                }, 500);
+                $settingsPlaceholder.show();
                 break;
             case 'status':
+                showPreloader();
                 loadStatusTabContent();
                 adjustTableForMobile();
+                // Warn the user if a systemd service restart is required due to missing fuse cache path mounts
                 const statusTabContent = document.querySelector('#status');
                 if (statusTabContent) {
                     if (!npppCurrentObserver) {
@@ -150,20 +146,18 @@ $(document).ready(function() {
                 }
                 break;
             case 'premium':
+                showPreloader();
                 nppdisconnectObserver();
                 loadPremiumTabContent();
                 break;
             case 'help':
                 nppdisconnectObserver();
-                setTimeout(() => {
-                    hidePreloader();
-                    $helpPlaceholder.show();
-                }, 500);
+                $helpPlaceholder.show();
                 break;
         }
     }
 
-    // Function to observe changes in the status panel and insert the warning icon
+    // Function to observe changes in the "Status" tab
     function nppobserveFuseStatusChange(tabContent) {
         // Create a MutationObserver to observe the status content
         const observer = new MutationObserver((mutationsList, observer) => {
@@ -218,7 +212,7 @@ $(document).ready(function() {
         }
     }
 
-    // Function to disconnect the observer when no longer needed
+    // Function to disconnect the observer
     function nppdisconnectObserver() {
         if (npppCurrentObserver) {
             npppCurrentObserver.disconnect();
@@ -269,6 +263,9 @@ $(document).ready(function() {
                 // Reset the flag after handling hash activation
                 isTabChangeFromHash = false;
             }
+        } else {
+            // Set the default tab to 'Settings'
+            npppActivateTab('settings');
         }
     }
 
