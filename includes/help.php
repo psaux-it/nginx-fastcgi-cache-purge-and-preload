@@ -61,7 +61,7 @@ function nppp_my_faq_html() {
       }
     </style>
 
-    <div class="nppp-premium-container">
+    <div class="nppp-premium-container" style="display: none;">
         <div class="nppp-premium-wrap">
             <div id="nppp-accordion" class="accordion">
                 <h3 class="nppp-question">Why plugin not functional on my environment?</h3>
