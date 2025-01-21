@@ -123,8 +123,8 @@ function nppp_nginx_cache_settings_page() {
                     <li><a href="#help"><?php echo do_shortcode('[nppp_svg_icon icon="help" class="tab-icon" size="24px"]'); ?> <span class="tab-text">Help</span></a></li>
                 </ul>
             </div>
-            <div id="settings" class="tab-content active">
-                <div id="settings-content-placeholder">
+            <div id="settings" class="tab-content">
+                <div id="settings-content-placeholder" style="display: none;">
                 <div class="nppp-submenu">
                     <ul>
                         <li><a href="#purge-options">Purge Options</a></li>
@@ -460,11 +460,11 @@ function nppp_nginx_cache_settings_page() {
             </div>
 
             <div id="status" class="tab-content">
-                <div id="status-content-placeholder"></div>
+                <div id="status-content-placeholder" style="display: none;"></div>
             </div>
 
             <div id="premium" class="tab-content">
-                <div id="premium-content-placeholder"></div>
+                <div id="premium-content-placeholder" style="display: none;"></div>
             </div>
 
             <div id="help" class="tab-content">
