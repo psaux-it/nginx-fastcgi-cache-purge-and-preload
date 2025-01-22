@@ -38,6 +38,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         'id' => 'purge-cache',
         'title' => __('Purge All', 'fastcgi-cache-purge-and-preload-nginx'),
         'href'   => wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce'),
+        'meta'   => array('class' => 'nppp-action-trigger'),
     ));
 
     // Add "Preload All" admin-bar parent menu for NPP 
@@ -46,6 +47,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         'id' => 'preload-cache',
         'title' => __('Preload All', 'fastcgi-cache-purge-and-preload-nginx'),
         'href' => wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce'),
+        'meta'   => array('class' => 'nppp-action-trigger'),
     ));
 
     // Add single "Purge" and "Preload" admin-bar parent menus for front-end
