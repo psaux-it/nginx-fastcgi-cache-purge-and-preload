@@ -391,6 +391,11 @@ $(document).ready(function() {
         });
     }
 
+    // Attach click event to the "Purge All" and "Preload All" menu items
+    $('.nppp-action-trigger').on('click', function() {
+        showPreloader();
+    });
+
     // Handle click event for purge buttons in advanced tab
     $(document).on('click', '.nppp-purge-btn', function() {
         // Get the data
