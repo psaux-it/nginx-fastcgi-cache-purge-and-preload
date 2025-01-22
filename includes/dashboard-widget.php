@@ -14,6 +14,32 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Check preload action status
+function nppp_check_preload_status_widget() {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
+        );
+        return;
+    }
+
+    $this_script_path = dirname(plugin_dir_path(__FILE__));
+    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+
+    if ($wp_filesystem->exists($PIDFILE)) {
+        $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
+
+        if ($pid > 0 && nppp_is_process_alive($pid)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // Show Next Run: Scheduled event in widget
 function nppp_get_active_cron_events_widget() {
     // Get all scheduled events
@@ -91,6 +117,9 @@ function nppp_dashboard_widget() {
     // Fetch the NPP plugin settings from the database
     $settings = get_option('nginx_cache_settings', []);
 
+    // Check if the preload process is running
+    $is_preload_alive = nppp_check_preload_status_widget();
+
     // Prepare NPP plugin statuses data
     $statuses = [
         'auto_purge' => [
@@ -132,6 +161,12 @@ function nppp_dashboard_widget() {
 
     // Output the widget content with buttons
     echo '<div id="nppp-widget-placeholder" style="border: 1px solid #e5e5e5;">';
+
+        // Add hidden element for progress status
+        if ($is_preload_alive) {
+            echo '<div id="nppp-preload-in-progress" style="display: none;"></div>';
+        }
+
         // Output the preloader HTML
         echo '<div id="nppp-loader-overlay" aria-live="assertive" aria-busy="true">
                 <div class="nppp-spinner-container">
@@ -142,7 +177,6 @@ function nppp_dashboard_widget() {
                     <span class="nppp-loader-text">NPP</span>
                 </div>
                 <p class="nppp-loader-message">' . esc_html__('Processing, please wait...', 'fastcgi-cache-purge-and-preload-nginx') . '</p>
-                <p class="nppp-loader-message">Processing, please wait...</p>
             </div>';
 
         // Output the "Purge All" and "Preload All" top buttons
