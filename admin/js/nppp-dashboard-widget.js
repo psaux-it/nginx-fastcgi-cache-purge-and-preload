@@ -8,7 +8,7 @@
  * License: GPL-2.0+
  */
 
-// NPP WP dashboard widget preloader
+// NPP WP dashboard widget
 (function ($) {
     'use strict';
     
@@ -40,6 +40,11 @@
             if (action === 'nppp-widget-purge' || action === 'nppp-widget-preload') {
                 showPreloader();
             }
+        });
+
+        // Handle click events on "Purge All" and "Preload All" admin bar items
+        $('.nppp-action-trigger').on('click', function() {
+            showPreloader();
         });
     });
 })(jQuery);
