@@ -260,6 +260,9 @@ $(document).ready(function() {
                 $nppTabs.tabs("option", "active", index);
                 npppActivateTab(hash.replace('#', ''));
 
+                // Scroll to the top of the page
+                window.scrollTo(0, 0);
+
                 // Reset the flag after handling hash activation
                 isTabChangeFromHash = false;
             }
