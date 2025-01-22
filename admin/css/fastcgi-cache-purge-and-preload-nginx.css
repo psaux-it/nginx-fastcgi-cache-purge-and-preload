@@ -361,7 +361,7 @@ td.action, td.check {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     font-weight: 500;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;
-    font-size: 14px !important;
+    font-size: 13px !important;
     transition: background-color 0.3s ease;
 }
 
@@ -376,7 +376,7 @@ td.action, td.check {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     font-weight: 500;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;
-    font-size: 14px !important;
+    font-size: 13px !important;
     transition: background-color 0.3s ease;
 }
 
