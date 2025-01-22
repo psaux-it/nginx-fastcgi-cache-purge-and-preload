@@ -80,12 +80,28 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         'href' => admin_url('options-general.php?page=nginx_cache_settings#status'),
     ));
 
+    // Add "Advanced" admin-bar parent menu for NPP
+    $wp_admin_bar->add_menu(array(
+        'parent' => 'fastcgi-cache-operations',
+        'id' => 'fastcgi-cache-advanced',
+        'title' => __('Cache Advanced', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href' => admin_url('options-general.php?page=nginx_cache_settings#premium'),
+    ));
+
     // Add "Settings" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'fastcgi-cache-settings',
         'title' => __('Cache Settings', 'fastcgi-cache-purge-and-preload-nginx'),
         'href' => admin_url('options-general.php?page=nginx_cache_settings'),
+    ));
+
+    // Add "Help" admin-bar parent menu for NPP
+    $wp_admin_bar->add_menu(array(
+        'parent' => 'fastcgi-cache-operations',
+        'id' => 'fastcgi-cache-help',
+        'title' => __('Help', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href' => admin_url('options-general.php?page=nginx_cache_settings#help'),
     ));
 }
 
