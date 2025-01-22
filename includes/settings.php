@@ -100,11 +100,11 @@ function nppp_nginx_cache_settings_page() {
                 <div class="nppp-cache-buttons">
                     <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce')); ?>" class="nppp-button nppp-button-primary" id="nppp-purge-button">
                         <span class="dashicons dashicons-trash" style="font-size: 18px;"></span>
-                        <?php _e( 'Purge All', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        <?php esc_html_e( 'Purge All', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     </a>
                     <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce')); ?>" class="nppp-button nppp-button-primary" id="nppp-preload-button">
                         <span class="dashicons dashicons-update" style="font-size: 18px;"></span>
-                        <?php _e( 'Preload All', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        <?php esc_html_e( 'Preload All', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     </a>
                 </div>
                 <p class="nppp-cache-tip">
