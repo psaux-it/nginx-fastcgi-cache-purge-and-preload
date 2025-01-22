@@ -141,6 +141,7 @@ function nppp_dashboard_widget() {
                     </div>
                     <span class="nppp-loader-text">NPP</span>
                 </div>
+                <p class="nppp-loader-message">' . esc_html__('Processing, please wait...', 'fastcgi-cache-purge-and-preload-nginx') . '</p>
                 <p class="nppp-loader-message">Processing, please wait...</p>
             </div>';
 
