@@ -523,7 +523,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
             );
         } else {
             // Process complete time can not calculated
-            $elapsed_time_str = __( 'Unable to calculate elapsed time', 'fastcgi-cache-purge-and-preload-nginx' );
+            $elapsed_time_str = __( '(unable to calculate elapsed time)', 'fastcgi-cache-purge-and-preload-nginx' );
         }
 
         // Send Mail
