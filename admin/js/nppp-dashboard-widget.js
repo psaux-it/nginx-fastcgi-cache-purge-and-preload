@@ -88,7 +88,7 @@
                 // Get the current background color
                 var currentBackgroundColor = npppPreloadButton.css('background-color');
 
-                // Only revert back style if changed before
+                // Revert styles only if they were previously modified
                 if (currentBackgroundColor !== 'rgb(60, 179, 113)') {
 
                     // Apply the default styles
@@ -108,18 +108,18 @@
             }
         }
 
-        // Function to start blinking using CSS animation
+        // Function to start blinking
         function npppstartBlinking(element) {
             element.css('animation', 'nppp-blink 2s infinite alternate');
             element.css('animation-timing-function', 'ease-in-out');
         }
 
-        // Function to stop blinking by removing the animation
+        // Function to stop blinking
         function npppstopBlinking(element) {
             element.css('animation', 'none');
         }
 
-        // Run the check on page load and when the DOM is ready
+        // Call main
         npppCheckPreloadStatus();
     });
 })(jQuery);
