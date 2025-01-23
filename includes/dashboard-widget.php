@@ -347,4 +347,5 @@ function nppp_add_dashboard_widget() {
         /* Translators: NPP is the short name of the plugin. */
         __('NPP - Nginx Cache Status', 'fastcgi-cache-purge-and-preload-nginx'),
         'nppp_dashboard_widget'
- 
+    );
+}
