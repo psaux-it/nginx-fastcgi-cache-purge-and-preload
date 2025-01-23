@@ -168,3 +168,27 @@
     color: indigo !important;
     background-color: #e6b800 !important;
 }
+
+/* Widget buttons on mobile */
+@media screen and (max-width: 768px) {
+    .nppp-settings-button {
+        flex: 55% !important;
+    }
+
+    .nppp-give-star-button {
+        flex: 45% !important;
+    }
+}
+
+/* Keyframes for blinking effect */
+@keyframes nppp-blink {
+    0% {
+        background-color: white;
+    }
+    50% {
+        background-color: #90ee90;
+    }
+    100% {
+        background-color: white;
+    }
+}
