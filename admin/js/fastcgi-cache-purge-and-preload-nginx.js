@@ -119,6 +119,40 @@ $(document).ready(function() {
     let isTabChangeFromHash = false;
     let npppCurrentObserver = null;
 
+    // npp-submenu page load load effect
+    function nppphighlightSubmenu(selector, totalTime) {
+        var items = $(selector);
+
+        // Check if the elements exist
+        if (items.length === 0) {
+            return;
+        }
+
+        var totalItems = items.length;
+        var initialDelay = 350;
+        var accelerationFactor = 0.6;
+        var baseTimePerItem = (totalTime - initialDelay) / totalItems;
+        var delay = initialDelay;
+
+        // Loop through each item and apply the effect with varied timing
+        items.each(function(index, element) {
+            var item = $(element);
+
+            // Add the 'active' class with staggered timing
+            setTimeout(function() {
+                item.addClass('active');
+
+                // Remove the 'active' class after the base time duration
+                setTimeout(function() {
+                    item.removeClass('active');
+                }, baseTimePerItem);
+            }, delay);
+
+            // Increase the delay for the next item to progressively speed up the animation
+            delay += baseTimePerItem * accelerationFactor;
+        });
+    }
+
     // Function to handle tab content activation
     function npppActivateTab(tabId) {
         // Hide all content placeholders
@@ -132,12 +166,14 @@ $(document).ready(function() {
             case 'settings':
                 nppdisconnectObserver();
                 $settingsPlaceholder.show();
+                nppphighlightSubmenu('.nppp-submenu ul li a', 900);
                 break;
             case 'status':
                 showPreloader();
                 loadStatusTabContent();
                 adjustTableForMobile();
-                // Warn the user if a systemd service restart is required due to missing fuse cache path mounts
+                // Warn the user if a systemd service restart
+                // is required due to missing fuse cache path mounts
                 const statusTabContent = document.querySelector('#status');
                 if (statusTabContent) {
                     if (!npppCurrentObserver) {
@@ -1409,12 +1445,12 @@ $(document).ready(function() {
 
             // Set column widths
             columnDefs: [
-                { width: "22%", targets: 0, className: 'text-left' }, // Cached URL
+                { width: "21%", targets: 0, className: 'text-left' }, // Cached URL
                 { width: "37%", targets: 1, className: 'text-left' }, // Cache Path
                 { width: "10%", targets: 2, className: 'text-left' }, // Content Category
-                { width: "6%", targets: 3, className: 'text-left' }, // Cache Method
+                { width: "5%", targets: 3, className: 'text-left' }, // Cache Method
                 { width: "12%", targets: 4, className: 'text-left' }, // Cache Date
-                { width: "13%", targets: 5, className: 'text-left' }, // Actions
+                { width: "15%", targets: 5, className: 'text-left' }, // Actions
                 { responsivePriority: 1, targets: 0 }, // Cached URL gets priority for responsiveness
                 { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] }, // Collapse all in first row on mobile, hide actions always
                 { defaultContent: "", targets: "_all" } // Ensures all columns render even if empty
