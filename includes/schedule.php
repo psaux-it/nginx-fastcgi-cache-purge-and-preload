@@ -514,7 +514,13 @@ function nppp_create_scheduled_event_preload_status_callback() {
             $elapsed_time = $current_time->diff($scheduled_time);
 
             // Format elapsed time as a string
-            $elapsed_time_str = $elapsed_time->format('%h hours, %i minutes, and %s seconds');
+            $elapsed_time_str = sprintf(
+                /* Translators: %1$s, %2$s, and %3$s are numeric values representing hours, minutes, and seconds respectively. */
+                __('%1$s hours, %2$s minutes, %3$s seconds', 'fastcgi-cache-purge-and-preload-nginx'),
+                $elapsed_time->format('%h'),
+                $elapsed_time->format('%i'),
+                $elapsed_time->format('%s')
+            );
         } else {
             // Process complete time can not calculated
             $elapsed_time_str = __( 'Unable to calculate elapsed time', 'fastcgi-cache-purge-and-preload-nginx' );
