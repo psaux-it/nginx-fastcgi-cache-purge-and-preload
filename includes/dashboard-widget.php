@@ -14,6 +14,66 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Get latest Preload complete date
+function nppp_get_last_preload_complete_date() {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
+    // Define a constant for the log file path
+    if ( ! defined( 'NGINX_CACHE_LOG_FILE' ) ) {
+        define('NGINX_CACHE_LOG_FILE', dirname(__FILE__) . '/../fastcgi_ops.log');
+    }
+
+    // Check if the log file constant is defined
+    if (defined('NGINX_CACHE_LOG_FILE')) {
+        $log_file_path = NGINX_CACHE_LOG_FILE;
+
+        // Check if log file exists
+        if ($wp_filesystem->exists($log_file_path)) {
+            // Read the log file
+            $log_contents = $wp_filesystem->get_contents($log_file_path);
+
+            // Split log contents into lines
+            $log_lines = explode("\n", $log_contents);
+
+            // Variable to hold the latest timestamp
+            $latest_timestamp = null;
+
+            // Regex pattern to match time strings
+            $pattern = '\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\]\s.*\bin\s*((?:\d+\s*\w+\s*(?:,\s*)?)+(?:\s*\d+\s*\w+))';
+
+            // Iterate through each line in the log to find a matching time format
+            foreach (array_reverse($log_lines) as $line) {
+                // Match the time pattern anywhere in the line
+                if (preg_match('/' . $pattern . '/', $line)) {
+                    // Extract the timestamp part from the line
+                    preg_match('/\[(.*?)\]/', $line, $match);
+                    if (isset($match[1])) {
+                        $latest_timestamp = $match[1];
+                        return $latest_timestamp;
+                    }
+                }
+            }
+
+            // Return the latest timestamp found
+            return null;
+        } else {
+            // Log file doesn't exist
+            return null;
+        }
+    } else {
+        // Log file constant is not defined
+        return null;
+    }
+}
+
 // Check preload action status
 function nppp_check_preload_status_widget() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -76,12 +136,17 @@ function nppp_get_active_cron_events_widget() {
                     // Format the scheduled event information
                     echo '<div class="nppp-scheduled-event">';
                         echo '<div class="nppp-cron-info">';
-                            echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-left: 23px;"></span>';
-                            echo '<span class="nppp-next-run">' . sprintf(
-                                /* Translators: %s is the formatted next run time */
-                                esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                                '<strong style="color: #2196f3; font-size: 12px;">' . esc_html($next_run_formatted) . '</strong>'
-                            ) . '</span>';
+                            echo '<td style="padding: 6px 15px; width: 75%;">';
+                                echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-right: 8px;"></span>';
+                                echo '<span class="nppp-next-run">' . sprintf(
+                                    /* Translators: %s is the formatted next run time */
+                                    esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                                    '<strong style="color: #2196f3; font-size: 12px;">' . esc_html($next_run_formatted) . '</strong>'
+                                ) . '</span>';
+                            echo '</td>';
+                            echo '<td style="padding: 6px 15px; text-align: center;">';
+                                echo '<span class="dashicons dashicons-info" style="font-size: 18px; color: orange;"></span>';
+                            echo '</td>';
                         echo '</div>';
                     echo '</div>';
 
@@ -119,6 +184,9 @@ function nppp_dashboard_widget() {
 
     // Check if the preload process is running
     $is_preload_alive = nppp_check_preload_status_widget();
+
+    // Get the latest preload complete date
+    $last_preload_complete_date = nppp_get_last_preload_complete_date();
 
     // Prepare NPP plugin statuses data
     $statuses = [
@@ -217,13 +285,39 @@ function nppp_dashboard_widget() {
                     echo '</td>';
                 echo '</tr>';
 
-                // If "Scheduled Cache" is enabled, show the next scheduled event
+                // Show Last Run: under "Auto Preload"
+                if ($key === 'auto_preload') {
+                    if ($last_preload_complete_date) {
+                        echo '<tr style="border-bottom: 1px solid #f1f1f1;">';
+                            echo '<td style="padding: 6px 15px; width: 75%;">';
+                                // Format the Preload Last complete date
+                                echo '<div class="nppp-preload-complete-date">';
+                                    echo '<div class="nppp-preload-widget-info">';
+                                        // Use Dashicon for the right arrow icon
+                                        echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-right: 8px;"></span>';
+
+                                        // Display the preload complete date
+                                        echo '<span class="nppp-preload-last-date">' . sprintf(
+                                            /* Translators: %s is the formatted preload last complete time */
+                                            esc_html__('Last Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                                            '<strong style="color: #2196f3; font-size: 12px;">' . esc_html($last_preload_complete_date) . '</strong>'
+                                            ) . '</span>';
+                                    echo '</div>';
+                                echo '</div>';
+                            echo '</td>';
+
+                            echo '<td style="padding: 6px 15px; text-align: center;">';
+                                echo '<span class="dashicons dashicons-info" style="font-size: 18px; color: orange;"></span>';
+                            echo '</td>';
+                        echo '</tr>';
+                    }
+                }
+
+                // Show Next Run: under "Scheduled Cache" if enabled
                 if ($key === 'scheduled_cache' && $status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) {
                     echo '<tr style="border-bottom: 1px solid #f1f1f1;">';
-                        echo '<td colspan="2" style="padding: 6px 15px;">';
-                            // Call the function to display the next scheduled event
-                            nppp_get_active_cron_events_widget();
-                        echo '</td>';
+                        // Call the function to display the next scheduled event
+                        nppp_get_active_cron_events_widget();
                     echo '</tr>';
                 }
             }
@@ -253,5 +347,4 @@ function nppp_add_dashboard_widget() {
         /* Translators: NPP is the short name of the plugin. */
         __('NPP - Nginx Cache Status', 'fastcgi-cache-purge-and-preload-nginx'),
         'nppp_dashboard_widget'
-    );
-}
+ 
