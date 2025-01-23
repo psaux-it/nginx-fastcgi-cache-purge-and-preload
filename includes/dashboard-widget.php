@@ -166,12 +166,17 @@ function nppp_get_active_cron_events_widget() {
     if (!$has_events) {
         echo '<div class="nppp-scheduled-event">';
             echo '<div class="nppp-cron-info">';
-                echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-left: 23px;"></span>';
-                echo '<span class="nppp-next-run">' . sprintf(
-                    /* Translators: %s is the formatted next run time */
-                    esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                    '<strong style="color: #2196f3; font-size: 12px;">' . esc_html__('No event found', 'fastcgi-cache-purge-and-preload-nginx') . '</strong>'
-                ) . '</span>';
+                echo '<td style="padding: 6px 15px; width: 75%;">';
+                    echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-right: 8px;"></span>';
+                    echo '<span class="nppp-next-run">' . sprintf(
+                        /* Translators: %s is the formatted next run time */
+                        esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        '<strong style="color: #2196f3; font-size: 12px;">' . esc_html__('No event found', 'fastcgi-cache-purge-and-preload-nginx') . '</strong>'
+                    ) . '</span>';
+                echo '</td>';
+                echo '<td style="padding: 6px 15px; text-align: center;">';
+                    echo '<span class="dashicons dashicons-info" style="font-size: 18px; color: orange;"></span>';
+                echo '</td>';
             echo '</div>';
         echo '</div>';
     }
