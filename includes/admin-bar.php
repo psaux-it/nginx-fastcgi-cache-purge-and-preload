@@ -32,7 +32,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         'href' => admin_url('options-general.php?page=nginx_cache_settings'),
     ));
 
-    // Add "Purge All" admin-bar parent menu for NPP 
+    // Add "Purge All" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'purge-cache',
@@ -41,7 +41,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         'meta'   => array('class' => 'nppp-action-trigger'),
     ));
 
-    // Add "Preload All" admin-bar parent menu for NPP 
+    // Add "Preload All" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'preload-cache',
