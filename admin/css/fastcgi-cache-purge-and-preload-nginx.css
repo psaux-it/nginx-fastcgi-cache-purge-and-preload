@@ -2281,7 +2281,7 @@ p.description {
 }
 
 .nppp-submenu ul li a:hover {
-    color: #00a0d2;
+    color: #ff6f61;
 }
 
 /* Responsive Adjustments */
@@ -2631,8 +2631,7 @@ p.description {
 /* Active Link */
 .nppp-submenu ul li a.active {
     background-color: #fff !important;
-    color: #0073aa;
-    font-weight: bold;
+    color: #ff6f61;
 }
 
 /* Persistent Underline for Active Link */
