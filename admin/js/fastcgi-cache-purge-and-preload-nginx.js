@@ -2764,6 +2764,10 @@ function npppupdateStatus() {
         nppppermIsolationSpan.style.color = "orange";
         iconSpanPermIsolation.classList.add("dashicons", "dashicons-clock");
         permIsolationStatusText = ' ' + nppppermIsolation;
+    } else if (nppppermIsolation === "Not Determined") {
+        nppppermIsolationSpan.style.color = "red";
+        iconSpanPermIsolation.classList.add("dashicons", "dashicons-no");
+        permIsolationStatusText = ' ' + nppppermIsolation;
     }
 
     nppppermIsolationSpan.appendChild(iconSpanPermIsolation);
