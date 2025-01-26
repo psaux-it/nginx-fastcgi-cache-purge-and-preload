@@ -156,45 +156,39 @@ function nppp_plugin_requirements_met() {
         // Initialize $server_software variable
         $server_software = '';
 
-        // Check if $_SERVER['SERVER_SOFTWARE'] is set
+        // Check SERVER_SOFTWARE
         if (isset($_SERVER['SERVER_SOFTWARE'])) {
             // Unslash and sanitize $_SERVER['SERVER_SOFTWARE']
             $server_software = sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']));
         }
 
-        // Check for Nginx-specific environment variables
-        if (empty($server_software) && isset($_SERVER['NGINX_VERSION'])) {
-            $server_software = 'nginx';
-        } elseif (empty($server_software) && isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            // Nginx acting as a reverse proxy
-            $server_software = 'nginx';
-        }
-
-        // Check for the SAPI name to detect if Nginx is using PHP-FPM
+        // If no SERVER_SOFTWARE detected, check response headers
         if (empty($server_software)) {
-            $sapi_name = php_sapi_name();
-            if (strpos($sapi_name, 'fpm-fcgi') !== false) {
-                // Nginx with PHP-FPM
-                $server_software = 'nginx';
-            }
-        }
+            // Perform the request
+            $response = wp_remote_get(get_site_url());
 
-        // If still no server software detected, check outgoing headers
-        if (empty($server_software)) {
-            $headers = headers_list();
-            foreach ($headers as $header) {
-                if (stripos($header, 'server: nginx') !== false) {
-                    $server_software = 'nginx';
-                    break;
-                } elseif (stripos($header, 'server: apache') !== false) {
-                    $server_software = 'apache';
-                    break;
+            // Check if the request was successful
+            if (is_array($response) && !is_wp_error($response)) {
+                // Get response headers
+                $headers = wp_remote_retrieve_headers($response);
+
+                // Check if the 'Server' header exists
+                if (isset($headers['server'])) {
+                    $server_software = $headers['server'];
                 }
             }
         }
 
+        // Check for the SAPI name, not reliable
+        if (empty($server_software)) {
+            $sapi_name = php_sapi_name();
+            if (strpos($sapi_name, 'fpm-fcgi') !== false) {
+                $server_software = 'nginx';
+            }
+        }
+
         // Check if the web server is Nginx
-        if (strpos($server_software, 'nginx') !== false) {
+        if (stripos($server_software, 'nginx') !== false) {
             // Initialize a flag to track the success functions
             $shell_functions_enabled = true;
 
