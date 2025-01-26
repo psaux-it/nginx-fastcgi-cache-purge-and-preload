@@ -44,6 +44,8 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
                 return 2;
             } elseif ($error_code === 'directory_not_found') {
                 return 3;
+            } elseif ($error_code === 'directory_traversal') {
+                return 5;
             } else {
                 return 4;
             }
@@ -194,7 +196,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                                 $error_message = __( 'ERROR PATH: The Nginx cache path appears to be a critical system directory or a first-level directory. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
                                 break;
                             case 'file_not_found_or_not_readable':
-                                $error_message = __( 'ERROR PATH: The specified Nginx cache path was not found. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
+                                $error_message = __( 'ERROR PATH: The specified Nginx cache path does not exist. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
                                 break;
                             default:
                                 $error_message = __( 'ERROR PATH: An invalid Nginx cache path was provided. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
@@ -564,6 +566,11 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 case 4:
                     $message_type = 'error';
                     $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while attempting to purge the Nginx cache. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' );
+                    break;
+                case 5:
+                    $message_type = 'error';
+                    // Translators: %s is the Nginx cache path
+                    $message_content = sprintf( __( 'ERROR SECURITY: A directory traversal issue was detected with the provided path (%s). Cache purge aborted for security reasons. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
                     break;
             }
 
