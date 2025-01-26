@@ -110,11 +110,40 @@ function nppp_wp_purge($directory_path) {
         return;
     }
 
+    // Resolve the absolute path
+    $real_path = realpath($directory_path);
+
+    // Check if the realpath is valid
+    if ($real_path === false) {
+        return new WP_Error('directory_traversal', __('Directory traversal detected or invalid path.', 'fastcgi-cache-purge-and-preload-nginx'));
+    }
+
+    // Ensure the resolved path doesn't traverse outside the intended directory structure
+    if (strpos(rtrim($real_path, DIRECTORY_SEPARATOR), rtrim($directory_path, DIRECTORY_SEPARATOR)) !== 0) {
+        return new WP_Error('directory_traversal', __('Directory traversal detected or invalid path.', 'fastcgi-cache-purge-and-preload-nginx'));
+    }
+
     // Check for read and write permissions early
     if (!$wp_filesystem->is_readable($directory_path) || !$wp_filesystem->is_writable($directory_path)) {
         // Translators: %s is the Nginx cache path
         return new WP_Error('permission_error', sprintf(__('Permission denied while accessing or writing to directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path));
     }
+
+    // Protected folders to be excluded, recursively
+    $protected_folders = ['client_temp', 'scgi_temp', 'uwsgi_temp', 'fastcgi_temp', 'proxy_temp'];
+    $protected_paths = array_map(function ($folder) use ($real_path) {
+        return trailingslashit($real_path) . $folder;
+    }, $protected_folders);
+
+    // Recursive function to check if a path is protected
+    $is_protected = function ($path) use ($protected_paths) {
+        foreach ($protected_paths as $protected_path) {
+            if (strpos(rtrim($path, DIRECTORY_SEPARATOR), rtrim($protected_path, DIRECTORY_SEPARATOR)) === 0) {
+                return true;
+            }
+        }
+        return false;
+    };
 
     // Check if the directory exists before attempting to purge cache
     if ($wp_filesystem->is_dir($directory_path)) {
@@ -129,6 +158,12 @@ function nppp_wp_purge($directory_path) {
         } elseif (!empty($contents)) {
             foreach ($contents as $file) {
                 $file_path = trailingslashit($directory_path) . $file['name'];
+
+                // Skip if the path is protected (recursively)
+                if ($is_protected($file_path)) {
+                    continue;
+                }
+
                 if ($wp_filesystem->is_file($file_path) || $wp_filesystem->is_dir($file_path)) {
                     // Attempt to delete file or directory
                     $deleted = $wp_filesystem->delete($file_path, true);
