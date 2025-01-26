@@ -527,10 +527,19 @@ function nppp_my_status_html() {
     $php_process_owner = nppp_get_website_user();
     $web_server_user = nppp_get_webserver_user();
 
-    // Compare the two users and set the status
-    $nppp_isolation_status = $php_process_owner === $web_server_user
-        ? __('Not Isolated', 'fastcgi-cache-purge-and-preload-nginx')
-        : __('Isolated', 'fastcgi-cache-purge-and-preload-nginx');
+    // Normalize values to handle potential inconsistencies
+    $php_process_owner = trim(strtolower($php_process_owner));
+    $web_server_user = trim(strtolower($web_server_user));
+
+    // Check if either user is "Not Determined"
+    if ($php_process_owner === 'not determined' || $web_server_user === 'not determined') {
+        $nppp_isolation_status = __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        // Compare the two users
+        $nppp_isolation_status = ($php_process_owner === $web_server_user)
+            ? __('Not Isolated', 'fastcgi-cache-purge-and-preload-nginx')
+            : __('Isolated', 'fastcgi-cache-purge-and-preload-nginx');
+    }
 
     // Check NGINX FastCGI Cache Key
     $config_data = nppp_parse_nginx_cache_key();
