@@ -147,6 +147,65 @@ function nppp_is_linux() {
     return false;
 }
 
+// Checks if the specified shell commands are available in the environment, indicating
+// specially whether the system is likely Dockerized
+function nppp_is_dockerized() {
+    // Static key base for transient
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_missing_commands_' . md5($static_key_base);
+
+    // Check if transient exists and is valid
+    $missing_commands = get_transient($transient_key);
+
+    if (false === $missing_commands) {
+        // List of commands to check
+        $commands_to_check = ['ps', 'grep', 'awk', 'sort', 'uniq', 'sed', 'nohup', 'wget'];
+
+        // Initialize the missing commands array
+        $missing_commands = [];
+
+        // Loop through each command and check if it exists
+        foreach ($commands_to_check as $command) {
+            // Execute 'command -v' to check if the command exists in the shell
+            $result = shell_exec("command -v {$command}");
+
+            // If the result is empty, the command doesn't exist
+            if (empty($result)) {
+                $missing_commands[] = $command;
+            }
+        }
+
+        // Save missing commands in a transient for 10 seconds
+        set_transient($transient_key, $missing_commands, 10);
+    }
+
+    // Return the list of missing commands (or an empty array if none are missing)
+    return $missing_commands;
+}
+
+// Check NPP required shell toolset for plugin and preload action
+function nppp_shell_toolset_check($global_, $preload) {
+    // Define the toolsets based on the arguments
+    if ($global_) {
+        $commands = ['ps', 'grep', 'awk', 'sort', 'uniq', 'sed'];
+    } elseif ($preload) {
+        $commands = ['wget', 'nohup'];
+    }
+
+    // Get the missing commands from the existing transient
+    $missing_commands = nppp_is_dockerized();
+
+    // Find the commands from the selected toolset that are missing
+    $missing_toolset_commands = array_intersect($missing_commands, $commands);
+
+    // If no commands from the selected toolset are missing
+    if (empty($missing_toolset_commands)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 // Check plugin requirements
 function nppp_plugin_requirements_met() {
     $nppp_met = false;
@@ -219,7 +278,10 @@ function nppp_plugin_requirements_met() {
 
             // NPP ready to go
             if ($shell_functions_enabled && function_exists('posix_kill')) {
-                $nppp_met = true;
+                // Lastly we check shell command required by NPP
+                if (nppp_shell_toolset_check(true, false)) {
+                    $nppp_met = true;
+                }
             }
         }
     }
@@ -256,20 +318,15 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
         }
     }
 
-    // Check if wget command exists
+    // Disable/limit plugin functionality to prevent unexpected behaviors
     if ($nppp_met) {
-        $output = shell_exec('command -v wget');
-        if (empty($output)) {
-            // wget is not available
+        if (!nppp_shell_toolset_check(false, true)) {
             wp_enqueue_script('nppp-disable-preload', plugins_url('../admin/js/nppp-disable-preload.js', __FILE__), array('jquery'), '2.0.9', true);
         } else {
-            // wget is available, dequeue the "nppp-disable-preload.js" if it's already enqueued
             wp_dequeue_script('nppp-disable-preload');
         }
         wp_dequeue_script('nppp-disable-functionality');
     } else {
-        // This plugin only works on Linux with nginx
-        // Disable plugin functionality to prevent unexpected behaviors.
         wp_enqueue_script('nppp-disable-functionality', plugins_url('../admin/js/nppp-disable-functionality.js', __FILE__), array('jquery'), '2.0.9', true);
     }
 }
