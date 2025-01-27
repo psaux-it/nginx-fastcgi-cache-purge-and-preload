@@ -308,10 +308,26 @@ function nppp_pre_checks_critical() {
         return __('GLOBAL ERROR POSIX: Plugin is not functional on your environment. The PHP POSIX extension is required but not enabled. Please install or enable POSIX on your server.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
-    // Check if wget is available
-    $output = shell_exec('command -v wget');
-    if (empty($output)) {
-        return __('GLOBAL ERROR COMMAND: The "wget" utility is not available. Please ensure "wget" is installed on your server. The preload action is not functional in your environment.', 'fastcgi-cache-purge-and-preload-nginx');
+    // Check shell command requirements for plugin functionality
+    if (!nppp_shell_toolset_check(true, false)) {
+        // Get the missing commands directly from the transient
+        $missing_commands = get_transient('nppp_missing_commands_' . md5('nppp'));
+        // If there are missing commands
+        if (!empty($missing_commands)) {
+            $missing_commands_str = implode(', ', $missing_commands);
+            return sprintf(__('GLOBAL ERROR COMMAND: Plugin is not functional on your environment. The required core shell command(s) not found: %s', 'fastcgi-cache-purge-and-preload-nginx'), $missing_commands_str);
+        }
+    }
+
+    // Check action specific shell command requirements for Preload
+    if (!nppp_shell_toolset_check(false, true)) {
+        // Get the missing commands directly from the transient
+        $missing_commands = get_transient('nppp_missing_commands_' . md5('nppp'));
+        // If there are missing commands
+        if (!empty($missing_commands)) {
+            $missing_commands_str = implode(', ', $missing_commands);
+            return sprintf(__('GLOBAL ERROR COMMAND: Preload action is not functional on your environment. The required shell command(s) not found: %s', 'fastcgi-cache-purge-and-preload-nginx'), $missing_commands_str);
+        }
     }
 
     // All requirements met
