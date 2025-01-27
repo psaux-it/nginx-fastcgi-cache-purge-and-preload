@@ -315,6 +315,7 @@ function nppp_pre_checks_critical() {
         // If there are missing commands
         if (!empty($missing_commands)) {
             $missing_commands_str = implode(', ', $missing_commands);
+            // Translators: %s will be replaced with the list of missing commands
             return sprintf(__('GLOBAL ERROR COMMAND: Plugin is not functional on your environment. The required core shell command(s) not found: %s', 'fastcgi-cache-purge-and-preload-nginx'), $missing_commands_str);
         }
     }
@@ -326,6 +327,7 @@ function nppp_pre_checks_critical() {
         // If there are missing commands
         if (!empty($missing_commands)) {
             $missing_commands_str = implode(', ', $missing_commands);
+            // Translators: %s will be replaced with the list of missing commands
             return sprintf(__('GLOBAL ERROR COMMAND: Preload action is not functional on your environment. The required shell command(s) not found: %s', 'fastcgi-cache-purge-and-preload-nginx'), $missing_commands_str);
         }
     }
