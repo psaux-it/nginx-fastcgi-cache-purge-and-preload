@@ -271,12 +271,6 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
             return;
         }
 
-        // Prevent transition_post_status runs twice
-        // cause cache purge also runs twice
-        if (defined('REST_REQUEST') && REST_REQUEST) {
-            return;
-        }
-
         // Priority 1: Handle Status Changes (publish from trash, draft, or pending)
         if ('publish' === $new_status) {
             // If the post was moved from trash to publish, purge the cache
