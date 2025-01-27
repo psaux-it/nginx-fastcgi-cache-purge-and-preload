@@ -248,7 +248,6 @@ function nppp_pre_checks_critical() {
 
     // Check SERVER_SOFTWARE
     if (isset($_SERVER['SERVER_SOFTWARE'])) {
-        // Unslash and sanitize $_SERVER['SERVER_SOFTWARE']
         $server_software = sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']));
     }
 
