@@ -17,6 +17,7 @@
         var preloadButton = $('#wp-admin-bar-preload-cache');
         var purgeButton = $('#wp-admin-bar-purge-cache');
         var statusButton = $('#wp-admin-bar-fastcgi-cache-status');
+        var advancedButton = $('#wp-admin-bar-fastcgi-cache-advanced');
 
         // Check if the preload button exists and disable it
         if (preloadButton.length > 0) {
@@ -59,6 +60,21 @@
 
             // Prevent default click behavior
             statusButton.find('a').click(function(event) {
+                event.preventDefault();
+            });
+        }
+
+        // Check if the advanced button exists and disable it
+        if (advancedButton.length > 0) {
+            // Disable the button
+            advancedButton.find('a').css({
+                'pointer-events': 'none',
+                'opacity': '0.5',
+                'cursor': 'not-allowed'
+            });
+
+            // Prevent default click behavior
+            advancedButton.find('a').click(function(event) {
                 event.preventDefault();
             });
         }
