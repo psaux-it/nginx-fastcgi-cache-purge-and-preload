@@ -57,8 +57,17 @@
                 'pointer-events': 'none',
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
-            }).off('click').on('click', function(event) {
-                event.preventDefault();
+            }).each(function() {
+                $(this).off('click');
+            });
+
+            // Ensure the parent <p> tags are also non-clickable for rest API preload stuff
+            $('#nppp-preload-url').css({
+                'pointer-events': 'none',
+                'opacity': '0.5',
+                'cursor': 'not-allowed'
+            }).each(function() {
+                $(this).off('click');
             });
 
             // style cron status heading
