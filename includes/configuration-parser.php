@@ -283,26 +283,49 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
 }
 
 // Function to get Nginx version, OpenSSL version, and modules
+// Function to get Nginx version, OpenSSL version, and modules
 function nppp_get_nginx_info() {
-    $output = shell_exec('nginx -V 2>&1');
+    $nginx_version = 'Unknown';
+    $php_version = 'Unknown';
 
-    // Extract Nginx version
-    if (preg_match('/nginx\/([\d.]+)/', $output, $matches)) {
-        $nginx_version = $matches[1];
+    // Get version directly via nginx binary
+    if (shell_exec('command -v nginx')) {
+        $output = shell_exec('nginx -V 2>&1');
+
+        // Extract Nginx version
+        if (preg_match('/nginx\/([\d.]+)/', $output, $matches)) {
+            $nginx_version = $matches[1];
+        }
     } else {
-        $nginx_version = 'Unknown';
+        // Fallback: Check SERVER_SOFTWARE for Nginx version
+        if (isset($_SERVER['SERVER_SOFTWARE'])) {
+            $server_software = sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']));
+
+            // Extract Nginx version from SERVER_SOFTWARE
+            if (preg_match('/nginx[\s\/]?([\d.]+)/i', $server_software, $matches)) {
+                $nginx_version = $matches[1];
+            }
+        }
     }
 
-    // Extract OpenSSL version
-    if (preg_match('/OpenSSL ([\d.]+)/', $output, $matches)) {
-        $openssl_version = $matches[1];
-    } else {
-        $openssl_version = 'Unknown';
+    // Get PHP version
+    $output = phpversion();
+    if (preg_match('/(?:php\s+version:?\s*)?(\d+(?:\.\d+){0,3})/i', $output, $matches)) {
+        $php_version = $matches[1];
+    }
+
+    // Sanitize output
+    if ($nginx_version !== 'Unknown') {
+        $nginx_version = preg_replace('/[^0-9.]/', '', $nginx_version);
+    }
+
+    if ($php_version !== 'Unknown') {
+        $php_version = preg_replace('/[^0-9.]/', '', $php_version);
     }
 
     return [
         'nginx_version' => $nginx_version,
-        'openssl_version' => $openssl_version,
+        'php_version' => $php_version,
     ];
 }
 
@@ -369,14 +392,14 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     </tr>
                     <!-- Section for OpenSSL Version -->
                     <tr>
-                        <td class="action"><?php esc_html_e('OpenSSL Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action"><?php esc_html_e('PHP Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppOpenSSLVersion">
-                            <?php if ($nginx_info['openssl_version'] === 'Unknown'): ?>
+                            <?php if ($nginx_info['php_version'] === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: orange;"> <?php echo esc_html($nginx_info['openssl_version']); ?></span>
+                                <span style="color: orange;"> <?php echo esc_html($nginx_info['php_version']); ?></span>
                             <?php else: ?>
                                 <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span><?php echo esc_html($nginx_info['openssl_version']); ?></span>
+                                <span><?php echo esc_html($nginx_info['php_version']); ?></span>
                             <?php endif; ?>
                         </td>
                     </tr>
