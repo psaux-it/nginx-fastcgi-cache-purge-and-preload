@@ -282,8 +282,7 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
     return ['cache_paths' => $cache_paths];
 }
 
-// Function to get Nginx version, OpenSSL version, and modules
-// Function to get Nginx version, OpenSSL version, and modules
+// Function to get Nginx version, PHP version
 function nppp_get_nginx_info() {
     $nginx_version = 'Unknown';
     $php_version = 'Unknown';
