@@ -128,13 +128,22 @@
             // disable generate API key button
             $('#api-key-button').prop('disabled', true);
 
-            // disable rest API stuff
+            // disable the rest API elements non-clickable
             $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({
                 'pointer-events': 'none',
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
-            }).off('click').on('click', function(event) {
-                event.preventDefault();
+            }).each(function() {
+                $(this).off('click');
+            });
+
+            // ensure the parent <p> tags are also non-clickable
+            $('#nppp-api-key, #nppp-purge-url, #nppp-preload-url').css({
+                'pointer-events': 'none',
+                'opacity': '0.5',
+                'cursor': 'not-allowed'
+            }).each(function() {
+                $(this).off('click');
             });
 
             // style cron status heading
