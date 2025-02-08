@@ -12,7 +12,33 @@
 (function($) {
     'use strict';
 
+    // Function to disable preload button on Advanced Tab
+    function NppdisablePreloadButtons() {
+        $('.nppp-preload-btn').each(function() {
+            var $btn = $(this);
+
+            // Remove all jQuery-attached click event listeners
+            $btn.off('click');
+
+            // Remove any inline onclick attribute
+            $btn.removeAttr('onclick');
+
+            // Disable the button using the native disabled property
+            $btn.prop('disabled', true);
+
+            // Apply CSS to show the button as disabled
+            $btn.css({
+                'pointer-events': 'none',
+                'opacity': '0.5',
+                'cursor': 'not-allowed'
+            });
+        });
+    }
+
     $(document).ready(function() {
+        // Disable the Preload button on the Advanced Tab
+        NppdisablePreloadButtons();
+
         // Disable the Preload button in the WP admin bar
         var preloadButton = $('#wp-admin-bar-preload-cache');
 
@@ -77,5 +103,11 @@
                 'cursor': 'not-allowed'
             });
         }
+    });
+
+    // Disable the Preload button on the Advanced Tab
+    // After ajax completed
+    $(document).ajaxComplete(function() {
+        NppdisablePreloadButtons();
     });
 })(jQuery);
