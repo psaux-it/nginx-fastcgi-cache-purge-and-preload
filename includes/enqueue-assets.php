@@ -183,6 +183,46 @@ function nppp_is_dockerized() {
     return $missing_commands;
 }
 
+// Conditionally disable Nginx Cache features
+function nppp_disable_features($unsupported, $preload) {
+    $unsupported = (bool) $unsupported;
+    $preload     = (bool) $preload;
+
+    // Retrieve the current settings
+    $options = get_option( 'nginx_cache_settings', array() );
+
+    // Determine which features to disable
+    if ( $unsupported === true ) {
+        // If unsupported is true
+        $features = array(
+            'nginx_cache_purge_on_update',
+            'nginx_cache_auto_preload',
+            'nginx_cache_auto_preload_mobile',
+            'nginx_cache_schedule',
+            'nginx_cache_send_mail',
+            'nginx_cache_api'
+        );
+    } elseif ( $preload === true ) {
+        // If preload is true
+        $features = array(
+            'nginx_cache_api',
+            'nginx_cache_auto_preload',
+            'nginx_cache_auto_preload_mobile',
+            'nginx_cache_schedule'
+        );
+    } else {
+        return;
+    }
+
+    // Set the selected features to 'no'.
+    foreach ( $features as $feature ) {
+        $options[ $feature ] = 'no';
+    }
+
+    // Update the option in the database.
+    update_option( 'nginx_cache_settings', $options );
+}
+
 // Check NPP required shell toolset for plugin and preload action
 function nppp_shell_toolset_check($global_, $preload) {
     // Define the toolsets based on the arguments
@@ -322,12 +362,14 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
     if ($nppp_met) {
         if (!nppp_shell_toolset_check(false, true)) {
             wp_enqueue_script('nppp-disable-preload', plugins_url('../admin/js/nppp-disable-preload.js', __FILE__), array('jquery'), '2.0.9', true);
+            nppp_disable_features(false, true);
         } else {
             wp_dequeue_script('nppp-disable-preload');
         }
         wp_dequeue_script('nppp-disable-functionality');
     } else {
         wp_enqueue_script('nppp-disable-functionality', plugins_url('../admin/js/nppp-disable-functionality.js', __FILE__), array('jquery'), '2.0.9', true);
+        nppp_disable_features(true, false);
     }
 }
 
