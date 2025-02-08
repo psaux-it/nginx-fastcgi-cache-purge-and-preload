@@ -40,19 +40,23 @@
         NppdisablePreloadButtons();
 
         // Disable the Preload button in the WP admin bar
-        var preloadButton = $('#wp-admin-bar-preload-cache');
+        var $preloadButton = $('#wp-admin-bar-preload-cache');
+        if ($preloadButton.length) {
+            // Remove all click events
+            $preloadButton.off('click');
 
-        if (preloadButton.length > 0) {
-            preloadButton.find('a').css({
-                'pointer-events': 'none',
-                'opacity': '0.5',
-                'cursor': 'not-allowed'
-            });
-
-            preloadButton.find('a').click(function(event) {
-                event.preventDefault();
-            });
+            // Disable click behavior
+            $preloadButton.find('a')
+                .removeAttr('href')
+                .css({
+                    'pointer-events': 'none',
+                    'opacity': '0.5',
+                    'cursor': 'not-allowed'
+                });
         }
+
+        // Also remove any delegated events
+        $(document).off('click', '#wp-admin-bar-preload-cache');
 
         // Disable the Preload button on the Dashboard Widget
         $('.nppp-action-button[data-action="nppp-widget-preload"]')
