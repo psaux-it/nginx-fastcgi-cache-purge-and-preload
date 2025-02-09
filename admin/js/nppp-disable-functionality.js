@@ -13,71 +13,42 @@
     'use strict';
 
     $(document).ready(function() {
-        // Select the buttons in the admin bar
-        var preloadButton = $('#wp-admin-bar-preload-cache');
-        var purgeButton = $('#wp-admin-bar-purge-cache');
-        var statusButton = $('#wp-admin-bar-fastcgi-cache-status');
-        var advancedButton = $('#wp-admin-bar-fastcgi-cache-advanced');
+        // Select the buttons in the admin bar with unique names
+        var npppAllButtons = {
+            npppPreload: $('#wp-admin-bar-preload-cache'),
+            npppPurge: $('#wp-admin-bar-purge-cache'),
+            npppStatus: $('#wp-admin-bar-fastcgi-cache-status'),
+            npppAdvanced: $('#wp-admin-bar-fastcgi-cache-advanced')
+        };
 
-        // Check if the preload button exists and disable it
-        if (preloadButton.length > 0) {
-            // Disable the button
-            preloadButton.find('a').css({
-                'pointer-events': 'none',
-                'opacity': '0.5',
-                'cursor': 'not-allowed'
-            });
+        // Function to disable a single button
+        function npppDisableButtonSingle(npppButton) {
+            if (npppButton.length) {
+                npppButton.off('click');
+                $(document).off('click', `#${npppButton.attr('id')}`);
 
-            // Prevent default click behavior
-            preloadButton.find('a').click(function(event) {
-                event.preventDefault();
+                npppButton.find('a')
+                    .removeAttr('href')
+                    .css({
+                        'pointer-events': 'none',
+                        'opacity': '0.5',
+                        'cursor': 'not-allowed'
+                    })
+                    .on('click', function(event) {
+                        event.preventDefault();
+                    });
+            }
+        }
+
+        // Function to disable all buttons at once
+        function npppDisableButtonAll() {
+            $.each(npppAllButtons, function(_, npppBtn) {
+                npppDisableButtonSingle(npppBtn);
             });
         }
 
-        // Check if the purge button exists and disable it
-        if (purgeButton.length > 0) {
-            // Disable the button
-            purgeButton.find('a').css({
-                'pointer-events': 'none',
-                'opacity': '0.5',
-                'cursor': 'not-allowed'
-            });
-
-            // Prevent default click behavior
-            purgeButton.find('a').click(function(event) {
-                event.preventDefault();
-            });
-        }
-
-        // Check if the status button exists and disable it
-        if (statusButton.length > 0) {
-            // Disable the button
-            statusButton.find('a').css({
-                'pointer-events': 'none',
-                'opacity': '0.5',
-                'cursor': 'not-allowed'
-            });
-
-            // Prevent default click behavior
-            statusButton.find('a').click(function(event) {
-                event.preventDefault();
-            });
-        }
-
-        // Check if the advanced button exists and disable it
-        if (advancedButton.length > 0) {
-            // Disable the button
-            advancedButton.find('a').css({
-                'pointer-events': 'none',
-                'opacity': '0.5',
-                'cursor': 'not-allowed'
-            });
-
-            // Prevent default click behavior
-            advancedButton.find('a').click(function(event) {
-                event.preventDefault();
-            });
-        }
+        // Disable all buttons
+        npppDisableButtonAll();
 
         // Disable WP dashboard widget buttons
         $('.nppp-action-button').addClass('disabled').removeAttr('href');
