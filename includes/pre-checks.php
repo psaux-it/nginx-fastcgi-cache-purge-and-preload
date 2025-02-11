@@ -16,27 +16,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Check if the process is alive
 function nppp_is_process_alive($pid) {
-    // Validate that $pid
+    // Validate that $pid is a positive integer
     if (!is_numeric($pid) || $pid <= 0 || intval($pid) != $pid) {
         return false;
     }
 
-    // Get the site URL
+    // Get the path to the 'ps' command
     $ps_path = trim(shell_exec('command -v ps'));
 
-    // Escape the PID and the site URL to avoid shell injection
+    // Escape to avoid shell injection
     $escaped_pid = escapeshellarg($pid);
     $escaped_ps_path = escapeshellarg($ps_path);
 
-    // Execute the ps aux command to check if wget with the site URL is running
-    exec("$escaped_ps_path aux | grep $escaped_pid | grep -v 'grep'", $output);
+    // Check for the process by PID
+    exec("$escaped_ps_path aux | grep -w $escaped_pid | grep -v 'grep'", $output);
 
-    // If there's output, process running
+    // Process running
     if (!empty($output)) {
         return true;
     }
 
-    // Otherwise, the process is not running
+    // Process is not running
     return false;
 }
 
