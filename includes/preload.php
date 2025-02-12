@@ -40,15 +40,8 @@ function nppp_detect_premature_process(
                    "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
                    "\"$fdomain\" ";
 
-    // Set up test process descriptors
-    $descriptors = [
-        0 => ['pipe', 'r'],
-        1 => ['pipe', 'w'],
-        2 => ['pipe', 'w'],
-    ];
-
     // Start the testprocess
-    $process = proc_open($testCommand, $descriptors, $pipes);
+    $process = proc_open($testCommand, [], $dummy);
 
     // Verify that the process was successfully created
     if (is_resource($process)) {
