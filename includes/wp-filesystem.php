@@ -212,7 +212,7 @@ function nppp_wp_purge($directory_path) {
         // Cache purged
         return true;
     } else {
-		// No cache directory found
+        // No cache directory found
         return new WP_Error('directory_not_found', __('Directory not found', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 }
