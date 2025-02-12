@@ -721,7 +721,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
 
             // Display the success message
             if (!empty($success_message)) {
-                nppp_display_admin_notice('success', $success_message, true, false);
+                nppp_display_admin_notice('success', $success_message, true);
             }
         } else {
             // Determine the error message based on auto purge status
@@ -749,7 +749,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
 
             // Display the error message
             if (!empty($error_message)) {
-                nppp_display_admin_notice('error', $error_message, true, false);
+                nppp_display_admin_notice('error', $error_message, true);
             }
         }
     }
