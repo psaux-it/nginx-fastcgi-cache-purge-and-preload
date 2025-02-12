@@ -2017,7 +2017,7 @@ $(document).ready(function() {
         // Set a timeout to reload the page after 2 seconds
         setTimeout(function() {
             window.location.href = url;
-        }, 2000);
+        }, 500);
     });
 
     // Start masking API key on front-end
