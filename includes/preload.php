@@ -14,12 +14,11 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Detect premature process failures, which can happen too quickly for traditional PID-based checks.
-//  - When using PID-based monitoring (ps), a process that fails or exits immediately might not be detected in time.
-//  - By checking the process status with proc_get_status immediately after a short delay (100ms),
-//    we can confirm whether the process terminated unexpectedly or completed successfully rapidly.
-// Here we avoid running the process in the background (using nohup &), which would make it nearly impossible to 
-//  retrieve the early exit code directly in PHP environment.
+// Check if a preload process fails immediately—too fast.
+// Instead of relying on tools like 'ps' to detect it, we need to use 'proc_get_status'
+// to get PID and exit status to determine if the process has already ended unexpectedly.
+// Unfortunately, without 'proc_open', it's nearly impossible to detect premature
+// shell processes in PHP using traditional techniques.
 function nppp_detect_premature_process(
     string $fdomain,
     string $tmp_path,
@@ -62,7 +61,7 @@ function nppp_detect_premature_process(
 
         // Refresh process status after 100ms
         $status = proc_get_status($process);
-		
+
         // Close the pipes immediately
         foreach ($pipes as $pipe) {
             fclose($pipe);
@@ -179,15 +178,23 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             }
 
             // Test and detect premature process
-            $test_result = nppp_detect_premature_process(
-                $fdomain,
-                $tmp_path,
-                $nginx_cache_limit_rate,
-                $nginx_cache_wait,
-                $nginx_cache_reject_regex,
-                $nginx_cache_reject_extension,
-                $NPPP_DYNAMIC_USER_AGENT
-            );
+            if (function_exists('proc_open') && is_callable('proc_open')) {
+                $test_result = nppp_detect_premature_process(
+                    $fdomain,
+                    $tmp_path,
+                    $nginx_cache_limit_rate,
+                    $nginx_cache_wait,
+                    $nginx_cache_reject_regex,
+                    $nginx_cache_reject_extension,
+                    $NPPP_DYNAMIC_USER_AGENT
+                );
+
+                if (!$test_result) {
+                    // Translators: %s is replaced with the domain name (e.g., example.com).
+                    nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Cannot start Nginx cache Preloading for %s! Please check your DNS, connectivity, proxy/firewall settings, and Exclude syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
+                    return;
+                }
+            }
 
             // Start cache preloading for whole website (Preload All)
             // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
@@ -204,75 +211,70 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 "--reject='\"$nginx_cache_reject_extension\"' " .
                 "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
                 "\"$fdomain\" >/dev/null 2>&1 & echo \$!";
-            
-            // We did not get immediate exit from process
-            if ($test_result) {
-                // We are ready to call main command
-                $output = shell_exec($command);
 
-                // Get the process ID
-                $parts = explode(" ", $output);
-                $pid = end($parts);
-                nppp_perform_file_operation($PIDFILE, 'write', $pid);
+            // We are ready to call main command
+            $output = shell_exec($command);
 
-                // Create a DateTime object for the current time in WordPress timezone
-                $wordpress_timezone = new DateTimeZone(wp_timezone_string());
-                $current_time = new DateTime('now', $wordpress_timezone);
+            // Get the process ID
+            $parts = explode(" ", $output);
+            $pid = end($parts);
+            nppp_perform_file_operation($PIDFILE, 'write', $pid);
 
-                // Format the current time as the start time for the scheduled event
-                $start_time = $current_time->format('H:i:s');
+            // Create a DateTime object for the current time in WordPress timezone
+            $wordpress_timezone = new DateTimeZone(wp_timezone_string());
+            $current_time = new DateTime('now', $wordpress_timezone);
 
-                // Call the function to schedule the status check event
+            // Format the current time as the start time for the scheduled event
+            $start_time = $current_time->format('H:i:s');
+
+            // Call the function to schedule the status check event
+            if (!$preload_mobile) {
+                nppp_create_scheduled_event_preload_status($start_time);
+            }
+
+            // Start cpulimit if it is exist
+            if ($cpulimit === 1) {
+                $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
+                shell_exec($command);
+            }
+
+            // Define a default success message
+            $default_success_message = __( 'SUCCESS: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' );
+
+            // Check the status of $nppp_is_rest_api and display success message accordingly
+            if (is_bool($nppp_is_rest_api) && $nppp_is_rest_api) {
                 if (!$preload_mobile) {
-                    nppp_create_scheduled_event_preload_status($start_time);
+                    nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                } else {
+                    nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 }
+            }
 
-                // Start cpulimit if it is exist
-                if ($cpulimit === 1) {
-                    $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
-                    shell_exec($command);
+            // Check the status of $nppp_is_wp_cron and display success message accordingly
+            if (is_bool($nppp_is_wp_cron) && $nppp_is_wp_cron) {
+                if (!$preload_mobile) {
+                    nppp_display_admin_notice('success', __( 'SUCCESS CRON: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                } else {
+                    nppp_display_admin_notice('success', __( 'SUCCESS CRON: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 }
+            }
 
-                // Define a default success message
-                $default_success_message = __( 'SUCCESS: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' );
-
-                // Check the status of $nppp_is_rest_api and display success message accordingly
-                if (is_bool($nppp_is_rest_api) && $nppp_is_rest_api) {
-                    if (!$preload_mobile) {
-                        nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                    } else {
-                        nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                    }
+            // Check the status of $nppp_is_admin_bar and display success message accordingly
+            if (is_bool($nppp_is_admin_bar) && $nppp_is_admin_bar) {
+                if (!$preload_mobile) {
+                    nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                } else {
+                    nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 }
+            }
 
-                // Check the status of $nppp_is_wp_cron and display success message accordingly
-                if (is_bool($nppp_is_wp_cron) && $nppp_is_wp_cron) {
-                    if (!$preload_mobile) {
-                        nppp_display_admin_notice('success', __( 'SUCCESS CRON: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                    } else {
-                        nppp_display_admin_notice('success', __( 'SUCCESS CRON: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                    }
+            // If none of the specific conditions were met, display the default success message
+            if (!($nppp_is_rest_api || $nppp_is_wp_cron || $nppp_is_admin_bar)) {
+                if (!$preload_mobile) {
+                    nppp_display_admin_notice('success', $default_success_message);
+                } else {
+                    nppp_display_admin_notice('success', __( 'SUCCESS: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 }
-
-                // Check the status of $nppp_is_admin_bar and display success message accordingly
-                if (is_bool($nppp_is_admin_bar) && $nppp_is_admin_bar) {
-                    if (!$preload_mobile) {
-                        nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                    } else {
-                        nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                    }
-                }
-
-                // If none of the specific conditions were met, display the default success message
-                if (!($nppp_is_rest_api || $nppp_is_wp_cron || $nppp_is_admin_bar)) {
-                    if (!$preload_mobile) {
-                        nppp_display_admin_notice('success', $default_success_message);
-                    } else {
-                        nppp_display_admin_notice('success', __( 'SUCCESS: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                    }
-                }
-            } else {
-                nppp_display_admin_notice('error', __( 'ERROR COMMAND: Cannot start Nginx cache Preloading! Please check your Exclude Endpoints & Exclude File Extensions syntax are correct.', 'fastcgi-cache-purge-and-preload-nginx' ));
             }
         } elseif ($status === 1) {
             nppp_display_admin_notice('error', __( 'ERROR PERMISSION: Cannot Purge Nginx cache to start cache Preloading. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ));
@@ -305,15 +307,23 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         }
 
         // Test and detect premature process
-        $test_result = nppp_detect_premature_process(
-            $fdomain,
-            $tmp_path,
-            $nginx_cache_limit_rate,
-            $nginx_cache_wait,
-            $nginx_cache_reject_regex,
-            $nginx_cache_reject_extension,
-            $NPPP_DYNAMIC_USER_AGENT
-        );
+        if (function_exists('proc_open') && is_callable('proc_open')) {
+            $test_result = nppp_detect_premature_process(
+                $fdomain,
+                $tmp_path,
+                $nginx_cache_limit_rate,
+                $nginx_cache_wait,
+                $nginx_cache_reject_regex,
+                $nginx_cache_reject_extension,
+                $NPPP_DYNAMIC_USER_AGENT
+            );
+
+            if (!$test_result) {
+                // Translators: %s is replaced with the domain name (e.g., example.com).
+                nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Cannot start Nginx cache Preloading for %s! Please check your DNS, connectivity, proxy/firewall settings, and Exclude option syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
+                return;
+            }
+        }
 
         // Start cache preloading for whole website (Preload All)
         // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
@@ -331,56 +341,51 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
                 "\"$fdomain\" >/dev/null 2>&1 & echo \$!";
 
-        // We did not get immediate exit from process
-        if ($test_result) {
-            // We are ready to call main command
-            $output = shell_exec($command);
+        // We are ready to call main command
+        $output = shell_exec($command);
 
-            // Get the process ID
-            $parts = explode(" ", $output);
-            $pid = end($parts);
-            nppp_perform_file_operation($PIDFILE, 'write', $pid);
+        // Get the process ID
+        $parts = explode(" ", $output);
+        $pid = end($parts);
+        nppp_perform_file_operation($PIDFILE, 'write', $pid);
 
-            // Create a DateTime object for the current time in WordPress timezone
-            $wordpress_timezone = new DateTimeZone(wp_timezone_string());
-            $current_time = new DateTime('now', $wordpress_timezone);
+        // Create a DateTime object for the current time in WordPress timezone
+        $wordpress_timezone = new DateTimeZone(wp_timezone_string());
+        $current_time = new DateTime('now', $wordpress_timezone);
 
-            // Format the current time as the start time for the scheduled event
-            $start_time = $current_time->format('H:i:s');
+        // Format the current time as the start time for the scheduled event
+        $start_time = $current_time->format('H:i:s');
 
-            // Call the function to schedule the status check event
+        // Call the function to schedule the status check event
+        if (!$preload_mobile) {
+            nppp_create_scheduled_event_preload_status($start_time);
+        }
+
+        // Start cpulimit if it is exist
+        if ($cpulimit === 1) {
+            $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
+            shell_exec($command);
+        }
+
+        // Display the deferred message as admin notice
+        if (is_bool($nppp_is_rest_api) && $nppp_is_rest_api) {
             if (!$preload_mobile) {
-                nppp_create_scheduled_event_preload_status($start_time);
-            }
-
-            // Start cpulimit if it is exist
-            if ($cpulimit === 1) {
-                $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
-                shell_exec($command);
-            }
-
-            // Display the deferred message as admin notice
-            if (is_bool($nppp_is_rest_api) && $nppp_is_rest_api) {
-                if (!$preload_mobile) {
-                    nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache purged successfully. Auto preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                } else {
-                    nppp_display_admin_notice('success', __( 'SUCCESS REST: Auto Preload initiated for Mobile in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                }
-            } elseif (is_bool($nppp_is_admin_bar) && $nppp_is_admin_bar) {
-                if (!$preload_mobile) {
-                    nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                } else {
-                    nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Auto Preload initiated for Mobile in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                }
+                nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache purged successfully. Auto preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
             } else {
-                if (!$preload_mobile) {
-                    nppp_display_admin_notice('success', __( 'SUCCESS: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                } else {
-                    nppp_display_admin_notice('success', __( 'SUCCESS: Auto Preload initiated for Mobile in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                }
+                nppp_display_admin_notice('success', __( 'SUCCESS REST: Auto Preload initiated for Mobile in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+            }
+        } elseif (is_bool($nppp_is_admin_bar) && $nppp_is_admin_bar) {
+            if (!$preload_mobile) {
+                nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+            } else {
+                nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Auto Preload initiated for Mobile in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
             }
         } else {
-            nppp_display_admin_notice('error', __( 'ERROR COMMAND: Cannot start Nginx cache Preloading! Please check your Exclude Endpoints & Exclude File Extensions syntax are correct.', 'fastcgi-cache-purge-and-preload-nginx' ));
+            if (!$preload_mobile) {
+                nppp_display_admin_notice('success', __( 'SUCCESS: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+            } else {
+                nppp_display_admin_notice('success', __( 'SUCCESS: Auto Preload initiated for Mobile in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+            }
         }
     }
 }
