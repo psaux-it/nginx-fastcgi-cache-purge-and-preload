@@ -55,11 +55,6 @@ function nppp_detect_premature_process(
         // Refresh process status after 100ms
         $status = proc_get_status($process);
 
-        // Close the pipes immediately
-        foreach ($pipes as $pipe) {
-            fclose($pipe);
-        }
-
         // If process not running after 100ms;
         // We have 'exitcode'
         if (!$status['running']) {
