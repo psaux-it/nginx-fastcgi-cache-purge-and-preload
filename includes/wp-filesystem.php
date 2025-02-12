@@ -145,27 +145,57 @@ function nppp_wp_purge($directory_path) {
         return false;
     };
 
-    // Check if the directory exists before attempting to purge cache
+    // Check if the cache directory exist before trying to purge cache
     if ($wp_filesystem->is_dir($directory_path)) {
-        // Get directory contents
+        // Get cache directory contents
         $contents = $wp_filesystem->dirlist($directory_path);
 
-        // Check permission errors first
+        // Check permission errors
         if ($contents === false) {
             // Translators: %s is the Nginx cache path
             return new WP_Error('permission_error', sprintf(__('Permission denied while deleting file or directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path));
-        // If we have permisson to list directory and it is not empty try to delete files and directories in the directory.
+        // Ok, try to purge cache
         } elseif (!empty($contents)) {
+            // First check purge needed
+            try {
+                $cache_iterator = new RecursiveIteratorIterator(
+                    new RecursiveDirectoryIterator($directory_path, RecursiveDirectoryIterator::SKIP_DOTS),
+                    RecursiveIteratorIterator::SELF_FIRST
+                );
+
+                $has_files = '';
+                foreach ($cache_iterator as $file) {
+                    if ($wp_filesystem->is_file($file->getPathname())) {
+                        // Read cache content
+                        $file_content = $wp_filesystem->get_contents($file->getPathname());
+
+                        // Validate cache exists
+                        if (preg_match('/^KEY:/m', $file_content)) {
+                            $has_files = 'found';
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                $has_files = 'error';
+            }
+
+            // No cache found, no need to purge
+            if ($has_files !== 'found' && $has_files !== 'error') {
+                return new WP_Error('empty_directory', __('Directory is empty', 'fastcgi-cache-purge-and-preload-nginx'));
+            }
+
+            // Cache found, purge now
             foreach ($contents as $file) {
                 $file_path = trailingslashit($directory_path) . $file['name'];
 
-                // Skip if the path is protected (recursively)
+                // Skip protected paths (recursively)
                 if ($is_protected($file_path)) {
                     continue;
                 }
 
                 if ($wp_filesystem->is_file($file_path) || $wp_filesystem->is_dir($file_path)) {
-                    // Attempt to delete file or directory
+                    // Attempt to purge cache
                     $deleted = $wp_filesystem->delete($file_path, true);
                     // Check we throw in permisson errors
                     if (!$deleted) {
@@ -175,12 +205,14 @@ function nppp_wp_purge($directory_path) {
                 }
             }
         } else {
+            // No cache found, no need to purge
             return new WP_Error('empty_directory', __('Directory is empty', 'fastcgi-cache-purge-and-preload-nginx'));
         }
 
-        // Cache purged successfully
+        // Cache purged
         return true;
     } else {
+		// No cache directory found
         return new WP_Error('directory_not_found', __('Directory not found', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 }
