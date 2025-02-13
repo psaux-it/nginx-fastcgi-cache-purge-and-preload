@@ -298,8 +298,10 @@ function nppp_plugin_requirements_met() {
         }
 
         // Lastly fallback the traditional check for edge cases
-        if ($wp_filesystem->exists('/etc/nginx/nginx.conf')) {
-            $server_software = 'nginx';
+        if (empty($server_software)) {
+            if ($wp_filesystem->exists('/etc/nginx/nginx.conf')) {
+                $server_software = 'nginx';
+            }
         }
 
         // Check if the web server is Nginx
