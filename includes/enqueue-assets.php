@@ -248,6 +248,16 @@ function nppp_shell_toolset_check($global_, $preload) {
 
 // Check plugin requirements
 function nppp_plugin_requirements_met() {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
     $nppp_met = false;
 
     // Check if the operating system is Linux
@@ -270,8 +280,10 @@ function nppp_plugin_requirements_met() {
                 // Get response headers
                 $headers = wp_remote_retrieve_headers($response);
 
-                // Check if the 'Server' header exists
-                if (isset($headers['server'])) {
+                // Check cache headers
+                if (isset($headers['x-fastcgi-cache'])) {
+                    $server_software = 'nginx';
+                } elseif (isset($headers['server'])) {
                     $server_software = $headers['server'];
                 }
             }
@@ -283,6 +295,11 @@ function nppp_plugin_requirements_met() {
             if (strpos($sapi_name, 'fpm-fcgi') !== false) {
                 $server_software = 'nginx';
             }
+        }
+
+        // Lastly fallback the traditional check for edge cases
+        if ($wp_filesystem->exists('/etc/nginx/nginx.conf')) {
+            $server_software = 'nginx';
         }
 
         // Check if the web server is Nginx
