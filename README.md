@@ -36,10 +36,9 @@ Moreover, granting the correct permissions to the PHP process owner (PHP-FPM-USE
 📌 If you see warnings or if any plugin settings or tabs are disabled, this could indicate permission issues, an unsupported environment, or missing dependencies that the plugin requires to function properly.
 
 > [!TIP]
-> You do not need any external Nginx module. If you're deploying on an **All-in-One Monolithic Server** simply execute the one of the following one liner's on the server after installing plugin and follow instructions. <br/> <br/>Please read the information below to understand what **install.sh** does.
+> You do not need any external Nginx module. If you're deploying on an **All-in-One Monolithic Server** simply execute the one of the following one liner's on the server after installing plugin and follow instructions. <br/> <br/>Please read the **Installation Instructions** below.
 
 💯```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` <br/>
-💯```wget -qO /tmp/install.sh https://psaux-it.github.io/install.sh && bash /tmp/install.sh```
 
 ### Plugin Main Features
 
@@ -80,11 +79,22 @@ To facilitate this, a pre-configured bash script is included, which cat be run m
 
 Use **bindfs** to create a FUSE mount of the original Nginx Cache Path, granting read and write permissions to the PHP-FPM-USER.
 
-## Installation Instructions
+## Installation Instructions (All-in-One Monolithic Server)
 
 To implement this solution:
 1. Download latest [plugin](https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/) from official wordpress plugin repository or from our latest [releases](https://github.com/psaux-it/nginx-fastcgi-cache-purge-preload-wordpress/releases/tag/v2.0.9) and install to your wordpress instance also you can search plugin on wordpress admin dashboard as 'fastcgi cache purge and preload for nginx'
-2. On **root** call ```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` one liner to start automated setup
+2. Call ```install.sh``` one liner to start automated setup;
+
+Switch to ```root``` user:
+```bash
+sudo su - root || su - root
+bash <(curl -Ss https://psaux-it.github.io/install.sh)
+```
+
+or directly with ```sudo```
+ ```bash
+sudo bash -c "$(curl -Ss https://psaux-it.github.io/install.sh)"
+```
 
 ### What does install.sh do?
 
@@ -118,7 +128,7 @@ fastcgi_cache_path /var/cache/psauxit-fastcgi
 fastcgi_cache_path /var/cache/website-psauxit.com
 ```
 
-### Scriptless Setup Instructions  
+### Scriptless Setup Instructions (Not Recommended)
 
 These instructions guide you through setting up the NPP plugin in environments where `PHP-FPM-USER` and `WEBSERVER-USER` are distinct, manually, without the automation script **install.sh**  
 
