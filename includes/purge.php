@@ -271,6 +271,12 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
             return;
         }
 
+        // Exclude URLs containing 'wp-global-styles-*' from being purged
+        $post_url = get_permalink($post->ID);
+        if (strpos($post_url, 'wp-global-styles-') !== false) {
+            return;
+        }
+
         // Priority 1: Handle Status Changes (publish from trash, draft, or pending)
         if ('publish' === $new_status) {
             // If the post was moved from trash to publish, purge the cache
