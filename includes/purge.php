@@ -364,7 +364,7 @@ function nppp_purge_cache_plugin_activation_deactivation() {
 // Auto Purge (Entire)
 // Purge entire cache automatically for THEME switchs.
 // This function hooks into the 'switch_theme' action
-function nppp_purge_cache_on_theme_switch($old_name, $old_theme) {
+function nppp_purge_cache_on_theme_switch($new_name, $new_theme, $old_theme) {
     // Retrieve plugin settings
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
