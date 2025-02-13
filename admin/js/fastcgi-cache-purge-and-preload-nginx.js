@@ -2852,6 +2852,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Update the position when the window is resized
     window.addEventListener('resize', updateSubmitPosition);
+    window.addEventListener('scroll', updateSubmitPosition);
+
+    const observer = new MutationObserver(updateSubmitPosition);
+    observer.observe(tabsContainer.parentNode, { attributes: true, childList: true, subtree: true });
 });
 
 // Track the currently active link for the submenu
