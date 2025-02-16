@@ -1477,7 +1477,7 @@ function nppp_fetch_default_reject_regex() {
             return $matches[1];
         }
     } else {
-        wp_die( esc_html__( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
+        wp_die(esc_html__( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
     }
     return '';
 }
@@ -1502,7 +1502,7 @@ function nppp_fetch_default_regex_for_cache_key() {
             return $matches[1];
         }
     } else {
-        wp_die( esc_html__( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
+        wp_die(esc_html__( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
     }
     return '';
 }
@@ -1527,7 +1527,7 @@ function nppp_fetch_default_reject_extension() {
             return $matches[1];
         }
     } else {
-        wp_die( esc_html__( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
+        wp_die(esc_html__( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
     }
     return '';
 }
