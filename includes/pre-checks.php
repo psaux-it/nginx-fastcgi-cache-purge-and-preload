@@ -367,6 +367,10 @@ function nppp_pre_checks() {
         return;
     }
 
+    // Optimize performance by caching results of recursive permission checks
+    $permission_check_result = nppp_check_permissions_recursive_with_cache();
+    $nppp_permissions_check_result = $permission_check_result;
+
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $default_cache_path = '/dev/shm/change-me-now';
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
@@ -374,29 +378,23 @@ function nppp_pre_checks() {
     // Check if plugin critical requirements are met
     $requirements_met = nppp_pre_checks_critical();
     if ($requirements_met !== true) {
-        // Plugin requirements are not met
         nppp_display_pre_check_warning($requirements_met);
-        return;
     }
 
-    // Check if cache directory exists if not force to create it
+    // Check if cache directory exists
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
         nppp_display_pre_check_warning(__('GLOBAL ERROR PATH: The specified Nginx cache directory is default one or does not exist anymore. Please check your Nginx cache directory.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
-    // Optimize performance by caching results of recursive permission checks
-    $permission_check_result = nppp_check_permissions_recursive_with_cache();
-    $nppp_permissions_check_result = $permission_check_result;
-
+    // Check permissions are sufficient
     if ($nppp_permissions_check_result === 'false') {
-        // Handle the case where permissions are not sufficient
         nppp_display_pre_check_warning(__('GLOBAL ERROR PERMISSION: Insufficient permissions for Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
+    // Check cache status
     try {
-        // Use RecursiveDirectoryIterator to scan the cache directory and all subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
                 RecursiveIteratorIterator::SELF_FIRST
@@ -420,7 +418,7 @@ function nppp_pre_checks() {
         $has_files = 'error';
     }
 
-    // If no files are found or if files don't contain 'KEY:', display a warning
+    // Warn about empty cache
     if ($has_files !== 'found' && $has_files !== 'error') {
         nppp_display_pre_check_warning(__('GLOBAL WARNING CACHE: The Nginx cache is empty. Consider preloading the Nginx cache now!', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
