@@ -675,7 +675,7 @@ function nppp_handle_nginx_cache_settings_submission() {
 
                         // Redirect with success message
                         wp_redirect(add_query_arg(array(
-                            'status_message' => urlencode('Plugin cache (permission) cleared, settings saved successfully!'),
+                            'status_message' => urlencode(__('Plugin cache (permission) cleared, settings saved successfully!', 'fastcgi-cache-purge-and-preload-nginx')),
                             'message_type' => 'success',
                             'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
                         ), admin_url('options-general.php?page=nginx_cache_settings')));
@@ -696,15 +696,15 @@ function nppp_handle_nginx_cache_settings_submission() {
                     }
                 } else {
                     // No settings submitted
-                    wp_die('No settings to save.');
+                    wp_die(esc_html__('No settings to save.', 'fastcgi-cache-purge-and-preload-nginx'));
                 }
             } else {
                 // Nonce verification failed
-                wp_die('Nonce verification failed');
+                wp_die(esc_html__('Nonce verification failed', 'fastcgi-cache-purge-and-preload-nginx'));
             }
         } else {
             // Nonce verification failed
-            wp_die('Nonce not found');
+            wp_die(esc_html__('Nonce not found', 'fastcgi-cache-purge-and-preload-nginx'));
         }
     }
 }
@@ -725,9 +725,9 @@ function nppp_clear_nginx_cache_logs() {
     $log_file_path = NGINX_CACHE_LOG_FILE;
     if ($wp_filesystem->exists($log_file_path)) {
         nppp_perform_file_operation($log_file_path, 'write', '');
-        nppp_display_admin_notice('success', 'SUCCESS LOGS: Logs cleared successfully.', true, false);
+        nppp_display_admin_notice('success', __('SUCCESS LOGS: Logs cleared successfully.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
     } else {
-        nppp_display_admin_notice('error', 'ERROR LOGS: Log file not found.', true, false);
+        nppp_display_admin_notice('error', __('ERROR LOGS: Log file not found.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
     }
 }
 
@@ -1290,8 +1290,8 @@ function nppp_nginx_cache_send_mail_callback() {
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_send_mail]" class="nppp-onoffswitch-checkbox" value='yes' id="nginx_cache_send_mail" <?php echo esc_attr($send_mail_checked); ?>>
     <label class="nppp-onoffswitch-label" for="nginx_cache_send_mail">
         <span class="nppp-onoffswitch-inner">
-            <span class="nppp-off">OFF</span>
-            <span class="nppp-on">ON</span>
+            <span class="nppp-off"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-on"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
         </span>
         <span class="nppp-onoffswitch-switch"></span>
     </label>
@@ -1307,8 +1307,8 @@ function nppp_nginx_cache_auto_preload_callback() {
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_auto_preload]" class="nppp-onoffswitch-checkbox-preload" value="yes" id="nginx_cache_auto_preload" <?php echo esc_attr($auto_preload_checked); ?>>
     <label class="nppp-onoffswitch-label-preload" for="nginx_cache_auto_preload">
         <span class="nppp-onoffswitch-inner-preload">
-            <span class="nppp-off-preload">OFF</span>
-            <span class="nppp-on-preload">ON</span>
+            <span class="nppp-off-preload"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-on-preload"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
         </span>
         <span class="nppp-onoffswitch-switch-preload"></span>
     </label>
@@ -1324,8 +1324,8 @@ function nppp_nginx_cache_schedule_callback() {
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_schedule]" class="nppp-onoffswitch-checkbox-schedule" value="yes" id="nginx_cache_schedule" <?php echo esc_attr($cache_schedule_checked); ?>>
     <label class="nppp-onoffswitch-label-schedule" for="nginx_cache_schedule">
         <span class="nppp-onoffswitch-inner-schedule">
-            <span class="nppp-off-schedule">OFF</span>
-            <span class="nppp-on-schedule">ON</span>
+            <span class="nppp-off-schedule"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-on-schedule"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
         </span>
         <span class="nppp-onoffswitch-switch-schedule"></span>
     </label>
@@ -1341,8 +1341,8 @@ function nppp_nginx_cache_purge_on_update_callback() {
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_purge_on_update]" class="nppp-onoffswitch-checkbox-autopurge" value="yes" id="nginx_cache_purge_on_update" <?php echo esc_attr($auto_purge_checked); ?>>
     <label class="nppp-onoffswitch-label-autopurge" for="nginx_cache_purge_on_update">
         <span class="nppp-onoffswitch-inner-autopurge">
-            <span class="nppp-off-autopurge">OFF</span>
-            <span class="nppp-on-autopurge">ON</span>
+            <span class="nppp-off-autopurge"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-on-autopurge"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
         </span>
         <span class="nppp-onoffswitch-switch-autopurge"></span>
     </label>
@@ -1358,8 +1358,8 @@ function nppp_nginx_cache_auto_preload_mobile_callback() {
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_auto_preload_mobile]" class="nppp-onoffswitch-checkbox-preload-mobile" value="yes" id="nginx_cache_auto_preload_mobile" <?php echo esc_attr($auto_preload_mobile_checked); ?>>
     <label class="nppp-onoffswitch-label-preload-mobile" for="nginx_cache_auto_preload_mobile">
         <span class="nppp-onoffswitch-inner-preload-mobile">
-            <span class="nppp-off-preload-mobile">OFF</span>
-            <span class="nppp-on-preload-mobile">ON</span>
+            <span class="nppp-off-preload-mobile"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-on-preload-mobile"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
         </span>
         <span class="nppp-onoffswitch-switch-preload-mobile"></span>
     </label>
@@ -1401,7 +1401,7 @@ function nppp_nginx_cache_tracking_opt_in_callback() {
     $value = isset($options['nginx_cache_tracking_opt_in']) ? $options['nginx_cache_tracking_opt_in'] : '1';
     ?>
     <input type="checkbox" id="nginx_cache_tracking_opt_in" name="nginx_cache_settings[nginx_cache_tracking_opt_in]" value="1" <?php checked('1', $value); ?> />
-    <label for="nginx_cache_tracking_opt_in">Opt-in to help improve plugin development.</label>
+    <label for="nginx_cache_tracking_opt_in"><?php echo esc_html__('Opt-in to help improve plugin development.', 'fastcgi-cache-purge-and-preload-nginx'); ?></label>
     <?php
 }
 
@@ -1443,10 +1443,10 @@ function nppp_nginx_cache_logs_callback() {
             </div>
             <?php
         } else {
-             echo '<p>Unable to read log file. Please check file permissions.</p>';
+            echo '<p>' . esc_html__('Unable to read log file. Please check file permissions.', 'fastcgi-cache-purge-and-preload-nginx') . '</p>';
         }
     } else {
-        echo '<p>Log file not found or is not readable.</p>';
+        echo '<p>' . esc_html__('Log file not found or is not readable.', 'fastcgi-cache-purge-and-preload-nginx') . '</p>';
     }
 }
 
@@ -1464,7 +1464,7 @@ function nppp_fetch_default_reject_regex() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
@@ -1477,7 +1477,7 @@ function nppp_fetch_default_reject_regex() {
             return $matches[1];
         }
     } else {
-        wp_die('File does not exist: ' . esc_html($rr_txt_file));
+        wp_die( __( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
     }
     return '';
 }
@@ -1489,7 +1489,7 @@ function nppp_fetch_default_regex_for_cache_key() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
@@ -1502,7 +1502,7 @@ function nppp_fetch_default_regex_for_cache_key() {
             return $matches[1];
         }
     } else {
-        wp_die('File does not exist: ' . esc_html($rr_txt_file));
+        wp_die( __( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
     }
     return '';
 }
@@ -1514,7 +1514,7 @@ function nppp_fetch_default_reject_extension() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
@@ -1527,7 +1527,7 @@ function nppp_fetch_default_reject_extension() {
             return $matches[1];
         }
     } else {
-        wp_die('File does not exist: ' . esc_html($rr_txt_file));
+        wp_die( __( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
     }
     return '';
 }
@@ -1540,11 +1540,11 @@ function nppp_nginx_cache_api_key_callback() {
     echo "<input type='text' id='nginx_cache_api_key' name='nginx_cache_settings[nginx_cache_api_key]' value='" . esc_attr($api_key) . "' class='regular-text' />";
 
     echo "<div style='display: block; align-items: baseline;'>";
-    echo "<button id='api-key-button' class='button nginx-api-key-button'>Generate API Key</button>";
+    echo "<button id='api-key-button' class='button nginx-api-key-button'>" . esc_html__( 'Generate API Key', 'fastcgi-cache-purge-and-preload-nginx' ) . "</button>";
     echo "<div style='display: flex; align-items: baseline; margin-top: 8px; margin-bottom: 8px;'>";
-    echo "<p class='description' id='nppp-api-key' style='margin-right: 10px;'><span class='nppp-tooltip'>API Key<span class='nppp-tooltiptext'>Click to copy REST API Key</span></span></p>";
-    echo "<p class='description' id='nppp-purge-url' style='margin-right: 10px;'><span class='nppp-tooltip'>Purge URL<span class='nppp-tooltiptext'>Click to copy full REST API CURL URL for Purge</span></span></p>";
-    echo "<p class='description' id='nppp-preload-url'><span class='nppp-tooltip'>Preload URL<span class='nppp-tooltiptext'>Click to copy full REST API CURL URL for Preload</span></span></p>";
+    echo "<p class='description' id='nppp-api-key' style='margin-right: 10px;'><span class='nppp-tooltip'>" . esc_html__( 'API Key', 'fastcgi-cache-purge-and-preload-nginx' ) . "<span class='nppp-tooltiptext'>" . esc_html__( 'Click to copy REST API Key', 'fastcgi-cache-purge-and-preload-nginx' ) . "</span></span></p>";
+    echo "<p class='description' id='nppp-purge-url' style='margin-right: 10px;'><span class='nppp-tooltip'>" . esc_html__( 'Purge URL', 'fastcgi-cache-purge-and-preload-nginx' ) . "<span class='nppp-tooltiptext'>" . esc_html__( 'Click to copy full REST API CURL URL for Purge', 'fastcgi-cache-purge-and-preload-nginx' ) . "</span></span></p>";
+    echo "<p class='description' id='nppp-preload-url'><span class='nppp-tooltip'>" . esc_html__( 'Preload URL', 'fastcgi-cache-purge-and-preload-nginx' ) . "<span class='nppp-tooltiptext'>" . esc_html__( 'Click to copy full REST API CURL URL for Preload', 'fastcgi-cache-purge-and-preload-nginx' ) . "</span></span></p>";
     echo "</div>";
     echo "</div>";
 }
@@ -1558,8 +1558,8 @@ function nppp_nginx_cache_api_callback() {
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_api]" class="nppp-onoffswitch-checkbox-api" value='yes' id="nginx_cache_api" <?php echo esc_attr($api_checked); ?>>
     <label class="nppp-onoffswitch-label-api" for="nginx_cache_api">
         <span class="nppp-onoffswitch-inner-api">
-            <span class="nppp-off-api">OFF</span>
-            <span class="nppp-on-api">ON</span>
+            <span class="nppp-off-api"><?php echo esc_html__( 'OFF', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+            <span class="nppp-on-api"><?php echo esc_html__( 'ON', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
         </span>
         <span class="nppp-onoffswitch-switch-api"></span>
     </label>
