@@ -379,6 +379,7 @@ function nppp_pre_checks() {
     $requirements_met = nppp_pre_checks_critical();
     if ($requirements_met !== true) {
         nppp_display_pre_check_warning($requirements_met);
+        return;
     }
 
     // Check if cache directory exists
