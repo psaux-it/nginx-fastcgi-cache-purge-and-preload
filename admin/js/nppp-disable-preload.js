@@ -28,7 +28,6 @@
 
             // Apply CSS to show the button as disabled
             $btn.css({
-                'pointer-events': 'none',
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
             });
@@ -36,9 +35,6 @@
     }
 
     $(document).ready(function() {
-        // Disable the Preload button on the Advanced Tab
-        NppdisablePreloadButtons();
-
         // Disable the Preload button in the WP admin bar
         var $preloadButton = $('#wp-admin-bar-preload-cache');
         if ($preloadButton.length) {
@@ -49,21 +45,16 @@
             $preloadButton.find('a')
                 .removeAttr('href')
                 .css({
-                    'pointer-events': 'none',
                     'opacity': '0.5',
                     'cursor': 'not-allowed'
                 });
         }
-
-        // Also remove any delegated events
-        $(document).off('click', '#wp-admin-bar-preload-cache');
 
         // Disable the Preload button on the Dashboard Widget
         $('.nppp-action-button[data-action="nppp-widget-preload"]')
             .addClass('disabled')
             .removeAttr('href')
             .css({
-                'pointer-events': 'none',
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
             });
@@ -84,7 +75,6 @@
 
             // Disable rest API preload stuff
             $('#nppp-preload-url .nppp-tooltip').css({
-                'pointer-events': 'none',
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
             }).each(function() {
@@ -93,7 +83,6 @@
 
             // Ensure the parent <p> tags are also non-clickable for rest API preload stuff
             $('#nppp-preload-url').css({
-                'pointer-events': 'none',
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
             }).each(function() {
@@ -102,7 +91,6 @@
 
             // style cron status heading
             $('.nppp-active-cron-heading').css({
-                'pointer-events': 'none',
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
             });
@@ -110,8 +98,9 @@
     });
 
     // Disable the Preload button on the Advanced Tab
-    // After ajax completed
-    $(document).ajaxComplete(function() {
-        NppdisablePreloadButtons();
+    $(document).ajaxComplete(function(event, xhr, settings) {
+        if (settings.data && settings.data.includes('action=nppp_load_premium_content')) {
+            NppdisablePreloadButtons();
+        }
     });
 })(jQuery);
