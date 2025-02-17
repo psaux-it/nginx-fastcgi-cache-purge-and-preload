@@ -31,6 +31,9 @@
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
             });
+
+            // Add a unique class to flag it
+            $btn.addClass('nppp-general');
         });
     }
 
