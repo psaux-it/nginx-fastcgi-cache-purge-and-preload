@@ -2394,7 +2394,7 @@ function npppupdateStatus() {
     if (npppphpFpmStatus === "false") {
         npppphpFpmStatusSpan.style.color = "red";
         iconSpanFpm.classList.add("dashicons", "dashicons-no");
-        fpmStatusText = ' Required (Check Help)';
+        fpmStatusText = ' Required';
     } else if (npppphpFpmStatus === "Not Found") {
         npppphpFpmStatusSpan.style.color = "orange";
         iconSpanFpm.classList.add("dashicons", "dashicons-clock");
@@ -2420,7 +2420,7 @@ function npppupdateStatus() {
     if (npppcacheInPageSpanValue === "Undetermined") {
         npppcacheInPageSpan.style.color = "red";
         iconSpanCache.classList.add("dashicons", "dashicons-no");
-        cacheStatusText = ' Permission Issue';
+        cacheStatusText = ' Fix Permission';
     } else if (npppcacheInPageSpanValue === "RegexError") {
         npppcacheInPageSpan.style.color = "red";
         iconSpanCache.classList.add("dashicons", "dashicons-no");
@@ -2570,7 +2570,7 @@ function npppupdateStatus() {
     } else if (npppaclStatus.includes("Need Action")) {
         npppaclStatusSpan.style.color = "red";
         iconSpanAcl.classList.add("dashicons", "dashicons-no");
-        aclStatusText = ' Need Action (Check Help)';
+        aclStatusText = ' Need Action';
     } else {
         npppaclStatusSpan.style.color = "orange";
         iconSpanAcl.classList.add("dashicons", "dashicons-clock");
