@@ -123,10 +123,13 @@ function nppp_wp_purge($directory_path) {
         return new WP_Error('directory_traversal', __('Directory traversal detected or invalid path.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
-    // Check for read and write permissions early
+    // Check for read and write permissions softly and recursive
     if (!$wp_filesystem->is_readable($directory_path) || !$wp_filesystem->is_writable($directory_path)) {
         // Translators: %s is the Nginx cache path
-        return new WP_Error('permission_error', sprintf(__('Permission denied while accessing or writing to directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path));
+        return new WP_Error('permission_error', sprintf(__('Permission denied while reading or writing to the cache directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path));
+    } elseif (!nppp_check_permissions_recursive($directory_path)) {
+        // Translators: %s is the Nginx cache path
+        return new WP_Error('permission_error', sprintf(__('Permission denied during recursive check of the cache directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path));
     }
 
     // Protected folders to be excluded, recursively
