@@ -2856,7 +2856,7 @@ document.addEventListener('DOMContentLoaded', function() {
             clearInterval(waitForTabs);
             updateSubmitPosition();
         }
-    }, 100);
+    }, 10);
 
     // Update the position when the window is resized
     window.addEventListener('resize', updateSubmitPosition);
