@@ -30,7 +30,6 @@
                 npppButton.find('a')
                     .removeAttr('href')
                     .css({
-                        'pointer-events': 'none',
                         'opacity': '0.5',
                         'cursor': 'not-allowed'
                     })
@@ -101,7 +100,6 @@
 
             // disable the rest API elements non-clickable
             $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({
-                'pointer-events': 'none',
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
             }).each(function() {
@@ -110,7 +108,6 @@
 
             // ensure the parent <p> tags are also non-clickable
             $('#nppp-api-key, #nppp-purge-url, #nppp-preload-url').css({
-                'pointer-events': 'none',
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
             }).each(function() {
@@ -119,7 +116,6 @@
 
             // style cron status heading
             $('.nppp-active-cron-heading').css({
-                'pointer-events': 'none',
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
             });
