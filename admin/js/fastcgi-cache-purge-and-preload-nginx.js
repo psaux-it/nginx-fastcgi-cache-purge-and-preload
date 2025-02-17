@@ -2424,7 +2424,7 @@ function npppupdateStatus() {
     } else if (npppcacheInPageSpanValue === "RegexError") {
         npppcacheInPageSpan.style.color = "red";
         iconSpanCache.classList.add("dashicons", "dashicons-no");
-        cacheStatusText = ' Regex Error';
+        cacheStatusText = ' Fix Regex';
     } else if (npppcacheInPageSpanValue === "0") {
         npppcacheInPageSpan.style.color = "orange";
         iconSpanCache.classList.add("dashicons", "dashicons-clock");
