@@ -2826,7 +2826,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Adjust width of submit button according to it's container nppp-nginx-tabs
+// Adjust width of submit button
 document.addEventListener('DOMContentLoaded', function() {
     const tabsContainer = document.getElementById('nppp-nginx-tabs');
     const submitContainer = document.querySelector('.submit');
@@ -2838,11 +2838,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const containerRect = tabsContainer.getBoundingClientRect();
 
-        // Set the width and position of the submit button to match the container
+        // Set the width and position of the submit button
         submitContainer.style.left = `${containerRect.left}px`;
         submitContainer.style.width = `${containerRect.width}px`;
 
-        // Remove any extra padding or margins on the button that could cause overflow
+        // Remove any extra padding or margins
         submitContainer.style.margin = '0';
         submitContainer.style.padding = '0';
     }
@@ -2850,12 +2850,26 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial update on page load
     updateSubmitPosition();
 
-    // Update the position when the window is resized
-    window.addEventListener('resize', updateSubmitPosition);
-    window.addEventListener('scroll', updateSubmitPosition);
+    // Resize events
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(updateSubmitPosition, 100);
+    });
 
-    const observer = new MutationObserver(updateSubmitPosition);
-    observer.observe(tabsContainer.parentNode, { attributes: true, childList: true, subtree: true });
+    // Scroll events
+    window.addEventListener('scroll', function() {
+        requestAnimationFrame(updateSubmitPosition);
+    });
+
+    // Only observe attribute changes on the parent of tabsContainer
+    const observer = new MutationObserver(() => {
+        requestAnimationFrame(updateSubmitPosition);
+    });
+
+    if (tabsContainer && tabsContainer.parentNode) {
+        observer.observe(tabsContainer.parentNode, { attributes: true, childList: false, subtree: false });
+    }
 });
 
 // Track the currently active link for the submenu
