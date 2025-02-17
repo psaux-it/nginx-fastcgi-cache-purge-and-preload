@@ -295,9 +295,6 @@ $(document).ready(function() {
                     `);
                     $statusPlaceholder.show();
                 }
-
-                // Recalculate scroll positions and sizes
-                $(window).trigger('resize').trigger('scroll');
             },
             error: function(xhr, status, error) {
                 console.error(error);
@@ -352,9 +349,6 @@ $(document).ready(function() {
                     `);
                     $premiumPlaceholder.show();
                 }
-
-                // Recalculate scroll positions and sizes
-                $(window).trigger('resize').trigger('scroll');
             },
             error: function(xhr, status, error) {
                 console.error(status + ': ' + error);
