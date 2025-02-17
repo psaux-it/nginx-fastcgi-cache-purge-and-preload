@@ -2020,7 +2020,7 @@ function nppp_defaults_on_plugin_activation() {
     $default_options = array(
         'nginx_cache_path' => '/dev/shm/change-me-now',
         'nginx_cache_email' => 'your-email@example.com',
-        'nginx_cache_cpu_limit' => 80,
+        'nginx_cache_cpu_limit' => 100,
         'nginx_cache_reject_extension' => nppp_fetch_default_reject_extension(),
         'nginx_cache_reject_regex' => nppp_fetch_default_reject_regex(),
         'nginx_cache_key_custom_regex' => base64_encode(nppp_fetch_default_regex_for_cache_key()),
