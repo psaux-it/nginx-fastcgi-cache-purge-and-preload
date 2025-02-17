@@ -411,12 +411,16 @@ $(document).ready(function() {
                         btn.prop('disabled', true);
                         // Add disabled style
                         btn.addClass('disabled');
-                        // highlight preload action
-                        preloadBtn.css('background-color', '#43A047');
 
-                        // Enable preload button and reset its style
-                        preloadBtn.prop('disabled', false);
-                        preloadBtn.removeClass('disabled');
+                        if (!preloadBtn.hasClass('nppp-general')) {
+                            // highlight preload action
+                            preloadBtn.css('background-color', '#43A047');
+
+                            // Enable preload button and reset its style
+                            preloadBtn.prop('disabled', false);
+                            preloadBtn.removeClass('disabled');
+                        }
+
                         if (btn.css('background-color') === 'rgb(67, 160, 71)') {
                             btn.css('background-color', '');
                         }
