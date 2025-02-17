@@ -589,7 +589,7 @@ $(document).ready(function() {
             if (response.success) {
                 // Show a small notification indicating successful saved option
                 var notification = document.createElement('div');
-                notification.textContent = 'Saved';
+                notification.textContent = '✔';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeftMail + 'px';
                 notification.style.top = notificationTopMail + 'px';
@@ -637,7 +637,7 @@ $(document).ready(function() {
             if (response.success) {
                 // Show a small notification indicating successfully saved option
                 var notification = document.createElement('div');
-                notification.textContent = 'Saved';
+                notification.textContent = '✔';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeftAutoPreload + 'px';
                 notification.style.top = notificationTopAutoPreload + 'px';
@@ -684,7 +684,7 @@ $(document).ready(function() {
             if (response.success) {
                 // Show a small notification indicating successfully saved option
                 var notification = document.createElement('div');
-                notification.textContent = 'Saved';
+                notification.textContent = '✔';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeftMobilePreload + 'px';
                 notification.style.top = notificationTopMobilePreload + 'px';
@@ -732,7 +732,7 @@ $(document).ready(function() {
             if (response.success) {
                 // Show a small notification indicating successfully saved option
                 var notification = document.createElement('div');
-                notification.textContent = 'Saved';
+                notification.textContent = '✔';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeftAutoPurge + 'px';
                 notification.style.top = notificationTopAutoPurge + 'px';
@@ -780,7 +780,7 @@ $(document).ready(function() {
             if (response.success) {
                 // Show a small notification indicating successfully saved option
                 var notification = document.createElement('div');
-                notification.textContent = 'Saved';
+                notification.textContent = '✔';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeftRestApi + 'px';
                 notification.style.top = notificationTopRestApi + 'px';
@@ -948,7 +948,7 @@ $(document).ready(function() {
             if (response.success) {
                 // Show a small notification indicating successfully saved option
                 var notification = document.createElement('div');
-                notification.textContent = 'Saved';
+                notification.textContent = '✔';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeftCacheSchedule + 'px';
                 notification.style.top = notificationTopCacheSchedule + 'px';
