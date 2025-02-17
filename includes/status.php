@@ -640,10 +640,7 @@ function nppp_my_status_html() {
                         <tbody>
                             <tr>
                                 <td class="action">
-                                    <div class="action-wrapper"><?php esc_html_e('Server Side Action (Use One-liner)', 'fastcgi-cache-purge-and-preload-nginx'); ?></div>
-                                    <div class="action-wrapper" style="font-size: 12px; color: white; background-color: #ff9900; width: max-content; margin-top: 5px; padding-right: 5px; padding-left: 5px;">
-                                        bash <(curl -Ss https://psaux-it.github.io/install.sh)
-                                    </div>
+                                    <div class="action-wrapper"><?php esc_html_e('Server Side Action', 'fastcgi-cache-purge-and-preload-nginx'); ?></div>
                                 </td>
                                 <td class="status" id="npppphpFpmStatus">
                                     <span class="dashicons"></span>
