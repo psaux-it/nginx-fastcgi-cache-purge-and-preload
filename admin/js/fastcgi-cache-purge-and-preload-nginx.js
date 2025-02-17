@@ -2829,7 +2829,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Adjust width of submit button
 document.addEventListener('DOMContentLoaded', function() {
     const tabsContainer = document.getElementById('nppp-nginx-tabs');
-    const submitContainer = document.querySelector('.submit');
+    const submitContainer = document.querySelector('#nppp-settings-form .submit');
 
     function updateSubmitPosition() {
         if (!tabsContainer || !submitContainer) {
@@ -2847,29 +2847,19 @@ document.addEventListener('DOMContentLoaded', function() {
         submitContainer.style.padding = '0';
     }
 
-    // Initial update on page load
-    updateSubmitPosition();
+    // Wait for elements ready
+    const waitForTabs = setInterval(() => {
+        const tabsContainer = document.getElementById('nppp-nginx-tabs');
+        const submitContainer = document.querySelector('#nppp-settings-form .submit');
 
-    // Resize events
-    let resizeTimeout;
-    window.addEventListener('resize', function() {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(updateSubmitPosition, 100);
-    });
+        if (tabsContainer && submitContainer) {
+            clearInterval(waitForTabs);
+            updateSubmitPosition();
+        }
+    }, 100);
 
-    // Scroll events
-    window.addEventListener('scroll', function() {
-        requestAnimationFrame(updateSubmitPosition);
-    });
-
-    // Only observe attribute changes on the parent of tabsContainer
-    const observer = new MutationObserver(() => {
-        requestAnimationFrame(updateSubmitPosition);
-    });
-
-    if (tabsContainer && tabsContainer.parentNode) {
-        observer.observe(tabsContainer.parentNode, { attributes: true, childList: false, subtree: false });
-    }
+    // Update the position when the window is resized
+    window.addEventListener('resize', updateSubmitPosition);
 });
 
 // Track the currently active link for the submenu
