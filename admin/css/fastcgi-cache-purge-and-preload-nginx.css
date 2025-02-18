@@ -2635,3 +2635,7 @@ p.description {
 .nppp-submenu ul li a.active::after {
     transform: scaleX(1);
 }
+
+#wp-admin-bar-fastcgi-cache-operations {
+    background-color: midnightblue !important;
+}
