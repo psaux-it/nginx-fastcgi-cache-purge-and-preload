@@ -579,8 +579,8 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                         src="<?php echo esc_url($image_url_ad); ?>"
                         alt="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
                         title="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
-                        width="90"
-                        height="90">
+                        width="100%"
+                        height="auto">
                 </a>
             </p>
             <p class="textcenter">
