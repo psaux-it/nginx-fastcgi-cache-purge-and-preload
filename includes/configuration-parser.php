@@ -583,9 +583,6 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                         height="auto">
                 </a>
             </p>
-            <p class="textcenter">
-                <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="button button-primary button-large open-nppp-upsell" data-pro-ad="sidebar-button"><?php esc_html_e('Get Service', 'fastcgi-cache-purge-and-preload-nginx'); ?></a>
-            </p>
         </div>
     </div>
     <?php
