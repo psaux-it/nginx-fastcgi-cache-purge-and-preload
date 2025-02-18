@@ -584,11 +584,6 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
     line-height: 1.2;
 }
 
-/* Style for images within the advertisement section */
-#nppp-ad img {
-    width: 90px !important;
-}
-
 /* Style for plain lists within the advertisement section */
 #nppp-ad .plain-list {
     text-align: left;
