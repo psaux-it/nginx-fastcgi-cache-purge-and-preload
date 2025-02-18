@@ -17,7 +17,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Function to output the FAQ HTML
 function nppp_my_faq_html() {
     ob_start();
-    // img url's
     $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
     ?>
 
