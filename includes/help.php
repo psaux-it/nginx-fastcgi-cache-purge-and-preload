@@ -409,8 +409,8 @@ listen = /var/run/php-fcgi-websiteuser.sock</code></pre>
                             src="<?php echo esc_url($image_url_ad); ?>"
                             alt="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
                             title="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
-                            width="90"
-                            height="90">
+                            width="100%"
+                            height="auto">
                     </a>
                 </p>
                 <p class="textcenter"><a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="button button-primary button-large open-nppp-upsell" data-pro-ad="sidebar-button">Get Service</a></p>
