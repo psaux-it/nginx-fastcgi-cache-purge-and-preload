@@ -192,3 +192,7 @@
         background-color: white;
     }
 }
+
+#wp-admin-bar-fastcgi-cache-operations {
+    background-color: midnightblue !important;
+}
