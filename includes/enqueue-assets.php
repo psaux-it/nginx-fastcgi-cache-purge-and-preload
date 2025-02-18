@@ -97,6 +97,28 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Create a nonce for preload mobile option
     $update_auto_preload_mobile_option_nonce = wp_create_nonce('nppp-update-auto-preload-mobile-option');
 
+    // i18n
+    $npp_translated_strings = array(
+        'required'       => __('Required', 'nginx-fastcgi-cache-purge-and-preload'),
+        'not_determined' => __('Not Determined', 'nginx-fastcgi-cache-purge-and-preload'),
+        'not_required'   => __('Not Required', 'nginx-fastcgi-cache-purge-and-preload'),
+        'fix_permission' => __('Fix Permission', 'nginx-fastcgi-cache-purge-and-preload'),
+        'fix_regex'      => __('Fix Regex', 'nginx-fastcgi-cache-purge-and-preload'),
+        'found'          => __('Found', 'nginx-fastcgi-cache-purge-and-preload'),
+        'not_found'      => __('Not Found', 'nginx-fastcgi-cache-purge-and-preload'),
+        'ready'          => __('Ready', 'nginx-fastcgi-cache-purge-and-preload'),
+        'not_ready'      => __('Not Ready', 'nginx-fastcgi-cache-purge-and-preload'),
+        'allowed'        => __('Allowed', 'nginx-fastcgi-cache-purge-and-preload'),
+        'not_allowed'    => __('Not Allowed', 'nginx-fastcgi-cache-purge-and-preload'),
+        'granted'        => __('Granted', 'nginx-fastcgi-cache-purge-and-preload'),
+        'need_action'    => __('Need Action', 'nginx-fastcgi-cache-purge-and-preload'),
+        'in_progress'    => __('In Progress', 'nginx-fastcgi-cache-purge-and-preload'),
+        'installed'      => __('Installed', 'nginx-fastcgi-cache-purge-and-preload'),
+        'not_installed'  => __('Not Installed', 'nginx-fastcgi-cache-purge-and-preload'),
+        'isolated'       => __('Isolated', 'nginx-fastcgi-cache-purge-and-preload'),
+        'not_isolated'   => __('Not Isolated', 'nginx-fastcgi-cache-purge-and-preload'),
+    );
+
     // Localize nonce values for nppp_admin-js
     wp_localize_script('nppp_admin-js', 'nppp_admin_data', array(
         'ajaxurl' => admin_url('admin-ajax.php'),
@@ -122,6 +144,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'plugin_cache_nonce' => $clear_plugin_cache_nonce,
         'systemd_service_nonce' => $restart_systemd_service_nonce,
         'cache_key_regex_nonce' => $update_default_cache_key_regex_option_nonce,
+        'i18n' => $npp_translated_strings,
     ));
 }
 
