@@ -2335,15 +2335,15 @@ function npppupdateStatus() {
     if (npppphpFpmStatus === "false") {
         npppphpFpmStatusSpan.style.color = "red";
         iconSpanFpm.classList.add("dashicons", "dashicons-no");
-        fpmStatusText = ' Required';
+        fpmStatusText = ' ' + nppp_admin_data.i18n.required;
     } else if (npppphpFpmStatus === "Not Found") {
         npppphpFpmStatusSpan.style.color = "orange";
         iconSpanFpm.classList.add("dashicons", "dashicons-clock");
-        fpmStatusText = ' Not Determined';
+        fpmStatusText = ' ' + nppp_admin_data.i18n.not_determined;
     } else {
         npppphpFpmStatusSpan.style.color = "green";
         iconSpanFpm.classList.add("dashicons", "dashicons-yes");
-        fpmStatusText = ' Not Required';
+        fpmStatusText = ' ' + nppp_admin_data.i18n.not_required;
     }
 
     npppphpFpmStatusSpan.textContent = '';
@@ -2361,11 +2361,11 @@ function npppupdateStatus() {
     if (npppcacheInPageSpanValue === "Undetermined") {
         npppcacheInPageSpan.style.color = "red";
         iconSpanCache.classList.add("dashicons", "dashicons-no");
-        cacheStatusText = ' Fix Permission';
+        cacheStatusText = ' ' + nppp_admin_data.i18n.fix_permission;
     } else if (npppcacheInPageSpanValue === "RegexError") {
         npppcacheInPageSpan.style.color = "red";
         iconSpanCache.classList.add("dashicons", "dashicons-no");
-        cacheStatusText = ' Fix Regex';
+        cacheStatusText = ' ' + nppp_admin_data.i18n.fix_regex;
     } else if (npppcacheInPageSpanValue === "0") {
         npppcacheInPageSpan.style.color = "orange";
         iconSpanCache.classList.add("dashicons", "dashicons-clock");
@@ -2373,7 +2373,7 @@ function npppupdateStatus() {
     } else if (npppcacheInPageSpanValue === "Not Found") {
         npppcacheInPageSpan.style.color = "orange";
         iconSpanCache.classList.add("dashicons", "dashicons-clock");
-        cacheStatusText = ' Not Determined';
+        cacheStatusText = ' ' + nppp_admin_data.i18n.not_determined;
     } else {
         npppcacheInPageSpan.style.color = "green";
         iconSpanCache.classList.add("dashicons", "dashicons-yes");
@@ -2430,12 +2430,12 @@ function npppupdateStatus() {
         npppcachePathSpan.style.color = "green";
         iconSpanCachePath.classList.add("dashicons", "dashicons-yes");
         npppcachePathSpan.appendChild(iconSpanCachePath);
-        npppcachePathSpan.append(' Found');
+        npppcachePathSpan.append(' ' + nppp_admin_data.i18n.found);
     } else if (npppcachePath === "Not Found") {
         npppcachePathSpan.style.color = "red";
         iconSpanCachePath.classList.add("dashicons", "dashicons-no");
         npppcachePathSpan.appendChild(iconSpanCachePath);
-        npppcachePathSpan.append(' Not Found');
+        npppcachePathSpan.append(' ' + nppp_admin_data.i18n.not_found);
     }
 
     // Fetch and update purge action status
@@ -2452,17 +2452,17 @@ function npppupdateStatus() {
         nppppurgeStatusSpan.style.color = "green";
         iconSpanPurgeStatus.classList.add("dashicons", "dashicons-yes");
         nppppurgeStatusSpan.appendChild(iconSpanPurgeStatus);
-        nppppurgeStatusSpan.append(' Ready');
+        nppppurgeStatusSpan.append(' ' + nppp_admin_data.i18n.ready);
     } else if (nppppurgeStatus === "false") {
         nppppurgeStatusSpan.style.color = "red";
         iconSpanPurgeStatus.classList.add("dashicons", "dashicons-no");
         nppppurgeStatusSpan.appendChild(iconSpanPurgeStatus);
-        nppppurgeStatusSpan.append(' Not Ready');
+        nppppurgeStatusSpan.append(' ' + nppp_admin_data.i18n.not_ready);
     } else {
         nppppurgeStatusSpan.style.color = "orange";
         iconSpanPurgeStatus.classList.add("dashicons", "dashicons-clock");
         nppppurgeStatusSpan.appendChild(iconSpanPurgeStatus);
-        nppppurgeStatusSpan.append(' Not Determined');
+        nppppurgeStatusSpan.append(' ' + nppp_admin_data.i18n.not_determined);
     }
 
     // Fetch and update shell_exec status
@@ -2479,12 +2479,12 @@ function npppupdateStatus() {
         npppshellExecSpan.style.color = "green";
         iconSpanShellExec.classList.add("dashicons", "dashicons-yes");
         npppshellExecSpan.appendChild(iconSpanShellExec);
-        npppshellExecSpan.append(' Allowed');
+        npppshellExecSpan.append(' ' + nppp_admin_data.i18n.allowed);
     } else if (npppshellExec === "Not Ok") {
         npppshellExecSpan.style.color = "red";
         iconSpanShellExec.classList.add("dashicons", "dashicons-no");
         npppshellExecSpan.appendChild(iconSpanShellExec);
-        npppshellExecSpan.append(' Not Allowed');
+        npppshellExecSpan.append(' ' + nppp_admin_data.i18n.not_allowed);
     }
 
     // Fetch and update ACLs status
@@ -2500,7 +2500,7 @@ function npppupdateStatus() {
     if (npppaclStatus.includes("Granted")) {
         npppaclStatusSpan.style.color = "green";
         iconSpanAcl.classList.add("dashicons", "dashicons-yes");
-        aclStatusText = ' Granted ';
+        aclStatusText = ' ' + nppp_admin_data.i18n.granted + ' ';
 
         var processOwner = npppaclStatus.replace("Granted", "").trim();
         if (processOwner) {
@@ -2511,11 +2511,11 @@ function npppupdateStatus() {
     } else if (npppaclStatus.includes("Need Action")) {
         npppaclStatusSpan.style.color = "red";
         iconSpanAcl.classList.add("dashicons", "dashicons-no");
-        aclStatusText = ' Need Action';
+        aclStatusText = ' ' + nppp_admin_data.i18n.need_action;
     } else {
         npppaclStatusSpan.style.color = "orange";
         iconSpanAcl.classList.add("dashicons", "dashicons-clock");
-        aclStatusText = ' Not Determined';
+        aclStatusText = ' ' + nppp_admin_data.i18n.not_determined;
     }
 
     npppaclStatusSpan.appendChild(iconSpanAcl);
@@ -2538,15 +2538,15 @@ function npppupdateStatus() {
     if (nppppreloadStatus === "true") {
         nppppreloadStatusSpan.style.color = "green";
         iconSpanPreload.classList.add("dashicons", "dashicons-yes");
-        preloadStatusText = ' Ready';
+        preloadStatusText = ' ' + nppp_admin_data.i18n.ready;
     } else if (nppppreloadStatus === "false") {
         nppppreloadStatusSpan.style.color = "red";
         iconSpanPreload.classList.add("dashicons", "dashicons-no");
-        preloadStatusText = ' Not Ready';
+        preloadStatusText = ' ' + nppp_admin_data.i18n.not_ready;
     } else {
         nppppreloadStatusSpan.style.color = "orange";
         iconSpanPreload.classList.add("dashicons", "dashicons-clock");
-        preloadStatusText = ' In Progress';
+        preloadStatusText = ' ' + nppp_admin_data.i18n.in_progress;
         nppppreloadStatusCell.style.backgroundColor = "lightgreen";
 
         nppppreloadStatusCell.animate([
@@ -2574,11 +2574,11 @@ function npppupdateStatus() {
     if (npppwgetStatus === "Installed") {
         npppwgetStatusSpan.style.color = "green";
         iconSpanWget.classList.add("dashicons", "dashicons-yes");
-        wgetStatusText = ' Installed';
+        wgetStatusText = ' ' + nppp_admin_data.i18n.installed;
     } else if (npppwgetStatus === "Not Installed") {
         npppwgetStatusSpan.style.color = "red";
         iconSpanWget.classList.add("dashicons", "dashicons-no");
-        wgetStatusText = ' Not Installed';
+        wgetStatusText = ' ' + nppp_admin_data.i18n.not_installed;
     }
 
     npppwgetStatusSpan.appendChild(iconSpanWget);
@@ -2605,7 +2605,7 @@ function npppupdateStatus() {
         iconSpanLibfuse.classList.add("dashicons", "dashicons-yes");
         iconSpanLibfuse.style.fontSize = "20px";
         iconSpanLibfuse.style.color = "green";
-        libfuseStatusText = ` ${installedVersion} <span style="color:orange;">(Not Determined)</span>`;
+        libfuseStatusText = ` ${installedVersion} <span style="color:orange;">(${nppp_admin_data.i18n.not_determined})</span>`;
     } else if (npppLibfuseVersion.includes("(")) {
         var versions = npppLibfuseVersion.match(/(\d+\.\d+\.\d+)\s\((\d+\.\d+\.\d+)\)/);
         if (versions) {
@@ -2657,7 +2657,7 @@ function npppupdateStatus() {
         iconSpanBindfs.classList.add("dashicons", "dashicons-yes");
         iconSpanBindfs.style.fontSize = "20px";
         iconSpanBindfs.style.color = "green";
-        bindfsStatusText = ` ${installedVersion} <span style="color:orange;">(Not Determined)</span>`;
+        bindfsStatusText = ` ${installedVersion} <span style="color:orange;">(${nppp_admin_data.i18n.not_determined})</span>`;
     } else if (npppBindfsVersion.includes("(")) {
         var versions = npppBindfsVersion.match(/(\d+\.\d+\.\d+)\s\((\d+\.\d+\.\d+)\)/);
         if (versions) {
@@ -2700,15 +2700,15 @@ function npppupdateStatus() {
     if (nppppermIsolation === "Isolated") {
         nppppermIsolationSpan.style.color = "green";
         iconSpanPermIsolation.classList.add("dashicons", "dashicons-yes");
-        permIsolationStatusText = ' ' + nppppermIsolation;
+        permIsolationStatusText = ' ' + nppp_admin_data.i18n.isolated;
     } else if (nppppermIsolation === "Not Isolated") {
         nppppermIsolationSpan.style.color = "orange";
         iconSpanPermIsolation.classList.add("dashicons", "dashicons-clock");
-        permIsolationStatusText = ' ' + nppppermIsolation;
+        permIsolationStatusText = ' ' + nppp_admin_data.i18n.not_isolated;
     } else if (nppppermIsolation === "Not Determined") {
         nppppermIsolationSpan.style.color = "red";
         iconSpanPermIsolation.classList.add("dashicons", "dashicons-no");
-        permIsolationStatusText = ' ' + nppppermIsolation;
+        permIsolationStatusText = ' ' + nppp_admin_data.i18n.not_determined;
     }
 
     nppppermIsolationSpan.appendChild(iconSpanPermIsolation);
@@ -2726,11 +2726,11 @@ function npppupdateStatus() {
     if (npppcpulimitStatus === "Installed") {
         npppcpulimitStatusSpan.style.color = "green";
         iconSpanCpulimit.classList.add("dashicons", "dashicons-yes");
-        cpulimitStatusText = ' Installed';
+        cpulimitStatusText = ' ' + nppp_admin_data.i18n.installed;
     } else if (npppcpulimitStatus === "Not Installed") {
         npppcpulimitStatusSpan.style.color = "red";
         iconSpanCpulimit.classList.add("dashicons", "dashicons-no");
-        cpulimitStatusText = ' Not Installed';
+        cpulimitStatusText = ' ' + nppp_admin_data.i18n.not_installed;
     }
 
     npppcpulimitStatusSpan.appendChild(iconSpanCpulimit);
