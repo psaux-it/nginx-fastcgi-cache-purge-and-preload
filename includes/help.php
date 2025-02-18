@@ -413,7 +413,6 @@ listen = /var/run/php-fcgi-websiteuser.sock</code></pre>
                             height="auto">
                     </a>
                 </p>
-                <p class="textcenter"><a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="button button-primary button-large open-nppp-upsell" data-pro-ad="sidebar-button">Get Service</a></p>
             </div>
         </div>
     </div>
