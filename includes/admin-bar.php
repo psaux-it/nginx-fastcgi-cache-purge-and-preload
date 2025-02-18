@@ -25,7 +25,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     $wp_admin_bar->add_menu(array(
         'id'    => 'fastcgi-cache-operations',
         'title' => sprintf(
-            '<img style="height: 20px; margin-bottom: -4px; width: 20px;" src="%s"> %s',
+            '<img style="height: 20px; margin-bottom: -5px; width: 20px;" src="%s"> %s',
             esc_url(plugin_dir_url(__FILE__) . '../admin/img/bar.png'),
             esc_html__('Nginx Cache', 'fastcgi-cache-purge-and-preload-nginx')
         ),
