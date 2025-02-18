@@ -109,7 +109,7 @@ function nppp_nginx_cache_settings_page() {
                 </div>
                 <p class="nppp-cache-tip">
                     <span class="dashicons dashicons-info"></span>
-                    <?php esc_html_e( 'Use Purge All to stop ongoing Preloading', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    <?php esc_html_e( 'Use Purge All to stop Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                 </p>
             </div>
         </div>
