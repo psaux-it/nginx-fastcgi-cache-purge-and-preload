@@ -17,6 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Function to output the FAQ HTML
 function nppp_my_faq_html() {
     ob_start();
+    $image_url_space = plugins_url('/admin/img/lost_in_space.png', dirname(__FILE__));
     $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
     ?>
 
@@ -391,6 +392,14 @@ listen = /var/run/php-fcgi-websiteuser.sock</code></pre>
         <div class="nppp-premium-widget">
             <div id="nppp-ad">
                 <div class="textcenter">
+                    <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="open-nppp-upsell-top" data-pro-ad="sidebar-logo">
+                        <img
+                            src="<?php echo esc_url($image_url_space); ?>"
+                            alt="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
+                            title="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
+                            width="100"
+                            height="100">
+                    </a>
                 </div>
                 <h3 class="textcenter">Hope you are enjoying NPP! Do you still need assistance with the server side integration? Get our server integration service now and optimize your website's caching performance!</h3>
                 <p class="textcenter">
