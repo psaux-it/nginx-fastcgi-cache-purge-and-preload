@@ -1610,13 +1610,13 @@ function nppp_nginx_cache_settings_sanitize($input) {
             // Handle different validation outcomes
             switch ($validation_result) {
                 case 'critical_path':
-                    $error_message = 'ERROR PATH: The specified Nginx Cache Directory appears to be a critical system directory or a first-level directory, which is not allowed.';
+                    $error_message = __('ERROR PATH: The specified Nginx Cache Directory is either a critical system directory or a top-level directory and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx');
                     break;
                 case 'directory_not_exist_or_readable':
-                    $error_message = 'ERROR PATH: The specified Nginx Cache Directory does not exist. Please verify the Nginx Cache Directory.';
+                    $error_message = __('ERROR PATH: The specified Nginx Cache Directory does not exist. Please verify the Nginx Cache Directory.', 'fastcgi-cache-purge-and-preload-nginx');
                     break;
                 default:
-                    $error_message = 'ERROR PATH: An invalid path was provided for the Nginx Cache Directory. Please provide a valid directory path.';
+                    $error_message = __('ERROR PATH: An invalid path was provided for the Nginx Cache Directory. Please provide a valid directory path.', 'fastcgi-cache-purge-and-preload-nginx');
             }
 
             // Add settings error
@@ -1643,12 +1643,12 @@ function nppp_nginx_cache_settings_sanitize($input) {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid-email',
-                'ERROR OPTION: Please enter a valid email address.',
+                __('ERROR OPTION: Please enter a valid email address.', 'fastcgi-cache-purge-and-preload-nginx'),
                 'error'
             );
 
             // Log the error message
-            nppp_log_error_message('ERROR OPTION: Please enter a valid email address.');
+            nppp_log_error_message(__('ERROR OPTION: Please enter a valid email address.', 'fastcgi-cache-purge-and-preload-nginx'));
         }
     }
 
@@ -1666,23 +1666,23 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 add_settings_error(
                     'nppp_nginx_cache_settings_group',
                     'invalid-cpu-limit',
-                    'Please enter a CPU limit between 10 and 100.',
+                    __('Please enter a CPU limit between 10 and 100.', 'fastcgi-cache-purge-and-preload-nginx'),
                     'error'
                 );
 
                 // Log the error message
-                nppp_log_error_message('ERROR OPTION: Please enter a CPU limit between 10 and 100.');
+                nppp_log_error_message(__('ERROR OPTION: Please enter a CPU limit between 10 and 100.', 'fastcgi-cache-purge-and-preload-nginx'));
             }
         } else {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid-cpu-limit-format',
-                'CPU limit must be a numeric value.',
+                __('CPU limit must be a numeric value.', 'fastcgi-cache-purge-and-preload-nginx'),
                 'error'
             );
 
             // Log the error message
-            nppp_log_error_message('ERROR OPTION: CPU limit must be a numeric value.');
+            nppp_log_error_message(__('ERROR OPTION: CPU limit must be a numeric value.', 'fastcgi-cache-purge-and-preload-nginx'));
         }
     }
 
@@ -1700,23 +1700,23 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 add_settings_error(
                     'nppp_nginx_cache_settings_group',
                     'invalid-wait-time',
-                    'Please enter a Per Request Wait Time between 0 and 60 seconds.',
+                    __('Please enter a Per Request Wait Time between 0 and 60 seconds.', 'fastcgi-cache-purge-and-preload-nginx'),
                     'error'
                 );
 
                 // Log the error message
-                nppp_log_error_message('ERROR OPTION: Please enter a per request wait time between 0 and 60 seconds.');
+                nppp_log_error_message(__('ERROR OPTION: Please enter a per request wait time between 0 and 60 seconds.', 'fastcgi-cache-purge-and-preload-nginx'));
             }
         } else {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid-wait-time-format',
-                'Wait time must be a numeric value.',
+                __('Wait time must be a numeric value.', 'fastcgi-cache-purge-and-preload-nginx'),
                 'error'
             );
 
             // Log the error message
-            nppp_log_error_message('ERROR OPTION: Wait time must be a numeric value.');
+            nppp_log_error_message(__('ERROR OPTION: Wait time must be a numeric value.', 'fastcgi-cache-purge-and-preload-nginx'));
         }
     }
 
@@ -1745,29 +1745,29 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
         // Validate the regex
         if (@preg_match($regex, "") === false) {
-            $error_message_regex = 'ERROR REGEX: The custom cache key regex is invalid check syntax and test before use it.';
+            $error_message_regex = __('ERROR REGEX: The custom cache key regex is invalid. Check the syntax and test it before use.', 'fastcgi-cache-purge-and-preload-nginx');
         }
 
         // Check for excessive lookaheads (limit to 3)
         $lookahead_count = preg_match_all('/(\(\?=.*\))/i', $regex);
         if ($lookahead_count > 3) {
-            $error_message_regex = 'ERROR REGEX: The custom cache key regex contains more than 3 lookaheads, which is not allowed.';
+            $error_message_regex = __('ERROR REGEX: The custom cache key regex contains more than 3 lookaheads and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx');
         }
 
         // Check for greedy quantifiers inside lookaheads
         if (preg_match('/\(\?=.*\.\*\)/', $regex)) {
-            $error_message_regex = 'ERROR REGEX: The custom cache key regex contains a greedy quantifier inside a lookahead, which is not allowed.';
+            $error_message_regex = __('ERROR REGEX: The custom cache key regex contains a greedy quantifier inside a lookahead and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx');
         }
 
         // Allow only a single ".*" in the regex
         $greedy_count = preg_match_all('/\.\*/', $regex);
         if ($greedy_count > 1) {
-            $error_message_regex = 'ERROR REGEX: The custom cache key regex contains more than one ".*" quantifier, which is not allowed.';
+            $error_message_regex = __('ERROR REGEX: The custom cache key regex contains more than one ".*" quantifier and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx');
         }
 
         // Check for excessively long regex patterns (limit length to 300 characters)
         if (strlen($regex) > 300) {
-            $error_message_regex = 'ERROR REGEX: The custom cache key regex exceeds the allowed length of 300 characters.';
+            $error_message_regex = __('ERROR REGEX: The custom cache key regex exceeds the allowed length of 300 characters.', 'fastcgi-cache-purge-and-preload-nginx');
         }
 
         // If an error message was set, trigger the error and log it
@@ -1827,23 +1827,23 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 add_settings_error(
                     'nppp_nginx_cache_settings_group',
                     'invalid-limit-rate',
-                    'Please enter a limit rate between 1 KB/sec and 100 MB/sec.',
+                    __('Please enter a limit rate between 1 KB/sec and 100 MB/sec.', 'fastcgi-cache-purge-and-preload-nginx'),
                     'error'
                 );
 
                 // Log the error message
-                nppp_log_error_message('ERROR OPTION: Please enter a limit rate between 1 MB/sec and 100 MB/sec in KB/sec.');
+                nppp_log_error_message(__('ERROR OPTION: Please enter a limit rate between 1 KB/sec and 100 MB/sec.', 'fastcgi-cache-purge-and-preload-nginx'));
             }
         } else {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid-limit-rate-format',
-                'Limit rate must be a numeric value in KB/sec.',
+                __('Limit rate must be a numeric value in KB/sec.', 'fastcgi-cache-purge-and-preload-nginx'),
                 'error'
             );
 
             // Log the error message
-           nppp_log_error_message('ERROR OPTION: Limit rate must be a numeric value in KB/sec.');
+            nppp_log_error_message(__('ERROR OPTION: Limit rate must be a numeric value in KB/sec.', 'fastcgi-cache-purge-and-preload-nginx'));
         }
     }
 
@@ -1860,12 +1860,12 @@ function nppp_nginx_cache_settings_sanitize($input) {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid-api-key',
-                'ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.',
+                __('ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.', 'fastcgi-cache-purge-and-preload-nginx'),
                 'error'
             );
 
             // Log the error message
-            nppp_log_error_message('ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.');
+            nppp_log_error_message(__('ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.', 'fastcgi-cache-purge-and-preload-nginx'));
         }
     }
 
@@ -1880,7 +1880,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
