@@ -11,6 +11,7 @@
 // NPP plugin admin side main js code
 (function ($) {
     'use strict';
+    const { __, _x, _n, _nx } = wp.i18n;
 
 $(document).ready(function() {
     // Selectors
