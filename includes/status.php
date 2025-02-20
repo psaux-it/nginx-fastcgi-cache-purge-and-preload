@@ -532,12 +532,12 @@ function nppp_my_status_html() {
 
     // Check if either user is "Not Determined"
     if ($php_process_owner === 'not determined' || $web_server_user === 'not determined') {
-        $nppp_isolation_status = __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx');
+        $nppp_isolation_status = 'Not Determined';
     } else {
         // Compare the two users
         $nppp_isolation_status = ($php_process_owner === $web_server_user)
-            ? __('Not Isolated', 'fastcgi-cache-purge-and-preload-nginx')
-            : __('Isolated', 'fastcgi-cache-purge-and-preload-nginx');
+            ? 'Not Isolated'
+            : 'Isolated';
     }
 
     // Check NGINX FastCGI Cache Key
@@ -601,10 +601,10 @@ function nppp_my_status_html() {
 
     // Format the status string
     $perm_status_message = $perm_in_cache_status_perm === 'true'
-        ? __('Granted', 'fastcgi-cache-purge-and-preload-nginx')
+        ? 'Granted'
         : ($perm_in_cache_status_perm === 'Not Found'
-            ? __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx')
-            : __('Need Action (Check Help)', 'fastcgi-cache-purge-and-preload-nginx'));
+            ? 'Not Determined'
+            : 'Need Action (Check Help)');
     $perm_status_message .= ' (' . esc_html($php_process_owner) . ')';
 
     ob_start();
