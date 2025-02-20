@@ -202,7 +202,7 @@ function nppp_wp_purge($directory_path) {
                     $deleted = $wp_filesystem->delete($file_path, true);
                     // Check we throw in permisson errors
                     if (!$deleted) {
-                        // Translators: %s is the file or directory path to delete
+                        // Translators: %s is the Nginx cache path
                         return new WP_Error('permission_error', sprintf(__('Permission denied while deleting file or directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $file_path));
                     }
                 }
