@@ -254,7 +254,7 @@ msgstr ""
 #: includes/configuration-parser.php:659
 #: includes/dashboard-widget.php:24
 #: includes/dashboard-widget.php:84
-#: includes/enqueue-assets.php:279
+#: includes/enqueue-assets.php:259
 #: includes/pre-checks.php:111
 #: includes/pre-checks.php:246
 #: includes/pre-checks.php:365
@@ -335,6 +335,7 @@ msgstr ""
 #: includes/configuration-parser.php:436
 #: includes/configuration-parser.php:490
 #: includes/configuration-parser.php:499
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2439
 msgid "Not Found"
 msgstr ""
 
@@ -1781,4 +1782,82 @@ msgstr ""
 
 #: includes/wp-filesystem.php:249
 msgid "Directory not found."
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2339
+msgid "Required"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2343
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2377
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2466
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2519
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2609
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2661
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2712
+msgid "Not Determined"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2347
+msgid "Not Required"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2365
+msgid "Fix Permission"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2369
+msgid "Fix Regex"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2434
+msgid "Found"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2456
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2542
+msgid "Ready"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2461
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2546
+msgid "Not Ready"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2483
+msgid "Allowed"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2488
+msgid "Not Allowed"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2504
+msgid "Granted"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2515
+msgid "Need Action"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2550
+msgid "In Progress"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2578
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2730
+msgid "Installed"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2582
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2734
+msgid "Not Installed"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2704
+msgid "Isolated"
+msgstr ""
+
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2708
+msgid "Not Isolated"
 msgstr ""
