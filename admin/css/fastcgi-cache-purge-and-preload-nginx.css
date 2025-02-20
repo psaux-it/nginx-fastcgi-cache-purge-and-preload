@@ -2639,3 +2639,7 @@ p.description {
 #wp-admin-bar-fastcgi-cache-operations {
     background-color: midnightblue !important;
 }
+
+.key-regex-info {
+    max-width: 978px;
+}
