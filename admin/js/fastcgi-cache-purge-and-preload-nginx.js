@@ -2336,15 +2336,15 @@ function npppupdateStatus() {
     if (npppphpFpmStatus === "false") {
         npppphpFpmStatusSpan.style.color = "red";
         iconSpanFpm.classList.add("dashicons", "dashicons-no");
-        fpmStatusText = ' ' + nppp_admin_data.i18n.required;
+        fpmStatusText = ' ' + __('Required', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (npppphpFpmStatus === "Not Found") {
         npppphpFpmStatusSpan.style.color = "orange";
         iconSpanFpm.classList.add("dashicons", "dashicons-clock");
-        fpmStatusText = ' ' + nppp_admin_data.i18n.not_determined;
+        fpmStatusText = ' ' + __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx');
     } else {
         npppphpFpmStatusSpan.style.color = "green";
         iconSpanFpm.classList.add("dashicons", "dashicons-yes");
-        fpmStatusText = ' ' + nppp_admin_data.i18n.not_required;
+        fpmStatusText = ' ' + __('Not Required', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     npppphpFpmStatusSpan.textContent = '';
@@ -2362,11 +2362,11 @@ function npppupdateStatus() {
     if (npppcacheInPageSpanValue === "Undetermined") {
         npppcacheInPageSpan.style.color = "red";
         iconSpanCache.classList.add("dashicons", "dashicons-no");
-        cacheStatusText = ' ' + nppp_admin_data.i18n.fix_permission;
+        cacheStatusText = ' ' + __('Fix Permission', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (npppcacheInPageSpanValue === "RegexError") {
         npppcacheInPageSpan.style.color = "red";
         iconSpanCache.classList.add("dashicons", "dashicons-no");
-        cacheStatusText = ' ' + nppp_admin_data.i18n.fix_regex;
+        cacheStatusText = ' ' + __('Fix Regex', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (npppcacheInPageSpanValue === "0") {
         npppcacheInPageSpan.style.color = "orange";
         iconSpanCache.classList.add("dashicons", "dashicons-clock");
@@ -2374,7 +2374,7 @@ function npppupdateStatus() {
     } else if (npppcacheInPageSpanValue === "Not Found") {
         npppcacheInPageSpan.style.color = "orange";
         iconSpanCache.classList.add("dashicons", "dashicons-clock");
-        cacheStatusText = ' ' + nppp_admin_data.i18n.not_determined;
+        cacheStatusText = ' ' + __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx');
     } else {
         npppcacheInPageSpan.style.color = "green";
         iconSpanCache.classList.add("dashicons", "dashicons-yes");
@@ -2431,12 +2431,12 @@ function npppupdateStatus() {
         npppcachePathSpan.style.color = "green";
         iconSpanCachePath.classList.add("dashicons", "dashicons-yes");
         npppcachePathSpan.appendChild(iconSpanCachePath);
-        npppcachePathSpan.append(' ' + nppp_admin_data.i18n.found);
+        npppcachePathSpan.append(' ', __('Found', 'fastcgi-cache-purge-and-preload-nginx'));
     } else if (npppcachePath === "Not Found") {
         npppcachePathSpan.style.color = "red";
         iconSpanCachePath.classList.add("dashicons", "dashicons-no");
         npppcachePathSpan.appendChild(iconSpanCachePath);
-        npppcachePathSpan.append(' ' + nppp_admin_data.i18n.not_found);
+        npppcachePathSpan.append(' ', __('Not Found', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
     // Fetch and update purge action status
@@ -2453,17 +2453,17 @@ function npppupdateStatus() {
         nppppurgeStatusSpan.style.color = "green";
         iconSpanPurgeStatus.classList.add("dashicons", "dashicons-yes");
         nppppurgeStatusSpan.appendChild(iconSpanPurgeStatus);
-        nppppurgeStatusSpan.append(' ' + nppp_admin_data.i18n.ready);
+        nppppurgeStatusSpan.append(' ', __('Ready', 'fastcgi-cache-purge-and-preload-nginx'));
     } else if (nppppurgeStatus === "false") {
         nppppurgeStatusSpan.style.color = "red";
         iconSpanPurgeStatus.classList.add("dashicons", "dashicons-no");
         nppppurgeStatusSpan.appendChild(iconSpanPurgeStatus);
-        nppppurgeStatusSpan.append(' ' + nppp_admin_data.i18n.not_ready);
+        nppppurgeStatusSpan.append(' ', __('Not Ready', 'fastcgi-cache-purge-and-preload-nginx'));
     } else {
         nppppurgeStatusSpan.style.color = "orange";
         iconSpanPurgeStatus.classList.add("dashicons", "dashicons-clock");
         nppppurgeStatusSpan.appendChild(iconSpanPurgeStatus);
-        nppppurgeStatusSpan.append(' ' + nppp_admin_data.i18n.not_determined);
+        nppppurgeStatusSpan.append(' ', __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
     // Fetch and update shell_exec status
@@ -2480,12 +2480,12 @@ function npppupdateStatus() {
         npppshellExecSpan.style.color = "green";
         iconSpanShellExec.classList.add("dashicons", "dashicons-yes");
         npppshellExecSpan.appendChild(iconSpanShellExec);
-        npppshellExecSpan.append(' ' + nppp_admin_data.i18n.allowed);
+        npppshellExecSpan.append(' ', __('Allowed', 'fastcgi-cache-purge-and-preload-nginx'));
     } else if (npppshellExec === "Not Ok") {
         npppshellExecSpan.style.color = "red";
         iconSpanShellExec.classList.add("dashicons", "dashicons-no");
         npppshellExecSpan.appendChild(iconSpanShellExec);
-        npppshellExecSpan.append(' ' + nppp_admin_data.i18n.not_allowed);
+        npppshellExecSpan.append(' ', __('Not Allowed', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
     // Fetch and update ACLs status
@@ -2501,7 +2501,7 @@ function npppupdateStatus() {
     if (npppaclStatus.includes("Granted")) {
         npppaclStatusSpan.style.color = "green";
         iconSpanAcl.classList.add("dashicons", "dashicons-yes");
-        aclStatusText = ' ' + nppp_admin_data.i18n.granted + ' ';
+        aclStatusText = ' ' + __('Granted', 'fastcgi-cache-purge-and-preload-nginx') + ' ';
 
         var processOwner = npppaclStatus.replace("Granted", "").trim();
         if (processOwner) {
@@ -2512,11 +2512,11 @@ function npppupdateStatus() {
     } else if (npppaclStatus.includes("Need Action")) {
         npppaclStatusSpan.style.color = "red";
         iconSpanAcl.classList.add("dashicons", "dashicons-no");
-        aclStatusText = ' ' + nppp_admin_data.i18n.need_action;
+        aclStatusText = ' ' + __('Need Action', 'fastcgi-cache-purge-and-preload-nginx');
     } else {
         npppaclStatusSpan.style.color = "orange";
         iconSpanAcl.classList.add("dashicons", "dashicons-clock");
-        aclStatusText = ' ' + nppp_admin_data.i18n.not_determined;
+        aclStatusText = ' ' + __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     npppaclStatusSpan.appendChild(iconSpanAcl);
@@ -2539,15 +2539,15 @@ function npppupdateStatus() {
     if (nppppreloadStatus === "true") {
         nppppreloadStatusSpan.style.color = "green";
         iconSpanPreload.classList.add("dashicons", "dashicons-yes");
-        preloadStatusText = ' ' + nppp_admin_data.i18n.ready;
+        preloadStatusText = ' ' + __('Ready', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (nppppreloadStatus === "false") {
         nppppreloadStatusSpan.style.color = "red";
         iconSpanPreload.classList.add("dashicons", "dashicons-no");
-        preloadStatusText = ' ' + nppp_admin_data.i18n.not_ready;
+        preloadStatusText = ' ' + __('Not Ready', 'fastcgi-cache-purge-and-preload-nginx');
     } else {
         nppppreloadStatusSpan.style.color = "orange";
         iconSpanPreload.classList.add("dashicons", "dashicons-clock");
-        preloadStatusText = ' ' + nppp_admin_data.i18n.in_progress;
+        preloadStatusText = ' ' + __('In Progress', 'fastcgi-cache-purge-and-preload-nginx');
         nppppreloadStatusCell.style.backgroundColor = "lightgreen";
 
         nppppreloadStatusCell.animate([
@@ -2575,11 +2575,11 @@ function npppupdateStatus() {
     if (npppwgetStatus === "Installed") {
         npppwgetStatusSpan.style.color = "green";
         iconSpanWget.classList.add("dashicons", "dashicons-yes");
-        wgetStatusText = ' ' + nppp_admin_data.i18n.installed;
+        wgetStatusText = ' ' + __('Installed', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (npppwgetStatus === "Not Installed") {
         npppwgetStatusSpan.style.color = "red";
         iconSpanWget.classList.add("dashicons", "dashicons-no");
-        wgetStatusText = ' ' + nppp_admin_data.i18n.not_installed;
+        wgetStatusText = ' ' + __('Not Installed', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     npppwgetStatusSpan.appendChild(iconSpanWget);
@@ -2606,7 +2606,7 @@ function npppupdateStatus() {
         iconSpanLibfuse.classList.add("dashicons", "dashicons-yes");
         iconSpanLibfuse.style.fontSize = "20px";
         iconSpanLibfuse.style.color = "green";
-        libfuseStatusText = ` ${installedVersion} <span style="color:orange;">(${nppp_admin_data.i18n.not_determined})</span>`;
+        libfuseStatusText = ` ${installedVersion} <span style="color:orange;">(${__('Not Determined', 'fastcgi-cache-purge-and-preload-nginx')})</span>`;
     } else if (npppLibfuseVersion.includes("(")) {
         var versions = npppLibfuseVersion.match(/(\d+\.\d+\.\d+)\s\((\d+\.\d+\.\d+)\)/);
         if (versions) {
@@ -2658,7 +2658,7 @@ function npppupdateStatus() {
         iconSpanBindfs.classList.add("dashicons", "dashicons-yes");
         iconSpanBindfs.style.fontSize = "20px";
         iconSpanBindfs.style.color = "green";
-        bindfsStatusText = ` ${installedVersion} <span style="color:orange;">(${nppp_admin_data.i18n.not_determined})</span>`;
+        bindfsStatusText = ` ${installedVersion} <span style="color:orange;">(${__('Not Determined', 'fastcgi-cache-purge-and-preload-nginx')})</span>`;
     } else if (npppBindfsVersion.includes("(")) {
         var versions = npppBindfsVersion.match(/(\d+\.\d+\.\d+)\s\((\d+\.\d+\.\d+)\)/);
         if (versions) {
@@ -2701,15 +2701,15 @@ function npppupdateStatus() {
     if (nppppermIsolation === "Isolated") {
         nppppermIsolationSpan.style.color = "green";
         iconSpanPermIsolation.classList.add("dashicons", "dashicons-yes");
-        permIsolationStatusText = ' ' + nppp_admin_data.i18n.isolated;
+        permIsolationStatusText = ' ' + __('Isolated', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (nppppermIsolation === "Not Isolated") {
         nppppermIsolationSpan.style.color = "orange";
         iconSpanPermIsolation.classList.add("dashicons", "dashicons-clock");
-        permIsolationStatusText = ' ' + nppp_admin_data.i18n.not_isolated;
+        permIsolationStatusText = ' ' + __('Not Isolated', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (nppppermIsolation === "Not Determined") {
         nppppermIsolationSpan.style.color = "red";
         iconSpanPermIsolation.classList.add("dashicons", "dashicons-no");
-        permIsolationStatusText = ' ' + nppp_admin_data.i18n.not_determined;
+        permIsolationStatusText = ' ' + __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     nppppermIsolationSpan.appendChild(iconSpanPermIsolation);
@@ -2727,11 +2727,11 @@ function npppupdateStatus() {
     if (npppcpulimitStatus === "Installed") {
         npppcpulimitStatusSpan.style.color = "green";
         iconSpanCpulimit.classList.add("dashicons", "dashicons-yes");
-        cpulimitStatusText = ' ' + nppp_admin_data.i18n.installed;
+        cpulimitStatusText = ' ' + __('Installed', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (npppcpulimitStatus === "Not Installed") {
         npppcpulimitStatusSpan.style.color = "red";
         iconSpanCpulimit.classList.add("dashicons", "dashicons-no");
-        cpulimitStatusText = ' ' + nppp_admin_data.i18n.not_installed;
+        cpulimitStatusText = ' ' + __('Not Installed', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     npppcpulimitStatusSpan.appendChild(iconSpanCpulimit);
