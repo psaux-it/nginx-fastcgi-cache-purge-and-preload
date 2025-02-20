@@ -308,7 +308,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
             if (!$test_result) {
                 // Translators: %s is replaced with the domain name (e.g., example.com).
-                nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Cannot start Nginx cache Preloading for %s! Please check your DNS, connectivity, proxy/firewall settings, and Exclude option syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
+                nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Cannot start Nginx cache Preloading for %s! Please check your DNS, connectivity, proxy/firewall settings, and Exclude syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
                 return;
             }
         }
