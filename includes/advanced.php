@@ -366,11 +366,11 @@ function nppp_purge_cache_premium_callback() {
     // Perform the purge action (delete the file)
     $deleted = $wp_filesystem->delete($file_path);
     if ($deleted) {
-        // Translators: %s: current page URL
+        // Translators: %s is the page URL
         $success_message = sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url );
         nppp_log_and_send_success($success_message, $log_file_path);
     } else {
-        // Translators: %s: current page URL
+        // Translators: %s is the page URL
         $error_message = sprintf( __( 'ERROR ADMIN: Nginx cache can not be purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url );
         nppp_log_and_send_error($error_message, $log_file_path);
     }
