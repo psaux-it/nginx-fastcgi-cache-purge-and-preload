@@ -310,8 +310,14 @@ function nppp_get_webserver_user() {
 
     // Check the running processes for Nginx
     $nginx_user_process = shell_exec("ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v 'root' | awk '{print $1}' | sort | uniq");
+
     // Convert the process output to an array and filter out empty values
-    $process_users = array_filter(array_unique(array_map('trim', explode("\n", $nginx_user_process))));
+    if ($nginx_user_process !== null && $nginx_user_process !== '') {
+        $process_users = array_filter(array_unique(array_map('trim', explode("\n", $nginx_user_process))));
+    } else {
+        $process_users = [];
+    }
+
     // Try to get the user from the Nginx configuration file
     $nginx_user_conf = shell_exec("grep -i '^\s*user\s\+' $config_file | grep -v '^\s*#' | awk '{print $2}' | sed 's/;.*//;s/\s*$//'");
 
