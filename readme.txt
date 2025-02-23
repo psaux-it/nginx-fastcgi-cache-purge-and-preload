@@ -15,7 +15,9 @@ The most comprehensive solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI)
 
 This plugin, **NPP**, allows WordPress users to manage **Nginx Cache Purge and Preload** (FastCGI, Proxy, SCGI, UWSGI) operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.
 
-Unlike other solutions that depend on Nginx modules, **NPP** directly manages cache files without needing to interact with Nginx. This approach provides the following benefits:
+Unlike other solutions that depend on Nginx modules, **NPP** directly manages cache files without needing to interact with Nginx.
+
+➡️ **This approach provides the following benefits:**
 
 ⚡ **Faster** – No waiting for Nginx to process cache purges; works without interacting with Nginx.
 🌐 **Greater flexibility** – Works seamlessly across different architectures, including containerized environments where Nginx may run on a host, in a separate container, or distributed across systems.
