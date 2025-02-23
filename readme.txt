@@ -4,50 +4,62 @@ Donate link: https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordp
 Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
-Tested up to: 6.7.1
+Tested up to: 6.7.2
 Stable tag: 2.0.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-The most comprehensive solution for managing Nginx Cache from your WordPress dashboard.
+The most comprehensive solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI) cache operations directly from your WordPress dashboard.
 
 == Description ==
 
-This plugin allows WordPress users to manage Nginx Cache Purge and Preload operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.
+This plugin, **NPP**,  allows WordPress users to manage **Nginx Cache Purge and Preload** (FastCGI, Proxy, SCGI, UWSGI) operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.
 
-== Important ==
+Unlike other solutions that depend on Nginx modules, **NPP** directly manages cache files without needing to interact with Nginx. This approach provides the following benefits:
 
-For detailed integration steps and guidance, visit the [main development repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload), and refer to the **FAQ** or the plugin's **Help tab**.
+⚡ **Faster** – No waiting for Nginx to process cache purges; works without interacting with Nginx.
+🌐 **Greater flexibility** – Works seamlessly across different architectures, including containerized environments where Nginx may run on a host, in a separate container, or distributed across systems.
+🤖 **Automations** - NPP is flexible for server-side automations, making it easy to integrate into your workflow.
 
-== Why NPP? ==
+⚠️ **IMPORTANT:**
 
-Because NPP does not depend on external Nginx modules, It provides a simpler and more flexible solution for Nginx cache management. NPP also handles **Nginx Cache Preloading!**
+**NPP** is feature rich, completely free & functional and great for users who manage their own servers and have technical know-how. For those with less technical experience, pre-made Bash scripts are available, making it easy to get started and benefit from the plugin.
 
-Here's why:
+➡️ **For detailed integration steps and guidance:**
 
-🔧**Ease of Setup**: Simple to implement once permissions are set correctly. No need for Nginx recompilation, making the setup straightforward.
-🔑**Granularity**: Can be controlled at a file level. Offers flexibility in managing cache and other resources for better fine-tuning.
-🔒**Security**: Greater security control by leveraging existing filesystem permissions. Ensures more precise access management compared to other methods.
-⚡**Performance**: Direct cache purge is faster in certain cases. Targets specific files, avoiding the need for Nginx processing.
-🔗**Integration**: Works independently of Nginx, providing broader application across different cache systems.
-🤖**Automation**: Highly customizable with scripts for cache purging & preloading. Allows greater automation and flexibility for optimized workflow.
+• Visit the [NPP Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
+• Explore [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) for easy deployments.
+• Refer to the **FAQ** or the plugin’s **Help tab** for further instructions.
 
 == Features ==
 
-🚀**Purge All Nginx Cache**: Completely clear all cached data stored by Nginx.
-🚀**Preload All Nginx Cache**: Populate the Nginx cache with the most recent data for the entire website.
-🚀**Auto Preload Nginx Cache**: Automatically preloads the cache when Auto Purge is enabled for a POST/PAGE or after the Purge All action
-🚀**Auto Purge Nginx Cache**: Purge on Post/Page content changes, Comment status updates or approvals, Theme/Plugin updates, or when compatible Cache Plugins trigger a purge. Nginx cache is preloaded automatically if Auto Preload is enabled (for entire or single).
-🚀**Schedule Cache Purge & Preload via WP Cron**: Automate the purge and preload process using WordPress Cron jobs.
-🚀**Remote Nginx Cache Purge & Preload via REST API**: Remotely trigger cache purging and preloading through REST API endpoints.
-🚀**Manual Nginx Cache Purge & Preload**: Allow manual purging and preloading of cache through the table view in Advanced Tab.
-🚀**On-Page Nginx Cache Purge & Preload**: Manually purge and preload Nginx cache for the currently visited page directly from the frontend.
-🚀**Custom Cache Key Support**: Define a regex pattern to parse URLs based on your custom fastcgi_cache_key format.
-🚀**Optimized Nginx Cache Preload**: Enhance Nginx cache preload performance with options to limit CPU usage, exclude endpoints, wait retrievals and rate limiting.
-🚀**Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, and Nginx status from the Status tab.
-🚀**User-Friendly Interface**: Easy-to-use AJAX-powered settings, integrated into the WordPress admin bar for quick access.
-🚀**Admin Notices and Logs**: Receive handy notifications and view logs for plugin status and all cache-related actions within the WordPress admin area.
-🚀**Email Notifications**: Receive email alerts upon completion of preload actions, with customizable templates to suit your needs.
+🧹 **Purge All Nginx Cache**: Completely clear all cached data stored by Nginx.
+
+🔄 **Preload All Nginx Cache**: Warm the Nginx cache with the most recent data for the entire website.
+
+🚀 **Auto Preload Nginx Cache**: Automatically preloads the cache when Auto Purge is enabled for a POST/PAGE or after the Purge All action.
+
+🧼 **Auto Purge Nginx Cache**: Purge cache on Post/Page content changes, comment status updates, theme/plugin updates, or when compatible Cache Plugins trigger a purge. Nginx cache is preloaded automatically if Auto Preload is enabled (for the entire site or individual page).
+
+⏰ **Schedule Nginx Cache Purge & Preload via WP Cron**: Automate the purge and preload process using WordPress Cron jobs.
+
+🌐 **Remote Nginx Cache Purge & Preload via REST API**: Remotely trigger cache purging and preloading through REST API endpoints.
+
+⚙️ **Manual Nginx Cache Purge & Preload**: Allow manual purging and preloading of cache through the table view in the Advanced Tab.
+
+🔍 **On-Page Nginx Cache Purge & Preload**: Manually purge and preload Nginx cache for the currently visited page directly from the frontend.
+
+🗝️ **Custom Cache Key Support**: Define a regex pattern to parse URLs based on your custom `_cache_key` format.
+
+⚡ **Optimized Nginx Cache Preload**: Enhance Nginx cache preload performance with options to limit CPU usage, exclude endpoints, wait retrievals, and apply rate limiting.
+
+📊 **Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, and Nginx status from the Status tab.
+
+🖥️ **User-Friendly Interface**: Easy-to-use AJAX-powered settings, integrated into the WordPress admin bar and dashboard for quick access.
+
+📋 **Admin Notices and Logs**: Receive notifications and view logs for plugin status and all cache-related actions within the WordPress admin area.
+
+📧 **Email Notifications**: Receive email alerts upon completion of preload actions, with customizable templates to suit your needs.
 
 == Installation ==
 
