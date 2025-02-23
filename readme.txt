@@ -419,7 +419,7 @@ Release date: 2024-03-14
 
 == Credits ==
 
-This plugin is developed and maintained by Hasan CALISIR.
+This plugin is developed and maintained by Hasan CALISIR. 
 
 == Support ==
 
