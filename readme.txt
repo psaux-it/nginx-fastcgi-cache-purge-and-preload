@@ -30,7 +30,7 @@ Unlike other solutions that depend on Nginx modules, **NPP** directly manages ca
 ➡️ **For detailed integration steps and guidance:**
 
 • Visit the [NPP Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
-• Explore [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) for easy deployments.
+• Explore [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) for easy production deployments and testing NPP locally.
 • Refer to the **FAQ** or the plugin’s **Help tab** for further instructions.
 
 == Features ==
@@ -165,6 +165,37 @@ Yes, please refer to the plugin settings **Help** tab.
 8. Front-end Admin Bar
 
 == Changelog ==
+
+= 2.1.0 =
+
+Release date: 2025-02-23
+
+Major Release: 46 files changed, 5,170 additions, 1,410 deletions.
+Now fully supports internationalization,
+enabling complete translation for a global user base.
+
+* Added support for internationalization (i18n).
+* Added support for Nginx cache for PROXY, SCGI, and uWSGI.
+* Added support for Nginx cache status widget in the WordPress dashboard.
+* Added support for deep hash linking with jQuery UI Tabs.
+* Added support for better UI/UX for various elements.
+* Improved compatibility with containerized environments. (Marc-Antoine Lalonde, Pawel Strzyzewski)
+* Resolved issue where auto purge was not working on post/page content updates.
+* Resolved issue where theme switch or theme update triggered purge and preload actions twice.
+* Resolved issue where tabs were stuck and hanging on switch with admin bar and internal clicks
+* Resolved issue with preload process completion time accuracy.
+* Resolved issue with plugin tracking cron event handling.
+* Resolved issues with false detections inside the Status Tab.
+* Resolved issue with front-end action messages for better clarity.
+* Resolved various PCP (Plugin Check) errors.
+* Resolved issue with false positives in certain validation checks.
+* Resolved issue with preload features not being disabled correctly.
+* Resolved issue with WP purge handling and process exits.
+* Resolved issue with page reload time.
+* Updated error and success messages for clarity.
+* Updated external assets to latest versions.
+* Updated Plugin logo and plugin header assets.
+* Updated plugin readme.txt
 
 = 2.0.9 =
 
