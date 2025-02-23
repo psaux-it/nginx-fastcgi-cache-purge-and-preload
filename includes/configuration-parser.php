@@ -190,15 +190,17 @@ function nppp_check_fuse_cache_paths($cache_paths) {
 }
 
 // Function to parse Nginx cache paths from the configuration file
-function nppp_parse_nginx_config($file, $wp_filesystem = null) {
-    // Ask result in cache first
-    $static_key_base = 'nppp';
-    $transient_key = 'nppp_cache_paths_' . md5($static_key_base);
+function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = true) {
+    // Ask result in cache first, but only on the top-level call
+    if ($is_top_level) {
+        $static_key_base = 'nppp';
+        $transient_key = 'nppp_cache_paths_' . md5($static_key_base);
 
-    $cached_result = get_transient($transient_key);
-    // Return cached result if available
-    if ($cached_result !== false) {
-        return $cached_result;
+        $cached_result = get_transient($transient_key);
+        // Return cached result if available
+        if ($cached_result !== false) {
+            return $cached_result;
+        }
     }
 
     // Initialize wp_filesystem
@@ -220,11 +222,13 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
     }
 
     // Track already parsed files to avoid re-processing duplicates
+    // (skip symlinked duplicates)
     static $parsed_files = [];
-    if (in_array($file, $parsed_files)) {
+    $canonical = realpath($file) ?: $file;
+    if (in_array($canonical, $parsed_files)) {
         return ['cache_paths' => []];
     }
-    $parsed_files[] = $file;
+    $parsed_files[] = $canonical;
 
     $config = $wp_filesystem->get_contents($file);
     $cache_paths = [];
@@ -265,7 +269,7 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
 
     // Recursively parse included files
     foreach ($included_files as $included_file) {
-        $result = nppp_parse_nginx_config($included_file, $wp_filesystem);
+        $result = nppp_parse_nginx_config($included_file, $wp_filesystem, false);
         if ($result !== false && isset($result['cache_paths'])) {
             foreach ($result['cache_paths'] as $directive => $paths) {
                 if (!isset($cache_paths[$directive])) {
@@ -287,11 +291,11 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
         return ['cache_paths' => []];
     }
 
-    // Store the result in the cache before returning
-    set_transient($transient_key, ['cache_paths' => $cache_paths], MONTH_IN_SECONDS);
-
-    // Reset the error transients
-    delete_transient('nppp_cache_path_not_found');
+    // Store the result in the cache before returning (only on the top-level call)
+    if ($is_top_level) {
+        set_transient($transient_key, ['cache_paths' => $cache_paths], MONTH_IN_SECONDS);
+        delete_transient('nppp_cache_path_not_found');
+    }
 
     // Return found active Nginx Cache Paths
     return ['cache_paths' => $cache_paths];
