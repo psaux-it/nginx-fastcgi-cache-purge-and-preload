@@ -189,8 +189,7 @@ function nppp_check_fuse_cache_paths($cache_paths) {
     return ['fuse_paths' => $fuse_paths];
 }
 
-// Function to parse the Nginx configuration file with included paths
-// for Nginx Cache Paths
+// Function to parse Nginx cache paths from the configuration file
 function nppp_parse_nginx_config($file, $wp_filesystem = null) {
     // Ask result in cache first
     $static_key_base = 'nppp';
@@ -220,6 +219,13 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
         return false;
     }
 
+    // Track already parsed files to avoid re-processing duplicates
+    static $parsed_files = [];
+    if (in_array($file, $parsed_files)) {
+        return ['cache_paths' => []];
+    }
+    $parsed_files[] = $file;
+
     $config = $wp_filesystem->get_contents($file);
     $cache_paths = [];
     $included_files = [];
@@ -234,7 +240,11 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
             if (!isset($cache_paths[$directive])) {
                 $cache_paths[$directive] = [];
             }
-            $cache_paths[$directive][] = $value;
+
+            // Add only if not already present to avoid duplicates
+            if (!in_array($value, $cache_paths[$directive])) {
+                $cache_paths[$directive][] = $value;
+            }
         }
     }
 
@@ -261,7 +271,12 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null) {
                 if (!isset($cache_paths[$directive])) {
                     $cache_paths[$directive] = [];
                 }
-                $cache_paths[$directive] = array_merge($cache_paths[$directive], $paths);
+                foreach ($paths as $path) {
+                    // Only merge unique paths
+                    if (!in_array($path, $cache_paths[$directive])) {
+                        $cache_paths[$directive][] = $path;
+                    }
+                }
             }
         }
     }
