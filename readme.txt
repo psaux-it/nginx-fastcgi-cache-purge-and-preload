@@ -386,11 +386,11 @@ Release date: 2024-03-14
 
 == Credits ==
 
-This plugin is developed and maintained by Hasan ÇALIŞIR.
+This plugin is developed and maintained by Hasan CALISIR.
 
 == Support ==
 
-For support and assistance, please contact Hasan ÇALIŞIR at hasan.calisir@psauxit.com.
+For support and assistance, please contact Hasan CALISIR at hasan.calisir@psauxit.com.
 
 == License ==
 
