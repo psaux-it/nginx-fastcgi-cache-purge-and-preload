@@ -2,7 +2,7 @@
 /**
  * Preload action related schedule cron events for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains preload action related schedule cron events functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.1.0
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -20,7 +20,6 @@ function nppp_get_active_cron_events() {
     $events = _get_cron_array();
 
     // npp plugin's schedule event hook name
-    //$plugin_hooks = array('npp_cache_preload_event', 'npp_cache_preload_status_event');
     $plugin_hook = 'npp_cache_preload_event';
 
     // Initialize a flag to track if events are found
@@ -33,18 +32,18 @@ function nppp_get_active_cron_events() {
     if (empty($timezone_string)) {
         // Format the scheduled event information
         echo '<div class="nppp-scheduled-event">';
-        echo '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
-        echo '<div class="nppp-scheduled-event" style="padding-right: 45px;">Please set your Timezone in Wordpress - Options/General!</div>';
+        echo '<h3 class="nppp-active-cron-heading">' . esc_html__('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') . '</h3>';
+        echo '<div class="nppp-scheduled-event" style="padding-right: 45px;">' . esc_html__('Please set your Timezone in WordPress - Options/General!', 'fastcgi-cache-purge-and-preload-nginx') . '</div>';
         echo '</div>';
         return;
     }
 
     // Check events are empty
     if (empty($events)) {
-         // Format the scheduled event information
+        // Format the scheduled event information
         echo '<div class="nppp-scheduled-event">';
-        echo '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
-        echo '<div class="nppp-scheduled-event" style="padding-right: 45px;">No active scheduled events found!</div>';
+        echo '<h3 class="nppp-active-cron-heading">' . esc_html__('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') . '</h3>';
+        echo '<div class="nppp-scheduled-event" style="padding-right: 45px;">' . esc_html__('No active scheduled events found!', 'fastcgi-cache-purge-and-preload-nginx') . '</div>';
         echo '</div>';
         return;
     }
@@ -56,7 +55,6 @@ function nppp_get_active_cron_events() {
             foreach ($cron as $hook => $args) {
                 // Check if the hook matches the npp's hook name
                 if ($hook === $plugin_hook) {
-                //if (in_array($hook, $plugin_hooks)) {
                     // Set the flag to indicate that events are found
                     $has_events = true;
 
@@ -71,25 +69,41 @@ function nppp_get_active_cron_events() {
 
                     // Format the scheduled event information
                     echo '<div class="nppp-scheduled-event">';
-                    echo '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
+                    echo '<h3 class="nppp-active-cron-heading">' . esc_html__('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') . '</h3>';
                     echo '<div class="nppp-cron-info">';
-                    echo '<span class="nppp-hook-name">Cron Name: <strong>' . esc_html($hook) . '</strong></span> - ';
-                    echo '<span class="nppp-next-run">Next Run: <strong>' . esc_html($next_run_formatted) . '</strong></span>';
+                    echo '<span class="nppp-hook-name">' . sprintf(
+                        /* Translators: %s is the cron hook name */
+                        esc_html__('Cron Name: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        '<strong>' . esc_html($hook) . '</strong>'
+                    ) . '</span> - ';
+                    echo '<span class="nppp-next-run">' . sprintf(
+                        /* Translators: %s is the formatted next run time */
+                        esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        '<strong>' . esc_html($next_run_formatted) . '</strong>'
+                    ) . '</span>';
                     echo '</div>';
                     echo '<div class="nppp-cancel-btn-container">';
-                    echo '<button class="nppp-cancel-btn" data-hook="' . esc_attr($hook) . '">Cancel</button>';
+                    echo '<button class="nppp-cancel-btn" data-hook="' . esc_attr($hook) . '">' . esc_html__('Cancel', 'fastcgi-cache-purge-and-preload-nginx') . '</button>';
                     echo '</div>';
                     echo '</div>';
+
+                    // Exit the inner loop
+                    break;
                 }
+            }
+
+            // Exit the outer loop
+            if ($has_events) {
+                break;
             }
         }
     }
 
-    // If no events are found for the plugin, add a message to the output
+    // If no matching cron event is found
     if (!$has_events) {
         echo '<div class="nppp-scheduled-event">';
-        echo '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
-        echo '<div class="nppp-scheduled-event" style="padding-right: 45px;">No active scheduled events found!</div>';
+        echo '<h3 class="nppp-active-cron-heading">' . esc_html__('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') . '</h3>';
+        echo '<div class="nppp-scheduled-event" style="padding-right: 45px;">' . esc_html__('No active scheduled events found!', 'fastcgi-cache-purge-and-preload-nginx') . '</div>';
         echo '</div>';
     }
 }
@@ -101,7 +115,7 @@ function nppp_get_active_cron_events_ajax() {
 
     // Check user capability
     if (!current_user_can('manage_options')) {
-        wp_die('You do not have permission to call this action.');
+        wp_die(esc_html__('You do not have permission to call this action.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
     // Get all scheduled events
@@ -142,7 +156,7 @@ function nppp_get_active_cron_events_ajax() {
     // If no events are found for the plugin, add a message to the event data
     if (empty($event_data)) {
         $event_data[] = array(
-            'hook_name' => 'No active scheduled events found for NPP',
+            'hook_name' => __('No active scheduled events found for NPP', 'fastcgi-cache-purge-and-preload-nginx'),
             'next_run' => ''
         );
     }
@@ -229,7 +243,7 @@ function nppp_create_scheduled_events($cron_expression) {
     if ($existing_timestamp) {
         $cleared = wp_clear_scheduled_hook('npp_cache_preload_event');
         if (!$cleared) {
-            nppp_custom_error_log('Failed to unschedule existing event.');
+            nppp_custom_error_log( __( 'Failed to unschedule existing event.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
     }
@@ -242,7 +256,7 @@ function nppp_create_scheduled_events($cron_expression) {
     $scheduled = wp_schedule_event($next_execution_timestamp, $recurrence, 'npp_cache_preload_event');
 
     if (!$scheduled) {
-        nppp_custom_error_log('Failed to schedule new event.');
+        nppp_custom_error_log( __( 'Failed to schedule new event.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         return;
     }
 
@@ -282,7 +296,7 @@ function nppp_get_preload_start_time() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
@@ -311,28 +325,44 @@ function nppp_get_preload_start_time() {
             $options = get_option('nginx_cache_settings');
             $auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
 
-            // Iterate through each line to find the latest relevant entry
-            foreach ($log_lines as $line) {
+            // Define the translated strings for the different variations of the preload initiation message
+            $auto_preload_messages = [
+                __( 'SUCCESS REST: Nginx cache purged successfully. Auto preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'SUCCESS ADMIN: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'SUCCESS: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' )
+            ];
+
+            // Define the translated strings for the manual preload messages
+            $manual_preload_messages = [
+                __( 'SUCCESS: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'SUCCESS REST: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'SUCCESS CRON: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'SUCCESS ADMIN: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' )
+            ];
+
+            // Iterate through each line in the log to find the latest preload initiation time
+            foreach (array_reverse($log_lines) as $line) {
                 if ($auto_preload) {
-                    if (strpos($line, 'Auto preload initiated in the background') !== false) {
-                        // Extract the timestamp part from the line
-                        preg_match('/\[(.*?)\]/', $line, $match);
-                        if (isset($match[1])) {
-                            // Update $latest_timestamp only if the current timestamp is later than the previous one
-                            if ($latest_timestamp === null || $match[1] > $latest_timestamp) {
+                    // Check for any of the "auto preload" initiation messages
+                    foreach ($auto_preload_messages as $auto_preload_message) {
+                        if (strpos($line, $auto_preload_message) !== false) {
+                            // Extract the timestamp part from the line
+                            preg_match('/\[(.*?)\]/', $line, $match);
+                            if (isset($match[1])) {
                                 $latest_timestamp = $match[1];
+                                return $latest_timestamp;
                             }
                         }
                     }
                 } else {
-                    // Check for manual preload initiation
-                    if (strpos($line, 'Cache preloading has started in the background') !== false) {
-                        // Extract the timestamp part from the line
-                        preg_match('/\[(.*?)\]/', $line, $match);
-                        if (isset($match[1])) {
-                            // Update $latest_timestamp only if the current timestamp is later than the previous one
-                            if ($latest_timestamp === null || $match[1] > $latest_timestamp) {
+                    // Check for any of the "manual preload" initiation messages
+                    foreach ($manual_preload_messages as $manual_preload_message) {
+                        if (strpos($line, $manual_preload_message) !== false) {
+                            // Extract the timestamp part from the line
+                            preg_match('/\[(.*?)\]/', $line, $match);
+                            if (isset($match[1])) {
                                 $latest_timestamp = $match[1];
+                                return $latest_timestamp;
                             }
                         }
                     }
@@ -340,7 +370,7 @@ function nppp_get_preload_start_time() {
             }
 
             // Return the latest timestamp found
-            return $latest_timestamp;
+            return null;
         } else {
             // Log file doesn't exist
             return null;
@@ -358,7 +388,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
@@ -374,7 +404,11 @@ function nppp_create_scheduled_event_preload_status_callback() {
 
     // Convert the scheduled time string to a DateTime object
     $wordpress_timezone = new DateTimeZone(wp_timezone_string());
-    $scheduled_time = DateTime::createFromFormat('Y-m-d H:i:s', $scheduled_time_str, $wordpress_timezone);
+
+    // Check if the scheduled time string is not null
+    if ($scheduled_time_str !== null) {
+        $scheduled_time = DateTime::createFromFormat('Y-m-d H:i:s', $scheduled_time_str, $wordpress_timezone);
+    }
 
     // Get preload pid file
     $PIDFILE = dirname(__FILE__) . '/../cache_preload.pid';
@@ -476,22 +510,37 @@ function nppp_create_scheduled_event_preload_status_callback() {
         $current_time = new DateTime('now', $wordpress_timezone);
 
         // Calculate elapsed time
-        $elapsed_time = $current_time->diff($scheduled_time);
+        if (isset($scheduled_time) && $scheduled_time instanceof DateTime) {
+            $elapsed_time = $current_time->diff($scheduled_time);
 
-        // Format elapsed time as a string
-        $elapsed_time_str = $elapsed_time->format('%h hours, %i minutes, and %s seconds');
+            // Format elapsed time as a string
+            $elapsed_time_str = sprintf(
+                /* Translators: %1$s, %2$s, and %3$s are numeric values representing hours, minutes, and seconds respectively. */
+                __('%1$s hours, %2$s minutes, %3$s seconds', 'fastcgi-cache-purge-and-preload-nginx'),
+                $elapsed_time->format('%h'),
+                $elapsed_time->format('%i'),
+                $elapsed_time->format('%s')
+            );
+        } else {
+            // Process complete time can not calculated
+            $elapsed_time_str = __( '(unable to calculate elapsed time)', 'fastcgi-cache-purge-and-preload-nginx' );
+        }
 
         // Send Mail
-        $mail_message = "The Nginx FastCGI Cache Preload operation has been completed";
+        $mail_message = __('The Nginx cache preload operation has been completed', 'fastcgi-cache-purge-and-preload-nginx');
         nppp_send_mail_now($mail_message, $elapsed_time_str);
 
-        // Display admin notice for completed preload
+        // Log the preload process status
         if ($mobile_enabled) {
-            nppp_display_admin_notice('success', "SUCCESS: Nginx FastCGI cache preload completed for both Mobile and Desktop in $elapsed_time_str.", true, false);
+            // Translators: %s is the elapsed time.
+            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed for both Mobile and Desktop in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
         } else {
-            nppp_display_admin_notice('success', "SUCCESS: Nginx FastCGI cache preload completed in $elapsed_time_str.", true, false);
+            // Translators: %s is the elapsed time.
+            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
         }
     }
+
+    // Gracefully exit from wp cron job
     exit(0);
 }
 

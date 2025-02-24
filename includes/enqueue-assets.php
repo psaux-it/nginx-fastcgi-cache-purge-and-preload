@@ -2,7 +2,7 @@
 /**
  * Enqueue custom CSS and JavaScript files for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains enqueue assets functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.1.0
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -21,16 +21,13 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_style('nppp_jquery-ui-tabs-theme', plugins_url('../admin/css/jquery-ui.theme.min.css', __FILE__), array(), '1.13.3');
 
     // Enqueue CSS files for dataTables
-    wp_enqueue_style('nppp_datatables-css', plugins_url('../admin/css/dataTables.min.css', __FILE__), array(), '2.1.8');
+    wp_enqueue_style('nppp_datatables-css', plugins_url('../admin/css/dataTables.min.css', __FILE__), array(), '2.2.2');
 
     // Enqueue CSS files for Tempus Dominus Date/Time Picker
     wp_enqueue_style('nppp_tempus-dominus-css', plugins_url('../admin/css/tempus-dominus.min.css', __FILE__), array(), '6.9.4');
 
     // Enqueue CSS files for Nginx FastCGI Cache Purge and Preload Plugin
-    wp_enqueue_style('nppp_admin-css', plugins_url('../admin/css/fastcgi-cache-purge-and-preload-nginx.min.css', __FILE__), array(), '2.0.9');
-
-    // Enqueue the default-passive-events polyfill
-    wp_enqueue_script('nppp_default-event-js', plugins_url('../admin/js/default-passive-events.min.js', __FILE__), array(), '2.0.0', false);
+    wp_enqueue_style('nppp_admin-css', plugins_url('../admin/css/fastcgi-cache-purge-and-preload-nginx.min.css', __FILE__), array(), '2.1.0');
 
     // Enqueue jQuery UI core, jQuery UI Tabs, jQuery UI Accordion
     wp_enqueue_script('jquery-ui-core');
@@ -38,13 +35,13 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_script('jquery-ui-accordion');
 
     /*!
-    * DataTables v2.1.3
+    * DataTables v2.2.2
     * https://datatables.net/
     * Copyright 2008-2024, SpryMedia Ltd.
     * License: MIT (https://datatables.net/license/mit)
     */
     // Enqueue JavaScript files for dataTables
-    wp_enqueue_script('nppp_datatables-js', plugins_url('../admin/js/dataTables.min.js', __FILE__), array('jquery'), '2.1.8', true);
+    wp_enqueue_script('nppp_datatables-js', plugins_url('../admin/js/dataTables.min.js', __FILE__), array('jquery'), '2.2.2', true);
 
     /*!
     * Tempus Dominus Date Time Picker v6.9.4
@@ -57,7 +54,10 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_script('nppp_tempus-dominus-js', plugins_url('../admin/js/tempus-dominus.min.js', __FILE__), array('nppp_popper-js'), '6.9.4', true);
 
     // Enqueue JavaScript files for Nginx FastCGI Cache Purge and Preload Plugin
-    wp_enqueue_script('nppp_admin-js', plugins_url('../admin/js/fastcgi-cache-purge-and-preload-nginx.min.js', __FILE__), array('jquery'), '2.0.9', true);
+    wp_enqueue_script('nppp_admin-js', plugins_url('../admin/js/fastcgi-cache-purge-and-preload-nginx.min.js', __FILE__), array('jquery', 'jquery-ui-core', 'jquery-ui-tabs', 'jquery-ui-accordion', 'nppp_datatables-js', 'nppp_tempus-dominus-js', 'wp-i18n'), '2.1.0', true);
+
+    // Set script i18n translations
+    wp_set_script_translations('nppp_admin-js', 'fastcgi-cache-purge-and-preload-nginx');
 
     // Retrieve plugin options.
     $options = get_option('nginx_cache_settings');
@@ -100,7 +100,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Create a nonce for preload mobile option
     $update_auto_preload_mobile_option_nonce = wp_create_nonce('nppp-update-auto-preload-mobile-option');
 
-    // Localize nonce values for nppp_admin-js
+    // Localize nonce values for plugin main js
     wp_localize_script('nppp_admin-js', 'nppp_admin_data', array(
         'ajaxurl' => admin_url('admin-ajax.php'),
         'clear_logs_nonce' => $clear_nginx_cache_logs_nonce,
@@ -150,8 +150,117 @@ function nppp_is_linux() {
     return false;
 }
 
+// Checks if the specified shell commands are available in the environment, indicating
+// specially whether the system is likely Dockerized
+function nppp_is_dockerized() {
+    // Static key base for transient
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_missing_commands_' . md5($static_key_base);
+
+    // Check if transient exists and is valid
+    $missing_commands = get_transient($transient_key);
+
+    if (false === $missing_commands) {
+        // List of commands to check
+        $commands_to_check = ['ps', 'grep', 'awk', 'sort', 'uniq', 'sed', 'nohup', 'wget'];
+
+        // Initialize the missing commands array
+        $missing_commands = [];
+
+        // Loop through each command and check if it exists
+        foreach ($commands_to_check as $command) {
+            // Execute 'command -v' to check if the command exists in the shell
+            $result = shell_exec("command -v {$command}");
+
+            // If the result is empty, the command doesn't exist
+            if (empty($result)) {
+                $missing_commands[] = $command;
+            }
+        }
+
+        // Save missing commands in a transient for 10 seconds
+        set_transient($transient_key, $missing_commands, 10);
+    }
+
+    // Return the list of missing commands (or an empty array if none are missing)
+    return $missing_commands;
+}
+
+// Conditionally disable Nginx Cache features
+function nppp_disable_features($unsupported, $preload) {
+    $unsupported = (bool) $unsupported;
+    $preload     = (bool) $preload;
+
+    // Retrieve the current settings
+    $options = get_option( 'nginx_cache_settings', array() );
+
+    // Determine which features to disable
+    if ( $unsupported === true ) {
+        // If unsupported is true
+        $features = array(
+            'nginx_cache_purge_on_update',
+            'nginx_cache_auto_preload',
+            'nginx_cache_auto_preload_mobile',
+            'nginx_cache_schedule',
+            'nginx_cache_send_mail',
+            'nginx_cache_api'
+        );
+    } elseif ( $preload === true ) {
+        // If preload is true
+        $features = array(
+            'nginx_cache_api',
+            'nginx_cache_auto_preload',
+            'nginx_cache_auto_preload_mobile',
+            'nginx_cache_schedule'
+        );
+    } else {
+        return;
+    }
+
+    // Set the selected features to 'no'.
+    foreach ( $features as $feature ) {
+        $options[ $feature ] = 'no';
+    }
+
+    // Update the option in the database.
+    update_option( 'nginx_cache_settings', $options );
+}
+
+// Check NPP required shell toolset for plugin and preload action
+function nppp_shell_toolset_check($global_, $preload) {
+    // Define the toolsets based on the arguments
+    if ($global_) {
+        $commands = ['ps', 'grep', 'awk', 'sort', 'uniq', 'sed'];
+    } elseif ($preload) {
+        $commands = ['wget', 'nohup'];
+    }
+
+    // Get the missing commands from the existing transient
+    $missing_commands = nppp_is_dockerized();
+
+    // Find the commands from the selected toolset that are missing
+    $missing_toolset_commands = array_intersect($missing_commands, $commands);
+
+    // If no commands from the selected toolset are missing
+    if (empty($missing_toolset_commands)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 // Check plugin requirements
 function nppp_plugin_requirements_met() {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
     $nppp_met = false;
 
     // Check if the operating system is Linux
@@ -159,45 +268,47 @@ function nppp_plugin_requirements_met() {
         // Initialize $server_software variable
         $server_software = '';
 
-        // Check if $_SERVER['SERVER_SOFTWARE'] is set
+        // Check SERVER_SOFTWARE
         if (isset($_SERVER['SERVER_SOFTWARE'])) {
-            // Unslash and sanitize $_SERVER['SERVER_SOFTWARE']
             $server_software = sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']));
         }
 
-        // Check for Nginx-specific environment variables
-        if (empty($server_software) && isset($_SERVER['NGINX_VERSION'])) {
-            $server_software = 'nginx';
-        } elseif (empty($server_software) && isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            // Nginx acting as a reverse proxy
-            $server_software = 'nginx';
-        }
-
-        // Check for the SAPI name to detect if Nginx is using PHP-FPM
+        // If no SERVER_SOFTWARE detected, check response headers
         if (empty($server_software)) {
-            $sapi_name = php_sapi_name();
-            if (strpos($sapi_name, 'fpm-fcgi') !== false) {
-                // Nginx with PHP-FPM
-                $server_software = 'nginx';
-            }
-        }
+            // Perform the request
+            $response = wp_remote_get(get_site_url());
 
-        // If still no server software detected, check outgoing headers
-        if (empty($server_software)) {
-            $headers = headers_list();
-            foreach ($headers as $header) {
-                if (stripos($header, 'server: nginx') !== false) {
+            // Check if the request was successful
+            if (is_array($response) && !is_wp_error($response)) {
+                // Get response headers
+                $headers = wp_remote_retrieve_headers($response);
+
+                // Check cache headers
+                if (isset($headers['x-fastcgi-cache'])) {
                     $server_software = 'nginx';
-                    break;
-                } elseif (stripos($header, 'server: apache') !== false) {
-                    $server_software = 'apache';
-                    break;
+                } elseif (isset($headers['server'])) {
+                    $server_software = $headers['server'];
                 }
             }
         }
 
+        // Check for the SAPI name, not reliable
+        if (empty($server_software)) {
+            $sapi_name = php_sapi_name();
+            if (strpos($sapi_name, 'fpm-fcgi') !== false) {
+                $server_software = 'nginx';
+            }
+        }
+
+        // Lastly fallback the traditional check for edge cases
+        if (empty($server_software)) {
+            if ($wp_filesystem->exists('/etc/nginx/nginx.conf')) {
+                $server_software = 'nginx';
+            }
+        }
+
         // Check if the web server is Nginx
-        if (strpos($server_software, 'nginx') !== false) {
+        if (stripos($server_software, 'nginx') !== false) {
             // Initialize a flag to track the success functions
             $shell_functions_enabled = true;
 
@@ -229,7 +340,10 @@ function nppp_plugin_requirements_met() {
 
             // NPP ready to go
             if ($shell_functions_enabled && function_exists('posix_kill')) {
-                $nppp_met = true;
+                // Lastly we check shell command required by NPP
+                if (nppp_shell_toolset_check(true, false)) {
+                    $nppp_met = true;
+                }
             }
         }
     }
@@ -241,35 +355,56 @@ function nppp_plugin_requirements_met() {
 // Check plugin requirements and limit the functionality accordingly on admin side
 function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
     $nppp_met = nppp_plugin_requirements_met();
+    $current_screen = get_current_screen();
 
-    // Check if wget command exists
+    // Handle assets while switching wp admin area and NPP plugin settings page to prevent conflicts.
+    if ($current_screen->base === 'dashboard') {
+        // Enqueue the NPP WP admin dashboard JS
+        if (!wp_script_is('nppp-dashboard-widget-js', 'enqueued')) {
+            wp_enqueue_script('nppp-dashboard-widget-js', plugins_url('../admin/js/nppp-dashboard-widget.js', __FILE__), array('jquery'), '2.1.0', true);
+        }
+
+        // Enqueue the NPP WP admin dashboard CSS
+        if (!wp_style_is('nppp-dashboard-widget-css', 'enqueued')) {
+            wp_enqueue_style('nppp-dashboard-widget-css', plugins_url('../admin/css/nppp-dashboard-widget.css', __FILE__), array(), '2.1.0');
+        }
+    } elseif ($current_screen->id === 'settings_page_nginx_cache_settings') {
+        // Dequeue the NPP WP admin dashboard JS
+        if (wp_script_is('nppp-dashboard-widget-js', 'enqueued')) {
+            wp_dequeue_script('nppp-dashboard-widget-js');
+        }
+
+        // Dequeue the NPP WP admin dashboard CSS
+        if (wp_style_is('nppp-dashboard-widget-css', 'enqueued')) {
+            wp_dequeue_style('nppp-dashboard-widget-css');
+        }
+    }
+
+    // Disable/limit plugin functionality to prevent unexpected behaviors
     if ($nppp_met) {
-        $output = shell_exec('command -v wget');
-        if (empty($output)) {
-            // Wget is not available
-            wp_enqueue_script('preload-button-disable', plugins_url('../admin/js/preload-button-disable.js', __FILE__), array('jquery'), '2.0.9', true);
+        if (!nppp_shell_toolset_check(false, true)) {
+            wp_enqueue_script('nppp-disable-preload', plugins_url('../admin/js/nppp-disable-preload.js', __FILE__), array('jquery'), '2.1.0', true);
+            nppp_disable_features(false, true);
         } else {
-            // Wget is available, dequeue the preload-button-disable.js if it's already enqueued
-            wp_dequeue_script('preload-button-disable');
+            wp_dequeue_script('nppp-disable-preload');
         }
         wp_dequeue_script('nppp-disable-functionality');
     } else {
-        // This plugin only works on Linux with nginx
-        // Disable plugin functionality to prevent unexpected behaviors.
-        wp_enqueue_script('nppp-disable-functionality', plugins_url('../admin/js/nppp-disable-functionality.js', __FILE__), array('jquery'), '2.0.9', true);
+        wp_enqueue_script('nppp-disable-functionality', plugins_url('../admin/js/nppp-disable-functionality.js', __FILE__), array('jquery'), '2.1.0', true);
+        nppp_disable_features(true, false);
     }
 }
 
-// Enqueue CSS and JavaScript files for admin logged-in front-end
+// Enqueue CSS and JavaScript files for admin, logged-in, front-end
 function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
     if (is_user_logged_in() && current_user_can('administrator') && isset($_GET['nppp_front'])) {
         $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
         if (wp_verify_nonce($nonce, 'nppp_redirect_nonce')) {
             if (!is_admin()) {
                 // Enqueue CSS files for Nginx FastCGI Cache Purge and Preload Plugin
-                wp_enqueue_style('nppp_admin-front-css', plugins_url('../frontend/css/fastcgi-cache-purge-and-preload-nginx-front.css', __FILE__), array(), '2.0.9');
+                wp_enqueue_style('nppp_admin-front-css', plugins_url('../frontend/css/fastcgi-cache-purge-and-preload-nginx-front.css', __FILE__), array(), '2.1.0');
                 // Enqueue JavaScript files for Nginx FastCGI Cache Purge and Preload Plugin frontend
-                wp_enqueue_script('nppp_admin-front-js', plugins_url('../frontend/js/fastcgi-cache-purge-and-preload-nginx-front.js', __FILE__), array('jquery'), '2.0.9', true);
+                wp_enqueue_script('nppp_admin-front-js', plugins_url('../frontend/js/fastcgi-cache-purge-and-preload-nginx-front.js', __FILE__), array('jquery'), '2.1.0', true);
             }
         }
     }
@@ -277,7 +412,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
     // Check plugin requirements and limit the functionality accordingly on front-end
     $nppp_met = nppp_plugin_requirements_met();
     if (!$nppp_met) {
-        wp_enqueue_script('nppp-disable-functionality-front', plugins_url('../frontend/js/nppp-disable-functionality-front.js', __FILE__), array('jquery'), '2.0.9', true);
+        wp_enqueue_script('nppp-disable-functionality-front', plugins_url('../frontend/js/nppp-disable-functionality-front.js', __FILE__), array('jquery'), '2.1.0', true);
     } else {
         wp_dequeue_script('nppp-disable-functionality-front');
     }
@@ -288,7 +423,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
 // are visible while on the plugin settings page.
 function nppp_manage_admin_notices() {
     // Register a dummy stylesheet
-    wp_register_style('nppp-manage-notices', false, array(), '2.0.9');
+    wp_register_style('nppp-manage-notices', false, array(), '2.1.0');
 
     // Enqueue the dummy stylesheet
     wp_enqueue_style('nppp-manage-notices');

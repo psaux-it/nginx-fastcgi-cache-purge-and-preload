@@ -2,7 +2,7 @@
 /**
  * WP_Filesytem functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains WP_Filesytem functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.1.0
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -44,7 +44,7 @@ function nppp_initialize_wp_filesystem() {
 
     // Handle credential request failure
     if (!$credentials || is_wp_error($credentials)) {
-        nppp_custom_error_log('nppp_initialize_wp_filesystem: Unable to obtain filesystem credentials.');
+        nppp_custom_error_log(__('Unable to obtain filesystem credentials.', 'fastcgi-cache-purge-and-preload-nginx'));
         return false;
     }
 
@@ -54,12 +54,12 @@ function nppp_initialize_wp_filesystem() {
         if (!empty($wp_filesystem)) {
             return $wp_filesystem;
         } else {
-            nppp_custom_error_log('nppp_initialize_wp_filesystem: WP_Filesystem object is not set.');
+            nppp_custom_error_log(__('Filesystem object is not set.', 'fastcgi-cache-purge-and-preload-nginx'));
             return false;
         }
     }
 
-    nppp_custom_error_log('nppp_initialize_wp_filesystem: Could not initialize the WP Filesystem.');
+    nppp_custom_error_log(__('Could not initialize the filesystem.', 'fastcgi-cache-purge-and-preload-nginx'));
     return false;
 }
 
@@ -70,7 +70,7 @@ function nppp_perform_file_operation($file_path, $operation, $data = null) {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
@@ -105,47 +105,118 @@ function nppp_wp_purge($directory_path) {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
 
-    // Check for read and write permissions early,
-    // --if ($contents === false)-- not handle correctly
-    if (!$wp_filesystem->is_readable($directory_path) || !$wp_filesystem->is_writable($directory_path)) {
-        return new WP_Error('permission_error', 'Permission denied while accessing or writing to directory: ' . $directory_path);
+    // Resolve the absolute path
+    $real_path = realpath($directory_path);
+
+    // Check if the realpath is valid
+    if ($real_path === false) {
+        return new WP_Error('directory_traversal', __('Directory traversal detected or invalid path.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
-    // Check if the directory exists before attempting to remove its contents
+    // Ensure the resolved path doesn't traverse outside the intended directory structure
+    if (strpos(rtrim($real_path, DIRECTORY_SEPARATOR), rtrim($directory_path, DIRECTORY_SEPARATOR)) !== 0) {
+        return new WP_Error('directory_traversal', __('Directory traversal detected or invalid path.', 'fastcgi-cache-purge-and-preload-nginx'));
+    }
+
+    // Check for read and write permissions softly and recursive
+    if (!$wp_filesystem->is_readable($directory_path) || !$wp_filesystem->is_writable($directory_path)) {
+        // Translators: %s is the Nginx cache path
+        return new WP_Error('permission_error', sprintf(__('Permission denied while reading or writing to the cache directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path));
+    } elseif (!nppp_check_permissions_recursive($directory_path)) {
+        // Translators: %s is the Nginx cache path
+        return new WP_Error('permission_error', sprintf(__('Permission denied during recursive check of the cache directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path));
+    }
+
+    // Protected folders to be excluded, recursively
+    $protected_folders = ['client_temp', 'scgi_temp', 'uwsgi_temp', 'fastcgi_temp', 'proxy_temp'];
+    $protected_paths = array_map(function ($folder) use ($real_path) {
+        return trailingslashit($real_path) . $folder;
+    }, $protected_folders);
+
+    // Recursive function to check if a path is protected
+    $is_protected = function ($path) use ($protected_paths) {
+        foreach ($protected_paths as $protected_path) {
+            if (strpos(rtrim($path, DIRECTORY_SEPARATOR), rtrim($protected_path, DIRECTORY_SEPARATOR)) === 0) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Check if the cache directory exist before trying to purge cache
     if ($wp_filesystem->is_dir($directory_path)) {
-        // Get directory contents
+        // Get cache directory contents
         $contents = $wp_filesystem->dirlist($directory_path);
 
-        // Check permission errors first
+        // Check permission errors
         if ($contents === false) {
-            return new WP_Error('permission_error', 'Permission denied while deleting file or directory: ' . $directory_path);
-        // If we have permisson to list directory and it is not empty
-        // try to delete files and directories in the directory.
+            // Translators: %s is the Nginx cache path
+            return new WP_Error('permission_error', sprintf(__('Permission denied while deleting file or directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path));
+        // Ok, try to purge cache
         } elseif (!empty($contents)) {
+            // First check purge needed
+            try {
+                $cache_iterator = new RecursiveIteratorIterator(
+                    new RecursiveDirectoryIterator($directory_path, RecursiveDirectoryIterator::SKIP_DOTS),
+                    RecursiveIteratorIterator::SELF_FIRST
+                );
+
+                $has_files = '';
+                foreach ($cache_iterator as $file) {
+                    if ($wp_filesystem->is_file($file->getPathname())) {
+                        // Read cache content
+                        $file_content = $wp_filesystem->get_contents($file->getPathname());
+
+                        // Validate cache exists
+                        if (preg_match('/^KEY:/m', $file_content)) {
+                            $has_files = 'found';
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                $has_files = 'error';
+            }
+
+            // No cache found, no need to purge
+            if ($has_files !== 'found' && $has_files !== 'error') {
+                return new WP_Error('empty_directory', __('Directory is empty', 'fastcgi-cache-purge-and-preload-nginx'));
+            }
+
+            // Cache found, purge now
             foreach ($contents as $file) {
                 $file_path = trailingslashit($directory_path) . $file['name'];
+
+                // Skip protected paths (recursively)
+                if ($is_protected($file_path)) {
+                    continue;
+                }
+
                 if ($wp_filesystem->is_file($file_path) || $wp_filesystem->is_dir($file_path)) {
-                    // Attempt to delete file or directory
+                    // Attempt to purge cache
                     $deleted = $wp_filesystem->delete($file_path, true);
                     // Check we throw in permisson errors
                     if (!$deleted) {
-                        return new WP_Error('permission_error', 'Permission denied while deleting file or directory: ' . $file_path);
+                        // Translators: %s is the Nginx cache path
+                        return new WP_Error('permission_error', sprintf(__('Permission denied while deleting file or directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $file_path));
                     }
                 }
             }
         } else {
-            return new WP_Error('empty_directory', 'Directory is empty');
+            // No cache found, no need to purge
+            return new WP_Error('empty_directory', __('Directory is empty', 'fastcgi-cache-purge-and-preload-nginx'));
         }
 
-        // Contents removed successfully
+        // Cache purged
         return true;
     } else {
-        return new WP_Error('directory_not_found', 'Directory not found');
+        // No cache directory found
+        return new WP_Error('directory_not_found', __('Directory not found', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 }
 
@@ -156,7 +227,7 @@ function nppp_wp_remove_directory($directory_path, $recursive = true) {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
@@ -168,13 +239,14 @@ function nppp_wp_remove_directory($directory_path, $recursive = true) {
 
         if ($result === false) {
             // Error occurred while removing directory
-            return new WP_Error('remove_directory_error', 'Error removing directory.');
+            return new WP_Error('remove_directory_error', __('Error removing directory.', 'fastcgi-cache-purge-and-preload-nginx'));
         }
 
-        return true; // Directory removed successfully
+        // Directory removed successfully
+        return true;
     } else {
         // Directory does not exist
-        return new WP_Error('directory_not_found', 'Directory not found.');
+        return new WP_Error('directory_not_found', __('Directory not found.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 }
 
@@ -186,7 +258,7 @@ function nppp_is_directory_readable($directory_path) {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }
@@ -227,7 +299,7 @@ function nppp_check_permissions_recursive($path) {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
         return;
     }

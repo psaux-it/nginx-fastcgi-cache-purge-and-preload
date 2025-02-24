@@ -2,7 +2,7 @@
 /**
  * Status page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains functions which shows information about FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.1.0
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -27,7 +27,7 @@ function nppp_check_permissions_recursive_with_cache() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
         );
         return;
     }
@@ -100,12 +100,12 @@ function nppp_clear_plugin_cache() {
 
         // Check if the transient still exists
         if (get_transient($transient) !== false) {
-            return 'An error occurred while clearing the plugin cache.';
+            return __('An error occurred while clearing the plugin cache.', 'fastcgi-cache-purge-and-preload-nginx');
         }
     }
 
     // Notify the user if all transients were cleared successfully
-    return 'Plugin cache cleared successfully. Refreshing the Status..';
+    return __('Plugin cache cleared successfully. Refreshing the Status..', 'fastcgi-cache-purge-and-preload-nginx');
 }
 
 // Check server side action need for cache path permissions.
@@ -158,7 +158,7 @@ function nppp_check_preload_status() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
         );
         return;
     }
@@ -193,7 +193,7 @@ function nppp_check_path() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
         );
         return;
     }
@@ -293,7 +293,7 @@ function nppp_get_webserver_user() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
         );
         return;
     }
@@ -310,8 +310,14 @@ function nppp_get_webserver_user() {
 
     // Check the running processes for Nginx
     $nginx_user_process = shell_exec("ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v 'root' | awk '{print $1}' | sort | uniq");
+
     // Convert the process output to an array and filter out empty values
-    $process_users = array_filter(array_unique(array_map('trim', explode("\n", $nginx_user_process))));
+    if ($nginx_user_process !== null && $nginx_user_process !== '') {
+        $process_users = array_filter(array_unique(array_map('trim', explode("\n", $nginx_user_process))));
+    } else {
+        $process_users = [];
+    }
+
     // Try to get the user from the Nginx configuration file
     $nginx_user_conf = shell_exec("grep -i '^\s*user\s\+' $config_file | grep -v '^\s*#' | awk '{print $2}' | sed 's/;.*//;s/\s*$//'");
 
@@ -361,7 +367,7 @@ function nppp_get_in_cache_page_count() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
         );
         return;
     }
@@ -450,6 +456,48 @@ function nppp_get_in_cache_page_count() {
     return $urls_count > 0 ? $urls_count : 0;
 }
 
+// Function to check for same Nginx cache path for multiple instance
+function nppp_check_duplicate_nginx_cache_paths($file, $wp_filesystem) {
+    // Retrieve the cached result from the transient
+    $transient_key = 'nppp_cache_paths_' . md5('nppp');
+    $cached_result = get_transient($transient_key);
+
+    // Check if cached result exists else parse config
+    if ($cached_result === false || empty($cached_result['cache_paths'])) {
+        nppp_parse_nginx_config($file, $wp_filesystem);
+
+        // Retrieve again the cached result
+        $cached_result = get_transient($transient_key);
+    }
+
+    // Extract cache paths from the cached result
+    $cache_paths = $cached_result['cache_paths'];
+
+    // Find duplicates
+    $unique_paths = [];
+    $duplicates = [];
+
+    foreach ($cache_paths as $directive => $paths) {
+        foreach ($paths as $path) {
+            // Normalize the path
+            $normalized_path = rtrim(strtolower($path), '/');
+
+            if (in_array($path, $unique_paths)) {
+                $duplicates[] = $path;
+            } else {
+                $unique_paths[] = $path;
+            }
+        }
+    }
+
+    // Return duplicates
+    if (!empty($duplicates)) {
+        return $duplicates;
+    }
+
+    return false;
+}
+
 // Generate HTML for status tab
 function nppp_my_status_html() {
     // Initialize wp_filesystem
@@ -457,7 +505,7 @@ function nppp_my_status_html() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
+            __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
         );
         return;
     }
@@ -469,12 +517,11 @@ function nppp_my_status_html() {
     // Exit early if unable to find or read the nginx.conf file
     if (empty($conf_paths)) {
         return '<div class="nppp-status-wrap">
-                    <p class="nppp-advanced-error-message">ERROR CONF: Unable to read or locate the <span style="color: #f0c36d;">nginx.conf</span> configuration file!</p>
+                    <p class="nppp-advanced-error-message">' . wp_kses(__('ERROR CONF: Unable to read or locate the <span style="color: #f0c36d;">nginx.conf</span> configuration file!', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => []]]) . '</p>
                 </div>
                 <div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                     <p style="margin: 0; align-items: center;">
-                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
-                        The <strong>nginx.conf</strong> file was not found in the <strong>default paths</strong>. This may indicate a <strong>custom Nginx setup</strong> with a non-standard configuration file location or permission issue. If you still encounter this error, please get help from plugin support forum!
+                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>' . wp_kses(__('The <strong>nginx.conf</strong> file was not found in the <strong>default paths</strong>. This may indicate a <strong>custom Nginx setup</strong> with a non-standard configuration file location or permission issue. If you still encounter this error, please get help from the plugin support forum!', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]) . '</p>
                     </p>
                 </div>';
     }
@@ -485,44 +532,85 @@ function nppp_my_status_html() {
     $php_process_owner = nppp_get_website_user();
     $web_server_user = nppp_get_webserver_user();
 
-    // Compare the two users and set the status
-    if ($php_process_owner === $web_server_user) {
-        $nppp_isolation_status = 'Not Isolated';
+    // Normalize values to handle potential inconsistencies
+    $php_process_owner = trim(strtolower($php_process_owner));
+    $web_server_user = trim(strtolower($web_server_user));
+
+    // Check if either user is "Not Determined"
+    if ($php_process_owner === 'not determined' || $web_server_user === 'not determined') {
+        $nppp_isolation_status = 'Not Determined';
     } else {
-        $nppp_isolation_status = 'Isolated';
+        // Compare the two users
+        $nppp_isolation_status = ($php_process_owner === $web_server_user)
+            ? 'Not Isolated'
+            : 'Isolated';
     }
 
     // Check NGINX FastCGI Cache Key
     $config_data = nppp_parse_nginx_cache_key();
 
-    // Warn about not found fastcgi cache keys
+    // Check same Nginx cache path for multiple instance
+    $config_file = $conf_paths[0];
+    $duplicates = nppp_check_duplicate_nginx_cache_paths($config_file, $wp_filesystem);
+
+    // Warn about not found cache key
     if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">WARNING SETUP: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found.</p>
-              </div>
-              <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                  <p style="margin: 0; align-items: center;">
-                      <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                      Please review your <strong>Nginx FastCGI cache setup</strong> to ensure that the <strong>fastcgi_cache_key</strong> is correctly defined. If you continue to encounter this error, this may indicate a <strong>parsing error</strong> and can be safely ignored.
-                  </p>
+                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: No <span style="color: #FFDEAD;">cache key</span> directive was found.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => []]]) . '</p>
               </div>';
-    // Warn about the unsupported fastcgi cache keys
+    // Warn about the unsupported cache key
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">INFO: <span style="color: #f0c36d;">Unsupported</span> FastCGI cache keys found!</p>
-              </div>
-              <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                  <p style="margin: 0; align-items: center;">
-                      <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                      If <strong>Pages In Cache Count</strong> indicates <strong>Regex Error</strong>, please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section and try again.
-                  </p>
+                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Unsupported</span> cache key found!', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => []]]) . '</p>
               </div>';
+    }
+
+    // Warn about same Nginx cache path for multiple instance
+    if ($duplicates !== false) {
+        echo '<div class="nppp-status-wrap">
+                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Same</span> Nginx cache path found!', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => []]]) . '</p>
+              </div>';
+    }
+
+    // Details about not found cache key
+    if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
+        echo '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                 <p style="margin: 0; align-items: center;">
+                     <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>' . wp_kses(__('Please check your <strong>Nginx cache setup</strong> to ensure that the <strong>cache key</strong> directive is defined. If you continue to encounter this error, this may indicate a <strong>parsing error</strong> and can be safely ignored.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]) . '
+                 </p>
+             </div>';
+    // Details about the unsupported cache key
+    } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
+        echo '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                 <p style="margin: 0; align-items: center;">
+                     <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>' . sprintf(
+                         /* Translators: %1$s, %2$s, %3$s, %4$s are dynamic strings */
+                         wp_kses(__('If <strong>%1$s</strong> indicates <strong>%2$s</strong>, please check the <strong>%3$s</strong> option in the plugin <strong>%4$s</strong> section and try again.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]),
+                         wp_kses(__('Pages In Cache Count', 'fastcgi-cache-purge-and-preload-nginx'), []),
+                         wp_kses(__('Regex Error', 'fastcgi-cache-purge-and-preload-nginx'), []),
+                         wp_kses(__('Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'), []),
+                         wp_kses(__('Advanced Options', 'fastcgi-cache-purge-and-preload-nginx'), [])
+                     ) . '
+                 </p>
+             </div>';
+    }
+
+    // Details about same Nginx cache path for multiple instance
+    if ($duplicates !== false) {
+        echo '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                 <p style="margin: 0; align-items: center;">
+                     <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                     ' . wp_kses(__('Same Nginx cache path may be used for multiple WP instances. Please ensure <strong>unique Nginx cache paths</strong> are configured for each WP instance to avoid conflicts.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]) . '
+                 </p>
+             </div>';
     }
 
     // Format the status string
     $perm_status_message = $perm_in_cache_status_perm === 'true'
-    ? 'Granted'
-    : ($perm_in_cache_status_perm === 'Not Found' ? 'Not Determined' : 'Need Action (Check Help)');
+        ? 'Granted'
+        : ($perm_in_cache_status_perm === 'Not Found'
+            ? 'Not Determined'
+            : 'Need Action (Check Help)');
     $perm_status_message .= ' (' . esc_html($php_process_owner) . ')';
 
     ob_start();
@@ -531,27 +619,34 @@ function nppp_my_status_html() {
         <div id="nppp-status-tab" class="container">
             <header></header>
             <main>
+                <!-- Clear Plugin Cache Section -->
                 <section class="clear-plugin-cache" style="background-color: mistyrose;">
-                    <h2>Clear Plugin Cache</h2>
-                    <p style="padding-left: 10px; font-weight: 500;">To ensure the accuracy of the displayed statuses, please clear the plugin cache. This plugin caches expensive status metrics to enhance performance. However, If you're in the testing stage and making frequent changes and re-checking Status tab, clearing the cache is necessary to view the most up-to-date and accurate status.</p>
-                    <button id="nppp-clear-plugin-cache-btn" class="button button-primary" style="margin-left: 10px; margin-bottom: 15px;">Clear Plugin Cache</button>
+                    <h2><?php esc_html_e('Clear Plugin Cache', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
+                    <p style="padding-left: 10px; font-weight: 500;">
+                        <?php esc_html_e(
+                            'To ensure the accuracy of the displayed statuses, please clear the plugin cache. This plugin caches expensive status metrics to enhance performance. However, if you\'re in the testing stage and making frequent changes and re-checking the Status tab, clearing the cache is necessary to view the most up-to-date and accurate status.',
+                            'fastcgi-cache-purge-and-preload-nginx'
+                        ); ?>
+                    </p>
+                    <button id="nppp-clear-plugin-cache-btn" class="button button-primary" style="margin-left: 10px; margin-bottom: 15px;">
+                        <?php esc_html_e('Clear Plugin Cache', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                    </button>
                 </section>
+
+                <!-- Status Summary Section -->
                 <section class="status-summary">
-                    <h2>Status Summary</h2>
+                    <h2><?php esc_html_e('Status Summary', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
                     <table>
                         <thead>
                             <tr>
-                                <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
-                                <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                                <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e('Check', 'fastcgi-cache-purge-and-preload-nginx'); ?></th>
+                                <th class="status-header"><span class="dashicons dashicons-info"></span> <?php esc_html_e('Status', 'fastcgi-cache-purge-and-preload-nginx'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td class="action">
-                                    <div class="action-wrapper">Server Side Action (Use One-liner)</div>
-                                    <div class="action-wrapper" style="font-size: 12px; color: white; background-color: #ff9900; width: max-content; margin-top: 5px; padding-right: 5px; padding-left: 5px;">
-                                        bash <(curl -Ss https://psaux-it.github.io/install.sh)
-                                    </div>
+                                    <div class="action-wrapper"><?php esc_html_e('Server Side Action', 'fastcgi-cache-purge-and-preload-nginx'); ?></div>
                                 </td>
                                 <td class="status" id="npppphpFpmStatus">
                                     <span class="dashicons"></span>
@@ -564,20 +659,20 @@ function nppp_my_status_html() {
                     <table>
                         <thead>
                             <tr>
-                                <th class="action-header"><span class="dashicons dashicons-admin-generic"></span> Action</th>
-                                <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                                <th class="action-header"><span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e('Action', 'fastcgi-cache-purge-and-preload-nginx'); ?></th>
+                                <th class="status-header"><span class="dashicons dashicons-info"></span> <?php esc_html_e('Status', 'fastcgi-cache-purge-and-preload-nginx'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
-                                <td class="action">Purge Action</td>
+                                <td class="action"><?php esc_html_e('Purge Action', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="nppppurgeStatus">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html($perm_in_cache_status_purge); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="action">Preload Action</td>
+                                <td class="action"><?php esc_html_e('Preload Action', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="nppppreloadStatus">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_check_preload_status()); ?></span>
@@ -586,67 +681,69 @@ function nppp_my_status_html() {
                         </tbody>
                     </table>
                 </section>
+
+                <!-- System Checks Section -->
                 <section id="nppp-system-checks" class="system-checks">
-                    <h2>System Checks</h2>
+                    <h2><?php esc_html_e('System Checks', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
                     <table>
                         <thead>
                             <tr>
-                                <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
-                                <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                                <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e('Check', 'fastcgi-cache-purge-and-preload-nginx'); ?></th>
+                                <th class="status-header"><span class="dashicons dashicons-info"></span> <?php esc_html_e('Status', 'fastcgi-cache-purge-and-preload-nginx'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
-                                <td class="check">PHP Process Owner (Website User)</td>
+                                <td class="check"><?php esc_html_e('PHP Process Owner (Website User)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppphpProcessOwner">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html($php_process_owner); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">Web Server User (nginx | www-data)</td>
+                                <td class="check"><?php esc_html_e('Web Server User (nginx | www-data)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppphpWebServer">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html($web_server_user); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">Shell Execution (Required)</td>
+                                <td class="check"><?php esc_html_e('Shell Execution (Required)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppshellExec">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_shell_exec()); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">Nginx Cache Path (Required)</td>
+                                <td class="check"><?php esc_html_e('Nginx Cache Path (Required)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppcachePath">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_check_path()); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">Cache Path Permission (Required)</td>
+                                <td class="check"><?php esc_html_e('Cache Path Permission (Required)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppaclStatus">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html($perm_status_message); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">Permission Isolation (Optional)</td>
+                                <td class="check"><?php esc_html_e('Permission Isolation (Optional)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="nppppermIsolation">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html($nppp_isolation_status); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">wget (Required command)</td>
+                                <td class="check"><?php esc_html_e('wget (Required command)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppwgetStatus">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_check_command_status('wget')); ?></span>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check">cpulimit (Optional command)</td>
+                                <td class="check"><?php esc_html_e('cpulimit (Optional command)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppcpulimitStatus">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_check_command_status('cpulimit')); ?></span>
@@ -655,18 +752,20 @@ function nppp_my_status_html() {
                         </tbody>
                     </table>
                 </section>
+
+                <!-- Cache Status Section -->
                 <section class="cache-status">
-                    <h2>Cache Status</h2>
+                    <h2><?php esc_html_e('Cache Status', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
                     <table>
                         <thead>
                             <tr>
-                                <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> Check</th>
-                                <th class="status-header"><span class="dashicons dashicons-info"></span> Status</th>
+                                <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e('Check', 'fastcgi-cache-purge-and-preload-nginx'); ?></th>
+                                <th class="status-header"><span class="dashicons dashicons-info"></span> <?php esc_html_e('Status', 'fastcgi-cache-purge-and-preload-nginx'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
-                                <td class="check">Pages In Cache Count</td>
+                                <td class="check"><?php esc_html_e('Pages In Cache Count', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppphpPagesInCache">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_get_in_cache_page_count()); ?></span>
@@ -691,15 +790,15 @@ function nppp_clear_plugin_cache_callback() {
     if (isset($_POST['_wpnonce'])) {
         $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
         if (!wp_verify_nonce($nonce, 'nppp-clear-plugin-cache-action')) {
-            wp_die('Nonce verification failed.');
+            wp_die(esc_html__('Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx'));
         }
     } else {
-        wp_die('Nonce is missing.');
+        wp_die(esc_html__('Nonce is missing.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
     // Check user capability
     if (!current_user_can('manage_options')) {
-        wp_die('You do not have permission to access this page.');
+        wp_die(esc_html__('You do not have permission to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
      // Clear the plugin cache
@@ -715,15 +814,15 @@ function nppp_cache_status_callback() {
     if (isset($_POST['_wpnonce'])) {
         $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
         if (!wp_verify_nonce($nonce, 'cache-status')) {
-            wp_die('Nonce verification failed.');
+            wp_die(esc_html__('Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx'));
         }
     } else {
-        wp_die('Nonce is missing.');
+        wp_die(esc_html__('Nonce is missing.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
     // Check user capability
     if (!current_user_can('manage_options')) {
-        wp_die('You do not have permission to access this page.');
+        wp_die(esc_html__('You do not have permission to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
     // Call the shortcode function to get HTML content

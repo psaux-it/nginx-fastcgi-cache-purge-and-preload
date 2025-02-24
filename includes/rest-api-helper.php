@@ -2,7 +2,7 @@
 /**
  * REST API Helper for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains REST API related code for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.1.0
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -25,7 +25,7 @@ function nppp_handle_dummy_endpoints($result, $server, $request) {
     // Check if the request is for the NPP plugin's endpoints
     if (strpos($route, '/nppp_nginx_cache/v2/purge') !== false || strpos($route, '/nppp_nginx_cache/v2/preload') !== false) {
         // Return a custom response when the API feature is disabled
-        $status_message = 'The NPP REST API feature is disabled.';
+        $status_message = __('The NPP REST API feature is disabled.', 'fastcgi-cache-purge-and-preload-nginx');
         return new WP_REST_Response(array(
             'success' => true,
             'message' => $status_message
