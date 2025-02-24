@@ -222,7 +222,6 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = t
     }
 
     // Track already parsed files to avoid re-processing duplicates
-    // (skip symlinked duplicates)
     static $parsed_files = [];
     $canonical = realpath($file) ?: $file;
     if (in_array($canonical, $parsed_files)) {
@@ -241,29 +240,41 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = t
         if (isset($cache_directive[1]) && isset($cache_directive[2])) {
             $directive = $cache_directive[1];
             $value = trim(preg_replace('/\s.*$/', '', $cache_directive[2]));
+
+            // Initialize an array for this directive if not already present
             if (!isset($cache_paths[$directive])) {
                 $cache_paths[$directive] = [];
             }
 
-            // Add only if not already present to avoid duplicates
-            if (!in_array($value, $cache_paths[$directive])) {
-                $cache_paths[$directive][] = $value;
-            }
+            // Add path to array
+            $cache_paths[$directive][] = $value;
         }
     }
 
-    // Regex to match include directives
-    preg_match_all('/^\s*(?!#\s*)include\s+([^;]+);/m', $config, $include_directives, PREG_SET_ORDER);
+    // Regex to match include directives (supports single/multiple files)
+    preg_match_all('/^\s*(?!#\s*)include\s+(.+?);/m', $config, $include_directives, PREG_SET_ORDER);
 
     foreach ($include_directives as $include_directive) {
-        $include_path = trim($include_directive[1]);
-        if (strpos($include_path, '*') !== false) {
-            $files = glob($include_path);
-            if ($files !== false) {
-                $included_files = array_merge($included_files, $files);
+        // Split the included paths properly
+        $include_paths = preg_split('/\s+/', trim($include_directive[1]));
+
+        foreach ($include_paths as $include_path) {
+            if ($include_path === '' || !isset($include_path[0])) {
+                continue;
             }
-        } else {
-            $included_files[] = $include_path;
+
+            if (strpos($include_path, '*') !== false) {
+                // Expand wildcards safely
+                $files = glob($include_path, GLOB_BRACE) ?: [];
+                $included_files = array_merge($included_files, $files);
+            } else {
+                // Handle single file includes
+                $base_dir = dirname($file);
+                $resolved_path = ($include_path[0] === '/') ? $include_path : $base_dir . '/' . $include_path;
+                if (file_exists($resolved_path)) {
+                    $included_files[] = $resolved_path;
+                }
+            }
         }
     }
 
@@ -272,14 +283,13 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = t
         $result = nppp_parse_nginx_config($included_file, $wp_filesystem, false);
         if ($result !== false && isset($result['cache_paths'])) {
             foreach ($result['cache_paths'] as $directive => $paths) {
+                // Merge new paths into the existing array
                 if (!isset($cache_paths[$directive])) {
                     $cache_paths[$directive] = [];
                 }
+
                 foreach ($paths as $path) {
-                    // Only merge unique paths
-                    if (!in_array($path, $cache_paths[$directive])) {
-                        $cache_paths[$directive][] = $path;
-                    }
+                    $cache_paths[$directive][] = $path;
                 }
             }
         }
