@@ -3,7 +3,6 @@
 🚀 **Support this project!** If NPP has improved your workflow, consider giving it a ⭐ to help us grow:  
 🚀 **Need help with server-side integration?** Check out our tailored services:
 
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/9a44f213f50e4b169473c9066672da86)](https://app.codacy.com/gh/psaux-it/nginx-fastcgi-cache-purge-and-preload/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 [![GitHub Release](https://img.shields.io/github/v/release/psaux-it/nginx-fastcgi-cache-purge-and-preload?logo=github)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases) [![Donate](https://img.shields.io/badge/Wordpress_SVN-v2.1.0-blue?style=flat&logo=wordpress)](https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/) [![Donate](https://img.shields.io/badge/Donate-PayTR-blue?style=flat&logo=visa)](https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/) [![Donate](https://img.shields.io/badge/Check-Services-blue?style=flat&logo=Linux)](https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/)
 
 > [!NOTE]
