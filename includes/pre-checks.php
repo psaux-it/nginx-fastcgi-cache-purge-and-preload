@@ -167,10 +167,13 @@ function nppp_parse_nginx_cache_key() {
 
 // Helper function to parse individual Nginx configuration files.
 function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) {
-    if (in_array($file, $parsed_files)) {
+    // Skip symbolic links
+    if (in_array(realpath($file), $parsed_files) || is_link($file)) {
         return false;
     }
-    $parsed_files[] = $file;
+
+    // Add the real path of the file to track it
+    $parsed_files[] = realpath($file);
 
     if (!$wp_filesystem->exists($file)) {
         return false;
@@ -188,7 +191,6 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
 
     // Regex to match (proxy,scgi,uwsgi,fastcgi)_cache_key directives
     preg_match_all('/^\s*(?!#)\s*(?:proxy_cache_key|fastcgi_cache_key|scgi_cache_key|uwsgi_cache_key)\s+([\'"]?(?:\s*\$?[^\';"\s]+)+[\'"]?)\s*;/m', $config_content, $cache_key_directives, PREG_SET_ORDER);
-
     foreach ($cache_key_directives as $cache_key_directive) {
         $value = trim($cache_key_directive[1]);
 
@@ -198,29 +200,29 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
     }
 
     // Regex to match include directives
-    preg_match_all('/^\s*(?!#)\s*include\s+([^;]+);/m', $config_content, $include_directives, PREG_SET_ORDER);
-
+    preg_match_all('/^\s*(?!#\s*)include\s+(.+?);/m', $config_content, $include_directives, PREG_SET_ORDER);
     foreach ($include_directives as $include_directive) {
-        $include_path = trim($include_directive[1]);
+        $include_paths = preg_split('/\s+/', trim($include_directive[1]));
 
-        // Resolve variables like ${...}
-        $include_path = preg_replace_callback('/\$\{([^}]+)\}/', function($matches) {
-            return getenv($matches[1]) ?: $matches[0];
-        }, $include_path);
+        foreach ($include_paths as $include_path) {
+            $include_path = preg_replace_callback('/\$\{([^}]+)\}/', function($matches) {
+                return getenv($matches[1]) ?: $matches[0];
+            }, $include_path);
 
-        // Resolve relative paths based on the current directory
-        if (!preg_match('/^\//', $include_path)) {
-            $include_path = $current_dir . '/' . $include_path;
-        }
-
-        // Handle wildcards
-        if (strpos($include_path, '*') !== false) {
-            $files = glob($include_path);
-            if ($files !== false) {
-                $included_files = array_merge($included_files, $files);
+            // Resolve relative paths based on the current directory
+            if (!preg_match('/^\//', $include_path)) {
+                $include_path = $current_dir . '/' . $include_path;
             }
-        } else {
-            $included_files[] = $include_path;
+
+            // Handle wildcards
+            if (strpos($include_path, '*') !== false) {
+                $files = glob($include_path);
+                if ($files !== false) {
+                    $included_files = array_merge($included_files, $files);
+                }
+            } else {
+                $included_files[] = $include_path;
+            }
         }
     }
 
@@ -232,7 +234,7 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
         }
     }
 
-    // Return only found fastcgi_cache_key values
+    // Return values
     return ['cache_keys' => $cache_keys];
 }
 
