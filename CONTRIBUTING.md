@@ -6,7 +6,7 @@ Thank you for considering contributing to the **Nginx Cache Purge & Preload for 
 
 ### Reporting Issues
 
-If you encounter any issues or bugs with the project, please:
+If you encounter any issues or bugs with the project, please: 
 
 1. **Check** if the issue has already been reported by searching through the existing [Issues](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/issues).
 2. If the issue is not listed, create a new issue with the following details:
