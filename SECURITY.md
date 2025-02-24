@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Currently, only the latest version of the project is supported with security updates.
+Currently, only the latest version of the project is supported with security updates. 
 
 | Version | Supported          |
 | ------- | ------------------ |
