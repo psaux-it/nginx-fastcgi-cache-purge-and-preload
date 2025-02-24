@@ -1,7 +1,7 @@
 /**
  * Frontend styles for FastCGI Cache Purge and Preload for Nginx
  * Description: This CSS file contains frontend styles for the FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.1.0
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -34,4 +34,8 @@
     background-color: orchid;
     border-color: #bee5eb;
     color: white;
+}
+
+#wp-admin-bar-fastcgi-cache-operations {
+    background-color: midnightblue !important;
 }

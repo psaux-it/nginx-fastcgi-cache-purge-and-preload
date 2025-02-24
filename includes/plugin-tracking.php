@@ -5,7 +5,7 @@
  * Description: This file handles tracking the plugin activation and deactivation status
  * and sends this information to the main API to track plugin statistics.
  *
- * Version: 2.0.9
+ * Version: 2.1.0
  * Author: Hasan CALISIR
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
@@ -82,7 +82,7 @@ function nppp_plugin_tracking($status = 'active') {
     $plugin_version = $plugin_data['Version'];
 
     if (empty($plugin_name) || empty($plugin_version)) {
-        nppp_custom_error_log('Plugin data not available. API call aborted.');
+        nppp_custom_error_log(__('Plugin data not available. API call aborted.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
@@ -119,11 +119,13 @@ function nppp_plugin_tracking($status = 'active') {
 
             // Log tracking failure
             if (is_wp_error($tracking_response)) {
-                nppp_custom_error_log('Plugin tracking request failed: ' . $tracking_response->get_error_message());
+                // Translators: This message appears when the plugin tracking request fails.
+                nppp_custom_error_log(sprintf(__('Plugin tracking request failed: %s', 'fastcgi-cache-purge-and-preload-nginx'), $tracking_response->get_error_message()));
             }
         }
     } else {
-        nppp_custom_error_log('Failed to retrieve JWT token: ' . $response->get_error_message());
+        // Translators: This message appears when JWT token retrieval fails.
+        nppp_custom_error_log(sprintf(__('Failed to retrieve JWT token: %s', 'fastcgi-cache-purge-and-preload-nginx'), $response->get_error_message()));
     }
 }
 
@@ -132,12 +134,7 @@ function nppp_schedule_plugin_tracking_event($status = false) {
     // If status is true, clear the scheduled hook and remove the action
     if ($status === true) {
         // Clear the scheduled event
-        wp_clear_scheduled_hook('npp_plugin_tracking_event');
-
-        // Remove the action that is tied to the event
-        remove_action('npp_plugin_tracking_event', 'nppp_plugin_tracking');
-
-        // Log the event clearing (optional)
+        wp_clear_scheduled_hook('npp_plugin_tracking_event', array('active'));
         return;
     }
 
@@ -154,17 +151,16 @@ function nppp_schedule_plugin_tracking_event($status = false) {
     // Set recurrence
     $recurrence = 'daily';
 
+    // Prepare arguments
+    $args = array('active');
+
     // Check if the event is already scheduled
     if (!wp_next_scheduled('npp_plugin_tracking_event')) {
-        $scheduled = wp_schedule_event($next_execution_timestamp, $recurrence, 'npp_plugin_tracking_event');
-        if (!$scheduled) {
-            nppp_custom_error_log('Failed to schedule plugin tracking event.');
-        }
-    }
+        $scheduled = wp_schedule_event($next_execution_timestamp, $recurrence, 'npp_plugin_tracking_event', $args);
 
-    // Register the callback function for the scheduled event
-    if (!has_action('npp_plugin_tracking_event', 'nppp_plugin_tracking')) {
-        add_action('npp_plugin_tracking_event', 'nppp_plugin_tracking');
+        if (!$scheduled) {
+            nppp_custom_error_log(__('Failed to schedule plugin tracking event.', 'fastcgi-cache-purge-and-preload-nginx'));
+        }
     }
 }
 
@@ -174,7 +170,7 @@ function nppp_handle_opt_in_change($opt_in_value) {
     if ($opt_in_value == '1') {
         // User opted in
         nppp_plugin_tracking('active');
-        nppp_schedule_plugin_tracking_event();
+        nppp_schedule_plugin_tracking_event(false);
     } else {
         // User opted out
         nppp_plugin_tracking('opt-out');

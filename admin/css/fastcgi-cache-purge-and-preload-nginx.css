@@ -1,7 +1,7 @@
 /**
  * Styles for FastCGI Cache Purge and Preload for Nginx
  * Description: This CSS file contains styles for the FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.1.0
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -352,32 +352,42 @@ td.action, td.check {
 
 /* Style the nppp-purge-btn button */
 .nppp-purge-btn {
-    background-color: #007bff;
+    background-color: #d9534f;
     color: #fff;
     border: none;
-    padding: 8px 16px;
+    padding: 8px 12px;
     border-radius: 4px;
     cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    font-weight: 500;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;
+    font-size: 13px !important;
+    transition: background-color 0.3s ease;
 }
 
 /* Style the nppp-purge-btn button */
 .nppp-preload-btn {
-    background-color: #007bff;
+    background-color: #3CB371;
     color: #fff;
     border: none;
-    padding: 8px 16px;
+    padding: 8px 12px;
     border-radius: 4px;
     cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    font-weight: 500;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;
+    font-size: 13px !important;
+    transition: background-color 0.3s ease;
 }
 
 /* Hover effect for nppp-purge-btn button */
 .nppp-purge-btn:hover {
-    background-color: #0056b3;
+    background-color: #c9302c;
 }
 
 /* Hover effect for nppp-purge-btn button */
 .nppp-preload-btn:hover {
-    background-color: #0056b3;
+    background-color: #2e8b57;
 }
 
 /* Style the length menu dropdown */
@@ -574,11 +584,6 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
     line-height: 1.2;
 }
 
-/* Style for images within the advertisement section */
-#nppp-ad img {
-    width: 90px !important;
-}
-
 /* Style for plain lists within the advertisement section */
 #nppp-ad .plain-list {
     text-align: left;
@@ -664,7 +669,7 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
 /* Very cool button style */
 .nppp-button {
     display: inline-block;
-    padding: 8px 16px;
+    padding: 8px 10px;
     border-radius: 5px;
     background-color: #007BFF;
     color: white;
@@ -2190,6 +2195,8 @@ button.nppp-preload-btn[disabled] {
     display: flex;
     justify-content: center;
     align-items: center;
+    transform: translateZ(0);
+    will-change: transform;
 }
 
 /* Make the submit button itself full-width */
@@ -2251,11 +2258,13 @@ p.description {
     margin-left: -12px;
     margin-top: 0px;
     border: 2px dotted #FFA500;
-    max-width: max-content;
     padding-left: 5px;
     padding-right: 5px;
     padding-top: 10px;
     padding-bottom: 5px;
+    overflow-x: auto;
+    justify-content: flex-start;
+    max-width: max-content;
 }
 
 .nppp-submenu ul li {
@@ -2269,7 +2278,7 @@ p.description {
 }
 
 .nppp-submenu ul li a:hover {
-    color: #00a0d2;
+    color: #ff6f61;
 }
 
 /* Responsive Adjustments */
@@ -2289,7 +2298,7 @@ p.description {
     }
 
     .nppp-submenu ul li a:focus {
-        background-color: peachpuff !important;
+        background-color: white !important;
     }
 }
 
@@ -2310,7 +2319,7 @@ p.description {
     }
 
     .nppp-submenu ul li a:focus {
-        background-color: peachpuff !important;
+        background-color: white !important;
     }
 }
 
@@ -2417,7 +2426,7 @@ p.description {
     border-left: 4px solid orange;
     padding: 10px;
     font-size: 12px !important;
-    margin-top: 8px !important;
+    margin-top: 12px !important;
 }
 
 .cache-paths-info h4 {
@@ -2537,4 +2546,100 @@ p.description {
     pointer-events: none;
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* style for settings page actions button */
+#nppp-purge-button.nppp-button {
+    background-color: #d9534f;
+    color: white;
+}
+
+#nppp-purge-button.nppp-button:hover {
+    background-color: #c9302c;
+    color: white;
+}
+
+#nppp-preload-button.nppp-button {
+    background-color: #3CB371;
+    color: white;
+}
+
+#nppp-preload-button.nppp-button:hover {
+    background-color: #2e8b57;
+    color: white;
+}
+
+/* Submenu Items */
+.nppp-submenu ul li {
+    position: relative !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+}
+
+/* Submenu Links */
+.nppp-submenu ul li a {
+    text-decoration: none !important;
+    padding: 5px 0 !important;
+    transition: color 0.2s ease !important;
+    position: relative !important;
+}
+
+/* Hover and Active Underline */
+.nppp-submenu ul li a::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -5px;
+    height: 3px;
+    background-color: transparent;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+    transform: scaleX(0);
+    transform-origin: left;
+}
+
+/* Submenu Underline Colors */
+.nppp-submenu ul li:nth-child(1) a::after {
+    background-color: #0073aa;
+}
+.nppp-submenu ul li:nth-child(2) a::after {
+    background-color: #ff5722;
+}
+.nppp-submenu ul li:nth-child(3) a::after {
+    background-color: #4caf50;
+}
+.nppp-submenu ul li:nth-child(4) a::after {
+    background-color: #9c27b0;
+}
+.nppp-submenu ul li:nth-child(5) a::after {
+    background-color: #ff9800;
+}
+.nppp-submenu ul li:nth-child(6) a::after {
+    background-color: #2196f3;
+}
+
+/* Hover Effect */
+.nppp-submenu ul li a:hover::after,
+.nppp-submenu ul li a.active::after {
+    transform: scaleX(1);
+}
+
+/* Active Link */
+.nppp-submenu ul li a.active {
+    background-color: #fff !important;
+    color: #ff6f61;
+}
+
+/* Persistent Underline for Active Link */
+.nppp-submenu ul li a.active::after {
+    transform: scaleX(1);
+}
+
+#wp-admin-bar-fastcgi-cache-operations {
+    background-color: midnightblue !important;
+}
+
+.key-regex-info {
+    max-width: 978px;
 }

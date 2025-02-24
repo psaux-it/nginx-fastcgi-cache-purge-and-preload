@@ -2,7 +2,7 @@
 /**
  * Advanced table for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains advanced table functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.0.9
+ * Version: 2.1.0
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -21,10 +21,10 @@ function nppp_premium_html($nginx_cache_path) {
 
     if ($wp_filesystem === false) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
-                        <span style="font-size: 14px;">ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1070)</span>
+                        <span style="font-size: 14px;">' . esc_html__( 'ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1070)', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
                     </p>
                 </div>';
     }
@@ -32,10 +32,10 @@ function nppp_premium_html($nginx_cache_path) {
     // Handle case where option doesn't exist
     if (empty($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
-                        <span style="font-size: 14px;">ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1071)</span>
+                        <span style="font-size: 14px;">' . esc_html__( 'ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1071)', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
                     </p>
                 </div>';
     }
@@ -43,10 +43,10 @@ function nppp_premium_html($nginx_cache_path) {
     // Handle case where cache directory doesn't exist
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
-                        <span style="font-size: 14px;">ERROR CACHE PATH: The specified Nginx cache directory could not be found. Please verify the path in the plugin settings.</span>
+                        <span style="font-size: 14px;">' . esc_html__( 'ERROR PATH: The specified Nginx cache path was not found. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
                     </p>
                 </div>';
     }
@@ -54,19 +54,19 @@ function nppp_premium_html($nginx_cache_path) {
     // Check if the directory and its contents are readable softly and recursive
     if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
-                        <span style="font-size: 14px;">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</span>
+                        <span style="font-size: 14px;">' . esc_html__( 'ERROR PERMISSION: Please ensure proper permissions are set for the Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
                     </p>
                 </div>';
 
     } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;Error Displaying Cached Content</h2>
+                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
-                        <span style="font-size: 14px;">ERROR PERMISSION: Please ensure proper permissions are set for the cache directory. Refer to the Help tab for guidance.</span>
+                        <span style="font-size: 14px;">' . esc_html__( 'ERROR PERMISSION: Please ensure proper permissions are set for the Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
                     </p>
                 </div>';
     }
@@ -89,7 +89,7 @@ function nppp_premium_html($nginx_cache_path) {
 
         // Stop execution if no cached content is found due to an empty cache or cache key regex error.
         return '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;Displaying Cached Content</h2>
+                    <h2>&nbsp;' . __( 'Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . $error_message . '</span>
@@ -100,17 +100,17 @@ function nppp_premium_html($nginx_cache_path) {
     // Warn about cache keys not found
     if ($config_data === false) {
         echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.</p>
+                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
               </div>';
     // Warn about cache keys not found
     } elseif (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
         echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.</p>
+                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
               </div>';
     // Warn about the unsupported cache keys
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
         echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">INFO CACHE KEY: <span style="color: #f0c36d;">Unsupported</span> FastCGI cache keys found!</p>
+                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO CACHE KEY: <span style="color: #f0c36d;">Unsupported</span> cache keys found!', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
               </div>';
     }
 
@@ -120,19 +120,19 @@ function nppp_premium_html($nginx_cache_path) {
     <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
         <p style="margin: 0; display: flex; align-items: center;">
             <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-            If the <strong>Cached URL's</strong> are incorrect <strong>Preload</strong> will not works as expected. Please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section, ensure the regex is configured correctly, and try again.
+            <?php echo wp_kses_post( __( 'If the <strong>Cached URL\'s</strong> are incorrect, <strong>Preload</strong> will not work as expected. Please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section, ensure the regex is configured correctly, and try again.', 'fastcgi-cache-purge-and-preload-nginx' ) ); ?>
         </p>
     </div>
     <h2></h2>
     <table id="nppp-premium-table" class="display">
         <thead>
             <tr>
-                <th>Cached URL</th>
-                <th>Cache Path</th>
-                <th>Content Category</th>
-                <th>Cache Method</th>
-                <th>Cache Date</th>
-                <th>Action</th>
+                <th><?php esc_html_e( 'Cached URL', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Cache Path', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Content Category', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Cache Method', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Cache Date', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Action', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
             </tr>
         </thead>
         <tbody>
@@ -147,8 +147,8 @@ function nppp_premium_html($nginx_cache_path) {
                         <td>GET</td>
                         <td><?php echo esc_html($urlData['cache_date']); ?></td>
                         <td>
-                            <button class="nppp-purge-btn" data-file="<?php echo esc_attr($urlData['file_path']); ?>">Purge</button>
-                            <button class="nppp-preload-btn" data-url="<?php echo esc_attr($urlData['url']); ?>">Preload</button>
+                            <button class="nppp-purge-btn" data-file="<?php echo esc_attr($urlData['file_path']); ?>"><span class="dashicons dashicons-trash" style="font-size: 16px; margin: 0; padding: 0;"></span> <?php echo esc_html__( 'Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
+                            <button class="nppp-preload-btn" data-url="<?php echo esc_attr($urlData['url']); ?>"><span class="dashicons dashicons-update" style="font-size: 16px; margin: 0; padding: 0;"></span> <?php echo esc_html__( 'Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
                         </td>
                     </tr>
                 <?php endforeach;
@@ -288,7 +288,7 @@ function nppp_purge_cache_premium_callback() {
 
         // Check process is alive
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            $error_message = "INFO ADMIN: Purge cache halted due to ongoing cache preloading. You can stop cache preloading anytime via Purge All.";
+            $error_message = __( 'INFO ADMIN: Nginx cache purge has been halted due to ongoing cache preloading. You can stop Nginx cache preloading anytime via the "Purge All" option.', 'fastcgi-cache-purge-and-preload-nginx' );
             nppp_log_and_send_error($error_message, $log_file_path);
         }
     }
@@ -302,23 +302,23 @@ function nppp_purge_cache_premium_callback() {
     if ($path_check !== true) {
         switch ($path_check) {
             case 'file_not_found':
-                $error_message = 'Cache purge attempted, but the page is not currently cached.';
+                $error_message = __( 'Nginx cache purge attempted, but no cache entry was found.', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
             case 'invalid_cache_directory':
-                $error_message = 'Cache purge failed because the cache directory is invalid.';
+                $error_message = __( 'Nginx cache purge failed because the Nginx cache directory is invalid.', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
             case 'outside_cache_directory':
-                $error_message = 'Cache purge attempted but forbidden for security reasons.';
+                $error_message = __( 'The attempt to purge the Nginx cache was blocked due to security restrictions.', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
             default:
-                $error_message = 'Cache purge failed due to an unexpected error. Please try again later.';
+                $error_message = __( 'An unexpected error occurred while attempting to purge the Nginx cache. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' );
         }
         nppp_log_and_send_error($error_message, $log_file_path);
     }
 
     // Check permissions before purge cache
     if (!$wp_filesystem->is_readable($file_path) || !$wp_filesystem->is_writable($file_path)) {
-        $error_message = 'ERROR PERMISSION: Cache purge failed  due to permission issue. Refer to -Help- tab for guidance.';
+        $error_message = __( 'ERROR PERMISSION: The Nginx cache purge failed due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
         nppp_log_and_send_error($error_message, $log_file_path);
     }
 
@@ -352,13 +352,13 @@ function nppp_purge_cache_premium_callback() {
         // Handle different validation outcomes
         switch ($validation_result) {
             case 'critical_path':
-                $error_message = 'ERROR PATH: The cache path appears to be a critical system directory or a first-level directory. Cannot purge cache!';
+                $error_message = __( 'ERROR PATH: The Nginx cache path appears to be a critical system directory or a first-level directory. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
             case 'file_not_found_or_not_readable':
-                $error_message = 'ERROR PATH: The specified cache path does not exist. Cannot purge cache!';
+                $error_message = __( 'ERROR PATH: The specified Nginx cache path was not found. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
             default:
-                $error_message = 'ERROR PATH: An invalid cache path was provided. Cannot purge cache!';
+                $error_message = __( 'ERROR PATH: An invalid Nginx cache path was provided. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
         }
         nppp_log_and_send_error($error_message, $log_file_path);
     }
@@ -366,10 +366,12 @@ function nppp_purge_cache_premium_callback() {
     // Perform the purge action (delete the file)
     $deleted = $wp_filesystem->delete($file_path);
     if ($deleted) {
-        $success_message = "SUCCESS ADMIN: Cache Purged for page $final_url";
+        // Translators: %s is the page URL
+        $success_message = sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url );
         nppp_log_and_send_success($success_message, $log_file_path);
     } else {
-        $error_message = "ERROR ADMIN: Cache cannot purged for page $final_url";
+        // Translators: %s is the page URL
+        $error_message = sprintf( __( 'ERROR ADMIN: Nginx cache can not be purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url );
         nppp_log_and_send_error($error_message, $log_file_path);
     }
 }
@@ -509,12 +511,22 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                             $regex_tested = true;
                         } else {
                             return [
-                                'error' => 'ERROR REGEX: Please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>$host$request_uri</strong> portion correctly.'
+                                'error' => sprintf(
+                                    /* Translators: %1$s and %2$s are dynamic strings, $host$request_uri is string */
+                                    __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is parsing the string <strong>\$host\$request_uri</strong> correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
+                                    __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'),
+                                    __( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx')
+                                )
                             ];
                         }
                     } else {
                         return [
-                            'error' => 'ERROR REGEX: Please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.'
+                            'error' => sprintf(
+                                /* Translators: %1$s and %2$s are dynamic strings */
+                                __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
+                                __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'),
+                                __( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx')
+                            )
                         ];
                     }
                 }
@@ -552,14 +564,14 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     } catch (Exception $e) {
         // Handle exceptions and return an error message
         return [
-            'error' => 'An error occurred while accessing the Nginx Cache Directory. Please try again.'
+            'error' => __( 'An error occurred while accessing the Nginx cache directory. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         ];
     }
 
     // Check if any URLs were extracted
     if (empty($urls)) {
         return [
-            'error' => 'No cached content found. Please <strong>Preload All</strong> cache first and try again.'
+            'error' => __( 'No cached content found. Please use <strong>Preload All</strong> to warm Nginx cache first and try again.', 'fastcgi-cache-purge-and-preload-nginx' )
         ];
     }
 

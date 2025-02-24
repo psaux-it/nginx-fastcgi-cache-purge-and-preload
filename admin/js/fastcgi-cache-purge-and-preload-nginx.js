@@ -1,84 +1,31 @@
 /**
  * JavaScript for FastCGI Cache Purge and Preload for Nginx
- * Description: This JavaScript file contains functions to manage FastCGI Cache Purge and Preload for Nginx plugin and interact with WordPress admin dashboard.
- * Version: 2.0.9
+ * Description: This file contains code to manage the plugin's admin interface for FastCGI Cache Purge and Preload for Nginx
+ * Version: 2.1.0
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
  */
 
-// Immediately Invoked Function Expression (IIFE)
-// Prevent interfere with core wp and other plugin code
-(function($, window, document, undefined) {
+// NPP plugin admin side main js code
+(function ($) {
     'use strict';
+    const { __, _x, _n, _nx } = wp.i18n;
 
-// Main plugin admin side  js code
 $(document).ready(function() {
-    // Function to adjust the status tab table layout for mobile
-    function adjustTableForMobile() {
-        const mobileBreakpoint = 480;
-
-        // Get the current viewport width
-        const viewportWidth = window.innerWidth;
-
-        // Check if viewport is smaller than the breakpoint
-        if (viewportWidth < mobileBreakpoint) {
-            // Select the specific row in the status-summary section
-            $('.status-summary table tbody tr').each(function() {
-                const actionWrapperDiv = $(this).find('.action .action-wrapper:last-of-type');
-                const statusTd = $(this).find('#npppphpFpmStatus');
-
-                // Check if the row has the actionWrapperDiv and statusTd
-                if (actionWrapperDiv.length && statusTd.length) {
-                    // Create a new div for status content
-                    const statusWrapper = $('<div class="status-wrapper"></div>');
-                    statusWrapper.css({
-                        'font-size': '14px',
-                        'color': 'green',
-                        'margin-top': '5px'
-                    }).html(statusTd.html());
-
-                    // Hide the original status td
-                    statusTd.hide();
-
-                    // Append the new status wrapper after the action-wrapper div
-                    actionWrapperDiv.after(statusWrapper);
-                }
-
-                // Target the second action-wrapper with font-size 12px
-                const actionWrapperDivs = $(this).find('.action .action-wrapper');
-                if (actionWrapperDivs.length > 1) {
-                    const secondActionWrapperDiv = actionWrapperDivs.eq(1);
-                    if (secondActionWrapperDiv.css('font-size') === '12px') {
-                        // Adjust the text font size to 10px
-                        const textSpan = $('<span></span>').css({
-                            'font-size': '10px',
-                            'color': secondActionWrapperDiv.css('color') // Use the existing color
-                        }).text(secondActionWrapperDiv.text().trim());
-
-                        // Replace the content of the second action-wrapper with the new span
-                        secondActionWrapperDiv.empty().append(textSpan);
-                    }
-                }
-            });
-        }
-    }
-
-    // Adjust layout on viewport resize
-    $(window).on('resize', adjustTableForMobile);
-
-    // Initial call to adjust the layout on page load
-    adjustTableForMobile();
-
-    // Cache jQuery selectors for better performance and easier reference
+    // Selectors
     const $preloader = $('#nppp-loader-overlay');
     const $settingsPlaceholder = $('#settings-content-placeholder');
     const $statusPlaceholder = $('#status-content-placeholder');
     const $premiumPlaceholder = $('#premium-content-placeholder');
+    const $helpPlaceholder = $('.nppp-premium-container');
+
+    // UI tabs container and links
+    const $nppTabs = $('#nppp-nginx-tabs');
+    const $nppTabsLinks = $nppTabs.find('a');
 
     // Function to show the preloader overlay
-    // Adds the 'active' class and fades in the preloader over 50 milliseconds
     function showPreloader() {
         // Adjust the `.nppp-loader-fill` animation duration
         $('.nppp-loader-fill').css({
@@ -97,7 +44,6 @@ $(document).ready(function() {
     }
 
     // Function to hide the preloader overlay
-    // Removes the 'active' class and fades out the preloader over 50 milliseconds
     function hidePreloader() {
         $preloader.removeClass('active').fadeOut(50);
 
@@ -114,59 +60,205 @@ $(document).ready(function() {
         });
     }
 
-    // Initialize jQuery UI tabs on the element with ID 'nppp-nginx-tabs'
-    $('#nppp-nginx-tabs').tabs({
-        activate: function(event, ui) {
-            var tabId = ui.newPanel.attr('id');
-            // Show the preloader when a new tab is activated
-            if (tabId !== 'help') {
-                showPreloader();
-            }
+    // Flag to prevent the duplicate call to npppActivateTab()
+    let isTabChangeFromHash = false;
+    let npppCurrentObserver = null;
 
-            // Hide all content placeholders to ensure only the active tab's content is visible
-            $settingsPlaceholder.hide();
-            $statusPlaceholder.hide();
-            $premiumPlaceholder.hide();
+    // npp-submenu page load load effect
+    function nppphighlightSubmenu(selector, totalTime) {
+        var items = $(selector);
 
-            // Handle specific actions for each tab
-            if (tabId === 'settings') {
-                // Check if the Settings tab panel does not have the 'ui-tabs-active' class
-                if (!ui.newPanel.hasClass('ui-tabs-active')) {
-                    // Reload the settings page to create cache
-                    location.reload();
-                } else {
-                    // If the Settings tab is already active, hide the preloader
-                    hidePreloader();
-                }
-            } else if (tabId === 'status') {
-                // Load content for the 'Status' tab via AJAX
-                loadStatusTabContent();
-                // Adjust table layout for mobile devices if necessary
-                adjustTableForMobile();
-            } else if (tabId === 'premium') {
-                // Load content for the 'Premium' tab via AJAX
-                loadPremiumTabContent();
-            }
-        },
-        beforeLoad: function(event, ui) {
-            // Attach a fail handler to the AJAX request associated with the tab
-            ui.jqXHR.fail(function() {
-                ui.panel.html("Couldn't load this tab. We'll try to fix this as soon as possible.");
-                // Hide the preloader since loading failed
-                hidePreloader();
-            });
+        // Check if the elements exist
+        if (items.length === 0) {
+            return;
         }
-    });
 
-    // Check if the user navigated directly to the 'Status' tab via URL hash (e.g., yoursite.com/page#status)
-    if (window.location.hash === '#status') {
-        // Show the preloader when loading the Status tab directly
-        showPreloader();
-        // Load content for the 'Status' tab via AJAX
-        loadStatusTabContent();
-        // Adjust table layout for mobile devices if necessary
-        adjustTableForMobile();
+        var totalItems = items.length;
+        var initialDelay = 350;
+        var accelerationFactor = 0.6;
+        var baseTimePerItem = (totalTime - initialDelay) / totalItems;
+        var delay = initialDelay;
+
+        // Loop through each item and apply the effect with varied timing
+        items.each(function(index, element) {
+            var item = $(element);
+
+            // Add the 'active' class with staggered timing
+            setTimeout(function() {
+                item.addClass('active');
+
+                // Remove the 'active' class after the base time duration
+                setTimeout(function() {
+                    item.removeClass('active');
+                }, baseTimePerItem);
+            }, delay);
+
+            // Increase the delay for the next item to progressively speed up the animation
+            delay += baseTimePerItem * accelerationFactor;
+        });
     }
+
+    // Function to handle tab content activation
+    function npppActivateTab(tabId) {
+        // Hide all content placeholders
+        $settingsPlaceholder.hide();
+        $statusPlaceholder.hide();
+        $premiumPlaceholder.hide();
+        $helpPlaceholder.hide();
+
+        // Handle specific tab actions
+        switch (tabId) {
+            case 'settings':
+                nppdisconnectObserver();
+                $settingsPlaceholder.show();
+                nppphighlightSubmenu('.nppp-submenu ul li a', 900);
+                break;
+            case 'status':
+                showPreloader();
+                loadStatusTabContent();
+                // Warn the user if a systemd service restart
+                // is required due to missing fuse cache path mounts
+                const statusTabContent = document.querySelector('#status');
+                if (statusTabContent) {
+                    if (!npppCurrentObserver) {
+                        nppobserveFuseStatusChange(statusTabContent);
+                    }
+                }
+                break;
+            case 'premium':
+                showPreloader();
+                nppdisconnectObserver();
+                loadPremiumTabContent();
+                break;
+            case 'help':
+                nppdisconnectObserver();
+                $helpPlaceholder.show();
+                break;
+        }
+    }
+
+    // Function to observe changes in the "Status" tab
+    function nppobserveFuseStatusChange(tabContent) {
+        // Create a MutationObserver to observe the status content
+        const observer = new MutationObserver((mutationsList, observer) => {
+            const fuseStatusSpan = document.querySelector('#npppFuseMountStatus span:last-of-type');
+            if (fuseStatusSpan) {
+                // Compare the trimmed text
+                if (fuseStatusSpan.textContent.trim() === 'Not Mounted') {
+                    nppinsertWarningIcon(tabContent);
+                }
+                // Disconnect the observer after finding the status
+                observer.disconnect();
+            }
+        });
+
+        // Store the observer to be cleaned up later
+        npppCurrentObserver = observer;
+
+        // Start observing the tab content for changes in the DOM
+        observer.observe(tabContent, { childList: true, subtree: true });
+    }
+
+    // Function to insert the warning icon into the "Status" tab
+    function nppinsertWarningIcon(tabContent) {
+        try {
+            // Create the warning icon
+            const attentionIcon = document.createElement('span');
+            attentionIcon.className = 'dashicons dashicons-warning';
+            attentionIcon.style.cssText = 'color: orange; margin-left: 8px; font-size: 28px;';
+
+            // Ensure the restart button exists before inserting the icon
+            const restartButton = document.querySelector('#nppp-restart-systemd-service-btn');
+            if (restartButton) {
+                restartButton.parentNode.insertBefore(attentionIcon, restartButton.nextSibling);
+
+                // Apply blink effect
+                const blinkEffect = attentionIcon.animate([
+                    { opacity: 1 },
+                    { opacity: 0 }
+                 ], {
+                    duration: 500,
+                    iterations: Infinity,
+                    direction: 'alternate'
+                });
+
+                // Stop blinking after 2 seconds
+                setTimeout(() => {
+                    blinkEffect.cancel();
+                }, 2000);
+            }
+        } catch (error) {
+            console.error('Error in warning icon insertion:', error);
+        }
+    }
+
+    // Function to disconnect the observer
+    function nppdisconnectObserver() {
+        if (npppCurrentObserver) {
+            npppCurrentObserver.disconnect();
+            npppCurrentObserver = null;
+        }
+    }
+
+    // Initialize jQuery UI tabs
+    if (!$nppTabs.hasClass('ui-tabs')) {
+        $nppTabs.tabs({
+            activate: function(event, ui) {
+                // Only trigger if it's a internal interaction (not direct link)
+                if (!isTabChangeFromHash) {
+                    const tabId = ui.newPanel.attr('id');
+                    if (tabId) {
+                        window.history.replaceState(null, null, `#${tabId}`);
+                        npppActivateTab(tabId);
+                    }
+                }
+
+                // Reset the flag after activation
+                isTabChangeFromHash = false;
+            },
+            beforeLoad: function(event, ui) {
+                const isActive = ui.tab.attr('aria-selected') === 'true' || ui.tab.closest('.ui-tabs-active').length > 0;
+                // Cancel the default load action for inactive tabs
+                if (!isActive) {
+                    ui.jqXHR.abort();
+                    ui.panel.html("");
+                }
+            }
+        });
+    }
+
+    // Deep linking jQuery UI tabs
+    function activateTabFromHash() {
+        const hash = window.location.hash;
+
+        if (hash) {
+            // Set the flag to true because the tab change is triggered by the direct URL
+            isTabChangeFromHash = true;
+
+            const index = $nppTabsLinks.filter(`[href="${hash}"]`).parent().index();
+            if (index !== -1) {
+                $nppTabs.tabs("option", "active", index);
+                npppActivateTab(hash.replace('#', ''));
+
+                // Scroll to the top of the page
+                window.scrollTo(0, 0);
+
+                // Reset the flag after handling hash activation
+                isTabChangeFromHash = false;
+            }
+        } else {
+            // Set the default tab to 'Settings'
+            npppActivateTab('settings');
+        }
+    }
+
+    // Call on page load to handle deep linking (activate tab based on URL hash)
+    activateTabFromHash();
+
+    // Listen for hash changes (URL changes) and re-activate the correct tab
+    $(window).on('hashchange', function() {
+        activateTabFromHash();
+    });
 
     // Function to load content for the 'Status' tab via AJAX
     // Sends a POST request to the server to fetch the Status tab content
@@ -204,9 +296,6 @@ $(document).ready(function() {
                     `);
                     $statusPlaceholder.show();
                 }
-
-                // Recalculate scroll positions and sizes
-                $(window).trigger('resize').trigger('scroll');
             },
             error: function(xhr, status, error) {
                 console.error(error);
@@ -261,9 +350,6 @@ $(document).ready(function() {
                     `);
                     $premiumPlaceholder.show();
                 }
-
-                // Recalculate scroll positions and sizes
-                $(window).trigger('resize').trigger('scroll');
             },
             error: function(xhr, status, error) {
                 console.error(status + ': ' + error);
@@ -278,6 +364,11 @@ $(document).ready(function() {
             }
         });
     }
+
+    // Attach click event to the "Purge All" and "Preload All" menu items
+    $('.nppp-action-trigger').on('click', function() {
+        showPreloader();
+    });
 
     // Handle click event for purge buttons in advanced tab
     $(document).on('click', '.nppp-purge-btn', function() {
@@ -321,12 +412,16 @@ $(document).ready(function() {
                         btn.prop('disabled', true);
                         // Add disabled style
                         btn.addClass('disabled');
-                        // highlight preload action
-                        preloadBtn.css('background-color', '#43A047');
 
-                        // Enable preload button and reset its style
-                        preloadBtn.prop('disabled', false);
-                        preloadBtn.removeClass('disabled');
+                        if (!preloadBtn.hasClass('nppp-general')) {
+                            // highlight preload action
+                            preloadBtn.css('background-color', '#43A047');
+
+                            // Enable preload button and reset its style
+                            preloadBtn.prop('disabled', false);
+                            preloadBtn.removeClass('disabled');
+                        }
+
                         if (btn.css('background-color') === 'rgb(67, 160, 71)') {
                             btn.css('background-color', '');
                         }
@@ -436,7 +531,7 @@ $(document).ready(function() {
             if (response.success) {
                 // Show a small notification indicating successful saved option
                 var notification = document.createElement('div');
-                notification.textContent = 'Saved';
+                notification.textContent = '✔';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeftMail + 'px';
                 notification.style.top = notificationTopMail + 'px';
@@ -484,7 +579,7 @@ $(document).ready(function() {
             if (response.success) {
                 // Show a small notification indicating successfully saved option
                 var notification = document.createElement('div');
-                notification.textContent = 'Saved';
+                notification.textContent = '✔';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeftAutoPreload + 'px';
                 notification.style.top = notificationTopAutoPreload + 'px';
@@ -531,7 +626,7 @@ $(document).ready(function() {
             if (response.success) {
                 // Show a small notification indicating successfully saved option
                 var notification = document.createElement('div');
-                notification.textContent = 'Saved';
+                notification.textContent = '✔';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeftMobilePreload + 'px';
                 notification.style.top = notificationTopMobilePreload + 'px';
@@ -579,7 +674,7 @@ $(document).ready(function() {
             if (response.success) {
                 // Show a small notification indicating successfully saved option
                 var notification = document.createElement('div');
-                notification.textContent = 'Saved';
+                notification.textContent = '✔';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeftAutoPurge + 'px';
                 notification.style.top = notificationTopAutoPurge + 'px';
@@ -627,7 +722,7 @@ $(document).ready(function() {
             if (response.success) {
                 // Show a small notification indicating successfully saved option
                 var notification = document.createElement('div');
-                notification.textContent = 'Saved';
+                notification.textContent = '✔';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeftRestApi + 'px';
                 notification.style.top = notificationTopRestApi + 'px';
@@ -795,7 +890,7 @@ $(document).ready(function() {
             if (response.success) {
                 // Show a small notification indicating successfully saved option
                 var notification = document.createElement('div');
-                notification.textContent = 'Saved';
+                notification.textContent = '✔';
                 notification.style.position = 'absolute';
                 notification.style.left = notificationLeftCacheSchedule + 'px';
                 notification.style.top = notificationTopCacheSchedule + 'px';
@@ -1292,15 +1387,14 @@ $(document).ready(function() {
 
             // Set column widths
             columnDefs: [
-                { width: "28%", targets: 0, className: 'text-left' }, // Cached URL
-                { width: "30%", targets: 1, className: 'text-left' }, // Cache Path
+                { width: "21%", targets: 0, className: 'text-left' }, // Cached URL
+                { width: "37%", targets: 1, className: 'text-left' }, // Cache Path
                 { width: "10%", targets: 2, className: 'text-left' }, // Content Category
-                { width: "10%", targets: 3, className: 'text-left' }, // Cache Method
-                { width: "10%", targets: 4, className: 'text-left' }, // Cache Date
-                { width: "12%", targets: 5, className: 'text-left' }, // Actions
+                { width: "5%", targets: 3, className: 'text-left' }, // Cache Method
+                { width: "12%", targets: 4, className: 'text-left' }, // Cache Date
+                { width: "15%", targets: 5, className: 'text-left' }, // Actions
                 { responsivePriority: 1, targets: 0 }, // Cached URL gets priority for responsiveness
                 { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] }, // Collapse all in first row on mobile, hide actions always
-                //{ responsivePriority: 2, targets: -1 }, // Action column gets second priority on mobile
                 { defaultContent: "", targets: "_all" } // Ensures all columns render even if empty
             ],
 
@@ -1865,7 +1959,7 @@ $(document).ready(function() {
         // Set a timeout to reload the page after 2 seconds
         setTimeout(function() {
             window.location.href = url;
-        }, 2000);
+        }, 500);
     });
 
     // Start masking API key on front-end
@@ -2092,7 +2186,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 decades:false,
                 hours:true,
                 minutes:true,
-                seconds:false,
+                seconds:false
             },
             icons: {
                 time: 'dashicons dashicons-arrow-up-alt2',
@@ -2104,7 +2198,7 @@ document.addEventListener("DOMContentLoaded", function() {
         },
         localization: {
             dateFormats: {
-                LT: 'HH:mm',
+                LT: 'HH:mm'
             },
             hourCycle: 'h23',
             format: 'LT'
@@ -2235,114 +2329,200 @@ function npppupdateStatus() {
 
     npppphpFpmStatusSpan.textContent = npppphpFpmStatus;
     npppphpFpmStatusSpan.style.fontSize = "14px";
+
+    let iconSpanFpm = document.createElement('span');
+    let fpmStatusText = '';
+
     if (npppphpFpmStatus === "false") {
         npppphpFpmStatusSpan.style.color = "red";
-        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Required (Check Help)';
+        iconSpanFpm.classList.add("dashicons", "dashicons-no");
+        fpmStatusText = ' ' + __('Required', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (npppphpFpmStatus === "Not Found") {
         npppphpFpmStatusSpan.style.color = "orange";
-        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
+        iconSpanFpm.classList.add("dashicons", "dashicons-clock");
+        fpmStatusText = ' ' + __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx');
     } else {
         npppphpFpmStatusSpan.style.color = "green";
-        npppphpFpmStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Not Required';
+        iconSpanFpm.classList.add("dashicons", "dashicons-yes");
+        fpmStatusText = ' ' + __('Not Required', 'fastcgi-cache-purge-and-preload-nginx');
     }
+
+    npppphpFpmStatusSpan.textContent = '';
+    npppphpFpmStatusSpan.appendChild(iconSpanFpm);
+    npppphpFpmStatusSpan.append(fpmStatusText);
 
     // Fetch and update pages in cache count
     var npppcacheInPageSpan = document.getElementById("npppphpPagesInCache");
     var npppcacheInPageSpanValue = npppcacheInPageSpan.textContent.trim();
     npppcacheInPageSpan.style.fontSize = "14px";
+
+    let iconSpanCache = document.createElement('span');
+    let cacheStatusText = '';
+
     if (npppcacheInPageSpanValue === "Undetermined") {
         npppcacheInPageSpan.style.color = "red";
-        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Permission Issue';
+        iconSpanCache.classList.add("dashicons", "dashicons-no");
+        cacheStatusText = ' ' + __('Fix Permission', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (npppcacheInPageSpanValue === "RegexError") {
         npppcacheInPageSpan.style.color = "red";
-        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Regex Error';
+        iconSpanCache.classList.add("dashicons", "dashicons-no");
+        cacheStatusText = ' ' + __('Fix Regex', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (npppcacheInPageSpanValue === "0") {
         npppcacheInPageSpan.style.color = "orange";
-        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + npppcacheInPageSpanValue;
+        iconSpanCache.classList.add("dashicons", "dashicons-clock");
+        cacheStatusText = ' ' + npppcacheInPageSpanValue;
     } else if (npppcacheInPageSpanValue === "Not Found") {
         npppcacheInPageSpan.style.color = "orange";
-        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
+        iconSpanCache.classList.add("dashicons", "dashicons-clock");
+        cacheStatusText = ' ' + __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx');
     } else {
         npppcacheInPageSpan.style.color = "green";
-        npppcacheInPageSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + npppcacheInPageSpanValue;
+        iconSpanCache.classList.add("dashicons", "dashicons-yes");
+        cacheStatusText = ' ' + npppcacheInPageSpanValue;
     }
+
+    npppcacheInPageSpan.textContent = '';
+    npppcacheInPageSpan.appendChild(iconSpanCache);
+    npppcacheInPageSpan.append(cacheStatusText);
 
     // Fetch and update php process owner
     // PHP-FPM (website user)
     var npppphpProcessOwnerSpan = document.getElementById("npppphpProcessOwner");
     var npppphpProcessOwner = npppphpProcessOwnerSpan.textContent.trim();
-    npppphpProcessOwnerSpan.textContent = npppphpProcessOwner;
+
     npppphpProcessOwnerSpan.style.fontSize = "14px";
     npppphpProcessOwnerSpan.style.color = "green";
-    npppphpProcessOwnerSpan.innerHTML = '<span class="dashicons dashicons-arrow-right-alt" style="font-size: 16px;"></span> ' + npppphpProcessOwner;
+    npppphpProcessOwnerSpan.textContent = '';
+
+    let iconSpanProcessOwner = document.createElement('span');
+    iconSpanProcessOwner.classList.add("dashicons", "dashicons-arrow-right-alt");
+    iconSpanProcessOwner.style.fontSize = "16px";
+
+    npppphpProcessOwnerSpan.appendChild(iconSpanProcessOwner);
+    npppphpProcessOwnerSpan.append(' ' + npppphpProcessOwner);
 
     // Fetch and update web server user
     // WEB-SERVER (webserver user)
     var npppphpWebServerSpan = document.getElementById("npppphpWebServer");
     var npppphpWebServer = npppphpWebServerSpan.textContent.trim();
-    npppphpWebServerSpan.textContent = npppphpWebServer;
+
     npppphpWebServerSpan.style.fontSize = "14px";
     npppphpWebServerSpan.style.color = "green";
-    npppphpWebServerSpan.innerHTML = '<span class="dashicons dashicons-arrow-right-alt" style="font-size: 16px;"></span> ' + npppphpWebServer;
+    npppphpWebServerSpan.textContent = '';
+
+    let iconSpanWebServer = document.createElement('span');
+    iconSpanWebServer.classList.add("dashicons", "dashicons-arrow-right-alt");
+    iconSpanWebServer.style.fontSize = "16px";
+
+    npppphpWebServerSpan.appendChild(iconSpanWebServer);
+    npppphpWebServerSpan.append(' ' + npppphpWebServer);
 
     // Fetch and update nginx cache path status
     var npppcachePathSpan = document.getElementById("npppcachePath");
     var npppcachePath = npppcachePathSpan.textContent.trim();
-    npppcachePathSpan.textContent = npppcachePath;
+
     npppcachePathSpan.style.fontSize = "14px";
+    npppcachePathSpan.textContent = '';
+
+    let iconSpanCachePath = document.createElement('span');
+    iconSpanCachePath.style.fontSize = "20px";
+
     if (npppcachePath === "Found") {
         npppcachePathSpan.style.color = "green";
-        npppcachePathSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Found';
+        iconSpanCachePath.classList.add("dashicons", "dashicons-yes");
+        npppcachePathSpan.appendChild(iconSpanCachePath);
+        npppcachePathSpan.append(' ', __('Found', 'fastcgi-cache-purge-and-preload-nginx'));
     } else if (npppcachePath === "Not Found") {
         npppcachePathSpan.style.color = "red";
-        npppcachePathSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Found';
+        iconSpanCachePath.classList.add("dashicons", "dashicons-no");
+        npppcachePathSpan.appendChild(iconSpanCachePath);
+        npppcachePathSpan.append(' ', __('Not Found', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
     // Fetch and update purge action status
     var nppppurgeStatusSpan = document.getElementById("nppppurgeStatus");
     var nppppurgeStatus = nppppurgeStatusSpan.textContent.trim();
-    nppppurgeStatusSpan.textContent = nppppurgeStatus;
+
     nppppurgeStatusSpan.style.fontSize = "14px";
+    nppppurgeStatusSpan.textContent = '';
+
+    let iconSpanPurgeStatus = document.createElement('span');
+    iconSpanPurgeStatus.style.fontSize = "20px";
+
     if (nppppurgeStatus === "true") {
         nppppurgeStatusSpan.style.color = "green";
-        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
+        iconSpanPurgeStatus.classList.add("dashicons", "dashicons-yes");
+        nppppurgeStatusSpan.appendChild(iconSpanPurgeStatus);
+        nppppurgeStatusSpan.append(' ', __('Ready', 'fastcgi-cache-purge-and-preload-nginx'));
     } else if (nppppurgeStatus === "false") {
         nppppurgeStatusSpan.style.color = "red";
-        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
+        iconSpanPurgeStatus.classList.add("dashicons", "dashicons-no");
+        nppppurgeStatusSpan.appendChild(iconSpanPurgeStatus);
+        nppppurgeStatusSpan.append(' ', __('Not Ready', 'fastcgi-cache-purge-and-preload-nginx'));
     } else {
         nppppurgeStatusSpan.style.color = "orange";
-        nppppurgeStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
+        iconSpanPurgeStatus.classList.add("dashicons", "dashicons-clock");
+        nppppurgeStatusSpan.appendChild(iconSpanPurgeStatus);
+        nppppurgeStatusSpan.append(' ', __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
-    // Fetch and update purge shell_exec status
+    // Fetch and update shell_exec status
     var npppshellExecSpan = document.getElementById("npppshellExec");
     var npppshellExec = npppshellExecSpan.textContent.trim();
-    npppshellExecSpan.textContent = npppshellExec;
+
     npppshellExecSpan.style.fontSize = "14px";
+    npppshellExecSpan.textContent = '';
+
+    let iconSpanShellExec = document.createElement('span');
+    iconSpanShellExec.style.fontSize = "20px";
+
     if (npppshellExec === "Ok") {
-        npppshellExecSpan.style.color =  "green";
-        npppshellExecSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Allowed';
+        npppshellExecSpan.style.color = "green";
+        iconSpanShellExec.classList.add("dashicons", "dashicons-yes");
+        npppshellExecSpan.appendChild(iconSpanShellExec);
+        npppshellExecSpan.append(' ', __('Allowed', 'fastcgi-cache-purge-and-preload-nginx'));
     } else if (npppshellExec === "Not Ok") {
         npppshellExecSpan.style.color = "red";
-        npppshellExecSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Allowed';
+        iconSpanShellExec.classList.add("dashicons", "dashicons-no");
+        npppshellExecSpan.appendChild(iconSpanShellExec);
+        npppshellExecSpan.append(' ', __('Not Allowed', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
     // Fetch and update ACLs status
     var npppaclStatusSpan = document.getElementById("npppaclStatus");
     var npppaclStatus = npppaclStatusSpan.textContent.trim();
-    npppaclStatusSpan.textContent = npppaclStatus;
+    npppaclStatusSpan.textContent = '';
     npppaclStatusSpan.style.fontSize = "14px";
+
+    let iconSpanAcl = document.createElement('span');
+    let aclStatusText = '';
+    let processOwnerSpan = document.createElement('span');
+
     if (npppaclStatus.includes("Granted")) {
         npppaclStatusSpan.style.color = "green";
-        // Extract and display the process owner information if present
+        iconSpanAcl.classList.add("dashicons", "dashicons-yes");
+        aclStatusText = ' ' + __('Granted', 'fastcgi-cache-purge-and-preload-nginx') + ' ';
+
         var processOwner = npppaclStatus.replace("Granted", "").trim();
-        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Granted ' + (processOwner ? `<span style="color:darkorange;">${processOwner}</span>` : '');
+        if (processOwner) {
+            processOwnerSpan.textContent = processOwner;
+            processOwnerSpan.style.color = "darkorange";
+        }
+
     } else if (npppaclStatus.includes("Need Action")) {
         npppaclStatusSpan.style.color = "red";
-        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Need Action (Check Help)';
+        iconSpanAcl.classList.add("dashicons", "dashicons-no");
+        aclStatusText = ' ' + __('Need Action', 'fastcgi-cache-purge-and-preload-nginx');
     } else {
         npppaclStatusSpan.style.color = "orange";
-        npppaclStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> Not Determined';
+        iconSpanAcl.classList.add("dashicons", "dashicons-clock");
+        aclStatusText = ' ' + __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    npppaclStatusSpan.appendChild(iconSpanAcl);
+    npppaclStatusSpan.append(aclStatusText);
+    if (processOwnerSpan.textContent) {
+        npppaclStatusSpan.appendChild(processOwnerSpan);
     }
 
     // Fetch and update preload action status
@@ -2350,19 +2530,26 @@ function npppupdateStatus() {
     var nppppreloadStatusCell = nppppreloadStatusRow.querySelector("#nppppreloadStatus");
     var nppppreloadStatusSpan = document.getElementById("nppppreloadStatus");
     var nppppreloadStatus = nppppreloadStatusSpan.textContent.trim();
-    nppppreloadStatusSpan.textContent = nppppreloadStatus;
+    nppppreloadStatusSpan.textContent = '';
     nppppreloadStatusSpan.style.fontSize = "14px";
+
+    let iconSpanPreload = document.createElement('span');
+    let preloadStatusText = '';
+
     if (nppppreloadStatus === "true") {
         nppppreloadStatusSpan.style.color = "green";
-        nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Ready';
+        iconSpanPreload.classList.add("dashicons", "dashicons-yes");
+        preloadStatusText = ' ' + __('Ready', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (nppppreloadStatus === "false") {
         nppppreloadStatusSpan.style.color = "red";
-        nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Ready';
+        iconSpanPreload.classList.add("dashicons", "dashicons-no");
+        preloadStatusText = ' ' + __('Not Ready', 'fastcgi-cache-purge-and-preload-nginx');
     } else {
         nppppreloadStatusSpan.style.color = "orange";
-        nppppreloadStatusSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> In Progress';
+        iconSpanPreload.classList.add("dashicons", "dashicons-clock");
+        preloadStatusText = ' ' + __('In Progress', 'fastcgi-cache-purge-and-preload-nginx');
         nppppreloadStatusCell.style.backgroundColor = "lightgreen";
-        // Blink animation
+
         nppppreloadStatusCell.animate([
             { backgroundColor: 'inherit' },
             { backgroundColor: '#90ee90' }
@@ -2373,18 +2560,30 @@ function npppupdateStatus() {
         });
     }
 
+    nppppreloadStatusSpan.appendChild(iconSpanPreload);
+    nppppreloadStatusSpan.append(preloadStatusText);
+
     // Fetch and update wget command status
     var npppwgetStatusSpan = document.getElementById("npppwgetStatus");
     var npppwgetStatus = npppwgetStatusSpan.textContent.trim();
-    npppwgetStatusSpan.textContent = npppwgetStatus;
+    npppwgetStatusSpan.textContent = '';
     npppwgetStatusSpan.style.fontSize = "14px";
+
+    let iconSpanWget = document.createElement('span');
+    let wgetStatusText = '';
+
     if (npppwgetStatus === "Installed") {
         npppwgetStatusSpan.style.color = "green";
-        npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
+        iconSpanWget.classList.add("dashicons", "dashicons-yes");
+        wgetStatusText = ' ' + __('Installed', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (npppwgetStatus === "Not Installed") {
         npppwgetStatusSpan.style.color = "red";
-        npppwgetStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
+        iconSpanWget.classList.add("dashicons", "dashicons-no");
+        wgetStatusText = ' ' + __('Not Installed', 'fastcgi-cache-purge-and-preload-nginx');
     }
+
+    npppwgetStatusSpan.appendChild(iconSpanWget);
+    npppwgetStatusSpan.append(wgetStatusText);
 
     // Update the FUSE status for libfuse
     var npppLibfuseVersionSpan = document.getElementById("npppLibfuseVersion");
@@ -2392,16 +2591,23 @@ function npppupdateStatus() {
 
     npppLibfuseVersionSpan.style.fontSize = "14px";
     npppLibfuseVersionSpan.style.fontWeight = "bold";
+    npppLibfuseVersionSpan.textContent = '';
+
+    let iconSpanLibfuse = document.createElement('span');
+    let libfuseStatusText = '';
 
     if (npppLibfuseVersion === "Not Installed") {
         npppLibfuseVersionSpan.style.color = "orange";
-        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-warning" style="color:orange; font-size:18px;"></span> ' + npppLibfuseVersion;
-    }
-    else if (npppLibfuseVersion.includes("(Not Determined)")) {
+        iconSpanLibfuse.classList.add("dashicons", "dashicons-warning");
+        iconSpanLibfuse.style.fontSize = "18px";
+        libfuseStatusText = ' ' + npppLibfuseVersion;
+    } else if (npppLibfuseVersion.includes("(Not Determined)")) {
         var installedVersion = npppLibfuseVersion.split(" ")[0];
-        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> <span style="color:green;">' + installedVersion + '</span> <span style="color:orange;">(Not Determined)</span>';
-    }
-    else if (npppLibfuseVersion.includes("(")) {
+        iconSpanLibfuse.classList.add("dashicons", "dashicons-yes");
+        iconSpanLibfuse.style.fontSize = "20px";
+        iconSpanLibfuse.style.color = "green";
+        libfuseStatusText = ` ${installedVersion} <span style="color:orange;">(${__('Not Determined', 'fastcgi-cache-purge-and-preload-nginx')})</span>`;
+    } else if (npppLibfuseVersion.includes("(")) {
         var versions = npppLibfuseVersion.match(/(\d+\.\d+\.\d+)\s\((\d+\.\d+\.\d+)\)/);
         if (versions) {
             var installedVersion = versions[1];
@@ -2409,16 +2615,27 @@ function npppupdateStatus() {
 
             if (installedVersion === latestVersion) {
                 npppLibfuseVersionSpan.style.color = "green";
-                npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> ' + installedVersion + ' (' + latestVersion + ')';
+                iconSpanLibfuse.classList.add("dashicons", "dashicons-yes");
+                iconSpanLibfuse.style.fontSize = "20px";
+                iconSpanLibfuse.style.color = "green";
+                libfuseStatusText = ` ${installedVersion} (${latestVersion})`;
             } else {
-                npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-update" style="color:orange; font-size:18px;"></span> <span style="color:orange;">' + installedVersion + '</span> <span style="color:green;">(' + latestVersion + ')</span>';
+                iconSpanLibfuse.classList.add("dashicons", "dashicons-update");
+                iconSpanLibfuse.style.fontSize = "18px";
+                iconSpanLibfuse.style.color = "orange";
+                libfuseStatusText = `<span style="color:orange;">${installedVersion}</span> <span style="color:green;">(${latestVersion})</span>`;
             }
         }
-    }
-    else {
+    } else {
         npppLibfuseVersionSpan.style.color = "green";
-        npppLibfuseVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> ' + npppLibfuseVersion;
+        iconSpanLibfuse.classList.add("dashicons", "dashicons-yes");
+        iconSpanLibfuse.style.fontSize = "20px";
+        iconSpanLibfuse.style.color = "green";
+        libfuseStatusText = ' ' + npppLibfuseVersion;
     }
+
+    npppLibfuseVersionSpan.appendChild(iconSpanLibfuse);
+    npppLibfuseVersionSpan.append(libfuseStatusText);
 
     // Update the FUSE status for bindfs
     var npppBindfsVersionSpan = document.getElementById("npppBindfsVersion");
@@ -2426,16 +2643,23 @@ function npppupdateStatus() {
 
     npppBindfsVersionSpan.style.fontSize = "14px";
     npppBindfsVersionSpan.style.fontWeight = "bold";
+    npppBindfsVersionSpan.textContent = '';
+
+    let iconSpanBindfs = document.createElement('span');
+    let bindfsStatusText = '';
 
     if (npppBindfsVersion === "Not Installed") {
         npppBindfsVersionSpan.style.color = "orange";
-        npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-warning" style="color:orange; font-size:18px;"></span> ' + npppBindfsVersion;
-    }
-    else if (npppBindfsVersion.includes("(Not Determined)")) {
+        iconSpanBindfs.classList.add("dashicons", "dashicons-warning");
+        iconSpanBindfs.style.fontSize = "18px";
+        bindfsStatusText = ' ' + npppBindfsVersion;
+    } else if (npppBindfsVersion.includes("(Not Determined)")) {
         var installedVersion = npppBindfsVersion.split(" ")[0];
-        npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> <span style="color:green;">' + installedVersion + '</span> <span style="color:orange;">(Not Determined)</span>';
-    }
-    else if (npppBindfsVersion.includes("(")) {
+        iconSpanBindfs.classList.add("dashicons", "dashicons-yes");
+        iconSpanBindfs.style.fontSize = "20px";
+        iconSpanBindfs.style.color = "green";
+        bindfsStatusText = ` ${installedVersion} <span style="color:orange;">(${__('Not Determined', 'fastcgi-cache-purge-and-preload-nginx')})</span>`;
+    } else if (npppBindfsVersion.includes("(")) {
         var versions = npppBindfsVersion.match(/(\d+\.\d+\.\d+)\s\((\d+\.\d+\.\d+)\)/);
         if (versions) {
             var installedVersion = versions[1];
@@ -2443,42 +2667,75 @@ function npppupdateStatus() {
 
             if (installedVersion === latestVersion) {
                 npppBindfsVersionSpan.style.color = "green";
-                npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> ' + installedVersion + ' (' + latestVersion + ')';
+                iconSpanBindfs.classList.add("dashicons", "dashicons-yes");
+                iconSpanBindfs.style.fontSize = "20px";
+                iconSpanBindfs.style.color = "green";
+                bindfsStatusText = ` ${installedVersion} (${latestVersion})`;
             } else {
-                npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-update" style="color:orange; font-size:18px;"></span> <span style="color:orange;">' + installedVersion + '</span> <span style="color:green;">(' + latestVersion + ')</span>';
+                iconSpanBindfs.classList.add("dashicons", "dashicons-update");
+                iconSpanBindfs.style.fontSize = "18px";
+                iconSpanBindfs.style.color = "orange";
+                bindfsStatusText = `<span style="color:orange;">${installedVersion}</span> <span style="color:green;">(${latestVersion})</span>`;
             }
         }
-    }
-    else {
+    } else {
         npppBindfsVersionSpan.style.color = "green";
-        npppBindfsVersionSpan.innerHTML = '<span class="dashicons dashicons-yes" style="color:green; font-size:20px;"></span> ' + npppBindfsVersion;
+        iconSpanBindfs.classList.add("dashicons", "dashicons-yes");
+        iconSpanBindfs.style.fontSize = "20px";
+        iconSpanBindfs.style.color = "green";
+        bindfsStatusText = ' ' + npppBindfsVersion;
     }
+
+    npppBindfsVersionSpan.appendChild(iconSpanBindfs);
+    npppBindfsVersionSpan.append(bindfsStatusText);
 
     // Fetch and update permission isolation status
     var nppppermIsolationSpan = document.getElementById("nppppermIsolation");
     var nppppermIsolation = nppppermIsolationSpan.textContent.trim();
-    nppppermIsolationSpan.textContent = nppppermIsolation;
+    nppppermIsolationSpan.textContent = '';
     nppppermIsolationSpan.style.fontSize = "14px";
+
+    let iconSpanPermIsolation = document.createElement('span');
+    let permIsolationStatusText = '';
+
     if (nppppermIsolation === "Isolated") {
         nppppermIsolationSpan.style.color = "green";
-        nppppermIsolationSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> ' + nppppermIsolation;
+        iconSpanPermIsolation.classList.add("dashicons", "dashicons-yes");
+        permIsolationStatusText = ' ' + __('Isolated', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (nppppermIsolation === "Not Isolated") {
         nppppermIsolationSpan.style.color = "orange";
-        nppppermIsolationSpan.innerHTML = '<span class="dashicons dashicons-clock"></span> ' + nppppermIsolation;
+        iconSpanPermIsolation.classList.add("dashicons", "dashicons-clock");
+        permIsolationStatusText = ' ' + __('Not Isolated', 'fastcgi-cache-purge-and-preload-nginx');
+    } else if (nppppermIsolation === "Not Determined") {
+        nppppermIsolationSpan.style.color = "red";
+        iconSpanPermIsolation.classList.add("dashicons", "dashicons-no");
+        permIsolationStatusText = ' ' + __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx');
     }
+
+    nppppermIsolationSpan.appendChild(iconSpanPermIsolation);
+    nppppermIsolationSpan.append(permIsolationStatusText);
 
     // Fetch and update cpulimit command status
     var npppcpulimitStatusSpan = document.getElementById("npppcpulimitStatus");
     var npppcpulimitStatus = npppcpulimitStatusSpan.textContent.trim();
-    npppcpulimitStatusSpan.textContent = npppcpulimitStatus;
+    npppcpulimitStatusSpan.textContent = '';
     npppcpulimitStatusSpan.style.fontSize = "14px";
+
+    let iconSpanCpulimit = document.createElement('span');
+    let cpulimitStatusText = '';
+
     if (npppcpulimitStatus === "Installed") {
         npppcpulimitStatusSpan.style.color = "green";
-        npppcpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-yes"></span> Installed';
+        iconSpanCpulimit.classList.add("dashicons", "dashicons-yes");
+        cpulimitStatusText = ' ' + __('Installed', 'fastcgi-cache-purge-and-preload-nginx');
     } else if (npppcpulimitStatus === "Not Installed") {
         npppcpulimitStatusSpan.style.color = "red";
-        npppcpulimitStatusSpan.innerHTML = '<span class="dashicons dashicons-no"></span> Not Installed';
+        iconSpanCpulimit.classList.add("dashicons", "dashicons-no");
+        cpulimitStatusText = ' ' + __('Not Installed', 'fastcgi-cache-purge-and-preload-nginx');
     }
+
+    npppcpulimitStatusSpan.appendChild(iconSpanCpulimit);
+    npppcpulimitStatusSpan.append(cpulimitStatusText);
 
     // Add spin effect to icons
     document.querySelectorAll('.status').forEach(status => {
@@ -2511,115 +2768,60 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Adjust width of submit button according to it's container nppp-nginx-tabs
+// Adjust width of submit button
 document.addEventListener('DOMContentLoaded', function() {
     const tabsContainer = document.getElementById('nppp-nginx-tabs');
-    const submitContainer = document.querySelector('.submit');
+    const submitContainer = document.querySelector('#nppp-settings-form .submit');
 
     function updateSubmitPosition() {
+        if (!tabsContainer || !submitContainer) {
+            return;
+        }
+
         const containerRect = tabsContainer.getBoundingClientRect();
 
-        // Set the width and position of the submit button to match the container
+        // Set the width and position of the submit button
         submitContainer.style.left = `${containerRect.left}px`;
         submitContainer.style.width = `${containerRect.width}px`;
 
-        // Remove any extra padding or margins on the button that could cause overflow
+        // Remove any extra padding or margins
         submitContainer.style.margin = '0';
         submitContainer.style.padding = '0';
     }
 
-    // Initial update on page load
-    updateSubmitPosition();
+    // Wait for elements ready
+    const waitForTabs = setInterval(() => {
+        const tabsContainer = document.getElementById('nppp-nginx-tabs');
+        const submitContainer = document.querySelector('#nppp-settings-form .submit');
+
+        if (tabsContainer && submitContainer) {
+            clearInterval(waitForTabs);
+            updateSubmitPosition();
+        }
+    }, 10);
 
     // Update the position when the window is resized
     window.addEventListener('resize', updateSubmitPosition);
 });
 
-// Warn the user if a systemd service restart is required due to missing fuse cache path mounts
-document.addEventListener('DOMContentLoaded', function () {
-    let currentObserver = null;
+// Track the currently active link for the submenu
+let npppActiveLink = null;
 
-    // Function to handle the "Status" tab content updates
-    function npponTabActivated(event, ui) {
-        const tabId = ui.newPanel.attr('id');
+// Add event listener to the parent <ul> for event delegation
+document.querySelector('.nppp-submenu ul').addEventListener('click', function(npppEvent) {
+    // Check if the clicked element is an <a> inside the submenu
+    const npppClickedLink = npppEvent.target.closest('a');
+    if (!npppClickedLink) return;
 
-        // Check if the "Status" tab is activated
-        if (tabId === 'status') {
-            // Only observe if not already observing
-            if (!currentObserver) {
-                nppobserveFuseStatusChange(ui.newPanel[0]);
-            }
-        } else {
-            // Disconnect observer when switching away from Status tab
-            nppdisconnectObserver();
-        }
+    // Remove 'active' class from the previously active link
+    if (npppActiveLink) {
+        npppActiveLink.classList.remove('active');
     }
 
-    // Function to observe changes in the status panel and insert the warning icon
-    function nppobserveFuseStatusChange(tabContent) {
-        // Create a MutationObserver to observe the status content
-        const observer = new MutationObserver((mutationsList, observer) => {
-            const fuseStatusSpan = document.querySelector('#npppFuseMountStatus span:last-of-type');
-            if (fuseStatusSpan) {
-                // Compare the trimmed text
-                if (fuseStatusSpan.textContent.trim() === 'Not Mounted') {
-                    nppinsertWarningIcon(tabContent);
-                }
-                // Disconnect the observer after finding the status
-                observer.disconnect();
-            }
-        });
+    // Add 'active' class to the clicked link
+    npppClickedLink.classList.add('active');
 
-        // Store the observer to be cleaned up later
-        currentObserver = observer;
-        // Start observing the tab content for changes in the DOM
-        observer.observe(tabContent, { childList: true, subtree: true });
-    }
-
-    // Function to insert the warning icon into the "Status" tab
-    function nppinsertWarningIcon(tabContent) {
-        try {
-            // Create the warning icon
-            const attentionIcon = document.createElement('span');
-            attentionIcon.className = 'dashicons dashicons-warning';
-            attentionIcon.style.cssText = 'color: orange; margin-left: 8px; font-size: 28px;';
-
-            // Ensure the restart button exists before inserting the icon
-            const restartButton = document.querySelector('#nppp-restart-systemd-service-btn');
-            if (restartButton) {
-                restartButton.parentNode.insertBefore(attentionIcon, restartButton.nextSibling);
-
-                // Apply blink effect
-                const blinkEffect = attentionIcon.animate([
-                    { opacity: 1 },
-                    { opacity: 0 }
-                 ], {
-                    duration: 500,
-                    iterations: Infinity,
-                    direction: 'alternate'
-                });
-
-                // Stop blinking after 2 seconds
-                setTimeout(() => {
-                    blinkEffect.cancel();
-                }, 2000);
-            }
-        } catch (error) {
-            console.error('Error in warning icon insertion:', error);
-        }
-    }
-
-    // Function to disconnect the observer when no longer needed
-    function nppdisconnectObserver() {
-        if (currentObserver) {
-            currentObserver.disconnect();
-            currentObserver = null;
-        }
-    }
-
-    // Attach the npponTabActivated function to the 'tabsactivate' event only on the Status tab
-    $('#nppp-nginx-tabs').on('tabsactivate', function(event, ui) {
-        npponTabActivated(event, ui);
-    });
+    // Update the active link reference
+    npppActiveLink = npppClickedLink;
 });
-})(jQuery, window, document);
+})(jQuery);
