@@ -168,12 +168,11 @@ function nppp_parse_nginx_cache_key() {
 // Helper function to parse individual Nginx configuration files.
 function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) {
     // Skip symbolic links
-    if (in_array(realpath($file), $parsed_files) || is_link($file)) {
+    $realPath = realpath($file) ?: $file;
+    if (in_array($realPath, $parsed_files)) {
         return false;
     }
-
-    // Add the real path of the file to track it
-    $parsed_files[] = realpath($file);
+    $parsed_files[] = $realPath;
 
     if (!$wp_filesystem->exists($file)) {
         return false;
