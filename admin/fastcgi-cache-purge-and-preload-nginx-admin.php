@@ -3,7 +3,7 @@
  * Plugin Name:       FastCGI Cache Purge and Preload for Nginx
  * Plugin URI:        https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload
  * Description:       Manage FastCGI Cache Purge and Preload for Nginx operations directly from your WordPress admin dashboard.
- * Version:           2.1.0
+ * Version:           2.0.9
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
  * Author Email:      hasan.calisir@psauxit.com
@@ -53,7 +53,6 @@ require_once dirname(__DIR__) . '/includes/schedule.php';
 require_once dirname(__DIR__) . '/includes/rest-api-helper.php';
 require_once dirname(__DIR__) . '/includes/plugin-tracking.php';
 require_once dirname(__DIR__) . '/includes/update.php';
-require_once dirname(__DIR__) . '/includes/dashboard-widget.php';
 
 // Get the status of Auto Purge option
 $options = get_option('nginx_cache_settings');
@@ -73,7 +72,6 @@ $page_cache_purge_actions = array(
 );
 
 // Add actions and filters
-add_action('init', 'nppp_load_i18n');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_check_for_plugin_update');
 add_action('admin_enqueue_scripts', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets');
@@ -116,12 +114,10 @@ add_action('transition_comment_status', 'nppp_purge_cache_on_comment_change', 20
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
 add_action('upgrader_process_complete', 'nppp_purge_cache_on_theme_plugin_update', 10, 2);
 add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_default_cache_key_regex_option');
-add_action('switch_theme', 'nppp_purge_cache_on_theme_switch', 10, 3);
+add_action('after_switch_theme', 'nppp_purge_cache_on_theme_switch', 10, 2);
 add_action('activated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
 add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
 add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_preload_mobile_option');
-add_action('npp_plugin_tracking_event', 'nppp_plugin_tracking', 10, 1);
-add_action('wp_dashboard_setup', 'nppp_add_dashboard_widget');
 $nppp_auto_purge
     ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions)
     : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions);

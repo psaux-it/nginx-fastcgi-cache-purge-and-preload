@@ -2,7 +2,7 @@
 /**
  * Rest API for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains rest api functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.0
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -134,8 +134,7 @@ function nppp_log_api_request($endpoint, $status) {
 
     // Check if the directory is valid and exists
     if ($sanitized_dir_path === false) {
-        // Translators: %s is the path to the log file.
-        nppp_custom_error_log(sprintf(__('Invalid or inaccessible log file directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $log_file_dir));
+        nppp_custom_error_log("Invalid or inaccessible log file directory: " . $log_file_dir);
         return;
     }
 
@@ -150,8 +149,7 @@ function nppp_log_api_request($endpoint, $status) {
 
     // Check the append log status
     if (!$append_result) {
-        // Translators: %s is the path to the log file.
-        nppp_custom_error_log(sprintf(__('Error appending to log file at %s', 'fastcgi-cache-purge-and-preload-nginx'), $sanitized_path));
+        nppp_custom_error_log("Error appending to log file at " . $sanitized_path);
         return;
     }
 }
@@ -174,8 +172,8 @@ function nppp_api_rate_limit_check($ip_address, $endpoint) {
 
         // Limit requests to 1 per minute
         if ($request_count > $rate_limit) {
-            nppp_log_api_request($endpoint, __('ERROR 429 TOO MANY REQUEST', 'fastcgi-cache-purge-and-preload-nginx'));
-            return new WP_Error('rate_limit_error', __('NPP REST API rate limit exceeded. Try again in 1 minute.', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 429));
+            nppp_log_api_request($endpoint, "ERROR 429 TOO MANY REQUEST");
+            return new WP_Error('rate_limit_error', 'NPP REST API Rate Limit Exceeded. Wait 1 Minute.', array('status' => 429));
         }
 
         // Update the request count
@@ -226,8 +224,7 @@ function nppp_validate_and_rate_limit_endpoint($request) {
     // 4. If no API key is provided, return an error
     // or Sanitize API Key
     if (empty($api_key)) {
-        nppp_log_api_request('global', __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
-        return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
+        return new WP_Error('authentication_error', 'No API Key provided', array('status' => 403));
     } else {
         $api_key = sanitize_text_field($api_key);
     }
@@ -247,8 +244,8 @@ function nppp_validate_and_rate_limit_endpoint($request) {
 
     // Validate API key format
     if (!preg_match('/^[a-f0-9]{64}$/i', $api_key)) {
-        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
-        return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
+        nppp_log_api_request($endpoint, 'ERROR 403 INVALID API KEY');
+        return new WP_Error('validation_error', 'NPP REST API Invalid API Key', array('status' => 403));
     }
 
     // Retrieve the stored API key from options
@@ -257,8 +254,8 @@ function nppp_validate_and_rate_limit_endpoint($request) {
 
     // Authentication check
     if (!hash_equals($stored_key, $api_key)) {
-        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
-        return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
+        nppp_log_api_request($endpoint, 'ERROR 403 AUTHENTICATION FAILED');
+        return new WP_Error('authentication_error', 'NPP REST API Authentication Error', array('status' => 403));
     }
 
     // Everything passed
@@ -275,7 +272,7 @@ function nppp_nginx_cache_purge_endpoint($request) {
 
     // Log the successful purge API call
     // Not hit the rate limit, authentication errors
-    nppp_log_api_request('purge', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'));
+    nppp_log_api_request('purge', 'SUCCESS 200 OK');
 
     // Necessary data for purge action
     $nginx_cache_settings = get_option('nginx_cache_settings');
@@ -316,7 +313,7 @@ function nppp_nginx_cache_preload_endpoint($request) {
 
     // Log the successful preload API call
     // Not hit the rate limit, authentication errors
-    nppp_log_api_request('preload', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'));
+    nppp_log_api_request('preload', 'SUCCESS 200 OK');
 
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');

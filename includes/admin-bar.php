@@ -2,7 +2,7 @@
 /**
  * WP Admin Bar code for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Admin Bar code for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.0
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -14,96 +14,78 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Add NPP menu to WordPress admin-bar
+// Add buttons to WordPress admin bar
 function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     // Check if the user has permissions to manage options
     if (!current_user_can('manage_options')) {
         return;
     }
 
-    // Add top admin-bar menu for NPP
+    // Add a parent menu item for FastCGI cache operations
     $wp_admin_bar->add_menu(array(
-        'id'    => 'fastcgi-cache-operations',
-        'title' => sprintf(
-            '<img style="height: 20px; margin-bottom: -5px; width: 20px;" src="%s"> %s',
-            esc_url(plugin_dir_url(__FILE__) . '../admin/img/bar.png'),
-            esc_html__('Nginx Cache', 'fastcgi-cache-purge-and-preload-nginx')
+        'id' => 'fastcgi-cache-operations',
+        'title' => '<img style="height: 20px; margin-bottom: -4px; padding-right: 3px;" src="' . plugin_dir_url(__FILE__) . '../admin/img/bar.png" alt="NPP" title="NPP"> FastCGI Cache',
+        'href' => '#',
+        'meta' => array(
+            'class' => 'npp-icon',
         ),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings'),
     ));
 
-    // Add "Purge All" admin-bar parent menu for NPP
+    // Add purge submenu
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'purge-cache',
-        'title' => __('Purge All', 'fastcgi-cache-purge-and-preload-nginx'),
+        'title' => 'Purge All',
         'href'   => wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce'),
-        'meta'   => array('class' => 'nppp-action-trigger'),
     ));
 
-    // Add "Preload All" admin-bar parent menu for NPP
+    // Add preload submenu
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'preload-cache',
-        'title' => __('Preload All', 'fastcgi-cache-purge-and-preload-nginx'),
+        'title' => 'Preload All',
         'href' => wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce'),
-        'meta'   => array('class' => 'nppp-action-trigger'),
     ));
 
-    // Add single "Purge" and "Preload" admin-bar parent menus for front-end
+    // Add single purge and preload submenu only if not in wp-admin
     if (isset($_SERVER['REQUEST_URI']) && !empty($_SERVER['REQUEST_URI'])) {
+        // Unslash and sanitize the REQUEST_URI
         $request_uri = sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']));
 
         // Check if the URI does not contain 'wp-admin'
         if (strpos($request_uri, 'wp-admin') === false) {
-            // Purge
+            // Add child menu items - Add purge single submenu
             $wp_admin_bar->add_menu(array(
                 'parent' => 'fastcgi-cache-operations',
                 'id' => 'purge-cache-single',
-                'title' => __('Purge This Page', 'fastcgi-cache-purge-and-preload-nginx'),
+                'title' => 'Purge This Page',
                 'href'  => wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache_single'), 'purge_cache_nonce'),
             ));
 
-            // Preload
+            // Add child menu items - Add preload single submenu
             $wp_admin_bar->add_menu(array(
                 'parent' => 'fastcgi-cache-operations',
                 'id' => 'preload-cache-single',
-                'title' => __('Preload This Page', 'fastcgi-cache-purge-and-preload-nginx'),
+                'title' => 'Preload This Page',
                 'href'  => wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache_single'), 'preload_cache_nonce'),
             ));
         }
     }
 
-    // Add "Status" admin-bar parent menu for NPP
+    // Add status submenu
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'fastcgi-cache-status',
-        'title' => __('Status', 'fastcgi-cache-purge-and-preload-nginx'),
+        'title' => 'Cache Status',
         'href' => admin_url('options-general.php?page=nginx_cache_settings#status'),
     ));
 
-    // Add "Advanced" admin-bar parent menu for NPP
-    $wp_admin_bar->add_menu(array(
-        'parent' => 'fastcgi-cache-operations',
-        'id' => 'fastcgi-cache-advanced',
-        'title' => __('Advanced', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings#premium'),
-    ));
-
-    // Add "Settings" admin-bar parent menu for NPP
+    // Add settings submenu
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id' => 'fastcgi-cache-settings',
-        'title' => __('Settings', 'fastcgi-cache-purge-and-preload-nginx'),
+        'title' => 'Cache Settings',
         'href' => admin_url('options-general.php?page=nginx_cache_settings'),
-    ));
-
-    // Add "Help" admin-bar parent menu for NPP
-    $wp_admin_bar->add_menu(array(
-        'parent' => 'fastcgi-cache-operations',
-        'id' => 'fastcgi-cache-help',
-        'title' => __('Help', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings#help'),
     ));
 }
 
@@ -122,46 +104,35 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         return;
     }
 
-    // Validate actions
-    $allowed_actions = ['nppp_purge_cache', 'nppp_preload_cache', 'nppp_purge_cache_single', 'nppp_preload_cache_single'];
-    if (!in_array($action, $allowed_actions, true)) {
-        return;
-    }
-
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
-    // Set default data for purge & preload actions
+    // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';
     $default_limit_rate = 1280;
     $default_cpu_limit = 50;
     $default_reject_regex = nppp_fetch_default_reject_regex();
 
-    // Get the necessary data for purge & preload actions
+    // Get the necessary data for actions from plugin options
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
     $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
     $nginx_cache_cpu_limit = isset($nginx_cache_settings['nginx_cache_cpu_limit']) ? $nginx_cache_settings['nginx_cache_cpu_limit'] : $default_cpu_limit;
     $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
 
-    // Get extra data for purge & preload actions
+    // Extra data for actions
     $fdomain = get_site_url();
     $this_script_path = dirname(plugin_dir_path(__FILE__));
     $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
-    // Get the current page url for purge & preload front-end actions
+    // get the current page url for purge & preload front
+    // also this is the redirect URL
     if (empty($_SERVER['HTTP_REFERER'])) {
         $clean_current_page_url = home_url();
     } else {
-        // Sanitize the URL
+        // Sanitize and remove slashes from the URL
         $current_page_url = sanitize_text_field(wp_unslash($_SERVER['HTTP_REFERER']));
         $clean_current_page_url = filter_var($current_page_url, FILTER_SANITIZE_URL);
-
-        // Validate the URL
-        if (!filter_var($clean_current_page_url, FILTER_VALIDATE_URL)) {
-            // Fallback to home URL if invalid
-            $clean_current_page_url = home_url();
-        }
     }
 
     // Start output buffering to capture the output of the actions
@@ -223,8 +194,8 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         $redirect_url = add_query_arg(
             array(
                 'page' => 'nginx_cache_settings',
-                'status_message' => esc_html(urlencode($status_message)),
-                'message_type' => esc_html(urlencode($message_type)),
+                'status_message' => urlencode($status_message),
+                'message_type' => urlencode($message_type),
                 'redirect_nonce' => $nonce_redirect,
             ),
             admin_url('options-general.php')

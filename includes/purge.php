@@ -2,7 +2,7 @@
 /**
  * Purge action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.0
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -21,7 +21,7 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
         );
         return;
     }
@@ -44,8 +44,6 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
                 return 2;
             } elseif ($error_code === 'directory_not_found') {
                 return 3;
-            } elseif ($error_code === 'directory_traversal') {
-                return 5;
             } else {
                 return 4;
             }
@@ -65,7 +63,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
         );
         return;
     }
@@ -93,8 +91,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            // Translators: %s is the page URL
-            nppp_display_admin_notice('info', sprintf( __( 'INFO: Nginx auto cache purge for page %s has been halted due to ongoing cache preloading. You can stop Nginx cache preloading anytime via the "Purge All" option.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+            nppp_display_admin_notice('info', "INFO: Auto Purge for page $current_page_url halted due to ongoing cache preloading. You can stop cache preloading anytime via Purge All.");
             return;
         }
     }
@@ -105,7 +102,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         $url_to_search = preg_replace('#^https?://#', '', $current_page_url);
         $url_to_search_exact = rtrim($url_to_search, '/') . '/';
     } else {
-        nppp_display_admin_notice('error', __( 'ERROR URL: HTTP_REFERRER URL can not validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        nppp_display_admin_notice('error', "ERROR URL: HTTP_REFERRER URL can not validated.");
         return;
     }
 
@@ -123,8 +120,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
             if ($wp_filesystem->is_file($file->getPathname())) {
                 // Check read and write permissions for each file
                 if (!$wp_filesystem->is_readable($file->getPathname()) || !$wp_filesystem->is_writable($file->getPathname())) {
-                    // Translators: %s is the page URL
-                    nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+                    nppp_display_admin_notice('error', "ERROR PERMISSION: Cache purge failed for page $current_page_url due to permission issue. Refer to -Help- tab for guidance.");
                     return;
                 }
 
@@ -161,13 +157,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                         if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
                             $regex_tested = true;
                         } else {
-                            // Translators: %s is the page URL, $host$request_uri is just string the part of the cache key
-                            nppp_display_admin_notice('error', sprintf( __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\$host\$request_uri</strong> portion correctly.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ), true, false);
+                            nppp_display_admin_notice('error', "ERROR REGEX: Cache purge failed for page $current_page_url, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\$host\$request_uri</strong> portion correctly.", true, false);
                             return;
                         }
                     } else {
-                        // Translators: %s is the page URL
-                        nppp_display_admin_notice('error', sprintf( __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ), true, false);
+                        nppp_display_admin_notice('error', "ERROR REGEX: Cache purge failed for page $current_page_url, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.", true, false);
                         return;
                     }
                 }
@@ -191,15 +185,16 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
                     // Check the validation result
                     if ($validation_result !== true) {
+                        // Handle different validation outcomes
                         switch ($validation_result) {
                             case 'critical_path':
-                                $error_message = __( 'ERROR PATH: The Nginx cache path appears to be a critical system directory or a first-level directory. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
+                                $error_message = 'ERROR PATH: The cache path appears to be a critical system directory or a first-level directory. Cannot purge cache!';
                                 break;
                             case 'file_not_found_or_not_readable':
-                                $error_message = __( 'ERROR PATH: The specified Nginx cache path does not exist. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
+                                $error_message = 'ERROR PATH: The specified cache path does not exist. Cannot purge cache!';
                                 break;
                             default:
-                                $error_message = __( 'ERROR PATH: An invalid Nginx cache path was provided. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
+                                $error_message = 'ERROR PATH: An invalid cache path was provided. Cannot purge cache!';
                         }
                         nppp_display_admin_notice('error', $error_message);
                         return;
@@ -209,30 +204,25 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     $deleted = $wp_filesystem->delete($cache_path);
                     if ($deleted) {
                         if (!$nppp_auto_purge && !$nppp_auto_preload) {
-                            // Translators: %s is the page URL
-                            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+                            nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
                         } else {
                             if ($nppp_auto_purge && $nppp_auto_preload) {
                                 nppp_preload_cache_on_update($current_page_url, true);
                             } elseif ($nppp_auto_purge) {
-                                // Translators: %s is the page URL
-                                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+                                nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
                             } elseif ($nppp_auto_preload) {
-                                // Translators: %s is the page URL
-                                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+                                nppp_display_admin_notice('success', "SUCCESS ADMIN: Cache Purged for page $current_page_url");
                             }
                         }
                     } else {
-                        // Translators: %s is the page URL
-                        nppp_display_admin_notice('error', __( 'ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page $current_page_url. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                        nppp_display_admin_notice('error', "ERROR UNKNOWN: An unexpected error occurred while purging cache for page $current_page_url. Please file a bug on plugin support page.");
                     }
                     return;
                 }
             }
         }
     } catch (Exception $e) {
-        // Translators: %s is the page URL
-        nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+        nppp_display_admin_notice('error', "ERROR PERMISSION: Cache purge failed for page $current_page_url due to permission issue. Refer to -Help- tab for guidance.");
         return;
     }
 
@@ -244,8 +234,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
             nppp_preload_cache_on_update($current_page_url, false);
         } else {
             // Display admin notice if auto preload is not enabled
-            // Translators: %s is the page URL
-            nppp_display_admin_notice('info', sprintf( __( 'INFO ADMIN: Nginx cache purge attempted, but the page %s is not currently found in the cache.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+            nppp_display_admin_notice('info', "INFO ADMIN: Cache purge attempted, but the page $current_page_url is not currently found in the cache.");
         }
     }
 }
@@ -271,9 +260,9 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
             return;
         }
 
-        // Exclude URLs containing 'wp-global-styles-*' from being purged
-        $post_url = get_permalink($post->ID);
-        if (strpos($post_url, 'wp-global-styles-') !== false) {
+        // Prevent transition_post_status runs twice
+        // cause cache purge also runs twice
+        if (defined('REST_REQUEST') && REST_REQUEST) {
             return;
         }
 
@@ -370,7 +359,7 @@ function nppp_purge_cache_plugin_activation_deactivation() {
 // Auto Purge (Entire)
 // Purge entire cache automatically for THEME switchs.
 // This function hooks into the 'switch_theme' action
-function nppp_purge_cache_on_theme_switch($new_name, $new_theme, $old_theme) {
+function nppp_purge_cache_on_theme_switch($old_name, $old_theme) {
     // Retrieve plugin settings
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
@@ -466,7 +455,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
         );
         return;
     }
@@ -490,8 +479,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             // Try to kill the process with SIGTERM
             if (defined('SIGTERM') && @posix_kill($pid, SIGTERM) === false) {
                 // Log if SIGTERM is failed
-                // Translators: %s is the process PID
-                nppp_display_admin_notice('info', sprintf( __( 'INFO PROCESS: Failed to terminate the ongoing Nginx cache Preload process (PID: %s) using posix_kill', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
+                nppp_display_admin_notice('info', "INFO PROCESS: Failed to send SIGTERM to Preload process PID: $pid", true, false);
                 sleep(1);
 
                 // Check again if the process is still alive after SIGTERM
@@ -505,23 +493,21 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                         // Check again if the process is still alive after SIGKILL
                         if (!nppp_is_process_alive($pid)) {
                             // Log success after SIGKILL
-                            // Translators: %s is the process PID
-                            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using manual fallback mechanism SIGKILL', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
+                            nppp_display_admin_notice('success', "SUCCESS PROCESS: Fallback - SIGKILL sent to Preload process PID: $pid", true, false);
                         } else {
                             // Log failure if fallback didn't work
-                            nppp_display_admin_notice('error', __( 'ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx' ), true, false);
+                            nppp_display_admin_notice('error', "ERROR PROCESS: Unable to stop the ongoing Preload process. Please wait for the Preload process to complete and try Purge All again.", true, false);
                             return;
                         }
                     } else {
                         // Log failure if the kill command is not found
-                        nppp_display_admin_notice('error', __( 'ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx' ), true, false);
+                        nppp_display_admin_notice('error', "ERROR PROCESS: Unable to stop the ongoing Preload process. Please wait for the Preload process to complete and try Purge All again.", true, false);
                         return;
                     }
                 }
             } else {
                 // Log if SIGTERM is successfully sent
-                // Translators: %s is the process PID
-                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using posix_kill', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
+                nppp_display_admin_notice('success', "SUCCESS PROCESS: Successfully sent SIGTERM to Preload process with PID: $pid", true, false);
             }
 
             // If on-going preload action halted via purge
@@ -545,32 +531,26 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 case 0:
                     if ($nppp_is_rest_api) {
                         $message_type = 'success';
-                        $message_content = __( 'SUCCESS REST: The ongoing Nginx cache preloading process has been halted. All Nginx cache has been purged successfully.', 'fastcgi-cache-purge-and-preload-nginx' );
+                        $message_content = 'SUCCESS REST: Ongoing preloading halted. All cache purged successfully.';
                     } elseif ($nppp_is_admin_bar){
                         $message_type = 'success';
-                        $message_content = __( 'SUCCESS ADMIN: The ongoing Nginx cache preloading process has been halted. All Nginx cache has been purged successfully.', 'fastcgi-cache-purge-and-preload-nginx' );
+                        $message_content = 'SUCCESS ADMIN: Ongoing preloading halted. All cache purged successfully.';
                     } else {
                         $message_type = 'success';
-                        $message_content = __( 'SUCCESS: The ongoing Nginx cache preloading process has been halted. All Nginx cache has been purged successfully.', 'fastcgi-cache-purge-and-preload-nginx' );
+                        $message_content = 'SUCCESS: Ongoing preloading halted. All cache purged successfully.';
                     }
                     break;
                 case 1:
                     $message_type = 'error';
-                    $message_content = __( 'ERROR PERMISSION: The ongoing Nginx cache preloading process was halted, but Nginx cache purge failed due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
+                    $message_content = 'ERROR PERMISSION: Ongoing preloading halted but cache purge failed due to permission issue. Refer to -Help- tab for guidance.';
                     break;
                 case 3:
                     $message_type = 'error';
-                    // Translators: %s is the Nginx cache path
-                    $message_content = sprintf( __( 'ERROR PATH: The specified Nginx cache path (%s) was not found. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
+                    $message_content = 'ERROR PATH: Your FastCGI cache PATH (' . $nginx_cache_path . ') is not found. Please check your FastCGI cache path.';
                     break;
                 case 4:
                     $message_type = 'error';
-                    $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while attempting to purge the Nginx cache. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' );
-                    break;
-                case 5:
-                    $message_type = 'error';
-                    // Translators: %s is the Nginx cache path
-                    $message_content = sprintf( __( 'ERROR SECURITY: A directory traversal issue was detected with the provided path (%s). Cache purge aborted for security reasons. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
+                    $message_content = 'ERROR UNKNOWN: An unexpected error occurred while purging the FastCGI cache. Please file a bug on plugin support page.';
                     break;
             }
 
@@ -587,35 +567,34 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                     if (!$auto_preload) {
                         if ($nppp_is_rest_api) {
                             $message_type = 'success';
-                            $message_content = __( 'SUCCESS REST: All Nginx cache purged successfully.', 'fastcgi-cache-purge-and-preload-nginx' );
+                            $message_content = 'SUCCESS REST: All cache purged successfully.';
                         } elseif ($nppp_is_admin_bar){
                             $message_type = 'success';
-                            $message_content = __( 'SUCCESS ADMIN: All Nginx cache purged successfully.', 'fastcgi-cache-purge-and-preload-nginx' );
+                            $message_content = 'SUCCESS ADMIN: All cache purged successfully.';
                         } else {
                             $message_type = 'success';
-                            $message_content = __( 'SUCCESS: All Nginx cache purged successfully.', 'fastcgi-cache-purge-and-preload-nginx' );
+                            $message_content = 'SUCCESS: All cache purged successfully.';
                         }
                     }
                     break;
                 case 1:
                     $message_type = 'error';
-                    $message_content = __( 'ERROR PERMISSION: The Nginx cache purge failed due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
+                    $message_content = 'ERROR PERMISSION: Cache purge failed due to permission issue. Refer to -Help- tab for guidance.';
                     break;
                 case 2:
                     // Check auto preload status and defer message accordingly
                     if (!$auto_preload) {
                         $message_type = 'info';
-                        $message_content = __( 'INFO: Nginx cache purge attempted, but no cache found.', 'fastcgi-cache-purge-and-preload-nginx' );
+                        $message_content = 'INFO: Cache purge attempted, but no cache found.';
                     }
                     break;
                 case 3:
                     $message_type = 'error';
-                    // Translators: %s is the Nginx cache path
-                    $message_content = sprintf( __( 'ERROR PATH: The specified Nginx cache path (%s) was not found. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
+                    $message_content = 'ERROR PATH: Your FastCGI cache PATH (' . $nginx_cache_path . ') is not found. Please check your FastCGI cache path.';
                     break;
                 case 4:
                     $message_type = 'error';
-                    $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while attempting to purge the Nginx cache. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' );
+                    $message_content = 'ERROR UNKNOWN: An unexpected error occurred while purging the FastCGI cache. Please file a bug on plugin support page.';
                     break;
             }
 
@@ -633,35 +612,34 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 if (!$auto_preload) {
                     if ($nppp_is_rest_api) {
                         $message_type = 'success';
-                        $message_content = __( 'SUCCESS REST: All Nginx cache purged successfully.', 'fastcgi-cache-purge-and-preload-nginx' );
+                        $message_content = 'SUCCESS REST: All cache purged successfully.';
                     } elseif ($nppp_is_admin_bar){
                         $message_type = 'success';
-                        $message_content = __( 'SUCCESS ADMIN: All Nginx cache purged successfully.', 'fastcgi-cache-purge-and-preload-nginx' );
+                        $message_content = 'SUCCESS ADMIN: All cache purged successfully.';
                     } else {
                         $message_type = 'success';
-                        $message_content = __( 'SUCCESS: All Nginx cache purged successfully.', 'fastcgi-cache-purge-and-preload-nginx' );
+                        $message_content = 'SUCCESS: All cache purged successfully.';
                     }
                 }
                 break;
             case 1:
                 $message_type = 'error';
-                $message_content = __( 'ERROR PERMISSION: The Nginx cache purge failed due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
+                $message_content = 'ERROR PERMISSION: Cache purge failed due to permission issue. Refer to -Help- tab for guidance.';
                 break;
             case 2:
                 // Check auto preload status and defer message accordingly
                 if (!$auto_preload) {
                     $message_type = 'info';
-                    $message_content = __( 'INFO: Nginx cache purge attempted, but no cache found.', 'fastcgi-cache-purge-and-preload-nginx' );
+                    $message_content = 'INFO: Cache purge attempted, but no cache found.';
                 }
                 break;
             case 3:
                 $message_type = 'error';
-                // Translators: %s is the Nginx cache path
-                $message_content = sprintf( __( 'ERROR PATH: The specified Nginx cache path (%s) was not found. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
+                $message_content = 'ERROR PATH: Your FastCGI cache PATH (' . $nginx_cache_path . ') is not found. Please check your FastCGI cache path.';
                 break;
             case 4:
                 $message_type = 'error';
-                $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while attempting to purge the Nginx cache. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' );
+                $message_content = 'ERROR UNKNOWN: An unexpected error occurred while purging the FastCGI cache. Please file a bug on plugin support page.';
                 break;
         }
     }

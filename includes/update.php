@@ -2,7 +2,7 @@
 /**
  * Plugin update check and routines for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains functions to check for plugin updates and run necessary update routines for FastCGI Cache Purge and Preload for Nginx.
- * Version: 2.1.0
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -55,7 +55,7 @@ function nppp_run_update_routines($old_version, $new_version) {
         // Display admin notice informing the user they are opted in (GPDR) and how opt-out
         nppp_display_admin_notice(
             'info',
-            __('Thank you for helping us improve the plugin by collecting anonymous tracking data. If you wish to opt out, please visit the plugin settings page.', 'fastcgi-cache-purge-and-preload-nginx'),
+            'Thank you for helping us improve the plugin by collecting anonymous tracking data. If you wish to opt-out, please visit the plugin settings page.',
             false,
             true
         );
@@ -81,7 +81,7 @@ function nppp_run_update_routines($old_version, $new_version) {
         // Optionally, display a notice or handle any further updates for this change
         nppp_display_admin_notice(
             'info',
-            __('The cache key regex has been reset to the default due to changes in version 2.0.9. Please review and adjust the regex, if needed, in the plugin settings under the Advanced Options section.', 'fastcgi-cache-purge-and-preload-nginx'),
+            'The cache key regex has been reset to the default due to changes in version 2.0.9. Please review and adjust the regex, if needed, in the plugin settings under the Advanced Options section.',
             false,
             true
         );

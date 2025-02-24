@@ -2,7 +2,7 @@
 /**
  * Logging & WP admin notices function for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contain logging & wp admin notices function for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.0
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -55,12 +55,10 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
 
             if (!$append_result) {
-                // Translators: %s is the path to the log file.
-                nppp_custom_error_log(sprintf(__('Error appending to log file at %s', 'fastcgi-cache-purge-and-preload-nginx'), $sanitized_path));
+                nppp_custom_error_log("Error appending to log file at " . $sanitized_path);
             }
         } else {
-            // Translators: %s is the path to the log file.
-            nppp_custom_error_log(sprintf(__('Invalid or inaccessible log file directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $log_file_dir));
+            nppp_custom_error_log("Invalid or inaccessible log file directory: " . $log_file_dir);
         }
     }
 
@@ -109,8 +107,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         if (!empty($action) && array_key_exists($action, $allowed_actions)) {
             // Check if nonce is set and is valid
             if (!isset($_REQUEST['_wpnonce'])) {
-                // Translators: This message appears when a required nonce is missing.
-                wp_die(esc_html__('Nonce is missing.', 'fastcgi-cache-purge-and-preload-nginx'));
+                wp_die('Nonce is missing.');
             }
 
             // Sanitize nonce
@@ -119,14 +116,12 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
 
             // Verify nonce for WP Admin Notices
             if (!wp_verify_nonce($nonce, $expected_nonce)) {
-                // Translators: This message appears when the provided nonce is invalid.
-                wp_die(esc_html__('Invalid nonce. Request could not be verified.', 'fastcgi-cache-purge-and-preload-nginx'));
+                wp_die('Invalid nonce. Request could not be verified.');
             }
 
             // Further security check to verify the user’s capability
             if (!current_user_can('manage_options')) {
-                // Translators: This message appears when a user does not have the required permissions.
-                wp_die(esc_html__('Permission denied', 'fastcgi-cache-purge-and-preload-nginx'));
+                wp_die('Permission denied');
             }
         } else {
             return;
@@ -172,10 +167,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
 
     // Perform the permission check for admin actions
     if (is_admin() && !current_user_can('manage_options')) {
-        echo '<div class="notice notice-error"><p>' . esc_html__(
-                 'You do not have sufficient permissions to access this page.',
-                 'fastcgi-cache-purge-and-preload-nginx'
-             ) . '</p></div>';
+        echo '<div class="notice notice-error"><p>You do not have sufficient permissions to access this page.</p></div>';
         return;
     }
 

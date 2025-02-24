@@ -2,7 +2,7 @@
 /**
  * Settings page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains settings page functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.0
+ * Version: 2.0.9
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -44,7 +44,7 @@ function nppp_nginx_cache_settings_init() {
 function nppp_add_nginx_cache_settings_page() {
     add_submenu_page(
         'options-general.php',
-        'Nginx Cache',
+        'Nginx FastCGI Cache',
         'FastCGI Cache Purge and Preload',
         'manage_options',
         'nginx_cache_settings',
@@ -84,32 +84,22 @@ function nppp_nginx_cache_settings_page() {
                 <div class="nppp-fill-mask">
                     <div class="nppp-loader-fill"></div>
                 </div>
-                <span class="nppp-loader-text"><?php echo esc_html__( 'NPP', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                <span class="nppp-loader-text">NPP</span>
            </div>
-           <p class="nppp-loader-message"><?php echo esc_html__( 'Processing, please wait...', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+           <p class="nppp-loader-message">Processing, please wait...</p>
         </div>
         <div class="nppp-header-content">
             <div class="nppp-img-container">
-                <img
-                    src="<?php echo esc_url(plugins_url('../admin/img/logo.png', __FILE__)); ?>"
-                    width="90"
-                    height="90"
-                    alt="<?php echo esc_attr__('Plugin Logo', 'fastcgi-cache-purge-and-preload-nginx'); ?>">
+                <img src="<?php echo esc_url( plugins_url( '../admin/img/logo.png', __FILE__ ) ); ?>">
             </div>
             <div class="nppp-buttons-wrapper">
                 <div class="nppp-cache-buttons">
-                    <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce')); ?>" class="nppp-button nppp-button-primary" id="nppp-purge-button">
-                        <span class="dashicons dashicons-trash" style="font-size: 18px;"></span>
-                        <?php esc_html_e( 'Purge All', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                    </a>
-                    <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce')); ?>" class="nppp-button nppp-button-primary" id="nppp-preload-button">
-                        <span class="dashicons dashicons-update" style="font-size: 18px;"></span>
-                        <?php esc_html_e( 'Preload All', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                    </a>
+                    <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce')); ?>" class="nppp-button nppp-button-primary" id="nppp-purge-button">Purge All</a>
+                    <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce')); ?>" class="nppp-button nppp-button-primary" id="nppp-preload-button">Preload All</a>
                 </div>
                 <p class="nppp-cache-tip">
                     <span class="dashicons dashicons-info"></span>
-                    <?php esc_html_e( 'Use Purge All to stop Preload All', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    Use Purge All to stop ongoing Preloading
                 </p>
             </div>
         </div>
@@ -117,42 +107,22 @@ function nppp_nginx_cache_settings_page() {
         <div id="nppp-nginx-tabs">
             <div class="tab-header-container">
                 <ul>
-                    <li>
-                        <a href="#settings">
-                            <?php echo do_shortcode('[nppp_svg_icon icon="settings" class="tab-icon" size="24px"]'); ?>
-                            <span class="tab-text"><?php echo esc_html__( 'Settings', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="#status">
-                            <?php echo do_shortcode('[nppp_svg_icon icon="status" class="tab-icon" size="24px"]'); ?>
-                            <span class="tab-text"><?php echo esc_html__( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="#premium">
-                            <?php echo do_shortcode('[nppp_svg_icon icon="advanced" class="tab-icon" size="24px"]'); ?>
-                            <span class="tab-text"><?php echo esc_html__( 'Advanced', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="#help">
-                            <?php echo do_shortcode('[nppp_svg_icon icon="help" class="tab-icon" size="24px"]'); ?>
-                            <span class="tab-text"><?php echo esc_html__( 'Help', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        </a>
-                    </li>
+                    <li><a href="#settings"><?php echo do_shortcode('[nppp_svg_icon icon="settings" class="tab-icon" size="24px"]'); ?> <span class="tab-text">Settings</span></a></li>
+                    <li><a href="#status"><?php echo do_shortcode('[nppp_svg_icon icon="status" class="tab-icon" size="24px"]'); ?> <span class="tab-text">Status</span></a></li>
+                    <li><a href="#premium"><?php echo do_shortcode('[nppp_svg_icon icon="advanced" class="tab-icon" size="24px"]'); ?> <span class="tab-text">Advanced</span></a></li>
+                    <li><a href="#help"><?php echo do_shortcode('[nppp_svg_icon icon="help" class="tab-icon" size="24px"]'); ?> <span class="tab-text">Help</span></a></li>
                 </ul>
             </div>
-            <div id="settings" class="tab-content">
-                <div id="settings-content-placeholder" style="display: none;">
+            <div id="settings" class="tab-content active">
+                <div id="settings-content-placeholder">
                 <div class="nppp-submenu">
                     <ul>
-                        <li><a href="#purge-options"><?php echo esc_html__( 'Purge Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?></a></li>
-                        <li><a href="#preload-options"><?php echo esc_html__( 'Preload Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?></a></li>
-                        <li><a href="#schedule-options"><?php echo esc_html__( 'Schedule Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?></a></li>
-                        <li><a href="#advanced-options"><?php echo esc_html__( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?></a></li>
-                        <li><a href="#mail-options"><?php echo esc_html__( 'Mail Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?></a></li>
-                        <li><a href="#logging-options"><?php echo esc_html__( 'Logging Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?></a></li>
+                        <li><a href="#purge-options">Purge Options</a></li>
+                        <li><a href="#preload-options">Preload Options</a></li>
+                        <li><a href="#schedule-options">Schedule Options</a></li>
+                        <li><a href="#advanced-options">Advanced Options</a></li>
+                        <li><a href="#mail-options">Mail Options</a></li>
+                        <li><a href="#logging-options">Logging Options</a></li>
                     </ul>
                 </div>
                 <form id="nppp-settings-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
@@ -163,223 +133,158 @@ function nppp_nginx_cache_settings_page() {
                     <table class="form-table">
                         <!-- Start Purge Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;">
-                                <h3 id="purge-options" style="margin: 0; padding: 0;">
-                                    <?php echo esc_html__( 'Purge Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                </h3>
-                            </th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="purge-options" style="margin: 0; padding: 0;">Purge Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
                             <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-admin-site"></span>
-                                <?php echo esc_html__( 'Nginx Cache Directory', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-admin-site"></span> Nginx Cache Directory</th>
                             <td>
                                 <?php nppp_nginx_cache_path_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'Provide the full NGINX cache directory path for plugin operation.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'The directory must be configured in NGINX and accessible by the PHP process.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'With read and write permissions for cache purge and preload to function properly.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description">Provide the full NGINX cache directory path for plugin operation.</p>
+                                <p class="description">The directory must be configured in NGINX and accessible by the PHP process,</p>
+                                <p class="description">with read and write permissions for cache purge and preload to function properly.</p>
                                 <div class="cache-paths-info">
-                                    <h4><?php echo esc_html__( 'Allowed Cache Paths', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
-                                    <p>
-                                        <strong><?php echo esc_html__( 'For RAM-based:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Use directories under', 'fastcgi-cache-purge-and-preload-nginx' ); ?> <code>/dev/</code> | <code>/tmp/</code> | <code>/var/</code>
-                                    </p>
-                                    <p>
-                                        <strong><?php echo esc_html__( 'For persistent disk:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Use directories under', 'fastcgi-cache-purge-and-preload-nginx' ); ?> <code>/opt/</code>
-                                    </p>
-                                    <p>
-                                        <strong><?php echo esc_html__( 'Important:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Paths must be at least one level deeper (e.g. /var/cache).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                        <br class="line-break">
-                                        <?php echo esc_html__( 'Critical system paths are prohibited in default to ensure accuracy to avoid unintended deletions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                    </p>
+                                    <h4>Allowed Cache Paths</h4>
+                                    <p><strong>For RAM-based:</strong> Use directories under <code>/dev/</code> | <code>/tmp/</code> | <code>/var/</code></p>
+                                    <p><strong>For persistent disk:</strong> Use directories under <code>/opt/</code></p>
+                                    <p><strong>Important:</strong> Paths must be one level deeper (e.g. <code>/var/cache</code>).<br class="line-break">
+                                    Critical system paths are prohibited in default to ensure accuracy to avoid unintended deletions.</p>
                                 </div>
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-trash"></span>
-                                <?php echo esc_html__( 'Auto Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-trash"></span> Auto Purge</th>
                             <td>
                                 <div class="nppp-auto-preload-container">
                                     <div class="nppp-onoffswitch-autopurge">
                                         <?php nppp_nginx_cache_purge_on_update_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'This feature ensures automatic cache purging for both individual posts/pages and', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'the entire site whenever specific changes are made, ensuring up-to-date content.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'It also supports auto preloading of the cache after purging for enhanced performance.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description">This feature ensures automatic cache purging for both individual posts/pages and</p>
+                                <p class="description">the entire site whenever specific changes are made, ensuring up-to-date content.</p>
+                                <p class="description">It also supports auto preloading of the cache after purging for enhanced performance.</p>
                                 <div class="cache-paths-info">
-                                    <h4><?php echo esc_html__( 'The entire cache is automatically purged when:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
+                                    <h4>The <span style="color: orange;"><strong>entire cache</strong></span> is automatically purged when:</h4>
                                     <p>
-                                        <strong><?php echo esc_html__( 'THEME', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong> (<?php echo esc_html__( 'active', 'fastcgi-cache-purge-and-preload-nginx' ); ?>) <?php echo esc_html__( 'is switched or updated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
-                                        <strong><?php echo esc_html__( 'PLUGIN', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong> <?php echo esc_html__( 'is activated, updated, or deactivated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
-                                        <?php echo esc_html__( 'Compatible caching plugins trigger a cache purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                    </p>
-                                    <br>
-                                    <h4><?php echo esc_html__( 'The cache for a POST/PAGE is automatically purged when:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
+                                        <strong>THEME</strong> (active) is switched or updated.<br>
+                                        <strong>PLUGIN</strong> is activated, updated, or deactivated.<br>
+                                        Compatible <strong>caching plugins</strong> trigger a cache purge.
+                                    </p><br>
+                                    <h4>The cache for a <span style="color: orange;"><strong>POST/PAGE</strong></span> is automatically purged when:</h4>
                                     <p>
-                                        <?php echo esc_html__( 'Changes are made to the content of the POST/PAGE.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
-                                        <?php echo esc_html__( 'A new COMMENT is approved or its status is changed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        Changes are made to the content of the <strong>POST/PAGE</strong>.<br>
+                                        A new <strong>COMMENT</strong> is approved or its status is changed.
                                     </p><br>
                                     <p>
-                                        <?php echo esc_html__( 'If Auto Preload is enabled, the cache for the single POST/PAGE or the entire cache will be automatically preloaded after the cache is purged.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        If <strong>Auto Preload</strong> is enabled, the cache for the <span style="color: orange;"><strong>single</strong></span> <strong>POST/PAGE</strong> or the <span style="color: orange;"><strong>entire cache</strong></span> will be automatically preloaded after the cache is purged.
                                     </p>
                                 </div>
                             </td>
                         </tr>
                         <!-- Start Preload Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;">
-                                <h3 id="preload-options" style="margin: 0; padding: 0;">
-                                    <?php echo esc_html__( 'Preload Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                </h3>
-                            </th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="preload-options" style="margin: 0; padding: 0;">Preload Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
                             <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-update"></span>
-                                <?php echo esc_html__( 'Auto Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-update"></span> Auto Preload</th>
                             <td>
                                 <div class="nppp-auto-preload-container">
                                     <div class="nppp-onoffswitch-preload">
                                         <?php nppp_nginx_cache_auto_preload_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'Enable this feature to automatically preload the cache after purging. This ensures fast page load times for visitors by proactively caching content.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'When enabled, your website\'s cache will preload with the latest content automatically after purge, ensuring quick loading times even for uncached pages.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'This feature is particularly useful for dynamic websites with frequently changing content.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'This feature triggers when either Auto Purge feature is enabled or when the Purge All cache action is used manually.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description">Enable this feature to automatically preload the cache after purging. This ensures fast page load times for visitors by proactively caching content.</p>
+                                <p class="description">When enabled, your website's cache will preload with the latest content automatically after purge, ensuring quick loading times even for uncached pages.</p>
+                                <p class="description">This feature is particularly useful for dynamic websites with frequently changing content.</p>
+                                <p class="description">This feature triggers when either <strong>Auto Purge</strong> feature is enabled or when the <strong>Purge All</strong> cache action is used manually.</p>
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-smartphone"></span>
-                                <?php echo esc_html__( 'Preload Mobile', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-smartphone"></span> Preload Mobile</th>
                             <td>
                                 <div class="nppp-auto-preload-container">
                                     <div class="nppp-onoffswitch-preload-mobile">
                                         <?php nppp_nginx_cache_auto_preload_mobile_callback(); ?>
                                     </div>
                                 </div>
-                                <div class="key-regex-info">
-                                    <p class="description"><?php echo esc_html__( 'Preload also Nginx cache for Mobile devices separately. This feature supports for both entire and single POST/PAGE cache events.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'Only enable if you have different content, themes or configurations for Mobile and Desktop devices and need to warm the cache for both.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'If enabled, this feature always triggers automatically when Preload actions are called via Rest, Cron or Admin, regardless of whether Auto Preload or Auto Purge are enabled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'If only Auto Preload is enabled, it also triggers automatically after Purge actions are called via Rest, Admin.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'When both Auto Purge and Auto Preload are enabled, it triggers automatically when the cache is purged through Auto Purge conditions or when Purge actions are called via Rest or Admin.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                </div>
+                                <p class="description">Preload also Nginx cache for <code>Mobile</code> devices separately. This feature supports for both <strong>entire</strong> and <strong>single POST/PAGE</strong> cache events.</p>
+                                <p class="description">Only enable if you have different content, themes or configurations for <code>Mobile</code> and <code>Desktop</code> devices and need to warm the cache for both.</p>
+                                <p class="description">If enabled, this feature always triggers automatically when <strong>Preload</strong> actions are called via <code>Rest, Cron or Admin</code>, regardless of whether <strong>Auto Preload</strong> or <strong>Auto Purge</strong> are enabled.</p>
+                                <p class="description">If only <strong>Auto Preload</strong> is enabled, it also triggers automatically after <strong>Purge</strong> actions are called via <code>Rest, Admin</code>.</p>
+                                <p class="description">When both <strong>Auto Purge</strong> and <strong>Auto Preload</strong> are enabled, it triggers automatically when the cache is purged through <strong>Auto Purge</strong> conditions or when <br><strong>Purge</strong> actions are called via <code>Rest or Admin</code>.</p>
                                 <div class="cache-paths-info">
-                                    <h4><strong><?php echo esc_html__( 'Note:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong></h4>
-                                    <p><?php echo esc_html__( 'The Mobile Preload action will begin after the main Preload process completes via the WordPress Cron job. As a result, the Mobile Preload action may start with a delay. To track the status of this process, please refer to the log section of the plugin.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <h4><strong>Note:</strong></h4>
+                                    <p>The Mobile Preload action will begin after the main Preload process completes via the WordPress Cron job. As a result, the Mobile Preload action may start with a delay. To track the status of this process, please refer to the log section of the plugin.</p>
                                 </div>
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-dashboard"></span>
-                                <?php echo esc_html__( 'CPU Usage Limit (%)', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-dashboard"></span> CPU Usage Limit (%)</th>
                             <td>
                                 <?php nppp_nginx_cache_cpu_limit_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'Enter the CPU usage limit for wget (%).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'wget can cause high CPU usage; if you encounter this problem, install cpulimit via package manager to manage it (10-100%).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description">Enter the CPU usage limit for <code>wget</code> (%).<br><code>wget</code> can cause high CPU usage; if you encounter this problem, install <code>cpulimit</code> via package manager to manage it (10-100%).</p>
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-no"></span>
-                                <?php echo esc_html__( 'Exclude Endpoints', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-no"></span> Exclude Endpoints</th>
                             <td>
                                 <?php nppp_nginx_cache_reject_regex_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'Enter a regex pattern to exclude endpoints from being cached while Preloading. Use | as a delimiter for multiple patterns.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'The default regex patterns exclude dynamic endpoints to prevent caching of user-specific content such as wp-admin|my-account.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'These exclusions are better handled server-side using _cache_bypass, _no_cache, and skip_cache rules in your Nginx configuration.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Here, these patterns are used to prevent wget from making requests to these endpoints during the Preloading process to avoid unnecessary server load.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <button id="nginx-regex-reset-defaults" class="button nginx-reset-regex-button">
-                                    <?php echo esc_html__( 'Reset Default', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                </button>
-                                <div class="cache-paths-info">
-                                    <p class="description"><?php echo esc_html__( 'Click the button to reset defaults. After plugin updates, it\'s best to reset first to apply the latest changes, then reapply your custom rules.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                </div>
+                                <p class="description">Enter a regex pattern to exclude endpoints from being cached while Preloading. Use | as a delimiter for multiple patterns.</p>
+                                <p class="description">The default regex patterns exclude dynamic endpoints to prevent caching of user-specific content such as <code>wp-admin|my-account</code>.</p>
+                                <p class="description">These exclusions are better handled server-side using <code>fastcgi_cache_bypass</code>, <code>fastcgi_no_cache</code>, and <code>skip_cache</code> rules in your Nginx configuration.</p>
+                                <p class="description">Here, these patterns are used to prevent <code>wget -r</code> from making requests to these endpoints during the Preloading process to avoid unnecessary server load.</p>
+                                <button id="nginx-regex-reset-defaults" class="button nginx-reset-regex-button">Reset Default</button>
+                                <p class="description">Click the button to reset defaults.<br>After plugin updates, it's best to reset first to apply the latest changes, then reapply your custom rules.</p>
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-no"></span>
-                                <?php echo esc_html__( 'Exclude File Extensions', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-no"></span> Exclude File Extensions</th>
                             <td>
                                 <?php nppp_nginx_cache_reject_extension_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'Enter file extensions to exclude from being downloaded during Preloading. Use commas to separate each extension.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Nginx cache is designed to cache dynamic content, such as PHP-generated pages. Static assets like CSS, JS, and images are not cached by Nginx.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Nginx efficiently serves static assets from the disk, and headers like expires help reduce frequent requests for these files.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'By excluding static files, Preload operation are accelerated by avoiding unnecessary requests via wget for static assets.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <button id="nginx-extension-reset-defaults" class="button nginx-reset-extension-button">
-                                    <?php echo esc_html__( 'Reset Default', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                </button>
-                                <div class="cache-paths-info">
-                                     <p class="description"><?php echo esc_html__( 'Click the button to reset defaults. After plugin updates, it\'s best to reset first to apply the latest changes, then reapply your custom rules.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                </div>
+                                <p class="description">Enter file extensions to exclude from being downloaded during Preloading. Use commas to separate each extension.</p>
+                                <p class="description">Nginx FastCGI cache is designed to cache dynamic content, such as PHP-generated pages. Static assets like <code>CSS</code>, <code>JS</code>, and images are not cached by FastCGI.</p>
+                                <p class="description">Nginx efficiently serves static assets from the disk, and headers like <code>expires</code> help reduce frequent requests for these files.</p>
+                                <p class="description">By excluding static files, Preload operation are accelerated by avoiding unnecessary requests via <code>wget</code> for static assets.</p>
+                                <button id="nginx-extension-reset-defaults" class="button nginx-reset-extension-button">Reset Default</button>
+                                <p class="description">Click the button to reset defaults.<br>After plugin updates, it's best to reset first to apply the latest changes, then reapply your custom rules.</p>
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-admin-generic"></span>
-                                <?php echo esc_html__( 'Limit Rate', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-admin-generic"></span> Limit Rate</th>
                             <td>
                                  <?php nppp_nginx_cache_limit_rate_callback(); ?>
-                                 <p class="description"><?php echo esc_html__( 'Enter a limit rate for preload action in KB/Sec.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                 <p class="description"><?php echo esc_html__( 'Preventing excessive bandwidth usage and avoiding overwhelming the server.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                 <p class="description">Enter a limit rate for preload action in KB/Sec. <br> Preventing excessive bandwidth usage and avoiding overwhelming the server.</p>
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-hourglass"></span>
-                                <?php echo esc_html__( 'Wait Time', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-hourglass"></span> Wait Time</th>
                             <td>
                                  <?php nppp_nginx_cache_wait_request_callback(); ?>
-                                 <p class="description"><?php echo esc_html__( 'Wait the specified number of seconds between the retrievals.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                 <p class="description"><?php echo esc_html__( 'Use of this option is recommended, as it lightens the server load by making the requests less frequent.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                 <p class="description"><?php echo esc_html__( 'Higher values dramatically increase cache preload times, while lowering the value can increase server load (CPU, Memory, Network).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                 <p class="description"><?php echo esc_html__( 'Adjust the values to find the optimal balance based on your desired server resource allocation.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                 <p class="description"><?php echo esc_html__( 'If you encounter unexpected permission issues or risk overwhelming your server, try setting it to 1 first and take small steps with each adjustment.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                 <p class="description"><?php echo esc_html__( 'Default: 0 second, Disabled', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                 <p class="description">Wait the specified number of seconds between the retrievals. <br></p>
+                                 <p class="description">Use of this option is recommended, as it lightens the server load by making the requests less frequent. <br></p>
+                                 <p class="description">Higher values dramatically increase cache preload times, while lowering the value can increase server load (CPU, Memory, Network) .<br></p>
+                                 <p class="description">Adjust the values to find the optimal balance based on your desired server resource allocation. <br></p>
+                                 <p class="description">If you encounter unexpected permission issues or risk overwhelming your server, try setting it to 1 first and take small steps with each adjustment. <br></p>
+                                 <p class="description">Default: 0 second, Disabled <br></p>
                             </td>
                         </tr>
                         <!-- Start Schedule Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;">
-                                <h3 id="schedule-options" style="margin: 0; padding: 0;">
-                                    <?php echo esc_html__( 'Schedule Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                </h3>
-                            </th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="schedule-options" style="margin: 0; padding: 0;">Schedule Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
                             <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-clock"></span>
-                                <?php echo esc_html__( 'WP Schedule Cache', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-clock"></span> WP Schedule Cache</th>
                             <td>
                                 <div class="nppp-auto-preload-container">
                                     <div class="nppp-onoffswitch-preload">
@@ -389,21 +294,18 @@ function nppp_nginx_cache_settings_page() {
                                 <div class="nppp-select-wrapper">
                                     <div class="nppp-cron-event-select-container">
                                         <select name="cron_event" id="nppp_cron_event" class="nppp-cron-event-select">
-                                            <option value="" disabled selected><?php echo esc_html__( 'On Every', 'fastcgi-cache-purge-and-preload-nginx' ); ?></option>
-                                            <option value="daily"><?php echo esc_html__( 'Every Day', 'fastcgi-cache-purge-and-preload-nginx' ); ?></option>
-                                            <option value="weekly"><?php echo esc_html__( 'Every Week', 'fastcgi-cache-purge-and-preload-nginx' ); ?></option>
-                                            <option value="monthly"><?php echo esc_html__( 'Every Month', 'fastcgi-cache-purge-and-preload-nginx' ); ?></option>
+                                            <option value="" disabled selected>On Every</option>
+                                            <option value="daily">Every Day</option>
+                                            <option value="weekly">Every Week</option>
+                                            <option value="monthly">Every Month</option>
                                         </select>
                                     </div>
                                     <div class="nppp-time-select-container">
                                         <div class="nppp-input-group">
-                                            <input id="nppp_datetimepicker1Input" type="text" placeholder="<?php echo esc_attr__( 'Time', 'fastcgi-cache-purge-and-preload-nginx' ); ?>"/>
+                                            <input id="nppp_datetimepicker1Input" type="text" placeholder="Time"/>
                                             <div class="nppp-input-group-append">
                                                 <button id="nginx-cache-schedule-set" class="button nginx-cache-schedule-set-button">
-                                                    <span class="nppp-tooltip">
-                                                        <?php echo esc_html__( 'SET CRON', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                                        <span class="nppp-tooltiptext"><?php echo esc_html__( 'Click to set cron schedule', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                                                    </span>
+                                                    <span class="nppp-tooltip">SET CRON<span class="nppp-tooltiptext">Click to set <br> cron schedule</span></span>
                                                 </button>
                                             </div>
                                         </div>
@@ -412,20 +314,13 @@ function nppp_nginx_cache_settings_page() {
                                 <ul class="scheduled-events-list">
                                     <?php nppp_get_active_cron_events(); ?>
                                 </ul>
-                                <div class="key-regex-info">
-                                    <p class="description"><?php echo esc_html__( 'Enable this feature to automatically schedule cache preloading task at specified intervals.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'This ensures that your website’s cache is consistently updated, optimizing performance and reducing server load.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'When enabled, your website will automatically refresh its cache according to the configured schedule, keeping content up-to-date and reducing load times for visitors.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'This feature is particularly useful for maintaining peak performance on dynamic websites with content that changes periodically.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'By scheduling caching tasks, you can ensure that your site remains fast and responsive, even during peak traffic periods.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                </div>
+                                <p class="description">Enable this feature to automatically schedule cache preloading task at specified intervals. This ensures that your website's cache is consistently updated, <br> optimizing performance and reducing server load.</p>
+                                <p class="description">When enabled, your website will automatically refresh its cache according to the configured schedule, keeping content up-to-date and reducing load times for visitors.</p>
+                                <p class="description">This feature is particularly useful for maintaining peak performance on dynamic websites with content that changes periodically. By scheduling caching tasks <br> you can ensure that your site remains fast and responsive, even during peak traffic periods.</p>
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-admin-network"></span>
-                                <?php echo esc_html__( 'REST API', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-admin-network"></span> REST API</th>
                             <td>
                                 <div class="nppp-auto-preload-container">
                                     <div class="nppp-onoffswitch-preload">
@@ -433,187 +328,133 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <?php nppp_nginx_cache_api_key_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'Enable this feature to for remote triggering of Purge and Preload actions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'This functionality streamlines cache management, enhancing website performance and efficiency through seamless integration with external systems.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'The REST API capability ensures effortless cache control from anywhere, facilitating automated maintenance and optimization.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <br>
-                                <p class="description"><strong><?php echo esc_html__( 'API Key Management and Usage:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong></p>
+                                <p class="description">Enable this feature to for remote triggering of Purge and Preload actions.</p>
+                                <p class="description">This functionality streamlines cache management, enhancing website performance and efficiency through seamless integration with external systems.</p>
+                                <p class="description">The REST API capability ensures effortless cache control from anywhere, facilitating automated maintenance and optimization.</p><br>
+                                <p class="description"><strong>API Key Management and Usage:</strong></p>
                                 <ul class="description" style="color: #646970; font-size: 14px;">
-                                    <li>
-                                        <strong><?php echo esc_html__( 'Generate API Key:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Click to generate a new API Key. Also you can create your own 64-char API Key and Update Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                    </li>
-                                    <li>
-                                        <strong><?php echo esc_html__( 'API Key:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Click to copy your API Key to the clipboard.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                    </li>
-                                    <li>
-                                        <strong><?php echo esc_html__( 'Purge URL:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Click to copy a pre-configured curl command for cache purging.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                    </li>
-                                    <li>
-                                        <strong><?php echo esc_html__( 'Preload URL:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Click to copy a pre-configured curl command for cache preloading.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                    </li>
+                                    <li><strong>Generate API Key:</strong> Click to generate a new API Key. Also you can create your own 64-char API Key and Update Options</li>
+                                    <li><strong>API Key:</strong> Click to copy your API Key to the clipboard.</li>
+                                    <li><strong>Purge URL:</strong> Click to copy a pre-configured cURL command for cache purging.</li>
+                                    <li><strong>Preload URL:</strong> Click to copy a pre-configured cURL command for cache preloading.</li>
                                 </ul>
-                                <p class="description"><strong><?php echo esc_html__( 'Allowed API Authentication Headers:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong></p>
+                                <p class="description"><strong>Allowed API Authentication Headers:</strong></p>
                                 <ul class="description" style="color: #646970; font-size: 14px;">
-                                    <li>
-                                        <strong><?php echo esc_html__( 'Authorization Header:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <code><?php echo esc_html__( 'Authorization: Bearer YOUR_API_KEY', 'fastcgi-cache-purge-and-preload-nginx' ); ?></code>
-                                    </li>
-                                    <li>
-                                        <strong><?php echo esc_html__( 'X-Api-Key Header:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <code><?php echo esc_html__( 'X-Api-Key: YOUR_API_KEY', 'fastcgi-cache-purge-and-preload-nginx' ); ?></code>
-                                    </li>
-                                    <li>
-                                        <strong><?php echo esc_html__( 'Request Body or Query String Parameter:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <code><?php echo esc_html__( 'api_key=YOUR_API_KEY', 'fastcgi-cache-purge-and-preload-nginx' ); ?></code>
-                                    </li>
+                                    <li><strong>Authorization Header:</strong><code>Authorization: Bearer YOUR_API_KEY</code></li>
+                                    <li><strong>X-Api-Key Header:</strong><code>X-Api-Key: YOUR_API_KEY</code></li>
+                                    <li><strong>Request Body or Query String Parameter:</strong><code>api_key=YOUR_API_KEY</code></li>
                                 </ul>
                             </td>
                         </tr>
                         <!-- Start Advanced Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;">
-                                <h3 id="advanced-options" style="margin: 0; padding: 0;">
-                                    <?php echo esc_html__( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                </h3>
-                            </th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="advanced-options" style="margin: 0; padding: 0;">Advanced Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
                             <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-edit"></span>
-                                <?php echo esc_html__( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-edit"></span> Cache Key Regex</th>
                             <td>
                                 <?php nppp_nginx_cache_key_custom_regex_callback(); ?>
-                                <div class="key-regex-info">
-                                    <p class="description">⚡ <?php echo esc_html__('The default regex pattern is designed to parse the \'$host\' and \'$request_uri\' portions from the only standard cache key format supported by the plugin: \'$scheme$request_method$host$request_uri\'', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
-                                    <p class="description">⚡ <?php echo esc_html__('If you use a non-standard or complex \'_cache_key\' format, you must define a custom regex pattern to correctly parse \'$host\' and \'$request_uri\' portions in order to ensure proper plugin functionality.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
-                                    <p class="description">⚡ <?php echo esc_html__('For example, if your custom key format is \'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args\', you will need to provide a corresponding regex pattern that accurately captures the \'$host\' and \'$request_uri\' parts.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
-                                    <p class="description">📌 <strong><?php echo esc_html__('Guidelines for creating a compatible regex:', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong></p>
-                                    <p class="description">📣 <?php echo esc_html__('Ensure your regex pattern targets only GET requests, as HEAD or any other request methods do not represent cached content and cause duplicates.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                    <p class="description">📣 <?php echo esc_html__('Ensure that your regex pattern is entered with delimiters. (e.g., /your-regex/ - #your-regex#)', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                    <p class="description">📣 <?php echo esc_html__('The regex must capture the \'$host\' in capture group 1 as matches[1] and \'$request_uri\' in capture group 2 as matches[2] from your custom _cache_key', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                </div>
+                                <p class="description">Enter a <code>preg_match</code> PHP regex pattern to parse URL <code>'$host$request_uri'</code> based on your custom <code>fastcgi_cache_key</code> format.</p><br>
+                                <p class="description">⚡The default regex pattern is designed to parse the <code>'$host'</code> and <code>'$request_uri'</code> portions from the only</p>
+                                <p class="description">&nbsp;standard cache key format <strong>supported by the plugin:</strong> <code>'$scheme$request_method$host$request_uri'</code>.</p><br>
+                                <p class="description">⚡If you use a non-standard or complex <code>fastcgi_cache_key</code> format, you must define a custom regex pattern</p>
+                                <p class="description">&nbsp;to correctly parse <code>'$host'</code> and <code>'$request_uri'</code> portions in order to ensure proper plugin functionality.</p><br>
+                                <p class="description">⚡For example, if your custom key format is <code>'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args'</code></p>
+                                <p class="description">&nbsp;you will need to provide a corresponding regex pattern that accurately captures the <code>'$host'</code> and <code>'$request_uri'</code> parts.</p><br>
+                                <p class="description">📌 <strong>Guidelines for creating a compatible regex</strong>:</p>
+                                <p class="description">📣 Ensure your regex pattern targets only <code>GET</code> requests, as <code>HEAD</code> or any other request methods do not represent cached content and cause duplicates.</p>
+                                <p class="description">📣 Ensure that your regex pattern is entered with delimiters. (e.g., /your-regex/ - #your-regex#)
+                                <p class="description">📣 The regex must capture the <code>'$host'</code> in <strong>capture group 1</strong> as <strong>matches[1]</strong> and <code>'$request_uri'</code> in <strong>capture group 2</strong> as <strong>matches[2]</strong> from your custom <code>fastcgi_cache_key</code></p><br>
                                 <div class="cache-paths-info">
-                                    <h4><?php echo esc_html__('Example', 'fastcgi-cache-purge-and-preload-nginx'); ?></h4>
-                                    <p><?php echo esc_html__('fastcgi_cache_key "$scheme$request_method$host$device$request_uri"', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                    <p><?php echo esc_html__('KEY: httpsGETpsauxit.comMOBILE/category/nginx-cache/2025', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
-                                    <p><?php echo esc_html__('This example demonstrates how the regex must capture the $host and $request_uri in two separate groups.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
+                                    <h4>Example</h4>
+                                    fastcgi_cache_key "$scheme$request_method$host$device$request_uri"<br>
+                                    KEY: httpsGETexample.com.trMOBILE/category/nginx-cache/2024<br>
+                                    <br>
+                                    <p>This example demonstrates how the regex must captures the <code>$host</code> and <code>$request_uri</code> in two separate groups.<br>
+                                    <br>
                                     <div>
-                                        <h4><?php echo esc_html__('Matches', 'fastcgi-cache-purge-and-preload-nginx'); ?></h4>
-                                        <p><?php echo esc_html__('0  =>  KEY: httpsGETpsauxit.comMOBILE/category/nginx-cache/2025', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                        <p><?php echo esc_html__('1  =>  psauxit.com', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                        <p><?php echo esc_html__('2  =>  /category/nginx-cache/2025', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
+                                        <h4>Matches</h4>
+
+                                        0  =>  KEY: httpsGETexample.com.trMOBILE/category/nginx-cache/2024<br>
+                                        1  =>  example.com.tr<br>
+                                        2  =>  /category/nginx-cache/2024
                                     </div>
                                 </div>
                                 <br>
-                                <p class="description">🚨 <strong><?php echo esc_html__('You need to follow these security guidelines for your regex pattern:', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong></p>
-                                <p class="description">📣 <?php echo esc_html__('Checks for excessive lookaheads, catastrophic backtracking. (limit to 3).', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                <p class="description">📣 <?php echo esc_html__('Don\'t use greedy quantifiers inside lookaheads.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                <p class="description">📣 <?php echo esc_html__('Checks .* quantifiers. (limit to 1).', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                <p class="description">📣 <?php echo esc_html__('Checks for excessively long regex patterns. (limit length to 300 characters).', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                <button id="nginx-key-regex-reset-defaults" class="button nginx-reset-key-regex-button">
-                                    <?php echo esc_html__('Reset Default', 'fastcgi-cache-purge-and-preload-nginx'); ?>
-                                </button>
-                                <div class="cache-paths-info">
-                                    <p class="description"><?php echo esc_html__('Click the button to reset defaults. After plugin updates, it\'s best to reset first to apply the latest changes, then reapply your custom rules.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                </div>
+                                <p class="description">🚨 <strong>You need to follow these security guidelines for your regex pattern:</strong>:</p>
+                                <p class="description">📣 Checks for excessive lookaheads, catastrophic backtracking. (limit to 3).</p>
+                                <p class="description">📣 Don't use greedy quantifiers inside lookaheads.</p>
+                                <p class="description">📣 Checks <code>.*</code> quantifiers. (limit to 1).</p>
+                                <p class="description">📣 Checks for excessively long regex patterns. (limit length to 100 characters).</p>
+                                <button id="nginx-key-regex-reset-defaults" class="button nginx-reset-key-regex-button">Reset Default</button>
+                                <p class="description">Click the button to reset defaults.<br>After plugin updates, it's best to reset first to apply the latest changes, then reapply your custom rules.</p>
                             </td>
                         </tr>
                         <!-- Start Mail Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;">
-                                <h3 id="mail-options" style="margin: 0; padding: 0;">
-                                    <?php echo esc_html__( 'Mail Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                </h3>
-                            </th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="mail-options" style="margin: 0; padding: 0;">Mail Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
                             <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-email-alt"></span>
-                                <?php echo esc_html__( 'Send Email Notification', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-email-alt"></span> Send Email Notification</th>
                             <td>
                                 <div class="nppp-onoffswitch">
                                     <?php nppp_nginx_cache_send_mail_callback(); ?>
                                 </div>
-                                <div class="key-regex-info">
-                                    <p class="description"><?php echo esc_html__( 'Enable this feature to receive email notifications about essential plugin activities, ensuring you stay informed about preload actions, cron task statuses, and general plugin updates.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                </div>
+                                <p class="description">Enable this feature to receive email notifications about essential plugin activities, ensuring you stay informed about preload actions, <br>cron task statuses, and general plugin updates..</p>
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-email"></span>
-                                <?php echo esc_html__( 'Email Address', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-email"></span> Email Address</th>
                             <td>
                                 <?php nppp_nginx_cache_email_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'Enter an email address to get Nginx Cache operation notifications.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description">Enter an email address to get Nginx FastCGI Cache operation's notifications.</p>
                             </td>
                         </tr>
                         <!-- Start Logging Options Section -->
                         <tr valign="top">
-                            <th scope="row" style="padding: 0; padding-top: 15px;">
-                                <h3 id="logging-options" style="margin: 0; padding: 0;">
-                                    <?php echo esc_html__( 'Logging Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                </h3>
-                            </th>
+                            <th scope="row" style="padding: 0; padding-top: 15px;"><h3 id="logging-options" style="margin: 0; padding: 0;">Logging Options</h3></th>
                             <td style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
                             <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-archive"></span>
-                                <?php echo esc_html__( 'Logs', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-archive"></span> Logs</th>
                             <td>
                                 <?php nppp_nginx_cache_logs_callback(); ?>
-                                <button id="clear-logs-button" class="button nginx-clear-logs-button">
-                                    <?php echo esc_html__( 'Clear Logs', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                </button>
-                                <p class="description">
-                                    <?php echo esc_html__( 'Click the button to clear logs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                </p>
+                                <button id="clear-logs-button" class="button nginx-clear-logs-button">Clear Logs</button>
+                                <p class="description">Click the button to clear logs.</p>
                             </td>
                         </tr>
                         <tr valign="top">
-                            <th scope="row">
-                                <span class="dashicons dashicons-admin-users"></span>
-                                <?php echo esc_html__( 'Opt-in', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
+                            <th scope="row"><span class="dashicons dashicons-admin-users"></span> Opt-in</th>
                             <td>
                                 <?php nppp_nginx_cache_tracking_opt_in_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'Please check the GDPR Compliance and Data Collection section in the Help tab to get more info.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description">Please check the <strong>GDPR Compliance and Data Collection</strong> section in the Help tab to get more info.</p>
                             </td>
                         </tr>
                     </table>
                     <p class="submit">
-                        <input type="submit" name="nppp_submit" class="button-primary" value="<?php echo esc_attr__( 'Update Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
+                        <input type="submit" name="nppp_submit" class="button-primary" value="Update Options">
                     </p>
                 </form>
                 </div>
             </div>
 
             <div id="status" class="tab-content">
-                <div id="status-content-placeholder" style="display: none;"></div>
+                <div id="status-content-placeholder"></div>
             </div>
 
             <div id="premium" class="tab-content">
-                <div id="premium-content-placeholder" style="display: none;"></div>
+                <div id="premium-content-placeholder"></div>
             </div>
 
             <div id="help" class="tab-content">
@@ -684,7 +525,7 @@ function nppp_handle_nginx_cache_settings_submission() {
 
                         // Redirect with success message
                         wp_redirect(add_query_arg(array(
-                            'status_message' => urlencode(__('Plugin cache (permission) cleared, settings saved successfully!', 'fastcgi-cache-purge-and-preload-nginx')),
+                            'status_message' => urlencode('Plugin cache (permission) cleared, settings saved successfully!'),
                             'message_type' => 'success',
                             'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
                         ), admin_url('options-general.php?page=nginx_cache_settings')));
@@ -705,15 +546,15 @@ function nppp_handle_nginx_cache_settings_submission() {
                     }
                 } else {
                     // No settings submitted
-                    wp_die(esc_html__('No settings to save.', 'fastcgi-cache-purge-and-preload-nginx'));
+                    wp_die('No settings to save.');
                 }
             } else {
                 // Nonce verification failed
-                wp_die(esc_html__('Nonce verification failed', 'fastcgi-cache-purge-and-preload-nginx'));
+                wp_die('Nonce verification failed');
             }
         } else {
             // Nonce verification failed
-            wp_die(esc_html__('Nonce not found', 'fastcgi-cache-purge-and-preload-nginx'));
+            wp_die('Nonce not found');
         }
     }
 }
@@ -734,9 +575,9 @@ function nppp_clear_nginx_cache_logs() {
     $log_file_path = NGINX_CACHE_LOG_FILE;
     if ($wp_filesystem->exists($log_file_path)) {
         nppp_perform_file_operation($log_file_path, 'write', '');
-        nppp_display_admin_notice('success', __('SUCCESS LOGS: Logs cleared successfully.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
+        nppp_display_admin_notice('success', 'SUCCESS LOGS: Logs cleared successfully.', true, false);
     } else {
-        nppp_display_admin_notice('error', __('ERROR LOGS: Log file not found.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
+        nppp_display_admin_notice('error', 'ERROR LOGS: Log file not found.', true, false);
     }
 }
 
@@ -1299,8 +1140,8 @@ function nppp_nginx_cache_send_mail_callback() {
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_send_mail]" class="nppp-onoffswitch-checkbox" value='yes' id="nginx_cache_send_mail" <?php echo esc_attr($send_mail_checked); ?>>
     <label class="nppp-onoffswitch-label" for="nginx_cache_send_mail">
         <span class="nppp-onoffswitch-inner">
-            <span class="nppp-off"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-            <span class="nppp-on"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-off">OFF</span>
+            <span class="nppp-on">ON</span>
         </span>
         <span class="nppp-onoffswitch-switch"></span>
     </label>
@@ -1316,8 +1157,8 @@ function nppp_nginx_cache_auto_preload_callback() {
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_auto_preload]" class="nppp-onoffswitch-checkbox-preload" value="yes" id="nginx_cache_auto_preload" <?php echo esc_attr($auto_preload_checked); ?>>
     <label class="nppp-onoffswitch-label-preload" for="nginx_cache_auto_preload">
         <span class="nppp-onoffswitch-inner-preload">
-            <span class="nppp-off-preload"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-            <span class="nppp-on-preload"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-off-preload">OFF</span>
+            <span class="nppp-on-preload">ON</span>
         </span>
         <span class="nppp-onoffswitch-switch-preload"></span>
     </label>
@@ -1333,8 +1174,8 @@ function nppp_nginx_cache_schedule_callback() {
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_schedule]" class="nppp-onoffswitch-checkbox-schedule" value="yes" id="nginx_cache_schedule" <?php echo esc_attr($cache_schedule_checked); ?>>
     <label class="nppp-onoffswitch-label-schedule" for="nginx_cache_schedule">
         <span class="nppp-onoffswitch-inner-schedule">
-            <span class="nppp-off-schedule"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-            <span class="nppp-on-schedule"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-off-schedule">OFF</span>
+            <span class="nppp-on-schedule">ON</span>
         </span>
         <span class="nppp-onoffswitch-switch-schedule"></span>
     </label>
@@ -1350,8 +1191,8 @@ function nppp_nginx_cache_purge_on_update_callback() {
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_purge_on_update]" class="nppp-onoffswitch-checkbox-autopurge" value="yes" id="nginx_cache_purge_on_update" <?php echo esc_attr($auto_purge_checked); ?>>
     <label class="nppp-onoffswitch-label-autopurge" for="nginx_cache_purge_on_update">
         <span class="nppp-onoffswitch-inner-autopurge">
-            <span class="nppp-off-autopurge"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-            <span class="nppp-on-autopurge"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-off-autopurge">OFF</span>
+            <span class="nppp-on-autopurge">ON</span>
         </span>
         <span class="nppp-onoffswitch-switch-autopurge"></span>
     </label>
@@ -1367,8 +1208,8 @@ function nppp_nginx_cache_auto_preload_mobile_callback() {
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_auto_preload_mobile]" class="nppp-onoffswitch-checkbox-preload-mobile" value="yes" id="nginx_cache_auto_preload_mobile" <?php echo esc_attr($auto_preload_mobile_checked); ?>>
     <label class="nppp-onoffswitch-label-preload-mobile" for="nginx_cache_auto_preload_mobile">
         <span class="nppp-onoffswitch-inner-preload-mobile">
-            <span class="nppp-off-preload-mobile"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-            <span class="nppp-on-preload-mobile"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-off-preload-mobile">OFF</span>
+            <span class="nppp-on-preload-mobile">ON</span>
         </span>
         <span class="nppp-onoffswitch-switch-preload-mobile"></span>
     </label>
@@ -1410,7 +1251,7 @@ function nppp_nginx_cache_tracking_opt_in_callback() {
     $value = isset($options['nginx_cache_tracking_opt_in']) ? $options['nginx_cache_tracking_opt_in'] : '1';
     ?>
     <input type="checkbox" id="nginx_cache_tracking_opt_in" name="nginx_cache_settings[nginx_cache_tracking_opt_in]" value="1" <?php checked('1', $value); ?> />
-    <label for="nginx_cache_tracking_opt_in"><?php echo esc_html__('Opt-in to help improve plugin development.', 'fastcgi-cache-purge-and-preload-nginx'); ?></label>
+    <label for="nginx_cache_tracking_opt_in">Opt-in to help improve plugin development.</label>
     <?php
 }
 
@@ -1452,10 +1293,10 @@ function nppp_nginx_cache_logs_callback() {
             </div>
             <?php
         } else {
-            echo '<p>' . esc_html__('Unable to read log file. Please check file permissions.', 'fastcgi-cache-purge-and-preload-nginx') . '</p>';
+             echo '<p>Unable to read log file. Please check file permissions.</p>';
         }
     } else {
-        echo '<p>' . esc_html__('Log file not found or is not readable.', 'fastcgi-cache-purge-and-preload-nginx') . '</p>';
+        echo '<p>Log file not found or is not readable.</p>';
     }
 }
 
@@ -1473,7 +1314,7 @@ function nppp_fetch_default_reject_regex() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
         );
         return;
     }
@@ -1486,7 +1327,7 @@ function nppp_fetch_default_reject_regex() {
             return $matches[1];
         }
     } else {
-        wp_die(esc_html__( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
+        wp_die('File does not exist: ' . esc_html($rr_txt_file));
     }
     return '';
 }
@@ -1498,7 +1339,7 @@ function nppp_fetch_default_regex_for_cache_key() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
         );
         return;
     }
@@ -1511,7 +1352,7 @@ function nppp_fetch_default_regex_for_cache_key() {
             return $matches[1];
         }
     } else {
-        wp_die(esc_html__( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
+        wp_die('File does not exist: ' . esc_html($rr_txt_file));
     }
     return '';
 }
@@ -1523,7 +1364,7 @@ function nppp_fetch_default_reject_extension() {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
         );
         return;
     }
@@ -1536,7 +1377,7 @@ function nppp_fetch_default_reject_extension() {
             return $matches[1];
         }
     } else {
-        wp_die(esc_html__( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
+        wp_die('File does not exist: ' . esc_html($rr_txt_file));
     }
     return '';
 }
@@ -1549,11 +1390,11 @@ function nppp_nginx_cache_api_key_callback() {
     echo "<input type='text' id='nginx_cache_api_key' name='nginx_cache_settings[nginx_cache_api_key]' value='" . esc_attr($api_key) . "' class='regular-text' />";
 
     echo "<div style='display: block; align-items: baseline;'>";
-    echo "<button id='api-key-button' class='button nginx-api-key-button'>" . esc_html__( 'Generate API Key', 'fastcgi-cache-purge-and-preload-nginx' ) . "</button>";
+    echo "<button id='api-key-button' class='button nginx-api-key-button'>Generate API Key</button>";
     echo "<div style='display: flex; align-items: baseline; margin-top: 8px; margin-bottom: 8px;'>";
-    echo "<p class='description' id='nppp-api-key' style='margin-right: 10px;'><span class='nppp-tooltip'>" . esc_html__( 'API Key', 'fastcgi-cache-purge-and-preload-nginx' ) . "<span class='nppp-tooltiptext'>" . esc_html__( 'Click to copy REST API Key', 'fastcgi-cache-purge-and-preload-nginx' ) . "</span></span></p>";
-    echo "<p class='description' id='nppp-purge-url' style='margin-right: 10px;'><span class='nppp-tooltip'>" . esc_html__( 'Purge URL', 'fastcgi-cache-purge-and-preload-nginx' ) . "<span class='nppp-tooltiptext'>" . esc_html__( 'Click to copy full REST API CURL URL for Purge', 'fastcgi-cache-purge-and-preload-nginx' ) . "</span></span></p>";
-    echo "<p class='description' id='nppp-preload-url'><span class='nppp-tooltip'>" . esc_html__( 'Preload URL', 'fastcgi-cache-purge-and-preload-nginx' ) . "<span class='nppp-tooltiptext'>" . esc_html__( 'Click to copy full REST API CURL URL for Preload', 'fastcgi-cache-purge-and-preload-nginx' ) . "</span></span></p>";
+    echo "<p class='description' id='nppp-api-key' style='margin-right: 10px;'><span class='nppp-tooltip'>API Key<span class='nppp-tooltiptext'>Click to copy REST API Key</span></span></p>";
+    echo "<p class='description' id='nppp-purge-url' style='margin-right: 10px;'><span class='nppp-tooltip'>Purge URL<span class='nppp-tooltiptext'>Click to copy full REST API CURL URL for Purge</span></span></p>";
+    echo "<p class='description' id='nppp-preload-url'><span class='nppp-tooltip'>Preload URL<span class='nppp-tooltiptext'>Click to copy full REST API CURL URL for Preload</span></span></p>";
     echo "</div>";
     echo "</div>";
 }
@@ -1567,8 +1408,8 @@ function nppp_nginx_cache_api_callback() {
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_api]" class="nppp-onoffswitch-checkbox-api" value='yes' id="nginx_cache_api" <?php echo esc_attr($api_checked); ?>>
     <label class="nppp-onoffswitch-label-api" for="nginx_cache_api">
         <span class="nppp-onoffswitch-inner-api">
-            <span class="nppp-off-api"><?php echo esc_html__( 'OFF', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-            <span class="nppp-on-api"><?php echo esc_html__( 'ON', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+            <span class="nppp-off-api">OFF</span>
+            <span class="nppp-on-api">ON</span>
         </span>
         <span class="nppp-onoffswitch-switch-api"></span>
     </label>
@@ -1619,13 +1460,13 @@ function nppp_nginx_cache_settings_sanitize($input) {
             // Handle different validation outcomes
             switch ($validation_result) {
                 case 'critical_path':
-                    $error_message = __('ERROR PATH: The specified Nginx Cache Directory is either a critical system directory or a top-level directory and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx');
+                    $error_message = 'ERROR PATH: The specified Nginx Cache Directory appears to be a critical system directory or a first-level directory, which is not allowed.';
                     break;
                 case 'directory_not_exist_or_readable':
-                    $error_message = __('ERROR PATH: The specified Nginx Cache Directory does not exist. Please verify the Nginx Cache Directory.', 'fastcgi-cache-purge-and-preload-nginx');
+                    $error_message = 'ERROR PATH: The specified Nginx Cache Directory does not exist. Please verify the Nginx Cache Directory.';
                     break;
                 default:
-                    $error_message = __('ERROR PATH: An invalid path was provided for the Nginx Cache Directory. Please provide a valid directory path.', 'fastcgi-cache-purge-and-preload-nginx');
+                    $error_message = 'ERROR PATH: An invalid path was provided for the Nginx Cache Directory. Please provide a valid directory path.';
             }
 
             // Add settings error
@@ -1652,12 +1493,12 @@ function nppp_nginx_cache_settings_sanitize($input) {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid-email',
-                __('ERROR OPTION: Please enter a valid email address.', 'fastcgi-cache-purge-and-preload-nginx'),
+                'ERROR OPTION: Please enter a valid email address.',
                 'error'
             );
 
             // Log the error message
-            nppp_log_error_message(__('ERROR OPTION: Please enter a valid email address.', 'fastcgi-cache-purge-and-preload-nginx'));
+            nppp_log_error_message('ERROR OPTION: Please enter a valid email address.');
         }
     }
 
@@ -1675,23 +1516,23 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 add_settings_error(
                     'nppp_nginx_cache_settings_group',
                     'invalid-cpu-limit',
-                    __('Please enter a CPU limit between 10 and 100.', 'fastcgi-cache-purge-and-preload-nginx'),
+                    'Please enter a CPU limit between 10 and 100.',
                     'error'
                 );
 
                 // Log the error message
-                nppp_log_error_message(__('ERROR OPTION: Please enter a CPU limit between 10 and 100.', 'fastcgi-cache-purge-and-preload-nginx'));
+                nppp_log_error_message('ERROR OPTION: Please enter a CPU limit between 10 and 100.');
             }
         } else {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid-cpu-limit-format',
-                __('CPU limit must be a numeric value.', 'fastcgi-cache-purge-and-preload-nginx'),
+                'CPU limit must be a numeric value.',
                 'error'
             );
 
             // Log the error message
-            nppp_log_error_message(__('ERROR OPTION: CPU limit must be a numeric value.', 'fastcgi-cache-purge-and-preload-nginx'));
+            nppp_log_error_message('ERROR OPTION: CPU limit must be a numeric value.');
         }
     }
 
@@ -1709,23 +1550,23 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 add_settings_error(
                     'nppp_nginx_cache_settings_group',
                     'invalid-wait-time',
-                    __('Please enter a Per Request Wait Time between 0 and 60 seconds.', 'fastcgi-cache-purge-and-preload-nginx'),
+                    'Please enter a Per Request Wait Time between 0 and 60 seconds.',
                     'error'
                 );
 
                 // Log the error message
-                nppp_log_error_message(__('ERROR OPTION: Please enter a per request wait time between 0 and 60 seconds.', 'fastcgi-cache-purge-and-preload-nginx'));
+                nppp_log_error_message('ERROR OPTION: Please enter a per request wait time between 0 and 60 seconds.');
             }
         } else {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid-wait-time-format',
-                __('Wait time must be a numeric value.', 'fastcgi-cache-purge-and-preload-nginx'),
+                'Wait time must be a numeric value.',
                 'error'
             );
 
             // Log the error message
-            nppp_log_error_message(__('ERROR OPTION: Wait time must be a numeric value.', 'fastcgi-cache-purge-and-preload-nginx'));
+            nppp_log_error_message('ERROR OPTION: Wait time must be a numeric value.');
         }
     }
 
@@ -1754,29 +1595,29 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
         // Validate the regex
         if (@preg_match($regex, "") === false) {
-            $error_message_regex = __('ERROR REGEX: The custom cache key regex is invalid. Check the syntax and test it before use.', 'fastcgi-cache-purge-and-preload-nginx');
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex is invalid check syntax and test before use it.';
         }
 
         // Check for excessive lookaheads (limit to 3)
         $lookahead_count = preg_match_all('/(\(\?=.*\))/i', $regex);
         if ($lookahead_count > 3) {
-            $error_message_regex = __('ERROR REGEX: The custom cache key regex contains more than 3 lookaheads and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx');
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex contains more than 3 lookaheads, which is not allowed.';
         }
 
         // Check for greedy quantifiers inside lookaheads
         if (preg_match('/\(\?=.*\.\*\)/', $regex)) {
-            $error_message_regex = __('ERROR REGEX: The custom cache key regex contains a greedy quantifier inside a lookahead and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx');
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex contains a greedy quantifier inside a lookahead, which is not allowed.';
         }
 
         // Allow only a single ".*" in the regex
         $greedy_count = preg_match_all('/\.\*/', $regex);
         if ($greedy_count > 1) {
-            $error_message_regex = __('ERROR REGEX: The custom cache key regex contains more than one ".*" quantifier and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx');
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex contains more than one ".*" quantifier, which is not allowed.';
         }
 
         // Check for excessively long regex patterns (limit length to 300 characters)
         if (strlen($regex) > 300) {
-            $error_message_regex = __('ERROR REGEX: The custom cache key regex exceeds the allowed length of 300 characters.', 'fastcgi-cache-purge-and-preload-nginx');
+            $error_message_regex = 'ERROR REGEX: The custom cache key regex exceeds the allowed length of 300 characters.';
         }
 
         // If an error message was set, trigger the error and log it
@@ -1836,23 +1677,23 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 add_settings_error(
                     'nppp_nginx_cache_settings_group',
                     'invalid-limit-rate',
-                    __('Please enter a limit rate between 1 KB/sec and 100 MB/sec.', 'fastcgi-cache-purge-and-preload-nginx'),
+                    'Please enter a limit rate between 1 KB/sec and 100 MB/sec.',
                     'error'
                 );
 
                 // Log the error message
-                nppp_log_error_message(__('ERROR OPTION: Please enter a limit rate between 1 KB/sec and 100 MB/sec.', 'fastcgi-cache-purge-and-preload-nginx'));
+                nppp_log_error_message('ERROR OPTION: Please enter a limit rate between 1 MB/sec and 100 MB/sec in KB/sec.');
             }
         } else {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid-limit-rate-format',
-                __('Limit rate must be a numeric value in KB/sec.', 'fastcgi-cache-purge-and-preload-nginx'),
+                'Limit rate must be a numeric value in KB/sec.',
                 'error'
             );
 
             // Log the error message
-            nppp_log_error_message(__('ERROR OPTION: Limit rate must be a numeric value in KB/sec.', 'fastcgi-cache-purge-and-preload-nginx'));
+           nppp_log_error_message('ERROR OPTION: Limit rate must be a numeric value in KB/sec.');
         }
     }
 
@@ -1869,12 +1710,12 @@ function nppp_nginx_cache_settings_sanitize($input) {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid-api-key',
-                __('ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.', 'fastcgi-cache-purge-and-preload-nginx'),
+                'ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.',
                 'error'
             );
 
             // Log the error message
-            nppp_log_error_message(__('ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.', 'fastcgi-cache-purge-and-preload-nginx'));
+            nppp_log_error_message('ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.');
         }
     }
 
@@ -1889,7 +1730,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.'
         );
         return;
     }
@@ -2029,7 +1870,7 @@ function nppp_defaults_on_plugin_activation() {
     $default_options = array(
         'nginx_cache_path' => '/dev/shm/change-me-now',
         'nginx_cache_email' => 'your-email@example.com',
-        'nginx_cache_cpu_limit' => 100,
+        'nginx_cache_cpu_limit' => 80,
         'nginx_cache_reject_extension' => nppp_fetch_default_reject_extension(),
         'nginx_cache_reject_regex' => nppp_fetch_default_reject_regex(),
         'nginx_cache_key_custom_regex' => base64_encode(nppp_fetch_default_regex_for_cache_key()),
@@ -2072,6 +1913,6 @@ function nppp_defaults_on_plugin_activation() {
         nppp_plugin_tracking('active');
 
         // Schedule cron for plugin status check
-        nppp_schedule_plugin_tracking_event(false);
+        nppp_schedule_plugin_tracking_event();
     }
 }
