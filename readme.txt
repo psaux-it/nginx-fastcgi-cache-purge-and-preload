@@ -1,11 +1,11 @@
-=== FastCGI Cache Purge and Preload for Nginx ===
+=== Nginx Cache Purge Preload ===
 Contributors: psauxit
 Donate link: https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/
 Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 6.7.2
-Stable tag: 2.1.0
+Stable tag: 2.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -67,15 +67,15 @@ Unlike other solutions that depend on Nginx modules, **NPP** directly manages ca
 
 Manual Installation
 
-1. Upload the 'fastcgi-cache-purge-and-preload-nginx' folder to the '/wp-content/plugins/' directory.
-2. Activate the plugin through the 'Plugins' menu in the WordPress admin dashboard.
-3. Configure plugin settings under 'Settings' -> 'FastCGI Cache Purge and Preload' in the WordPress admin dashboard.
-4. Access FastCGI Cache Purge and Preload operations from the WordPress admin bar(both frontend,backend) and Plugin settings page.
+1. Upload the "fastcgi-cache-purge-and-preload-nginx" folder to the "/wp-content/plugins/" directory.
+2. Activate the plugin through the "Plugins" menu in the WordPress admin dashboard.
+3. Configure plugin settings under "Settings" -> "Nginx Cache Purge Preload" in the WordPress admin dashboard.
+4. Access "Nginx Cache Purge Preload" operations from the WordPress admin bar (frontend & backend), the Admin Dashboard, and the Plugin Settings page.
 
 Automatic Installation
 
-1. Log in to your WordPress admin panel, navigate to the Plugins menu and click Add New.
-2. In the search field type “FastCGI Cache Purge and Preload Nginx” and click Search Plugins. From the search results, pick "FastCGI Cache Purge and Preload for Nginx" and click Install Now. Wordpress will ask you to confirm to complete the installation.
+1. Log in to your WordPress admin panel, navigate to the "Plugins" menu and click "Add New".
+2. In the search field type “Nginx Cache Purge Preload” and click "Search Plugins". From the search results, pick "Nginx Cache Purge Preload" and click "Install Now". Wordpress will ask you to confirm to complete the installation.
 
 == Frequently Asked Questions ==
 
@@ -117,7 +117,7 @@ This combined setup ensures NPP manages server-side caching while other plugins 
 
 = How do I configure the plugin settings? =
 
-Navigate to Settings -> FastCGI Cache Purge and Preload in the WordPress admin dashboard or navigate to Admin Bar -> FastCGI Cache to configure the options and use the actions.
+Navigate to Settings -> **Nginx Cache Purge Preload** in the WordPress admin dashboard or navigate to Admin Bar -> **Nginx Cache** to configure the options and use the actions.
 
 = Why plugin not functional on my environment? =
 
@@ -165,6 +165,13 @@ Yes, please refer to the plugin settings **Help** tab.
 8. Front-end Admin Bar
 
 == Changelog ==
+
+= 2.1.1 =
+
+Release date: 2025-03-17
+
+* Changed plugin name to "Nginx Cache Purge Preload"
+* Other minor improvements
 
 = 2.1.0 =
 
@@ -431,4 +438,4 @@ This plugin is licensed under the GPLv2 or later.
 
 == Other Notes ==
 
-For more information, visit the plugin development page: [FastCGI Cache Purge and Preload for Nginx](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
+For more information, visit the plugin development page: [Nginx Cache Purge Preload](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
