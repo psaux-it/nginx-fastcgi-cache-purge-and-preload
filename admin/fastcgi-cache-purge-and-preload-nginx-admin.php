@@ -155,11 +155,24 @@ add_action('nppp_plugin_admin_notices', function($type, $message, $log_message, 
     <?php
 }, 10, 4);
 add_action('wp', function() {
+    // 1) Bail on REST
     if (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) {
         return;
     } elseif (function_exists('wp_doing_rest') && wp_doing_rest()) {
         return;
     } elseif (defined('REST_REQUEST') && REST_REQUEST) {
+        return;
+    }
+
+    // 2) Bail on AJAX
+    if (function_exists('wp_doing_ajax') && wp_doing_ajax()
+         || (defined('DOING_AJAX') && DOING_AJAX)) {
+        return;
+    }
+
+    // 3) Bail on WP-Cron
+    if (function_exists('wp_doing_cron') && wp_doing_cron()
+         || (defined('DOING_CRON') && DOING_CRON)) {
         return;
     }
 
