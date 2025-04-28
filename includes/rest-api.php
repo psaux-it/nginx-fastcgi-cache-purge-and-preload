@@ -267,7 +267,7 @@ function nppp_validate_and_rate_limit_endpoint($request) {
 
 // Handle the REST API request for purge action.
 function nppp_nginx_cache_purge_endpoint($request) {
-    // Start output buffering for preload endpoint
+    // Start output buffering for purge endpoint
     ob_start();
 
     // Validate the API key and check rate limit
