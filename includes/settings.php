@@ -45,7 +45,7 @@ function nppp_add_nginx_cache_settings_page() {
     add_submenu_page(
         'options-general.php',
         'Nginx Cache',
-        'FastCGI Cache Purge and Preload',
+        'Nginx Cache Purge Preload',
         'manage_options',
         'nginx_cache_settings',
         'nppp_nginx_cache_settings_page'
