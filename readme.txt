@@ -166,6 +166,15 @@ Yes, please refer to the plugin settings **Help** tab.
 
 == Changelog ==
 
+= 2.1.2 =
+
+Release date: 2025-04-28
+
+* Fix leaking HTML into API responses
+* Fix plugin name under Settings menu
+* Fix mobile layout issues
+* Tested for WP 6.8
+
 = 2.1.1 =
 
 Release date: 2025-03-17
