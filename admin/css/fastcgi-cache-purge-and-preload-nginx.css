@@ -2643,3 +2643,14 @@ p.description {
 .key-regex-info {
     max-width: 978px;
 }
+
+@media (max-width: 768px) {
+  .container p,
+  .wrap p,
+  .logs-container div,
+  .answer,
+  .question {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+}
