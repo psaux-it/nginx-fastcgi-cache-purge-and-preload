@@ -155,6 +155,14 @@ add_action('nppp_plugin_admin_notices', function($type, $message, $log_message, 
     <?php
 }, 10, 4);
 add_action('wp', function() {
+    if (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) {
+        return;
+    } elseif (function_exists('wp_doing_rest') && wp_doing_rest()) {
+        return;
+    } elseif (defined('REST_REQUEST') && REST_REQUEST) {
+        return;
+    }
+
     if (is_user_logged_in() && current_user_can('administrator') && isset($_GET['nppp_front'])) {
         $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
         if (wp_verify_nonce($nonce, 'nppp_redirect_nonce')) {
