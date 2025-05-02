@@ -170,10 +170,11 @@ Yes, please refer to the plugin settings **Help** tab.
 
 Release date: 2025-04-28
 
-* Fix leaking HTML into API responses
+* Fix leaking HTML into WP core API responses
 * Fix plugin name under Settings menu
+* Fix non-public custom post types (CPTs) were being purged
 * Fix mobile layout issues
-* Tested for WP 6.8
+* Tested with WordPress 6.8.1
 
 = 2.1.1 =
 
