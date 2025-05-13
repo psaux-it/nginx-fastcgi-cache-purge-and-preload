@@ -110,12 +110,6 @@ add_action('npp_cache_preload_status_event', 'nppp_create_scheduled_event_preloa
 add_action('wp_ajax_nppp_get_active_cron_events_ajax', 'nppp_get_active_cron_events_ajax');
 add_action('wp_ajax_nppp_clear_plugin_cache', 'nppp_clear_plugin_cache_callback');
 add_action('wp_ajax_nppp_restart_systemd_service', 'nppp_restart_systemd_service');
-add_action('transition_post_status', function($new_status, $old_status, $post) {
-    $pt_obj = get_post_type_object($post->post_type);
-    if (! $pt_obj || ! $pt_obj->publicly_queryable) {
-        remove_action('transition_post_status', 'nppp_purge_cache_on_update', 10, 3);
-    }
-}, 5, 3);
 add_action('transition_post_status', 'nppp_purge_cache_on_update', 10, 3);
 add_action('wp_insert_comment', 'nppp_purge_cache_on_comment', 200, 2);
 add_action('transition_comment_status', 'nppp_purge_cache_on_comment_change', 200, 3);
