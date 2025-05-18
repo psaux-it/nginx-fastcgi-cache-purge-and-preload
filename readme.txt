@@ -172,7 +172,6 @@ Release date: 2025-04-28
 
 * Fix leaking HTML into WP core API responses
 * Fix plugin name under Settings menu
-* Fix non-public custom post types (CPTs) were being purged
 * Fix mobile layout issues
 * Bump external assets to latest versions
 * Tested with WordPress 6.8.1
