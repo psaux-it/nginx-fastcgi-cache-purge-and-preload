@@ -2635,7 +2635,7 @@ function npppupdateStatus() {
     }
 
     npppLibfuseVersionSpan.appendChild(iconSpanLibfuse);
-    npppLibfuseVersionSpan.append(libfuseStatusText);
+    npppLibfuseVersionSpan.insertAdjacentHTML('beforeend', libfuseStatusText);
 
     // Update the FUSE status for bindfs
     var npppBindfsVersionSpan = document.getElementById("npppBindfsVersion");
@@ -2687,7 +2687,7 @@ function npppupdateStatus() {
     }
 
     npppBindfsVersionSpan.appendChild(iconSpanBindfs);
-    npppBindfsVersionSpan.append(bindfsStatusText);
+    npppBindfsVersionSpan.insertAdjacentHTML('beforeend', bindfsStatusText);
 
     // Fetch and update permission isolation status
     var nppppermIsolationSpan = document.getElementById("nppppermIsolation");
