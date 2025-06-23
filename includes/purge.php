@@ -273,8 +273,15 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
 
         // Exclude URLs containing 'wp-global-styles-*' from being purged
         $post_url = get_permalink($post->ID);
-        if (strpos($post_url, 'wp-global-styles-') !== false) {
-            return;
+        $excluded_patterns = [
+            'wp-global-styles-',
+            'post_type=edd_license_log',
+        ];
+
+        foreach ($excluded_patterns as $pattern) {
+            if (strpos($post_url, $pattern) !== false) {
+                return;
+            }
         }
 
         // Priority 1: Handle Status Changes (publish from trash, draft, or pending)
