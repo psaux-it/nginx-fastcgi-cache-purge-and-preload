@@ -257,15 +257,26 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     static $did_purge = [];
 
-    // 0) Bail out on REST, AJAX or Cron
+    // 0) Bail out on REST, AJAX, or Cron unless Elementor/Yoast saving
+    $allowed_ajax_actions = ['elementor_ajax', 'wpseo_elementor_save'];
+    $is_allowed_elementor = isset($_POST['action']) && in_array($_POST['action'], $allowed_ajax_actions, true);
+
     if (
-        ( function_exists('wp_is_rest_request') && wp_is_rest_request() ) ||
-        ( function_exists('wp_doing_ajax')     && wp_doing_ajax()     ) ||
-        ( function_exists('wp_doing_cron')     && wp_doing_cron()     ) ||
-        ( defined('REST_REQUEST') && REST_REQUEST ) ||
-        ( defined('DOING_AJAX')    && DOING_AJAX ) ||
-        ( defined('DOING_CRON')    && DOING_CRON )
+        (
+            ( function_exists('wp_is_rest_request') && wp_is_rest_request() ) ||
+            ( defined('REST_REQUEST') && REST_REQUEST ) ||
+            ( function_exists('wp_doing_ajax') && wp_doing_ajax() ) ||
+            ( defined('DOING_AJAX') && DOING_AJAX )
+        ) && ! $is_allowed_elementor
     ) {
+        return;
+    }
+
+    if (function_exists('wp_doing_cron') && wp_doing_cron()) {
+        return;
+    }
+
+    if (defined('DOING_CRON') && DOING_CRON) {
         return;
     }
 
