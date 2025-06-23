@@ -9,9 +9,9 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2025-04-28T01:20:19+00:00\n"
+"POT-Creation-Date: 2025-06-23T14:00:17+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"X-Generator: WP-CLI 2.11.0\n"
+"X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: fastcgi-cache-purge-and-preload-nginx\n"
 
 #. Plugin Name of the plugin
@@ -184,8 +184,8 @@ msgid "An unexpected error occurred while attempting to purge the Nginx cache. P
 msgstr ""
 
 #: includes/advanced.php:321
-#: includes/purge.php:602
-#: includes/purge.php:648
+#: includes/purge.php:633
+#: includes/purge.php:679
 msgid "ERROR PERMISSION: The Nginx cache purge failed due to permission issue. Refer to the \"Help\" tab for guidance."
 msgstr ""
 
@@ -208,16 +208,19 @@ msgstr ""
 #: includes/purge.php:213
 #: includes/purge.php:219
 #: includes/purge.php:222
+#, php-format
 msgid "SUCCESS ADMIN: Nginx cache purged for page %s"
 msgstr ""
 
 #. Translators: %s is the page URL
 #: includes/advanced.php:374
+#, php-format
 msgid "ERROR ADMIN: Nginx cache can not be purged for page %s"
 msgstr ""
 
 #. Translators: %1$s and %2$s are dynamic strings, $host$request_uri is string
 #: includes/advanced.php:516
+#, php-format
 msgid "ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is parsing the string <strong>\\$host\\$request_uri</strong> correctly."
 msgstr ""
 
@@ -238,6 +241,7 @@ msgstr ""
 
 #. Translators: %1$s and %2$s are dynamic strings
 #: includes/advanced.php:526
+#, php-format
 msgid "ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is configured correctly."
 msgstr ""
 
@@ -263,7 +267,7 @@ msgstr ""
 #: includes/preload.php:581
 #: includes/purge.php:24
 #: includes/purge.php:68
-#: includes/purge.php:469
+#: includes/purge.php:500
 #: includes/schedule.php:299
 #: includes/schedule.php:391
 #: includes/send-mail.php:52
@@ -396,6 +400,7 @@ msgstr ""
 #: includes/dashboard-widget.php:143
 #: includes/dashboard-widget.php:173
 #: includes/schedule.php:81
+#, php-format
 msgid "Next Run: %s"
 msgstr ""
 
@@ -465,6 +470,7 @@ msgstr ""
 
 #. Translators: %s is the formatted preload last complete time
 #: includes/dashboard-widget.php:307
+#, php-format
 msgid "Last Run: %s"
 msgstr ""
 
@@ -484,33 +490,35 @@ msgstr ""
 #. Translators: %s is the path to the log file.
 #: includes/log.php:59
 #: includes/rest-api.php:154
+#, php-format
 msgid "Error appending to log file at %s"
 msgstr ""
 
 #. Translators: %s is the path to the log file.
 #: includes/log.php:63
 #: includes/rest-api.php:138
+#, php-format
 msgid "Invalid or inaccessible log file directory: %s"
 msgstr ""
 
 #. Translators: This message appears when a required nonce is missing.
-#: includes/log.php:113
+#: includes/log.php:132
 #: includes/status.php:796
 #: includes/status.php:820
 msgid "Nonce is missing."
 msgstr ""
 
 #. Translators: This message appears when the provided nonce is invalid.
-#: includes/log.php:123
+#: includes/log.php:142
 msgid "Invalid nonce. Request could not be verified."
 msgstr ""
 
 #. Translators: This message appears when a user does not have the required permissions.
-#: includes/log.php:129
+#: includes/log.php:148
 msgid "Permission denied"
 msgstr ""
 
-#: includes/log.php:175
+#: includes/log.php:165
 msgid "You do not have sufficient permissions to access this page."
 msgstr ""
 
@@ -520,11 +528,13 @@ msgstr ""
 
 #. Translators: This message appears when the plugin tracking request fails.
 #: includes/plugin-tracking.php:123
+#, php-format
 msgid "Plugin tracking request failed: %s"
 msgstr ""
 
 #. Translators: This message appears when JWT token retrieval fails.
 #: includes/plugin-tracking.php:128
+#, php-format
 msgid "Failed to retrieve JWT token: %s"
 msgstr ""
 
@@ -558,11 +568,13 @@ msgstr ""
 
 #. Translators: %s will be replaced with the list of missing commands
 #: includes/pre-checks.php:339
+#, php-format
 msgid "GLOBAL ERROR COMMAND: Plugin is not functional on your environment. The required core shell command(s) not found: %s"
 msgstr ""
 
 #. Translators: %s will be replaced with the list of missing commands
 #: includes/pre-checks.php:351
+#, php-format
 msgid "GLOBAL ERROR COMMAND: Preload action is not functional on your environment. The required shell command(s) not found: %s"
 msgstr ""
 
@@ -592,6 +604,7 @@ msgstr ""
 #. Translators: %s is replaced with the domain name (e.g., example.com).
 #: includes/preload.php:182
 #: includes/preload.php:311
+#, php-format
 msgid "ERROR COMMAND: Cannot start Nginx cache Preloading for %s! Please check your DNS, connectivity, proxy/firewall settings, and Exclude syntax."
 msgstr ""
 
@@ -637,6 +650,7 @@ msgstr ""
 
 #. Translators: %s is the Nginx cache path
 #: includes/preload.php:271
+#, php-format
 msgid "ERROR PATH: Nginx cache path (%s) was not found. Please check your cache path."
 msgstr ""
 
@@ -678,6 +692,7 @@ msgstr ""
 #. Translators: %s: Current page URL
 #: includes/preload.php:409
 #: includes/preload.php:414
+#, php-format
 msgid "ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the \"Help\" tab for guidance."
 msgstr ""
 
@@ -691,73 +706,87 @@ msgstr ""
 
 #. Translators: %s: Current page URL
 #: includes/preload.php:525
+#, php-format
 msgid "SUCCESS ADMIN: Nginx cache preloading has started in the background for the desktop version of page %s."
 msgstr ""
 
 #. Translators: %s: Current page URL
 #: includes/preload.php:529
+#, php-format
 msgid "SUCCESS ADMIN: Nginx cache preloading has started in the background for the mobile version of page %s."
 msgstr ""
 
 #. Translators: %s: Current page URL
 #: includes/preload.php:533
+#, php-format
 msgid "SUCCESS ADMIN: Nginx cache preloading has started in the background for both desktop and mobile versions of page %s."
 msgstr ""
 
 #. Translators: %s: Current page URL
 #: includes/preload.php:542
+#, php-format
 msgid "ERROR COMMAND: Nginx cache preloading failed for both desktop and mobile versions of page %s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s: Current page URL
 #: includes/preload.php:545
 #: includes/preload.php:551
+#, php-format
 msgid "ERROR COMMAND: Nginx cache preloading failed for desktop version of page %s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s: Current page URL
 #: includes/preload.php:557
+#, php-format
 msgid "ERROR COMMAND: Nginx cache preloading failed for mobile version of page %s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s1: device type (desktop or mobile), %s2: current page URL
 #: includes/preload.php:702
 #: includes/preload.php:710
+#, php-format
 msgid "SUCCESS ADMIN: Auto preload started for %1$s version of %2$s"
 msgstr ""
 
 #. Translators: %s1: device type (desktop or mobile), %s2: current page URL
 #: includes/preload.php:705
+#, php-format
 msgid "SUCCESS ADMIN: Auto purge cache completed, Auto preload started for %1$s version of %2$s"
 msgstr ""
 
 #. Translators: %s1: device type (desktop or mobile), %s2: current page URL
 #: includes/preload.php:713
+#, php-format
 msgid "SUCCESS ADMIN: Auto purge cache attempted but page not found in cache, Auto preload started for %1$s version of %2$s"
 msgstr ""
 
 #. Translators: %s1: device type (desktop or mobile), %s2: current page URL
 #: includes/preload.php:727
+#, php-format
 msgid "ERROR COMMAND: Unable to start Auto preload for %1$s version of %2$s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s1: device type (desktop or mobile), %s2: current page URL
 #: includes/preload.php:731
+#, php-format
 msgid "ERROR COMMAND: Auto purge cache completed, but unable to start Auto preload for %1$s version of %2$s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s: device type (desktop or mobile)
 #: includes/preload.php:737
+#, php-format
 msgid "ERROR COMMAND: Unable to start Auto preload for %s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s: device type (desktop or mobile)
 #: includes/preload.php:741
+#, php-format
 msgid "ERROR COMMAND: Auto purge cache attempted but page not found in cache, unable to start Auto preload for %s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s is the page URL
 #: includes/purge.php:97
+#, php-format
 msgid "INFO: Nginx auto cache purge for page %s has been halted due to ongoing cache preloading. You can stop Nginx cache preloading anytime via the \"Purge All\" option."
 msgstr ""
 
@@ -768,16 +797,19 @@ msgstr ""
 #. Translators: %s is the page URL
 #: includes/purge.php:127
 #: includes/purge.php:235
+#, php-format
 msgid "ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to the \"Help\" tab for guidance."
 msgstr ""
 
 #. Translators: %s is the page URL, $host$request_uri is just string the part of the cache key
 #: includes/purge.php:165
+#, php-format
 msgid "ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\\$host\\$request_uri</strong> portion correctly."
 msgstr ""
 
 #. Translators: %s is the page URL
 #: includes/purge.php:170
+#, php-format
 msgid "ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly."
 msgstr ""
 
@@ -792,80 +824,86 @@ msgstr ""
 
 #. Translators: %s is the page URL
 #: includes/purge.php:248
+#, php-format
 msgid "INFO ADMIN: Nginx cache purge attempted, but the page %s is not currently found in the cache."
 msgstr ""
 
 #. Translators: %s is the process PID
-#: includes/purge.php:494
+#: includes/purge.php:525
+#, php-format
 msgid "INFO PROCESS: Failed to terminate the ongoing Nginx cache Preload process (PID: %s) using posix_kill"
 msgstr ""
 
 #. Translators: %s is the process PID
-#: includes/purge.php:509
+#: includes/purge.php:540
+#, php-format
 msgid "SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using manual fallback mechanism SIGKILL"
 msgstr ""
 
-#: includes/purge.php:512
-#: includes/purge.php:517
+#: includes/purge.php:543
+#: includes/purge.php:548
 msgid "ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again."
 msgstr ""
 
 #. Translators: %s is the process PID
-#: includes/purge.php:524
+#: includes/purge.php:555
+#, php-format
 msgid "SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using posix_kill"
 msgstr ""
 
-#: includes/purge.php:548
+#: includes/purge.php:579
 msgid "SUCCESS REST: The ongoing Nginx cache preloading process has been halted. All Nginx cache has been purged successfully."
 msgstr ""
 
-#: includes/purge.php:551
+#: includes/purge.php:582
 msgid "SUCCESS ADMIN: The ongoing Nginx cache preloading process has been halted. All Nginx cache has been purged successfully."
 msgstr ""
 
-#: includes/purge.php:554
+#: includes/purge.php:585
 msgid "SUCCESS: The ongoing Nginx cache preloading process has been halted. All Nginx cache has been purged successfully."
 msgstr ""
 
-#: includes/purge.php:559
+#: includes/purge.php:590
 msgid "ERROR PERMISSION: The ongoing Nginx cache preloading process was halted, but Nginx cache purge failed due to permission issue. Refer to the \"Help\" tab for guidance."
 msgstr ""
 
 #. Translators: %s is the Nginx cache path
-#: includes/purge.php:564
-#: includes/purge.php:614
-#: includes/purge.php:660
+#: includes/purge.php:595
+#: includes/purge.php:645
+#: includes/purge.php:691
+#, php-format
 msgid "ERROR PATH: The specified Nginx cache path (%s) was not found. Please verify your Nginx cache path."
 msgstr ""
 
-#: includes/purge.php:568
-#: includes/purge.php:618
-#: includes/purge.php:664
+#: includes/purge.php:599
+#: includes/purge.php:649
+#: includes/purge.php:695
 msgid "ERROR UNKNOWN: An unexpected error occurred while attempting to purge the Nginx cache. Please report this issue on the plugin's support page."
 msgstr ""
 
 #. Translators: %s is the Nginx cache path
-#: includes/purge.php:573
+#: includes/purge.php:604
+#, php-format
 msgid "ERROR SECURITY: A directory traversal issue was detected with the provided path (%s). Cache purge aborted for security reasons. Please verify your Nginx cache path."
 msgstr ""
 
-#: includes/purge.php:590
-#: includes/purge.php:636
+#: includes/purge.php:621
+#: includes/purge.php:667
 msgid "SUCCESS REST: All Nginx cache purged successfully."
 msgstr ""
 
-#: includes/purge.php:593
-#: includes/purge.php:639
+#: includes/purge.php:624
+#: includes/purge.php:670
 msgid "SUCCESS ADMIN: All Nginx cache purged successfully."
 msgstr ""
 
-#: includes/purge.php:596
-#: includes/purge.php:642
+#: includes/purge.php:627
+#: includes/purge.php:673
 msgid "SUCCESS: All Nginx cache purged successfully."
 msgstr ""
 
-#: includes/purge.php:608
-#: includes/purge.php:654
+#: includes/purge.php:639
+#: includes/purge.php:685
 msgid "INFO: Nginx cache purge attempted, but no cache found."
 msgstr ""
 
@@ -893,8 +931,8 @@ msgstr ""
 msgid "NPP REST API Authentication Error"
 msgstr ""
 
-#: includes/rest-api.php:278
-#: includes/rest-api.php:319
+#: includes/rest-api.php:281
+#: includes/rest-api.php:324
 msgid "SUCCESS 200 OK"
 msgstr ""
 
@@ -916,6 +954,7 @@ msgstr ""
 
 #. Translators: %s is the cron hook name
 #: includes/schedule.php:76
+#, php-format
 msgid "Cron Name: %s"
 msgstr ""
 
@@ -941,6 +980,7 @@ msgstr ""
 
 #. Translators: %1$s, %2$s, and %3$s are numeric values representing hours, minutes, and seconds respectively.
 #: includes/schedule.php:519
+#, php-format
 msgid "%1$s hours, %2$s minutes, %3$s seconds"
 msgstr ""
 
@@ -954,11 +994,13 @@ msgstr ""
 
 #. Translators: %s is the elapsed time.
 #: includes/schedule.php:536
+#, php-format
 msgid "SUCCESS: Nginx cache preload completed for both Mobile and Desktop in %s."
 msgstr ""
 
 #. Translators: %s is the elapsed time.
 #: includes/schedule.php:539
+#, php-format
 msgid "SUCCESS: Nginx cache preload completed in %s."
 msgstr ""
 
@@ -1713,6 +1755,7 @@ msgstr ""
 
 #. Translators: %1$s, %2$s, %3$s, %4$s are dynamic strings
 #: includes/status.php:588
+#, php-format
 msgid "If <strong>%1$s</strong> indicates <strong>%2$s</strong>, please check the <strong>%3$s</strong> option in the plugin <strong>%4$s</strong> section and try again."
 msgstr ""
 
@@ -1835,17 +1878,20 @@ msgstr ""
 
 #. Translators: %s is the Nginx cache path
 #: includes/wp-filesystem.php:129
+#, php-format
 msgid "Permission denied while reading or writing to the cache directory: %s"
 msgstr ""
 
 #. Translators: %s is the Nginx cache path
 #: includes/wp-filesystem.php:132
+#, php-format
 msgid "Permission denied during recursive check of the cache directory: %s"
 msgstr ""
 
 #. Translators: %s is the Nginx cache path
 #: includes/wp-filesystem.php:159
 #: includes/wp-filesystem.php:206
+#, php-format
 msgid "Permission denied while deleting file or directory: %s"
 msgstr ""
 
