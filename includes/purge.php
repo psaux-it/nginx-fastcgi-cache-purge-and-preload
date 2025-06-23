@@ -257,26 +257,20 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     static $did_purge = [];
 
-    // 0) Bail out on REST, AJAX, or Cron unless Elementor/Yoast saving
-    $allowed_ajax_actions = ['elementor_ajax', 'wpseo_elementor_save'];
-    $is_allowed_elementor = isset($_POST['action']) && in_array($_POST['action'], $allowed_ajax_actions, true);
+    // 0) Bail out on REST, AJAX, or Cron unless Elementor/Yoast/WPBakery saving
+    $allowed_ajax_actions = ['elementor_ajax', 'wpseo_elementor_save', 'vc_save'];
+    $is_allowed_builder = isset($_POST['action']) && in_array($_POST['action'], $allowed_ajax_actions, true); // phpcs:ignore WordPress.Security.NonceVerification.Missing
 
     if (
         (
-            ( function_exists('wp_is_rest_request') && wp_is_rest_request() ) ||
-            ( defined('REST_REQUEST') && REST_REQUEST ) ||
-            ( function_exists('wp_doing_ajax') && wp_doing_ajax() ) ||
-            ( defined('DOING_AJAX') && DOING_AJAX )
-        ) && ! $is_allowed_elementor
+            (function_exists('wp_is_rest_request') && wp_is_rest_request()) ||
+            (defined('REST_REQUEST') && REST_REQUEST) ||
+            (function_exists('wp_doing_ajax') && wp_doing_ajax()) ||
+            (defined('DOING_AJAX') && DOING_AJAX) ||
+            (function_exists('wp_doing_cron') && wp_doing_cron()) ||
+            (defined('DOING_CRON') && DOING_CRON)
+        ) && ! $is_allowed_builder
     ) {
-        return;
-    }
-
-    if (function_exists('wp_doing_cron') && wp_doing_cron()) {
-        return;
-    }
-
-    if (defined('DOING_CRON') && DOING_CRON) {
         return;
     }
 
