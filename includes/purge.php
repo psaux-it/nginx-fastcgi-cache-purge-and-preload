@@ -255,62 +255,81 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 // Purge cache automatically for status changes (post/page)
 // This function hooks into the 'transition_post_status' action
 function nppp_purge_cache_on_update($new_status, $old_status, $post) {
-    // Get the plugin options
+    static $did_purge = [];
+
+    // 0) Bail out on REST, AJAX or Cron
+    if (
+        ( function_exists('wp_is_rest_request') && wp_is_rest_request() ) ||
+        ( function_exists('wp_doing_ajax')     && wp_doing_ajax()     ) ||
+        ( function_exists('wp_doing_cron')     && wp_doing_cron()     ) ||
+        ( defined('REST_REQUEST') && REST_REQUEST ) ||
+        ( defined('DOING_AJAX')    && DOING_AJAX ) ||
+        ( defined('DOING_CRON')    && DOING_CRON )
+    ) {
+        return;
+    }
+
+    // 1) Per-request guard
+    if (isset($did_purge[$post->ID])) {
+        return;
+    }
+
+    // 2) Sanity checks: no revisions, autosaves, or auto-drafts
+    if (wp_is_post_revision($post)
+      || wp_is_post_autosave($post)
+      || $new_status === 'auto-draft'
+      || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)
+    ) {
+        return;
+    }
+
+    // 3) Drop CPTs
+    $post_url = get_permalink($post->ID);
+    $excluded_patterns = [
+        'wp-global-styles-',
+        'post_type=edd_license_log',
+    ];
+
+    foreach ($excluded_patterns as $pattern) {
+        if (strpos($post_url, $pattern) !== false) {
+            return;
+        }
+    }
+
+    // 4) Feature flag
     $nginx_cache_settings = get_option('nginx_cache_settings');
+    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] !== 'yes') {
+        return;
+    }
 
-    // Check if auto-purge is enabled
-    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+    // 5) Prep cache path
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : '/dev/shm/change-me-now';
 
-        // Ensure we are not working with revisions, auto-saves, or newly created posts
-        if (wp_is_post_revision($post) || wp_is_post_autosave($post) || $new_status === 'auto-draft') {
+    // 6) Purge logic
+    // Priority 1: Handle Status Changes (publish from trash, draft, or pending)
+    if ('publish' === $new_status) {
+        // If the post was moved from trash to publish, purge the cache
+        if ('trash' === $old_status) {
+            nppp_purge_single($nginx_cache_path, $post_url, true);
+            $did_purge[ $post->ID ] = true;
             return;
         }
 
-        // Only purge if a post is actually being saved
-        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+        // If the post is published from draft, pending, or any other state, purge the cache
+        if ('publish' !== $old_status) {
+            nppp_purge_single($nginx_cache_path, $post_url, true);
+            $did_purge[ $post->ID ] = true;
             return;
         }
+    }
 
-        // Exclude URLs containing 'wp-global-styles-*' from being purged
-        $post_url = get_permalink($post->ID);
-        $excluded_patterns = [
-            'wp-global-styles-',
-            'post_type=edd_license_log',
-        ];
-
-        foreach ($excluded_patterns as $pattern) {
-            if (strpos($post_url, $pattern) !== false) {
-                return;
-            }
-        }
-
-        // Priority 1: Handle Status Changes (publish from trash, draft, or pending)
-        if ('publish' === $new_status) {
-            // If the post was moved from trash to publish, purge the cache
-            if ('trash' === $old_status) {
-                $post_url = get_permalink($post->ID);
-                $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : '/dev/shm/change-me-now';
-                nppp_purge_single($nginx_cache_path, $post_url, true);
-                return;
-            }
-
-            // If the post is published from draft, pending, or any other state, purge the cache
-            if ('publish' !== $old_status) {
-                $post_url = get_permalink($post->ID);
-                $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : '/dev/shm/change-me-now';
-                nppp_purge_single($nginx_cache_path, $post_url, true);
-                return;
-            }
-        }
-
-        // Priority 2: Handle Content Updates (publish to publish with content change)
-        if ('publish' === $new_status && 'publish' === $old_status) {
-            // Check if the content was updated (modified time differs from the original post time)
-            if (get_post_modified_time('U', true, $post) > get_post_time('U', true, $post)) {
-                $post_url = get_permalink($post->ID);
-                $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : '/dev/shm/change-me-now';
-                nppp_purge_single($nginx_cache_path, $post_url, true);
-            }
+    // Priority 2: Handle Content Updates (publish to publish with content change)
+    if ('publish' === $new_status && 'publish' === $old_status) {
+        // Check if the content was updated (modified time differs from the original post time)
+        if (get_post_modified_time('U', true, $post) > get_post_time('U', true, $post)) {
+            nppp_purge_single($nginx_cache_path, $post_url, true);
+            $did_purge[ $post->ID ] = true;
+            return;
         }
     }
 }
