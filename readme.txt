@@ -173,6 +173,8 @@ Release date: 2025-04-28
 * Fix leaking HTML into WP core API responses
 * Fix plugin name under Settings menu
 * Fix mobile layout issues
+* Fix plugin header
+* Fix Status tab render issue
 * Bump external assets to latest versions
 * Tested with WordPress 6.8.1
 
