@@ -2,7 +2,7 @@
 /**
  * Logging & WP admin notices function for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contain logging & wp admin notices function for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.0
+ * Version: 2.1.2
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -70,6 +70,25 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
      *    FROM INTERFERING WITH WP AJAX, REST, CRON, AND SCREENS.
      */
 
+    // Bail out on *all* REST requests except our own purge/preload endpoints
+    if (
+        (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) ||
+        (function_exists('wp_doing_rest') && wp_doing_rest()) ||
+        (defined('REST_REQUEST') && REST_REQUEST)
+    ) {
+        global $wp;
+        $route = $wp->query_vars['rest_route'] ?? '';
+        // Only echo for our two NPP routes
+        // to prevent interfere with core WP API responses.
+        if (in_array($route, [
+            '/nppp_nginx_cache/v2/purge',
+            '/nppp_nginx_cache/v2/preload',
+        ], true)) {
+            echo '<p>' . esc_html(sanitize_text_field($message)) . '</p>';
+        }
+        return;
+    }
+
     // Allow admin notices only for NPP AJAX actions
     // To prevent interfere with core WP AJAX
     // Verify nonce for WP Admin Notices
@@ -128,35 +147,6 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
                 // Translators: This message appears when a user does not have the required permissions.
                 wp_die(esc_html__('Permission denied', 'fastcgi-cache-purge-and-preload-nginx'));
             }
-        } else {
-            return;
-        }
-    }
-
-    // Allow admin notices only for NPP REST actions
-    // To prevent interfere with core WP REST
-    if (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) {
-        // Determine the current route
-        global $wp;
-        $rest_route = $wp->query_vars['rest_route'] ?? '';
-
-        // Check NPP routes
-        if ($rest_route === '/nppp_nginx_cache/v2/purge' || $rest_route === '/nppp_nginx_cache/v2/preload') {
-            echo '<p>' . esc_html($sanitized_message) . '</p>';
-            return;
-        } else {
-            return;
-        }
-    // Fallback for older WP versions
-    } elseif (function_exists('wp_doing_rest') && wp_doing_rest() || defined('REST_REQUEST') && REST_REQUEST) {
-        // Determine the current route
-        global $wp;
-        $rest_route = $wp->query_vars['rest_route'] ?? '';
-
-        // Check NPP routes
-        if ($rest_route === '/nppp_nginx_cache/v2/purge' || $rest_route === '/nppp_nginx_cache/v2/preload') {
-            echo '<p>' . esc_html($sanitized_message) . '</p>';
-            return;
         } else {
             return;
         }

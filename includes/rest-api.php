@@ -2,7 +2,7 @@
 /**
  * Rest API for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains rest api functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.0
+ * Version: 2.1.2
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -267,6 +267,9 @@ function nppp_validate_and_rate_limit_endpoint($request) {
 
 // Handle the REST API request for purge action.
 function nppp_nginx_cache_purge_endpoint($request) {
+    // Start output buffering for purge endpoint
+    ob_start();
+
     // Validate the API key and check rate limit
     $validation = nppp_validate_and_rate_limit_endpoint($request);
     if (is_wp_error($validation)) {
@@ -286,7 +289,6 @@ function nppp_nginx_cache_purge_endpoint($request) {
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Call purge action
-    ob_start();
     nppp_purge(
         $nginx_cache_path,
         $PIDFILE,
@@ -308,6 +310,9 @@ function nppp_nginx_cache_purge_endpoint($request) {
 
 // Handle the REST API request for preload action.
 function nppp_nginx_cache_preload_endpoint($request) {
+    // Start output buffering for preload endpoint
+    ob_start();
+
     // Validate the API key and check rate limit
     $validation = nppp_validate_and_rate_limit_endpoint($request);
     if (is_wp_error($validation)) {
@@ -340,7 +345,6 @@ function nppp_nginx_cache_preload_endpoint($request) {
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Call preload action
-    ob_start();
     nppp_preload(
         $nginx_cache_path,
         $this_script_path,

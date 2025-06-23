@@ -4,8 +4,8 @@ Donate link: https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordp
 Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
-Tested up to: 6.7.2
-Stable tag: 2.1.1
+Tested up to: 6.8
+Stable tag: 2.1.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -165,6 +165,19 @@ Yes, please refer to the plugin settings **Help** tab.
 8. Front-end Admin Bar
 
 == Changelog ==
+
+= 2.1.2 =
+
+Release date: 2025-04-28
+
+* Fix leaking HTML into WP core API responses
+* Fix plugin name under Settings menu
+* Fix mobile layout issues
+* Fix plugin not a valid header issue
+* Fix Status tab render issue
+* Fix Auto Purge triggers twice
+* Bump external assets to latest versions
+* Tested with WordPress 6.8.1
 
 = 2.1.1 =
 

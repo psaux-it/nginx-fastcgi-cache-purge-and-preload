@@ -2,7 +2,7 @@
 /**
  * Settings page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains settings page functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.0
+ * Version: 2.1.2
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -45,7 +45,7 @@ function nppp_add_nginx_cache_settings_page() {
     add_submenu_page(
         'options-general.php',
         'Nginx Cache',
-        'FastCGI Cache Purge and Preload',
+        'Nginx Cache Purge Preload',
         'manage_options',
         'nginx_cache_settings',
         'nppp_nginx_cache_settings_page'

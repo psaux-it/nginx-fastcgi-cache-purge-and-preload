@@ -1,17 +1,10 @@
 <?php
-/**
- * Plugin Name:       FastCGI Cache Purge and Preload for Nginx
- * Plugin URI:        https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload
- * Description:       Manage FastCGI Cache Purge and Preload for Nginx operations directly from your WordPress admin dashboard.
- * Version:           2.1.0
+/*
+ * Load NPP
+ * Version:           2.1.2
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
- * Author Email:      hasan.calisir@psauxit.com
  * License:           GPL-2.0+
- * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
- * Text Domain:       fastcgi-cache-purge-and-preload-nginx
- * Requires at least: 6.3
- * Requires PHP:      7.4
  */
 
 // Exit if accessed directly.
@@ -155,6 +148,27 @@ add_action('nppp_plugin_admin_notices', function($type, $message, $log_message, 
     <?php
 }, 10, 4);
 add_action('wp', function() {
+    // 1) Bail on REST
+    if (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) {
+        return;
+    } elseif (function_exists('wp_doing_rest') && wp_doing_rest()) {
+        return;
+    } elseif (defined('REST_REQUEST') && REST_REQUEST) {
+        return;
+    }
+
+    // 2) Bail on AJAX
+    if (function_exists('wp_doing_ajax') && wp_doing_ajax()
+         || (defined('DOING_AJAX') && DOING_AJAX)) {
+        return;
+    }
+
+    // 3) Bail on WP-Cron
+    if (function_exists('wp_doing_cron') && wp_doing_cron()
+         || (defined('DOING_CRON') && DOING_CRON)) {
+        return;
+    }
+
     if (is_user_logged_in() && current_user_can('administrator') && isset($_GET['nppp_front'])) {
         $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
         if (wp_verify_nonce($nonce, 'nppp_redirect_nonce')) {
