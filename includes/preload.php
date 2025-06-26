@@ -40,30 +40,31 @@ function nppp_detect_premature_process(
                    "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
                    "\"$fdomain\" ";
 
+    // Redirect all I/O to /dev/null so wget can never block on pipes
+    $descriptors = [
+        0 => ['file', '/dev/null', 'r'],
+        1 => ['file', '/dev/null', 'w'],
+        2 => ['file', '/dev/null', 'w'],
+    ];
+
     // Start the testprocess
-    $process = proc_open($testCommand, [], $dummy);
+    $process = proc_open($testCommand, $descriptors, $pipes);
 
     // Verify that the process was successfully created
     if (is_resource($process)) {
-        // Get process PID
-        $status = proc_get_status($process);
-        $test_pid = $status['pid'];
-
         // Sleep for 100ms to allow process to initialize/stabilize
         usleep(100000);
 
-        // Refresh process status after 100ms
-        $status = proc_get_status($process);
+        // Lets status check
+        $status   = proc_get_status($process);
+        $test_pid = $status['pid'];
+        $running  = $status['running'];
 
         // If process not running after 100ms;
-        // We have 'exitcode'
-        if (!$status['running']) {
-            // Process is not running so;
-            $exitCode = $status['exitcode'];
-            proc_close($process);
+        if (!$running) {
+            $exitCode  = $status['exitcode'];
 
-            // Process terminated prematurely?
-            // Process completed succesfully very quick?
+            // Test exit code
             if ($exitCode === 0) {
                 $test_process = true;
             } else {
@@ -71,7 +72,6 @@ function nppp_detect_premature_process(
             }
         } else {
             // Test process is live; terminate it
-            // As we trigger our main process with shell_exec 'nohup'
             if (!defined('SIGTERM')) {
                 define('SIGTERM', 15);
             }
@@ -80,11 +80,10 @@ function nppp_detect_premature_process(
                 $kill_path = trim(shell_exec('command -v kill'));
                 shell_exec(escapeshellcmd("$kill_path -9 $test_pid"));
             }
-            proc_close($process);
             $test_process = true;
         }
+        proc_close($process);
     } else {
-        // Starting the test command failed
         $test_process = false;
     }
 
