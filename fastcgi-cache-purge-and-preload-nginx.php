@@ -19,6 +19,9 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// PHP-FPM worker (non-login user) uses a minimal PATH, extend it for shell commands
+putenv('PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin');
+
 // Load text domain
 function nppp_load_i18n() {
     $plugin_rel_path = basename(dirname(__FILE__)) . '/languages';
