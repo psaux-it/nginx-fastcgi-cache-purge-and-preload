@@ -92,7 +92,7 @@ function nppp_perform_file_operation($file_path, $operation, $data = null) {
         case 'append':
             $current_content = $wp_filesystem->get_contents($file_path);
             $updated_content = $current_content . "\n" . $data;
-            return $wp_filesystem->put_contents($file_path, $updated_content, FS_CHMOD_FILE);
+            return $wp_filesystem->put_contents($file_path, $updated_content);
         default:
             return false;
     }
