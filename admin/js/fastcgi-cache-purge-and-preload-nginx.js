@@ -608,6 +608,53 @@ $(document).ready(function() {
         });
     });
 
+    // Update enable proxy status when state changes
+    $('#nginx_cache_preload_enable_proxy').change(function() {
+        var proxyElement = jQuery(this);
+        var clickToCopySpanProxy = proxyElement.next('.nppp-onoffswitch-label-proxy');
+        var clickToCopySpanOffsetProxy = clickToCopySpanProxy.offset();
+        var notificationLeftProxy = clickToCopySpanOffsetProxy.left + clickToCopySpanProxy.outerWidth() + 10;
+        var notificationTopProxy = clickToCopySpanOffsetProxy.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action: 'nppp_update_enable_proxy_option',
+            enable_proxy: isChecked,
+            _wpnonce: nppp_admin_data.enable_proxy_nonce
+        }, function(response) {
+            // Handle response
+            if (response.success) {
+                // Show a small notification indicating successfully saved option
+                var notification = document.createElement('div');
+                notification.textContent = '✔';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftProxy + 'px';
+                notification.style.top = notificationTopProxy + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
+            } else {
+                // Error updating option, revert checkbox
+                $('#nginx_cache_preload_enable_proxy').prop('checked', !$('#nginx_cache_preload_enable_proxy').prop('checked'));
+                alert('Error updating option!');
+            }
+        });
+    });
+
     // Update preload mobile status when state changes
     $('#nginx_cache_auto_preload_mobile').change(function() {
         var mobilePreloadElement = jQuery(this);
@@ -1618,6 +1665,39 @@ $(document).ready(function() {
             $('.nppp-onoffswitch-switch-preload-mobile').css('background', '#ea1919');
             $('.nppp-on-preload-mobile').css('color', '#000000');
             $('.nppp-off-preload-mobile').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for enable proxy
+    var isCheckedProxy = $('#nginx_cache_preload_enable_proxy').prop('checked');
+    // Update the toggle switch based on the checkbox state
+    if (isCheckedProxy) {
+        // Checkbox is checked, toggle switch to On
+        $('.nppp-onoffswitch-switch-proxy').css('background', '#66b317');
+        $('.nppp-on-proxy').css('color', '#ffffff');
+        $('.nppp-off-proxy').css('color', '#000000');
+    } else {
+        // Checkbox is unchecked, toggle switch to Off
+        $('.nppp-onoffswitch-switch-proxy').css('background', '#ea1919');
+        $('.nppp-on-proxy').css('color', '#000000');
+        $('.nppp-off-proxy').css('color', '#ffffff');
+    }
+
+    // Add event listener to the original checkbox
+    $('#nginx_cache_preload_enable_proxy').change(function() {
+        // Check if the checkbox is checked
+        var isCheckedProxy = $(this).prop('checked');
+        // Update the toggle switch based on the checkbox state
+        if (isCheckedProxy) {
+            // Checkbox is checked, toggle switch to On
+            $('.nppp-onoffswitch-switch-proxy').css('background', '#66b317');
+            $('.nppp-on-proxy').css('color', '#ffffff');
+            $('.nppp-off-proxy').css('color', '#000000');
+        } else {
+            // Checkbox is unchecked, toggle switch to Off
+            $('.nppp-onoffswitch-switch-proxy').css('background', '#ea1919');
+            $('.nppp-on-proxy').css('color', '#000000');
+            $('.nppp-off-proxy').css('color', '#ffffff');
         }
     });
 
