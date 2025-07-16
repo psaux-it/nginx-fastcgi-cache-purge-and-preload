@@ -115,6 +115,7 @@ add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivatio
 add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_preload_mobile_option');
 add_action('npp_plugin_tracking_event', 'nppp_plugin_tracking', 10, 1);
 add_action('wp_dashboard_setup', 'nppp_add_dashboard_widget');
+add_action('wp_ajax_nppp_update_enable_proxy_option', 'nppp_update_enable_proxy_option');
 $nppp_auto_purge
     ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions)
     : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions);
