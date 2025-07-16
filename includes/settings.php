@@ -294,14 +294,14 @@ function nppp_nginx_cache_settings_page() {
                         <tr valign="top">
                             <th scope="row">
                                 <span class="dashicons dashicons-randomize"></span>
-                                <?php echo esc_html__('Enable Proxy', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                                <?php echo esc_html__('Use Proxy', 'fastcgi-cache-purge-and-preload-nginx'); ?>
                             </th>
                             <td>
                                 <div class="nppp-onoffswitch-proxy">
                                     <?php nppp_nginx_cache_enable_proxy_callback(); ?>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'Enable this feature to route preload requests through a local proxy mitmproxy.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'This helps unify percent-encoding (uppercase vs lowercase) in URLs, matching browser behavior', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Enable this feature to route preload requests through a local proxy (mitmproxy).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'This helps unify percent-encoding (uppercase vs lowercase) in URLs, matching browser behavior.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Without this feature, Nginx may generate separate cache keys for uppercase/lowercase percent-encoded URLs, leading to cache misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Only use this if you encounter such a problem. Please see the Help tab for instructions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
