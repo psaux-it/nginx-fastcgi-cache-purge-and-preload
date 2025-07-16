@@ -261,10 +261,10 @@ function nppp_nginx_cache_settings_page() {
                                         <?php nppp_nginx_cache_auto_preload_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'Enable this feature to route preload requests through a local proxy mitmproxy.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'This helps unify percent-encoding (uppercase vs lowercase) in URLs, matching browser behavior', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Without this feature, Nginx may generate separate cache keys for uppercase/lowercase percent-encoded URLs, leading to cache misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Only use this if you encounter such a problem. Please see the Help tab for instructions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Enable this feature to automatically preload the cache after purging. This ensures fast page load times for visitors by proactively caching content.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'When enabled, your website\'s cache will preload with the latest content automatically after purge, ensuring quick loading times even for uncached pages.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'This feature is particularly useful for dynamic websites with frequently changing content.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'This feature triggers when either Auto Purge feature is enabled or when the Purge All cache action is used manually.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -300,10 +300,10 @@ function nppp_nginx_cache_settings_page() {
                                 <div class="nppp-onoffswitch-proxy">
                                     <?php nppp_nginx_cache_enable_proxy_callback(); ?>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'Enable this feature to route preload requests through a local proxy with mitmproxy.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'If your site uses URLs with non-ASCII characters (e.g., Chinese), they are percent-encoded in uppercase during Preload, but lowercase in browser requests.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Enable this feature to route preload requests through a local proxy mitmproxy.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'This helps unify percent-encoding (uppercase vs lowercase) in URLs, matching browser behavior', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Without this feature, Nginx may generate separate cache keys for uppercase/lowercase percent-encoded URLs, leading to cache misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Setup mitmproxy, use pre-made python script to convert percent-encodings to lowercase on the fly before requests reach Nginx. Please check Help tab.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Only use this if you encounter such a problem. Please see the Help tab for instructions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
                         <tr valign="top">
