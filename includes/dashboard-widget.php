@@ -210,6 +210,11 @@ function nppp_dashboard_widget() {
             'status' => isset($settings['nginx_cache_auto_preload_mobile']) && $settings['nginx_cache_auto_preload_mobile'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon' => 'dashicons-smartphone'
         ],
+        'enable_proxy' => [
+            'label' => __('Proxy', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status' => isset($settings['nginx_cache_preload_enable_proxy']) && $settings['nginx_cache_preload_enable_proxy'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
+            'icon'   => 'dashicons-randomize'
+        ],
         'scheduled_cache' => [
             'label' => __('Scheduled Cache', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nginx_cache_schedule']) && $settings['nginx_cache_schedule'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
