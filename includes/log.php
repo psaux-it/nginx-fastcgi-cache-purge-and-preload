@@ -118,6 +118,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_restart_systemd_service' => 'nppp-restart-systemd-service',
             'nppp_update_default_cache_key_regex_option' => 'nppp-update-default-cache-key-regex-option',
             'nppp_update_auto_preload_mobile_option' => 'nppp-update-auto-preload-mobile-option',
+            'nppp_update_enable_proxy_option' => 'nppp-update-enable-proxy-option',
         ];
 
         // Get the current AJAX action
