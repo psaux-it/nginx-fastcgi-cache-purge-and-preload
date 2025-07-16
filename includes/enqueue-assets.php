@@ -99,6 +99,8 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     $update_default_cache_key_regex_option_nonce = wp_create_nonce('nppp-update-default-cache-key-regex-option');
     // Create a nonce for preload mobile option
     $update_auto_preload_mobile_option_nonce = wp_create_nonce('nppp-update-auto-preload-mobile-option');
+    // Create a nonce for enable proxy option
+    $update_enable_proxy_option_nonce = wp_create_nonce('nppp-update-enable-proxy-option');
 
     // Localize nonce values for plugin main js
     wp_localize_script('nppp_admin-js', 'nppp_admin_data', array(
@@ -125,6 +127,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'plugin_cache_nonce' => $clear_plugin_cache_nonce,
         'systemd_service_nonce' => $restart_systemd_service_nonce,
         'cache_key_regex_nonce' => $update_default_cache_key_regex_option_nonce,
+        'enable_proxy_nonce' => $update_enable_proxy_option_nonce,
     ));
 }
 
