@@ -303,7 +303,8 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description"><?php echo esc_html__( 'Enable this feature to route preload requests through a local proxy (mitmproxy).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'This helps unify percent-encoding (uppercase vs lowercase) in URLs, matching browser behavior.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Without this feature, Nginx may generate separate cache keys for uppercase/lowercase percent-encoded URLs, leading to cache misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Only use this if you encounter such a problem. Please see the Help tab for instructions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Only use this if you encounter such a problem. Please see the Help tab for setup instructions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'For example, use this when your site has non-ASCII URLs (like Chinese or Japanese) and you experience cache misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
                         <tr valign="top">
