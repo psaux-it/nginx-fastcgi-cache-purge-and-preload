@@ -149,19 +149,20 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
-    // Get the current page url for purge & preload front-end actions
-    if (empty($_SERVER['HTTP_REFERER'])) {
-        $clean_current_page_url = home_url();
-    } else {
-        // Sanitize the URL
-        $current_page_url = sanitize_text_field(wp_unslash($_SERVER['HTTP_REFERER']));
-        $clean_current_page_url = filter_var($current_page_url, FILTER_SANITIZE_URL);
+    // Get current page URL for single actions
+    if (!empty($_SERVER['HTTP_REFERER'])) {
+        $raw_url              = wp_unslash($_SERVER['HTTP_REFERER']);
+        $current_page_url     = esc_url_raw($raw_url);
+        $decoded_page_url     = rawurldecode($current_page_url);
 
-        // Validate the URL
-        if (!filter_var($clean_current_page_url, FILTER_VALIDATE_URL)) {
-            // Fallback to home URL if invalid
-            $clean_current_page_url = home_url();
+        // Validate
+        if (!filter_var($current_page_url, FILTER_VALIDATE_URL)) {
+            $current_page_url  = home_url();
+            $decoded_page_url  = home_url();
         }
+    } else {
+        $current_page_url = home_url();
+        $decoded_page_url = home_url();
     }
 
     // Start output buffering to capture the output of the actions
@@ -177,11 +178,11 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
             $nppp_single_action = false;
             break;
         case 'nppp_purge_cache_single':
-            nppp_purge_single($nginx_cache_path, $clean_current_page_url, false);
+            nppp_purge_single($nginx_cache_path, $current_page_url, false);
             $nppp_single_action = true;
             break;
         case 'nppp_preload_cache_single':
-            nppp_preload_single($clean_current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
+            nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
             $nppp_single_action = true;
             break;
         default:
@@ -216,7 +217,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
                 'nppp_front' => $status_message_transient_key,
                 'redirect_nonce' => $nonce_redirect,
             ),
-            $clean_current_page_url
+            $decoded_page_url
         );
     } else {
         // Redirect to the settings page with the status message and message type as query parameters
