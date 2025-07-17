@@ -70,6 +70,9 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         return;
     }
 
+    // Display decoded URL to user
+    $current_page_url_decoded = rawurldecode($current_page_url);
+
     // Get the PIDFILE location
     $this_script_path = dirname(plugin_dir_path(__FILE__));
     $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
@@ -94,7 +97,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
         if ($pid > 0 && nppp_is_process_alive($pid)) {
             // Translators: %s is the page URL
-            nppp_display_admin_notice('info', sprintf( __( 'INFO: Nginx auto cache purge for page %s has been halted due to ongoing cache preloading. You can stop Nginx cache preloading anytime via the "Purge All" option.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+            nppp_display_admin_notice('info', sprintf( __( 'INFO: Nginx auto cache purge for page %s has been halted due to ongoing cache preloading. You can stop Nginx cache preloading anytime via the "Purge All" option.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
             return;
         }
     }
@@ -124,7 +127,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 // Check read and write permissions for each file
                 if (!$wp_filesystem->is_readable($file->getPathname()) || !$wp_filesystem->is_writable($file->getPathname())) {
                     // Translators: %s is the page URL
-                    nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+                    nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
                     return;
                 }
 
@@ -162,12 +165,12 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                             $regex_tested = true;
                         } else {
                             // Translators: %s is the page URL, $host$request_uri is just string the part of the cache key
-                            nppp_display_admin_notice('error', sprintf( __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\$host\$request_uri</strong> portion correctly.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ), true, false);
+                            nppp_display_admin_notice('error', sprintf( __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\$host\$request_uri</strong> portion correctly.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ), true, false);
                             return;
                         }
                     } else {
                         // Translators: %s is the page URL
-                        nppp_display_admin_notice('error', sprintf( __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ), true, false);
+                        nppp_display_admin_notice('error', sprintf( __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ), true, false);
                         return;
                     }
                 }
@@ -210,21 +213,21 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     if ($deleted) {
                         if (!$nppp_auto_purge && !$nppp_auto_preload) {
                             // Translators: %s is the page URL
-                            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+                            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
                         } else {
                             if ($nppp_auto_purge && $nppp_auto_preload) {
                                 nppp_preload_cache_on_update($current_page_url, true);
                             } elseif ($nppp_auto_purge) {
                                 // Translators: %s is the page URL
-                                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+                                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
                             } elseif ($nppp_auto_preload) {
                                 // Translators: %s is the page URL
-                                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+                                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
                             }
                         }
                     } else {
                         // Translators: %s is the page URL
-                        nppp_display_admin_notice('error', __( 'ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page $current_page_url. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                        nppp_display_admin_notice('error', __( 'ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page $current_page_url_decoded. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' ));
                     }
                     return;
                 }
@@ -232,7 +235,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         }
     } catch (Exception $e) {
         // Translators: %s is the page URL
-        nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+        nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
         return;
     }
 
@@ -245,7 +248,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         } else {
             // Display admin notice if auto preload is not enabled
             // Translators: %s is the page URL
-            nppp_display_admin_notice('info', sprintf( __( 'INFO ADMIN: Nginx cache purge attempted, but the page %s is not currently found in the cache.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url ));
+            nppp_display_admin_notice('info', sprintf( __( 'INFO ADMIN: Nginx cache purge attempted, but the page %s is not currently found in the cache.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
         }
     }
 }
