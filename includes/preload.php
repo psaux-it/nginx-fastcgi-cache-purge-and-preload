@@ -14,6 +14,27 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Get proxy options
+function nppp_get_proxy_settings() {
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $proxy_host = isset($nginx_cache_settings['nginx_cache_preload_proxy_host']) && !empty($nginx_cache_settings['nginx_cache_preload_proxy_host'])
+        ? $nginx_cache_settings['nginx_cache_preload_proxy_host']
+        : '127.0.0.1';
+    $proxy_port = isset($nginx_cache_settings['nginx_cache_preload_proxy_port']) && !empty($nginx_cache_settings['nginx_cache_preload_proxy_port'])
+        ? $nginx_cache_settings['nginx_cache_preload_proxy_port']
+        : 3434;
+
+    $use_proxy = isset($nginx_cache_settings['nginx_cache_preload_enable_proxy']) && $nginx_cache_settings['nginx_cache_preload_enable_proxy'] === 'yes'
+        ? 'yes'
+        : 'no';
+    $http_proxy = "http://{$proxy_host}:{$proxy_port}";
+
+    return array(
+        'use_proxy'  => $use_proxy,
+        'http_proxy' => $http_proxy,
+    );
+}
+
 // Check if a preload process fails immediately—too fast.
 // Instead of relying on tools like 'ps' to detect it, we need to use 'proc_get_status'
 // to get PID and exit status to determine if the process has already ended unexpectedly.
@@ -29,9 +50,19 @@ function nppp_detect_premature_process(
     string $NPPP_DYNAMIC_USER_AGENT
 ): bool {
     $test_process = false;
+
+    // Get proxy options
+    $proxy_settings = nppp_get_proxy_settings();
+    $use_proxy  = $proxy_settings['use_proxy'];
+    $http_proxy = $proxy_settings['http_proxy'];
+    $https_proxy = $http_proxy;
+
     $testCommand = "wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
                    "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
                    "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                   "-e use_proxy=$use_proxy " .
+                   "-e http_proxy=$http_proxy " .
+                   "-e https_proxy=$https_proxy " .
                    "-P \"$tmp_path\" " .
                    "--limit-rate=\"$nginx_cache_limit_rate\"k " .
                    "--wait=$nginx_cache_wait " .
@@ -53,7 +84,7 @@ function nppp_detect_premature_process(
     // Verify that the process was successfully created
     if (is_resource($process)) {
         // Sleep for 100ms to allow process to initialize/stabilize
-        usleep(100000);
+        usleep(300000);
 
         // Lets status check
         $status   = proc_get_status($process);
@@ -129,6 +160,12 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         $NPPP_DYNAMIC_USER_AGENT = NPPP_USER_AGENT;
     }
 
+    // Get proxy options
+    $proxy_settings = nppp_get_proxy_settings();
+    $use_proxy  = $proxy_settings['use_proxy'];
+    $http_proxy = $proxy_settings['http_proxy'];
+    $https_proxy = $http_proxy;
+
     // Here, we check the source of the preload request. There are several possible routes.
     // If nppp_is_auto_preload is false, it means we arrived here through one of the following routes:
     // Preload (settings page), Preload (admin bar), Preload (CRON), or Preload (REST API).
@@ -191,6 +228,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             $command = "nohup wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
                 "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
                 "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-e use_proxy=$use_proxy " .
+                "-e http_proxy=$http_proxy " .
+                "-e https_proxy=$https_proxy " .
                 "-P \"$tmp_path\" " .
                 "--limit-rate=\"$nginx_cache_limit_rate\"k " .
                 "--wait=$nginx_cache_wait " .
@@ -320,6 +360,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         $command = "nohup wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
                 "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
                 "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-e use_proxy=$use_proxy " .
+                "-e http_proxy=$http_proxy " .
+                "-e https_proxy=$https_proxy " .
                 "-P \"$tmp_path\" " .
                 "--limit-rate=\"$nginx_cache_limit_rate\"k " .
                 "--wait=$nginx_cache_wait " .
@@ -442,6 +485,12 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     // Initialize an array to hold the PIDs for both desktop and mobile preload processes
     $pids = [];
 
+    // Get proxy options
+    $proxy_settings = nppp_get_proxy_settings();
+    $use_proxy  = $proxy_settings['use_proxy'];
+    $http_proxy = $proxy_settings['http_proxy'];
+    $https_proxy = $http_proxy;
+
     // Start cache preloading for single post/page (when manual On-page preload action triggers)
     // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
     // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
@@ -454,6 +503,9 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $command_desktop = "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
                 "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
                 "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-e use_proxy=$use_proxy " .
+                "-e http_proxy=$http_proxy " .
+                "-e https_proxy=$https_proxy " .
                 "-P \"$tmp_path\" " .
                 "--limit-rate=\"$nginx_cache_limit_rate\"k " .
                 "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
@@ -483,6 +535,9 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         $command_mobile = "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
                 "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
                 "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-e use_proxy=$use_proxy " .
+                "-e http_proxy=$http_proxy " .
+                "-e https_proxy=$https_proxy " .
                 "-P \"$tmp_path\" " .
                 "--limit-rate=\"$nginx_cache_limit_rate\"k " .
                 "--user-agent='\"". NPPP_USER_AGENT_MOBILE ."\"' " .
@@ -622,6 +677,12 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // Initialize an array to hold the PIDs for both desktop and mobile preload processes
     $pids = [];
 
+    // Get proxy options
+    $proxy_settings = nppp_get_proxy_settings();
+    $use_proxy  = $proxy_settings['use_proxy'];
+    $http_proxy = $proxy_settings['http_proxy'];
+    $https_proxy = $http_proxy;
+
     // Start cache preloading for single post/page (when Auto Purge & Auto Preload enabled both)
     // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
     // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
@@ -634,6 +695,9 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $command_desktop = "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
                 "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
                 "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-e use_proxy=$use_proxy " .
+                "-e http_proxy=$http_proxy " .
+                "-e https_proxy=$https_proxy " .
                 "-P \"$tmp_path\" " .
                 "--limit-rate=\"$nginx_cache_limit_rate\"k " .
                 "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
@@ -663,6 +727,9 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         $command_mobile = "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
                 "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
                 "--ignore-length --timeout=5 --tries=1 -e robots=off " .
+                "-e use_proxy=$use_proxy " .
+                "-e http_proxy=$http_proxy " .
+                "-e https_proxy=$https_proxy " .
                 "-P \"$tmp_path\" " .
                 "--limit-rate=\"$nginx_cache_limit_rate\"k " .
                 "--user-agent='\"". NPPP_USER_AGENT_MOBILE ."\"' " .
