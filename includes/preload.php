@@ -733,6 +733,9 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         return;
     }
 
+    // Display decoded URL to user
+    $current_page_url_decoded = rawurldecode($current_page_url);
+
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
@@ -788,7 +791,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
 
         if (!nppp_is_proxy_port_listening($proxy_host, $proxy_port)) {
             // Translators: %s = domain name, %s = proxy host, %d = proxy port
-            nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $current_page_url, $proxy_host, $proxy_port));
+            nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $current_page_url_decoded, $proxy_host, $proxy_port));
             return;
         }
     }
@@ -875,18 +878,18 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             if ($found) {
                 if ($device === 'mobile') {
                     // Translators: %s1: device type (desktop or mobile), %s2: current page URL
-                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url );
+                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                 } else {
                     // Translators: %s1: device type (desktop or mobile), %s2: current page URL
-                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto purge cache completed, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url );
+                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto purge cache completed, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                 }
             } else {
                 if ($device === 'mobile') {
                     // Translators: %s1: device type (desktop or mobile), %s2: current page URL
-                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url );
+                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                 } else {
                     // Translators: %s1: device type (desktop or mobile), %s2: current page URL
-                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto purge cache attempted but page not found in cache, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url );
+                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto purge cache attempted but page not found in cache, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                 }
             }
 
@@ -900,11 +903,11 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
                 if ($device === 'mobile') {
                     if ($preload_mobile) {
                         // Translators: %s1: device type (desktop or mobile), %s2: current page URL
-                        $error_message = sprintf( __( 'ERROR COMMAND: Unable to start Auto preload for %1$s version of %2$s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url );
+                        $error_message = sprintf( __( 'ERROR COMMAND: Unable to start Auto preload for %1$s version of %2$s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                     }
                 } else {
                     // Translators: %s1: device type (desktop or mobile), %s2: current page URL
-                    $error_message = sprintf( __( 'ERROR COMMAND: Auto purge cache completed, but unable to start Auto preload for %1$s version of %2$s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url );
+                    $error_message = sprintf( __( 'ERROR COMMAND: Auto purge cache completed, but unable to start Auto preload for %1$s version of %2$s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                 }
             } else {
                 if ($device === 'mobile') {
