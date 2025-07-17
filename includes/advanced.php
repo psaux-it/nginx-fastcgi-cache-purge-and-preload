@@ -404,10 +404,7 @@ function nppp_preload_cache_premium_callback() {
     }
 
     // Get the file path from the AJAX request and sanitize it
-    $cache_url = isset($_POST['cache_url']) ? sanitize_text_field(wp_unslash($_POST['cache_url'])) : '';
-
-    // Sanitize the URL
-    $clean_cache_url = filter_var($cache_url, FILTER_SANITIZE_URL);
+    $cache_url = isset($_POST['cache_url']) ? esc_url_raw(wp_unslash($_POST['cache_url'])) : '';
 
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
@@ -428,12 +425,12 @@ function nppp_preload_cache_premium_callback() {
     $nginx_cache_cpu_limit = isset($nginx_cache_settings['nginx_cache_cpu_limit']) ? $nginx_cache_settings['nginx_cache_cpu_limit'] : $default_cpu_limit;
 
     // Validate the sanitized URL
-    if (filter_var($clean_cache_url, FILTER_VALIDATE_URL) !== false) {
+    if (filter_var($cache_url, FILTER_VALIDATE_URL) !== false) {
         // Start output buffering
         ob_start();
 
         // call single preload action
-        nppp_preload_single($clean_cache_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
+        nppp_preload_single($cache_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
 
         // Capture and clean the buffer
         $output = wp_strip_all_tags(ob_get_clean());
