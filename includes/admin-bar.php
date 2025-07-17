@@ -150,19 +150,25 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Get current page URL for single actions
-    if (!empty($_SERVER['HTTP_REFERER'])) {
-        $raw_url              = wp_unslash($_SERVER['HTTP_REFERER']);
-        $current_page_url     = esc_url_raw($raw_url);
-        $decoded_page_url     = rawurldecode($current_page_url);
+    if (! empty($_SERVER['HTTP_REFERER'])) {
+        $raw_url           = wp_unslash($_SERVER['HTTP_REFERER']);
+        $current_page_url  = esc_url_raw($raw_url);
 
         // Validate
-        if (!filter_var($current_page_url, FILTER_VALIDATE_URL)) {
-            $current_page_url  = home_url();
-            $decoded_page_url  = home_url();
+        if (! filter_var($current_page_url, FILTER_VALIDATE_URL)) {
+            global $wp;
+            if (empty($wp->request)) {
+                $wp->parse_request();
+            }
+            $current_page_url = esc_url_raw(trailingslashit(home_url(add_query_arg($_GET, $wp->request))));
         }
     } else {
-        $current_page_url = home_url();
-        $decoded_page_url = home_url();
+        global $wp;
+        if (empty($wp->request)) {
+            $wp->parse_request();
+        }
+
+        $current_page_url = esc_url_raw(trailingslashit(home_url(add_query_arg($_GET, $wp->request))));
     }
 
     // Start output buffering to capture the output of the actions
@@ -217,7 +223,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
                 'nppp_front' => $status_message_transient_key,
                 'redirect_nonce' => $nonce_redirect,
             ),
-            $decoded_page_url
+            $current_page_url
         );
     } else {
         // Redirect to the settings page with the status message and message type as query parameters
