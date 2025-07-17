@@ -35,6 +35,29 @@ function nppp_get_proxy_settings() {
     );
 }
 
+// Check proxy is running
+function nppp_is_proxy_port_listening(string $proxy_host, int $proxy_port): bool {
+    $proxy_port = intval($proxy_port);
+
+    // Tools and their matching commands
+    $check_commands = [
+        'ss' => "ss -ltnp | awk '\$4 ~ \":{$proxy_port}\\\$\"'",
+        'netstat' => "netstat -tupln 2>/dev/null | awk '\$4 ~ \":{$proxy_port}\\\$\"'",
+        'lsof' => "lsof -iTCP:{$proxy_port} -sTCP:LISTEN 2>/dev/null",
+    ];
+
+    foreach ($check_commands as $binary => $command) {
+        if (trim(shell_exec("command -v {$binary}"))) {
+            $output = shell_exec($command);
+            if (!empty($output)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 // Check if a preload process fails immediately—too fast.
 // Instead of relying on tools like 'ps' to detect it, we need to use 'proc_get_status'
 // to get PID and exit status to determine if the process has already ended unexpectedly.
@@ -48,7 +71,7 @@ function nppp_detect_premature_process(
     string $nginx_cache_reject_regex,
     string $nginx_cache_reject_extension,
     string $NPPP_DYNAMIC_USER_AGENT
-): bool {
+) {
     $test_process = false;
 
     // Get proxy options
@@ -56,6 +79,18 @@ function nppp_detect_premature_process(
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
+
+    // Check proxy is live
+    if ($use_proxy === 'yes') {
+        // Parse proxy IP and Port
+        $parsed_url = wp_parse_url($http_proxy);
+        $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
+        $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
+
+        if (!nppp_is_proxy_port_listening($proxy_host, $proxy_port)) {
+            return 'proxy_error';
+        }
+    }
 
     $testCommand = "wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
                    "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
@@ -213,10 +248,32 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                     $NPPP_DYNAMIC_USER_AGENT
                 );
 
-                if (!$test_result) {
-                    // Translators: %s is replaced with the domain name (e.g., example.com).
-                    nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Cannot start Nginx cache Preloading for %s! Please check your DNS, connectivity, proxy/firewall settings, and Exclude syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
+                if ($test_result === 'proxy_error') {
+                    // Get host/port again because they're not in scope
+                    $parsed_url = wp_parse_url($http_proxy);
+                    $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
+                    $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
+                    // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                    nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
                     return;
+                } elseif ($test_result !== true) {
+                    // Translators: %s is replaced with the domain name (e.g., example.com).
+                    nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %s. Please check your DNS, connectivity, proxy/firewall settings, and Exclude syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
+                    return;
+                }
+            } else {
+                // Check proxy is live
+                if ($use_proxy === 'yes') {
+                    // Parse proxy IP and Port
+                    $parsed_url = wp_parse_url($http_proxy);
+                    $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
+                    $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
+
+                    if (!nppp_is_proxy_port_listening($proxy_host, $proxy_port)) {
+                        // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                        nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
+                        return;
+                    }
                 }
             }
 
@@ -345,10 +402,32 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 $NPPP_DYNAMIC_USER_AGENT
             );
 
-            if (!$test_result) {
-                // Translators: %s is replaced with the domain name (e.g., example.com).
-                nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Cannot start Nginx cache Preloading for %s! Please check your DNS, connectivity, proxy/firewall settings, and Exclude syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
+            if ($test_result === 'proxy_error') {
+                // Get host/port again because they're not in scope
+                $parsed_url = wp_parse_url($http_proxy);
+                $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
+                $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
+                // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
                 return;
+            } elseif ($test_result !== true) {
+                // Translators: %s is replaced with the domain name (e.g., example.com).
+                nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %s. Please check your DNS, connectivity, proxy/firewall settings, and Exclude syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
+                return;
+            }
+        } else {
+            // Check proxy is live
+            if ($use_proxy === 'yes') {
+                // Parse proxy IP and Port
+                $parsed_url = wp_parse_url($http_proxy);
+                $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
+                $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
+
+                if (!nppp_is_proxy_port_listening($proxy_host, $proxy_port)) {
+                    // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                    nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
+                    return;
+                }
             }
         }
 
@@ -490,6 +569,20 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
+
+    // Check proxy is live
+    if ($use_proxy === 'yes') {
+        // Parse proxy IP and Port
+        $parsed_url = wp_parse_url($http_proxy);
+        $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
+        $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
+
+        if (!nppp_is_proxy_port_listening($proxy_host, $proxy_port)) {
+            // Translators: %s = domain name, %s = proxy host, %d = proxy port
+            nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $current_page_url, $proxy_host, $proxy_port));
+            return;
+        }
+    }
 
     // Start cache preloading for single post/page (when manual On-page preload action triggers)
     // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
@@ -682,6 +775,20 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
+
+    // Check proxy is live
+    if ($use_proxy === 'yes') {
+        // Parse proxy IP and Port
+        $parsed_url = wp_parse_url($http_proxy);
+        $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
+        $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
+
+        if (!nppp_is_proxy_port_listening($proxy_host, $proxy_port)) {
+            // Translators: %s = domain name, %s = proxy host, %d = proxy port
+            nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $current_page_url, $proxy_host, $proxy_port));
+            return;
+        }
+    }
 
     // Start cache preloading for single post/page (when Auto Purge & Auto Preload enabled both)
     // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
