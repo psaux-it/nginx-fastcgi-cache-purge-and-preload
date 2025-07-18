@@ -201,6 +201,13 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
 
+    // Create domain allowlist
+    $parsed = wp_parse_url($fdomain);
+    $host = $parsed['host'];
+    $base_host = preg_replace('/^www\./i', '', $host);
+    $www_host  = 'www.' . $base_host;
+    $domain_list = implode(',', array_unique([$base_host, $www_host]));
+
     // Here, we check the source of the preload request. There are several possible routes.
     // If nppp_is_auto_preload is false, it means we arrived here through one of the following routes:
     // Preload (settings page), Preload (admin bar), Preload (CRON), or Preload (REST API).
@@ -293,6 +300,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 "--wait=$nginx_cache_wait " .
                 "--reject-regex='\"$nginx_cache_reject_regex\"' " .
                 "--reject='\"$nginx_cache_reject_extension\"' " .
+                "--domains=$domain_list " .
                 "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
                 "\"$fdomain\" >/dev/null 2>&1 & echo \$!";
 
@@ -447,6 +455,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 "--wait=$nginx_cache_wait " .
                 "--reject-regex='\"$nginx_cache_reject_regex\"' " .
                 "--reject='\"$nginx_cache_reject_extension\"' " .
+                "--domains=$domain_list " .
                 "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
                 "\"$fdomain\" >/dev/null 2>&1 & echo \$!";
 
