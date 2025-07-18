@@ -35,27 +35,69 @@ function nppp_get_proxy_settings() {
     );
 }
 
-// Check proxy is running
-function nppp_is_proxy_port_listening(string $proxy_host, int $proxy_port): bool {
-    $proxy_port = intval($proxy_port);
+// Test DNS resolution on WP server
+function nppp_check_network_env(): array {
+    $test_domain = 'google.com';
 
-    // Tools and their matching commands
-    $check_commands = [
-        'ss' => "ss -ltnp | awk '\$4 ~ \":{$proxy_port}\\\$\"'",
-        'netstat' => "netstat -tupln 2>/dev/null | awk '\$4 ~ \":{$proxy_port}\\\$\"'",
-        'lsof' => "lsof -iTCP:{$proxy_port} -sTCP:LISTEN 2>/dev/null",
+    // Check DNS
+    $dns_ok = checkdnsrr($test_domain, 'A') || checkdnsrr($test_domain, 'AAAA');
+
+    // Check outbound connectivity
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen
+    $outbound_ok = @fsockopen($test_domain, 80, $errno, $errstr, 2) !== false;
+
+    return [
+        'dns_ok'      => $dns_ok,
+        'outbound_ok' => $outbound_ok,
     ];
+}
 
-    foreach ($check_commands as $binary => $command) {
-        if (trim(shell_exec("command -v {$binary}"))) {
-            $output = shell_exec($command);
-            if (!empty($output)) {
-                return true;
-            }
+function nppp_is_proxy_reachable(string $proxy_host, int $proxy_port, int $timeout = 1): array {
+    $env = nppp_check_network_env();
+
+    if (!$env['dns_ok']) {
+        return [
+            'success' => false,
+            'code'    => 'dns_error',
+        ];
+    }
+
+    if (!$env['outbound_ok']) {
+        return [
+            'success' => false,
+            'code'    => 'network_error',
+        ];
+    }
+
+    // Resolve IP
+    if (filter_var($proxy_host, FILTER_VALIDATE_IP)) {
+        $resolved_ip = $proxy_host;
+    } else {
+        $resolved_ip = gethostbyname($proxy_host);
+        if ($resolved_ip === $proxy_host) {
+            return [
+                'success' => false,
+                'code'    => 'proxy_dns_fail',
+            ];
         }
     }
 
-    return false;
+    // Attempt connection
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen
+    $connection = @fsockopen($resolved_ip, $proxy_port, $errno, $errstr, $timeout);
+    if ($connection) {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+        fclose($connection);
+        return [
+            'success' => true,
+            'code'    => 'ok',
+        ];
+    }
+
+    return [
+        'success' => false,
+        'code'    => 'proxy_unreachable',
+    ];
 }
 
 // Check if a preload process fails immediately—too fast.
@@ -87,8 +129,12 @@ function nppp_detect_premature_process(
         $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
         $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
 
-        if (!nppp_is_proxy_port_listening($proxy_host, $proxy_port)) {
-            return 'proxy_error';
+        // Use proxy health check
+        $proxy_status = nppp_is_proxy_reachable($proxy_host, $proxy_port);
+
+        if (!$proxy_status['success']) {
+            // Return a specific code to handle later
+            return $proxy_status['code'];
         }
     }
 
@@ -255,30 +301,73 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                     $NPPP_DYNAMIC_USER_AGENT
                 );
 
-                if ($test_result === 'proxy_error') {
-                    // Get host/port again because they're not in scope
+
+                if (in_array($test_result, ['dns_error', 'network_error', 'proxy_dns_fail', 'proxy_unreachable'], true)) {
                     $parsed_url = wp_parse_url($http_proxy);
                     $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
                     $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
-                    // Translators: %s = domain name, %s = proxy host, %d = proxy port
-                    nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
+
+                    switch ($test_result) {
+                        case 'dns_error':
+                            nppp_display_admin_notice('error', __('ERROR DNS: DNS resolution failed inside the WordPress container. Please check your container network/DNS settings.', 'fastcgi-cache-purge-and-preload-nginx'));
+                            break;
+
+                        case 'network_error':
+                            nppp_display_admin_notice('error', __('ERROR NETWORK: Outbound network connection failed from WordPress container. Ensure firewall/Docker network settings allow outbound access.', 'fastcgi-cache-purge-and-preload-nginx'));
+                            break;
+
+                        case 'proxy_dns_fail':
+                            // Translators: %s = proxy host
+                            nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
+                            break;
+
+                        case 'proxy_unreachable':
+                        default:
+                            // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                            nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
+                            break;
+                    }
+                    return;
+                } elseif ($test_result === false) {
+                    // Translators: %s = domain name
+                    nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %s. Please check Exclude Endpoints and Exclude File Extensions settings syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
                     return;
                 } elseif ($test_result !== true) {
-                    // Translators: %s is replaced with the domain name (e.g., example.com).
-                    nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %s. Please check your DNS, connectivity, proxy/firewall settings, and Exclude syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
-                    return;
+                    // Translators: %s = domain name
+                    nppp_display_admin_notice('error', sprintf(__('ERROR UNKNOWN: Preloading failed for %s. Unknown error occurred.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
                 }
             } else {
-                // Check proxy is live
                 if ($use_proxy === 'yes') {
                     // Parse proxy IP and Port
                     $parsed_url = wp_parse_url($http_proxy);
                     $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
                     $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
 
-                    if (!nppp_is_proxy_port_listening($proxy_host, $proxy_port)) {
-                        // Translators: %s = domain name, %s = proxy host, %d = proxy port
-                        nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
+                    // Use proxy health check
+                    $proxy_status = nppp_is_proxy_reachable($proxy_host, $proxy_port);
+
+                    if (!$proxy_status['success']) {
+                        // Show admin notice based on error code
+                        switch ($proxy_status['code']) {
+                            case 'dns_error':
+                                nppp_display_admin_notice('error', __('ERROR DNS: DNS resolution failed inside the WordPress container. Please check your container network/DNS settings.', 'fastcgi-cache-purge-and-preload-nginx'));
+                                break;
+
+                            case 'network_error':
+                                nppp_display_admin_notice('error', __('ERROR NETWORK: Outbound network connection failed from WordPress container. Ensure firewall/Docker network settings allow outbound access.', 'fastcgi-cache-purge-and-preload-nginx'));
+                                break;
+
+                            case 'proxy_dns_fail':
+                                // Translators: %s = proxy host
+                                nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
+                                break;
+
+                            case 'proxy_unreachable':
+                            default:
+                                // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                                nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
+                                break;
+                        }
                         return;
                     }
                 }
@@ -410,30 +499,72 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 $NPPP_DYNAMIC_USER_AGENT
             );
 
-            if ($test_result === 'proxy_error') {
-                // Get host/port again because they're not in scope
+            if (in_array($test_result, ['dns_error', 'network_error', 'proxy_dns_fail', 'proxy_unreachable'], true)) {
                 $parsed_url = wp_parse_url($http_proxy);
                 $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
                 $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
-                // Translators: %s = domain name, %s = proxy host, %d = proxy port
-                nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
+
+                switch ($test_result) {
+                    case 'dns_error':
+                        nppp_display_admin_notice('error', __('ERROR DNS: DNS resolution failed inside the WordPress container. Please check your container network/DNS settings.', 'fastcgi-cache-purge-and-preload-nginx'));
+                        break;
+
+                    case 'network_error':
+                        nppp_display_admin_notice('error', __('ERROR NETWORK: Outbound network connection failed from WordPress container. Ensure firewall/Docker network settings allow outbound access.', 'fastcgi-cache-purge-and-preload-nginx'));
+                        break;
+
+                    case 'proxy_dns_fail':
+                        // Translators: %s = proxy host
+                        nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
+                        break;
+
+                    case 'proxy_unreachable':
+                    default:
+                        // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                        nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
+                        break;
+                }
+                return;
+            } elseif ($test_result === false) {
+                // Translators: %s = domain name
+                nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %s. Please check Exclude Endpoints and Exclude File Extensions settings syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
                 return;
             } elseif ($test_result !== true) {
-                // Translators: %s is replaced with the domain name (e.g., example.com).
-                nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %s. Please check your DNS, connectivity, proxy/firewall settings, and Exclude syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
-                return;
+                // Translators: %s = domain name
+                nppp_display_admin_notice('error', sprintf(__('ERROR UNKNOWN: Preloading failed for %s. Unknown error occurred.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
             }
         } else {
-            // Check proxy is live
             if ($use_proxy === 'yes') {
                 // Parse proxy IP and Port
                 $parsed_url = wp_parse_url($http_proxy);
                 $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
                 $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
 
-                if (!nppp_is_proxy_port_listening($proxy_host, $proxy_port)) {
-                    // Translators: %s = domain name, %s = proxy host, %d = proxy port
-                    nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
+                // Use proxy health check
+                $proxy_status = nppp_is_proxy_reachable($proxy_host, $proxy_port);
+
+                if (!$proxy_status['success']) {
+                    // Show admin notice based on error code
+                    switch ($proxy_status['code']) {
+                        case 'dns_error':
+                            nppp_display_admin_notice('error', __('ERROR DNS: DNS resolution failed inside the WordPress container. Please check your container network/DNS settings.', 'fastcgi-cache-purge-and-preload-nginx'));
+                            break;
+
+                        case 'network_error':
+                            nppp_display_admin_notice('error', __('ERROR NETWORK: Outbound network connection failed from WordPress container. Ensure firewall/Docker network settings allow outbound access.', 'fastcgi-cache-purge-and-preload-nginx'));
+                            break;
+
+                        case 'proxy_dns_fail':
+                            // Translators: %s = proxy host
+                            nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
+                            break;
+
+                        case 'proxy_unreachable':
+                        default:
+                            // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                            nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
+                            break;
+                    }
                     return;
                 }
             }
@@ -582,16 +713,38 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
 
-    // Check proxy is live
+    // Test proxy and server network
     if ($use_proxy === 'yes') {
         // Parse proxy IP and Port
         $parsed_url = wp_parse_url($http_proxy);
         $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
         $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
 
-        if (!nppp_is_proxy_port_listening($proxy_host, $proxy_port)) {
-            // Translators: %s = domain name, %s = proxy host, %d = proxy port
-            nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $current_page_url_decoded, $proxy_host, $proxy_port));
+        // Use proxy health check
+        $proxy_status = nppp_is_proxy_reachable($proxy_host, $proxy_port);
+
+        if (!$proxy_status['success']) {
+            // Show admin notice based on error code
+            switch ($proxy_status['code']) {
+                case 'dns_error':
+                    nppp_display_admin_notice('error', __('ERROR DNS: DNS resolution failed inside the WordPress container. Please check your container network/DNS settings.', 'fastcgi-cache-purge-and-preload-nginx'));
+                    break;
+
+                case 'network_error':
+                    nppp_display_admin_notice('error', __('ERROR NETWORK: Outbound network connection failed from WordPress container. Ensure firewall/Docker network settings allow outbound access.', 'fastcgi-cache-purge-and-preload-nginx'));
+                    break;
+
+                case 'proxy_dns_fail':
+                    // Translators: %s = proxy host
+                    nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
+                    break;
+
+                case 'proxy_unreachable':
+                default:
+                    // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                    nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $current_page_url_decoded, $proxy_host, $proxy_port));
+                    break;
+            }
             return;
         }
     }
@@ -791,16 +944,38 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
 
-    // Check proxy is live
+    // Test proxy and server network
     if ($use_proxy === 'yes') {
         // Parse proxy IP and Port
         $parsed_url = wp_parse_url($http_proxy);
         $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
         $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
 
-        if (!nppp_is_proxy_port_listening($proxy_host, $proxy_port)) {
-            // Translators: %s = domain name, %s = proxy host, %d = proxy port
-            nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $current_page_url_decoded, $proxy_host, $proxy_port));
+        // Use proxy health check
+        $proxy_status = nppp_is_proxy_reachable($proxy_host, $proxy_port);
+
+        if (!$proxy_status['success']) {
+            // Show admin notice based on error code
+            switch ($proxy_status['code']) {
+                case 'dns_error':
+                    nppp_display_admin_notice('error', __('ERROR DNS: DNS resolution failed inside the WordPress container. Please check your container network/DNS settings.', 'fastcgi-cache-purge-and-preload-nginx'));
+                    break;
+
+                case 'network_error':
+                    nppp_display_admin_notice('error', __('ERROR NETWORK: Outbound network connection failed from WordPress container. Ensure firewall/Docker network settings allow outbound access.', 'fastcgi-cache-purge-and-preload-nginx'));
+                    break;
+
+                case 'proxy_dns_fail':
+                    // Translators: %s = proxy host
+                    nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
+                    break;
+
+                case 'proxy_unreachable':
+                default:
+                    // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                    nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $current_page_url_decoded, $proxy_host, $proxy_port));
+                    break;
+            }
             return;
         }
     }
