@@ -1989,21 +1989,27 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize and validate Proxy Host
     if (!empty($input['nginx_cache_preload_proxy_host'])) {
-        $proxy_host = sanitize_text_field($input['nginx_cache_preload_proxy_host']);
+        $proxy_host_raw = sanitize_text_field(trim($input['nginx_cache_preload_proxy_host']));
+        $proxy_host_raw = preg_replace( '#^[a-z][a-z0-9+\-.]*://#i', '', $proxy_host_raw );
+        $proxy_host     = preg_replace( '/[^a-z0-9\-.:]/i', '', $proxy_host_raw );
 
-        // Validate IP address format (IPv4 only)
-        if (filter_var($proxy_host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        // Validate IP (IPv4 or IPv6)
+        if (filter_var($proxy_host, FILTER_VALIDATE_IP)) {
             $sanitized_input['nginx_cache_preload_proxy_host'] = $proxy_host;
-        } else {
+        }
+        // Validate hostname (FQDN or short)
+        elseif (filter_var($proxy_host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
+            $sanitized_input['nginx_cache_preload_proxy_host'] = $proxy_host;
+        }
+        else {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'invalid-proxy-host',
-                __('ERROR OPTION: Please enter a valid IPv4 address for the Proxy Host.', 'fastcgi-cache-purge-and-preload-nginx'),
+                __('ERROR OPTION: Please enter a valid IP address or hostname for the Proxy Host.', 'fastcgi-cache-purge-and-preload-nginx'),
                 'error'
             );
 
-            // Log the error message
-            nppp_log_error_message(__('ERROR OPTION: Please enter a valid IPv4 address for the Proxy Host.', 'fastcgi-cache-purge-and-preload-nginx'));
+            nppp_log_error_message(__('ERROR OPTION: Invalid proxy host provided. Must be IPv4, IPv6, or valid hostname.', 'fastcgi-cache-purge-and-preload-nginx'));
         }
     }
 
