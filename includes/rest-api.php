@@ -276,23 +276,51 @@ function nppp_nginx_cache_preload_progress($request) {
 
 // Estimates the total number of URLs by parsing the site's XML sitemaps.
 function nppp_get_estimated_url_count() {
-    $total = 0;
-    $sitemap_url = home_url('/wp-sitemap.xml');
+    $static_key_base = 'nppp';
+    $transient_key = 'nppp_est_url_counts_' . md5($static_key_base);
 
+    // Check if cached
+    $cached = get_transient($transient_key);
+    if ($cached !== false) {
+        return $cached;
+    }
+
+    // Check if SimpleXML is available
+    if (!extension_loaded('SimpleXML')) {
+        set_transient($transient_key, 500, 3600);
+        return 500;
+    }
+
+    $total = 0;
+    $sitemap_url = home_url('/sitemap.xml');
     libxml_use_internal_errors(true);
 
     $xml = @simplexml_load_file($sitemap_url);
-    if (!$xml) return 500;
+    if (!$xml) {
+        set_transient($transient_key, 500, 3600);
+        return 500;
+    }
 
     foreach ($xml->sitemap as $sitemap) {
         $submap_url = (string) $sitemap->loc;
         $submap_xml = @simplexml_load_file($submap_url);
         if (!$submap_xml) continue;
 
-        $total += count($submap_xml->url);
+        // Register namespaces if available
+        $namespaces = $submap_xml->getNamespaces(true);
+        if (isset($namespaces[''])) {
+            $submap_xml->registerXPathNamespace('ns', $namespaces['']);
+            $urls = $submap_xml->xpath('//ns:url');
+        } else {
+            $urls = $submap_xml->xpath('//url');
+        }
+
+        $total += count($urls);
     }
 
-    return $total > 0 ? $total : 500;
+    $final_total = $total > 0 ? $total + 100 : 500;
+    set_transient($transient_key, $final_total, 3600);
+    return $final_total;
 }
 
 // Validation, authentication, rate limiting
