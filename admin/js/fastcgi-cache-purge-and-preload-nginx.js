@@ -282,12 +282,12 @@ $(document).ready(function() {
 
                 let html = `
                     <div class="nppp-progress-row">
-                        <span class="nppp-label">Processed URLs:</span> <code>${data.checked}</code>
+                        <span class="nppp-label">${__('Processed URLs:', 'fastcgi-cache-purge-and-preload-nginx')}</span> <code>${data.checked}</code>
                         &nbsp;|&nbsp;
-                        <span class="nppp-label">Broken URLs (404):</span> <code>${data.errors}</code>
+                        <span class="nppp-label">${__('Broken URLs (404):', 'fastcgi-cache-purge-and-preload-nginx')}</span> <code>${data.errors}</code>
                     </div>
                     <div class="nppp-progress-row">
-                        <span class="nppp-label">Last Processed Page:</span>
+                        <span class="nppp-label">${__('Last Processed Page:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
                         <span class="nppp-url">${data.last_url}</span>
                     </div>
                 `;
@@ -295,17 +295,17 @@ $(document).ready(function() {
                 if (data.time) {
                     html += `
                         <div class="nppp-progress-row">
-                            <span class="nppp-label">Time Elapsed:</span>
+                            <span class="nppp-label">${__('Time Elapsed:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
                             <code>${data.time || '-'}</code>
                             &nbsp;|&nbsp;
-                            <span class="nppp-label">Last Preload:</span>
+                            <span class="nppp-label">${__('Last Preload:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
                             <code>${data.last_preload_time || '-'}</code>
                         </div>
                     `;
                 }
 
                 if (pct >= 100 || data.status === "done") {
-                    html += `<div class="nppp-done">✅ <span>Preload Complete</span></div>`;
+                    html += `<div class="nppp-done">✅ <span>${__('Preload Complete', 'fastcgi-cache-purge-and-preload-nginx')}</span></div>`;
                 }
 
                 status.innerHTML = html;
