@@ -230,6 +230,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     $default_reject_extension = nppp_fetch_default_reject_extension();
     $nginx_cache_reject_extension = isset($nginx_cache_settings['nginx_cache_reject_extension']) ? $nginx_cache_settings['nginx_cache_reject_extension'] : $default_reject_extension;
     $nginx_cache_wait = isset($nginx_cache_settings['nginx_cache_wait_request']) ? $nginx_cache_settings['nginx_cache_wait_request'] : $default_wait_time;
+    $log_path = rtrim($this_script_path, '/') . '/nppp-wget.log';
 
     // Determine which USER_AGENT to use
     // Check Preload Mobile is enabled
@@ -378,7 +379,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
             //    speeding up cache preloading via reducing latency we use --no-check-certificate .
             //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-            $command = "nohup wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
+            $command = "nohup wget --no-verbose --recursive --no-cache --no-cookies --no-directories --delete-after " .
                 "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
                 "--ignore-length --timeout=5 --tries=1 -e robots=off " .
                 "-e use_proxy=$use_proxy " .
@@ -391,7 +392,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 "--reject='\"$nginx_cache_reject_extension\"' " .
                 "--domains=$domain_list " .
                 "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
-                "\"$fdomain\" >/dev/null 2>&1 & echo \$!";
+                "\"$fdomain\" > \"$log_path\" 2>&1 & echo \$!";
 
             // We are ready to call main command
             $output = shell_exec($command);
@@ -575,7 +576,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
         //    speeding up cache preloading via reducing latency we use --no-check-certificate .
         //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-        $command = "nohup wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
+        $command = "nohup wget --no-verbose --recursive --no-cache --no-cookies --no-directories --delete-after " .
                 "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
                 "--ignore-length --timeout=5 --tries=1 -e robots=off " .
                 "-e use_proxy=$use_proxy " .
@@ -588,7 +589,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 "--reject='\"$nginx_cache_reject_extension\"' " .
                 "--domains=$domain_list " .
                 "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
-                "\"$fdomain\" >/dev/null 2>&1 & echo \$!";
+                "\"$fdomain\" > \"$log_path\" 2>&1 & echo \$!";
 
         // We are ready to call main command
         $output = shell_exec($command);
