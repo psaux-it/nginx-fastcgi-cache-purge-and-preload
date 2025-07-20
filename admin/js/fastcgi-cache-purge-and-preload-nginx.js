@@ -359,12 +359,10 @@ $(document).ready(function() {
                         }
 
                         preloadStatusCell._npppAnimation = preloadStatusCell.animate([
-                            { backgroundColor: 'inherit' },
                             { backgroundColor: '#90ee90' }
                         ], {
-                            duration: 1000,
-                            iterations: Infinity,
-                            direction: 'alternate'
+                            duration: 1,
+                            iterations: 1
                         });
                     }
                 } else {
