@@ -128,6 +128,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'systemd_service_nonce' => $restart_systemd_service_nonce,
         'cache_key_regex_nonce' => $update_default_cache_key_regex_option_nonce,
         'enable_proxy_nonce' => $update_enable_proxy_option_nonce,
+        'wget_progress_api' => esc_url(rest_url('nppp_nginx_cache/v2/preload-progress')),
     ));
 }
 
