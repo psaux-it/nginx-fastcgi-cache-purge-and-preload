@@ -678,11 +678,11 @@ function nppp_my_status_html() {
                                     <span><?php echo esc_html(nppp_check_preload_status()); ?></span>
                                 </td>
                             </tr>
-                            <tr>
+                            <tr id="nppp-preload-progress-row">
                                 <td colspan="2">
                                     <!-- Progress Bar Container -->
                                     <div style="width: 100%; height: 20px; background-color: #e5e7eb; margin-top: 10px; overflow: hidden;">
-                                        <div id="wpt-bar-inner" style="width: 0%; height: 100%; background-color: #22c55e; position: relative; text-align: center; color: white; font-size: 12px; line-height: 20px;">
+                                        <div id="wpt-bar-inner" style="width: 0%; height: 100%; background-color: #5A9BD5; position: relative; text-align: center; color: white; font-size: 12px; line-height: 20px;">
                                             <span id="wpt-bar-text" style="position: absolute; width: 100%; left: 0;">0%</span>
                                         </div>
                                     </div>
