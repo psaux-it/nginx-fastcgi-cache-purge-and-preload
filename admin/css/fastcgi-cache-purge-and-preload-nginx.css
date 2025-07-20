@@ -2741,3 +2741,57 @@ p.description {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+.nppp-progress-status {
+    margin-top: 0px;
+    font-size: 13px;
+    color: #374151;
+    background-color: mintcream;
+    border: 1px solid #e5e7eb;
+    padding: 8px 12px;
+    border-radius: 0px;
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.nppp-progress-row {
+    margin-top: 4px;
+    font-size: 13px;
+    color: #374151;
+}
+.nppp-progress-percent {
+    font-weight: bold;
+    font-size: 14px;
+    color: #1e40af;
+}
+.nppp-label {
+    font-weight: 500;
+    color: #555;
+}
+.nppp-url {
+    color: #2563eb;
+    word-break: break-all;
+}
+.nppp-time {
+    color: #6b7280;
+}
+.nppp-done {
+    margin-top: 6px;
+    font-weight: 600;
+    color: #16a34a;
+}
+
+#wpt-bar-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 20px;
+  pointer-events: none;
+  user-select: none;
+}
