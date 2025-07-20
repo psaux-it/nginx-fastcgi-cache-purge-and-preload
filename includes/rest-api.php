@@ -203,12 +203,17 @@ function nppp_nginx_cache_register_preload_endpoint() {
     ));
 }
 
+// Protect preload progress endpoint.
+function nppp_nginx_cache_progress_permission_check() {
+    return current_user_can('manage_options');
+}
+
 // Register the REST API endpoint for preload progress tracking.
 function nppp_nginx_cache_register_preload_progress_endpoint() {
     register_rest_route('nppp_nginx_cache/v2', '/preload-progress', array(
         'methods' => 'GET',
         'callback' => 'nppp_nginx_cache_preload_progress',
-        'permission_callback' => '__return_true',
+        'permission_callback' => 'nppp_nginx_cache_progress_permission_check',
     ));
 }
 
