@@ -2756,7 +2756,7 @@ p.description {
 
 .nppp-progress-row {
     margin-top: 4px;
-    font-size: 13px;
+    font-size: 14px;
     color: #374151;
 }
 .nppp-progress-percent {
@@ -2765,8 +2765,9 @@ p.description {
     color: #1e40af;
 }
 .nppp-label {
-    font-weight: 500;
-    color: #555;
+    font-weight: bold;
+    color: #333;
+    font-size: 14px !important;
 }
 .nppp-url {
     color: #2563eb;
@@ -2777,8 +2778,9 @@ p.description {
 }
 .nppp-done {
     margin-top: 6px;
-    font-weight: 600;
-    color: #16a34a;
+    font-weight: bold;
+    color: green;
+    font-size: 14px;
 }
 
 #wpt-bar-text {
