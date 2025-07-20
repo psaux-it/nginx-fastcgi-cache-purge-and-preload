@@ -412,7 +412,18 @@ $(document).ready(function() {
 
                     // Preloas status progress
                     setTimeout(() => {
-                        fetchWgetProgress();
+                        const preloadStatusSpan = document.getElementById("nppppreloadStatus");
+                        const preloadProgressRow = document.getElementById("nppp-preload-progress-row");
+
+                        if (!preloadStatusSpan || !preloadProgressRow) return;
+
+                        const preloadStatus = preloadStatusSpan.textContent.trim().toLowerCase();
+                        if (preloadStatus === "true" || preloadStatus === "ready") {
+                            preloadProgressRow.style.display = "";
+                            fetchWgetProgress();
+                        } else {
+                            preloadProgressRow.style.display = "none";
+                        }
                     }, 100);
 
                     // Hide the preloader now that content is loaded
