@@ -665,21 +665,6 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         return;
     }
 
-    // Display decoded URL to user
-    $current_page_url_decoded = rawurldecode($current_page_url);
-
-    // Check for any permisson issue softly
-    if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
-        // Translators: %s: Current page URL
-        nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
-        return;
-    // Recusive check for permission issues deeply
-    } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
-        // Translators: %s: Current page URL
-        nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
-        return;
-    }
-
     // Valitade the sanitized url before process
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) === false) {
         nppp_display_admin_notice('error', __( 'ERROR URL: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
@@ -693,6 +678,27 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 
     if ($referrer_parsed_url['host'] !== $parsed_home_url['host']) {
         nppp_display_admin_notice('error', __( 'ERROR URL: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        return;
+    }
+
+    // PATCH: CVE ID: CVE-2025-6213
+    if (preg_match('/[;&|`$<>"]/', $current_page_url)) {
+        nppp_display_admin_notice('error', __( 'ERROR SECURITY: The URL contains potentially dangerous characters and has been blocked to prevent command injection.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        return;
+    }
+
+    // Display decoded URL to user
+    $current_page_url_decoded = rawurldecode($current_page_url);
+
+    // Check for any permisson issue softly
+    if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
+        // Translators: %s: Current page URL
+        nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
+        return;
+    // Recusive check for permission issues deeply
+    } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
+        // Translators: %s: Current page URL
+        nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
         return;
     }
 
@@ -893,6 +899,30 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             'error',
             __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
+        return;
+    }
+
+    // Valitade the sanitized url before process
+    // PATCH: CVE ID: CVE-2025-6213
+    if (filter_var($current_page_url, FILTER_VALIDATE_URL) === false) {
+        nppp_display_admin_notice('error', __( 'ERROR URL: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        return;
+    }
+
+    // Checks if the HTTP referrer originated from our own host domain
+    // PATCH: CVE ID: CVE-2025-6213
+    $referrer_parsed_url = wp_parse_url($current_page_url);
+    $home_url = home_url();
+    $parsed_home_url = wp_parse_url($home_url);
+
+    if ($referrer_parsed_url['host'] !== $parsed_home_url['host']) {
+        nppp_display_admin_notice('error', __( 'ERROR URL: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        return;
+    }
+
+    // PATCH: CVE ID: CVE-2025-6213
+    if (preg_match('/[;&|`$<>"]/', $current_page_url)) {
+        nppp_display_admin_notice('error', __( 'ERROR SECURITY: The URL contains potentially dangerous characters and has been blocked to prevent command injection.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
 
