@@ -149,26 +149,44 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
-    // Get current page URL for single actions
-    if (! empty($_SERVER['HTTP_REFERER'])) {
-        $raw_url           = wp_unslash($_SERVER['HTTP_REFERER']);
-        $current_page_url  = esc_url_raw($raw_url);
+    $nppp_single_action = false;
+    $current_page_url = '';
 
-        // Validate
-        if (! filter_var($current_page_url, FILTER_VALIDATE_URL)) {
+    // Only process URL for single-page actions
+    if (in_array($action, ['nppp_purge_cache_single', 'nppp_preload_cache_single'], true)) {
+        if (isset($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_REFERER'])) {
+            $raw_url           = wp_unslash($_SERVER['HTTP_REFERER']);
+            $current_page_url  = esc_url_raw($raw_url);
+
+            // Validate format
+            // PATCH: CVE ID: CVE-2025-6213
+            if (! filter_var($current_page_url, FILTER_VALIDATE_URL)) {
+                return;
+            }
+
+            // Enforce same-site origin
+            // PATCH: CVE ID: CVE-2025-6213
+            $site_host = wp_parse_url(home_url(), PHP_URL_HOST);
+            $url_host  = wp_parse_url($current_page_url, PHP_URL_HOST);
+
+            if ($site_host !== $url_host) {
+                return;
+            }
+
+            // Defense-in-depth: check for command injection
+            // PATCH: CVE ID: CVE-2025-6213
+            // NOTE: (escapeshellarg) not used, breaks percent-encoded URLs
+            if (preg_match('/[;&|`$<>"]/', $current_page_url)) {
+                return;
+            }
+
+        } else {
             global $wp;
             if (empty($wp->request)) {
                 $wp->parse_request();
             }
             $current_page_url = esc_url_raw(trailingslashit(home_url(add_query_arg($_GET, $wp->request))));
         }
-    } else {
-        global $wp;
-        if (empty($wp->request)) {
-            $wp->parse_request();
-        }
-
-        $current_page_url = esc_url_raw(trailingslashit(home_url(add_query_arg($_GET, $wp->request))));
     }
 
     // Start output buffering to capture the output of the actions
@@ -177,11 +195,9 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     switch ($_GET['action']) {
         case 'nppp_purge_cache':
             nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, false);
-            $nppp_single_action = false;
             break;
         case 'nppp_preload_cache':
             nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, false, false, false, true);
-            $nppp_single_action = false;
             break;
         case 'nppp_purge_cache_single':
             nppp_purge_single($nginx_cache_path, $current_page_url, false);
@@ -192,7 +208,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
             $nppp_single_action = true;
             break;
         default:
-            break;
+            return;
     }
 
     // Get the status message from the output buffer
@@ -217,6 +233,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
             'message' => $status_message,
             'type' => $message_type
         ), 60);
+
         // Add nonce as a query parameter
         $redirect_url = add_query_arg(
             array(
@@ -238,6 +255,8 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         );
     }
 
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
     wp_safe_redirect($redirect_url);
     exit();
 }
