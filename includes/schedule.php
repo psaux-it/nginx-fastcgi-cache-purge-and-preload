@@ -528,17 +528,31 @@ function nppp_create_scheduled_event_preload_status_callback() {
                             $elapsed_time_str = trim($match[1]);
                         }
                     }
+
+                    // Extract preload finish timestamp
+                    if (preg_match('/^FINISHED\s+--([\d\-]+\s+[\d:]+)--$/', $line, $match)) {
+                        $last_preload_time = trim($match[1]);
+                    }
                 }
             }
         }
 
         // Add buffer to total count
-        $final_total += 20;
+        if ($final_total > 0) {
+            $final_total += 20;
+        } else {
+            $final_total = 500;
+        }
 
         // Save to transient for frontend preload progress
         $static_key_base = 'nppp';
-        $transient_key = 'nppp_est_url_counts_' . md5($static_key_base);
-        set_transient($transient_key, $final_total, YEAR_IN_SECONDS);
+        $count_transient_key = 'nppp_est_url_counts_' . md5($static_key_base);
+        set_transient($count_transient_key, $final_total, YEAR_IN_SECONDS);
+
+        if (!empty($last_preload_time)) {
+            $timestamp_transient_key = 'nppp_last_preload_time_' . md5($static_key_base);
+            set_transient($timestamp_transient_key, $last_preload_time, YEAR_IN_SECONDS);
+        }
 
         // Remove downloaded content
         nppp_wp_remove_directory($tmp_path, true);
