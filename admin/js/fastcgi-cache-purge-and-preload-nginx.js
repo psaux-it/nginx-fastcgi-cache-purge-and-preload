@@ -410,21 +410,23 @@ $(document).ready(function() {
                     // Update status metrics or perform additional initialization after content is loaded
                     npppupdateStatus();
 
-                    // Preloas status progress
-                    setTimeout(() => {
+                    // Preload live status progress
+                    (async () => {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+
                         const preloadStatusSpan = document.getElementById("nppppreloadStatus");
                         const preloadProgressRow = document.getElementById("nppp-preload-progress-row");
 
                         if (!preloadStatusSpan || !preloadProgressRow) return;
 
-                        const preloadStatus = preloadStatusSpan.textContent.trim().toLowerCase();
-                        if (preloadStatus === "true" || preloadStatus === "ready") {
+                        const preloadRawStatus = preloadStatusSpan.dataset.statusRaw?.toLowerCase();
+                        if (preloadRawStatus === "true" || preloadRawStatus === "progress") {
                             preloadProgressRow.style.display = "";
                             fetchWgetProgress();
                         } else {
                             preloadProgressRow.style.display = "none";
                         }
-                    }, 100);
+                    })();
 
                     // Hide the preloader now that content is loaded
                     hidePreloader();
@@ -2756,6 +2758,7 @@ function npppupdateStatus() {
     var nppppreloadStatusCell = nppppreloadStatusRow.querySelector("#nppppreloadStatus");
     var nppppreloadStatusSpan = document.getElementById("nppppreloadStatus");
     var nppppreloadStatus = nppppreloadStatusSpan.textContent.trim();
+    nppppreloadStatusSpan.dataset.statusRaw = nppppreloadStatus;
     nppppreloadStatusSpan.textContent = '';
     nppppreloadStatusSpan.style.fontSize = "14px";
 
