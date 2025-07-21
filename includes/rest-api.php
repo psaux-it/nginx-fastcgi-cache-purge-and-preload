@@ -243,7 +243,8 @@ function nppp_nginx_cache_preload_progress($request) {
         $lines = @file($log_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if ($lines) {
             foreach ($lines as $line) {
-                if (preg_match('/URL:(https?:\/\/[^\s]+)/', $line, $match)) {
+                if (trim($line) === '') continue;
+                if (preg_match('/URL:(https?:\/\/[^\s]+).*?->/', $line, $match)) {
                     $checked++;
                     $last_url = $match[1];
                 }
@@ -265,7 +266,7 @@ function nppp_nginx_cache_preload_progress($request) {
         }
     }
 
-    // Parse sitemap.xml
+    // Get URL count
     $est_total = nppp_get_estimated_url_count();
 
     return new WP_REST_Response([
@@ -292,7 +293,7 @@ function nppp_get_estimated_url_count() {
 
     // Check if SimpleXML is available
     if (!extension_loaded('SimpleXML')) {
-        set_transient($transient_key, 500, 3600);
+        set_transient($transient_key, 500, YEAR_IN_SECONDS);
         return 500;
     }
 
@@ -302,7 +303,7 @@ function nppp_get_estimated_url_count() {
 
     $xml = @simplexml_load_file($sitemap_url);
     if (!$xml) {
-        set_transient($transient_key, 500, 3600);
+        set_transient($transient_key, 500, YEAR_IN_SECONDS);
         return 500;
     }
 
@@ -324,7 +325,7 @@ function nppp_get_estimated_url_count() {
     }
 
     $final_total = $total > 0 ? $total + 100 : 500;
-    set_transient($transient_key, $final_total, 3600);
+    set_transient($transient_key, $final_total, YEAR_IN_SECONDS);
     return $final_total;
 }
 
