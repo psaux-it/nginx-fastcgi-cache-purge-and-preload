@@ -500,6 +500,46 @@ function nppp_create_scheduled_event_preload_status_callback() {
         // wget downloaded content path
         $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
+        // Define plugin path and log file
+        $plugin_path = dirname(plugin_dir_path( __FILE__ ));
+        $log_path = rtrim($plugin_path, '/') . '/nppp-wget.log';
+
+        // Initialize final total
+        $final_total = 0;
+
+        // Parse log file using to get total processed URL
+        if ($wp_filesystem->exists($log_path) && $wp_filesystem->is_readable($log_path)) {
+            $log_contents = $wp_filesystem->get_contents($log_path);
+
+            if ($log_contents) {
+                $lines = explode( "\n", $log_contents );
+
+                foreach ($lines as $line) {
+                    if (trim($line) === '') continue;
+
+                    // Count processed URLs
+                    if (preg_match('/URL:(https?:\/\/[^\s]+).*?->/', $line)) {
+                        $final_total++;
+                    }
+
+                    // Extract wall clock time
+                    if (stripos($line, 'Total wall clock time:') !== false) {
+                        if (preg_match('/Total wall clock time:\s*((?:[0-9]+m\s*)?[0-9]+s)/i', $line, $match)) {
+                            $elapsed_time_str = trim($match[1]);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add buffer to total count
+        $final_total += 20;
+
+        // Save to transient for frontend preload progress
+        $static_key_base = 'nppp';
+        $transient_key = 'nppp_est_url_counts_' . md5($static_key_base);
+        set_transient($transient_key, $final_total, YEAR_IN_SECONDS);
+
         // Remove downloaded content
         nppp_wp_remove_directory($tmp_path, true);
 
@@ -510,20 +550,22 @@ function nppp_create_scheduled_event_preload_status_callback() {
         $current_time = new DateTime('now', $wordpress_timezone);
 
         // Calculate elapsed time
-        if (isset($scheduled_time) && $scheduled_time instanceof DateTime) {
-            $elapsed_time = $current_time->diff($scheduled_time);
+        if (empty($elapsed_time_str)) {
+            if (isset($scheduled_time) && $scheduled_time instanceof DateTime) {
+                $elapsed_time = $current_time->diff($scheduled_time);
 
-            // Format elapsed time as a string
-            $elapsed_time_str = sprintf(
-                /* Translators: %1$s, %2$s, and %3$s are numeric values representing hours, minutes, and seconds respectively. */
-                __('%1$s hours, %2$s minutes, %3$s seconds', 'fastcgi-cache-purge-and-preload-nginx'),
-                $elapsed_time->format('%h'),
-                $elapsed_time->format('%i'),
-                $elapsed_time->format('%s')
-            );
-        } else {
-            // Process complete time can not calculated
-            $elapsed_time_str = __( '(unable to calculate elapsed time)', 'fastcgi-cache-purge-and-preload-nginx' );
+                // Format elapsed time as a string
+                $elapsed_time_str = sprintf(
+                    /* Translators: %1$s, %2$s, and %3$s are numeric values representing hours, minutes, and seconds respectively. */
+                    __('%1$s hours, %2$s minutes, %3$s seconds', 'fastcgi-cache-purge-and-preload-nginx'),
+                    $elapsed_time->format('%h'),
+                    $elapsed_time->format('%i'),
+                    $elapsed_time->format('%s')
+                );
+            } else {
+                // Process complete time can not calculated
+                $elapsed_time_str = __( '(unable to calculate elapsed time)', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
         }
 
         // Send Mail
