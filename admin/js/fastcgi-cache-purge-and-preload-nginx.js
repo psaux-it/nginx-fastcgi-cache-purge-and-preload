@@ -279,6 +279,15 @@ $(document).ready(function() {
             return res.json();
         })
         .then(data => {
+            if (!data.log_found) {
+                const preloadRow = document.getElementById("nppp-preload-progress-row");
+                if (preloadRow) preloadRow.style.display = "none";
+                    return;
+            } else {
+                const preloadRow = document.getElementById("nppp-preload-progress-row");
+                if (preloadRow) preloadRow.style.display = "";
+            }
+
             const estTotal = data.total || 500;
             let pct = Math.min(100, Math.round((data.checked / estTotal) * 100));
 
