@@ -2,7 +2,7 @@
 /**
  * Preload action related schedule cron events for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains preload action related schedule cron events functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.3
+ * Version: 2.1.2
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -541,17 +541,17 @@ function nppp_create_scheduled_event_preload_status_callback() {
         if ($final_total > 0) {
             $final_total += 20;
         } else {
-            $final_total = 500;
+            $final_total = 2000;
         }
 
         // Save to transient for frontend preload progress
         $static_key_base = 'nppp';
         $count_transient_key = 'nppp_est_url_counts_' . md5($static_key_base);
-        set_transient($count_transient_key, $final_total, YEAR_IN_SECONDS);
+        set_transient($count_transient_key, $final_total, DAY_IN_SECONDS);
 
         if (!empty($last_preload_time)) {
             $timestamp_transient_key = 'nppp_last_preload_time_' . md5($static_key_base);
-            set_transient($timestamp_transient_key, $last_preload_time, YEAR_IN_SECONDS);
+            set_transient($timestamp_transient_key, $last_preload_time, DAY_IN_SECONDS);
         }
 
         // Remove downloaded content
