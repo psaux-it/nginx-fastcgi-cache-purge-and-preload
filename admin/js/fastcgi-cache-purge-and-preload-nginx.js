@@ -366,9 +366,18 @@ $(document).ready(function() {
                         });
                     }
                 } else {
-                    preloadStatusSpan.style.color = "red";
-                    iconSpan.classList.add("dashicons", "dashicons-no");
-                    preloadStatusText = ' ' + __('Not Ready', 'fastcgi-cache-purge-and-preload-nginx');
+                    // Use pre-stored raw value (true/false)
+                    const rawStatus = preloadStatusSpan.dataset.statusRaw;
+
+                    if (rawStatus === "true") {
+                        preloadStatusSpan.style.color = "green";
+                        iconSpan.classList.add("dashicons", "dashicons-yes");
+                        preloadStatusText = ' ' + __('Ready', 'fastcgi-cache-purge-and-preload-nginx');
+                    } else {
+                        preloadStatusSpan.style.color = "red";
+                        iconSpan.classList.add("dashicons", "dashicons-no");
+                        preloadStatusText = ' ' + __('Not Ready', 'fastcgi-cache-purge-and-preload-nginx');
+                    }
 
                     if (preloadStatusCell._npppAnimation) {
                         preloadStatusCell._npppAnimation.cancel();
