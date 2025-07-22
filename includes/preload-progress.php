@@ -40,6 +40,7 @@ function nppp_nginx_cache_preload_progress($request) {
     $time_info = '';
     $last_preload_time = '';
     $is_running = false;
+    $log_found = false;
 
     // Check if preload process is alive
     if (file_exists($pid_path)) {
@@ -51,6 +52,7 @@ function nppp_nginx_cache_preload_progress($request) {
 
     // Parse log file
     if (file_exists($log_path)) {
+        $log_found = true;
         $lines = @file($log_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if ($lines) {
             foreach ($lines as $line) {
@@ -87,7 +89,8 @@ function nppp_nginx_cache_preload_progress($request) {
         'last_url' => $last_url,
         'total' => $est_total,
         'time' => $time_info,
-        'last_preload_time' => $last_preload_time
+        'last_preload_time' => $last_preload_time,
+        'log_found' => $log_found
     ]);
 }
 
