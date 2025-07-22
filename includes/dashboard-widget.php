@@ -16,6 +16,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Get latest Preload complete date
 function nppp_get_last_preload_complete_date() {
+    $static_key_base = 'nppp';
+    $timestamp_transient_key = 'nppp_last_preload_time_' . md5($static_key_base);
+
+    // Try to get from transient first
+    $cached_timestamp = get_transient($timestamp_transient_key);
+    if (!empty($cached_timestamp)) {
+        return $cached_timestamp;
+    }
+
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
