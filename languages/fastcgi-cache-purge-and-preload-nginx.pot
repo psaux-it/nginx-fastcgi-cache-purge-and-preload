@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2025-07-22T01:39:28+00:00\n"
+"POT-Creation-Date: 2025-07-22T09:50:27+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: fastcgi-cache-purge-and-preload-nginx\n"
@@ -39,31 +39,31 @@ msgstr ""
 msgid "https://www.psauxit.com/"
 msgstr ""
 
-#: includes/admin-bar.php:30
+#: includes/admin-bar.php:31
 msgid "Nginx Cache"
 msgstr ""
 
-#: includes/admin-bar.php:39
+#: includes/admin-bar.php:40
 #: includes/dashboard-widget.php:276
 #: includes/settings.php:106
 msgid "Purge All"
 msgstr ""
 
-#: includes/admin-bar.php:48
+#: includes/admin-bar.php:49
 #: includes/dashboard-widget.php:283
 #: includes/settings.php:110
 msgid "Preload All"
 msgstr ""
 
-#: includes/admin-bar.php:63
+#: includes/admin-bar.php:64
 msgid "Purge This Page"
 msgstr ""
 
-#: includes/admin-bar.php:71
+#: includes/admin-bar.php:72
 msgid "Preload This Page"
 msgstr ""
 
-#: includes/admin-bar.php:81
+#: includes/admin-bar.php:82
 #: includes/configuration-parser.php:404
 #: includes/settings.php:132
 #: includes/status.php:643
@@ -73,36 +73,36 @@ msgstr ""
 msgid "Status"
 msgstr ""
 
-#: includes/admin-bar.php:89
+#: includes/admin-bar.php:90
 #: includes/settings.php:138
 msgid "Advanced"
 msgstr ""
 
-#: includes/admin-bar.php:97
+#: includes/admin-bar.php:98
 #: includes/settings.php:126
 msgid "Settings"
 msgstr ""
 
-#: includes/admin-bar.php:105
+#: includes/admin-bar.php:106
 #: includes/settings.php:144
 msgid "Help"
 msgstr ""
 
-#: includes/admin-bar.php:164
-#: includes/preload.php:670
-#: includes/preload.php:908
+#: includes/admin-bar.php:165
+#: includes/preload.php:671
+#: includes/preload.php:909
 msgid "ERROR SECURITY: HTTP_REFERER URL cannot be validated."
 msgstr ""
 
-#: includes/admin-bar.php:174
-#: includes/preload.php:680
-#: includes/preload.php:919
+#: includes/admin-bar.php:175
+#: includes/preload.php:681
+#: includes/preload.php:920
 msgid "ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain."
 msgstr ""
 
-#: includes/admin-bar.php:181
-#: includes/preload.php:686
-#: includes/preload.php:925
+#: includes/admin-bar.php:182
+#: includes/preload.php:687
+#: includes/preload.php:926
 msgid "ERROR SECURITY: The URL contains potentially dangerous characters and has been blocked to prevent command injection."
 msgstr ""
 
@@ -280,19 +280,19 @@ msgstr ""
 #: includes/pre-checks.php:111
 #: includes/pre-checks.php:247
 #: includes/pre-checks.php:366
-#: includes/preload.php:212
-#: includes/preload.php:650
-#: includes/preload.php:900
+#: includes/preload.php:213
+#: includes/preload.php:651
+#: includes/preload.php:901
 #: includes/purge.php:24
 #: includes/purge.php:68
 #: includes/purge.php:503
 #: includes/schedule.php:299
 #: includes/schedule.php:391
 #: includes/send-mail.php:52
-#: includes/settings.php:1582
-#: includes/settings.php:1607
-#: includes/settings.php:1632
-#: includes/settings.php:2059
+#: includes/settings.php:1583
+#: includes/settings.php:1608
+#: includes/settings.php:1633
+#: includes/settings.php:2060
 #: includes/status.php:30
 #: includes/status.php:161
 #: includes/status.php:196
@@ -357,7 +357,7 @@ msgstr ""
 #: includes/configuration-parser.php:465
 #: includes/configuration-parser.php:519
 #: includes/configuration-parser.php:528
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2667
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2685
 msgid "Not Found"
 msgstr ""
 
@@ -614,235 +614,235 @@ msgstr ""
 msgid "GLOBAL WARNING CACHE: The Nginx cache is empty. Consider preloading the Nginx cache now!"
 msgstr ""
 
-#: includes/preload.php:222
+#: includes/preload.php:223
 msgid "INFO: Nginx cache preloading is already running. If you want to stop it, please use Purge All!"
 msgstr ""
 
-#: includes/preload.php:279
-#: includes/preload.php:478
-#: includes/preload.php:664
-#: includes/preload.php:964
+#: includes/preload.php:280
+#: includes/preload.php:479
+#: includes/preload.php:665
+#: includes/preload.php:965
 msgid "FATAL ERROR: Failed to create PID file."
 msgstr ""
 
-#: includes/preload.php:313
-#: includes/preload.php:354
-#: includes/preload.php:510
-#: includes/preload.php:551
-#: includes/preload.php:737
-#: includes/preload.php:992
+#: includes/preload.php:314
+#: includes/preload.php:355
+#: includes/preload.php:511
+#: includes/preload.php:552
+#: includes/preload.php:738
+#: includes/preload.php:993
 msgid "ERROR DNS: DNS resolution failed inside the WordPress container. Please check your container network/DNS settings."
 msgstr ""
 
-#: includes/preload.php:317
-#: includes/preload.php:358
-#: includes/preload.php:514
-#: includes/preload.php:555
-#: includes/preload.php:741
-#: includes/preload.php:996
+#: includes/preload.php:318
+#: includes/preload.php:359
+#: includes/preload.php:515
+#: includes/preload.php:556
+#: includes/preload.php:742
+#: includes/preload.php:997
 msgid "ERROR NETWORK: Outbound network connection failed from WordPress container. Ensure firewall/Docker network settings allow outbound access."
 msgstr ""
 
 #. Translators: %s = proxy host
-#: includes/preload.php:322
-#: includes/preload.php:363
-#: includes/preload.php:519
-#: includes/preload.php:560
-#: includes/preload.php:746
-#: includes/preload.php:1001
+#: includes/preload.php:323
+#: includes/preload.php:364
+#: includes/preload.php:520
+#: includes/preload.php:561
+#: includes/preload.php:747
+#: includes/preload.php:1002
 #, php-format
 msgid "ERROR PROXY: The proxy hostname \"%s\" could not be resolved to an IP address."
 msgstr ""
 
 #. Translators: %s = domain name, %s = proxy host, %d = proxy port
-#: includes/preload.php:328
-#: includes/preload.php:369
-#: includes/preload.php:525
-#: includes/preload.php:566
-#: includes/preload.php:752
-#: includes/preload.php:1007
+#: includes/preload.php:329
+#: includes/preload.php:370
+#: includes/preload.php:526
+#: includes/preload.php:567
+#: includes/preload.php:753
+#: includes/preload.php:1008
 #, php-format
 msgid "ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode."
 msgstr ""
 
 #. Translators: %s = domain name
-#: includes/preload.php:334
-#: includes/preload.php:531
+#: includes/preload.php:335
+#: includes/preload.php:532
 #, php-format
 msgid "ERROR COMMAND: Preloading failed for %s. Please check Exclude Endpoints and Exclude File Extensions settings syntax."
 msgstr ""
 
 #. Translators: %s = domain name
-#: includes/preload.php:338
-#: includes/preload.php:535
+#: includes/preload.php:339
+#: includes/preload.php:536
 #, php-format
 msgid "ERROR UNKNOWN: Preloading failed for %s. Unknown error occurred."
 msgstr ""
 
-#: includes/preload.php:424
+#: includes/preload.php:425
 #: includes/schedule.php:337
 msgid "SUCCESS: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates."
 msgstr ""
 
-#: includes/preload.php:429
+#: includes/preload.php:430
 #: includes/schedule.php:338
 msgid "SUCCESS REST: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates."
 msgstr ""
 
-#: includes/preload.php:431
+#: includes/preload.php:432
 msgid "SUCCESS REST: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates."
 msgstr ""
 
-#: includes/preload.php:438
+#: includes/preload.php:439
 #: includes/schedule.php:339
 msgid "SUCCESS CRON: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates."
 msgstr ""
 
-#: includes/preload.php:440
+#: includes/preload.php:441
 msgid "SUCCESS CRON: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates."
 msgstr ""
 
-#: includes/preload.php:447
+#: includes/preload.php:448
 #: includes/schedule.php:340
 msgid "SUCCESS ADMIN: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates."
 msgstr ""
 
-#: includes/preload.php:449
+#: includes/preload.php:450
 msgid "SUCCESS ADMIN: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates."
 msgstr ""
 
-#: includes/preload.php:458
+#: includes/preload.php:459
 msgid "SUCCESS: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates."
 msgstr ""
 
-#: includes/preload.php:462
+#: includes/preload.php:463
 msgid "ERROR PERMISSION: Cannot Purge Nginx cache to start cache Preloading. Refer to the \"Help\" tab for guidance."
 msgstr ""
 
 #. Translators: %s is the Nginx cache path
-#: includes/preload.php:465
+#: includes/preload.php:466
 #, php-format
 msgid "ERROR PATH: Nginx cache path (%s) was not found. Please check your cache path."
 msgstr ""
 
-#: includes/preload.php:467
+#: includes/preload.php:468
 msgid "ERROR UNKNOWN: An unexpected error occurred while Preloading the Nginx cache. Please report this issue on the plugin support page."
 msgstr ""
 
-#: includes/preload.php:623
+#: includes/preload.php:624
 #: includes/schedule.php:330
 msgid "SUCCESS REST: Nginx cache purged successfully. Auto preload initiated in the background. Monitor the -Status- tab for real-time updates."
 msgstr ""
 
-#: includes/preload.php:625
+#: includes/preload.php:626
 msgid "SUCCESS REST: Auto Preload initiated for Mobile in the background. Monitor the -Status- tab for real-time updates."
 msgstr ""
 
-#: includes/preload.php:629
+#: includes/preload.php:630
 #: includes/schedule.php:331
 msgid "SUCCESS ADMIN: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates."
 msgstr ""
 
-#: includes/preload.php:631
+#: includes/preload.php:632
 msgid "SUCCESS ADMIN: Auto Preload initiated for Mobile in the background. Monitor the -Status- tab for real-time updates."
 msgstr ""
 
-#: includes/preload.php:635
+#: includes/preload.php:636
 #: includes/schedule.php:332
 msgid "SUCCESS: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates."
 msgstr ""
 
-#: includes/preload.php:637
+#: includes/preload.php:638
 msgid "SUCCESS: Auto Preload initiated for Mobile in the background. Monitor the -Status- tab for real-time updates."
 msgstr ""
 
-#: includes/preload.php:660
+#: includes/preload.php:661
 msgid "INFO: Nginx cache preloading is already running. If you want to stop it, please use Purge All"
 msgstr ""
 
 #. Translators: %s: Current page URL
-#: includes/preload.php:696
-#: includes/preload.php:701
+#: includes/preload.php:697
+#: includes/preload.php:702
 #, php-format
 msgid "ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the \"Help\" tab for guidance."
 msgstr ""
 
 #. Translators: %s: Current page URL
-#: includes/preload.php:844
+#: includes/preload.php:845
 #, php-format
 msgid "SUCCESS ADMIN: Nginx cache preloading has started in the background for the desktop version of page %s."
 msgstr ""
 
 #. Translators: %s: Current page URL
-#: includes/preload.php:848
+#: includes/preload.php:849
 #, php-format
 msgid "SUCCESS ADMIN: Nginx cache preloading has started in the background for the mobile version of page %s."
 msgstr ""
 
 #. Translators: %s: Current page URL
-#: includes/preload.php:852
+#: includes/preload.php:853
 #, php-format
 msgid "SUCCESS ADMIN: Nginx cache preloading has started in the background for both desktop and mobile versions of page %s."
 msgstr ""
 
 #. Translators: %s: Current page URL
-#: includes/preload.php:861
+#: includes/preload.php:862
 #, php-format
 msgid "ERROR COMMAND: Nginx cache preloading failed for both desktop and mobile versions of page %s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s: Current page URL
-#: includes/preload.php:864
-#: includes/preload.php:870
+#: includes/preload.php:865
+#: includes/preload.php:871
 #, php-format
 msgid "ERROR COMMAND: Nginx cache preloading failed for desktop version of page %s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s: Current page URL
-#: includes/preload.php:876
+#: includes/preload.php:877
 #, php-format
 msgid "ERROR COMMAND: Nginx cache preloading failed for mobile version of page %s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s1: device type (desktop or mobile), %s2: current page URL
-#: includes/preload.php:1096
-#: includes/preload.php:1104
+#: includes/preload.php:1097
+#: includes/preload.php:1105
 #, php-format
 msgid "SUCCESS ADMIN: Auto preload started for %1$s version of %2$s"
 msgstr ""
 
 #. Translators: %s1: device type (desktop or mobile), %s2: current page URL
-#: includes/preload.php:1099
+#: includes/preload.php:1100
 #, php-format
 msgid "SUCCESS ADMIN: Auto purge cache completed, Auto preload started for %1$s version of %2$s"
 msgstr ""
 
 #. Translators: %s1: device type (desktop or mobile), %s2: current page URL
-#: includes/preload.php:1107
+#: includes/preload.php:1108
 #, php-format
 msgid "SUCCESS ADMIN: Auto purge cache attempted but page not found in cache, Auto preload started for %1$s version of %2$s"
 msgstr ""
 
 #. Translators: %s1: device type (desktop or mobile), %s2: current page URL
-#: includes/preload.php:1121
+#: includes/preload.php:1122
 #, php-format
 msgid "ERROR COMMAND: Unable to start Auto preload for %1$s version of %2$s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s1: device type (desktop or mobile), %s2: current page URL
-#: includes/preload.php:1125
+#: includes/preload.php:1126
 #, php-format
 msgid "ERROR COMMAND: Auto purge cache completed, but unable to start Auto preload for %1$s version of %2$s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s: device type (desktop or mobile)
-#: includes/preload.php:1131
+#: includes/preload.php:1132
 #, php-format
 msgid "ERROR COMMAND: Unable to start Auto preload for %s. Please report this issue on the plugin support page."
 msgstr ""
 
 #. Translators: %s: device type (desktop or mobile)
-#: includes/preload.php:1135
+#: includes/preload.php:1136
 #, php-format
 msgid "ERROR COMMAND: Auto purge cache attempted but page not found in cache, unable to start Auto preload for %s. Please report this issue on the plugin support page."
 msgstr ""
@@ -970,7 +970,7 @@ msgstr ""
 msgid "INFO: Nginx cache purge attempted, but no cache found."
 msgstr ""
 
-#: includes/rest-api-helper.php:28
+#: includes/rest-api-helper.php:35
 msgid "The NPP REST API feature is disabled."
 msgstr ""
 
@@ -982,20 +982,20 @@ msgstr ""
 msgid "NPP REST API rate limit exceeded. Try again in 1 minute."
 msgstr ""
 
-#: includes/rest-api.php:355
-#: includes/rest-api.php:376
-#: includes/rest-api.php:386
+#: includes/rest-api.php:229
+#: includes/rest-api.php:250
+#: includes/rest-api.php:260
 msgid "ERROR 403 AUTHENTICATION FAILED"
 msgstr ""
 
-#: includes/rest-api.php:356
-#: includes/rest-api.php:377
-#: includes/rest-api.php:387
+#: includes/rest-api.php:230
+#: includes/rest-api.php:251
+#: includes/rest-api.php:261
 msgid "NPP REST API Authentication Error"
 msgstr ""
 
-#: includes/rest-api.php:407
-#: includes/rest-api.php:450
+#: includes/rest-api.php:281
+#: includes/rest-api.php:324
 msgid "SUCCESS 200 OK"
 msgstr ""
 
@@ -1646,38 +1646,28 @@ msgstr ""
 msgid "Update Options"
 msgstr ""
 
-#: includes/settings.php:726
+#: includes/settings.php:727
 msgid "Plugin cache (permission) cleared, settings saved successfully!"
 msgstr ""
 
-#: includes/settings.php:747
+#: includes/settings.php:748
 msgid "No settings to save."
 msgstr ""
 
-#: includes/settings.php:751
+#: includes/settings.php:752
 msgid "Nonce verification failed"
 msgstr ""
 
-#: includes/settings.php:755
+#: includes/settings.php:756
 msgid "Nonce not found"
 msgstr ""
 
-#: includes/settings.php:776
+#: includes/settings.php:777
 msgid "SUCCESS LOGS: Logs cleared successfully."
 msgstr ""
 
-#: includes/settings.php:778
+#: includes/settings.php:779
 msgid "ERROR LOGS: Log file not found."
-msgstr ""
-
-#: includes/settings.php:1378
-#: includes/settings.php:1395
-#: includes/settings.php:1412
-#: includes/settings.php:1429
-#: includes/settings.php:1446
-#: includes/settings.php:1567
-#: includes/settings.php:1676
-msgid "OFF"
 msgstr ""
 
 #: includes/settings.php:1379
@@ -1687,160 +1677,170 @@ msgstr ""
 #: includes/settings.php:1447
 #: includes/settings.php:1568
 #: includes/settings.php:1677
+msgid "OFF"
+msgstr ""
+
+#: includes/settings.php:1380
+#: includes/settings.php:1397
+#: includes/settings.php:1414
+#: includes/settings.php:1431
+#: includes/settings.php:1448
+#: includes/settings.php:1569
+#: includes/settings.php:1678
 msgid "ON"
 msgstr ""
 
-#: includes/settings.php:1489
+#: includes/settings.php:1490
 msgid "Opt-in to help improve plugin development."
 msgstr ""
 
-#: includes/settings.php:1531
+#: includes/settings.php:1532
 msgid "Unable to read log file. Please check file permissions."
 msgstr ""
 
-#: includes/settings.php:1534
+#: includes/settings.php:1535
 msgid "Log file not found or is not readable."
 msgstr ""
 
-#: includes/settings.php:1595
-#: includes/settings.php:1620
-#: includes/settings.php:1645
+#: includes/settings.php:1596
+#: includes/settings.php:1621
+#: includes/settings.php:1646
 msgid "File does not exist:"
 msgstr ""
 
-#: includes/settings.php:1658
+#: includes/settings.php:1659
 msgid "Generate API Key"
 msgstr ""
 
-#: includes/settings.php:1660
+#: includes/settings.php:1661
 msgid "API Key"
 msgstr ""
 
-#: includes/settings.php:1660
+#: includes/settings.php:1661
 msgid "Click to copy REST API Key"
 msgstr ""
 
-#: includes/settings.php:1661
+#: includes/settings.php:1662
 msgid "Purge URL"
 msgstr ""
 
-#: includes/settings.php:1661
+#: includes/settings.php:1662
 msgid "Click to copy full REST API CURL URL for Purge"
 msgstr ""
 
-#: includes/settings.php:1662
+#: includes/settings.php:1663
 msgid "Preload URL"
 msgstr ""
 
-#: includes/settings.php:1662
+#: includes/settings.php:1663
 msgid "Click to copy full REST API CURL URL for Preload"
 msgstr ""
 
-#: includes/settings.php:1728
+#: includes/settings.php:1729
 msgid "ERROR PATH: The specified Nginx Cache Directory is either a critical system directory or a top-level directory and cannot be used."
 msgstr ""
 
-#: includes/settings.php:1731
+#: includes/settings.php:1732
 msgid "ERROR PATH: The specified Nginx Cache Directory does not exist. Please verify the Nginx Cache Directory."
 msgstr ""
 
-#: includes/settings.php:1734
+#: includes/settings.php:1735
 msgid "ERROR PATH: An invalid path was provided for the Nginx Cache Directory. Please provide a valid directory path."
 msgstr ""
 
-#: includes/settings.php:1761
-#: includes/settings.php:1766
+#: includes/settings.php:1762
+#: includes/settings.php:1767
 msgid "ERROR OPTION: Please enter a valid email address."
 msgstr ""
 
-#: includes/settings.php:1784
+#: includes/settings.php:1785
 msgid "Please enter a CPU limit between 10 and 100."
 msgstr ""
 
-#: includes/settings.php:1789
+#: includes/settings.php:1790
 msgid "ERROR OPTION: Please enter a CPU limit between 10 and 100."
 msgstr ""
 
-#: includes/settings.php:1795
+#: includes/settings.php:1796
 msgid "CPU limit must be a numeric value."
 msgstr ""
 
-#: includes/settings.php:1800
+#: includes/settings.php:1801
 msgid "ERROR OPTION: CPU limit must be a numeric value."
 msgstr ""
 
-#: includes/settings.php:1818
+#: includes/settings.php:1819
 msgid "Please enter a Per Request Wait Time between 0 and 60 seconds."
 msgstr ""
 
-#: includes/settings.php:1823
+#: includes/settings.php:1824
 msgid "ERROR OPTION: Please enter a per request wait time between 0 and 60 seconds."
 msgstr ""
 
-#: includes/settings.php:1829
+#: includes/settings.php:1830
 msgid "Wait time must be a numeric value."
 msgstr ""
 
-#: includes/settings.php:1834
+#: includes/settings.php:1835
 msgid "ERROR OPTION: Wait time must be a numeric value."
 msgstr ""
 
-#: includes/settings.php:1863
+#: includes/settings.php:1864
 msgid "ERROR REGEX: The custom cache key regex is invalid. Check the syntax and test it before use."
 msgstr ""
 
-#: includes/settings.php:1869
+#: includes/settings.php:1870
 msgid "ERROR REGEX: The custom cache key regex contains more than 3 lookaheads and cannot be used."
 msgstr ""
 
-#: includes/settings.php:1874
+#: includes/settings.php:1875
 msgid "ERROR REGEX: The custom cache key regex contains a greedy quantifier inside a lookahead and cannot be used."
 msgstr ""
 
-#: includes/settings.php:1880
+#: includes/settings.php:1881
 msgid "ERROR REGEX: The custom cache key regex contains more than one \".*\" quantifier and cannot be used."
 msgstr ""
 
-#: includes/settings.php:1885
+#: includes/settings.php:1886
 msgid "ERROR REGEX: The custom cache key regex exceeds the allowed length of 300 characters."
 msgstr ""
 
-#: includes/settings.php:1945
+#: includes/settings.php:1946
 msgid "Please enter a limit rate between 1 KB/sec and 100 MB/sec."
 msgstr ""
 
-#: includes/settings.php:1950
+#: includes/settings.php:1951
 msgid "ERROR OPTION: Please enter a limit rate between 1 KB/sec and 100 MB/sec."
 msgstr ""
 
-#: includes/settings.php:1956
+#: includes/settings.php:1957
 msgid "Limit rate must be a numeric value in KB/sec."
 msgstr ""
 
-#: includes/settings.php:1961
+#: includes/settings.php:1962
 msgid "ERROR OPTION: Limit rate must be a numeric value in KB/sec."
 msgstr ""
 
-#: includes/settings.php:1978
-#: includes/settings.php:1983
+#: includes/settings.php:1979
+#: includes/settings.php:1984
 msgid "ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key."
 msgstr ""
 
-#: includes/settings.php:2008
+#: includes/settings.php:2009
 msgid "ERROR OPTION: Please enter a valid IP address or hostname for the Proxy Host."
 msgstr ""
 
-#: includes/settings.php:2012
+#: includes/settings.php:2013
 msgid "ERROR OPTION: Invalid proxy host provided. Must be IPv4, IPv6, or valid hostname."
 msgstr ""
 
-#: includes/settings.php:2028
-#: includes/settings.php:2033
+#: includes/settings.php:2029
+#: includes/settings.php:2034
 msgid "ERROR OPTION: Please enter a valid Proxy Port between 1 and 65535."
 msgstr ""
 
-#: includes/settings.php:2039
-#: includes/settings.php:2044
+#: includes/settings.php:2040
+#: includes/settings.php:2045
 msgid "ERROR OPTION: Proxy Port must be a numeric value."
 msgstr ""
 
@@ -2035,106 +2035,107 @@ msgstr ""
 msgid "Directory not found."
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:294
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:303
 msgid "Processed URLs:"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:296
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:305
 msgid "Broken URLs (404):"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:299
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:308
 msgid "Last Processed Page:"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:307
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:316
 msgid "Time Elapsed:"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:310
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:319
 msgid "Last Preload:"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:317
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:326
 msgid "Preload Complete"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:338
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2684
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2771
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:347
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:384
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2702
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2789
 msgid "Ready"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:352
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:361
 msgid "In Progress"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:371
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2689
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2775
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:388
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2707
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2793
 msgid "Not Ready"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2567
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2585
 msgid "Required"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2571
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2605
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2694
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2747
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2824
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2876
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2927
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2589
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2623
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2712
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2765
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2842
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2894
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2945
 msgid "Not Determined"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2575
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2593
 msgid "Not Required"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2593
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2611
 msgid "Fix Permission"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2597
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2615
 msgid "Fix Regex"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2662
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2680
 msgid "Found"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2711
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2729
 msgid "Allowed"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2716
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2734
 msgid "Not Allowed"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2732
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2750
 msgid "Granted"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2743
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2761
 msgid "Need Action"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2793
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2945
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2811
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2963
 msgid "Installed"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2797
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2949
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2815
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2967
 msgid "Not Installed"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2919
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2937
 msgid "Isolated"
 msgstr ""
 
-#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2923
+#: admin/js/fastcgi-cache-purge-and-preload-nginx.js:2941
 msgid "Not Isolated"
 msgstr ""
