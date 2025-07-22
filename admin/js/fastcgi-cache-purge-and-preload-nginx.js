@@ -288,7 +288,7 @@ $(document).ready(function() {
                 if (preloadRow) preloadRow.style.display = "";
             }
 
-            const estTotal = data.total || 500;
+            const estTotal = data.total || 2000;
             let pct = Math.min(100, Math.round((data.checked / estTotal) * 100));
 
             if (data.status === "done") {
