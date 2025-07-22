@@ -155,12 +155,13 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     // Only process URL for single-page actions
     if (in_array($action, ['nppp_purge_cache_single', 'nppp_preload_cache_single'], true)) {
         if (isset($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_REFERER'])) {
-            $raw_url           = wp_unslash($_SERVER['HTTP_REFERER']);
-            $current_page_url  = esc_url_raw($raw_url);
+            // esc_url_raw: sanitize without altering percent-encoded characters
+            $current_page_url = esc_url_raw(wp_unslash($_SERVER['HTTP_REFERER']));
 
             // Validate format
             // PATCH: CVE ID: CVE-2025-6213
             if (! filter_var($current_page_url, FILTER_VALIDATE_URL)) {
+                nppp_display_admin_notice('error', __('ERROR SECURITY: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
                 return;
             }
 
@@ -170,13 +171,14 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
             $url_host  = wp_parse_url($current_page_url, PHP_URL_HOST);
 
             if ($site_host !== $url_host) {
+                nppp_display_admin_notice('error', __('ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
                 return;
             }
 
-            // Defense-in-depth: check for command injection
+            // Defense-in-depth: check for command injection to shell
             // PATCH: CVE ID: CVE-2025-6213
-            // NOTE: (escapeshellarg) not used, breaks percent-encoded URLs
             if (preg_match('/[;&|`$<>"]/', $current_page_url)) {
+                nppp_display_admin_notice('error', __('ERROR SECURITY: The URL contains potentially dangerous characters and has been blocked to prevent command injection.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
                 return;
             }
 
