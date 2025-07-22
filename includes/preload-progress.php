@@ -107,8 +107,8 @@ function nppp_get_estimated_url_count() {
 
     // Check if SimpleXML is available
     if (!extension_loaded('SimpleXML')) {
-        set_transient($transient_key, 500, YEAR_IN_SECONDS);
-        return 500;
+        set_transient($transient_key, 2000, DAY_IN_SECONDS);
+        return 2000;
     }
 
     $total = 0;
@@ -117,8 +117,8 @@ function nppp_get_estimated_url_count() {
 
     $xml = @simplexml_load_file($sitemap_url);
     if (!$xml) {
-        set_transient($transient_key, 500, YEAR_IN_SECONDS);
-        return 500;
+        set_transient($transient_key, 2000, DAY_IN_SECONDS);
+        return 2000;
     }
 
     foreach ($xml->sitemap as $sitemap) {
@@ -138,7 +138,7 @@ function nppp_get_estimated_url_count() {
         $total += count($urls);
     }
 
-    $final_total = $total > 0 ? $total + 100 : 500;
-    set_transient($transient_key, $final_total, YEAR_IN_SECONDS);
+    $final_total = $total > 0 ? $total + 100 : 2000;
+    set_transient($transient_key, $final_total, DAY_IN_SECONDS);
     return $final_total;
 }
