@@ -160,6 +160,7 @@ function nppp_detect_premature_process(
     ];
 
     // Start the testprocess
+    // phpcs:ignore Generic.PHP.ForbiddenFunctions.Found -- proc_open() is needed to detect premature process status safely
     $process = proc_open($testCommand, $descriptors, $pipes);
 
     // Verify that the process was successfully created
