@@ -667,7 +667,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 
     // Valitade the sanitized url before process
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) === false) {
-        nppp_display_admin_notice('error', __( 'ERROR URL: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
 
@@ -677,7 +677,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $parsed_home_url = wp_parse_url($home_url);
 
     if ($referrer_parsed_url['host'] !== $parsed_home_url['host']) {
-        nppp_display_admin_notice('error', __( 'ERROR URL: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
 
@@ -905,7 +905,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // Valitade the sanitized url before process
     // PATCH: CVE ID: CVE-2025-6213
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) === false) {
-        nppp_display_admin_notice('error', __( 'ERROR URL: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
 
@@ -916,7 +916,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $parsed_home_url = wp_parse_url($home_url);
 
     if ($referrer_parsed_url['host'] !== $parsed_home_url['host']) {
-        nppp_display_admin_notice('error', __( 'ERROR URL: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
 
