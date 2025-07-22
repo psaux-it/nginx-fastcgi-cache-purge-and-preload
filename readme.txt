@@ -5,7 +5,7 @@ Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 6.8
-Stable tag: 2.1.2
+Stable tag: 2.1.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -166,9 +166,23 @@ Yes, please refer to the plugin settings **Help** tab.
 
 == Changelog ==
 
+= 2.1.3 =
+
+Release date: 2025-07-22
+
+* PATCHED: CVE-2025-6213 — Prevent command injection via ['HTTP_REFERER'] (Credit: @cynau1t)
+* Fixed: UTF-8 decoded URLs are now correctly displayed in the Advanced tab for improved readability (Credit: @XCJYO)
+* Fixed: Percent-encoded URL normalization (uppercase vs lowercase) to prevent cache miss via mismatched encodings (Credit: @XCJYO)
+* Fixed: Fatal error in CLI context caused by undefined FS_CHMOD_FILE when running WP-CLI (Reported by: @sergeybv)
+* Fixed: Preload completion time and last preload timestamp now display accurately
+* Fixed: Addressed several WordPress Plugin Check (PCP) compatibility warnings and false positives
+* Added: Real-time Preload Progress Monitor in the Status tab, with visual feedback and progress bar
+* Added: Proxy support for preload operations, including validation and status checks
+* Compatibility: Tested with WordPress 6.8.2
+
 = 2.1.2 =
 
-Release date: 2025-04-28
+Release date: 2025-06-23
 
 * Fix leaking HTML into WP core API responses
 * Fix plugin name under Settings menu
