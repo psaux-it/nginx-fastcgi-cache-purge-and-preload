@@ -2,7 +2,7 @@
 /**
  * Rest API for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains rest api preload progress functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.3
+ * Version: 2.1.2
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -138,7 +138,7 @@ function nppp_get_estimated_url_count() {
         $total += count($urls);
     }
 
-    $final_total = $total > 0 ? $total + 100 : 2000;
+    $final_total = $total > 0 ? $total + 1000 : 2000;
     set_transient($transient_key, $final_total, DAY_IN_SECONDS);
     return $final_total;
 }
