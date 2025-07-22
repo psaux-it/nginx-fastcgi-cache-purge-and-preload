@@ -14,6 +14,10 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Always load and register preload progress endpoint
+require_once dirname(__FILE__) . '/preload-progress.php';
+add_action('rest_api_init', 'nppp_nginx_cache_register_preload_progress_endpoint');
+
 // Retrieve NPP REST API status
 $options = get_option('nginx_cache_settings');
 $api_status = isset($options['nginx_cache_api']) ? $options['nginx_cache_api'] : '';
