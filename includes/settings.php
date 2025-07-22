@@ -689,6 +689,7 @@ function nppp_handle_nginx_cache_settings_submission() {
                     $existing_options = get_option('nginx_cache_settings');
 
                     // Ignored PCP warning because we use custom sanitization via 'nppp_nginx_cache_settings_sanitize()'.
+                    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Already sanitized
                     $nginx_cache_settings = wp_unslash($_POST['nginx_cache_settings']);
 
                     // This is a pre-check to catch sanitization errors early, before calling update_option, to ensure proper redirection
