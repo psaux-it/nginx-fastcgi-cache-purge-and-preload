@@ -314,7 +314,7 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_nginx_cache_proxy_host_callback(); ?>
-                                <p class="description"><?php echo esc_html__('Enter the proxy IP (e.g., 127.0.0.1).', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
+                                <p class="description"><?php echo esc_html__('Enter the proxy IP, hostname, or container hostname (e.g., 127.0.0.1, localhost, or my-proxy).', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
                             </td>
                         </tr>
                         <tr valign="top">
