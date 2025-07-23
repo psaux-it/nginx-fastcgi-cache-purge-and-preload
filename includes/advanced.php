@@ -2,7 +2,7 @@
 /**
  * Advanced table for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains advanced table functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.2
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -148,7 +148,7 @@ function nppp_premium_html($nginx_cache_path) {
                         <td><?php echo esc_html($urlData['cache_date']); ?></td>
                         <td>
                             <button class="nppp-purge-btn" data-file="<?php echo esc_attr($urlData['file_path']); ?>"><span class="dashicons dashicons-trash" style="font-size: 16px; margin: 0; padding: 0;"></span> <?php echo esc_html__( 'Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
-                            <button class="nppp-preload-btn" data-url="<?php echo esc_attr($urlData['url']); ?>"><span class="dashicons dashicons-update" style="font-size: 16px; margin: 0; padding: 0;"></span> <?php echo esc_html__( 'Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
+                            <button class="nppp-preload-btn" data-url="<?php echo esc_attr($urlData['url_encoded']); ?>"><span class="dashicons dashicons-update" style="font-size: 16px; margin: 0; padding: 0;"></span> <?php echo esc_html__( 'Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
                         </td>
                     </tr>
                 <?php endforeach;
@@ -365,13 +365,17 @@ function nppp_purge_cache_premium_callback() {
 
     // Perform the purge action (delete the file)
     $deleted = $wp_filesystem->delete($file_path);
+
+    // Display decoded URL to user
+    $final_url_decoded = rawurldecode($final_url);
+
     if ($deleted) {
         // Translators: %s is the page URL
-        $success_message = sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url );
+        $success_message = sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url_decoded );
         nppp_log_and_send_success($success_message, $log_file_path);
     } else {
         // Translators: %s is the page URL
-        $error_message = sprintf( __( 'ERROR ADMIN: Nginx cache can not be purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url );
+        $error_message = sprintf( __( 'ERROR ADMIN: Nginx cache can not be purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url_decoded );
         nppp_log_and_send_error($error_message, $log_file_path);
     }
 }
@@ -404,10 +408,7 @@ function nppp_preload_cache_premium_callback() {
     }
 
     // Get the file path from the AJAX request and sanitize it
-    $cache_url = isset($_POST['cache_url']) ? sanitize_text_field(wp_unslash($_POST['cache_url'])) : '';
-
-    // Sanitize the URL
-    $clean_cache_url = filter_var($cache_url, FILTER_SANITIZE_URL);
+    $cache_url = isset($_POST['cache_url']) ? esc_url_raw(wp_unslash($_POST['cache_url'])) : '';
 
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
@@ -428,12 +429,12 @@ function nppp_preload_cache_premium_callback() {
     $nginx_cache_cpu_limit = isset($nginx_cache_settings['nginx_cache_cpu_limit']) ? $nginx_cache_settings['nginx_cache_cpu_limit'] : $default_cpu_limit;
 
     // Validate the sanitized URL
-    if (filter_var($clean_cache_url, FILTER_VALIDATE_URL) !== false) {
+    if (filter_var($cache_url, FILTER_VALIDATE_URL) !== false) {
         // Start output buffering
         ob_start();
 
         // call single preload action
-        nppp_preload_single($clean_cache_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
+        nppp_preload_single($cache_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
 
         // Capture and clean the buffer
         $output = wp_strip_all_tags(ob_get_clean());
@@ -500,6 +501,12 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                         // Build the URL
                         $host = trim($matches[1]);
                         $request_uri = trim($matches[2]);
+
+                        // Normalize percent-encoded sequences to lowercase to prevent cache misses
+                        $request_uri = preg_replace_callback('/%[0-9A-F]{2}/i', function ($matches) {
+                            return strtolower($matches[0]);
+                        }, $request_uri);
+
                         $constructed_url = $host . $request_uri;
 
                         // Test parsed URL via regex with FILTER_VALIDATE_URL
@@ -536,13 +543,20 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                     // Build the URL
                     $host = trim($matches[1]);
                     $request_uri = trim($matches[2]);
-                    $constructed_url = $host . $request_uri;
 
-                    // Sanitize and validate the URL
-                    $sanitized_url = filter_var($constructed_url, FILTER_SANITIZE_URL);
-                    $final_url = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
+                    // Keep the encoded URI for internal consistency
+                    $constructed_url_encoded = $host . $request_uri;
 
-                    if (filter_var($final_url, FILTER_VALIDATE_URL) !== false) {
+                    // Sanitize and validate the encoded URL
+                    $sanitized_url = filter_var($constructed_url_encoded, FILTER_SANITIZE_URL);
+                    $final_url_encoded = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
+
+                    if (filter_var($final_url_encoded, FILTER_VALIDATE_URL) !== false) {
+                        // Decode URI only for displaying URLs in human-readable form
+                        $decoded_uri = rawurldecode($request_uri);
+                        $constructed_url_decoded = $host . $decoded_uri;
+                        $final_url = $https_enabled ? "https://$constructed_url_decoded" : "http://$constructed_url_decoded";
+
                         // Get the file modification time for cache date
                         $cache_timestamp = $file->getMTime();
                         $cache_date = wp_date('Y-m-d H:i:s', $cache_timestamp);
@@ -552,10 +566,11 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
 
                         // Store URL data
                         $urls[] = array(
-                            'file_path'  => $file->getPathname(),
-                            'url'        => $final_url,
-                            'category'   => $category,
-                            'cache_date' => $cache_date
+                            'file_path'   => $file->getPathname(),
+                            'url'         => $final_url,
+                            'url_encoded' => $final_url_encoded,
+                            'category'    => $category,
+                            'cache_date'  => $cache_date
                         );
                     }
                 }

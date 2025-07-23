@@ -2,7 +2,7 @@
 /**
  * Dashboard widget for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains dashboard widget functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.2
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -16,6 +16,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Get latest Preload complete date
 function nppp_get_last_preload_complete_date() {
+    $static_key_base = 'nppp';
+    $timestamp_transient_key = 'nppp_last_preload_time_' . md5($static_key_base);
+
+    // Try to get from transient first
+    $cached_timestamp = get_transient($timestamp_transient_key);
+    if (!empty($cached_timestamp)) {
+        return $cached_timestamp;
+    }
+
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
@@ -209,6 +218,11 @@ function nppp_dashboard_widget() {
             'label' => __('Preload Mobile', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nginx_cache_auto_preload_mobile']) && $settings['nginx_cache_auto_preload_mobile'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon' => 'dashicons-smartphone'
+        ],
+        'enable_proxy' => [
+            'label' => __('Proxy', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status' => isset($settings['nginx_cache_preload_enable_proxy']) && $settings['nginx_cache_preload_enable_proxy'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
+            'icon'   => 'dashicons-randomize'
         ],
         'scheduled_cache' => [
             'label' => __('Scheduled Cache', 'fastcgi-cache-purge-and-preload-nginx'),

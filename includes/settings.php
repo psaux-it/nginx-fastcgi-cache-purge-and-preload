@@ -2,7 +2,7 @@
 /**
  * Settings page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains settings page functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.2
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -38,6 +38,9 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_tracking_opt_in', 'Enable Tracking', 'nppp_nginx_cache_tracking_opt_in_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_key_custom_regex', 'Enable Custom regex', 'nppp_nginx_cache_key_custom_regex_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_auto_preload_mobile', 'Auto Preload Mobile', 'nppp_nginx_cache_auto_preload_mobile_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_preload_enable_proxy', 'Enable Proxy', 'nppp_nginx_cache_enable_proxy_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_preload_proxy_host', 'Proxy Host', 'nppp_nginx_cache_proxy_host_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_preload_proxy_port', 'Proxy Port', 'nppp_nginx_cache_proxy_port_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -286,6 +289,42 @@ function nppp_nginx_cache_settings_page() {
                                     <h4><strong><?php echo esc_html__( 'Note:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong></h4>
                                     <p><?php echo esc_html__( 'The Mobile Preload action will begin after the main Preload process completes via the WordPress Cron job. As a result, the Mobile Preload action may start with a delay. To track the status of this process, please refer to the log section of the plugin.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 </div>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row">
+                                <span class="dashicons dashicons-randomize"></span>
+                                <?php echo esc_html__('Use Proxy', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                            </th>
+                            <td>
+                                <div class="nppp-onoffswitch-proxy">
+                                    <?php nppp_nginx_cache_enable_proxy_callback(); ?>
+                                </div>
+                                <p class="description"><?php echo esc_html__( 'Enable this feature to route preload requests through a local proxy (mitmproxy).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'This helps unify percent-encoding (uppercase vs lowercase) in URLs, matching browser behavior.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Without this feature, Nginx may generate separate cache keys for uppercase/lowercase percent-encoded URLs, leading to cache misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Only use this if you encounter such a problem. Please see the Help tab for setup instructions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'For example, use this when your site has non-ASCII URLs (like Chinese or Japanese) and you experience cache misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row">
+                                <span class="dashicons dashicons-admin-site-alt3"></span>
+                                <?php echo esc_html__('Proxy Host', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                            </th>
+                            <td>
+                                <?php nppp_nginx_cache_proxy_host_callback(); ?>
+                                <p class="description"><?php echo esc_html__('Enter the proxy IP, hostname, or container hostname (e.g., 127.0.0.1, localhost, or my-proxy).', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row">
+                                <span class="dashicons dashicons-admin-links"></span>
+                                <?php echo esc_html__('Proxy Port', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                            </th>
+                            <td>
+                                <?php nppp_nginx_cache_proxy_port_callback(); ?>
+                                <p class="description"><?php echo esc_html__('Enter the proxy port (e.g., 8080).', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -650,6 +689,7 @@ function nppp_handle_nginx_cache_settings_submission() {
                     $existing_options = get_option('nginx_cache_settings');
 
                     // Ignored PCP warning because we use custom sanitization via 'nppp_nginx_cache_settings_sanitize()'.
+                    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Already sanitized
                     $nginx_cache_settings = wp_unslash($_POST['nginx_cache_settings']);
 
                     // This is a pre-check to catch sanitization errors early, before calling update_option, to ensure proper redirection
@@ -825,6 +865,43 @@ function nppp_update_auto_preload_option() {
 
     // Update the specific option within the array
     $current_options['nginx_cache_auto_preload'] = $auto_preload;
+
+    // Save the updated options
+    $updated = update_option('nginx_cache_settings', $current_options);
+
+    // Check if option is updated successfully
+    if ($updated) {
+        wp_send_json_success('Option updated successfully.');
+    } else {
+        wp_send_json_error('Error updating option.');
+    }
+}
+
+// AJAX callback function to update enable proxy option
+function nppp_update_enable_proxy_option() {
+    // Verify nonce
+    if (isset($_POST['_wpnonce'])) {
+        $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
+        if (!wp_verify_nonce($nonce, 'nppp-update-enable-proxy-option')) {
+            wp_send_json_error('Nonce verification failed.');
+        }
+    } else {
+        wp_send_json_error('Nonce is missing.');
+    }
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to update this option.');
+    }
+
+    // Get the posted option value and sanitize it
+    $enable_proxy = isset($_POST['enable_proxy']) ? sanitize_text_field(wp_unslash($_POST['enable_proxy'])) : '';
+
+    // Get the current options
+    $current_options = get_option('nginx_cache_settings', array());
+
+    // Update the specific option within the array
+    $current_options['nginx_cache_preload_enable_proxy'] = $enable_proxy;
 
     // Save the updated options
     $updated = update_option('nginx_cache_settings', $current_options);
@@ -1466,6 +1543,36 @@ function nppp_nginx_cache_limit_rate_callback() {
     echo "<input type='number' id='nginx_cache_limit_rate' name='nginx_cache_settings[nginx_cache_limit_rate]' min='1' max='102400' value='" . esc_attr($options['nginx_cache_limit_rate'] ?? $default_limit_rate) . "' class='small-text' />";
 }
 
+// Callback function to display the input field for Proxy Port setting.
+function nppp_nginx_cache_proxy_port_callback() {
+    $options = get_option('nginx_cache_settings');
+    $default_port = 3434;
+    echo "<input type='number' id='nginx_cache_preload_proxy_port' name='nginx_cache_settings[nginx_cache_preload_proxy_port]' value='" . esc_attr($options['nginx_cache_preload_proxy_port'] ?? $default_port) . "' class='small-text' />";
+}
+
+// Callback function to display the input field for Proxy Host setting (IP field).
+function nppp_nginx_cache_proxy_host_callback() {
+    $options = get_option('nginx_cache_settings');
+    $default_host = '127.0.0.1';
+    echo "<input type='text' id='nginx_cache_preload_proxy_host' name='nginx_cache_settings[nginx_cache_preload_proxy_host]' value='" . esc_attr($options['nginx_cache_preload_proxy_host'] ?? $default_host) . "' class='regular-text' />";
+}
+
+// Callback function for the nginx_cache_preload_enable_proxy field
+function nppp_nginx_cache_enable_proxy_callback() {
+    $options = get_option('nginx_cache_settings');
+    $enable_proxy_checked = isset($options['nginx_cache_preload_enable_proxy']) && $options['nginx_cache_preload_enable_proxy'] === 'yes' ? 'checked="checked"' : '';
+    ?>
+    <input type="checkbox" name="nginx_cache_settings[nginx_cache_preload_enable_proxy]" class="nppp-onoffswitch-checkbox-proxy" value="yes" id="nginx_cache_preload_enable_proxy" <?php echo esc_attr($enable_proxy_checked); ?>>
+    <label class="nppp-onoffswitch-label-proxy" for="nginx_cache_preload_enable_proxy">
+        <span class="nppp-onoffswitch-inner-proxy">
+            <span class="nppp-off-proxy"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-on-proxy"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+        </span>
+        <span class="nppp-onoffswitch-switch-proxy"></span>
+    </label>
+    <?php
+}
+
 // Fetch default reject regex
 function nppp_fetch_default_reject_regex() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -1878,6 +1985,67 @@ function nppp_nginx_cache_settings_sanitize($input) {
         }
     }
 
+    // Sanitize Enable Proxy
+    $sanitized_input['nginx_cache_preload_enable_proxy'] = isset($input['nginx_cache_preload_enable_proxy']) && $input['nginx_cache_preload_enable_proxy'] === 'yes' ? 'yes' : 'no';
+
+    // Sanitize and validate Proxy Host
+    if (!empty($input['nginx_cache_preload_proxy_host'])) {
+        $proxy_host_raw = sanitize_text_field(trim($input['nginx_cache_preload_proxy_host']));
+        $proxy_host_raw = preg_replace( '#^[a-z][a-z0-9+\-.]*://#i', '', $proxy_host_raw );
+        $proxy_host     = preg_replace( '/[^a-z0-9\-.:]/i', '', $proxy_host_raw );
+
+        // Validate IP (IPv4 or IPv6)
+        if (filter_var($proxy_host, FILTER_VALIDATE_IP)) {
+            $sanitized_input['nginx_cache_preload_proxy_host'] = $proxy_host;
+        }
+        // Validate hostname (FQDN or short)
+        elseif (filter_var($proxy_host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
+            $sanitized_input['nginx_cache_preload_proxy_host'] = $proxy_host;
+        }
+        else {
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'invalid-proxy-host',
+                __('ERROR OPTION: Please enter a valid IP address or hostname for the Proxy Host.', 'fastcgi-cache-purge-and-preload-nginx'),
+                'error'
+            );
+
+            nppp_log_error_message(__('ERROR OPTION: Invalid proxy host provided. Must be IPv4, IPv6, or valid hostname.', 'fastcgi-cache-purge-and-preload-nginx'));
+        }
+    }
+
+    // Sanitize and validate Proxy Port
+    if (!empty($input['nginx_cache_preload_proxy_port'])) {
+        // Check if numeric
+        if (is_numeric($input['nginx_cache_preload_proxy_port'])) {
+            $proxy_port = intval($input['nginx_cache_preload_proxy_port']);
+            // Validate valid port range
+            if ($proxy_port >= 1 && $proxy_port <= 65535) {
+                $sanitized_input['nginx_cache_preload_proxy_port'] = $proxy_port;
+            } else {
+                add_settings_error(
+                    'nppp_nginx_cache_settings_group',
+                    'invalid-proxy-port',
+                    __('ERROR OPTION: Please enter a valid Proxy Port between 1 and 65535.', 'fastcgi-cache-purge-and-preload-nginx'),
+                    'error'
+                );
+
+                // Log the error message
+                nppp_log_error_message(__('ERROR OPTION: Please enter a valid Proxy Port between 1 and 65535.', 'fastcgi-cache-purge-and-preload-nginx'));
+            }
+        } else {
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'invalid-proxy-port-format',
+                __('ERROR OPTION: Proxy Port must be a numeric value.', 'fastcgi-cache-purge-and-preload-nginx'),
+                'error'
+            );
+
+            // Log the error message
+            nppp_log_error_message(__('ERROR OPTION: Proxy Port must be a numeric value.', 'fastcgi-cache-purge-and-preload-nginx'));
+        }
+    }
+
     return $sanitized_input;
 }
 
@@ -2037,6 +2205,8 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_limit_rate' => 5120,
         'nginx_cache_tracking_opt_in' => '1',
         'nginx_cache_api_key' => $new_api_key,
+        'nginx_cache_preload_proxy_host' => '127.0.0.1',
+        'nginx_cache_preload_proxy_port' => 3434,
     );
 
     // Retrieve existing options (if any)

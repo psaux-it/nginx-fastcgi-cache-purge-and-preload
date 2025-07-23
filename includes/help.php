@@ -2,7 +2,7 @@
 /**
  * FAQ for FastCGI Cache Purge and Preload for Nginx
  * Description: This help file contains informations about FastCGI Cache Purge and Preload for Nginx plugin usage.
- * Version: 2.1.2
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -291,6 +291,113 @@ function nppp_my_faq_html() {
                         </ol>
 
                         <p style="font-size: 14px;">By using NPP for server side page caching and other plugins solely for frontend optimizations, you ensure a streamlined, high-performance system without redundant caching layers and conflicts.</p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">Why does a cache miss occur for URLs with percent-encoded characters like /product/水滴轮锻碳单摇/?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <p style="font-size: 14px;"><strong>Background:</strong> Some URLs contain non-ASCII characters (e.g., Chinese, Cyrillic, Arabic), which browsers and tools like <code>wget</code> automatically convert into percent-encoded ASCII format. For example:</p>
+                        <pre><code>/product/水滴轮锻碳单摇/ → /product/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87/</code></pre>
+
+                        <p style="font-size: 14px;">However, percent-encoded characters can appear in either <strong>uppercase</strong> or <strong>lowercase</strong> depending on how the request is generated:</p>
+
+                        <p style="font-size: 14px;"><strong>Nginx cache is case-sensitive</strong>, meaning if the NPP preload request stores a file using uppercase encoding, and a real visitor accesses the page using lowercase, Nginx sees them as different and returns a <strong>cache miss</strong>.</p>
+
+                        <p style="font-size: 14px;">So, for example, if the NPP plugin preloads this URL:</p>
+                        <pre><code>https://example.com/product/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87/</code></pre>
+                        <p style="font-size: 14px;">...but a user accesses it like this:</p>
+                        <pre><code>https://example.com/product/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87/</code></pre>
+                        <p style="font-size: 14px;">Nginx will not find a matching cache file. <strong>This is a classic cache mismatch caused by encoding inconsistency.</strong></p>
+
+                        <h4>✅ Solution: Normalize Encoding with mitmproxy</h4>
+                        <p style="font-size: 14px;"><strong>mitmproxy</strong> acts as a "man-in-the-middle" proxy between the NPP Preload (wget) and Nginx. It rewrites percent-encoded characters to a consistent casing <strong>on the fly</strong>, ensuring preload and browser requests use identical formats.</p>
+
+                        <p style="font-size: 14px;">To fix cache misses caused by inconsistent percent-encoding (uppercase vs lowercase), follow these steps:</p>
+
+                        <p style="font-size: 14px;"><strong>WordPress Admin → Settings → Nginx Cache Purge Preload → Preload Options</strong></p>
+
+                        <ul>
+                            <li>
+                                <strong>Use Proxy:</strong><br>
+                                Enable this to route all preload requests (from <code>wget</code>) through  <strong>mitmproxy</strong>.
+                            </li>
+                            <li>
+                                <strong>Proxy Host:</strong><br>
+                                <ul>
+                                    <li><code>127.0.0.1|localhost</code> – if mitmproxy runs on the <strong>same server</strong> as WordPress.</li>
+                                    <li><code>my-mitmproxy</code> – if using mitmproxy in a <strong>containerized setup</strong>.</li>
+                                </ul>
+                            </li>
+                            <li>
+                                <strong>Proxy Port:</strong><br>
+                                Enter the port that mitmproxy is listening on. <br>
+                                Example: <code>3434</code>
+                            </li>
+                        </ul>
+
+                        <p style="font-size: 14px;">Once enabled, the plugin automatically routes all <strong>Preload requests</strong> (<code>wget</code>) through <strong>mitmproxy</strong>, which intercepts and rewrites the request paths <strong>on the fly</strong> — ensuring that percent-encoded characters follow a consistent format <strong>before reaching Nginx</strong>. This eliminates cache mismatches caused by case differences in encoding.</p>
+
+                        <pre><code>[wget] → [mitmproxy] → [Nginx]</code></pre>
+
+                        <h4>🧠 Any helper script?</h4>
+                        <p style="font-size: 14px;">Depending on how the NPP plugin generates cache keys on your system, choose the appropriate script:</p>
+
+                        <p><strong>1. percent_encode_lowercase.py</strong> – It forcibly rewrites the percent-encoded characters in NPP plugin preload requests to lowercase for consistency:</p>
+                        <pre><code>from mitmproxy import http, ctx
+import re
+
+percent_encoded_re = re.compile(r'%[0-9A-Fa-f]{2}')
+
+def request(flow: http.HTTPFlow) -> None:
+    path = flow.request.path
+    new_path = percent_encoded_re.sub(lambda m: m.group(0).lower(), path)
+
+    if new_path != path:
+        flow.request.path = new_path
+        ctx.log.info(f"Rewriting path: {path} → {new_path}")</code></pre>
+
+                        <p><strong>2. percent_encode_uppercase.py</strong> – It forcibly rewrites the percent-encoded characters in NPP plugin preload requests to uppercase for consistency:</p>
+                        <pre><code>from mitmproxy import http, ctx
+import re
+
+percent_encoded_re = re.compile(r'%[0-9a-f]{2}')
+
+def request(flow: http.HTTPFlow) -> None:
+    path = flow.request.path
+    new_path = percent_encoded_re.sub(lambda m: m.group(0).upper(), path)
+
+    if new_path != path:
+        flow.request.path = new_path
+        ctx.log.info(f"Rewriting path: {path} → {new_path}")</code></pre>
+
+                        <h4>🔧 Example systemd service for mitmproxy:</h4>
+                        <ul style="font-size: 14px;">
+                            <li><strong>Same host:</strong> Use <code>--listen-host 127.0.0.1</code></li>
+                            <li><strong>Container:</strong> Use <code>--listen-host 0.0.0.0</code></li>
+                            <li><strong>Allow-Hosts:</strong> Set <code>yourdomain.com</code></li>
+                        </ul>
+
+                        <pre><code>[Unit]
+Description=Mitmproxy - Normalize Percent-Encoding
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/mitmdump \
+    --mode regular \
+    --listen-host 127.0.0.1 \
+    --listen-port 3434 \
+    --set block_global=false \
+    --allow-hosts yourdomain.com \
+    -s /etc/mitmproxy/percent_encode_lowercase.py
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/log/mitmproxy.log
+StandardError=append:/var/log/mitmproxy.log
+
+[Install]
+WantedBy=multi-user.target</code></pre>
                     </div>
                 </div>
 

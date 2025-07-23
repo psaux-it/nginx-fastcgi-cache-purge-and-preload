@@ -2,7 +2,7 @@
 /**
  * WP Admin Bar code for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Admin Bar code for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.2
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -25,6 +25,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     $wp_admin_bar->add_menu(array(
         'id'    => 'fastcgi-cache-operations',
         'title' => sprintf(
+            // phpcs:ignore PluginCheck.CodeAnalysis.ImageFunctions.NonEnqueuedImage -- Image is internal plugin asset, not from media library
             '<img style="height: 20px; margin-bottom: -5px; width: 20px;" src="%s"> %s',
             esc_url(plugin_dir_url(__FILE__) . '../admin/img/bar.png'),
             esc_html__('Nginx Cache', 'fastcgi-cache-purge-and-preload-nginx')
@@ -149,18 +150,45 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
-    // Get the current page url for purge & preload front-end actions
-    if (empty($_SERVER['HTTP_REFERER'])) {
-        $clean_current_page_url = home_url();
-    } else {
-        // Sanitize the URL
-        $current_page_url = sanitize_text_field(wp_unslash($_SERVER['HTTP_REFERER']));
-        $clean_current_page_url = filter_var($current_page_url, FILTER_SANITIZE_URL);
+    $nppp_single_action = false;
+    $current_page_url = '';
 
-        // Validate the URL
-        if (!filter_var($clean_current_page_url, FILTER_VALIDATE_URL)) {
-            // Fallback to home URL if invalid
-            $clean_current_page_url = home_url();
+    // Only process URL for single-page actions
+    if (in_array($action, ['nppp_purge_cache_single', 'nppp_preload_cache_single'], true)) {
+        if (isset($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_REFERER'])) {
+            // esc_url_raw: sanitize without altering percent-encoded characters
+            $current_page_url = esc_url_raw(wp_unslash($_SERVER['HTTP_REFERER']));
+
+            // Validate format
+            // PATCH: CVE ID: CVE-2025-6213
+            if (! filter_var($current_page_url, FILTER_VALIDATE_URL)) {
+                nppp_display_admin_notice('error', __('ERROR SECURITY: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
+                return;
+            }
+
+            // Enforce same-site origin
+            // PATCH: CVE ID: CVE-2025-6213
+            $site_host = wp_parse_url(home_url(), PHP_URL_HOST);
+            $url_host  = wp_parse_url($current_page_url, PHP_URL_HOST);
+
+            if ($site_host !== $url_host) {
+                nppp_display_admin_notice('error', __('ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
+                return;
+            }
+
+            // Defense-in-depth: check for command injection to shell
+            // PATCH: CVE ID: CVE-2025-6213
+            if (preg_match('/[;&|`$<>"]/', $current_page_url)) {
+                nppp_display_admin_notice('error', __('ERROR SECURITY: The URL contains potentially dangerous characters and has been blocked to prevent command injection.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
+                return;
+            }
+
+        } else {
+            global $wp;
+            if (empty($wp->request)) {
+                $wp->parse_request();
+            }
+            $current_page_url = esc_url_raw(trailingslashit(home_url(add_query_arg($_GET, $wp->request))));
         }
     }
 
@@ -170,22 +198,20 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     switch ($_GET['action']) {
         case 'nppp_purge_cache':
             nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, false);
-            $nppp_single_action = false;
             break;
         case 'nppp_preload_cache':
             nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, false, false, false, true);
-            $nppp_single_action = false;
             break;
         case 'nppp_purge_cache_single':
-            nppp_purge_single($nginx_cache_path, $clean_current_page_url, false);
+            nppp_purge_single($nginx_cache_path, $current_page_url, false);
             $nppp_single_action = true;
             break;
         case 'nppp_preload_cache_single':
-            nppp_preload_single($clean_current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
+            nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
             $nppp_single_action = true;
             break;
         default:
-            break;
+            return;
     }
 
     // Get the status message from the output buffer
@@ -210,13 +236,14 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
             'message' => $status_message,
             'type' => $message_type
         ), 60);
+
         // Add nonce as a query parameter
         $redirect_url = add_query_arg(
             array(
                 'nppp_front' => $status_message_transient_key,
                 'redirect_nonce' => $nonce_redirect,
             ),
-            $clean_current_page_url
+            $current_page_url
         );
     } else {
         // Redirect to the settings page with the status message and message type as query parameters
@@ -231,6 +258,8 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         );
     }
 
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
     wp_safe_redirect($redirect_url);
     exit();
 }

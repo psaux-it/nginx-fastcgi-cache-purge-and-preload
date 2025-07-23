@@ -1,7 +1,7 @@
 /**
  * JavaScript for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains code to manage the plugin's admin interface for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.2
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -260,6 +260,154 @@ $(document).ready(function() {
         activateTabFromHash();
     });
 
+    // Preload progress status
+    function fetchWgetProgress() {
+        const barText = document.getElementById("wpt-bar-text");
+        const bar = document.getElementById("wpt-bar-inner");
+        const status = document.getElementById("wpt-status");
+        if (!bar || !status) return;
+
+        fetch(nppp_admin_data.wget_progress_api, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'X-WP-Nonce': nppp_admin_data.preload_progress_nonce
+            }
+        })
+        .then(res => {
+            if (!res.ok) throw new Error('Network response was not ok');
+            return res.json();
+        })
+        .then(data => {
+            if (!data.log_found) {
+                const preloadRow = document.getElementById("nppp-preload-progress-row");
+                if (preloadRow) preloadRow.style.display = "none";
+                    return;
+            } else {
+                const preloadRow = document.getElementById("nppp-preload-progress-row");
+                if (preloadRow) preloadRow.style.display = "";
+            }
+
+            const estTotal = data.total || 2000;
+            let pct = Math.min(100, Math.round((data.checked / estTotal) * 100));
+
+            if (data.status === "done") {
+                pct = 100;
+            }
+
+            bar.style.width = pct + "%";
+            if (barText) barText.textContent = pct + "%";
+
+            let html = `
+                <div class="nppp-progress-row">
+                    <span class="nppp-label">${__('Processed URLs:', 'fastcgi-cache-purge-and-preload-nginx')}</span> <code>${data.checked}</code>
+                    &nbsp;|&nbsp;
+                    <span class="nppp-label">${__('Broken URLs (404):', 'fastcgi-cache-purge-and-preload-nginx')}</span> <code>${data.errors}</code>
+                </div>
+                <div class="nppp-progress-row">
+                    <span class="nppp-label">${__('Last Processed Page:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
+                    <span class="nppp-url">${data.last_url}</span>
+                </div>
+            `;
+
+            if (data.time) {
+                html += `
+                    <div class="nppp-progress-row">
+                        <span class="nppp-label">${__('Time Elapsed:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
+                        <code>${data.time || '-'}</code>
+                        &nbsp;|&nbsp;
+                        <span class="nppp-label">${__('Last Preload:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
+                        <code>${data.last_preload_time || '-'}</code>
+                    </div>
+                `;
+            }
+
+            if (pct >= 100 || data.status === "done") {
+                html += `<div class="nppp-done">✅ <span>${__('Preload Complete', 'fastcgi-cache-purge-and-preload-nginx')}</span></div>`;
+            }
+
+            status.innerHTML = html;
+
+            const preloadStatusSpan = document.getElementById("nppppreloadStatus");
+            if (preloadStatusSpan) {
+                const preloadStatusCell = preloadStatusSpan.closest("td");
+                preloadStatusSpan.textContent = '';
+                preloadStatusSpan.style.fontSize = "14px";
+
+                const iconSpan = document.createElement('span');
+                let preloadStatusText = '';
+
+                if (!preloadStatusCell._npppAnimation) {
+                    preloadStatusCell._npppAnimation = null;
+                }
+
+                if (data.status === "done") {
+                    preloadStatusSpan.style.color = "green";
+                    iconSpan.classList.add("dashicons", "dashicons-yes");
+                    preloadStatusText = ' ' + __('Ready', 'fastcgi-cache-purge-and-preload-nginx');
+
+                    if (preloadStatusCell._npppAnimation) {
+                        preloadStatusCell._npppAnimation.cancel();
+                        preloadStatusCell._npppAnimation = null;
+                    }
+
+                    // Remove any running animation background
+                    if (preloadStatusCell) {
+                        preloadStatusCell.style.backgroundColor = "inherit";
+                    }
+                } else if (data.status === "running") {
+                    preloadStatusSpan.style.color = "orange";
+                    iconSpan.classList.add("dashicons", "dashicons-clock");
+                    preloadStatusText = ' ' + __('In Progress', 'fastcgi-cache-purge-and-preload-nginx');
+
+                    if (preloadStatusCell) {
+                        preloadStatusCell.style.backgroundColor = "lightgreen";
+
+                        if (preloadStatusCell._npppAnimation) {
+                            preloadStatusCell._npppAnimation.cancel();
+                        }
+
+                        preloadStatusCell._npppAnimation = preloadStatusCell.animate([
+                            { backgroundColor: '#90ee90' }
+                        ], {
+                            duration: 1,
+                            iterations: 1
+                        });
+                    }
+                } else {
+                    // Use pre-stored raw value (true/false)
+                    const rawStatus = preloadStatusSpan.dataset.statusRaw;
+
+                    if (rawStatus === "true") {
+                        preloadStatusSpan.style.color = "green";
+                        iconSpan.classList.add("dashicons", "dashicons-yes");
+                        preloadStatusText = ' ' + __('Ready', 'fastcgi-cache-purge-and-preload-nginx');
+                    } else {
+                        preloadStatusSpan.style.color = "red";
+                        iconSpan.classList.add("dashicons", "dashicons-no");
+                        preloadStatusText = ' ' + __('Not Ready', 'fastcgi-cache-purge-and-preload-nginx');
+                    }
+
+                    if (preloadStatusCell._npppAnimation) {
+                        preloadStatusCell._npppAnimation.cancel();
+                        preloadStatusCell._npppAnimation = null;
+                    }
+                    preloadStatusCell.style.backgroundColor = "inherit";
+                }
+
+                preloadStatusSpan.appendChild(iconSpan);
+                preloadStatusSpan.append(preloadStatusText);
+            }
+
+            if (pct < 100 && data.status === "running") {
+                setTimeout(fetchWgetProgress, 500);
+            }
+        })
+        .catch(err => {
+            console.error('Fetch preload progress failed:', err);
+        });
+    }
+
     // Function to load content for the 'Status' tab via AJAX
     // Sends a POST request to the server to fetch the Status tab content
     function loadStatusTabContent() {
@@ -279,6 +427,24 @@ $(document).ready(function() {
 
                     // Update status metrics or perform additional initialization after content is loaded
                     npppupdateStatus();
+
+                    // Preload live status progress
+                    (async () => {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+
+                        const preloadStatusSpan = document.getElementById("nppppreloadStatus");
+                        const preloadProgressRow = document.getElementById("nppp-preload-progress-row");
+
+                        if (!preloadStatusSpan || !preloadProgressRow) return;
+
+                        const preloadRawStatus = preloadStatusSpan.dataset.statusRaw?.toLowerCase();
+                        if (preloadRawStatus === "true" || preloadRawStatus === "progress") {
+                            preloadProgressRow.style.display = "";
+                            fetchWgetProgress();
+                        } else {
+                            preloadProgressRow.style.display = "none";
+                        }
+                    })();
 
                     // Hide the preloader now that content is loaded
                     hidePreloader();
@@ -603,6 +769,53 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_auto_preload').prop('checked', !$('#nginx_cache_auto_preload').prop('checked'));
+                alert('Error updating option!');
+            }
+        });
+    });
+
+    // Update enable proxy status when state changes
+    $('#nginx_cache_preload_enable_proxy').change(function() {
+        var proxyElement = jQuery(this);
+        var clickToCopySpanProxy = proxyElement.next('.nppp-onoffswitch-label-proxy');
+        var clickToCopySpanOffsetProxy = clickToCopySpanProxy.offset();
+        var notificationLeftProxy = clickToCopySpanOffsetProxy.left + clickToCopySpanProxy.outerWidth() + 10;
+        var notificationTopProxy = clickToCopySpanOffsetProxy.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action: 'nppp_update_enable_proxy_option',
+            enable_proxy: isChecked,
+            _wpnonce: nppp_admin_data.enable_proxy_nonce
+        }, function(response) {
+            // Handle response
+            if (response.success) {
+                // Show a small notification indicating successfully saved option
+                var notification = document.createElement('div');
+                notification.textContent = '✔';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftProxy + 'px';
+                notification.style.top = notificationTopProxy + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
+            } else {
+                // Error updating option, revert checkbox
+                $('#nginx_cache_preload_enable_proxy').prop('checked', !$('#nginx_cache_preload_enable_proxy').prop('checked'));
                 alert('Error updating option!');
             }
         });
@@ -1621,6 +1834,39 @@ $(document).ready(function() {
         }
     });
 
+    // Toggle switch rules for enable proxy
+    var isCheckedProxy = $('#nginx_cache_preload_enable_proxy').prop('checked');
+    // Update the toggle switch based on the checkbox state
+    if (isCheckedProxy) {
+        // Checkbox is checked, toggle switch to On
+        $('.nppp-onoffswitch-switch-proxy').css('background', '#66b317');
+        $('.nppp-on-proxy').css('color', '#ffffff');
+        $('.nppp-off-proxy').css('color', '#000000');
+    } else {
+        // Checkbox is unchecked, toggle switch to Off
+        $('.nppp-onoffswitch-switch-proxy').css('background', '#ea1919');
+        $('.nppp-on-proxy').css('color', '#000000');
+        $('.nppp-off-proxy').css('color', '#ffffff');
+    }
+
+    // Add event listener to the original checkbox
+    $('#nginx_cache_preload_enable_proxy').change(function() {
+        // Check if the checkbox is checked
+        var isCheckedProxy = $(this).prop('checked');
+        // Update the toggle switch based on the checkbox state
+        if (isCheckedProxy) {
+            // Checkbox is checked, toggle switch to On
+            $('.nppp-onoffswitch-switch-proxy').css('background', '#66b317');
+            $('.nppp-on-proxy').css('color', '#ffffff');
+            $('.nppp-off-proxy').css('color', '#000000');
+        } else {
+            // Checkbox is unchecked, toggle switch to Off
+            $('.nppp-onoffswitch-switch-proxy').css('background', '#ea1919');
+            $('.nppp-on-proxy').css('color', '#000000');
+            $('.nppp-off-proxy').css('color', '#ffffff');
+        }
+    });
+
     // Toggle switch rules for REST API
     var isChecked = $('#nginx_cache_api').prop('checked');
     // Update the toggle switch based on the checkbox state
@@ -2530,6 +2776,7 @@ function npppupdateStatus() {
     var nppppreloadStatusCell = nppppreloadStatusRow.querySelector("#nppppreloadStatus");
     var nppppreloadStatusSpan = document.getElementById("nppppreloadStatus");
     var nppppreloadStatus = nppppreloadStatusSpan.textContent.trim();
+    nppppreloadStatusSpan.dataset.statusRaw = nppppreloadStatus;
     nppppreloadStatusSpan.textContent = '';
     nppppreloadStatusSpan.style.fontSize = "14px";
 
@@ -2544,20 +2791,6 @@ function npppupdateStatus() {
         nppppreloadStatusSpan.style.color = "red";
         iconSpanPreload.classList.add("dashicons", "dashicons-no");
         preloadStatusText = ' ' + __('Not Ready', 'fastcgi-cache-purge-and-preload-nginx');
-    } else {
-        nppppreloadStatusSpan.style.color = "orange";
-        iconSpanPreload.classList.add("dashicons", "dashicons-clock");
-        preloadStatusText = ' ' + __('In Progress', 'fastcgi-cache-purge-and-preload-nginx');
-        nppppreloadStatusCell.style.backgroundColor = "lightgreen";
-
-        nppppreloadStatusCell.animate([
-            { backgroundColor: 'inherit' },
-            { backgroundColor: '#90ee90' }
-        ], {
-            duration: 1000,
-            iterations: Infinity,
-            direction: 'alternate'
-        });
     }
 
     nppppreloadStatusSpan.appendChild(iconSpanPreload);

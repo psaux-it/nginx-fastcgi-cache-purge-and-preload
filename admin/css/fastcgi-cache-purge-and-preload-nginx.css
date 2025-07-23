@@ -1,7 +1,7 @@
 /**
  * Styles for FastCGI Cache Purge and Preload for Nginx
  * Description: This CSS file contains styles for the FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.2
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -2653,4 +2653,147 @@ p.description {
     overflow-wrap: break-word;
     word-break: break-word;
   }
+}
+
+/* Style for the toggle switch proxy container */
+.nppp-onoffswitch-proxy {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default checkbox */
+.nppp-onoffswitch-checkbox-proxy {
+    display: none;
+}
+
+/* Style for the toggle switch label */
+.nppp-onoffswitch-label-proxy {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* Style for the text labels (On and Off) */
+.nppp-onoffswitch-inner-proxy .nppp-on-proxy,
+.nppp-onoffswitch-inner-proxy .nppp-off-proxy {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-proxy .nppp-on-proxy {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-proxy .nppp-off-proxy {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Style for the toggle switch handle */
+.nppp-onoffswitch-switch-proxy {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #66b317;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Adjust styles based on checkbox state */
+#nginx_cache_preload_enable_proxy:checked + .nppp-onoffswitch-label-proxy .nppp-onoffswitch-inner-proxy .nppp-on-proxy {
+    color: #23282d;
+}
+
+#nginx_cache_preload_enable_proxy:checked + .nppp-onoffswitch-label-proxy .nppp-onoffswitch-switch-proxy {
+    width: 55px;
+    transform: translateX(60px);
+    background: #ea1919;
+}
+
+/* Show the Off label */
+.nppp-onoffswitch-checkbox-proxy + .nppp-onoffswitch-label-proxy .nppp-off-proxy {
+    display: block;
+}
+
+/* Hide the original checkbox */
+#nginx_cache_preload_enable_proxy {
+    position: absolute;
+    left: -99em;
+}
+
+/* style disabled proxy settings accordingly */
+.nppp-onoffswitch-checkbox-proxy[disabled] + .nppp-onoffswitch-label-proxy {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.nppp-progress-status {
+    margin-top: 0px;
+    font-size: 13px;
+    color: #374151;
+    background-color: mintcream;
+    border: 1px solid #e5e7eb;
+    padding: 8px 12px;
+    border-radius: 0px;
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.nppp-progress-row {
+    margin-top: 4px;
+    font-size: 14px;
+    color: #374151;
+}
+.nppp-progress-percent {
+    font-weight: bold;
+    font-size: 14px;
+    color: #1e40af;
+}
+.nppp-label {
+    font-weight: bold;
+    color: #333;
+    font-size: 14px !important;
+}
+.nppp-url {
+    color: #2563eb;
+    word-break: break-all;
+}
+.nppp-time {
+    color: #6b7280;
+}
+.nppp-done {
+    margin-top: 6px;
+    font-weight: bold;
+    color: green;
+    font-size: 14px;
+}
+
+#wpt-bar-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 20px;
+  pointer-events: none;
+  user-select: none;
 }

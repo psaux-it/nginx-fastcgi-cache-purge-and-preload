@@ -2,7 +2,7 @@
 /**
  * Uninstallation script for FastCGI Cache Purge and Preload for Nginx
  * Description: This file handles the cleanup process when the FastCGI Cache Purge and Preload for Nginx plugin is uninstalled.
- * Version: 2.1.2
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -32,6 +32,8 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_cache_paths_' . md5($static_key_base),
         'nppp_fuse_paths_' . md5($static_key_base),
         'nppp_webserver_user_' . md5($static_key_base),
+        'nppp_est_url_counts_' . md5($static_key_base),
+        'nppp_last_preload_time_' . md5($static_key_base),
     );
 
     // Category-related transients based on the URL cache

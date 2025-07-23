@@ -2,7 +2,7 @@
 /**
  * Logging & WP admin notices function for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contain logging & wp admin notices function for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.2
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -118,6 +118,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_restart_systemd_service' => 'nppp-restart-systemd-service',
             'nppp_update_default_cache_key_regex_option' => 'nppp-update-default-cache-key-regex-option',
             'nppp_update_auto_preload_mobile_option' => 'nppp-update-auto-preload-mobile-option',
+            'nppp_update_enable_proxy_option' => 'nppp-update-enable-proxy-option',
         ];
 
         // Get the current AJAX action

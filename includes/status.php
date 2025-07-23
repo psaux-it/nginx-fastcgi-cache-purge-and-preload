@@ -2,7 +2,7 @@
 /**
  * Status page for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains functions which shows information about FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.2
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -676,6 +676,21 @@ function nppp_my_status_html() {
                                 <td class="status" id="nppppreloadStatus">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_check_preload_status()); ?></span>
+                                </td>
+                            </tr>
+                            <tr id="nppp-preload-progress-row">
+                                <td colspan="2">
+                                    <!-- Progress Bar Container -->
+                                    <div style="width: 100%; height: 20px; background-color: #e5e7eb; margin-top: 10px; overflow: hidden;">
+                                        <div id="wpt-bar-inner" style="width: 0%; height: 100%; background-color: #5A9BD5; position: relative; text-align: center; color: white; font-size: 12px; line-height: 20px;">
+                                            <span id="wpt-bar-text" style="position: absolute; width: 100%; left: 0;">0%</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Progress Status Text -->
+                                    <div id="wpt-status" class="nppp-progress-status" style="margin-top: 0px; font-size: 13px; color: #374151;">
+                                        Initializing...
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>
