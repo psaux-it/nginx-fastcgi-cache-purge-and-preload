@@ -1,0 +1,27 @@
+[Unit]
+Description=Mitmproxy service with percent-encode rewrite script
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/mitmdump \
+  --mode regular \
+  --showhost \
+  --ssl-insecure \
+  --set upstream_cert=false \
+  --listen-host 127.0.0.1 \
+  --listen-port 3434 \
+  --set block_global=false \
+  --allow-hosts domain.com \
+  --allow-hosts www.domain.com \
+  --flow-detail=0 \
+  -s /etc/mitmproxy/percent_encode_lowercase.py
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+TasksMax=infinity
+StandardOutput=append:/var/log/mitmproxy.log
+StandardError=append:/var/log/mitmproxy.log
+
+[Install]
+WantedBy=multi-user.target
