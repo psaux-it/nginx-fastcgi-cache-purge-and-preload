@@ -292,7 +292,14 @@ function nppp_plugin_requirements_met() {
                 if (isset($headers['x-fastcgi-cache'])) {
                     $server_software = 'nginx';
                 } elseif (isset($headers['server'])) {
-                    $server_software = $headers['server'];
+                    $server_value = $headers['server'];
+
+                    // Normalize to string in case it's an array
+                    if (is_array($server_value)) {
+                        $server_software = implode(' ', $server_value);
+                    } else {
+                        $server_software = $server_value;
+                    }
                 }
             }
         }
@@ -307,7 +314,8 @@ function nppp_plugin_requirements_met() {
 
         // Lastly fallback the traditional check for edge cases
         if (empty($server_software)) {
-            if ($wp_filesystem->exists('/etc/nginx/nginx.conf')) {
+            $nginx_conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
+            if (!empty($nginx_conf_paths)) {
                 $server_software = 'nginx';
             }
         }
