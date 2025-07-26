@@ -74,6 +74,9 @@ function nppp_get_nginx_conf_paths($wp_filesystem) {
             '/usr/local/etc/nginx/conf/nginx.conf',
             '/usr/local/etc/nginx.conf',
             '/opt/nginx/conf/nginx.conf',
+            '/www/server/nginx/conf/nginx.conf',
+            '/etc/nginx/conf/nginx.conf',
+            '/etc/nginx/conf.d/ea-nginx.conf',
         ];
 
         foreach ($possible_paths as $path) {
@@ -82,6 +85,16 @@ function nppp_get_nginx_conf_paths($wp_filesystem) {
             }
         }
     }
+
+    // Override with NPPP_ASSUME_NGINX if explicitly requested
+    if (empty($conf_paths)) {
+        if (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true) {
+            $conf_paths[] = dirname(plugin_dir_path(__FILE__)) . '/dummy-nginx.conf';
+        }
+    }
+
+    // Remove duplicates
+    $conf_paths = array_unique($conf_paths);
 
     return $conf_paths;
 }
@@ -276,7 +289,14 @@ function nppp_pre_checks_critical() {
             if (isset($headers['x-fastcgi-cache'])) {
                 $server_software = 'nginx';
             } elseif (isset($headers['server'])) {
-                $server_software = $headers['server'];
+                $server_value = $headers['server'];
+
+                // Normalize to string in case it's an array
+                if (is_array($server_value)) {
+                    $server_software = implode(' ', $server_value);
+                } else {
+                    $server_software = $server_value;
+                }
             }
         }
     }
@@ -291,7 +311,8 @@ function nppp_pre_checks_critical() {
 
     // Lastly fallback the traditional check for edge cases
     if (empty($server_software)) {
-        if ($wp_filesystem->exists('/etc/nginx/nginx.conf')) {
+        $nginx_conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
+        if (!empty($nginx_conf_paths)) {
             $server_software = 'nginx';
         }
     }
