@@ -441,10 +441,25 @@ function nppp_manage_admin_notices() {
     // Enqueue the dummy stylesheet
     wp_enqueue_style('nppp-manage-notices');
 
-    // Add inline CSS to hide all admin notices except those with the class 'notice-nppp'
+     // Add inline CSS to hide all admin notices except those with the class 'notice-nppp'
     wp_add_inline_style('nppp-manage-notices', '
         /* Hide all admin notices except those with the class \'notice-nppp\' */
-        .notice { display: none !important; }
-        .notice.notice-nppp { display: block !important; }
+        .notice,
+        .update-nag,
+        .notice-success,
+        .notice-warning,
+        .notice-error,
+        .updated,
+        .error,
+        .is-dismissible,
+        .vc_license-activation-notice {
+            display: none !important;
+        }
+
+        .notice.notice-nppp,
+        .updated.notice-nppp,
+        .error.notice-nppp {
+            display: block !important;
+        }
     ');
 }
