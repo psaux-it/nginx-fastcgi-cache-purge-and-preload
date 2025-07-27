@@ -2657,11 +2657,18 @@ function npppupdateStatus() {
     npppphpWebServerSpan.textContent = '';
 
     let iconSpanWebServer = document.createElement('span');
-    iconSpanWebServer.classList.add("dashicons", "dashicons-arrow-right-alt");
-    iconSpanWebServer.style.fontSize = "16px";
 
-    npppphpWebServerSpan.appendChild(iconSpanWebServer);
-    npppphpWebServerSpan.append(' ' + npppphpWebServer);
+    if (npppphpWebServer.toLowerCase() === "dummy") {
+        iconSpanWebServer.classList.add("dashicons", "dashicons-clock");
+        npppphpWebServerSpan.style.color = "orange";
+        npppphpWebServerSpan.appendChild(iconSpanWebServer);
+        npppphpWebServerSpan.append(' ' + __('Not Determined', 'fastcgi-cache-purge-and-preload-nginx'));
+    } else {
+        iconSpanWebServer.classList.add("dashicons", "dashicons-arrow-right-alt");
+        npppphpWebServerSpan.style.color = "green";
+        npppphpWebServerSpan.appendChild(iconSpanWebServer);
+        npppphpWebServerSpan.append(' ' + npppphpWebServer);
+    }
 
     // Fetch and update nginx cache path status
     var npppcachePathSpan = document.getElementById("npppcachePath");
