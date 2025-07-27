@@ -2653,12 +2653,12 @@ function npppupdateStatus() {
     var npppphpWebServer = npppphpWebServerSpan.textContent.trim();
 
     npppphpWebServerSpan.style.fontSize = "14px";
-    npppphpWebServerSpan.style.color = "green";
     npppphpWebServerSpan.textContent = '';
 
     let iconSpanWebServer = document.createElement('span');
+    iconSpanWebServer.style.fontSize = "16px";
 
-    if (npppphpWebServer.toLowerCase() === "dummy") {
+    if (npppphpWebServer.toLowerCase() === "dummy" || npppphpWebServer.toLowerCase() === "not determined") {
         iconSpanWebServer.classList.add("dashicons", "dashicons-clock");
         npppphpWebServerSpan.style.color = "orange";
         npppphpWebServerSpan.appendChild(iconSpanWebServer);
