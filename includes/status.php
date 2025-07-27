@@ -319,7 +319,30 @@ function nppp_get_webserver_user() {
     }
 
     // Try to get the user from the Nginx configuration file
-    $nginx_user_conf = shell_exec("grep -i '^\s*user\s\+' $config_file | grep -v '^\s*#' | awk '{print $2}' | sed 's/;.*//;s/\s*$//'");
+    $config_contents = $wp_filesystem->get_contents($config_file);
+    if ($config_contents !== false) {
+        $lines = explode("\n", $config_contents);
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+
+            // Skip empty lines and comment lines
+            if ($line === '' || preg_match('/^\s*#/', $line)) {
+                continue;
+            }
+
+            // Match a user directive line
+            if (preg_match('/^\s*user\s+(.+?);/i', $line, $matches)) {
+                // Split the content after "user" into words
+                $parts = preg_split('/\s+/', trim($matches[1]));
+
+                if (!empty($parts[0])) {
+                    $nginx_user_conf = trim($parts[0]);
+                    break;
+                }
+            }
+        }
+    }
 
     // If both sources provide a user, check for consistency
     if (!empty($nginx_user_conf) && !empty($process_users)) {
