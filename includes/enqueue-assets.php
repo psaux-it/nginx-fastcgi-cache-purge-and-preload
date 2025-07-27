@@ -441,7 +441,7 @@ function nppp_manage_admin_notices() {
     // Enqueue the dummy stylesheet
     wp_enqueue_style('nppp-manage-notices');
 
-     // Add inline CSS to hide all admin notices except those with the class 'notice-nppp'
+    // Add inline CSS to hide all admin notices except those with the class 'notice-nppp'
     wp_add_inline_style('nppp-manage-notices', '
         /* Hide all admin notices except those with the class \'notice-nppp\' */
         .notice,
