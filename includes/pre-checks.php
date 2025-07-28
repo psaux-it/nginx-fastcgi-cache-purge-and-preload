@@ -319,7 +319,7 @@ function nppp_pre_checks_critical() {
 
     // Check if the web server is Nginx
     if (stripos($server_software, 'nginx') === false) {
-        return __('GLOBAL ERROR SERVER: The plugin is not functional on your environment. It requires an Nginx web server. If this detection is inaccurate, please report a bug.', 'fastcgi-cache-purge-and-preload-nginx');
+        return __('GLOBAL ERROR SERVER: The plugin is not functional on your environment. It requires an Nginx web server. If this detection is inaccurate, please refer to the Help tab for detailed instructions.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Check if either shell_exec or exec is enabled
