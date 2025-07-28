@@ -401,6 +401,29 @@ WantedBy=multi-user.target</code></pre>
                     </div>
                 </div>
 
+                <h3 class="nppp-question">Why am I seeing -GLOBAL ERROR SERVER: The plugin is not functional on your environment. It requires an Nginx web server.-?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <p style="font-size: 14px;">
+                            This message appears when the plugin cannot detect a running Nginx server or valid <code>nginx.conf</code> in your environment. This is common in reverse proxy setups (e.g., Apache in front of Nginx), containerized environments, or jailed systems (like <strong>cPanel</strong>, <strong>aaPanel</strong>, etc.).
+                        </p>
+                        <p style="font-size: 14px;">
+                            🔧 To force plugin activation in such non-standard environments, define the following constant in your <code>wp-config.php</code>:
+                        </p>
+                        <pre><code>define('NPPP_ASSUME_NGINX', true);</code></pre>
+                        <p style="font-size: 14px;">
+                            This override enables full plugin functionality even when Nginx auto-detection fails.
+                        </p>
+                        <p style="font-size: 14px;">
+                            ✅ <strong>Preferred Solution:</strong> For best accuracy, bind-mount or sync your actual <code>nginx.conf</code> file into the WordPress environment (jail/chroot/container) at:
+                        </p>
+                        <pre><code>/etc/nginx/nginx.conf</code></pre>
+                        <p style="font-size: 14px;">
+                            This lets the plugin auto-parse your live Nginx configuration to accurately detect cache paths, user directives, and cache key settings.
+                        </p>
+                    </div>
+                </div>
+
                 <h3 class="nppp-question">What is the proper PHP-FPM Nginx setup?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
