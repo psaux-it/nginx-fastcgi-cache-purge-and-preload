@@ -288,17 +288,25 @@ function nppp_plugin_requirements_met() {
                 // Get response headers
                 $headers = wp_remote_retrieve_headers($response);
 
-                // Check cache headers
-                if (isset($headers['x-fastcgi-cache'])) {
-                    $server_software = 'nginx';
-                } elseif (isset($headers['server'])) {
-                    $server_value = $headers['server'];
+                // Scan for any header name containing 'fastcgi'
+                foreach ($headers as $key => $value) {
+                    if (stripos($key, 'fastcgi') !== false) {
+                        $header_value = is_array($value) ? implode(' ', $value) : $value;
 
-                    // Normalize to string in case it's an array
-                    if (is_array($server_value)) {
-                        $server_software = implode(' ', $server_value);
-                    } else {
-                        $server_software = $server_value;
+                        if (!empty($header_value)) {
+                            $server_software = 'nginx';
+                            break;
+                        }
+                    }
+                }
+
+                // If still empty, check the 'server' header
+                if (empty($server_software) && isset($headers['server'])) {
+                    $server_header = $headers['server'];
+                    $server_value = is_array($server_header) ? implode(' ', $server_header) : $server_header;
+
+                    if (stripos($server_value, 'nginx') !== false) {
+                        $server_software = 'nginx';
                     }
                 }
             }
