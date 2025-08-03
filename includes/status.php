@@ -579,7 +579,7 @@ function nppp_my_status_html() {
     // Warn about not found cache key
     if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: No <span style="color: #FFDEAD;">cache key</span> directive was found.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => []]]) . '</p>
+                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: No <span style="color: #FFDEAD;">_cache_key</span> directive was found.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => []]]) . '</p>
               </div>';
     // Warn about the unsupported cache key
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
