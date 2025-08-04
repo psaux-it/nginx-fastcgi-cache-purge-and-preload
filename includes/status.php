@@ -54,6 +54,8 @@ function nppp_check_permissions_recursive_with_cache() {
 
 // Function to clear all transients related to the plugin
 function nppp_clear_plugin_cache() {
+    global $wpdb;
+
     // Static key base
     $static_key_base = 'nppp';
 
@@ -73,39 +75,22 @@ function nppp_clear_plugin_cache() {
         'nppp_webserver_user_' . md5($static_key_base),
     );
 
-    // Category-related transients based on the URL cache
-    $url_cache_pattern = 'nppp_category_';
-
-    // Rate limit transients
-    $rate_limit_pattern = 'nppp_rate_limit_';
-
-    // Get all transients
-    $all_transients = wp_cache_get('alloptions', 'options');
-    foreach ($all_transients as $transient_key => $value) {
-        // Match the category-based transients
-        if (strpos($transient_key, $url_cache_pattern) !== false) {
-            $transients[] = $transient_key;
-        }
-
-        // Match the rate limit-related transients
-        if (strpos($transient_key, $rate_limit_pattern) !== false) {
-            $transients[] = $transient_key;
-        }
-    }
-
-    // Attempt to delete all transients
+    // Delete each known transient
     foreach ($transients as $transient) {
-        // Delete the transient
         delete_transient($transient);
-
-        // Check if the transient still exists
-        if (get_transient($transient) !== false) {
-            return __('An error occurred while clearing the plugin cache.', 'fastcgi-cache-purge-and-preload-nginx');
-        }
     }
 
-    // Notify the user if all transients were cleared successfully
-    return __('Plugin cache cleared successfully. Refreshing the Status..', 'fastcgi-cache-purge-and-preload-nginx');
+    // Clean up all category and rate limit transients directly in DB
+    $wpdb->query("
+        DELETE FROM $wpdb->options
+        WHERE option_name LIKE '\\_transient_nppp_category_%'
+           OR option_name LIKE '\\_transient_timeout_nppp_category_%'
+           OR option_name LIKE '\\_transient_nppp_rate_limit_%'
+           OR option_name LIKE '\\_transient_timeout_nppp_rate_limit_%'
+    ");
+
+    // Log all transients were cleared successfully
+    nppp_display_admin_notice('success', __('SUCCESS: Plugin cache cleared successfully.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
 }
 
 // Check server side action need for cache path permissions.
