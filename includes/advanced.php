@@ -595,202 +595,170 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
 
 // Categorizes a URL based on WordPress permalink structures and template files.
 function nppp_categorize_url($url) {
-    // Static cache array to store results during the request
-    static $url_cache = array();
+    static $url_cache = [];
+    static $rewrite_rules = null;
+    static $all_post_types = null;
+    static $taxonomies = null;
 
-    // Check if the URL is already cached in the static cache
     if (isset($url_cache[$url])) {
         return $url_cache[$url];
     }
 
-    // Generate a unique cache key for the transient
     $cache_key = 'nppp_category_' . md5($url);
-
-    // Try to get the category from the transient cache
-    $category = get_transient($cache_key);
-
-    if ($category !== false) {
-        // Cache the result in the static cache as well
-        $url_cache[$url] = $category;
-        return $category;
+    $cached = get_transient($cache_key);
+    if ($cached !== false) {
+        $url_cache[$url] = $cached;
+        return $cached;
     }
 
-    // Ensure the URL is on the same host
-    $site_url    = get_site_url();
+    $site_url = get_site_url();
     $parsed_site = wp_parse_url($site_url);
-    $parsed_url  = wp_parse_url($url);
+    $parsed_url = wp_parse_url($url);
 
     if (!isset($parsed_url['host']) || $parsed_url['host'] !== $parsed_site['host']) {
         $category = 'EXTERNAL';
-        // Cache the result
-        $url_cache[$url] = $category;
         set_transient($cache_key, $category, MONTH_IN_SECONDS);
+        $url_cache[$url] = $category;
         return $category;
     }
 
-    // Remove query parameters and fragment
     $path = isset($parsed_url['path']) ? $parsed_url['path'] : '';
-
-    // Remove leading and trailing slashes
     $request = trim($path, '/');
+    $request = preg_replace('#/page/\d+/?$#', '', $request);
 
-    // Attempt to get the post ID from the URL
-    $post_id = url_to_postid($url);
-
-    if ($post_id) {
-        // Get the post type
-        $post_type = get_post_type($post_id);
-
-        // Get all registered post types (cache this as well)
-        static $all_post_types = null;
-        if ($all_post_types === null) {
-            $all_post_types = get_post_types(array(), 'objects');
-        }
-
-        if (isset($all_post_types[$post_type])) {
-            $post_type_object = $all_post_types[$post_type];
-            $category = strtoupper($post_type_object->labels->singular_name);
-        } else {
-            $category = strtoupper($post_type);
-        }
-
-        // Cache the result
-        $url_cache[$url] = $category;
-        set_transient($cache_key, $category, MONTH_IN_SECONDS);
-        return $category;
+    if ($request === '') {
+        $category = 'HOMEPAGE';
     } else {
-        global $wp_rewrite;
-
-        // Initialize query variables
-        $query_vars = array();
-
-        // Try to match the URL to rewrite rules
-        if (!empty($wp_rewrite->wp_rewrite_rules())) {
-            // Get rewrite rules (cache this as well)
-            static $rewrite_rules = null;
-            if ($rewrite_rules === null) {
-                $rewrite_rules = $wp_rewrite->wp_rewrite_rules();
+        $post_id = url_to_postid($url);
+        if ($post_id) {
+            $post_type = get_post_type($post_id);
+            if ($all_post_types === null) {
+                $all_post_types = get_post_types([], 'objects');
             }
 
-            foreach ($rewrite_rules as $match => $query) {
-                // If the request matches a rewrite rule
-                if (preg_match("#^$match#", $request, $matches)) {
-                    // Build the query vars
-                    $query = preg_replace("#^.+\?#", '', $query);
-
-                    // Substitute matches into the query
-                    $query = addslashes(WP_MatchesMapRegex::apply($query, $matches));
-
-                    parse_str($query, $query_vars);
-
-                    break;
-                }
-            }
-        }
-
-        // If query vars were populated, determine content type
-        if (!empty($query_vars)) {
-            if (!empty($query_vars['category_name']) || !empty($query_vars['cat'])) {
-                $category = 'CATEGORY';
-            } elseif (!empty($query_vars['tag']) || !empty($query_vars['tag_id'])) {
-                $category = 'TAG';
-            } elseif (!empty($query_vars['author_name']) || !empty($query_vars['author'])) {
-                $category = 'AUTHOR';
-            } elseif (!empty($query_vars['post_type'])) {
-                $post_type = $query_vars['post_type'];
-
-                // Handle array of post types
-                if (is_array($post_type)) {
-                    $post_type = reset($post_type);
-                }
-
-                // Get all registered post types (already cached above)
-                if (isset($all_post_types[$post_type])) {
-                    $post_type_object = $all_post_types[$post_type];
-                    $category = strtoupper($post_type_object->labels->singular_name);
-                } else {
-                    $category = strtoupper($post_type);
-                }
-            } elseif (!empty($query_vars['year']) || !empty($query_vars['monthnum']) || !empty($query_vars['day'])) {
-                $category = 'DATE_ARCHIVE';
-            } elseif (!empty($query_vars['s'])) {
-                $category = 'SEARCH_RESULTS';
+            if (isset($all_post_types[$post_type])) {
+                $category = strtoupper($all_post_types[$post_type]->labels->singular_name);
             } else {
-                $category = 'UNKNOWN';
+                $category = strtoupper($post_type);
             }
         } else {
-            // Check for taxonomy terms
-            static $taxonomies = null;
-            if ($taxonomies === null) {
-                $taxonomies = get_taxonomies(array(), 'objects');
+            global $wp_rewrite;
+            $query_vars = [];
+
+            if (!empty($wp_rewrite->wp_rewrite_rules())) {
+                if ($rewrite_rules === null) {
+                    $rewrite_rules = $wp_rewrite->wp_rewrite_rules();
+                }
+
+                foreach ($rewrite_rules as $match => $query) {
+                    if (preg_match("#^$match#", $request, $matches)) {
+                        $query = preg_replace("#^.+\?#", '', $query);
+                        $query = addslashes(WP_MatchesMapRegex::apply($query, $matches));
+                        parse_str($query, $query_vars);
+                        break;
+                    }
+                }
             }
 
-            $found = false;
-            foreach ($taxonomies as $taxonomy) {
-                $taxonomy_slug = isset($taxonomy->rewrite['slug']) ? $taxonomy->rewrite['slug'] : $taxonomy->name;
+            if (!empty($query_vars)) {
+                if (!empty($query_vars['category_name']) || !empty($query_vars['cat'])) {
+                    $category = 'CATEGORY';
+                } elseif (!empty($query_vars['tag']) || !empty($query_vars['tag_id'])) {
+                    $category = 'TAG';
+                } elseif (!empty($query_vars['author_name']) || !empty($query_vars['author'])) {
+                    $category = 'AUTHOR';
+                } elseif (!empty($query_vars['post_type'])) {
+                    $post_type = is_array($query_vars['post_type']) ? reset($query_vars['post_type']) : $query_vars['post_type'];
+                    if ($all_post_types === null) {
+                        $all_post_types = get_post_types([], 'objects');
+                    }
+                    if (isset($all_post_types[$post_type])) {
+                        $category = strtoupper($all_post_types[$post_type]->labels->singular_name);
+                    } else {
+                        $category = strtoupper($post_type);
+                    }
+                } elseif (!empty($query_vars['year']) || !empty($query_vars['monthnum']) || !empty($query_vars['day'])) {
+                    $category = 'DATE_ARCHIVE';
+                } elseif (!empty($query_vars['s'])) {
+                    $category = 'SEARCH_RESULTS';
+                }
+            }
 
-                if ($taxonomy_slug) {
-                    $pattern = '#^' . preg_quote($taxonomy_slug, '#') . '/([^/]+)/?$#';
+            if (empty($category)) {
+                if ($taxonomies === null) {
+                    $taxonomies = get_taxonomies(['public' => true], 'objects');
+                    foreach (['product_cat', 'product_tag'] as $tax) {
+                        if (!isset($taxonomies[$tax]) && taxonomy_exists($tax)) {
+                            $taxonomies[$tax] = get_taxonomy($tax);
+                        }
+                    }
+                }
 
+                foreach ($taxonomies as $taxonomy) {
+                    $slug = $taxonomy->rewrite['slug'] ?? $taxonomy->name;
+                    if (!$slug) continue;
+
+                    $pattern = '#^' . preg_quote($slug, '#') . '(/[^/]+(?:/[^/]+)*)?(?:/page/\d+)?/?$#';
                     if (preg_match($pattern, $request, $matches)) {
-                        $term_slug = $matches[1];
-                        $term      = get_term_by('slug', $term_slug, $taxonomy->name);
+                        $term_path = isset($matches[1]) ? trim($matches[1], '/') : '';
 
-                        if ($term && !is_wp_error($term)) {
-                            $category = strtoupper($taxonomy->labels->singular_name);
-                            $found = true;
-                            break;
+                        if ($taxonomy->hierarchical) {
+                            $slugs = explode('/', $term_path);
+                            $parent = 0;
+                            $term = null;
+
+                            foreach ($slugs as $slug_part) {
+                                $term = get_term_by('slug', $slug_part, $taxonomy->name);
+                                if (!$term || is_wp_error($term) || (int) $term->parent !== (int) $parent) {
+                                    $term = null;
+                                    break;
+                                }
+                                $parent = $term->term_id;
+                            }
+
+                            if ($term) {
+                                $category = strtoupper($taxonomy->labels->singular_name);
+                                break;
+                            }
+                        } else {
+                            $slug_part = basename($term_path);
+                            $term = get_term_by('slug', $slug_part, $taxonomy->name);
+                            if ($term && !is_wp_error($term)) {
+                                $category = strtoupper($taxonomy->labels->singular_name);
+                                break;
+                            }
                         }
                     }
                 }
             }
 
-            if (!$found) {
-                // Check for author archives
+            if (empty($category)) {
                 $author_base = $wp_rewrite->author_base ?: 'author';
-
-                $pattern = '#^' . preg_quote($author_base, '#') . '/([^/]+)/?$#';
-
-                if (preg_match($pattern, $request, $matches)) {
-                    $author_nicename = $matches[1];
-                    $author          = get_user_by('slug', $author_nicename);
-
-                    if ($author) {
-                        $category = 'AUTHOR';
-                    } else {
-                        $category = 'UNKNOWN';
-                    }
+                if (preg_match('#^' . preg_quote($author_base, '#') . '/([^/]+)/?$#', $request, $matches)) {
+                    $author = get_user_by('slug', $matches[1]);
+                    $category = $author ? 'AUTHOR' : 'UNKNOWN';
                 } else {
-                    // Check for date archives
                     $date_structure = $wp_rewrite->get_date_permastruct();
-
                     if ($date_structure) {
                         $date_regex = str_replace(
-                            array('%year%', '%monthnum%', '%day%'),
-                            array('([0-9]{4})', '([0-9]{1,2})', '([0-9]{1,2})'),
+                            ['%year%', '%monthnum%', '%day%'],
+                            ['([0-9]{4})', '([0-9]{1,2})', '([0-9]{1,2})'],
                             $date_structure
                         );
                         $date_regex = '!^' . trim($date_regex, '/') . '/?$!';
-
-                        if (preg_match($date_regex, $request)) {
-                            $category = 'DATE_ARCHIVE';
-                        } else {
-                            $category = 'UNKNOWN';
-                        }
+                        $category = preg_match($date_regex, $request) ? 'DATE_ARCHIVE' : 'UNKNOWN';
                     } else {
                         $category = 'UNKNOWN';
                     }
                 }
             }
         }
-
-        // Allow customization via filter
-        $category = apply_filters('nppp_categorize_url_result', $category, $url);
-
-        // Cache the result
-        $url_cache[$url] = $category;
-        set_transient($cache_key, $category, MONTH_IN_SECONDS);
-
-        return $category;
     }
+
+    $category = apply_filters('nppp_categorize_url_result', $category ?: 'UNKNOWN', $url);
+
+    $url_cache[$url] = $category;
+    set_transient($cache_key, $category, MONTH_IN_SECONDS);
+
+    return $category;
 }
