@@ -16,9 +16,10 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
 
 // Clear all transients related to the NPP
 function nppp_clear_plugin_cache_on_uninstall() {
-    $static_key_base = 'nppp';
+    global $wpdb;
 
     // Transients to clear
+    $static_key_base = 'nppp';
     $transients = array(
         'nppp_cache_keys_wpfilesystem_error',
         'nppp_nginx_conf_not_found',
@@ -36,31 +37,19 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_last_preload_time_' . md5($static_key_base),
     );
 
-    // Category-related transients based on the URL cache
-    $url_cache_pattern = 'nppp_category_';
-
-    // Rate limit transients
-    $rate_limit_pattern = 'nppp_rate_limit_';
-
-    // Get all transients
-    $all_transients = wp_cache_get('alloptions', 'options');
-    foreach ($all_transients as $transient_key => $value) {
-        // Match the category-based transients
-        if (strpos($transient_key, $url_cache_pattern) !== false) {
-            $transients[] = $transient_key;
-        }
-
-        // Match the rate limit-related transients
-        if (strpos($transient_key, $rate_limit_pattern) !== false) {
-            $transients[] = $transient_key;
-        }
-    }
-
-    // Attempt to delete all transients
+    // Delete each known transient
     foreach ($transients as $transient) {
-        // Delete the transient
         delete_transient($transient);
     }
+
+    // Clean up all category and rate limit transients directly in DB
+    $wpdb->query("
+        DELETE FROM $wpdb->options
+        WHERE option_name LIKE '\\_transient_nppp_category_%'
+           OR option_name LIKE '\\_transient_timeout_nppp_category_%'
+           OR option_name LIKE '\\_transient_nppp_rate_limit_%'
+           OR option_name LIKE '\\_transient_timeout_nppp_rate_limit_%'
+    ");
 }
 
 // Delete plugin transients
