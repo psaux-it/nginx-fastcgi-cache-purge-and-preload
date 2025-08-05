@@ -521,41 +521,90 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
         // Check if the preload process is alive
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            // Try to kill the process with SIGTERM
-            if (defined('SIGTERM') && @posix_kill($pid, SIGTERM) === false) {
-                // Log if SIGTERM is failed
-                // Translators: %s is the process PID
-                nppp_display_admin_notice('info', sprintf( __( 'INFO PROCESS: Failed to terminate the ongoing Nginx cache Preload process (PID: %s) using posix_kill', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
-                sleep(1);
+            $process_user = trim(shell_exec("ps -o user= -p " . escapeshellarg($pid)));
+            $killed_by_safexec = false;
 
-                // Check again if the process is still alive after SIGTERM
-                if (nppp_is_process_alive($pid)) {
-                    // Fallback: Use shell_exec to send SIGKILL
-                    $kill_path = trim(shell_exec('command -v kill'));
-                    if (!empty($kill_path)) {
-                        shell_exec(escapeshellcmd("$kill_path -9 $pid"));
-                        usleep(400000);
+            if ($process_user === 'nobody') {
+                $safexec_path = '/usr/local/bin/safexec';
 
-                        // Check again if the process is still alive after SIGKILL
-                        if (!nppp_is_process_alive($pid)) {
-                            // Log success after SIGKILL
-                            // Translators: %s is the process PID
-                            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using manual fallback mechanism SIGKILL', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
-                        } else {
-                            // Log failure if fallback didn't work
-                            nppp_display_admin_notice('error', __( 'ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx' ), true, false);
-                            return;
-                        }
+                // If not present at default location, try to discover via system path
+                if (!$wp_filesystem->exists($safexec_path)) {
+                    $detected = trim(shell_exec('command -v safexec 2>/dev/null'));
+                    if (!empty($detected)) {
+                        $safexec_path = $detected;
                     } else {
-                        // Log failure if the kill command is not found
-                        nppp_display_admin_notice('error', __( 'ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx' ), true, false);
-                        return;
+                        $safexec_path = false;
                     }
                 }
-            } else {
-                // Log if SIGTERM is successfully sent
-                // Translators: %s is the process PID
-                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using posix_kill', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
+
+                // Check for safexec binary and SUID
+                if ($safexec_path && function_exists('stat')) {
+                    $info = stat($safexec_path);
+                    $is_root_owner = ($info['uid'] === 0);
+                    $has_suid      = ($info['mode'] & 04000) === 04000;
+
+                    if ($is_root_owner && $has_suid) {
+                        $output = shell_exec(escapeshellcmd($safexec_path) . " --kill=" . escapeshellarg($pid) . " 2>&1");
+
+                        if (strpos($output, 'Killed PID') !== false) {
+                            usleep(200000);
+
+                            if (!nppp_is_process_alive($pid)) {
+                                // Translators: %s is the process PID
+                                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using safexec', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
+                                $killed_by_safexec = true;
+                            } else {
+                                // Translators: %s is the process PID
+                                nppp_display_admin_notice('info', sprintf(__('INFO PROCESS: Failed to terminate using safexec, falling back to posix_kill for PID %s', 'fastcgi-cache-purge-and-preload-nginx'), $pid), true, false);
+                            }
+                        }
+                    } else {
+                        // Translators: %s is the process PID
+                        nppp_display_admin_notice('info', sprintf(__('INFO PROCESS: safexec not privileged, falling back to posix_kill for PID %s', 'fastcgi-cache-purge-and-preload-nginx'), $pid), true, false);
+                    }
+                } else {
+                    // Translators: %s is the process PID
+                    nppp_display_admin_notice('info', sprintf(__('INFO PROCESS: safexec not found, falling back to posix_kill for PID %s', 'fastcgi-cache-purge-and-preload-nginx'), $pid), true, false);
+                }
+            }
+
+            if (!$killed_by_safexec) {
+                // Try to kill the process with SIGTERM
+                if (defined('SIGTERM') && @posix_kill($pid, SIGTERM) === false) {
+                    // Log if SIGTERM is failed
+                    // Translators: %s is the process PID
+                    nppp_display_admin_notice('info', sprintf( __( 'INFO PROCESS: Failed to terminate using posix_kill, falling back to manual SIGKILL for PID %s', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
+                    sleep(1);
+
+                    // Check again if the process is still alive after SIGTERM
+                    if (nppp_is_process_alive($pid)) {
+                        // Fallback: Use shell_exec to send SIGKILL
+                        $kill_path = trim(shell_exec('command -v kill'));
+                        if (!empty($kill_path)) {
+                            shell_exec(escapeshellcmd("$kill_path -9 $pid"));
+                            usleep(200000);
+
+                            // Check again if the process is still alive after SIGKILL
+                            if (!nppp_is_process_alive($pid)) {
+                                // Log success after SIGKILL
+                                // Translators: %s is the process PID
+                                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using manual SIGKILL', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
+                            } else {
+                                // Log failure if fallback didn't work
+                                nppp_display_admin_notice('error', __( 'ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                                return;
+                            }
+                        } else {
+                            // Log failure if the kill command is not found
+                            nppp_display_admin_notice('error', __( 'ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                            return;
+                        }
+                    }
+                } else {
+                    // Log if SIGTERM is successfully sent
+                    // Translators: %s is the process PID
+                    nppp_display_admin_notice('success', sprintf( __( 'SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using posix_kill', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
+                }
             }
 
             // If on-going preload action halted via purge
