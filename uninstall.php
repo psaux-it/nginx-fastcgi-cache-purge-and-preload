@@ -42,7 +42,8 @@ function nppp_clear_plugin_cache_on_uninstall() {
         delete_transient($transient);
     }
 
-    // Clean up all category and rate limit transients directly in DB
+    // Safe clean up transients directly in DB
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->query("
         DELETE FROM $wpdb->options
         WHERE option_name LIKE '\\_transient_nppp_category_%'
