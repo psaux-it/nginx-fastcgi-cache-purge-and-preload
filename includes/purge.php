@@ -539,15 +539,20 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
                 // Check for safexec binary and SUID
                 if ($safexec_path && function_exists('stat')) {
-                    $info = stat($safexec_path);
-                    $is_root_owner = ($info['uid'] === 0);
-                    $has_suid      = ($info['mode'] & 04000) === 04000;
+                    $is_root_owner = false;
+                    $has_suid      = false;
+    
+                    $info = @stat($safexec_path);
+                    if ($info && isset($info['uid'], $info['mode'])) {
+                        $is_root_owner = ($info['uid'] === 0);
+                        $has_suid      = ($info['mode'] & 04000) === 04000;
+                    }
 
                     if ($is_root_owner && $has_suid) {
                         $output = shell_exec(escapeshellcmd($safexec_path) . " --kill=" . escapeshellarg($pid) . " 2>&1");
 
                         if (strpos($output, 'Killed PID') !== false) {
-                            usleep(200000);
+                            usleep(250000);
 
                             if (!nppp_is_process_alive($pid)) {
                                 // Translators: %s is the process PID
@@ -569,41 +574,36 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             }
 
             if (!$killed_by_safexec) {
-                // Try to kill the process with SIGTERM
-                if (defined('SIGTERM') && @posix_kill($pid, SIGTERM) === false) {
-                    // Log if SIGTERM is failed
-                    // Translators: %s is the process PID
-                    nppp_display_admin_notice('info', sprintf( __( 'INFO PROCESS: Failed to terminate using posix_kill, falling back to manual SIGKILL for PID %s', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
-                    sleep(1);
+                $signal_sent = false;
 
-                    // Check again if the process is still alive after SIGTERM
-                    if (nppp_is_process_alive($pid)) {
-                        // Fallback: Use shell_exec to send SIGKILL
-                        $kill_path = trim(shell_exec('command -v kill'));
-                        if (!empty($kill_path)) {
-                            shell_exec(escapeshellcmd("$kill_path -9 $pid"));
-                            usleep(200000);
+                if (defined('SIGTERM')) {
+                    @posix_kill($pid, SIGTERM);
+                    $signal_sent = true;
+                    usleep(300000);
+                }
 
-                            // Check again if the process is still alive after SIGKILL
-                            if (!nppp_is_process_alive($pid)) {
-                                // Log success after SIGKILL
-                                // Translators: %s is the process PID
-                                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using manual SIGKILL', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
-                            } else {
-                                // Log failure if fallback didn't work
-                                nppp_display_admin_notice('error', __( 'ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx' ));
-                                return;
-                            }
+                if (nppp_is_process_alive($pid)) {
+                    // Process still alive, try kill -9
+                    $kill_path = trim(shell_exec('command -v kill'));
+                    if (!empty($kill_path)) {
+                        shell_exec(escapeshellcmd("$kill_path -9 $pid"));
+                        usleep(300000);
+
+                        if (!nppp_is_process_alive($pid)) {
+                            // Translators: %s is the process PID
+                            nppp_display_admin_notice('success', sprintf(__('SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) forcefully terminated (SIGKILL)', 'fastcgi-cache-purge-and-preload-nginx'), $pid), true, false);
                         } else {
-                            // Log failure if the kill command is not found
-                            nppp_display_admin_notice('error', __( 'ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                            nppp_display_admin_notice('error', __('ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx'));
                             return;
                         }
+                    } else {
+                        nppp_display_admin_notice('error', __('ERROR PROCESS: "kill" command not available. Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx'));
+                        return;
                     }
                 } else {
-                    // Log if SIGTERM is successfully sent
-                    // Translators: %s is the process PID
-                    nppp_display_admin_notice('success', sprintf( __( 'SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using posix_kill', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
+                    $method = $signal_sent ? 'SIGTERM' : 'check';
+                    // Translators: %1$s is the PID, %2$s is the termination method (e.g., posix_kill, kill -9).
+                    nppp_display_admin_notice('success', sprintf(__('SUCCESS PROCESS: Preload process (PID: %1$s) terminated using %2$s.', 'fastcgi-cache-purge-and-preload-nginx'), $pid, $method), true, false);
                 }
             }
 
