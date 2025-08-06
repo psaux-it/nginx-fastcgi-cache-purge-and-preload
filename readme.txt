@@ -50,6 +50,10 @@ Unlike other solutions that depend on Nginx modules, **NPP** directly manages ca
 
 ⏰ **Schedule Nginx Cache Purge & Preload via WP Cron**: Automate the purge and preload process using WordPress Cron jobs.
 
+🧭 **Proxy Support for Preload**: Route preload requests through a proxy server for edge-case environments and containerized deployments.
+
+⏱️ **Live Preload Progress Monitoring**: Watch the Nginx cache preload process in real time — complete with a dynamic progress bar, currently processed URL, 404 tracking, and total completion time.
+
 🌐 **Remote Nginx Cache Purge & Preload via REST API**: Remotely trigger cache purging and preloading through REST API endpoints.
 
 ⚙️ **Manual Nginx Cache Purge & Preload**: Allow manual purging and preloading of cache through the table view in the Advanced Tab.
