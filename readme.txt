@@ -35,7 +35,7 @@ Unlike other solutions that depend on Nginx modules, **NPP** directly manages ca
 ➡️ **For detailed integration steps and guidance:**
 
 • Visit the [NPP Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
-• Explore [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) for easy production deployments and testing NPP locally.
+• Explore [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) for easy deployments and developing NPP locally.
 • Refer to the **FAQ** or the plugin’s **Help tab** for further instructions.
 
 == Features ==
