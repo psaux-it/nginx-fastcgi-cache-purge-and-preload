@@ -5,7 +5,7 @@
 
 [![Security: CVE-2025-6213](https://img.shields.io/badge/security-CVE--2025--6213-green)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54) [![GitHub Release](https://img.shields.io/github/v/release/psaux-it/nginx-fastcgi-cache-purge-and-preload?logo=github)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases) [![Donate](https://img.shields.io/badge/Wordpress_SVN-v2.1.3-blue?style=flat&logo=wordpress)](https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-red?logo=github)](https://github.com/sponsors/psaux-it)
 
-| ![Image](https://github.com/user-attachments/assets/64712b98-ab33-44d5-bd41-15766c19b93a) | **WordPress solution for Nginx Cache management** |
+| ![Image](https://github.com/user-attachments/assets/64712b98-ab33-44d5-bd41-15766c19b93a) | 🚀 [Live Test](https://npp.psauxit.com/npp-login) — Try the NPP in action |
 |---|---|
 
 **NPP** allows WordPress users to manage Nginx Cache operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.  NPP supports Nginx **FastCGI**, **Proxy**, **SCGI**, and **UWSGI** cache purge and preload operations, making it the most comprehensive solution for managing Nginx Cache from your WordPress dashboard.
@@ -36,6 +36,7 @@ Moreover, granting the correct permissions to the PHP process owner (PHP-FPM-USE
 ➡️**Remote Nginx Cache Purge & Preload via REST API**: Remotely trigger cache purging and preloading through `REST API` endpoints.<br/>
 ➡️**Manual Nginx Cache Purge & Preload**: Allow manual purging and preloading of cache through the table view in Advanced Tab.<br/>
 ➡️**On-Page Nginx Cache Purge & Preload**: Manually purge and preload Nginx cache for the currently visited page directly from the frontend.<br/>
+➡️**Proxy Support for Preload**: Enable proxy-aware preloading to route requests through a specified HTTP/S proxy for advanced setups or isolated environments.<br/>
 ➡️**Custom Cache Key Support**: Define a regex pattern to parse URLs based on your custom `(fastcgi|proxy|uwsgi|scgi)_cache_key` format.<br/>
 ➡️**Optimized Nginx Cache Preload**: Enhance Nginx cache preload performance with options to limit server resource usage, via exclude endpoints, exclude file extensions, wait retrievals and rate limiting.<br/>
 ➡️**Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, cache preload status, and Nginx status from the Status tab.<br/>
