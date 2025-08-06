@@ -5,7 +5,7 @@
 
 [![Security: CVE-2025-6213](https://img.shields.io/badge/security-CVE--2025--6213-green)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54) [![GitHub Release](https://img.shields.io/github/v/release/psaux-it/nginx-fastcgi-cache-purge-and-preload?logo=github)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases) [![Donate](https://img.shields.io/badge/Wordpress_SVN-v2.1.3-blue?style=flat&logo=wordpress)](https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-red?logo=github)](https://github.com/sponsors/psaux-it)
 
-| ![Image](https://github.com/user-attachments/assets/64712b98-ab33-44d5-bd41-15766c19b93a) | 🚀 [Live Test](https://npp.psauxit.com/npp-login) — Try the NPP in action |
+| ![Image](https://github.com/user-attachments/assets/64712b98-ab33-44d5-bd41-15766c19b93a) | 🔴 [Live Test](https://npp.psauxit.com/npp-login) — Try NPP in action |
 |---|---|
 
 **NPP** allows WordPress users to manage Nginx Cache operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.  NPP supports Nginx **FastCGI**, **Proxy**, **SCGI**, and **UWSGI** cache purge and preload operations, making it the most comprehensive solution for managing Nginx Cache from your WordPress dashboard.
