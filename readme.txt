@@ -66,6 +66,8 @@ Unlike other solutions that depend on Nginx modules, **NPP** directly manages ca
 
 📊 **Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, and Nginx status from the Status tab.
 
+🧩 **Modular by Design**: Easily integrate with external scripts and automation tools.
+
 🖥️ **User-Friendly Interface**: Easy-to-use AJAX-powered settings, integrated into the WordPress admin bar and dashboard for quick access.
 
 📋 **Admin Notices and Logs**: Receive notifications and view logs for plugin status and all cache-related actions within the WordPress admin area.
