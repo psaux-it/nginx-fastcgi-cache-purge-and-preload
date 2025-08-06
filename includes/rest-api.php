@@ -26,15 +26,7 @@ function nppp_get_client_ip() {
         return $ip;
     };
 
-    // Check for REMOTE_ADDR
-    if (isset($_SERVER['REMOTE_ADDR']) && ! empty($_SERVER['REMOTE_ADDR'])) {
-        $ip = sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
-        if (filter_var($ip, FILTER_VALIDATE_IP)) {
-            return $mask_ip($ip);
-        }
-    }
-
-    // Check for HTTP_X_FORWARDED_FOR
+    // Check for HTTP_X_FORWARDED_FOR (Real IP)
     if (isset($_SERVER['HTTP_X_FORWARDED_FOR']) && ! empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
         $xff = sanitize_text_field(wp_unslash($_SERVER['HTTP_X_FORWARDED_FOR']));
         $ip_list = explode(',', $xff);
@@ -46,6 +38,14 @@ function nppp_get_client_ip() {
             if (filter_var($ip, FILTER_VALIDATE_IP)) {
                 return $mask_ip($ip);
             }
+        }
+    }
+
+    // Check for REMOTE_ADDR
+    if (isset($_SERVER['REMOTE_ADDR']) && ! empty($_SERVER['REMOTE_ADDR'])) {
+        $ip = sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
+        if (filter_var($ip, FILTER_VALIDATE_IP)) {
+            return $mask_ip($ip);
         }
     }
 
