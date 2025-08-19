@@ -37,10 +37,6 @@ jobs:
             gcc -static -O2 -pipe -fPIE -pie -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
                 -Wl,-z,relro,-z,now safexec.c -o safexec-x86_64-linux-musl
             strip safexec-x86_64-linux-musl
-            # make the artifact owned by the host user
-            HOST_UID=$(stat -c "%u" /src)
-            HOST_GID=$(stat -c "%g" /src)
-            chown "$HOST_UID:$HOST_GID" safexec-x86_64-linux-musl
           '
 
       # Build static aarch64 (musl) with dockcross
@@ -56,11 +52,14 @@ jobs:
             aarch64-linux-musl-gcc -static -O2 -pipe -fPIE -pie -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
                 -Wl,-z,relro,-z,now safexec/safexec.c -o safexec/safexec-aarch64-linux-musl
             aarch64-linux-musl-strip safexec/safexec-aarch64-linux-musl
-            HOST_UID=$(stat -c "%u" /src)
-            HOST_GID=$(stat -c "%g" /src)
-            chown "$HOST_UID:$HOST_GID" safexec/safexec-aarch64-linux-musl
           '
 
+      # Fix ownership of artifacts created by containers
+      - name: Fix artifact ownership
+        run: |
+          set -euo pipefail
+          sudo chown "$(id -u)":"$(id -g)" safexec/safexec-*-linux-musl
+    
       # Sanity check: confirm the binaries are static BEFORE checksums
       - name: Verify binaries are static
         run: |
