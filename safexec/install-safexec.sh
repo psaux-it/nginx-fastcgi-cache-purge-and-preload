@@ -45,10 +45,12 @@ mount_opts_for() {
   ' /proc/self/mounts 2>/dev/null
 }
 
-fs_has_nosuid() {
+# Generic mount-flag check
+fs_has_flag() {
   opts="$(mount_opts_for "$1")"
-  [ -n "$opts" ] && printf "%s" "$opts" | tr ',' '\n' | grep -qx nosuid
+  [ -n "$opts" ] && printf "%s" "$opts" | tr ',' '\n' | grep -qx "$2"
 }
+fs_has_nosuid() { fs_has_flag "$1" nosuid; }
 
 # Portable dirname->abs path
 dir_abs() {
@@ -60,11 +62,15 @@ dir_abs() {
 # ---- Preflight ----
 is_linux || die "this installer is Linux-only"
 
-for c in uname curl chmod chown awk grep sed stat mv mkdir; do
+# require root ASAP
+[ "$(id -u)" -eq 0 ] || die "please run as root (or with sudo) to install to ${INSTALL_PATH}"
+
+# required tools
+for c in uname curl chmod chown awk grep mv mkdir sha256sum id; do
   need_cmd "$c"
 done
 
-# arch sanity check:
+# arch sanity check
 if command -v file >/dev/null 2>&1; then
   HAVE_FILE=1
 else
@@ -97,7 +103,12 @@ Hint: re-mount without nosuid or set ALLOW_NOSUID=1 to install anyway (reduced i
   fi
 fi
 
-# cgroup v2 info (just informational)
+# noexec check (cannot run binaries from here)
+if fs_has_flag "$TARGET_DIR" noexec; then
+  die "filesystem for ${TARGET_DIR} is mounted with 'noexec' (cannot execute ${INSTALL_PATH})."
+fi
+
+# cgroup v2 info
 if [ -r /sys/fs/cgroup/cgroup.controllers ]; then
   echo "Info: cgroup v2 detected."
 else
@@ -109,25 +120,26 @@ if ! (getent passwd nobody >/dev/null 2>&1 || id -u nobody >/dev/null 2>&1); the
   warn "no 'nobody' user found; safexec will fall back to the FPM user."
 fi
 
-# must be root to install setuid root
-[ "$(id -u)" -eq 0 ] || die "please run as root (or with sudo) to install to ${INSTALL_PATH}"
+# warn if destination is a symlink (it will be atomically replaced)
+if [ -L "$INSTALL_PATH" ]; then
+  warn "${INSTALL_PATH} is a symlink; it will be replaced atomically."
+fi
 
 # ---- download ----
-tmp="$(mktemp)"
-tmp_sha=""
-trap 'rm -f "$tmp" "$tmp_sha"' EXIT
+td="$(mktemp -d)"
+trap 'rm -rf "$td"' EXIT
+tmp="$td/$FILE"
+tmp_sha="$td/$FILE.sha256"
 
 echo "Fetching ${BOLD}${CYAN}safexec${RESET} ..."
 curl -fsSL "$URL_BIN" -o "$tmp" || die "download failed: ${URL_BIN}"
 
-# Optional checksum verify (only if available and not skipped)
+# checksum verify (only if available and not skipped)
 if [ "$SKIP_CHECKSUM" != "1" ] && [ "$HAVE_SHA" -eq 1 ]; then
-  if tmp_sha="$(mktemp)"; curl -fsSL "$URL_SHA" -o "$tmp_sha"; then
+  if curl -fsSL "$URL_SHA" -o "$tmp_sha"; then
     echo "Verifying SHA256 ..."
-    want="$(cut -d ' ' -f1 "$tmp_sha" | tr -d '\r\n')"
-    have="$(sha256sum "$tmp" | awk '{print $1}')"
-    [ -n "$want" ] || die "empty checksum file at ${URL_SHA}"
-    [ "$want" = "$have" ] || die "checksum mismatch for ${FILE}"
+    ( cd "$td" && sha256sum -c "$FILE.sha256" ) \
+      || die "checksum mismatch for ${FILE}"
   else
     warn "no checksum file found at ${URL_SHA}; continuing without verification"
   fi
@@ -135,7 +147,7 @@ elif [ "$SKIP_CHECKSUM" != "1" ]; then
   warn "sha256sum not found; skipping checksum verification"
 fi
 
-# Basic sanity: ELF + arch (if 'file' exists)
+# Basic sanity: ELF + arch
 if [ "$HAVE_FILE" -eq 1 ]; then
   desc="$(file -b "$tmp" || true)"
   printf "Binary looks like: %s\n" "$desc"
@@ -149,17 +161,27 @@ fi
 mkdir -p "$TARGET_DIR"
 tmp_in_place="${TARGET_DIR}/.$(basename "$INSTALL_PATH").new.$$"
 
-# copy into target fs, then set owner+mode, then rename atomically
-cp "$tmp" "$tmp_in_place"
-chown root:root "$tmp_in_place"
-
-# set mode (setuid only useful if filesystem allows it)
-if fs_has_nosuid "$TARGET_DIR"; then
-  chmod 0755 "$tmp_in_place"
+if command -v install >/dev/null 2>&1; then
+  # Use 'install' to set owner+mode in one go
+  if fs_has_nosuid "$TARGET_DIR"; then
+    # nosuid FS: no point setting setuid bit
+    install -m 0755 -o root -g root "$tmp" "$tmp_in_place"
+  else
+    # setuid root when allowed
+    install -m 4755 -o root -g root "$tmp" "$tmp_in_place"
+  fi
 else
-  chmod 4755 "$tmp_in_place"
+  # Fallback: cp + chown + chmod
+  cp "$tmp" "$tmp_in_place"
+  chown root:root "$tmp_in_place"
+  if fs_has_nosuid "$TARGET_DIR"; then
+    chmod 0755 "$tmp_in_place"
+  else
+    chmod 4755 "$tmp_in_place"
+  fi
 fi
 
+# Atomic replace within the same filesystem
 mv -f "$tmp_in_place" "$INSTALL_PATH"
 
 # ---- quick smoke test ----
