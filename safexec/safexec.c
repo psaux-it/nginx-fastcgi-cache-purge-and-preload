@@ -1,11 +1,10 @@
 /**
- * safexec - A secure privilege-dropping and cgroup2-isolating wrapper for Nginx Cache Purge Preload
+ * safexec - A secure privilege-dropping and cgroup-isolating wrapper for PHP's shell_exec
  *
  * Purpose:
  * --------
- * This binary is used by the NPP plugin:
- *   "Nginx Cache Purge Preload for WordPress"
- * to safely launch `wget` from within a PHP-FPM context, ensuring:
+ * This code is written for the NPP (Nginx Cache Purge Preload for WordPress):
+ *   to safely launch `shell_exec` from within a PHP context, ensuring:
  *   - The process runs as an unprivileged user (`nobody`)
  *   - It is detached from the PHP-FPM service's cgroup2
  *   - It cannot retain inherited privileges
@@ -13,26 +12,16 @@
  *
  * Motivation:
  * -----------
- * Directly calling `shell_exec(wget ..)` with user inputs in PHP-FPM runs the command as the FPM pool user, which:
+ * Directly calling `shell_exec()` with user inputs in PHP runs the command as the FPM pool user, which:
  *   - Inherits the service's cgroup slice (`system-php-fpm.slice`)
  *   - Poses a security risk if an attacker injects malicious commands
  *   - Prevents full isolation or proper resource restriction
  *
  * By using this wrapper:
  *   ✓ Drops privileges to the `nobody` user before execution
- *   ✓ Isolates the process into a neutral cgroup to fully detach from php-fpm's slice
+ *   ✓ Isolates the process into a neutral cgroup2 to fully detach from php-fpm's slice
  *   ✓ Prevents privilege escalation and lateral movement from injected code
- *   ✓ Provides a controlled kill interface — only allows terminating `nobody`-owned processes
- *
- * Usage:
- *   safexec <command> [args...]       Executes the command as UID/GID nobody
- *   safexec --kill=<pid>              Attempts to kill a process only if it is owned by 'nobody'
- *
- * Features:
- *   - SUID-safe: Meant to be owned by root and setuid (chmod 4755)
- *   - Cgroup-compatible: Moves the process into a specified cgroup for isolation or resource limits
- *   - Abuse-resistant: Will not kill arbitrary processes or run as privileged
- *
+ *   ✓ Provides a controlled kill interface
  */
 
 #define _GNU_SOURCE 1
@@ -51,8 +40,24 @@
 #include <sys/prctl.h>
 #include <limits.h>
 
+// Metadata
+#define SAFEXEC_NAME     "safexec"
+#define SAFEXEC_VERSION  "1.9.2"
+#define SAFEXEC_AUTHOR   "Hasan Calisir"
+
+// Cgroup
 #define CGROUP_V2_MARKER "/sys/fs/cgroup/cgroup.controllers"
 #define CGROUP_TARGET    "/sys/fs/cgroup/cgroup.procs"
+
+// Print version
+static void print_version(void) {
+    printf(
+        "%s %s\n"
+        "Copyright (C) 2025 %s.\n"
+        "Used by: NPP – Nginx Cache Purge Preload for WordPress.\n",
+        SAFEXEC_NAME, SAFEXEC_VERSION, SAFEXEC_AUTHOR
+    );
+}
 
 // If euid!=0, fail early
 static void require_setuid_root_or_die(const char *argv0) {
@@ -70,15 +75,20 @@ static const char *base_of(const char *p) {
     const char *b = strrchr(p, '/');
     return b ? b + 1 : p;
 }
+
 static int is_prog(const char *arg, const char *name) {
     return strcmp(base_of(arg), name) == 0;
 }
 
+// Usage
 static void print_usage(const char *argv0) {
     fprintf(stderr,
         "Usage:\n"
         "  %s <program> [args...]\n"
-        "  %s --kill=<pid>\n", argv0, argv0);
+        "  %s --kill=<pid>\n"
+        "  %s --help | -h\n"
+        "  %s --version | -v\n",
+        argv0, argv0, argv0, argv0);
 }
 
 static int is_all_digits(const char *s) {
@@ -89,7 +99,6 @@ static int is_all_digits(const char *s) {
 }
 
 // Pre-drop: ensure /tmp/nppp-cache exists always
-// Idempotent; enables safe per-user subdirs later when unprivileged
 static int ensure_tmp_cache_root(void) {
     struct stat st;
 
@@ -246,8 +255,14 @@ int try_kill_mode(const char *arg) {
 }
 
 int main(int argc, char *argv[]) {
-    // arg handling: only two forms are accepted
+    // Version/help handler
+    if (argc >= 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
+        print_version();
+        return 0;
+    }
+
     if (argc < 2) { print_usage(argv[0]); return 1; }
+
     if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
         print_usage(argv[0]);
         return 0;
@@ -295,7 +310,7 @@ int main(int argc, char *argv[]) {
         if (setgid(pw->pw_gid) != 0) { perror("setgid failed");    goto drop_to_fpm_user; }
         if (setuid(pw->pw_uid) != 0) { perror("setuid failed");    goto drop_to_fpm_user; }
     } else {
-        fprintf(stderr, "Warning: 'nobody' user not found, continuing as current user\n");
+        fprintf(stderr, "Warning: 'nobody' user not found, continuing as fpm user\n");
     }
 
     // Ensure we never exec as root; if still euid==0, drop to FPM user
@@ -306,7 +321,7 @@ post_drop:
     // If /tmp isn't writable by the final euid
     fix_wget_tmp_if_tmp_blocked(argc, argv);
 
-    // Safe PATH for execvp resolution (no shell)
+    // Set PATH for execvp
     clearenv();
     setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/run/current-system/sw/bin", 1);
     umask(077);
