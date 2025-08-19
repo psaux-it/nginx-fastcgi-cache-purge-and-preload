@@ -7,6 +7,10 @@ on:
       - ".github/workflows/build-and-commit-safexec.yml"
   workflow_dispatch: {}
 
+concurrency:
+  group: build-safexec-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-commit:
     runs-on: ubuntu-latest
@@ -18,10 +22,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Ensure host tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y file coreutils binutils
+
       # Build static x86_64 (musl) with Alpine's GCC
       - name: Build x86_64 static (musl)
         run: |
-          set -eux
+          set -euo pipefail
           docker run --rm -v "$PWD":/src -w /src/safexec alpine:3.21 sh -euxc '
             apk add --no-cache build-base musl-dev
             gcc -static -O2 -pipe -fPIE -pie -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
@@ -32,7 +42,7 @@ jobs:
       # Build static aarch64 (musl) with dockcross
       - name: Build aarch64 static (musl)
         run: |
-          set -eux
+          set -euo pipefail
           # Generate dockcross wrapper for the musl ARM64 toolchain
           docker run --rm dockcross/linux-arm64-musl > ./dockcross
           chmod +x ./dockcross
@@ -44,21 +54,70 @@ jobs:
             aarch64-linux-musl-strip safexec/safexec-aarch64-linux-musl
           '
 
-      # Sanity check: confirm the binaries are static
+      # Sanity check: confirm the binaries are static BEFORE checksums
       - name: Verify binaries are static
         run: |
-          set -eux
+          set -euo pipefail
+          ls -l safexec/safexec-*-linux-musl
           file safexec/safexec-*-linux-musl
-          # readelf INTERP section should be absent for static
           for f in safexec/safexec-*-linux-musl; do
-            readelf -lW "$f" | grep INTERP && { echo "ERROR: $f is not fully static"; exit 1; } || true
+            # Fail if an INTERP segment exists (means dynamically linked)
+            ! readelf -lW "$f" | grep -q INTERP
           done
 
-      - name: Commit binaries back to repo
+      # Enable qemu/binfmt so we can run arm64 containers on x86_64 runner
+      - name: Enable binfmt for arm64
+        run: |
+          set -euo pipefail
+          docker run --privileged --rm tonistiigi/binfmt --install arm64
+
+      # Runtime smoke test (x86_64, minimal)
+      - name: Runtime smoke test (x86_64)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD":/src -w / alpine:3.21 sh -euxc '
+            apk add --no-cache coreutils
+            cp /src/safexec/safexec-x86_64-linux-musl /usr/local/bin/safexec
+            chown root:root /usr/local/bin/safexec
+            chmod 4755 /usr/local/bin/safexec
+            adduser -D -s /bin/sh fpm
+            su -s /bin/sh -c "/usr/local/bin/safexec --help >/dev/null" fpm
+            su -s /bin/sh -c "/usr/local/bin/safexec /usr/bin/id -un" fpm | grep -x nobody
+            su -s /bin/sh -c "/usr/local/bin/safexec /bin/true" fpm
+          '
+
+      # Runtime smoke test (aarch64, minimal; runs via qemu)
+      - name: Runtime smoke test (aarch64)
+        run: |
+          set -euo pipefail
+          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w / alpine:3.21 sh -euxc '
+            apk add --no-cache coreutils
+            cp /src/safexec/safexec-aarch64-linux-musl /usr/local/bin/safexec
+            chown root:root /usr/local/bin/safexec
+            chmod 4755 /usr/local/bin/safexec
+            adduser -D -s /bin/sh fpm
+            su -s /bin/sh -c "/usr/local/bin/safexec --help >/dev/null" fpm
+            su -s /bin/sh -c "/usr/local/bin/safexec /usr/bin/id -un" fpm | grep -x nobody
+            su -s /bin/sh -c "/usr/local/bin/safexec /bin/true" fpm
+          '
+
+      # Make checksums (per-file + combined)
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          cd safexec
+          for f in safexec-*-linux-musl; do
+            test -x "$f"
+            sha256sum "$f" > "$f.sha256"
+          done
+          sha256sum safexec-*-linux-musl | sort > SHA256SUMS
+
+      - name: Commit binaries & checksums back to repo
+        if: github.ref_type == 'branch'
         env:
           GITHUB_REF: ${{ github.ref }}
         run: |
-          set -eux
+          set -euo pipefail
 
           # Ensure executable bit for produced binaries
           chmod 755 safexec/safexec-*-linux-musl || true
@@ -67,8 +126,8 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Add only the binaries so source changes don't re-trigger endlessly
-          git add safexec/safexec-*-linux-musl || true
+          # Add only the binaries and checksum files
+          git add safexec/safexec-*-linux-musl safexec/*.sha256 safexec/SHA256SUMS || true
 
           # Commit only if there are staged changes
           if git diff --cached --quiet; then
