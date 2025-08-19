@@ -54,6 +54,18 @@
 #define CGROUP_V2_MARKER "/sys/fs/cgroup/cgroup.controllers"
 #define CGROUP_TARGET    "/sys/fs/cgroup/cgroup.procs"
 
+// If euid!=0, fail early
+static void require_setuid_root_or_die(const char *argv0) {
+    if (geteuid() != 0) {
+        fprintf(stderr,
+            "Error: %s is not running with euid=0.\n"
+            "Fix: ensure it is owned by root and setuid (chown root:root %s && chmod 4755 %s),\n"
+            "and that the filesystem is NOT mounted with 'nosuid'.\n",
+            argv0, argv0, argv0);
+        exit(126);
+    }
+}
+
 static const char *base_of(const char *p) {
     const char *b = strrchr(p, '/');
     return b ? b + 1 : p;
@@ -259,6 +271,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // Refuse to continue if not setuid-root
+    require_setuid_root_or_die(argv[0]);
+
     pid_t pid = getpid();
 
     // Move to isolated cgroup
@@ -266,7 +281,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Warning: Failed to move to cgroup %s\n", CGROUP_TARGET);
     }
 
-    // NEW: create /tmp/nppp-cache (01777) if possible, idempotent
+    // Create /tmp/nppp-cache (01777) if possible, idempotent
     (void)ensure_tmp_cache_root();
 
     // Remember original caller IDs for safe fallback
