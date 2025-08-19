@@ -1,0 +1,80 @@
+name: build-and-commit-safexec
+
+on:
+  push:
+    paths:
+      - "safexec/safexec.c"
+      - ".github/workflows/build-and-commit-safexec.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Build static x86_64 (musl) with Alpine's GCC
+      - name: Build x86_64 static (musl)
+        run: |
+          set -eux
+          docker run --rm -v "$PWD":/src -w /src/safexec alpine:3.21 sh -euxc '
+            apk add --no-cache build-base musl-dev
+            gcc -static -O2 -pipe -fPIE -pie -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
+                -Wl,-z,relro,-z,now safexec.c -o safexec-x86_64-linux-musl
+            strip safexec-x86_64-linux-musl
+          '
+
+      # Build static aarch64 (musl) with dockcross
+      - name: Build aarch64 static (musl)
+        run: |
+          set -eux
+          # Generate dockcross wrapper for the musl ARM64 toolchain
+          docker run --rm dockcross/linux-arm64-musl > ./dockcross
+          chmod +x ./dockcross
+
+          # Compile inside the dockcross environment; output to safexec/
+          ./dockcross bash -euxc '
+            aarch64-linux-musl-gcc -static -O2 -pipe -fPIE -pie -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
+                -Wl,-z,relro,-z,now safexec/safexec.c -o safexec/safexec-aarch64-linux-musl
+            aarch64-linux-musl-strip safexec/safexec-aarch64-linux-musl
+          '
+
+      # Sanity check: confirm the binaries are static
+      - name: Verify binaries are static
+        run: |
+          set -eux
+          file safexec/safexec-*-linux-musl
+          # readelf INTERP section should be absent for static
+          for f in safexec/safexec-*-linux-musl; do
+            readelf -lW "$f" | grep INTERP && { echo "ERROR: $f is not fully static"; exit 1; } || true
+          done
+
+      - name: Commit binaries back to repo
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          set -eux
+
+          # Ensure executable bit for produced binaries
+          chmod 755 safexec/safexec-*-linux-musl || true
+
+          # Configure Git identity
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Add only the binaries so source changes don't re-trigger endlessly
+          git add safexec/safexec-*-linux-musl || true
+
+          # Commit only if there are staged changes
+          if git diff --cached --quiet; then
+            echo "No binary changes to commit."
+            exit 0
+          fi
+
+          git commit -m "ci: build safexec (musl) binaries [skip ci]"
+          git push origin HEAD:${GITHUB_REF#refs/heads/}
