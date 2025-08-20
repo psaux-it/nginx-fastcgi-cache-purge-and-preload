@@ -39,6 +39,7 @@
 #include <sys/stat.h>
 #include <sys/prctl.h>
 #include <limits.h>
+#include <dirent.h>
 
 // Metadata
 #define SAFEXEC_NAME     "safexec"
@@ -96,6 +97,36 @@ static int is_all_digits(const char *s) {
     for (const unsigned char *p=(const unsigned char*)s; *p; ++p)
         if (*p < '0' || *p > '9') return 0;
     return 1;
+}
+
+// Sanitize environment & process state early
+static void sanitize_process_early(void) {
+    clearenv();
+    setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/run/current-system/sw/bin", 1);
+    setenv("LANG", "C", 1);
+    umask(077);
+    (void)prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
+}
+
+// Close all inherited fds >= 3
+static void closefrom_safe(int lowfd) {
+    DIR *d = opendir("/proc/self/fd");
+    if (!d) {
+        long max = sysconf(_SC_OPEN_MAX);
+        if (max < 0 || max > 65536) max = 1024; // conservative fallback
+        for (int fd = lowfd; fd < max; ++fd) close(fd);
+        return;
+    }
+    int dirfdno = dirfd(d);
+    struct dirent *de;
+    while ((de = readdir(d))) {
+        if (de->d_name[0] == '.') continue;
+        char *end = NULL;
+        long fd = strtol(de->d_name, &end, 10);
+        if (end && *end) continue; // not a number
+        if (fd >= lowfd && fd != dirfdno) close((int)fd);
+    }
+    closedir(d);
 }
 
 // Pre-drop: ensure /tmp/nppp-cache exists always
@@ -191,7 +222,7 @@ int move_to_cgroup(pid_t pid) {
         return -1;
     }
 
-    if (dprintf(fd, "%d", pid) < 0) {
+    if (dprintf(fd, "%d\n", pid) < 0) {
         perror("dprintf cgroup.procs");
         close(fd);
         return -1;
@@ -255,6 +286,9 @@ int try_kill_mode(const char *arg) {
 }
 
 int main(int argc, char *argv[]) {
+    // Sanitize env and process state before any NSS/library lookups
+    sanitize_process_early();
+
     // Version/help handler
     if (argc >= 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
         print_version();
@@ -280,7 +314,6 @@ int main(int argc, char *argv[]) {
     if (k == 1) { print_usage(argv[0]); return 1; }
 
     // From here, only "<program> [args...]" is allowed.
-    // If first arg starts with '-' or is all digits, it's invalid → show usage.
     if (argv[1][0] == '-' || is_all_digits(argv[1])) {
         print_usage(argv[0]);
         return 1;
@@ -321,15 +354,13 @@ post_drop:
     // If /tmp isn't writable by the final euid
     fix_wget_tmp_if_tmp_blocked(argc, argv);
 
-    // Set PATH for execvp
-    clearenv();
-    setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/run/current-system/sw/bin", 1);
-    umask(077);
-
     // Prevent privilege regain in the child
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
         perror("prctl(NO_NEW_PRIVS) failed");
     }
+
+    // Close all inherited fds except stdio before exec
+    closefrom_safe(3);
 
     // Exec command
     execvp(argv[1], &argv[1]);
