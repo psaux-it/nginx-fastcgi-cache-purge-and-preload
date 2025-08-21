@@ -122,16 +122,54 @@ function nppp_find_safexec_path() {
 }
 
 // Checks if the given safexec path is root-owned and SUID-enabled
-function nppp_is_safexec_usable($path) {
-    if (!function_exists('stat') || empty($path)) {
+function nppp_is_safexec_usable($path, $notify = true) {
+    if (!function_exists('stat')) {
         return false;
     }
 
-    $info = stat($path);
+    // Prevent interfere with REST and others
+    $notify = $notify && !(
+        (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) ||
+        (function_exists('wp_doing_rest') && wp_doing_rest()) ||
+        (defined('REST_REQUEST') && REST_REQUEST) ||
+        (function_exists('wp_doing_ajax') && wp_doing_ajax()) ||
+        (defined('DOING_AJAX') && DOING_AJAX) ||
+        (function_exists('wp_doing_cron') && wp_doing_cron()) ||
+        (defined('DOING_CRON') && DOING_CRON) ||
+        (defined('WP_CLI') && WP_CLI)
+    );
+
+    if (empty($path)) {
+        if ($notify) {
+            nppp_display_admin_notice('info', __('INFO SAFEXEC: safexec not found. Starting preload as the PHP-FPM user. To enable security hardening, installing safexec is strongly recommended. See the Help tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
+        }
+        return false;
+    }
+
+    $p = @realpath($path) ?: $path;
+    $info = @stat($p);
+
+    if ($info === false) {
+        if ($notify) {
+            // Translators: %s = safexec path
+            nppp_display_admin_notice('info', sprintf(__('INFO SAFEXEC: safexec at %s is not accessible. Starting preload as the PHP-FPM user.', 'fastcgi-cache-purge-and-preload-nginx'), $p), true, false);
+        }
+        return false;
+    }
+
     $is_root_owner = ($info['uid'] === 0);
     $has_suid      = ($info['mode'] & 04000) === 04000;
 
-    return ($is_root_owner && $has_suid);
+    if (!($is_root_owner && $has_suid)) {
+        if ($notify) {
+            $euid = function_exists('posix_geteuid') ? (int)@posix_geteuid() : -1;
+            // Translators: 1 = user id of fpm user (integer)
+            nppp_display_admin_notice('info', sprintf(__('INFO SAFEXEC: safexec is in pass-through mode (euid=%1$d). Starting preload as the PHP-FPM user. To fix it, see the Help Tab', 'fastcgi-cache-purge-and-preload-nginx'), $euid), true, false);
+        }
+        return false;
+    }
+
+    return true;
 }
 
 // Check if a preload process fails immediately—too fast.
@@ -174,7 +212,7 @@ function nppp_detect_premature_process(
 
     // Check safexec availability
     $safexec_path = nppp_find_safexec_path();
-    $use_safexec = $safexec_path && nppp_is_safexec_usable($safexec_path);
+    $use_safexec = $safexec_path && nppp_is_safexec_usable($safexec_path, false);
 
     $testCommand = ($use_safexec ? "$safexec_path " : "") .
         "wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
@@ -225,7 +263,7 @@ function nppp_detect_premature_process(
         } else {
             // If safexec is available, kill nobody process
             if ($use_safexec) {
-                $kill_cmd = escapeshellcmd($safexec_path) . " --kill=" . escapeshellarg($test_pid) . " 2>&1";
+                $kill_cmd = escapeshellcmd($safexec_path) . " --kill=" . (int)($test_pid) . " 2>&1";
                 $output = shell_exec($kill_cmd);
             }
 
@@ -237,7 +275,7 @@ function nppp_detect_premature_process(
             // Fallback to hard SIGKILL
             if (!@posix_kill($test_pid, SIGTERM)) {
                 $kill_path = trim(shell_exec('command -v kill'));
-                shell_exec(escapeshellcmd("$kill_path -9 $test_pid"));
+                shell_exec(escapeshellcmd("$kill_path -9 " . (int)$test_pid));
             }
             $test_process = true;
         }
