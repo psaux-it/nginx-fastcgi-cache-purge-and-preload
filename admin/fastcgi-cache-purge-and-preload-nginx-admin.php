@@ -27,6 +27,76 @@ if (!defined('NPPP_USER_AGENT_MOBILE')) {
     define('NPPP_USER_AGENT_MOBILE', 'Mozilla/5.0 (Linux; Android 15; SM-G960U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.81 Mobile Safari/537.36');
 }
 
+// Prepare PATH and SAFEXEC_QUIET env
+function nppp_prepare_request_env(bool $force = false): void {
+    static $done = false;
+    if ($done) return;
+
+    if (!$force) {
+        $is_rest = (
+            (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) ||
+            (function_exists('wp_doing_rest') && wp_doing_rest()) ||
+            (defined('REST_REQUEST') && REST_REQUEST)
+        );
+        $is_cron  = (
+            (function_exists('wp_doing_cron') && wp_doing_cron()) ||
+            (defined('DOING_CRON') && DOING_CRON)
+        );
+        $is_admin = function_exists('is_admin') ? is_admin() : false;
+
+        $is_needed = ($is_rest || $is_cron || $is_admin);
+        if (defined('NPPP_FORCE_ENV')) {
+            $is_needed = (bool) NPPP_FORCE_ENV;
+        }
+        if (function_exists('apply_filters')) {
+            $is_needed = (bool) apply_filters('nppp_prepare_env_is_needed', $is_needed);
+        }
+        if (!$is_needed) return;
+    }
+
+    // PATH merge
+    $need = ['/usr/local/sbin','/usr/local/bin','/usr/sbin','/usr/bin','/sbin','/bin'];
+    $orig_path = getenv('PATH');
+    if ($orig_path === false || $orig_path === '') {
+        putenv('PATH=' . implode(':', $need));
+    } else {
+        $parts  = array_values(array_filter(explode(':', $orig_path), fn($p) => $p !== '' && $p !== '.'));
+        $merged = array_values(array_unique(array_merge($need, $parts)));
+        $new    = implode(':', $merged);
+        if ($new !== $orig_path) {
+            putenv("PATH=$new");
+        }
+    }
+
+    // Quiet flag
+    $orig_quiet = getenv('SAFEXEC_QUIET');
+    $quiet_was_set_by_us = false;
+    if ($orig_quiet === false || $orig_quiet === '') {
+        putenv('SAFEXEC_QUIET=1');
+        $quiet_was_set_by_us = true;
+    }
+
+    // Restore at shutdown (don’t leak into the worker)
+    register_shutdown_function(function () use ($orig_path, $orig_quiet, $quiet_was_set_by_us) {
+        if ($orig_path === false) {
+            putenv('PATH');
+        } elseif (getenv('PATH') !== $orig_path) {
+            putenv("PATH=$orig_path");
+        }
+
+        if ($quiet_was_set_by_us) {
+            putenv('SAFEXEC_QUIET');
+        } elseif ($orig_quiet !== false && getenv('SAFEXEC_QUIET') !== $orig_quiet) {
+            putenv("SAFEXEC_QUIET=$orig_quiet");
+        }
+    });
+
+    $done = true;
+}
+
+// Set env for this request
+nppp_prepare_request_env();
+
 // Include plugin files
 require_once dirname(__DIR__) . '/includes/enqueue-assets.php';
 require_once dirname(__DIR__) . '/includes/wp-filesystem.php';
@@ -66,6 +136,7 @@ $page_cache_purge_actions = array(
 );
 
 // Add actions and filters
+add_action('rest_api_init', function () { nppp_prepare_request_env(true); }, 1);
 add_action('load-settings_page_nginx_cache_settings', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_check_for_plugin_update');
 add_action('admin_enqueue_scripts', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets');
@@ -197,6 +268,11 @@ add_action('wp', function() {
         }
     }
 });
+add_action('init', function () {
+    if ( (defined('DOING_CRON') && DOING_CRON) || (function_exists('wp_doing_cron') && wp_doing_cron()) ) {
+        nppp_prepare_request_env(true);
+    }
+}, 1);
 
 // Register shortcodes
 add_shortcode('nppp_svg_icon', 'nppp_svg_icon_shortcode');
