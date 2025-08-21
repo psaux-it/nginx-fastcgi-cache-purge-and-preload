@@ -210,7 +210,7 @@ static void fix_wget_tmp_if_tmp_blocked(int argc, char **argv) {
             if (access("/tmp", W_OK) == 0) return;
 
             if (!parent_cache_is_safe() || access("/tmp/nppp-cache", W_OK) != 0) {
-                s_fprintf(stderr, "Warning: /tmp not writable; no safe fallback. Keeping '-P /tmp'.\n");
+                s_fprintf(stderr, "Warning: /tmp not writable. No safe fallback. Keeping '-P /tmp'.\n");
                 return;
             }
 
@@ -218,12 +218,12 @@ static void fix_wget_tmp_if_tmp_blocked(int argc, char **argv) {
             snprintf(sub, sizeof sub, "/tmp/nppp-cache/%lu", (unsigned long)geteuid());
 
             if (mkdir(sub, 0700) != 0 && errno != EEXIST) {
-                s_fprintf(stderr, "Warning: failed to create '%s'. Keeping '-P /tmp'.\n", sub, strerror(errno));
+                s_fprintf(stderr, "Warning: failed to create '%s'. Keeping '-P /tmp'.\n", sub);
                 return;
             }
 
             struct stat ss;
-                if (lstat(sub, &ss) != 0 || !S_ISDIR(ss.st_mode) || ss.st_uid != geteuid()) {
+            if (lstat(sub, &ss) != 0 || !S_ISDIR(ss.st_mode) || ss.st_uid != geteuid()) {
                 s_fprintf(stderr, "Warning: unsafe fallback '%s'. Keeping '-P /tmp'.\n", sub);
                 return;
             }
@@ -248,12 +248,12 @@ int move_to_cgroup(pid_t pid) {
 
     int fd = open(CGROUP_TARGET, O_WRONLY | O_CLOEXEC | O_NOFOLLOW);
     if (fd == -1) {
-        s_perror("open cgroup.procs");
+        s_perror("open " CGROUP_TARGET);
         return -1;
     }
 
-    if (dprintf(fd, "%d\n", pid) < 0) {
-        s_perror("dprintf cgroup.procs");
+    if (dprintf(fd, "%ld\n", (long)pid) < 0) {
+        s_perror("write " CGROUP_TARGET);
         close(fd);
         return -1;
     }
@@ -307,10 +307,11 @@ int try_kill_mode(const char *arg) {
 
     // Send SIGTERM
     if (kill(pid, SIGTERM) != 0) {
-        s_perror("Error: kill failed");
+        s_perror("kill SIGTERM");
         return 1;
     }
 
+    // Not quiet
     printf("Success: Killed PID %d\n", pid);
     return 2;
 }
@@ -356,13 +357,13 @@ int main(int argc, char *argv[]) {
         chdir_safe_if_cwd_inaccessible();
 
         s_fprintf(stderr,
-            "Info: Pass-Through Mode (euid=%ld). Starting '%s' as original fpm user. "
+            "Info: Pass-Through Mode (euid=%ld). Starting '%s' as original user. "
             "To enable hardening: chown root:root %s && chmod 4755 %s (avoid nosuid).\n",
             (long)geteuid(), argv[1], argv[0], argv[0]);
 
         fflush(NULL);
         execvp(argv[1], &argv[1]);
-        s_perror("Error: safexec failed");
+        s_perror("safexec: execvp");
         _exit(1);
     }
 
@@ -386,9 +387,9 @@ int main(int argc, char *argv[]) {
 
     struct passwd *pw = getpwnam("nobody");
     if (pw) {
-        if (setgroups(0, NULL) != 0) { s_perror("Error: setgroups failed"); goto drop_to_fpm_user; }
-        if (setgid(pw->pw_gid) != 0) { s_perror("Error: setgid failed");    goto drop_to_fpm_user; }
-        if (setuid(pw->pw_uid) != 0) { s_perror("Error: setuid failed");    goto drop_to_fpm_user; }
+        if (setgroups(0, NULL) != 0) { s_perror("setgroups (nobody)"); goto drop_to_fpm_user; }
+        if (setgid(pw->pw_gid) != 0) { s_perror("setgid (nobody)");    goto drop_to_fpm_user; }
+        if (setuid(pw->pw_uid) != 0) { s_perror("setuid (nobody)");    goto drop_to_fpm_user; }
     } else {
         s_fprintf(stderr, "Warning: 'nobody' user not found, continuing as original user\n");
     }
@@ -406,25 +407,24 @@ post_drop:
 
     // Prevent privilege regain in the child
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
-        s_perror("Warning: prctl(NO_NEW_PRIVS) failed");
+        s_perror("prctl PR_SET_NO_NEW_PRIVS");
     }
 
     // Close all inherited fds except stdio before exec
     closefrom_safe(3);
 
-    // Exec command
     fflush(NULL);
     execvp(argv[1], &argv[1]);
-    s_perror("Error: safexec failed");
+    s_perror("safexec: execvp");
     _exit(1);
 
 drop_to_fpm_user:
 
     // Drop to original FPM user (ruid/rgid). If this fails, refuse to run.
     if (was_root) {
-        if (setgroups(0, NULL) != 0) { s_perror("Error: fallback setgroups failed"); return 1; }
-        if (setgid(rgid) != 0)       { s_perror("Error: fallback setgid failed");    return 1; }
-        if (setuid(ruid) != 0)       { s_perror("Error: fallback setuid failed");    return 1; }
+        if (setgroups(0, NULL) != 0) { s_perror("setgroups (fallback)"); return 1; }
+        if (setgid(rgid) != 0)       { s_perror("setgid (fallback)");    return 1; }
+        if (setuid(ruid) != 0)       { s_perror("setuid (fallback)");    return 1; }
     }
 
     // If not was_root, we’re already the caller; nothing to do
