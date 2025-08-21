@@ -40,6 +40,7 @@
 #include <sys/prctl.h>
 #include <limits.h>
 #include <dirent.h>
+#include <stdarg.h>
 
 // Metadata
 #define SAFEXEC_NAME     "safexec"
@@ -50,9 +51,50 @@
 #define CGROUP_V2_MARKER "/sys/fs/cgroup/cgroup.controllers"
 #define CGROUP_TARGET    "/sys/fs/cgroup/cgroup.procs"
 
+// Quiet-aware logging layer
+static int QUIET = 0;
+
+static int env_quiet_enabled(void) {
+    const char *q = getenv("SAFEXEC_QUIET");
+    return q && *q && strcmp(q, "0") != 0;
+}
+
+static int s_printf(const char *fmt, ...) {
+    if (QUIET) return 0;
+    va_list ap; va_start(ap, fmt);
+    int r = vfprintf(stdout, fmt, ap);
+    va_end(ap);
+    return r;
+}
+
+static int s_fprintf(FILE *stream, const char *fmt, ...) {
+    if (QUIET) return 0;
+    va_list ap; va_start(ap, fmt);
+    int r = vfprintf(stream, fmt, ap);
+    va_end(ap);
+    return r;
+}
+
+static void s_perror(const char *s) {
+    if (!QUIET) perror(s);
+}
+
+// Safe DIR
+static void chdir_safe_if_cwd_inaccessible(void) {
+    /* If the final euid can "search" the current dir, do nothing */
+    if (access(".", X_OK) == 0) return;
+    s_fprintf(stderr, "Info: CWD not accessible; switching to /tmp\n");
+
+    // Try /tmp first; if it fails, try /
+    if (chdir("/tmp") != 0) {
+        if (chdir("/") != 0) {
+        }
+    }
+}
+
 // Print version
 static void print_version(void) {
-    printf(
+    s_printf(
         "%s %s\n"
         "Copyright (C) 2025 %s.\n"
         "Used by: NPP – Nginx Cache Purge Preload for WordPress.\n",
@@ -71,7 +113,7 @@ static int is_prog(const char *arg, const char *name) {
 
 // Usage
 static void print_usage(const char *argv0) {
-    fprintf(stderr,
+    s_printf(
         "Usage:\n"
         "  %s <program> [args...]\n"
         "  %s --kill=<pid>\n"
@@ -101,7 +143,7 @@ static void closefrom_safe(int lowfd) {
     DIR *d = opendir("/proc/self/fd");
     if (!d) {
         long max = sysconf(_SC_OPEN_MAX);
-        if (max < 0 || max > 65536) max = 1024; // conservative fallback
+        if (max < 0 || max > 65536) max = 1024;
         for (int fd = lowfd; fd < max; ++fd) close(fd);
         return;
     }
@@ -111,7 +153,7 @@ static void closefrom_safe(int lowfd) {
         if (de->d_name[0] == '.') continue;
         char *end = NULL;
         long fd = strtol(de->d_name, &end, 10);
-        if (end && *end) continue; // not a number
+        if (end && *end) continue;
         if (fd >= lowfd && fd != dirfdno) close((int)fd);
     }
     closedir(d);
@@ -129,18 +171,18 @@ static int ensure_tmp_cache_root(void) {
         if (!S_ISDIR(stc.st_mode)) return -1;
         if (stc.st_uid != 0 || stc.st_gid != 0) return -1;
         if (chmod("/tmp/nppp-cache", 01777) != 0)
-            perror("chmod /tmp/nppp-cache");
+            s_perror("chmod /tmp/nppp-cache");
         if (chown("/tmp/nppp-cache", 0, 0) != 0)
-            perror("chown /tmp/nppp-cache");
+            s_perror("chown /tmp/nppp-cache");
         return 0;
     }
     if (errno != ENOENT) return -1;
 
     if (mkdir("/tmp/nppp-cache", 0700) != 0) return -1;
     if (chown("/tmp/nppp-cache", 0, 0) != 0)
-        perror("chown /tmp/nppp-cache");
+        s_perror("chown /tmp/nppp-cache");
     if (chmod("/tmp/nppp-cache", 01777) != 0)
-        perror("chmod /tmp/nppp-cache");
+        s_perror("chmod /tmp/nppp-cache");
     if (lstat("/tmp/nppp-cache", &stc) != 0 || !S_ISDIR(stc.st_mode) ||
         stc.st_uid != 0 || stc.st_gid != 0) return -1;
     return 0;
@@ -168,7 +210,7 @@ static void fix_wget_tmp_if_tmp_blocked(int argc, char **argv) {
             if (access("/tmp", W_OK) == 0) return;
 
             if (!parent_cache_is_safe() || access("/tmp/nppp-cache", W_OK) != 0) {
-                fprintf(stderr, "Warning: /tmp not writable and /tmp/nppp-cache not a safe, root-owned dir; leaving -P /tmp\n");
+                s_fprintf(stderr, "Warning: /tmp not writable; no safe fallback. Keeping '-P /tmp'.\n");
                 return;
             }
 
@@ -176,23 +218,23 @@ static void fix_wget_tmp_if_tmp_blocked(int argc, char **argv) {
             snprintf(sub, sizeof sub, "/tmp/nppp-cache/%lu", (unsigned long)geteuid());
 
             if (mkdir(sub, 0700) != 0 && errno != EEXIST) {
-                fprintf(stderr, "Warning: cannot mkdir %s (%s); leaving -P /tmp\n", sub, strerror(errno));
+                s_fprintf(stderr, "Warning: failed to create '%s'. Keeping '-P /tmp'.\n", sub, strerror(errno));
                 return;
             }
 
             struct stat ss;
                 if (lstat(sub, &ss) != 0 || !S_ISDIR(ss.st_mode) || ss.st_uid != geteuid()) {
-                fprintf(stderr, "Warning: '%s' not a safe dir; leaving -P /tmp\n", sub);
+                s_fprintf(stderr, "Warning: unsafe fallback '%s'. Keeping '-P /tmp'.\n", sub);
                 return;
             }
 
             if (access(sub, W_OK) != 0) {
-                fprintf(stderr, "Warning: fallback %s not writable; leaving -P /tmp\n", sub);
+                s_fprintf(stderr, "Warning: fallback '%s' not writable. Keeping '-P /tmp'.\n", sub);
                 return;
             }
 
             argv[i + 1] = strdup(sub);
-            fprintf(stderr, "Info: /tmp not writable; rewriting wget -P '/tmp' -> '%s'\n", sub);
+            s_fprintf(stderr, "Info: Rewriting wget -P '/tmp' -> '%s'\n", sub);
             return;
         }
     }
@@ -206,12 +248,12 @@ int move_to_cgroup(pid_t pid) {
 
     int fd = open(CGROUP_TARGET, O_WRONLY | O_CLOEXEC | O_NOFOLLOW);
     if (fd == -1) {
-        perror("open cgroup.procs");
+        s_perror("open cgroup.procs");
         return -1;
     }
 
     if (dprintf(fd, "%d\n", pid) < 0) {
-        perror("dprintf cgroup.procs");
+        s_perror("dprintf cgroup.procs");
         close(fd);
         return -1;
     }
@@ -226,7 +268,7 @@ int try_kill_mode(const char *arg) {
 
     pid_t pid = atoi(arg + 7);
     if (pid <= 0) {
-        fprintf(stderr, "Invalid PID\n");
+        s_fprintf(stderr, "Error: Invalid PID\n");
         return 1;
     }
 
@@ -235,7 +277,7 @@ int try_kill_mode(const char *arg) {
     snprintf(path, sizeof(path), "/proc/%d/status", (int)pid);
     FILE *fp = fopen(path, "r");
     if (!fp) {
-        fprintf(stderr, "PID %d does not exist or already exited\n", pid);
+        s_fprintf(stderr, "Error: PID %d does not exist or already exited\n", pid);
         return 1;
     }
 
@@ -254,26 +296,28 @@ int try_kill_mode(const char *arg) {
     // Dynamically resolve 'nobody' instead of hardcoding 65534
     struct passwd *npw = getpwnam("nobody");
     if (!npw) {
-        fprintf(stderr, "'nobody' user not found\n");
+        s_fprintf(stderr, "Warning: 'nobody' user not found\n");
         return 1;
     }
 
     if (uid != (int)npw->pw_uid) {
-        fprintf(stderr, "Refusing to kill PID %d: not owned by 'nobody' (uid=%d)\n", pid, uid);
+        s_fprintf(stderr, "Info: Refusing to kill PID %d: not owned by 'nobody' (uid=%d)\n", pid, uid);
         return 1;
     }
 
     // Send SIGTERM
     if (kill(pid, SIGTERM) != 0) {
-        perror("kill failed");
+        s_perror("Error: kill failed");
         return 1;
     }
 
-    printf("Killed PID %d\n", pid);
+    printf("Success: Killed PID %d\n", pid);
     return 2;
 }
 
 int main(int argc, char *argv[]) {
+    QUIET = env_quiet_enabled();
+
     // Version/help handler
     if (argc >= 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
         print_version();
@@ -296,8 +340,8 @@ int main(int argc, char *argv[]) {
     {
         // Handle --kill=<pid>
         int k = try_kill_mode(argv[1]);
-        if (k == 2) return 0;
-        if (k == 1) { print_usage(argv[0]); return 1; }
+        if (k != 0)
+            return (k == 2) ? 0 : 1;
     }
 
     // From here, only "<program> [args...]" is allowed.
@@ -308,14 +352,17 @@ int main(int argc, char *argv[]) {
 
     // PASS-THROUGH MODE
     if (geteuid() != 0) {
-        dprintf(STDERR_FILENO,
-            "safexec: Pass-Through Mode (euid=%ld). "
-            "Starting '%s' as original fpm user. "
+        // Safe DIR
+        chdir_safe_if_cwd_inaccessible();
+
+        s_fprintf(stderr,
+            "Info: Pass-Through Mode (euid=%ld). Starting '%s' as original fpm user. "
             "To enable hardening: chown root:root %s && chmod 4755 %s (avoid nosuid).\n",
             (long)geteuid(), argv[1], argv[0], argv[0]);
 
+        fflush(NULL);
         execvp(argv[1], &argv[1]);
-        perror("safexec: execvp");
+        s_perror("Error: safexec failed");
         _exit(1);
     }
 
@@ -326,7 +373,7 @@ int main(int argc, char *argv[]) {
 
     // Move to isolated cgroup
     if (move_to_cgroup(pid) != 0) {
-        fprintf(stderr, "Warning: Failed to move to cgroup %s\n", CGROUP_TARGET);
+        s_fprintf(stderr, "Warning: Failed to move to cgroup %s\n", CGROUP_TARGET);
     }
 
     // Create /tmp/nppp-cache (01777) if possible, idempotent
@@ -339,11 +386,11 @@ int main(int argc, char *argv[]) {
 
     struct passwd *pw = getpwnam("nobody");
     if (pw) {
-        if (setgroups(0, NULL) != 0) { perror("setgroups failed"); goto drop_to_fpm_user; }
-        if (setgid(pw->pw_gid) != 0) { perror("setgid failed");    goto drop_to_fpm_user; }
-        if (setuid(pw->pw_uid) != 0) { perror("setuid failed");    goto drop_to_fpm_user; }
+        if (setgroups(0, NULL) != 0) { s_perror("Error: setgroups failed"); goto drop_to_fpm_user; }
+        if (setgid(pw->pw_gid) != 0) { s_perror("Error: setgid failed");    goto drop_to_fpm_user; }
+        if (setuid(pw->pw_uid) != 0) { s_perror("Error: setuid failed");    goto drop_to_fpm_user; }
     } else {
-        fprintf(stderr, "Warning: 'nobody' user not found, continuing as fpm user\n");
+        s_fprintf(stderr, "Warning: 'nobody' user not found, continuing as original user\n");
     }
 
     // Ensure we never exec as root; if still euid==0, drop to FPM user
@@ -351,29 +398,33 @@ int main(int argc, char *argv[]) {
 
 post_drop:
 
+    // Safe DIR
+    chdir_safe_if_cwd_inaccessible();
+
     // If /tmp isn't writable by the final euid
     fix_wget_tmp_if_tmp_blocked(argc, argv);
 
     // Prevent privilege regain in the child
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
-        perror("prctl(NO_NEW_PRIVS) failed");
+        s_perror("Warning: prctl(NO_NEW_PRIVS) failed");
     }
 
     // Close all inherited fds except stdio before exec
     closefrom_safe(3);
 
     // Exec command
+    fflush(NULL);
     execvp(argv[1], &argv[1]);
-    perror("exec failed");
+    s_perror("Error: safexec failed");
     _exit(1);
 
 drop_to_fpm_user:
 
     // Drop to original FPM user (ruid/rgid). If this fails, refuse to run.
     if (was_root) {
-        if (setgroups(0, NULL) != 0) { perror("fallback setgroups failed"); return 1; }
-        if (setgid(rgid) != 0)       { perror("fallback setgid failed");    return 1; }
-        if (setuid(ruid) != 0)       { perror("fallback setuid failed");    return 1; }
+        if (setgroups(0, NULL) != 0) { s_perror("Error: fallback setgroups failed"); return 1; }
+        if (setgid(rgid) != 0)       { s_perror("Error: fallback setgid failed");    return 1; }
+        if (setuid(ruid) != 0)       { s_perror("Error: fallback setuid failed");    return 1; }
     }
 
     // If not was_root, we’re already the caller; nothing to do
