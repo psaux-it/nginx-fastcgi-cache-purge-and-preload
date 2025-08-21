@@ -60,18 +60,6 @@ static void print_version(void) {
     );
 }
 
-// If euid!=0, fail early
-static void require_setuid_root_or_die(const char *argv0) {
-    if (geteuid() != 0) {
-        fprintf(stderr,
-            "Error: %s is not running with euid=0.\n"
-            "Fix: ensure it is owned by root and setuid (chown root:root %s && chmod 4755 %s),\n"
-            "and that the filesystem is NOT mounted with 'nosuid'.\n",
-            argv0, argv0, argv0);
-        exit(126);
-    }
-}
-
 static const char *base_of(const char *p) {
     const char *b = strrchr(p, '/');
     return b ? b + 1 : p;
@@ -286,9 +274,6 @@ int try_kill_mode(const char *arg) {
 }
 
 int main(int argc, char *argv[]) {
-    // Sanitize env and process state before any NSS/library lookups
-    sanitize_process_early();
-
     // Version/help handler
     if (argc >= 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
         print_version();
@@ -308,10 +293,12 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Handle --kill=<pid>
-    int k = try_kill_mode(argv[1]);
-    if (k == 2) return 0;
-    if (k == 1) { print_usage(argv[0]); return 1; }
+    {
+        // Handle --kill=<pid>
+        int k = try_kill_mode(argv[1]);
+        if (k == 2) return 0;
+        if (k == 1) { print_usage(argv[0]); return 1; }
+    }
 
     // From here, only "<program> [args...]" is allowed.
     if (argv[1][0] == '-' || is_all_digits(argv[1])) {
@@ -319,8 +306,21 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Refuse to continue if not setuid-root
-    require_setuid_root_or_die(argv[0]);
+    // PASS-THROUGH MODE
+    if (geteuid() != 0) {
+        dprintf(STDERR_FILENO,
+            "safexec: Pass-Through Mode (euid=%ld). "
+            "Starting '%s' as original fpm user. "
+            "To enable hardening: chown root:root %s && chmod 4755 %s (avoid nosuid).\n",
+            (long)geteuid(), argv[1], argv[0], argv[0]);
+
+        execvp(argv[1], &argv[1]);
+        perror("safexec: execvp");
+        _exit(1);
+    }
+
+    // Sanitize env and process state before any NSS/library lookups
+    sanitize_process_early();
 
     pid_t pid = getpid();
 
