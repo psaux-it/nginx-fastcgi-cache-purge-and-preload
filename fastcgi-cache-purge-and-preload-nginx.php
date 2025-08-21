@@ -19,9 +19,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// PHP-FPM worker (non-login user) uses a minimal PATH, extend it for shell commands
-putenv('PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin');
-
 // Define the plugin main file path
 if (!defined('NPPP_PLUGIN_FILE')) {
     define('NPPP_PLUGIN_FILE', __FILE__);
