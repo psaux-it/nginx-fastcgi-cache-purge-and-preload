@@ -769,6 +769,13 @@ function nppp_my_status_html() {
                                 </td>
                             </tr>
                             <tr>
+                                <td class="check"><?php esc_html_e('safexec (Recommended command)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="status" id="npppsafexecStatus">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_check_command_status('safexec')); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
                                 <td class="check"><?php esc_html_e('cpulimit (Optional command)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppcpulimitStatus">
                                     <span class="dashicons"></span>
