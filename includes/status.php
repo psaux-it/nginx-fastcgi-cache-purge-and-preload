@@ -75,6 +75,7 @@ function nppp_clear_plugin_cache() {
         'nppp_webserver_user_' . md5($static_key_base),
         'nppp_est_url_counts_' . md5($static_key_base),
         'nppp_last_preload_time_' . md5($static_key_base),
+        'nppp_safexec_version_' . md5($static_key_base),
     );
 
     // Delete each known transient
