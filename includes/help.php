@@ -166,6 +166,68 @@ function nppp_my_faq_html() {
                     </div>
                 </div>
 
+                <h3 class="nppp-question">What is safexec?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <p style="font-size: 14px;">
+                            <strong>safexec</strong> is a hardened wrapper for PHP’s <code>shell_exec()</code>, <em>written in C specifically for NPP (Nginx Cache Purge &amp; Preload for WordPress)</em>, used to run helper commands more safely. It drops privileges to the <code>nobody</code> user, detaches from the PHP-FPM cgroup (on cgroup v2 systems), scrubs the environment, closes inherited file descriptors, and prevents privilege re-gain.
+                        </p>
+
+                        <h4>Why does NPP use it?</h4>
+                        <ul style="font-size: 14px;">
+                            <li><strong>Privilege drop:</strong> commands run as <code>nobody</code> instead of the PHP-FPM user.</li>
+                            <li><strong>cgroup isolation:</strong> moves the process to a neutral cgroup (when cgroup v2 is present).</li>
+                            <li><strong>Hardened exec:</strong> cleans PATH/LANG, sets <code>PR_SET_NO_NEW_PRIVS</code>, closes stray FDs.</li>
+                            <li><strong>Safer temp handling:</strong> rewrites <code>wget -P /tmp</code> to a safe per-user fallback if needed (e.g., <code>/tmp/nppp-cache/&lt;euid&gt;</code>).</li>
+                            <li><strong>Controlled termination:</strong> you can stop only safexec-owned jobs via <code>--kill=&lt;pid&gt;</code>.</li>
+                        </ul>
+
+                        <h4>Benefits</h4>
+                        <ul style="font-size: 14px;">
+                            <li>Reduces risk from injected or misbehaving shell commands.</li>
+                            <li>Keeps preload/purge helpers isolated from WordPress/PHP-FPM.</li>
+                            <li>More predictable behavior on multi-tenant or container setups.</li>
+                        </ul>
+
+                        <h4>Is it recommended?</h4>
+                        <p style="font-size: 14px;">
+                            <strong>Yes.</strong> Using safexec is higly recommended for all user.
+                        </p>
+
+                        <h4>How do I install it?</h4>
+                        <ol class="nginx-list" style="font-size: 14px;">
+                            <li>One liner auto install (requires root privileges) RECOMMENDED:<br>
+                                <pre><code>curl -fsSL https://psaux-it.github.io/install-safexec.sh | sudo sh</code></pre>
+                            </li>
+                            <li>Verify installation:<br>
+                                <pre><code>safexec --version</code></pre>
+                            </li>
+                            <li><em>Note:</em> Install safexec <u>inside</u> the WordPress/PHP-FPM container (not just the host) so NPP can call it.</li>
+
+                            <li><strong>Manual install (alternative):</strong>
+                            <li>Download the binary from: <a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec" target="_blank" rel="noopener">GitHub &raquo; safexec</a></li>
+                            <li>Place it somewhere in your <code>PATH</code> (e.g., <code>/usr/local/bin</code>) as renamed <code>safexec</code>:</li>
+                            <pre><code>sudo cp safexec /usr/local/bin/safexec</code></pre>
+                            <li>Set secure ownership and setuid bit so it can drop privileges correctly:</li>
+                            <pre><code>sudo chown root:root /usr/local/bin/safexec</code></pre>
+                            <pre><code>sudo chmod 4755 /usr/local/bin/safexec</code></pre>
+                            <li>Verify:</li>
+                            <pre><code>safexec --version</code></pre>
+                            <li><em>Note:</em> If your target filesystem is mounted with <code>nosuid</code>, the setuid bit won’t take effect. Choose a mount point without <code>nosuid</code>.</li>
+                        </ol>
+
+                        <h4>Optional: quick test</h4>
+                        <p style="font-size: 14px;">NPP uses safexec automatically, but you can test it manually:</p>
+                        <pre><code>safexec wget -qO- https://example.com</code></pre>
+                        <p style="font-size: 14px;">Terminate a long-running safexec job:</p>
+                        <pre><code>safexec --kill=&lt;pid&gt;</code></pre>
+
+                        <p style="font-size: 14px;">
+                            <em>Note:</em> On systems without cgroup v2, safexec still runs (isolation becomes a no-op).
+                        </p>
+                    </div>
+                </div>
+
                 <h3 class="nppp-question">What is different about this plugin compared to other Nginx Cache Plugins?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
@@ -344,7 +406,7 @@ function nppp_my_faq_html() {
                         <p style="font-size: 14px;">Depending on how the NPP plugin generates cache keys on your system, choose the appropriate script:</p>
 
                         <p><strong>1. percent_encode_lowercase.py</strong> – It forcibly rewrites the percent-encoded characters in NPP plugin preload requests to lowercase for consistency:</p>
-                        <pre><code>from mitmproxy import http, ctx
+                        <pre>from mitmproxy import http, ctx
 import re
 
 percent_encoded_re = re.compile(r'%[0-9A-Fa-f]{2}')
@@ -355,10 +417,10 @@ def request(flow: http.HTTPFlow) -> None:
 
     if new_path != path:
         flow.request.path = new_path
-        ctx.log.info(f"Rewriting path: {path} → {new_path}")</code></pre>
+        ctx.log.info(f"Rewriting path: {path} → {new_path}")</pre>
 
                         <p><strong>2. percent_encode_uppercase.py</strong> – It forcibly rewrites the percent-encoded characters in NPP plugin preload requests to uppercase for consistency:</p>
-                        <pre><code>from mitmproxy import http, ctx
+                        <pre>from mitmproxy import http, ctx
 import re
 
 percent_encoded_re = re.compile(r'%[0-9a-f]{2}')
@@ -369,7 +431,7 @@ def request(flow: http.HTTPFlow) -> None:
 
     if new_path != path:
         flow.request.path = new_path
-        ctx.log.info(f"Rewriting path: {path} → {new_path}")</code></pre>
+        ctx.log.info(f"Rewriting path: {path} → {new_path}")</pre>
 
                         <h4>🔧 Example systemd service for mitmproxy:</h4>
                         <ul style="font-size: 14px;">
@@ -378,7 +440,7 @@ def request(flow: http.HTTPFlow) -> None:
                             <li><strong>Allow-Hosts:</strong> Set <code>yourdomain.com</code></li>
                         </ul>
 
-                        <pre><code>[Unit]
+                        <pre>[Unit]
 Description=Mitmproxy - Normalize Percent-Encoding
 After=network.target
 
@@ -397,7 +459,7 @@ StandardOutput=append:/var/log/mitmproxy.log
 StandardError=append:/var/log/mitmproxy.log
 
 [Install]
-WantedBy=multi-user.target</code></pre>
+WantedBy=multi-user.target</pre>
                     </div>
                 </div>
 
