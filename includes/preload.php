@@ -212,7 +212,7 @@ function nppp_detect_premature_process(
 
     // Check safexec availability
     $safexec_path = nppp_find_safexec_path();
-    $use_safexec = $safexec_path && nppp_is_safexec_usable($safexec_path, false);
+    $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', false);
 
     $testCommand = ($use_safexec ? "$safexec_path " : "") .
         "wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
@@ -461,7 +461,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
             // Check safexec available
             $safexec_path = nppp_find_safexec_path();
-            $use_safexec = $safexec_path && nppp_is_safexec_usable($safexec_path);
+            $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
 
             // Start cache preloading for whole website (Preload All)
             // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
@@ -663,7 +663,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
         // Check safexec available
         $safexec_path = nppp_find_safexec_path();
-        $use_safexec = $safexec_path && nppp_is_safexec_usable($safexec_path);
+        $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
 
         // Start cache preloading for whole website (Preload All)
         // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
@@ -853,7 +853,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 
     // Check safexec available
     $safexec_path = nppp_find_safexec_path();
-    $use_safexec = $safexec_path && nppp_is_safexec_usable($safexec_path);
+    $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
 
     // Start cache preloading for single post/page (when manual On-page preload action triggers)
     // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
@@ -1114,7 +1114,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
 
     // Check safexec available
     $safexec_path = nppp_find_safexec_path();
-    $use_safexec = $safexec_path && nppp_is_safexec_usable($safexec_path);
+    $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
 
     // Start cache preloading for single post/page (when Auto Purge & Auto Preload enabled both)
     // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
