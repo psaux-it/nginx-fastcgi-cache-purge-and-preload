@@ -2557,7 +2557,8 @@ function npppupdateStatus() {
         "#npppLibfuseVersion",
         "#npppBindfsVersion",
         "#nppppermIsolation",
-        "#npppcpulimitStatus"
+        "#npppcpulimitStatus",
+        "#npppsafexecStatus"
     ];
 
     // Verify all elements are in the DOM
@@ -2976,6 +2977,28 @@ function npppupdateStatus() {
 
     npppcpulimitStatusSpan.appendChild(iconSpanCpulimit);
     npppcpulimitStatusSpan.append(cpulimitStatusText);
+
+    // Fetch and update safexec command status
+    var npppsafexecStatusSpan = document.getElementById("npppsafexecStatus");
+    var npppsafexecStatus = npppsafexecStatusSpan.textContent.trim();
+    npppsafexecStatusSpan.textContent = '';
+    npppsafexecStatusSpan.style.fontSize = "14px";
+
+    let iconSpanSafexec = document.createElement('span');
+    let safexecStatusText = '';
+
+    if (npppsafexecStatus === "Installed") {
+        npppsafexecStatusSpan.style.color = "green";
+        iconSpanSafexec.classList.add("dashicons", "dashicons-yes");
+        safexecStatusText = ' ' + __('Installed', 'fastcgi-cache-purge-and-preload-nginx');
+    } else if (npppsafexecStatus === "Not Installed") {
+        npppsafexecStatusSpan.style.color = "red";
+        iconSpanSafexec.classList.add("dashicons", "dashicons-no");
+        safexecStatusText = ' ' + __('Not Installed', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    npppsafexecStatusSpan.appendChild(iconSpanSafexec);
+    npppsafexecStatusSpan.append(safexecStatusText);
 
     // Add spin effect to icons
     document.querySelectorAll('.status').forEach(status => {
