@@ -139,6 +139,28 @@ function nppp_check_libfuse_version() {
     return $result;
 }
 
+// Function to check safexec version
+function nppp_check_safexec_version() {
+    $transient_key = 'nppp_safexec_version_' . md5('nppp');
+    $cached = get_transient($transient_key);
+    if ($cached !== false) {
+        return $cached;
+    }
+
+    $installed_version = 'Unknown';
+
+    // Check if safexec is in PATH
+    if (nppp_get_command_output('command -v safexec')) {
+        $line = nppp_get_command_output("safexec -v 2>&1 | awk 'NR==1{print \$2}'");
+        if (!empty($line)) {
+            $installed_version = trim($line);
+        }
+    }
+
+    set_transient($transient_key, $installed_version, MONTH_IN_SECONDS);
+    return $installed_version;
+}
+
 // Function to check nginx cache path fuse mount points
 function nppp_check_fuse_cache_paths($cache_paths) {
     // Ask result in cache first
@@ -411,23 +433,43 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                         <td class="status" id="npppNginxVersion">
                             <?php if ($nginx_info['nginx_version'] === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: orange;"> <?php echo esc_html($nginx_info['nginx_version']); ?></span>
+                                <span style="color: orange; font-size: 14px; font-weight: bold;">
+                                    <?php echo esc_html($nginx_info['nginx_version']); ?>
+                                </span>
                             <?php else: ?>
                                 <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span><?php echo esc_html($nginx_info['nginx_version']); ?></span>
                             <?php endif; ?>
                         </td>
                     </tr>
-                    <!-- Section for OpenSSL Version -->
+                    <!-- Section for PHP Version -->
                     <tr>
                         <td class="action"><?php esc_html_e('PHP Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppOpenSSLVersion">
                             <?php if ($nginx_info['php_version'] === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: orange;"> <?php echo esc_html($nginx_info['php_version']); ?></span>
+                                <span style="color: orange; font-size: 14px; font-weight: bold;">
+                                    <?php echo esc_html($nginx_info['php_version']); ?>
+                                </span>
                             <?php else: ?>
                                 <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span><?php echo esc_html($nginx_info['php_version']); ?></span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <!-- Section for safexec Version -->
+                    <tr>
+                        <td class="action"><?php esc_html_e('safexec Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="status" id="npppSafexecVersion">
+                            <?php $safexec_version = nppp_check_safexec_version(); ?>
+                            <?php if ($safexec_version === 'Unknown'): ?>
+                                <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: orange; font-size: 14px; font-weight: bold;">
+                                    <?php echo esc_html($safexec_version); ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span><?php echo esc_html($safexec_version); ?></span>
                             <?php endif; ?>
                         </td>
                     </tr>
