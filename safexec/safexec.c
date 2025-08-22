@@ -94,7 +94,7 @@ static void chdir_safe_if_cwd_inaccessible(void) {
 
 // Print version
 static void print_version(void) {
-    s_printf(
+    printf(
         "%s %s\n"
         "Copyright (C) 2025 %s.\n"
         "Used by: NPP – Nginx Cache Purge Preload for WordPress.\n",
