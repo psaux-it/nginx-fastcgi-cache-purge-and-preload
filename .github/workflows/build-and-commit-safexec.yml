@@ -33,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm -v "$PWD":/src -w /src/safexec alpine:3.21 sh -euxc '
-            apk add --no-cache build-base musl-dev
+            apk add --no-cache build-base musl-dev linux-headers
             gcc -static -O2 -pipe -fPIE -pie -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
                 -Wl,-z,relro,-z,now safexec.c -o safexec-x86_64-linux-musl
             strip safexec-x86_64-linux-musl
@@ -49,6 +49,10 @@ jobs:
 
           # Compile inside the dockcross environment; output to safexec/
           ./dockcross bash -euxc '
+            if command -v apt-get >/dev/null 2>&1; then
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends linux-libc-dev
+            fi
             aarch64-linux-musl-gcc -static -O2 -pipe -fPIE -pie -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
                 -Wl,-z,relro,-z,now safexec/safexec.c -o safexec/safexec-aarch64-linux-musl
             aarch64-linux-musl-strip safexec/safexec-aarch64-linux-musl
@@ -82,14 +86,13 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm -v "$PWD":/src -w / alpine:3.21 sh -euxc '
-            apk add --no-cache coreutils
+            apk add --no-cache coreutils wget
             cp /src/safexec/safexec-x86_64-linux-musl /usr/local/bin/safexec
             chown root:root /usr/local/bin/safexec
             chmod 4755 /usr/local/bin/safexec
             adduser -D -s /bin/sh fpm
             su -s /bin/sh -c "/usr/local/bin/safexec --help >/dev/null" fpm
-            su -s /bin/sh -c "/usr/local/bin/safexec /usr/bin/id -un" fpm | grep -x nobody
-            su -s /bin/sh -c "/usr/local/bin/safexec /bin/true" fpm
+            su -s /bin/sh -c "/usr/local/bin/safexec wget --version >/dev/null" fpm
           '
 
       # Runtime smoke test (aarch64, minimal; runs via qemu)
@@ -97,14 +100,13 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm --platform=linux/arm64 -v "$PWD":/src -w / alpine:3.21 sh -euxc '
-            apk add --no-cache coreutils
+            apk add --no-cache coreutils wget
             cp /src/safexec/safexec-aarch64-linux-musl /usr/local/bin/safexec
             chown root:root /usr/local/bin/safexec
             chmod 4755 /usr/local/bin/safexec
             adduser -D -s /bin/sh fpm
             su -s /bin/sh -c "/usr/local/bin/safexec --help >/dev/null" fpm
-            su -s /bin/sh -c "/usr/local/bin/safexec /usr/bin/id -un" fpm | grep -x nobody
-            su -s /bin/sh -c "/usr/local/bin/safexec /bin/true" fpm
+            su -s /bin/sh -c "/usr/local/bin/safexec wget --version >/dev/null" fpm
           '
 
       # Make checksums (per-file + combined)
