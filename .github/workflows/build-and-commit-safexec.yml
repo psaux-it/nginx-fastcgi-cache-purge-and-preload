@@ -85,13 +85,13 @@ jobs:
       - name: Runtime smoke test (x86_64)
         run: |
           set -euo pipefail
-          docker run --rm -v "$PWD":/src -w / alpine:3.21 sh -euxc '
+          docker run --rm --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v "$PWD":/src -w / alpine:3.21 sh -euxc '
             apk add --no-cache coreutils wget
             cp /src/safexec/safexec-x86_64-linux-musl /usr/local/bin/safexec
             chown root:root /usr/local/bin/safexec
             chmod 4755 /usr/local/bin/safexec
             adduser -D -s /bin/sh fpm
-            su -s /bin/sh -c "/usr/local/bin/safexec --help >/dev/null" fpm
+            su -s /bin/sh -c "/usr/local/bin/safexec --help" fpm
             su -s /bin/sh -c "/usr/local/bin/safexec wget --version >/dev/null" fpm
           '
 
