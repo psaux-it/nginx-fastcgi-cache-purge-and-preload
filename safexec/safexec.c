@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <signal.h>
@@ -41,24 +42,29 @@
 #include <limits.h>
 #include <dirent.h>
 #include <stdarg.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <linux/ioprio.h>
+#ifndef IOPRIO_WHO_PROCESS
+#define IOPRIO_WHO_PROCESS 1
+#endif
 
 // Metadata
 #define SAFEXEC_NAME     "safexec"
 #define SAFEXEC_VERSION  "1.9.2"
 #define SAFEXEC_AUTHOR   "Hasan Calisir"
 
-// Cgroup
-#define CGROUP_V2_MARKER "/sys/fs/cgroup/cgroup.controllers"
-#define CGROUP_TARGET    "/sys/fs/cgroup/cgroup.procs"
-
 // Quiet-aware logging layer
 static int QUIET = 0;
-
 static int env_quiet_enabled(void) {
-    const char *q = getenv("SAFEXEC_QUIET");
+    const char *q =
+#ifdef __GLIBC__
+        secure_getenv("SAFEXEC_QUIET");
+#else
+        getenv("SAFEXEC_QUIET");
+#endif
     return q && *q && strcmp(q, "0") != 0;
 }
-
 static int s_printf(const char *fmt, ...) {
     if (QUIET) return 0;
     va_list ap; va_start(ap, fmt);
@@ -66,7 +72,6 @@ static int s_printf(const char *fmt, ...) {
     va_end(ap);
     return r;
 }
-
 static int s_fprintf(FILE *stream, const char *fmt, ...) {
     if (QUIET) return 0;
     va_list ap; va_start(ap, fmt);
@@ -74,20 +79,557 @@ static int s_fprintf(FILE *stream, const char *fmt, ...) {
     va_end(ap);
     return r;
 }
-
 static void s_perror(const char *s) {
     if (!QUIET) perror(s);
 }
 
+// snprintf wrapper that errors on truncation to quiet -Wformat-truncation
+static int safe_snprintf(char *dst, size_t dstsz, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(dst, dstsz, fmt, ap);
+    va_end(ap);
+    if (n < 0) return -1;
+    if ((size_t)n >= dstsz) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    return 0;
+}
+
+// Limits
+typedef struct {
+    const char *mem_max_v2;  // e.g. "256M" or "max"
+    unsigned long long mem_max_v1_bytes; // e.g. 268435456
+    int pids_max;            // -1 unlimited
+    int cpu_weight_v2;       // 1..10000 (default 100)
+    int cpu_shares_v1;       // 2..262144 (default 1024)
+    const char *io_max;      // e.g. "8:0 rbps=1M wbps=1M" (optional)
+    int rlimit_cpu_secs;     // <0 => unlimited, 0 => skip, >0 => set
+    unsigned long long rlimit_as_bytes; // 0 => unlimited, >0 => set
+    int rlimit_nofile;       // <0 => unlimited, 0 => skip, >0 => set
+    int rlimit_nproc;        // <0 => unlimited, 0 => skip, >0 => set
+    int nice_adj;            // 0 => leave as-is
+    int ioprio_class;        // 0 => leave as-is; 1=RT,2=BE,3=IDLE
+    int ioprio_data;         // 0..7
+} nppp_limits;
+
+static nppp_limits nppp_default_limits(void) {
+    nppp_limits L = {
+        .mem_max_v2 = NULL,                 // v2: explicitly unlimited
+        .mem_max_v1_bytes = 0,               // v1: don't write -> unlimited
+        .pids_max = -1,                      // unlimited
+        .cpu_weight_v2 = 0,                  // don't write -> kernel default (100)
+        .cpu_shares_v1 = 0,                  // don't write
+        .io_max = NULL,
+        .rlimit_cpu_secs = -1,               // unlimited CPU time
+        .rlimit_as_bytes = 0,                // unlimited address space
+        .rlimit_nofile = -1,                 // unlimited (clamped by nr_open)
+        .rlimit_nproc = -1,                  // unlimited
+        .nice_adj = 0,                       // leave priority unchanged
+        .ioprio_class = 0, .ioprio_data = 0  // leave IO priority unchanged
+    };
+    return L;
+}
+
+static int write_all_str(const char *path, const char *s) {
+    int fd = open(path, O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
+    if (fd < 0) return -1;
+    size_t n = strlen(s);
+    ssize_t w = write(fd, s, n);
+    int saved = errno;
+    int rc = (w == (ssize_t)n) ? 0 : -1;
+    errno = saved;
+    close(fd);
+    return rc;
+}
+
+// Write a line (auto-append newline)
+static int write_all_line(const char *path, const char *s) {
+    int fd = open(path, O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
+    if (fd < 0) return -1;
+    ssize_t w1 = write(fd, s, strlen(s));
+    ssize_t w2 = (w1 >= 0) ? write(fd, "\n", 1) : -1;
+    int rc = (w1 == (ssize_t)strlen(s) && w2 == 1) ? 0 : -1;
+    close(fd);
+    return rc;
+}
+
+static int write_all_u64(const char *path, unsigned long long v) {
+    char buf[64];
+    int len = snprintf(buf, sizeof buf, "%llu\n", v);
+    (void)len;
+    return write_all_str(path, buf);
+}
+
+static int is_dir_nosym(const char *path) {
+    struct stat st;
+    if (lstat(path, &st) != 0) return 0;
+    return S_ISDIR(st.st_mode);
+}
+
+// Read back first token/line from a controller file (for logging)
+static int read_token(const char *path, char *out, size_t outsz) {
+    int fd = open(path, O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
+    if (fd < 0) return -1;
+    ssize_t n = read(fd, out, (ssize_t)outsz - 1);
+    close(fd);
+    if (n < 0) return -1;
+    size_t len = (n > 0) ? (size_t)n : 0;
+    out[len] = '\0';
+    char *nl = strchr(out, '\n'); if (nl) *nl = 0;
+    return 0;
+}
+
+// cgroup v2
+static const char *cgv2_root(void) {
+    static const char *root = NULL;
+    if (root) return root;
+    if (access("/sys/fs/cgroup/cgroup.controllers", R_OK) == 0)
+        root = "/sys/fs/cgroup";
+    else if (access("/sys/fs/cgroup/unified/cgroup.controllers", R_OK) == 0)
+        root = "/sys/fs/cgroup/unified";
+    else
+        root = NULL;
+    return root;
+}
+
+static int cgv2_available(void) {
+    return cgv2_root() != NULL;
+}
+
+static int cgv2_enable_one(const char *tok) {
+    const char *root = cgv2_root(); if (!root) return -1;
+    char path[PATH_MAX];
+    if (safe_snprintf(path, sizeof path, "%s/cgroup.subtree_control", root) != 0) return -1;
+    int fd = open(path, O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
+    if (fd < 0) {
+        s_fprintf(stderr, "Info: cannot open %s: %s\n", path, strerror(errno));
+        return -1;
+    }
+    char buf[32]; int len = snprintf(buf, sizeof buf, "%s\n", tok);
+    ssize_t w = write(fd, buf, len);
+    int e = errno; close(fd);
+    if (w != (ssize_t)len) {
+        if (strcmp(tok, "+cpu") == 0 && e == EINVAL) {
+            s_fprintf(stderr, "Info: enabling +cpu failed (EINVAL). "
+                               "Hint: v2 cpu controller needs all RT threads in root.\n");
+        } else {
+            s_fprintf(stderr, "Info: cannot enable %s on subtree_control: %s\n", tok, strerror(e));
+        }
+        return -1;
+    }
+    return 0;
+}
+
+static void __attribute__((unused)) cgv2_enable_controllers(void) {
+    // Try each; failures are non-fatal
+    (void)cgv2_enable_one("+memory");
+    (void)cgv2_enable_one("+pids");
+    (void)cgv2_enable_one("+cpu");
+    (void)cgv2_enable_one("+io");
+    (void)cgv2_enable_one("+cpuset");
+}
+
+// Remove empty stale groups matching prefix (e.g., "nppp.")
+static void cgv2_cleanup_stale(const char *prefix) {
+    const char *root = cgv2_root(); if (!root) return;
+    DIR *d = opendir(root); if (!d) return;
+    struct dirent *de;
+    size_t plen = strlen(prefix);
+    while ((de = readdir(d))) {
+        if (de->d_type != DT_DIR) {
+            if (de->d_type != DT_UNKNOWN) continue;
+            /* fall back to lstat when d_type is unknown */
+            char probe[PATH_MAX];
+            if (safe_snprintf(probe, sizeof probe, "%s/%s", root, de->d_name) != 0) continue;
+            struct stat st;
+            if (lstat(probe, &st) != 0 || !S_ISDIR(st.st_mode)) continue;
+        }
+        if (de->d_name[0] == '.') continue;
+        if (strncmp(de->d_name, prefix, plen) != 0) continue;
+        char dir[PATH_MAX];
+        if (safe_snprintf(dir, sizeof dir, "%s/%s", root, de->d_name) != 0) continue;
+        // Try to remove; will only succeed if empty
+        if (rmdir(dir) == 0) {
+            s_fprintf(stderr, "Info: removed empty stale cgroup v2 '%s'\n", dir);
+        }
+    }
+    closedir(d);
+}
+
+// New: cleanup under the current parent subtree instead of only the global root
+static void cgv2_cleanup_stale_at(const char *parent, const char *prefix) {
+    DIR *d = opendir(parent); if (!d) return;
+    struct dirent *de; size_t plen = strlen(prefix);
+    while ((de = readdir(d))) {
+        if (de->d_name[0] == '.') continue;
+        if (strncmp(de->d_name, prefix, plen) != 0) continue;
+        char dir[PATH_MAX];
+        if (safe_snprintf(dir, sizeof dir, "%s/%s", parent, de->d_name) != 0) continue;
+        /* Only remove if empty */
+        (void)rmdir(dir);
+    }
+    closedir(d);
+}
+
+// Read the absolute cgroup v2 dir of the current process: /sys/fs/cgroup + self path
+static int cgv2_self_dir(char *out, size_t outsz) {
+    const char *root = cgv2_root(); if (!root) return -1;
+    int fd = open("/proc/self/cgroup", O_RDONLY|O_CLOEXEC); if (fd < 0) return -1;
+    FILE *f = fdopen(fd, "r"); if (!f) { close(fd); return -1; }
+    char line[4096]; int rc = -1;
+    while (fgets(line, sizeof line, f)) {
+        // v2 line format: 0::/user.slice/...
+        if (strncmp(line, "0::", 3) == 0) {
+            char *p = line + 3;
+            char *nl = strchr(p, '\n'); if (nl) *nl = 0;
+            if (safe_snprintf(out, outsz, "%s%s", root, p) == 0) rc = 0;
+            break;
+        }
+    }
+    fclose(f);
+    return rc;
+}
+
+static int cgv2_enable_one_at(const char *parent, const char *tok) {
+    char path[PATH_MAX];
+    if (safe_snprintf(path, sizeof path, "%s/cgroup.subtree_control", parent) != 0) return -1;
+    int fd = open(path, O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
+    if (fd < 0) return -1;
+    char buf[32]; int len = snprintf(buf, sizeof buf, "%s\n", tok);
+    ssize_t w = write(fd, buf, len);
+    int saved = errno;
+    close(fd);
+    if (w != (ssize_t)len) { errno = saved; return -1; }
+    return 0;
+}
+
+static int cgv2_controller_available_at(const char *parent, const char *name) {
+    char path[PATH_MAX], buf[1024];
+    if (safe_snprintf(path, sizeof path, "%s/cgroup.controllers", parent) != 0) return 0;
+    int fd = open(path, O_RDONLY|O_CLOEXEC|O_NOFOLLOW); if (fd < 0) return 0;
+    ssize_t n = read(fd, buf, sizeof buf - 1);
+    close(fd);
+    if (n <= 0) return 0;
+    buf[n] = '\0';
+    return strstr(buf, name) != NULL;
+}
+
+// Read cgroup.type and check if a cgroup is in a threaded subtree
+static int cgv2_is_threaded(const char *dir) {
+    char path[PATH_MAX], t[64] = {0};
+    if (safe_snprintf(path, sizeof path, "%s/cgroup.type", dir) != 0) return 0;
+    if (read_token(path, t, sizeof t) != 0) return 0;
+    /* parent considered threaded if "threaded" or "domain threaded" */
+    return (strcmp(t, "threaded") == 0) || (strcmp(t, "domain threaded") == 0);
+}
+
+
+static void cgv2_copy_cpuset_from_parent(const char *parent, const char *child) {
+    char from[PATH_MAX], to[PATH_MAX], tok[8192];
+    // cpuset.cpus
+    if (safe_snprintf(to, sizeof to,   "%s/cpuset.cpus", child) == 0 &&
+        safe_snprintf(from, sizeof from,"%s/cpuset.cpus", parent) == 0) {
+        if (read_token(to, tok, sizeof tok) == 0 && tok[0] == '\0') {
+            if (read_token(from, tok, sizeof tok) == 0 && tok[0] != '\0')
+                (void)write_all_line(to, tok);
+        }
+    }
+    // cpuset.mems
+    if (safe_snprintf(to, sizeof to,   "%s/cpuset.mems", child) == 0 &&
+        safe_snprintf(from, sizeof from,"%s/cpuset.mems", parent) == 0) {
+        if (read_token(to, tok, sizeof tok) == 0 && tok[0] == '\0') {
+            if (read_token(from, tok, sizeof tok) == 0 && tok[0] != '\0')
+                (void)write_all_line(to, tok);
+        }
+    }
+}
+
+// Read cgroup.events and return 1 if populated, 0 if not, -1 on error
+static int cgv2_events_populated(const char *dir) {
+    char p[PATH_MAX];
+    if (safe_snprintf(p, sizeof p, "%s/cgroup.events", dir) != 0) return -1;
+
+    int fd = open(p, O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
+    if (fd < 0) return -1;
+    char buf[1024];
+    ssize_t n = read(fd, buf, sizeof buf - 1);
+    int saved = errno; close(fd); errno = saved;
+    if (n <= 0) return -1;
+    buf[n] = '\0';
+
+    /* Look for "populated <0/1>" anywhere */
+    const char *k = strstr(buf, "populated");
+    if (!k) return -1;
+    while (*k && (*k < '0' || *k > '9')) k++;
+    return (*k == '1') ? 1 : 0;
+}
+
+// Best-effort: remove dir only if empty/unpopulated
+static void cgv2_try_rmdir_if_empty(const char *dir) {
+    if (!is_dir_nosym(dir)) return;
+    int pop = cgv2_events_populated(dir);
+    if (pop == 0) {
+        (void)rmdir(dir);
+    }
+}
+
+// Always use /sys/fs/cgroup/nppp as base parent
+static int cgv2_root_base(char *out, size_t outsz) {
+    const char *root = cgv2_root();
+    if (!root) return -1;
+    if (safe_snprintf(out, outsz, "%s/%s", root, "nppp") != 0) return -1;
+    (void)mkdir(out, 0755);
+    return 0;
+}
+
+static int cgv2_join_group(const char *name, const nppp_limits *L) {
+    if (!cgv2_available()) return -1;
+
+    /* Discover where we START (session/service subtree), and our TARGET parent (/sys/fs/cgroup/nppp) */
+    char self_parent[PATH_MAX], parent[PATH_MAX];
+    if (cgv2_self_dir(self_parent, sizeof self_parent) != 0) return -1;
+    if (cgv2_root_base(parent, sizeof parent) != 0) return -1;
+
+    /* Prune empty nppp.* both under the session subtree and our global parent */
+    cgv2_cleanup_stale_at(self_parent, "nppp.");
+    cgv2_cleanup_stale_at(parent,      "nppp.");
+
+    /* Enable controllers on the global parent when possible (ignore failures) */
+    int parent_threaded = cgv2_is_threaded(parent);
+    if (!parent_threaded) {
+        (void)cgv2_enable_one_at(parent, "+memory");
+        (void)cgv2_enable_one_at(parent, "+pids");
+        (void)cgv2_enable_one_at(parent, "+cpu");
+        (void)cgv2_enable_one_at(parent, "+io");
+        (void)cgv2_enable_one_at(parent, "+cpuset");
+    }
+
+    /* Create child under the GLOBAL parent (always-detach) */
+    char dir[PATH_MAX];
+    if (safe_snprintf(dir, sizeof dir, "%s/%s", parent, name) != 0) return -1;
+    if (mkdir(dir, 0755) != 0 && errno != EEXIST) return -1;
+
+    /* If we *had* created a same-named child in the session subtree in earlier builds, remember it */
+    char legacy_in_session[PATH_MAX];
+    int have_legacy = (safe_snprintf(legacy_in_session, sizeof legacy_in_session, "%s/%s", self_parent, name) == 0) &&
+                      is_dir_nosym(legacy_in_session);
+
+    /* If parent is threaded (unexpected at root), mark child threaded so thread-move works */
+    if (parent_threaded) {
+        char p[PATH_MAX];
+        if (safe_snprintf(p, sizeof p, "%s/cgroup.type", dir) == 0)
+            (void)write_all_line(p, "threaded");
+    }
+
+    /* Apply optional limits only when meaningful */
+    char p[PATH_MAX];
+    int applied = 0;
+    if (!parent_threaded && L->mem_max_v2 && *L->mem_max_v2) {
+        if (safe_snprintf(p, sizeof p, "%s/memory.max", dir) != 0) return -1;
+        if (write_all_line(p, L->mem_max_v2) == 0) applied++;
+    }
+    if (!parent_threaded && cgv2_controller_available_at(parent, "memory")) {
+        if (safe_snprintf(p, sizeof p, "%s/memory.swap.max", dir) == 0)
+            (void)write_all_line(p, "max");
+    }
+    if (!parent_threaded && cgv2_controller_available_at(parent, "pids") && L->pids_max != 0) {
+        if (safe_snprintf(p, sizeof p, "%s/pids.max", dir) != 0) return -1;
+        if (L->pids_max < 0)  { if (write_all_line(p, "max") == 0) applied++; }
+        else                  { if (write_all_u64(p, (unsigned long long)L->pids_max) == 0) applied++; }
+    }
+    if (!parent_threaded && cgv2_controller_available_at(parent, "cpu") && L->cpu_weight_v2 > 0) {
+        if (safe_snprintf(p, sizeof p, "%s/cpu.weight", dir) != 0) return -1;
+        if (write_all_u64(p, (unsigned long long)L->cpu_weight_v2) == 0) applied++;
+    }
+    if (!parent_threaded && L->io_max && cgv2_controller_available_at(parent, "io")) {
+        if (safe_snprintf(p, sizeof p, "%s/io.max", dir) != 0) return -1;
+        if (write_all_line(p, L->io_max) == 0) applied++;
+    }
+    if (!parent_threaded && cgv2_controller_available_at(parent, "cpuset"))
+        cgv2_copy_cpuset_from_parent(parent, dir);
+
+    /* Safety: avoid memory.max=0 */
+    if (!parent_threaded && safe_snprintf(p, sizeof p, "%s/memory.max", dir) == 0) {
+        char v[32];
+        if (read_token(p, v, sizeof v) == 0 && strcmp(v, "0") == 0) {
+            s_fprintf(stderr, "Error: memory.max=0 in child; aborting cgroup join.\n");
+            (void)rmdir(dir);
+            return -1;
+        }
+    }
+
+    /* Move into the new child */
+    if (parent_threaded) {
+        if (safe_snprintf(p, sizeof p, "%s/cgroup.threads", dir) != 0) return -1;
+        char tidbuf[64]; snprintf(tidbuf, sizeof tidbuf, "%ld\n", (long)syscall(SYS_gettid));
+        if (write_all_str(p, tidbuf) != 0) {
+            s_fprintf(stderr, "Error: cannot move thread to '%s': %s\n", dir, strerror(errno));
+            return -1;
+        }
+    } else {
+        if (safe_snprintf(p, sizeof p, "%s/cgroup.procs", dir) != 0) return -1;
+        char pidbuf[64]; snprintf(pidbuf, sizeof pidbuf, "%ld\n", (long)getpid());
+        if (write_all_str(p, pidbuf) != 0) {
+            int saved = errno;
+            if (saved == EOPNOTSUPP && safe_snprintf(p, sizeof p, "%s/cgroup.threads", dir) == 0) {
+                char tidbuf[64]; snprintf(tidbuf, sizeof tidbuf, "%ld\n", (long)syscall(SYS_gettid));
+                if (write_all_str(p, tidbuf) != 0) {
+                    s_fprintf(stderr, "Error: cannot move to '%s': %s\n", dir, strerror(errno));
+                    return -1;
+                }
+            } else {
+                s_fprintf(stderr, "Error: cannot move to '%s': %s\n", dir, strerror(saved));
+                errno = saved;
+                return -1;
+            }
+        }
+    }
+
+    /* AFTER we moved out: try to remove a same-named legacy cgroup under the session subtree */
+    if (have_legacy) cgv2_try_rmdir_if_empty(legacy_in_session);
+
+    return 0;
+}
+
+
+// cgroup v1
+static int cgv1_available(void) {
+    return is_dir_nosym("/sys/fs/cgroup/memory") ||
+           is_dir_nosym("/sys/fs/cgroup/pids") ||
+           is_dir_nosym("/sys/fs/cgroup/cpu")  ||
+           is_dir_nosym("/sys/fs/cgroup/cpu,cpuacct");
+}
+
+static int cgv1_join_group(const char *name, const nppp_limits *L) {
+    char buf[PATH_MAX]; char tasks[PATH_MAX]; char base[PATH_MAX];
+    int moved = 0;
+    int applied = 0;
+    pid_t me = getpid();
+
+    if (is_dir_nosym("/sys/fs/cgroup/memory")) {
+        if (safe_snprintf(base, sizeof base, "/sys/fs/cgroup/memory/%s", name) != 0) return -1;
+        mkdir(base, 0755);
+        if (safe_snprintf(buf, sizeof buf, "%s/memory.limit_in_bytes", base) != 0) return -1;
+        if (L->mem_max_v1_bytes > 0 &&
+            write_all_u64(buf, L->mem_max_v1_bytes) == 0) {
+            applied++;
+            if (safe_snprintf(tasks, sizeof tasks, "%s/tasks", base) != 0) return -1;
+            if (write_all_u64(tasks, (unsigned long long)me) == 0) moved = 1;
+        }
+    }
+    if (is_dir_nosym("/sys/fs/cgroup/pids")) {
+        if (safe_snprintf(base, sizeof base, "/sys/fs/cgroup/pids/%s", name) != 0) return -1;
+        mkdir(base, 0755);
+        if (safe_snprintf(buf, sizeof buf, "%s/pids.max", base) != 0) return -1;
+        int wrote = 0;
+        if (L->pids_max > 0) {
+            wrote = (write_all_u64(buf, (unsigned long long)L->pids_max) == 0);
+        } else if (L->pids_max < 0) {
+            wrote = (write_all_line(buf, "max") == 0);
+        }
+        if (wrote) {
+            applied++;
+            if (safe_snprintf(tasks, sizeof tasks, "%s/tasks", base) != 0) return -1;
+            if (write_all_u64(tasks, (unsigned long long)me) == 0) moved = 1;
+        }
+    }
+    if (is_dir_nosym("/sys/fs/cgroup/cpu,cpuacct")) {
+        if (safe_snprintf(base, sizeof base, "/sys/fs/cgroup/cpu,cpuacct/%s", name) != 0) return -1;
+        mkdir(base, 0755);
+        if (safe_snprintf(buf, sizeof buf, "%s/cpu.shares", base) != 0) return -1;
+        if (L->cpu_shares_v1 > 0 && write_all_u64(buf, (unsigned long long)L->cpu_shares_v1) == 0) {
+            applied++;
+            if (safe_snprintf(tasks, sizeof tasks, "%s/tasks", base) != 0) return -1;
+            if (write_all_u64(tasks, (unsigned long long)me) == 0) moved = 1;
+        }
+    } else if (is_dir_nosym("/sys/fs/cgroup/cpu")) {
+        if (safe_snprintf(base, sizeof base, "/sys/fs/cgroup/cpu/%s", name) != 0) return -1;
+        mkdir(base, 0755);
+        if (safe_snprintf(buf, sizeof buf, "%s/cpu.shares", base) != 0) return -1;
+        if (L->cpu_shares_v1 > 0 && write_all_u64(buf, (unsigned long long)L->cpu_shares_v1) == 0) {
+            applied++;
+            if (safe_snprintf(tasks, sizeof tasks, "%s/tasks", base) != 0) return -1;
+            if (write_all_u64(tasks, (unsigned long long)me) == 0) moved = 1;
+        }
+    }
+    return (applied && moved) ? 0 : -1;
+}
+
+static void apply_rlimits_and_sched(const nppp_limits *L) {
+    struct rlimit r;
+    // Address space: 0 => unlimited, >0 => set
+    if (L->rlimit_as_bytes == 0) {
+        r.rlim_cur = r.rlim_max = RLIM_INFINITY;
+        (void)setrlimit(RLIMIT_AS, &r);
+    } else if (L->rlimit_as_bytes > 0) {
+        r.rlim_cur = r.rlim_max = (rlim_t)L->rlimit_as_bytes;
+        (void)setrlimit(RLIMIT_AS, &r);
+    }
+    // CPU time: <0 => unlimited, 0 => skip, >0 => set
+    if (L->rlimit_cpu_secs < 0) {
+        r.rlim_cur = r.rlim_max = RLIM_INFINITY;
+        (void)setrlimit(RLIMIT_CPU, &r);
+    } else if (L->rlimit_cpu_secs > 0) {
+        r.rlim_cur = r.rlim_max = (rlim_t)L->rlimit_cpu_secs;
+        (void)setrlimit(RLIMIT_CPU, &r);
+    }
+    // NOFILE: <0 => unlimited, 0 => skip, >0 => set
+    if (L->rlimit_nofile < 0) {
+        r.rlim_cur = r.rlim_max = RLIM_INFINITY;
+        (void)setrlimit(RLIMIT_NOFILE, &r);
+    } else if (L->rlimit_nofile > 0) {
+        r.rlim_cur = r.rlim_max = (rlim_t)L->rlimit_nofile;
+        (void)setrlimit(RLIMIT_NOFILE, &r);
+    }
+    // NPROC: <0 => unlimited, 0 => skip, >0 => set
+    #ifdef RLIMIT_NPROC
+    if (L->rlimit_nproc < 0) {
+        r.rlim_cur = r.rlim_max = RLIM_INFINITY;
+        (void)setrlimit(RLIMIT_NPROC, &r);
+    } else if (L->rlimit_nproc > 0) {
+        r.rlim_cur = r.rlim_max = (rlim_t)L->rlimit_nproc;
+        (void)setrlimit(RLIMIT_NPROC, &r);
+    }
+    #endif
+
+    // Only adjust nice/ionice if requested
+    if (L->nice_adj != 0) { errno = 0; (void)setpriority(PRIO_PROCESS, 0, L->nice_adj); }
+    if (L->ioprio_class > 0) {
+        int prio = IOPRIO_PRIO_VALUE(L->ioprio_class, L->ioprio_data);
+        (void)syscall(SYS_ioprio_set, IOPRIO_WHO_PROCESS, 0 /*self*/, prio);
+    }
+}
+
+enum detach_mode { DET_AUTO, DET_CGV2, DET_CGV1, DET_RLIMITS, DET_OFF };
+static enum detach_mode parse_detach_mode(void) {
+    const char *s =
+#ifdef __GLIBC__
+        secure_getenv("SAFEXEC_DETACH");
+#else
+        getenv("SAFEXEC_DETACH");
+#endif
+
+    if (!s || !*s) return DET_AUTO;
+    if (!strcasecmp(s, "auto"))    return DET_AUTO;
+    if (!strcasecmp(s, "cgv2"))    return DET_CGV2;
+    if (!strcasecmp(s, "cgv1"))    return DET_CGV1;
+    if (!strcasecmp(s, "rlimits")) return DET_RLIMITS;
+    if (!strcasecmp(s, "off"))     return DET_OFF;
+    return DET_AUTO;
+}
+
 // Safe DIR
 static void chdir_safe_if_cwd_inaccessible(void) {
-    /* If the final euid can "search" the current dir, do nothing */
-    if (access(".", X_OK) == 0) return;
+if (access(".", X_OK) == 0) return;
     s_fprintf(stderr, "Info: CWD not accessible; switching to /tmp\n");
-
-    // Try /tmp first; if it fails, try /
     if (chdir("/tmp") != 0) {
-        if (chdir("/") != 0) {
+        int rc = chdir("/");
+        if (rc != 0) {
+            int e = errno;
+            s_fprintf(stderr, "Warning: failed to chdir to /tmp and /: %s\n",
+                strerror(e));
         }
     }
 }
@@ -109,6 +651,19 @@ static const char *base_of(const char *p) {
 
 static int is_prog(const char *arg, const char *name) {
     return strcmp(base_of(arg), name) == 0;
+}
+
+// Find the real target program, skipping benign wrappers (e.g., nohup)
+static int find_target_prog_index(int argc, char **argv) {
+    int i = 1; // argv[0] = safexec
+    while (i < argc) {
+        const char *b = base_of(argv[i]);
+        if (strcmp(b, "nohup") == 0) { i++; continue; }  // allows: safexec nohup wget ...
+        // Add more wrappers later if needed, e.g.:
+        // if (strcmp(b, "nice") == 0) { i++; continue; }
+        break;
+    }
+    return i;
 }
 
 // Usage
@@ -199,10 +754,10 @@ static int parent_cache_is_safe(void) {
 
 // Post-drop: /tmp isn't writable by the final euid, rewrite -P to /tmp/nppp-cache/<euid>
 static void fix_wget_tmp_if_tmp_blocked(int argc, char **argv) {
-    if (argc < 3) return;
+    if (argc < 2) return;
 
-    int prog_i = 1;
-    if (argc > 2 && is_prog(argv[1], "nohup")) prog_i = 2;
+    int prog_i = find_target_prog_index(argc, argv);
+    if (prog_i >= argc) return;
     if (!is_prog(argv[prog_i], "wget")) return;
 
     for (int i = prog_i + 1; i + 1 < argc; i++) {
@@ -215,7 +770,10 @@ static void fix_wget_tmp_if_tmp_blocked(int argc, char **argv) {
             }
 
             char sub[PATH_MAX];
-            snprintf(sub, sizeof sub, "/tmp/nppp-cache/%lu", (unsigned long)geteuid());
+            if (safe_snprintf(sub, sizeof sub, "/tmp/nppp-cache/%lu", (unsigned long)geteuid()) != 0) {
+                s_fprintf(stderr, "Warning: failed to compose fallback path. Keeping '-P /tmp'.\n");
+                return;
+            }
 
             if (mkdir(sub, 0700) != 0 && errno != EEXIST) {
                 s_fprintf(stderr, "Warning: failed to create '%s'. Keeping '-P /tmp'.\n", sub);
@@ -238,28 +796,6 @@ static void fix_wget_tmp_if_tmp_blocked(int argc, char **argv) {
             return;
         }
     }
-}
-
-int move_to_cgroup(pid_t pid) {
-    // Only act on cgroup v2. If not v2, treat as success (no-op).
-    if (access(CGROUP_V2_MARKER, R_OK) != 0) {
-        return 0;
-    }
-
-    int fd = open(CGROUP_TARGET, O_WRONLY | O_CLOEXEC | O_NOFOLLOW);
-    if (fd == -1) {
-        s_perror("open " CGROUP_TARGET);
-        return -1;
-    }
-
-    if (dprintf(fd, "%ld\n", (long)pid) < 0) {
-        s_perror("write " CGROUP_TARGET);
-        close(fd);
-        return -1;
-    }
-
-    close(fd);
-    return 0;
 }
 
 int try_kill_mode(const char *arg) {
@@ -351,6 +887,18 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // Enforce a tight allowlist (plugin only needs wget), handling "safexec nohup wget ..."
+    int prog_i = find_target_prog_index(argc, argv);
+    if (prog_i >= argc) {
+        print_usage(argv[0]);
+        return 1;
+    }
+    const char *prog_base = base_of(argv[prog_i]);
+    if (strcmp(prog_base, "wget") != 0) {
+        s_fprintf(stderr, "Error: only 'wget' is allowed by safexec.\n");
+        return 1;
+    }
+
     // PASS-THROUGH MODE
     if (geteuid() != 0) {
         // Safe DIR
@@ -367,14 +915,69 @@ int main(int argc, char *argv[]) {
         _exit(1);
     }
 
+    // Read isolation preferences & limits
+    nppp_limits LIM = nppp_default_limits();
+    enum detach_mode mode = parse_detach_mode();
+
     // Sanitize env and process state before any NSS/library lookups
     sanitize_process_early();
 
-    pid_t pid = getpid();
+    int isolated = 0;
 
-    // Move to isolated cgroup
-    if (move_to_cgroup(pid) != 0) {
-        s_fprintf(stderr, "Warning: Failed to move to cgroup %s\n", CGROUP_TARGET);
+    // Fresh group name to avoid stale limits from previous runs
+    char cgname[64];
+    if (safe_snprintf(cgname, sizeof cgname, "nppp.%ld", (long)getpid()) != 0) {
+        s_fprintf(stderr, "Error: failed to compose cgroup name\n");
+        return 1;
+    }
+
+    // Optional: cleanup empty stale groups first
+    if (cgv2_available()) cgv2_cleanup_stale("nppp.");
+
+    // Try cgroup v2
+    if (!isolated && (mode == DET_AUTO || mode == DET_CGV2)) {
+        if (cgv2_available()) {
+            if (cgv2_join_group(cgname, &LIM) == 0) {
+                char selfcg[PATH_MAX];
+                if (cgv2_self_dir(selfcg, sizeof selfcg) == 0)
+                    s_fprintf(stderr, "Info: using cgroup v2 child %s\n", selfcg);
+                else {
+                    s_fprintf(stderr, "Info: using cgroup v2 child (path unknown)\n");
+                }
+                isolated = 1;
+            } else if (mode == DET_CGV2) {
+                s_fprintf(stderr, "Error: cgroup v2 requested but join failed\n");
+                return 1;
+            }
+        } else if (mode == DET_CGV2) {
+            s_fprintf(stderr, "Error: cgroup v2 requested but not available\n");
+            return 1;
+        }
+    }
+
+    // Try cgroup v1
+    if (!isolated && (mode == DET_AUTO || mode == DET_CGV1)) {
+        if (cgv1_available()) {
+            int rc = cgv1_join_group(cgname, &LIM);
+            if (rc == 0) {
+                s_fprintf(stderr, "Info: using cgroup v1 under .../%s\n", cgname);
+                isolated = 1;
+            } else if (mode == DET_CGV1) {
+                s_fprintf(stderr, "Error: cgroup v1 join failed\n");
+                return 1; // hard-fail only if explicitly requested
+            }
+            // DET_AUTO + failure -> fall through to RLIMITs
+        } else if (mode == DET_CGV1) {
+            s_fprintf(stderr, "Error: cgroup v1 requested but not available\n");
+            return 1;
+        }
+    }
+
+    // Apply RLIMITs
+    if (!isolated && mode != DET_OFF) {
+        s_fprintf(stderr, "Info: falling back to RLIMITs + nice/ionice\n");
+        apply_rlimits_and_sched(&LIM);
+        isolated = 1;
     }
 
     // Create /tmp/nppp-cache (01777) if possible, idempotent
