@@ -16,6 +16,7 @@ if (!defined('ABSPATH')) {
 
 // Function to execute a shell command and get the output
 function nppp_get_command_output($command) {
+    nppp_prepare_request_env(true);
     return trim(shell_exec($command));
 }
 
@@ -173,6 +174,9 @@ function nppp_check_fuse_cache_paths($cache_paths) {
     if ($cached_result !== false) {
         return $cached_result;
     }
+
+    // Set env
+    nppp_prepare_request_env(true);
 
     $fuse_paths = [];
 
@@ -335,6 +339,9 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = t
 
 // Function to get Nginx version, PHP version
 function nppp_get_nginx_info() {
+    // Set env
+    nppp_prepare_request_env(true);
+
     $nginx_version = 'Unknown';
     $php_version = 'Unknown';
 
@@ -662,6 +669,9 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
 
 // Handles the AJAX request to restart the systemd service
 function nppp_restart_systemd_service() {
+    // Set env
+    nppp_prepare_request_env(true);
+
     // Define the systemd service name
     $service_name = 'npp-wordpress.service';
 
