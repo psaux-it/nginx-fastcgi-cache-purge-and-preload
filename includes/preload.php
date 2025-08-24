@@ -327,6 +327,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         $NPPP_DYNAMIC_USER_AGENT = NPPP_USER_AGENT;
     }
 
+    // Set env
+    nppp_prepare_request_env(true);
+
     // Get proxy options
     $proxy_settings = nppp_get_proxy_settings();
     $use_proxy  = $proxy_settings['use_proxy'];
@@ -800,6 +803,9 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
+    // Set env
+    nppp_prepare_request_env(true);
+
     // Check Preload Mobile enabled
     $preload_mobile = false;
     if (isset($nginx_cache_settings['nginx_cache_auto_preload_mobile']) && $nginx_cache_settings['nginx_cache_auto_preload_mobile'] === 'yes') {
@@ -1032,6 +1038,9 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
 
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
+
+    // Set env
+    nppp_prepare_request_env(true);
 
     // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';
