@@ -506,6 +506,10 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
     }
 
     $options = get_option('nginx_cache_settings');
+
+    // Set env
+    nppp_prepare_request_env(true);
+
     $auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
 
     // Clear the scheduled preload status event immediately
