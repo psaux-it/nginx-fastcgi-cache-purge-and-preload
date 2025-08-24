@@ -30,64 +30,62 @@ if (!defined('NPPP_USER_AGENT_MOBILE')) {
 // Prepare PATH and SAFEXEC_QUIET env
 function nppp_prepare_request_env(bool $force = false): void {
     static $done = false;
-    if ($done) return;
-
-    if (!$force) {
-        $is_rest = (
-            (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) ||
-            (function_exists('wp_doing_rest') && wp_doing_rest()) ||
-            (defined('REST_REQUEST') && REST_REQUEST)
-        );
-        $is_cron  = (
-            (function_exists('wp_doing_cron') && wp_doing_cron()) ||
-            (defined('DOING_CRON') && DOING_CRON)
-        );
-        $is_admin = function_exists('is_admin') ? is_admin() : false;
-
-        $is_needed = ($is_rest || $is_cron || $is_admin);
-        if (defined('NPPP_FORCE_ENV')) {
-            $is_needed = (bool) NPPP_FORCE_ENV;
-        }
-        if (function_exists('apply_filters')) {
-            $is_needed = (bool) apply_filters('nppp_prepare_env_is_needed', $is_needed);
-        }
-        if (!$is_needed) return;
+    if ($done) {
+        return;
     }
 
-    // PATH merge
+    // If env funcs are disabled, just bail; calls will still run with the server's PATH.
+    if (!function_exists('getenv') || !function_exists('putenv')) {
+        $done = true;
+        return;
+    }
+
+    // Merge PATH once (adds common sbin/bin dirs if missing)
     $need = ['/usr/local/sbin','/usr/local/bin','/usr/sbin','/usr/bin','/sbin','/bin'];
     $orig_path = getenv('PATH');
-    if ($orig_path === false || $orig_path === '') {
-        putenv('PATH=' . implode(':', $need));
-    } else {
-        $parts  = array_values(array_filter(explode(':', $orig_path), fn($p) => $p !== '' && $p !== '.'));
-        $merged = array_values(array_unique(array_merge($need, $parts)));
-        $new    = implode(':', $merged);
-        if ($new !== $orig_path) {
-            putenv("PATH=$new");
-        }
+    $parts = $orig_path ? array_filter(explode(':', (string)$orig_path), fn($p) => $p !== '' && $p !== '.') : [];
+    $merged = array_values(array_unique(array_merge($need, $parts)));
+    $new_path = implode(':', $merged);
+
+    // Track what we change so we can restore at shutdown (prevents leaking into the FPM worker)
+    $GLOBALS['NPPP__ORIG_PATH'] = ($orig_path === false) ? null : $orig_path;
+    if ($new_path !== $orig_path) {
+        putenv("PATH={$new_path}");
     }
 
-    // Quiet flag
+    // ALWAYS quiet safexec during the request; restore original later
     $orig_quiet = getenv('SAFEXEC_QUIET');
-    $quiet_was_set_by_us = false;
-    if ($orig_quiet === false || $orig_quiet === '') {
+    $GLOBALS['NPPP__ORIG_SAFEXEC_QUIET'] = ($orig_quiet === false) ? null : (string)$orig_quiet;
+
+    // Only mark "changed" if we actually need to flip it
+    if ($orig_quiet !== '1') {
         putenv('SAFEXEC_QUIET=1');
-        $quiet_was_set_by_us = true;
+        $GLOBALS['NPPP__QUIET_WAS_CHANGED'] = true;
+    } else {
+        $GLOBALS['NPPP__QUIET_WAS_CHANGED'] = false;
     }
 
-    // Restore at shutdown (don’t leak into the worker)
-    register_shutdown_function(function () use ($orig_path, $orig_quiet, $quiet_was_set_by_us) {
-        if ($orig_path === false) {
-            putenv('PATH');
-        } elseif (getenv('PATH') !== $orig_path) {
-            putenv("PATH=$orig_path");
+    // Restore at end of request so nothing bleeds into the next request on the same worker
+    register_shutdown_function(static function () {
+        // Restore PATH
+        if (array_key_exists('NPPP__ORIG_PATH', $GLOBALS)) {
+            $orig = $GLOBALS['NPPP__ORIG_PATH'];
+            if ($orig === null) {
+                // PATH was originally undefined
+                putenv('PATH');
+            } elseif (getenv('PATH') !== $orig) {
+                putenv("PATH={$orig}");
+            }
         }
 
-        if ($quiet_was_set_by_us) {
-            putenv('SAFEXEC_QUIET');
-        } elseif ($orig_quiet !== false && getenv('SAFEXEC_QUIET') !== $orig_quiet) {
-            putenv("SAFEXEC_QUIET=$orig_quiet");
+        // Restore SAFEXEC_QUIET to its original value if we changed it
+        if (array_key_exists('NPPP__ORIG_SAFEXEC_QUIET', $GLOBALS) && !empty($GLOBALS['NPPP__QUIET_WAS_CHANGED'])) {
+            $orig = $GLOBALS['NPPP__ORIG_SAFEXEC_QUIET'];
+            if ($orig === null) {
+                putenv('SAFEXEC_QUIET'); // unset
+            } else {
+                putenv("SAFEXEC_QUIET={$orig}");
+            }
         }
     });
 
