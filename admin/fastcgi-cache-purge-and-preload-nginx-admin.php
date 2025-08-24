@@ -136,7 +136,6 @@ $page_cache_purge_actions = array(
 );
 
 // Add actions and filters
-add_action('rest_api_init', function () { nppp_prepare_request_env(true); }, 1);
 add_action('load-settings_page_nginx_cache_settings', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_check_for_plugin_update');
 add_action('admin_enqueue_scripts', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets');
