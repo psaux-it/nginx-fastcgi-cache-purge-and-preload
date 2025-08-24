@@ -836,22 +836,24 @@ function nppp_clear_plugin_cache_callback() {
     if (isset($_POST['_wpnonce'])) {
         $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
         if (!wp_verify_nonce($nonce, 'nppp-clear-plugin-cache-action')) {
-            wp_die(esc_html__('Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx'));
+            wp_send_json_error(__('Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx'));
         }
     } else {
-        wp_die(esc_html__('Nonce is missing.', 'fastcgi-cache-purge-and-preload-nginx'));
+        wp_send_json_error(__('Nonce is missing.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
     // Check user capability
     if (!current_user_can('manage_options')) {
-        wp_die(esc_html__('You do not have permission to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
+        wp_send_json_error(__('You do not have permission to access this action.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
-     // Clear the plugin cache
-    $message = nppp_clear_plugin_cache();
+    // Clear the plugin cache
+    nppp_clear_plugin_cache();
 
-    // Return success response
-    wp_send_json_success($message);
+    // Success
+    wp_send_json_success(
+        __('Plugin cache cleared successfully.', 'fastcgi-cache-purge-and-preload-nginx')
+    );
 }
 
 // AJAX handler to fetch shortcode content
