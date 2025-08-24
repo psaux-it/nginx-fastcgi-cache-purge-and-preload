@@ -2103,6 +2103,9 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     } else {
         // Now check if the directory exists
         if (!$wp_filesystem->is_dir($path)) {
+            // Set env
+            nppp_prepare_request_env(true);
+
             // Assign necessary variables
             $service_name = 'npp-wordpress.service';
             $service_path = '/etc/systemd/system/' . $service_name;
