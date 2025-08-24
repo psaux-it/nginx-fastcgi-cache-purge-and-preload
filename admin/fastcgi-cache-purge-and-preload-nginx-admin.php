@@ -94,9 +94,6 @@ function nppp_prepare_request_env(bool $force = false): void {
     $done = true;
 }
 
-// Set env for this request
-nppp_prepare_request_env();
-
 // Include plugin files
 require_once dirname(__DIR__) . '/includes/enqueue-assets.php';
 require_once dirname(__DIR__) . '/includes/wp-filesystem.php';
@@ -267,11 +264,6 @@ add_action('wp', function() {
         }
     }
 });
-add_action('init', function () {
-    if ( (defined('DOING_CRON') && DOING_CRON) || (function_exists('wp_doing_cron') && wp_doing_cron()) ) {
-        nppp_prepare_request_env(true);
-    }
-}, 1);
 
 // Register shortcodes
 add_shortcode('nppp_svg_icon', 'nppp_svg_icon_shortcode');
