@@ -166,6 +166,9 @@ function nppp_is_dockerized() {
     $missing_commands = get_transient($transient_key);
 
     if (false === $missing_commands) {
+        // Set env
+        nppp_prepare_request_env(true);
+
         // List of commands to check
         $commands_to_check = ['ps', 'grep', 'awk', 'sort', 'uniq', 'sed', 'nohup', 'wget'];
 
@@ -267,6 +270,9 @@ function nppp_plugin_requirements_met() {
     }
 
     $nppp_met = false;
+
+    // Set env
+    nppp_prepare_request_env(true);
 
     // Check if the operating system is Linux
     if (nppp_is_linux()) {
