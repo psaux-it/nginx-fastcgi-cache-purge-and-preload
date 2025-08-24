@@ -112,6 +112,9 @@ function nppp_find_safexec_path() {
         return;
     }
 
+    // Set env
+    nppp_prepare_request_env(true);
+
     $default_path = '/usr/local/bin/safexec';
     if ($wp_filesystem->exists($default_path)) {
         return $default_path;
@@ -187,6 +190,9 @@ function nppp_detect_premature_process(
     string $NPPP_DYNAMIC_USER_AGENT
 ) {
     $test_process = false;
+
+    // Set env
+    nppp_prepare_request_env(true);
 
     // Get proxy options
     $proxy_settings = nppp_get_proxy_settings();
