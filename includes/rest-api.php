@@ -283,6 +283,9 @@ function nppp_validate_and_rate_limit_endpoint($request) {
 
 // Handle the REST API request for purge action.
 function nppp_nginx_cache_purge_endpoint($request) {
+    // Prepare env
+    nppp_prepare_request_env(true);
+
     // Start output buffering for purge endpoint
     ob_start();
 
@@ -326,6 +329,9 @@ function nppp_nginx_cache_purge_endpoint($request) {
 
 // Handle the REST API request for preload action.
 function nppp_nginx_cache_preload_endpoint($request) {
+    // Prepare env
+    nppp_prepare_request_env(true);
+
     // Start output buffering for preload endpoint
     ob_start();
 
