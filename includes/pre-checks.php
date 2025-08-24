@@ -16,6 +16,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Check if the process is alive
 function nppp_is_process_alive($pid) {
+    // Set env
+    nppp_prepare_request_env(true);
+
     // Validate that $pid is a positive integer
     if (!is_numeric($pid) || $pid <= 0 || intval($pid) != $pid) {
         return false;
@@ -43,6 +46,9 @@ function nppp_is_process_alive($pid) {
 // Tries to determine the nginx.conf path using 'nginx -V'.
 // If that fails, falls back to checking common paths.
 function nppp_get_nginx_conf_paths($wp_filesystem) {
+    // Set env
+    nppp_prepare_request_env(true);
+
     $conf_paths = [];
 
     // Try to get the nginx.conf path using 'nginx -V'
@@ -75,7 +81,6 @@ function nppp_get_nginx_conf_paths($wp_filesystem) {
             '/usr/local/etc/nginx.conf',
             '/opt/nginx/conf/nginx.conf',
             '/www/server/nginx/conf/nginx.conf',
-            '/etc/nginx/conf/nginx.conf',
             '/etc/nginx/conf.d/ea-nginx.conf',
         ];
 
@@ -261,6 +266,9 @@ function nppp_pre_checks_critical() {
         );
         return;
     }
+
+    // Set env
+    nppp_prepare_request_env(true);
 
     // Check if the operating system is Linux and the web server is nginx
     if (!nppp_is_linux()) {
