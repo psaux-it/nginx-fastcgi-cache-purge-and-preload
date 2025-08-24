@@ -136,6 +136,9 @@ function nppp_check_perm_in_cache($check_path = false, $check_perm = false, $che
 
 // Check required command statuses
 function nppp_check_command_status($command) {
+    // Set env
+    nppp_prepare_request_env(true);
+
     $output = shell_exec("command -v $command");
     return !empty($output) ? 'Installed' : 'Not Installed';
 }
@@ -159,7 +162,7 @@ function nppp_check_preload_status() {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            return 'progress';;
+            return 'progress';
         }
     }
 
@@ -204,6 +207,9 @@ function nppp_check_path() {
 function nppp_shell_exec() {
     // Check if shell_exec is enabled
     if (function_exists('shell_exec')) {
+        // Set env
+        nppp_prepare_request_env(true);
+
         // Attempt to execute a harmless command
         $output = shell_exec('echo "Test"');
 
@@ -219,6 +225,9 @@ function nppp_shell_exec() {
 
 // Function to get the PHP process owner (website-user)
 function nppp_get_website_user() {
+    // Set env
+    nppp_prepare_request_env(true);
+
     $php_process_owner = '';
 
     // Check if the POSIX extension is available
@@ -296,6 +305,9 @@ function nppp_get_webserver_user() {
         set_transient($transient_key, "Not Determined", MONTH_IN_SECONDS);
         return "Not Determined";
     }
+
+    // Set env
+    nppp_prepare_request_env(true);
 
     // Check the running processes for Nginx
     $nginx_user_process = shell_exec("ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v 'root' | awk '{print $1}' | sort | uniq");
