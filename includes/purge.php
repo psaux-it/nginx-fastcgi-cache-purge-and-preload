@@ -257,23 +257,56 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 // Purge cache automatically for update (post/page)
 // Purge cache automatically for status changes (post/page)
 // This function hooks into the 'transition_post_status' action
+// Also check compat-{elementor,gutenberg}.php
 function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     static $did_purge = [];
 
-    // 0) Bail out on REST, AJAX, or Cron unless Elementor/Yoast/WPBakery saving
-    $allowed_ajax_actions = ['elementor_ajax', 'wpseo_elementor_save', 'vc_save'];
-    $is_allowed_builder = isset($_POST['action']) && in_array($_POST['action'], $allowed_ajax_actions, true); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    // -1) Bail on invalid post objects.
+    if (! ($post instanceof WP_Post)) {
+        return;
+    }
+
+    // -0.1) Early quit if auto purge disabled
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] !== 'yes') {
+        return;
+    }
+
+    // 0) Avoid duplicate purge with Gutenberg + metabox second request.
+    //    When block editor saves legacy metaboxes it posts to post.php with this flag.
+    // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+    if (isset($_REQUEST['meta-box-loader'])) {
+        return;
+    }
+
+    // 0.1) Skip REST entirely — compat-gutenberg (rest_after_insert_*) already purges.
+    if (
+        ( function_exists( 'wp_is_serving_rest_request' ) && wp_is_serving_rest_request() ) ||
+        ( function_exists( 'wp_is_rest_request' ) && wp_is_rest_request() ) ||
+        ( defined( 'REST_REQUEST' ) && REST_REQUEST )
+    ) {
+        return;
+    }
+
+    // 0.2) Allow only specific AJAX save routes (Quick/Bulk Edit, WPBakery).
+    $allowed_ajax_actions = [
+        'inline-save', // Quick Edit
+        'vc_save',     // WPBakery
+        'bulk_edit',   // Bulk Edit
+    ];
+
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    $current_ajax_action = isset( $_POST['action'] ) ? sanitize_key( wp_unslash( $_POST['action'] ) ) : '';
 
     if (
-        (
-            (function_exists('wp_is_rest_request') && wp_is_rest_request()) ||
-            (defined('REST_REQUEST') && REST_REQUEST) ||
-            (function_exists('wp_doing_ajax') && wp_doing_ajax()) ||
-            (defined('DOING_AJAX') && DOING_AJAX) ||
-            (function_exists('wp_doing_cron') && wp_doing_cron()) ||
-            (defined('DOING_CRON') && DOING_CRON)
-        ) && ! $is_allowed_builder
+        ( ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) || ( defined( 'DOING_AJAX' ) && DOING_AJAX ) ) &&
+        ! in_array( $current_ajax_action, $allowed_ajax_actions, true )
     ) {
+        return;
+    }
+
+    // 0.3) Skip WP-Cron runs.
+    if ( ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) || ( defined( 'DOING_CRON' ) && DOING_CRON ) ) {
         return;
     }
 
@@ -291,7 +324,7 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         return;
     }
 
-    // 3) Drop CPTs
+    // 3) Drop some reported CPTs
     $post_url = get_permalink($post->ID);
     $excluded_patterns = [
         'wp-global-styles-',
@@ -304,17 +337,11 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         }
     }
 
-    // 4) Feature flag
-    $nginx_cache_settings = get_option('nginx_cache_settings');
-    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] !== 'yes') {
-        return;
-    }
-
-    // 5) Prep cache path
+    // 4) Prep cache path
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : '/dev/shm/change-me-now';
 
-    // 6) Purge logic
-    // Priority 1: Handle Status Changes (publish from trash, draft, or pending)
+    // 5) Purge logic
+    // Priority A: Handle Status Changes (publish from trash, draft, or pending)
     if ('publish' === $new_status) {
         // If the post was moved from trash to publish, purge the cache
         if ('trash' === $old_status) {
@@ -331,8 +358,18 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         }
     }
 
-    // Priority 2: Handle Content Updates (publish to publish with content change)
+    // Priority B: Handle Content Updates (publish to publish with content change)
     if ('publish' === $new_status && 'publish' === $old_status) {
+        $is_quick_edit = ( $current_ajax_action === 'inline-save' );
+        $is_bulk_edit  = ( $current_ajax_action === 'bulk_edit' );
+
+        // Quick/Bulk Edit often adjust slug/taxonomies only; always purge.
+        if ($is_quick_edit || $is_bulk_edit) {
+            nppp_purge_single( $nginx_cache_path, $post_url, true );
+            $did_purge[ $post->ID ] = true;
+            return;
+        }
+
         // Check if the content was updated (modified time differs from the original post time)
         if (get_post_modified_time('U', true, $post) > get_post_time('U', true, $post)) {
             nppp_purge_single($nginx_cache_path, $post_url, true);
