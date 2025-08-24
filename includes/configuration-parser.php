@@ -719,14 +719,20 @@ function nppp_restart_systemd_service() {
     $status_command = 'sudo ' . escapeshellcmd($systemctl_path) . ' is-active ' . escapeshellcmd($service_name);
     $status = trim(shell_exec($status_command));
 
-    // Return response based on the service status
     if ($status === 'active') {
-        // Service is active, clear plugin cache
-        $cache_cleared_message = nppp_clear_plugin_cache();
+        // Clear plugin cache
+        nppp_clear_plugin_cache();
 
-        wp_send_json_success('Systemd service restarted and is active. ' . $cache_cleared_message);
+        wp_send_json_success(
+            __('Systemd service restarted and is active. Plugin cache cleared.', 'fastcgi-cache-purge-and-preload-nginx')
+        );
     } else {
-        wp_send_json_error('Restart completed but the service is not active. Status: ' . $status);
+        /* Translators: %s is the systemd service status string (e.g. "failed") */
+        $msg = sprintf(
+            __('Restart completed but the service is not active. Status: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+            $status
+        );
+        wp_send_json_error($msg);
     }
 }
 
