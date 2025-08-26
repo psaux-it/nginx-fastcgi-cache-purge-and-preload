@@ -349,6 +349,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     $www_host  = 'www.' . $base_host;
     $domain_list = implode(',', array_unique([$base_host, $www_host]));
 
+    // Wrap with literal double quotes
+    $dq = function ($s) { return '"' . $s . '"'; };
+
     // Here, we check the source of the preload request. There are several possible routes.
     // If nppp_is_auto_preload is false, it means we arrived here through one of the following routes:
     // Preload (settings page), Preload (admin bar), Preload (CRON), or Preload (REST API).
@@ -477,21 +480,26 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
             //    speeding up cache preloading via reducing latency we use --no-check-certificate .
             //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-            $command = ($use_safexec ? "$safexec_path " : "") .
-                "nohup wget --no-verbose --recursive --no-cache --no-cookies --no-directories --delete-after " .
-                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-                "-e use_proxy=$use_proxy " .
-                "-e http_proxy=$http_proxy " .
-                "-e https_proxy=$https_proxy " .
-                "-P " . escapeshellarg($use_safexec ? "/tmp" : $tmp_path) . " " .
-                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-                "--wait=$nginx_cache_wait " .
-                "--reject-regex='\"$nginx_cache_reject_regex\"' " .
-                "--reject='\"$nginx_cache_reject_extension\"' " .
-                "--domains=$domain_list " .
-                "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
-                "\"$fdomain\" > \"$log_path\" 2>&1 < /dev/null & echo \$!";
+
+            $command =
+                ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+                'nohup wget ' .
+                '--no-verbose --recursive --no-cache --no-cookies --no-directories --delete-after ' .
+                '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+                '--ignore-length --timeout=5 --tries=1 ' .
+                '-e robots=off ' .
+                '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+                '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+                '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+                '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+                '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+                '--wait=' . ((int)$nginx_cache_wait) . ' ' .
+                '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
+                '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
+                '--domains='      . escapeshellarg($domain_list) . ' ' .
+                '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
+                escapeshellarg($fdomain) . ' ' .
+                '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
 
             // We are ready to call main command
             $output = shell_exec($command);
@@ -679,21 +687,26 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
         //    speeding up cache preloading via reducing latency we use --no-check-certificate .
         //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-        $command = ($use_safexec ? "$safexec_path " : "") .
-            "nohup wget --no-verbose --recursive --no-cache --no-cookies --no-directories --delete-after " .
-            "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-            "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-            "-e use_proxy=$use_proxy " .
-            "-e http_proxy=$http_proxy " .
-            "-e https_proxy=$https_proxy " .
-            "-P " . escapeshellarg($use_safexec ? "/tmp" : $tmp_path) . " " .
-            "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-            "--wait=$nginx_cache_wait " .
-            "--reject-regex='\"$nginx_cache_reject_regex\"' " .
-            "--reject='\"$nginx_cache_reject_extension\"' " .
-            "--domains=$domain_list " .
-            "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
-            "\"$fdomain\" > \"$log_path\" 2>&1 < /dev/null & echo \$!";
+
+        $command =
+            ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+            'nohup wget ' .
+            '--no-verbose --recursive --no-cache --no-cookies --no-directories --delete-after ' .
+            '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+            '--ignore-length --timeout=5 --tries=1 ' .
+            '-e robots=off ' .
+            '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+            '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+            '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+            '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+            '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+            '--wait=' . ((int)$nginx_cache_wait) . ' ' .
+            '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
+            '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
+            '--domains='      . escapeshellarg($domain_list) . ' ' .
+            '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
+            escapeshellarg($fdomain) . ' ' .
+            '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
 
         // We are ready to call main command
         $output = shell_exec($command);
@@ -827,6 +840,16 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
 
+    // Wrap with literal double quotes
+    $dq = function ($s) { return '"' . $s . '"'; };
+
+    // Create domain allowlist
+    $parsed = wp_parse_url($fdomain);
+    $host = $parsed['host'];
+    $base_host = preg_replace('/^www\./i', '', $host);
+    $www_host  = 'www.' . $base_host;
+    $domain_list = implode(',', array_unique([$base_host, $www_host]));
+
     // Test proxy and server network
     if ($use_proxy === 'yes') {
         // Parse proxy IP and Port
@@ -872,21 +895,27 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
     //    speeding up cache preloading via reducing latency we use --no-check-certificate .
     //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-    // 3. --recursive removed here that we need single URL request
-    // 4. --wait removed we need single HTTP request
-    // 5. --reject-regex removed that preload URL already verified
-    // 6. --reject removed that we don't use --recursive
-    $command_desktop = ($use_safexec ? "$safexec_path " : "") .
-        "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
-        "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-        "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-        "-e use_proxy=$use_proxy " .
-        "-e http_proxy=$http_proxy " .
-        "-e https_proxy=$https_proxy " .
-        "-P " . escapeshellarg($use_safexec ? "/tmp" : $tmp_path) . " " .
-        "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-        "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
-        "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+    // 3. --recursive removed
+    // 4. --wait removed
+    // 5. --reject-regex removed
+    // 6. --reject removed
+
+    $command_desktop =
+        ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+        'nohup wget ' .
+        '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
+        '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+        '--ignore-length --timeout=5 --tries=1 ' .
+        '-e robots=off ' .
+        '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+        '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+        '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+        '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+        '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+        '--domains='      . escapeshellarg($domain_list) . ' ' .
+        '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
+        escapeshellarg($current_page_url) . ' ' .
+        '>/dev/null 2>&1 & echo $!';
 
     // Trigger desktop preload and get PID
     $output_desktop = shell_exec($command_desktop);
@@ -909,17 +938,22 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 
     // Preload cache also for Mobile
     if ($preload_mobile) {
-        $command_mobile = ($use_safexec ? "$safexec_path " : "") .
-            "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
-            "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-            "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-            "-e use_proxy=$use_proxy " .
-            "-e http_proxy=$http_proxy " .
-            "-e https_proxy=$https_proxy " .
-            "-P " . escapeshellarg($use_safexec ? "/tmp" : $tmp_path) . " " .
-            "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-            "--user-agent='\"". NPPP_USER_AGENT_MOBILE ."\"' " .
-            "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+        $command_mobile =
+            ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+            'nohup wget ' .
+            '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
+            '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+            '--ignore-length --timeout=5 --tries=1 ' .
+            '-e robots=off ' .
+            '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+            '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+            '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+            '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+            '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+            '--domains='      . escapeshellarg($domain_list) . ' ' .
+            '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
+            escapeshellarg($current_page_url) . ' ' .
+            '>/dev/null 2>&1 & echo $!';
 
         // Trigger preload for mobile
         $output_mobile = shell_exec($command_mobile);
@@ -1050,7 +1084,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
 
     // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';
-    $default_limit_rate = 1024;
+    $default_limit_rate = 5120;
 
     // Get the necessary data for preload action from plugin options
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
@@ -1090,6 +1124,16 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
+
+    // Wrap with literal double quotes
+    $dq = function ($s) { return '"' . $s . '"'; };
+
+    // Create domain allowlist
+    $parsed = wp_parse_url($fdomain);
+    $host = $parsed['host'];
+    $base_host = preg_replace('/^www\./i', '', $host);
+    $www_host  = 'www.' . $base_host;
+    $domain_list = implode(',', array_unique([$base_host, $www_host]));
 
     // Test proxy and server network
     if ($use_proxy === 'yes') {
@@ -1136,21 +1180,27 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
     //    speeding up cache preloading via reducing latency we use --no-check-certificate .
     //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-    // 3. --recursive removed here that we need single URL request
-    // 4. --wait removed we need single HTTP request
-    // 5. --reject-regex removed that preload URL already verified
-    // 6. --reject removed that we don't use --recursive
-    $command_desktop = ($use_safexec ? "$safexec_path " : "") .
-        "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
-        "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-        "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-        "-e use_proxy=$use_proxy " .
-        "-e http_proxy=$http_proxy " .
-        "-e https_proxy=$https_proxy " .
-        "-P " . escapeshellarg($use_safexec ? "/tmp" : $tmp_path) . " " .
-        "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-        "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
-        "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+    // 3. --recursive removed
+    // 4. --wait removed
+    // 5. --reject-regex removed
+    // 6. --reject removed
+
+    $command_desktop =
+        ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+        'nohup wget ' .
+        '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
+        '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+        '--ignore-length --timeout=5 --tries=1 ' .
+        '-e robots=off ' .
+        '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+        '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+        '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+        '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+        '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+        '--domains='      . escapeshellarg($domain_list) . ' ' .
+        '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
+        escapeshellarg($current_page_url) . ' ' .
+        '>/dev/null 2>&1 & echo $!';
 
     // Trigger desktop preload and get PID
     $output_desktop = shell_exec($command_desktop);
@@ -1173,17 +1223,22 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
 
     // Preload cache also for Mobile
     if ($preload_mobile) {
-        $command_mobile = ($use_safexec ? "$safexec_path " : "") .
-            "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
-            "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-            "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-            "-e use_proxy=$use_proxy " .
-            "-e http_proxy=$http_proxy " .
-            "-e https_proxy=$https_proxy " .
-            "-P " . escapeshellarg($use_safexec ? "/tmp" : $tmp_path) . " " .
-            "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-            "--user-agent='\"". NPPP_USER_AGENT_MOBILE ."\"' " .
-            "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+        $command_mobile =
+            ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+            'nohup wget ' .
+            '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
+            '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+            '--ignore-length --timeout=5 --tries=1 ' .
+            '-e robots=off ' .
+            '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+            '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+            '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+            '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+            '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+            '--domains='      . escapeshellarg($domain_list) . ' ' .
+            '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
+            escapeshellarg($current_page_url) . ' ' .
+            '>/dev/null 2>&1 & echo $!';
 
         // Trigger preload for mobile
         $output_mobile = shell_exec($command_mobile);
