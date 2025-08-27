@@ -541,7 +541,7 @@ function nppp_my_status_html() {
     // Exit early if unable to find or read the nginx.conf file
     if (empty($conf_paths)) {
         return '<div class="nppp-status-wrap">
-                    <p class="nppp-advanced-error-message">' . wp_kses(__('ERROR CONF: Unable to read or locate the <span style="color: #f0c36d;">nginx.conf</span> configuration file!', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => []]]) . '</p>
+                    <p class="nppp-advanced-error-message">' . wp_kses(__('ERROR CONF: Unable to read or locate the <span style="color: #f0c36d;">nginx.conf</span> configuration file!', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
                 </div>
                 <div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                     <p style="margin: 0; align-items: center;">
@@ -580,19 +580,19 @@ function nppp_my_status_html() {
     // Warn about not found cache key
     if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: No <span style="color: #FFDEAD;">_cache_key</span> directive was found.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => []]]) . '</p>
+                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: No <span style="color: #FFDEAD;">_cache_key</span> directive was found.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
               </div>';
     // Warn about the unsupported cache key
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Unsupported</span> cache key found!', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => []]]) . '</p>
+                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Unsupported</span> cache key found!', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
               </div>';
     }
 
     // Warn about same Nginx cache path for multiple instance
     if ($duplicates !== false) {
         echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Same</span> Nginx cache path found!', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => []]]) . '</p>
+                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Same</span> Nginx cache path found!', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
               </div>';
     }
 
@@ -713,7 +713,7 @@ function nppp_my_status_html() {
 
                                     <!-- Progress Status Text -->
                                     <div id="wpt-status" class="nppp-progress-status" style="margin-top: 0px; font-size: 13px; color: #374151;">
-                                        Initializing...
+                                        <?php esc_html_e( 'Initializing...', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </div>
                                 </td>
                             </tr>
