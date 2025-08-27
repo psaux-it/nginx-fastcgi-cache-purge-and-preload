@@ -1253,6 +1253,10 @@ $(document).ready(function() {
     $('#clear-logs-button').on('click', function(event) {
         event.preventDefault();
 
+        const $btn  = $(this);
+        $btn.prop('disabled', true).addClass('disabled');
+        const $spin = $('<span class="nppp-inline-spinner" aria-hidden="true"></span>').appendTo($btn);
+
         $.ajax({
             url: nppp_admin_data.ajaxurl,
             type: 'GET',
@@ -1287,11 +1291,16 @@ $(document).ready(function() {
                     error: function(xhr, status, error) {
                         console.error('Error getting log content:', status, error);
                     }
+                }).always(function () {
+                    $spin.remove();
+                    $btn.prop('disabled', false).removeClass('disabled');
                 });
             },
             // Error clearing logs
             error: function(xhr, status, error) {
                 console.error('AJAX request failed:', status, error);
+                $spin.remove();
+                $btn.prop('disabled', false).removeClass('disabled');
             }
         });
     });
@@ -1299,6 +1308,10 @@ $(document).ready(function() {
     // Make AJAX request to update API key option
     $('#api-key-button').on('click', function(event) {
         event.preventDefault();
+
+        const $btn  = $(this);
+        $btn.prop('disabled', true).addClass('disabled');
+        const $spin = $('<span class="nppp-inline-spinner" aria-hidden="true"></span>').appendTo($btn);
 
         $.ajax({
             url: nppp_admin_data.ajaxurl,
@@ -1318,8 +1331,11 @@ $(document).ready(function() {
                 }
             },
             error: function(xhr, status, error) {
-                // Display error message if AJAX request encounters an error
                 console.error(error);
+            },
+            complete: function() {
+                $spin.remove();
+                $btn.prop('disabled', false).removeClass('disabled');
             }
         });
     });
@@ -1327,6 +1343,10 @@ $(document).ready(function() {
     // Make AJAX request to update default reject regex
     $('#nginx-regex-reset-defaults').on('click', function(event) {
         event.preventDefault();
+
+        const $btn  = $(this);
+        $btn.prop('disabled', true).addClass('disabled');
+        const $spin = $('<span class="nppp-inline-spinner" aria-hidden="true"></span>').appendTo($btn);
 
         $.ajax({
             url: nppp_admin_data.ajaxurl,
@@ -1346,8 +1366,11 @@ $(document).ready(function() {
                 }
             },
             error: function(xhr, status, error) {
-                // Display error message if AJAX request encounters an error
                 console.error(error);
+            },
+            complete: function() {
+                $spin.remove();
+                $btn.prop('disabled', false).removeClass('disabled');
             }
         });
     });
@@ -1355,6 +1378,10 @@ $(document).ready(function() {
     // Make AJAX request to update default reject extension
     $('#nginx-extension-reset-defaults').on('click', function(event) {
         event.preventDefault();
+
+        const $btn  = $(this);
+        $btn.prop('disabled', true).addClass('disabled');
+        const $spin = $('<span class="nppp-inline-spinner" aria-hidden="true"></span>').appendTo($btn);
 
         $.ajax({
             url: nppp_admin_data.ajaxurl,
@@ -1374,8 +1401,11 @@ $(document).ready(function() {
                 }
             },
             error: function(xhr, status, error) {
-                // Display error message if AJAX request encounters an error
                 console.error(error);
+            },
+            complete: function() {
+                $spin.remove();
+                $btn.prop('disabled', false).removeClass('disabled');
             }
         });
     });
@@ -1383,6 +1413,10 @@ $(document).ready(function() {
     // Make AJAX request to update default cache key regex
     $('#nginx-key-regex-reset-defaults').on('click', function(event) {
         event.preventDefault();
+
+        const $btn  = $(this);
+        $btn.prop('disabled', true).addClass('disabled');
+        const $spin = $('<span class="nppp-inline-spinner" aria-hidden="true"></span>').appendTo($btn);
 
         $.ajax({
             url: nppp_admin_data.ajaxurl,
@@ -1402,8 +1436,11 @@ $(document).ready(function() {
                 }
             },
             error: function(xhr, status, error) {
-                // Display error message if AJAX request encounters an error
                 console.error(error);
+            },
+            complete: function() {
+                $spin.remove();
+                $btn.prop('disabled', false).removeClass('disabled');
             }
         });
     });
