@@ -2785,37 +2785,37 @@ p.description {
 }
 
 #wpt-bar-text {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  text-align: center;
-  color: white;
-  font-weight: 600;
-  font-size: 14px;
-  line-height: 20px;
-  pointer-events: none;
-  user-select: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 20px;
+    pointer-events: none;
+    user-select: none;
 }
 
 /* Toasts  */
 #nppp-toast-container{
-  position:fixed; right:12px; z-index:999999;
-  display:flex; flex-direction:column; gap:10px;
+    position:fixed; right:12px; z-index:999999;
+    display:flex; flex-direction:column; gap:10px;
 }
 .nppp-toast{
-  min-width:280px; max-width:420px; padding:12px 14px 12px 44px;
-  border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.18);
-  color:#111; background:#fff; border-left:6px solid #999;
-  font:14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  position:relative; animation:nppp-slide-in .18s ease-out both;
+    min-width:280px; max-width:420px; padding:12px 14px 12px 44px;
+    border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.18);
+    color:#111; background:#fff; border-left:6px solid #999;
+    font:14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    position:relative; animation:nppp-slide-in .18s ease-out both;
 }
 .nppp-toast .nppp-close{ position:absolute; top:8px; right:10px; cursor:pointer; opacity:.5; }
 .nppp-toast .nppp-close:hover{ opacity:1; }
 .nppp-toast .nppp-ico{
-  position:absolute; left:10px; top:50%; transform:translateY(-50%);
-  font:20px/1 dashicons; width:24px; text-align:center;
+    position:absolute; left:10px; top:50%; transform:translateY(-50%);
+    font:20px/1 dashicons; width:24px; text-align:center;
 }
 
 .nppp-toast.success{ border-left-color:#46b450; }
@@ -2830,24 +2830,24 @@ p.description {
 
 /* Mobile: wider, below admin bar */
 @media (max-width:782px){
-  #nppp-toast-container{ right:8px; left:8px; }
-  .nppp-toast{ max-width:unset; }
+    #nppp-toast-container{ right:8px; left:8px; }
+    .nppp-toast{ max-width:unset; }
 }
 
 /* Small inline spinner for buttons */
 .nppp-inline-spinner{
-  display:inline-block; width:14px; height:14px; margin-left:8px; vertical-align:-2px;
-  border:2px solid rgba(0,0,0,.15); border-top-color:rgba(0,0,0,.55); border-radius:50%;
-  animation:nppp-spin .6s linear infinite;
+    display:inline-block; width:14px; height:14px; margin-left:8px; vertical-align:-2px;
+    border:2px solid rgba(0,0,0,.15); border-top-color:rgba(0,0,0,.55); border-radius:50%;
+    animation:nppp-spin .6s linear infinite;
 }
 @keyframes nppp-spin{ to{ transform:rotate(360deg) } }
 
 @media (max-width: 782px){
-  body > #nppp-toast-container{
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-    width: calc(100vw - 26px);
-    max-width: 100%;
-  }
+    body > #nppp-toast-container{
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        width: calc(100vw - 26px);
+        max-width: 100%;
+    }
 }
