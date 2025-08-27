@@ -98,7 +98,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
         if ($pid > 0 && nppp_is_process_alive($pid)) {
             // Translators: %s is the page URL
-            nppp_display_admin_notice('info', sprintf( __( 'INFO: Nginx auto cache purge for page %s has been halted due to ongoing cache preloading. You can stop Nginx cache preloading anytime via the "Purge All" option.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
+            nppp_display_admin_notice('info', sprintf( __( 'INFO: Nginx cache purge for page %s was skipped because a cache preloading process is running. Use "Purge All" to stop preloading, then try again.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
             return;
         }
     }
