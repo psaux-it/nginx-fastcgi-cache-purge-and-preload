@@ -227,7 +227,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                         }
                     } else {
                         // Translators: %s is the page URL
-                        nppp_display_admin_notice('error', __( 'ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page $current_page_url_decoded. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                        nppp_display_admin_notice('error', sprintf(__('ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx'), $current_page_url_decoded));
                     }
                     return;
                 }
