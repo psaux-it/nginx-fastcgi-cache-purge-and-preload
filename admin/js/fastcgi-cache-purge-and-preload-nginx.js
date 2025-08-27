@@ -1191,39 +1191,62 @@ $(document).ready(function() {
     });
 
     // Click event handler for cancel event button
-    // We need event delegation here
-    $(document).on('click', '.nppp-cancel-btn', function() {
-        event.preventDefault();
-        var hook = $(this).data('hook');
+    $(document).on('click', '.nppp-cancel-btn', function (e) {
+        e.preventDefault();
 
-        // Confirm cancellation
-        if (confirm('Are you sure you want to cancel the scheduled event "' + hook + '"?')) {
-            // AJAX request to cancel the scheduled event
-            $.ajax({
-                url: nppp_admin_data.ajaxurl,
-                type: 'POST',
-                data: {
-                    action: 'nppp_cancel_scheduled_event',
-                    hook: hook,
-                    _wpnonce: nppp_admin_data.cancel_scheduled_event_nonce
-                },
-                success: function(response) {
-                    // Handle success response
-                    $('.scheduled-events-list').empty();
-                    var html = '<div class="nppp-scheduled-event">';
-                    html += '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
-                    html += '<div class="nppp-scheduled-event" style="padding-right: 45px;">No active scheduled events found!</div>';
-                    html += '</div>';
-                    $('.scheduled-events-list').append(html);
-                    console.log(response);
-                },
-                error: function(xhr, status, error) {
-                    // Handle error
-                    console.error(xhr.responseText);
-                    alert('An error occurred while canceling the scheduled event.');
-                }
-            });
+        const $btn = $(this);
+        const hook = $btn.data('hook');
+
+        if (!hook) {
+            npppToast(__('Missing cron.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+            return;
         }
+
+        // lock UI + inline spinner
+        $btn.prop('disabled', true).addClass('disabled');
+        const $spin = $('<span class="nppp-inline-spinner" aria-hidden="true"></span>').appendTo($btn);
+
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'nppp_cancel_scheduled_event',
+                hook: hook,
+                _wpnonce: nppp_admin_data.cancel_scheduled_event_nonce
+            }
+        })
+            .done(function (resp) {
+                const msg  = (resp && resp.data) ? resp.data : __('Scheduled event cancelled.', 'fastcgi-cache-purge-and-preload-nginx');
+                const type = (resp && resp.success) ? 'success' : npppInferType(msg, 'error');
+                npppToast(msg, type);
+
+                // refresh the list UI like before
+                $('.scheduled-events-list').empty().append(
+                    '<div class="nppp-scheduled-event">' +
+                        '<h3 class="nppp-active-cron-heading">' + __('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') + '</h3>' +
+                        '<div class="nppp-scheduled-event" style="padding-right:45px;">' +
+                            __('No active scheduled events found!', 'fastcgi-cache-purge-and-preload-nginx') +
+                        '</div>' +
+                    '</div>'
+                );
+
+                if (window.wp && wp.a11y && typeof wp.a11y.speak === 'function') {
+                    wp.a11y.speak(__('Scheduled event cancelled.', 'fastcgi-cache-purge-and-preload-nginx'));
+                }
+            })
+            .fail(function (xhr) {
+                const msg =
+                    (xhr && xhr.responseJSON && xhr.responseJSON.data) ? xhr.responseJSON.data :
+                    (xhr && xhr.responseText) ? xhr.responseText :
+                    __('An error occurred while canceling the scheduled event.', 'fastcgi-cache-purge-and-preload-nginx');
+                npppToast(msg, 'error');
+                console.error(xhr);
+            })
+            .always(function () {
+                $spin.remove();
+                $btn.prop('disabled', false).removeClass('disabled');
+            });
     });
 
     // Clear logs on back-end and update them on front-end
