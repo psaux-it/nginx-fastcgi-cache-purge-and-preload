@@ -220,7 +220,7 @@ $(document).ready(function() {
                 const isActive = ui.tab.attr('aria-selected') === 'true' || ui.tab.closest('.ui-tabs-active').length > 0;
                 // Cancel the default load action for inactive tabs
                 if (!isActive) {
-                    ui.jqXHR.abort();
+                    if (ui.jqXHR) ui.jqXHR.abort();
                     ui.panel.html("");
                 }
             }
@@ -551,7 +551,7 @@ $(document).ready(function() {
                     // Animate the opacity to 1 over 200 milliseconds for a fade-in effect
                     $premiumPlaceholder.animate({ opacity: 1 }, 100);
                 } else {
-                    console.error(status + ': ' + error);
+                    console.error('Empty response received for Premium tab.');
                     // Hide the preloader since loading failed
                     hidePreloader();
                     // Replace placeholder with proper error message
@@ -1004,8 +1004,8 @@ $(document).ready(function() {
 
     // Click event handler for the #nginx-cache-schedule-set button
     // Update schedule option values accordingly
-    $('#nginx-cache-schedule-set').on('click', function() {
-        event.preventDefault();
+    $('#nginx-cache-schedule-set').on('click', function(e) {
+        e.preventDefault();
 
         var npppcronEvent = $('#nppp_cron_event').val();
         var nppptime = $('#nppp_datetimepicker1Input').val();
@@ -1259,7 +1259,7 @@ $(document).ready(function() {
 
         $.ajax({
             url: nppp_admin_data.ajaxurl,
-            type: 'GET',
+            type: 'POST',
             data: {
                 action: 'nppp_clear_nginx_cache_logs',
                 _wpnonce: nppp_admin_data.clear_logs_nonce
@@ -2627,7 +2627,7 @@ function removeQueryParameters(parameters) {
                 updatedParameters.push(queryParameters[i]);
             }
         }
-        return baseUrl + '?' + updatedParameters.join('&');
+        return updatedParameters.length ? (baseUrl + '?' + updatedParameters.join('&')) : baseUrl;
     }
     return url;
 }
@@ -3169,7 +3169,8 @@ document.addEventListener('DOMContentLoaded', function() {
 let npppActiveLink = null;
 
 // Add event listener to the parent <ul> for event delegation
-document.querySelector('.nppp-submenu ul').addEventListener('click', function(npppEvent) {
+const npppSubmenuUl = document.querySelector('.nppp-submenu ul');
+if (npppSubmenuUl) npppSubmenuUl.addEventListener('click', function(npppEvent) {
     // Check if the clicked element is an <a> inside the submenu
     const npppClickedLink = npppEvent.target.closest('a');
     if (!npppClickedLink) return;
