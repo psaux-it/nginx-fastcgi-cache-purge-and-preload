@@ -260,6 +260,51 @@ $(document).ready(function() {
         activateTabFromHash();
     });
 
+    // Toasts
+    function npppEnsureToastContainer() {
+        let c = document.getElementById('nppp-toast-container');
+        if (!c) {
+            c = document.createElement('div');
+            c.id = 'nppp-toast-container';
+            // respect admin bar height
+            const bar = document.getElementById('wpadminbar');
+            c.style.top = (bar ? bar.offsetHeight + 12 : 12) + 'px';
+            document.body.appendChild(c);
+        }
+        return c;
+    }
+    function npppInferType(msg, fallback='info'){
+        if (/success/i.test(msg)) return 'success';
+        if (/error/i.test(msg)) return 'error';
+        if (/info/i.test(msg))  return 'info';
+        return fallback;
+    }
+    function npppToast(message, type='info', timeout=4500){
+        const c = npppEnsureToastContainer();
+        const t = document.createElement('div');
+        t.className = 'nppp-toast ' + (type || 'info');
+        t.setAttribute('role', 'status');
+        t.setAttribute('aria-live', 'polite');
+        t.innerHTML = `
+            <span class="nppp-ico" aria-hidden="true"></span>
+            <span class="nppp-close" aria-label="${__('Dismiss','fastcgi-cache-purge-and-preload-nginx')}">×</span>
+            <div class="nppp-msg"></div>
+        `;
+        // allow safe server HTML
+        t.querySelector('.nppp-msg').innerHTML = message;
+        t.querySelector('.nppp-close').onclick = () => npppDismissToast(t);
+        c.prepend(t);
+
+        let hideTimer = setTimeout(() => npppDismissToast(t), timeout);
+        t.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+        t.addEventListener('mouseleave', () => hideTimer = setTimeout(() => npppDismissToast(t), 1500));
+    }
+    function npppDismissToast(t){
+        if (!t) return;
+        t.style.animation = 'nppp-slide-out .14s ease-in forwards';
+        setTimeout(() => t.remove(), 160);
+    }
+
     // Preload progress status
     function fetchWgetProgress() {
         const barText = document.getElementById("wpt-bar-text");
@@ -537,145 +582,138 @@ $(document).ready(function() {
     });
 
     // Handle click event for purge buttons in advanced tab
-    $(document).on('click', '.nppp-purge-btn', function() {
+    $(document).on('click', '.nppp-purge-btn', function(e) {
+        e.preventDefault();
+
         // Get the data
         var btn = $(this);
         var filePath = btn.data('file');
         var row = btn.closest('tr');
 
-        // Send confirmation
-        if (confirm('Are you sure you want to purge cache?')) {
-            // AJAX request to purge the file
-            $.ajax({
-                url: nppp_admin_data.ajaxurl,
-                type: 'POST',
-                data: {
-                    action: 'nppp_purge_cache_premium',
-                    file_path: filePath,
-                    _wpnonce: nppp_admin_data.premium_nonce_purge
-                },
-                success: function(response) {
-                    // Check if the response indicates success
-                    if (response.success) {
-                        // Display a success message
-                        alert(response.data);
+        // disable during request + inline spinner
+        btn.prop('disabled', true).addClass('disabled');
+        var spin = $('<span class="nppp-inline-spinner" aria-hidden="true"></span>').appendTo(btn);
 
-                        // Check if the row is expanded on mobile
-                        if (row.hasClass('child')) {
-                            // If the row is expanded, target the parent row
-                            row = row.prev('tr');
-                        }
+        // AJAX request to purge cache
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'nppp_purge_cache_premium',
+                file_path: filePath,
+                _wpnonce: nppp_admin_data.premium_nonce_purge
+            },
+            success: function(response) {
+                var msg  = (response && response.data) ? response.data : __('Purge completed.','fastcgi-cache-purge-and-preload-nginx');
+                var type = (response && response.success) ? 'success' : npppInferType(msg, 'error');
+                npppToast(msg, type);
 
-                        // find the preload button
-                        var preloadBtn;
-                        if (row.hasClass('dtr-expanded')) {
-                            preloadBtn = row.next('.child').find('.nppp-preload-btn');
-                        } else {
-                            preloadBtn = row.find('.nppp-preload-btn');
-                        }
-
-                        // Disable the button
-                        btn.prop('disabled', true);
-                        // Add disabled style
-                        btn.addClass('disabled');
-
-                        if (!preloadBtn.hasClass('nppp-general')) {
-                            // highlight preload action
-                            preloadBtn.css('background-color', '#43A047');
-
-                            // Enable preload button and reset its style
-                            preloadBtn.prop('disabled', false);
-                            preloadBtn.removeClass('disabled');
-                        }
-
-                        if (btn.css('background-color') === 'rgb(67, 160, 71)') {
-                            btn.css('background-color', '');
-                        }
-                        // style the row for attention
-                        $('tr.purged-row').removeClass('purged-row');
-                        setTimeout(function() {
-                            row.addClass('purged-row');
-                        }, 0);
-                    } else {
-                        // Display an error message
-                        alert(response.data);
+                if (response && response.success) {
+                    // Check if the row is expanded on mobile
+                    if (row.hasClass('child')) {
+                        row = row.prev('tr');
                     }
-                },
-                error: function(xhr, status, error) {
-                    // Display an error message if the AJAX request fails
-                    alert(error);
+
+                    // find the preload button
+                    var preloadBtn;
+                    if (row.hasClass('dtr-expanded')) {
+                        preloadBtn = row.next('.child').find('.nppp-preload-btn');
+                    } else {
+                        preloadBtn = row.find('.nppp-preload-btn');
+                    }
+
+                    // state changes
+                    if (!preloadBtn.hasClass('nppp-general')) {
+                        preloadBtn.css('background-color', '#43A047');
+                        preloadBtn.prop('disabled', false);
+                        preloadBtn.removeClass('disabled');
+                        setTimeout(function(){ preloadBtn.css('background-color',''); }, 1200);
+                    }
+                    if (btn.css('background-color') === 'rgb(67, 160, 71)') {
+                        btn.css('background-color', '');
+                    }
+                    $('tr.purged-row').removeClass('purged-row');
+                    setTimeout(function() { row.addClass('purged-row'); }, 0);
+                } else {
+                    // on error
+                    btn.prop('disabled', false).removeClass('disabled');
                 }
-            });
-        }
+            },
+            error: function(xhr, status, error) {
+                npppToast(error || __('AJAX error','fastcgi-cache-purge-and-preload-nginx'), 'error');
+                btn.prop('disabled', false).removeClass('disabled');
+            },
+            complete: function() {
+                spin.remove();
+            }
+        });
     });
 
     // Handle click event for preload buttons in advanced tab
-    $(document).on('click', '.nppp-preload-btn', function() {
+    $(document).on('click', '.nppp-preload-btn', function(e) {
+        e.preventDefault();
+
         // Get the data
         var btn = $(this);
         var cacheUrl = btn.data('url');
         var row = btn.closest('tr');
 
-        // Send confirmation
-        if (confirm('Are you sure you want to preload cache?')) {
-            // AJAX request to purge the file
-            $.ajax({
-                url: nppp_admin_data.ajaxurl,
-                type: 'POST',
-                data: {
-                    action: 'nppp_preload_cache_premium',
-                    cache_url: cacheUrl,
-                    _wpnonce: nppp_admin_data.premium_nonce_preload
-                },
-                success: function(response) {
-                    // Check if the response indicates success
-                    if (response.success) {
-                        // Display a success message
-                        alert(response.data);
+        // disable during request + inline spinner
+        btn.prop('disabled', true).addClass('disabled');
+        var spin = $('<span class="nppp-inline-spinner" aria-hidden="true"></span>').appendTo(btn);
 
-                        // Check if the row is expanded on mobile
-                        if (row.hasClass('child')) {
-                            // If the row is expanded, target the parent row
-                            row = row.prev('tr');
-                        }
+        // AJAX request to preload
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'nppp_preload_cache_premium',
+                cache_url: cacheUrl,
+                _wpnonce: nppp_admin_data.premium_nonce_preload
+            },
+            success: function(response) {
+                var msg  = (response && response.data) ? response.data : __('Preload queued.','fastcgi-cache-purge-and-preload-nginx');
+                var type = (response && response.success) ? 'success' : npppInferType(msg, 'error');
+                npppToast(msg, type);
 
-                        // find the preload button
-                        var purgeBtn;
-                        if (row.hasClass('dtr-expanded')) {
-                            purgeBtn = row.next('.child').find('.nppp-purge-btn');
-                        } else {
-                            purgeBtn = row.find('.nppp-purge-btn');
-                        }
-
-                        // Disable the button
-                        btn.prop('disabled', true);
-                        // Add disabled style
-                        btn.addClass('disabled');
-                        // highlight preload action
-                        purgeBtn.css('background-color', '#43A047');
-
-                        // Enable purge button and reset its style
-                        purgeBtn.prop('disabled', false);
-                        purgeBtn.removeClass('disabled');
-                        if (btn.css('background-color') === 'rgb(67, 160, 71)') {
-                            btn.css('background-color', '');
-                        }
-                        // style the row for attention
-                        $('tr.purged-row').removeClass('purged-row');
-                        setTimeout(function() {
-                            row.addClass('purged-row');
-                        }, 0);
-                    } else {
-                        // Display an error message
-                        alert(response.data);
+                if (response && response.success) {
+                    // Check if the row is expanded on mobile
+                    if (row.hasClass('child')) {
+                        row = row.prev('tr');
                     }
-                },
-                error: function(xhr, status, error) {
-                    // Display an error message if the AJAX request fails
-                    alert(error);
+
+                    // find the purge button
+                    var purgeBtn;
+                    if (row.hasClass('dtr-expanded')) {
+                        purgeBtn = row.next('.child').find('.nppp-purge-btn');
+                    } else {
+                        purgeBtn = row.find('.nppp-purge-btn');
+                    }
+
+                    // state changes
+                    purgeBtn.css('background-color', '#43A047');
+                    purgeBtn.prop('disabled', false);
+                    purgeBtn.removeClass('disabled');
+                    setTimeout(function(){ purgeBtn.css('background-color',''); }, 1200);
+
+                    if (btn.css('background-color') === 'rgb(67, 160, 71)') {
+                        btn.css('background-color', '');
+                    }
+                    $('tr.purged-row').removeClass('purged-row');
+                    setTimeout(function() { row.addClass('purged-row'); }, 0);
+                } else {
+                    // on error
+                    btn.prop('disabled', false).removeClass('disabled');
                 }
-            });
-        }
+            },
+            error: function(xhr, status, error) {
+                npppToast(error || __('AJAX error','fastcgi-cache-purge-and-preload-nginx'), 'error');
+                btn.prop('disabled', false).removeClass('disabled');
+            },
+            complete: function() {
+                spin.remove();
+            }
+        });
     });
 
     // Update send mail status when state changes
