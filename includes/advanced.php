@@ -21,7 +21,7 @@ function nppp_premium_html($nginx_cache_path) {
 
     if ($wp_filesystem === false) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
+                    <h2>&nbsp;' . esc_html__( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . esc_html__( 'ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1070)', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
@@ -32,7 +32,7 @@ function nppp_premium_html($nginx_cache_path) {
     // Handle case where option doesn't exist
     if (empty($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
+                    <h2>&nbsp;' . esc_html__( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . esc_html__( 'ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1071)', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
@@ -43,7 +43,7 @@ function nppp_premium_html($nginx_cache_path) {
     // Handle case where cache directory doesn't exist
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
+                    <h2>&nbsp;' . esc_html__( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . esc_html__( 'ERROR PATH: The specified Nginx cache path was not found. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
@@ -54,7 +54,7 @@ function nppp_premium_html($nginx_cache_path) {
     // Check if the directory and its contents are readable softly and recursive
     if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
+                    <h2>&nbsp;' . esc_html__( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . esc_html__( 'ERROR PERMISSION: Please ensure proper permissions are set for the Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
@@ -63,7 +63,7 @@ function nppp_premium_html($nginx_cache_path) {
 
     } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
+                    <h2>&nbsp;' . esc_html__( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . esc_html__( 'ERROR PERMISSION: Please ensure proper permissions are set for the Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
@@ -137,7 +137,7 @@ function nppp_premium_html($nginx_cache_path) {
         </thead>
         <tbody>
             <?php if (empty($extractedUrls)) : ?>
-                <tr><td colspan="6">No cached content available yet. Consider Preload Cache now.</td></tr>
+                <tr><td colspan="6"><?php esc_html_e( 'No cached content available yet. Consider Preload Cache now.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></td></tr>
             <?php else :
                 foreach ($extractedUrls as $urlData) : ?>
                     <tr>
