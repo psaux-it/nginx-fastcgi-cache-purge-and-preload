@@ -349,7 +349,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description"><?php echo esc_html__( 'The default regex patterns exclude dynamic endpoints to prevent caching of user-specific content such as wp-admin|my-account.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'These exclusions are better handled server-side using _cache_bypass, _no_cache, and skip_cache rules in your Nginx configuration.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Here, these patterns are used to prevent wget from making requests to these endpoints during the Preloading process to avoid unnecessary server load.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <button id="nginx-regex-reset-defaults" class="button nginx-reset-regex-button">
+                                <button type="button" id="nginx-regex-reset-defaults" class="button nginx-reset-regex-button">
                                     <?php echo esc_html__( 'Reset Default', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </button>
                                 <div class="cache-paths-info">
@@ -368,7 +368,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description"><?php echo esc_html__( 'Nginx cache is designed to cache dynamic content, such as PHP-generated pages. Static assets like CSS, JS, and images are not cached by Nginx.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Nginx efficiently serves static assets from the disk, and headers like expires help reduce frequent requests for these files.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'By excluding static files, Preload operation are accelerated by avoiding unnecessary requests via wget for static assets.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <button id="nginx-extension-reset-defaults" class="button nginx-reset-extension-button">
+                                <button type="button" id="nginx-extension-reset-defaults" class="button nginx-reset-extension-button">
                                     <?php echo esc_html__( 'Reset Default', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </button>
                                 <div class="cache-paths-info">
@@ -438,7 +438,7 @@ function nppp_nginx_cache_settings_page() {
                                         <div class="nppp-input-group">
                                             <input id="nppp_datetimepicker1Input" type="text" placeholder="<?php echo esc_attr__( 'Time', 'fastcgi-cache-purge-and-preload-nginx' ); ?>"/>
                                             <div class="nppp-input-group-append">
-                                                <button id="nginx-cache-schedule-set" class="button nginx-cache-schedule-set-button">
+                                                <button type="button" id="nginx-cache-schedule-set" class="button nginx-cache-schedule-set-button">
                                                     <span class="nppp-tooltip">
                                                         <?php echo esc_html__( 'SET CRON', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                                         <span class="nppp-tooltiptext"><?php echo esc_html__( 'Click to set cron schedule', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
@@ -558,7 +558,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">📣 <?php echo esc_html__('Don\'t use greedy quantifiers inside lookaheads.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
                                 <p class="description">📣 <?php echo esc_html__('Checks .* quantifiers. (limit to 1).', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
                                 <p class="description">📣 <?php echo esc_html__('Checks for excessively long regex patterns. (limit length to 300 characters).', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                <button id="nginx-key-regex-reset-defaults" class="button nginx-reset-key-regex-button">
+                                <button type="button" id="nginx-key-regex-reset-defaults" class="button nginx-reset-key-regex-button">
                                     <?php echo esc_html__('Reset Default', 'fastcgi-cache-purge-and-preload-nginx'); ?>
                                 </button>
                                 <div class="cache-paths-info">
@@ -621,7 +621,7 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_nginx_cache_logs_callback(); ?>
-                                <button id="clear-logs-button" class="button nginx-clear-logs-button">
+                                <button type="button" id="clear-logs-button" class="button nginx-clear-logs-button">
                                     <?php echo esc_html__( 'Clear Logs', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </button>
                                 <p class="description">
@@ -1656,7 +1656,7 @@ function nppp_nginx_cache_api_key_callback() {
     echo "<input type='text' id='nginx_cache_api_key' name='nginx_cache_settings[nginx_cache_api_key]' value='" . esc_attr($api_key) . "' class='regular-text' />";
 
     echo "<div style='display: block; align-items: baseline;'>";
-    echo "<button id='api-key-button' class='button nginx-api-key-button'>" . esc_html__( 'Generate API Key', 'fastcgi-cache-purge-and-preload-nginx' ) . "</button>";
+    echo "<button type='button' id='api-key-button' class='button nginx-api-key-button'>" . esc_html__( 'Generate API Key', 'fastcgi-cache-purge-and-preload-nginx' ) . "</button>";
     echo "<div style='display: flex; align-items: baseline; margin-top: 8px; margin-bottom: 8px;'>";
     echo "<p class='description' id='nppp-api-key' style='margin-right: 10px;'><span class='nppp-tooltip'>" . esc_html__( 'API Key', 'fastcgi-cache-purge-and-preload-nginx' ) . "<span class='nppp-tooltiptext'>" . esc_html__( 'Click to copy REST API Key', 'fastcgi-cache-purge-and-preload-nginx' ) . "</span></span></p>";
     echo "<p class='description' id='nppp-purge-url' style='margin-right: 10px;'><span class='nppp-tooltip'>" . esc_html__( 'Purge URL', 'fastcgi-cache-purge-and-preload-nginx' ) . "<span class='nppp-tooltiptext'>" . esc_html__( 'Click to copy full REST API CURL URL for Purge', 'fastcgi-cache-purge-and-preload-nginx' ) . "</span></span></p>";
