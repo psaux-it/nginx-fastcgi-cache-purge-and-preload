@@ -288,7 +288,7 @@ function nppp_purge_cache_premium_callback() {
 
         // Check process is alive
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            $error_message = __( 'INFO ADMIN: Nginx cache purge has been halted due to ongoing cache preloading. You can stop Nginx cache preloading anytime via the "Purge All" option.', 'fastcgi-cache-purge-and-preload-nginx' );
+            $error_message = __( 'INFO ADMIN: Single-page purge skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion or use "Purge All" to cancel.', 'fastcgi-cache-purge-and-preload-nginx' );
             nppp_log_and_send_error($error_message, $log_file_path);
         }
     }
