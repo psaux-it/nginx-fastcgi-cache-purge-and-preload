@@ -220,6 +220,25 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     } else {
                         nppp_display_admin_notice('error', sprintf(__( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
                     }
+
+                    // Handle related homepage/category purge + optional preload
+                    $is_manual = !$nppp_auto_purge;
+                    $related_urls = nppp_get_related_urls_for_single($current_page_url);
+
+                    // Purge related silently
+                    foreach ($related_urls as $rel) {
+                        nppp_purge_url_silent($nginx_cache_path, $rel);
+                    }
+
+                    // Decide preload policy
+                    $settings = get_option('nginx_cache_settings');
+                    $should_preload_related =
+                        ($is_manual && !empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes')
+                        || (!$is_manual && !empty($settings['nginx_cache_auto_preload']) && $settings['nginx_cache_auto_preload'] === 'yes');
+
+                    if ($should_preload_related) {
+                        nppp_preload_urls_fire_and_forget($related_urls);
+                    }
                     return;
                 }
             }
@@ -239,6 +258,25 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         } else {
             // Translators: %s is the page URL
             nppp_display_admin_notice('info', sprintf( __( 'INFO ADMIN: Nginx cache purge attempted, but the page %s is not currently found in the cache.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
+        }
+
+        // Even if the single wasn’t found in cache, keep related in sync
+        $is_manual = !$nppp_auto_purge;
+        $related_urls = nppp_get_related_urls_for_single($current_page_url);
+
+        // Purge related silently
+        foreach ($related_urls as $rel) {
+            nppp_purge_url_silent($nginx_cache_path, $rel);
+        }
+
+        // Decide preload policy
+        $settings = get_option('nginx_cache_settings');
+        $should_preload_related =
+            ($is_manual && !empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes')
+            || (!$is_manual && !empty($settings['nginx_cache_auto_preload']) && $settings['nginx_cache_auto_preload'] === 'yes');
+
+        if ($should_preload_related) {
+            nppp_preload_urls_fire_and_forget($related_urls);
         }
     }
 }
