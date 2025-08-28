@@ -34,6 +34,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_api', 'API', 'nppp_nginx_cache_api_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_schedule', 'Scheduled Cache', 'nppp_nginx_cache_schedule_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_purge_on_update', 'Purge Cache on Post/Page Update', 'nppp_nginx_cache_purge_on_update_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nppp_related_pages', 'Related Pages (single-URL purge only)', 'nppp_nginx_cache_related_pages_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_wait_request', 'Per Request Wait Time', 'nppp_nginx_cache_wait_request_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_tracking_opt_in', 'Enable Tracking', 'nppp_nginx_cache_tracking_opt_in_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_key_custom_regex', 'Enable Custom regex', 'nppp_nginx_cache_key_custom_regex_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
@@ -234,6 +235,24 @@ function nppp_nginx_cache_settings_page() {
                                     </p><br>
                                     <p>
                                         <?php echo esc_html__( 'If Auto Preload is enabled, the cache for the single POST/PAGE or the entire cache will be automatically preloaded after the cache is purged.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    </p>
+                                </div>
+                            </td>
+                        </tr>
+                        <!-- Related post/page purge Options Section -->
+                        <tr valign="top">
+                            <th scope="row">
+                                <span class="dashicons dashicons-admin-home"></span>
+                                <?php echo esc_html__( 'Related Pages (single-URL purge only)', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <?php nppp_nginx_cache_related_pages_callback(); ?>
+                                <div class="key-regex-info" style="margin-top:8px;">
+                                    <p class="description">
+                                        <?php echo esc_html__( 'When Auto Purge is ON, these apply to single post/page purges triggered by updates/comments. For manual front-end “Purge This Page”, enable “Apply to manual one-page purges.”', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    </p>
+                                    <p class="description">
+                                        <?php echo esc_html__( 'Auto Preload still controls related-page preloads in the auto flow. The “Also preload related pages after manual purge” checkbox affects only the manual one-page action.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
                                 </div>
                             </td>
@@ -838,6 +857,49 @@ function nppp_update_send_mail_option() {
     } else {
         wp_send_json_error('Error updating option.');
     }
+}
+
+// AJAX callback function to update related pages
+function nppp_update_related_fields() {
+    // Nonce & capability
+    if ( ! isset($_POST['_wpnonce']) || ! wp_verify_nonce( sanitize_text_field( wp_unslash($_POST['_wpnonce']) ), 'nppp-related-posts-purge' ) ) {
+        wp_send_json_error( ['message' => __('Security check failed.', 'fastcgi-cache-purge-and-preload-nginx')], 403 );
+    }
+    if ( ! current_user_can('manage_options') ) {
+        wp_send_json_error( ['message' => __('You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx')], 403 );
+    }
+
+    $allowed_keys = [
+        'nppp_related_include_home',
+        'nppp_related_include_category',
+        'nppp_related_apply_manual',
+        'nppp_related_preload_after_manual',
+    ];
+
+    $posted = isset($_POST['fields']) && is_array($_POST['fields']) ? wp_unslash($_POST['fields']) : [];
+    // sanitize incoming values
+    foreach ($posted as $k => $v) {
+        $posted[$k] = is_string($v) ? sanitize_text_field($v) : $v;
+    }
+
+    $normalized = [];
+    foreach ($allowed_keys as $key) {
+        $raw = isset($posted[$key]) ? $posted[$key] : null;
+        $normalized[$key] = in_array($raw, ['yes','1',1,'true',true,'on'], true) ? 'yes' : 'no';
+    }
+
+    // Merge into existing options
+    $opts = get_option('nginx_cache_settings', []);
+    if ( ! is_array($opts) ) {
+        $opts = [];
+    }
+    $opts = array_merge($opts, $normalized);
+    update_option('nginx_cache_settings', $opts);
+
+    wp_send_json_success([
+        'message' => __('Related pages preferences saved.', 'fastcgi-cache-purge-and-preload-nginx'),
+        'data'    => $normalized,
+    ]);
 }
 
 // AJAX callback function to update auto preload option
@@ -1665,6 +1727,44 @@ function nppp_nginx_cache_api_key_callback() {
     echo "</div>";
 }
 
+// Related Pages (single-URL purge only) callback
+function nppp_nginx_cache_related_pages_callback() {
+    $options = get_option('nginx_cache_settings', array());
+
+    $include_home_checked     = (isset($options['nppp_related_include_home'])         && $options['nppp_related_include_home'] === 'yes') ? 'checked="checked"' : '';
+    $include_cat_checked      = (isset($options['nppp_related_include_category'])     && $options['nppp_related_include_category'] === 'yes') ? 'checked="checked"' : '';
+    $apply_manual_checked     = (isset($options['nppp_related_apply_manual'])         && $options['nppp_related_apply_manual'] === 'yes') ? 'checked="checked"' : '';
+    $preload_manual_checked   = (isset($options['nppp_related_preload_after_manual']) && $options['nppp_related_preload_after_manual'] === 'yes') ? 'checked="checked"' : '';
+    ?>
+    <fieldset class="nppp-related-pages">
+        <label style="display:block;margin-bottom:6px;">
+            <input type="checkbox"
+                   name="nginx_cache_settings[nppp_related_include_home]"
+                   value="yes" <?php echo esc_attr($include_home_checked); ?> />
+            <?php echo esc_html__( 'Include Homepage when purging a single post/page', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </label>
+        <label style="display:block;margin-bottom:6px;">
+            <input type="checkbox"
+                   name="nginx_cache_settings[nppp_related_include_category]"
+                   value="yes" <?php echo esc_attr($include_cat_checked); ?> />
+            <?php echo esc_html__( 'Include related Category archives (for posts)', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </label>
+        <label style="display:block;margin-bottom:6px;">
+            <input type="checkbox"
+                   name="nginx_cache_settings[nppp_related_apply_manual]"
+                   value="yes" <?php echo esc_attr($apply_manual_checked); ?> />
+            <?php echo esc_html__( 'Apply to manual one-page purges (Front-end “Purge This Page”)', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </label>
+        <label style="display:block;">
+            <input type="checkbox"
+                   name="nginx_cache_settings[nppp_related_preload_after_manual]"
+                   value="yes" <?php echo esc_attr($preload_manual_checked); ?> />
+            <?php echo esc_html__( 'Also preload related pages after manual purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </label>
+    </fieldset>
+    <?php
+}
+
 // Callback function for REST API
 function nppp_nginx_cache_api_callback() {
     $options = get_option('nginx_cache_settings');
@@ -1908,26 +2008,18 @@ function nppp_nginx_cache_settings_sanitize($input) {
         $sanitized_input['nginx_cache_reject_extension'] = preg_replace('/\\\\+/', '\\', $input['nginx_cache_reject_extension']);
     }
 
-    // Sanitize Send Mail
-    $sanitized_input['nginx_cache_send_mail'] = isset($input['nginx_cache_send_mail']) && $input['nginx_cache_send_mail'] === 'yes' ? 'yes' : 'no';
-
-    // Sanitize Auto Preload
-    $sanitized_input['nginx_cache_auto_preload'] = isset($input['nginx_cache_auto_preload']) && $input['nginx_cache_auto_preload'] === 'yes' ? 'yes' : 'no';
-
-    // Sanitize Auto Preload Mobile
-    $sanitized_input['nginx_cache_auto_preload_mobile'] = isset($input['nginx_cache_auto_preload_mobile']) && $input['nginx_cache_auto_preload_mobile'] === 'yes' ? 'yes' : 'no';
-
-    // Sanitize Auto Purge
-    $sanitized_input['nginx_cache_purge_on_update'] = isset($input['nginx_cache_purge_on_update']) && $input['nginx_cache_purge_on_update'] === 'yes' ? 'yes' : 'no';
-
-     // Sanitize Cache Schedule
-    $sanitized_input['nginx_cache_schedule'] = isset($input['nginx_cache_schedule']) && $input['nginx_cache_schedule'] === 'yes' ? 'yes' : 'no';
-
-    // Sanitize REST API
-    $sanitized_input['nginx_cache_api'] = isset($input['nginx_cache_api']) && $input['nginx_cache_api'] === 'yes' ? 'yes' : 'no';
-
-    // Sanitize Opt-in
-    $sanitized_input['nginx_cache_tracking_opt_in'] = isset($input['nginx_cache_tracking_opt_in']) && $input['nginx_cache_tracking_opt_in'] == '1' ? '1' : '0';
+    // Sanitize Send Mail, Auto Preload, Auto Preload Mobile, Auto Purge, Cache Schedule, REST API, Opt-in, Related Pages
+    $sanitized_input['nginx_cache_send_mail']              = isset($input['nginx_cache_send_mail'])               && $input['nginx_cache_send_mail'] === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_auto_preload']           = isset($input['nginx_cache_auto_preload'])            && $input['nginx_cache_auto_preload'] === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_auto_preload_mobile']    = isset($input['nginx_cache_auto_preload_mobile'])     && $input['nginx_cache_auto_preload_mobile'] === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_purge_on_update']        = isset($input['nginx_cache_purge_on_update'])         && $input['nginx_cache_purge_on_update'] === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_schedule']               = isset($input['nginx_cache_schedule'])                && $input['nginx_cache_schedule'] === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_api']                    = isset($input['nginx_cache_api'])                     && $input['nginx_cache_api'] === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_tracking_opt_in']        = isset($input['nginx_cache_tracking_opt_in'])         && $input['nginx_cache_tracking_opt_in'] == '1' ? '1' : '0';
+    $sanitized_input['nppp_related_include_home']          = (isset($input['nppp_related_include_home'])          && $input['nppp_related_include_home'] === 'yes') ? 'yes' : 'no';
+    $sanitized_input['nppp_related_include_category']      = (isset($input['nppp_related_include_category'])      && $input['nppp_related_include_category'] === 'yes') ? 'yes' : 'no';
+    $sanitized_input['nppp_related_apply_manual']          = (isset($input['nppp_related_apply_manual'])          && $input['nppp_related_apply_manual'] === 'yes') ? 'yes' : 'no';
+    $sanitized_input['nppp_related_preload_after_manual']  = (isset($input['nppp_related_preload_after_manual'])  && $input['nppp_related_preload_after_manual'] === 'yes') ? 'yes' : 'no';
 
     // Sanitize and validate cache limit rate
     if (!empty($input['nginx_cache_limit_rate'])) {
@@ -2198,18 +2290,22 @@ function nppp_defaults_on_plugin_activation() {
 
     // Define default options
     $default_options = array(
-        'nginx_cache_path' => '/dev/shm/change-me-now',
-        'nginx_cache_email' => 'your-email@example.com',
-        'nginx_cache_cpu_limit' => 100,
-        'nginx_cache_reject_extension' => nppp_fetch_default_reject_extension(),
-        'nginx_cache_reject_regex' => nppp_fetch_default_reject_regex(),
-        'nginx_cache_key_custom_regex' => base64_encode(nppp_fetch_default_regex_for_cache_key()),
-        'nginx_cache_wait_request' => 0,
-        'nginx_cache_limit_rate' => 5120,
-        'nginx_cache_tracking_opt_in' => '1',
-        'nginx_cache_api_key' => $new_api_key,
-        'nginx_cache_preload_proxy_host' => '127.0.0.1',
-        'nginx_cache_preload_proxy_port' => 3434,
+        'nginx_cache_path'                  => '/dev/shm/change-me-now',
+        'nginx_cache_email'                 => 'your-email@example.com',
+        'nginx_cache_cpu_limit'             => 100,
+        'nginx_cache_reject_extension'      => nppp_fetch_default_reject_extension(),
+        'nginx_cache_reject_regex'          => nppp_fetch_default_reject_regex(),
+        'nginx_cache_key_custom_regex'      => base64_encode(nppp_fetch_default_regex_for_cache_key()),
+        'nginx_cache_wait_request'          => 0,
+        'nginx_cache_limit_rate'            => 5120,
+        'nginx_cache_tracking_opt_in'       => '1',
+        'nginx_cache_api_key'               => $new_api_key,
+        'nginx_cache_preload_proxy_host'    => '127.0.0.1',
+        'nginx_cache_preload_proxy_port'    => 3434,
+        'nppp_related_include_home'         => 'no',
+        'nppp_related_include_category'     => 'no',
+        'nppp_related_apply_manual'         => 'no',
+        'nppp_related_preload_after_manual' => 'no',
     );
 
     // Retrieve existing options (if any)
