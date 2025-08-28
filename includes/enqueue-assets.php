@@ -130,6 +130,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'enable_proxy_nonce' => $update_enable_proxy_option_nonce,
         'wget_progress_api' => esc_url(rest_url('nppp_nginx_cache/v2/preload-progress')),
         'preload_progress_nonce' => wp_create_nonce('wp_rest'),
+        'related_purge_nonce' => wp_create_nonce('nppp-related-posts-purge'),
     ));
 }
 
