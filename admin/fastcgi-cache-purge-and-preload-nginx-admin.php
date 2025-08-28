@@ -100,6 +100,7 @@ require_once dirname(__DIR__) . '/includes/admin-bar.php';
 require_once dirname(__DIR__) . '/includes/log.php';
 require_once dirname(__DIR__) . '/includes/svg.php';
 require_once dirname(__DIR__) . '/includes/settings.php';
+require_once dirname(__DIR__) . '/includes/related.php';
 require_once dirname(__DIR__) . '/includes/purge.php';
 require_once dirname(__DIR__) . '/includes/preload.php';
 require_once dirname(__DIR__) . '/includes/help.php';
