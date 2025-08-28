@@ -2774,6 +2774,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Update status tab metrics
 function npppupdateStatus() {
+    const { __ } = wp.i18n;
+
     // Elements we need ready on DOM
     const elementsToCheck = [
         "#npppphpFpmStatus",
