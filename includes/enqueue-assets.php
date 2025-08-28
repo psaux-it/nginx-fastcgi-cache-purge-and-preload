@@ -441,8 +441,17 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
     $nppp_met = nppp_plugin_requirements_met();
     if (!$nppp_met) {
         wp_enqueue_script('nppp-disable-functionality-front', plugins_url('../frontend/js/nppp-disable-functionality-front.js', __FILE__), array('jquery'), '2.1.3', true);
+        // Make sure partial-preload disable is not also active
+        wp_dequeue_script('nppp-disable-preload-front');
     } else {
         wp_dequeue_script('nppp-disable-functionality-front');
+        // Extra gate: if shell/toolset missing, disable only preload actions on front-end
+        $has_shell = function_exists('nppp_shell_toolset_check') ? nppp_shell_toolset_check(false, true) : false;
+        if (! $has_shell) {
+            wp_enqueue_script('nppp-disable-preload-front', plugins_url('../frontend/js/nppp-disable-preload-front.js', __FILE__), array('jquery'), '2.1.3', true);
+        } else {
+            wp_dequeue_script('nppp-disable-preload-front');
+        }
     }
 }
 
