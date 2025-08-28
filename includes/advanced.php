@@ -372,6 +372,45 @@ function nppp_purge_cache_premium_callback() {
     if ($deleted) {
         // Translators: %s is the page URL
         $success_message = sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url_decoded );
+
+        $settings = get_option('nginx_cache_settings');
+        $related_urls = nppp_get_related_urls_for_single($final_url);
+
+        // Purge related silently (no extra notices, as this is an AJAX JSON response)
+        foreach ($related_urls as $rel) {
+            nppp_purge_url_silent($nginx_cache_path, $rel);
+        }
+
+        // Preload policy for manual (Advanced tab is manual)
+        if (!empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes') {
+            nppp_preload_urls_fire_and_forget($related_urls);
+        }
+
+        // Optionally make the success message clearer
+        if (!empty($related_urls)) {
+            $labels = [];
+            if (!empty($settings['nppp_related_include_home']) && $settings['nppp_related_include_home'] === 'yes') {
+                $labels[] = esc_html__('Homepage', 'fastcgi-cache-purge-and-preload-nginx');
+            }
+            if (!empty($settings['nppp_related_include_category']) && $settings['nppp_related_include_category'] === 'yes') {
+                $labels[] = esc_html__('Category archive(s)', 'fastcgi-cache-purge-and-preload-nginx');
+            }
+            $label_text = implode('/', $labels);
+
+            $preload_tail = (!empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes')
+                ? esc_html__(' purged & preloaded', 'fastcgi-cache-purge-and-preload-nginx')
+                : esc_html__(' purged', 'fastcgi-cache-purge-and-preload-nginx');
+
+            // Second line, colored
+            $success_message .= '<br><span class="nppp-related-line">('
+                . sprintf(
+                    /* Translators: %s is like "homepage/category archive(s)" */
+                    esc_html__('Related: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                    esc_html($label_text)
+                )
+                . $preload_tail
+                . ')</span>';
+        }
         nppp_log_and_send_success($success_message, $log_file_path);
     } else {
         // Translators: %s is the page URL
