@@ -212,7 +212,12 @@ function nppp_disable_features($unsupported, $preload) {
             'nginx_cache_auto_preload_mobile',
             'nginx_cache_schedule',
             'nginx_cache_send_mail',
-            'nginx_cache_api'
+            'nginx_cache_api',
+            'nginx_cache_preload_enable_proxy',
+            'nppp_related_include_home',
+            'nppp_related_include_category',
+            'nppp_related_apply_manual',
+            'nppp_related_preload_after_manual',
         );
     } elseif ( $preload === true ) {
         // If preload is true
@@ -220,7 +225,8 @@ function nppp_disable_features($unsupported, $preload) {
             'nginx_cache_api',
             'nginx_cache_auto_preload',
             'nginx_cache_auto_preload_mobile',
-            'nginx_cache_schedule'
+            'nginx_cache_schedule',
+            'nginx_cache_preload_enable_proxy',
         );
     } else {
         return;
