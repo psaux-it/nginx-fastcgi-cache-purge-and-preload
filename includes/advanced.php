@@ -175,11 +175,15 @@ function nppp_log_and_send_error($error_message, $log_file_path) {
 
 // Log and send success
 function nppp_log_and_send_success($success_message, $log_file_path) {
+    // Make a plain-text version for the log
+    $for_log  = preg_replace( '~<br\s*/?>~i', ' — ', (string) $success_message );
+    $log_text = trim( wp_strip_all_tags( $for_log, false ) );
+
     if (!empty($log_file_path)) {
         nppp_perform_file_operation(
             $log_file_path,
             'append',
-            '[' . current_time('Y-m-d H:i:s') . '] ' . $success_message
+            '[' . current_time('Y-m-d H:i:s') . '] ' . $log_text
         );
     } else {
         nppp_custom_error_log('Log file not found!');
