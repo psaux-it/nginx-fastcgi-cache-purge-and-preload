@@ -74,6 +74,9 @@
             // disable auto preload checkbox
             $('#nginx_cache_auto_preload').prop('disabled', true);
 
+            // disable preload proxy checkbox
+            $('#nginx_cache_preload_enable_proxy').prop('disabled', true);
+
             // disable preload mobile checkbox
             $('#nginx_cache_auto_preload_mobile').prop('disabled', true);
 
@@ -97,6 +100,33 @@
 
             // disable generate API key button
             $('#api-key-button').prop('disabled', true);
+
+            // Related purge checkboxes (lock + detach)
+            function npppLockCheckbox(name){
+                const $cb = $(`input[type="checkbox"][name="${name}"]`);
+                if (!$cb.length) return;
+
+                // force on, grey out, make non-interactive
+                $cb.prop('checked', true)
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'title':'Locked in unsupported environment'})
+                    .off('click change')
+                    .on('click.npppLock change.npppLock', function(e){ e.preventDefault(); return false; });
+
+                // grey the label/row too (optional)
+                $cb.closest('label, .form-table tr, p').css({ opacity:.5, cursor:'not-allowed' });
+
+                // disabled inputs don't submit; ensure "yes" still posts
+                const $form = $cb.closest('form');
+                if ($form.length && !$form.find(`input[type="hidden"][name="${name}"]`).length){
+                    $('<input>', {type:'hidden', name, value:'yes'}).appendTo($form);
+                }
+            }
+
+            // call for each setting
+            npppLockCheckbox('nginx_cache_settings[nppp_related_include_home]');
+            npppLockCheckbox('nginx_cache_settings[nppp_related_include_category]');
+            npppLockCheckbox('nginx_cache_settings[nppp_related_preload_after_manual]');
 
             // disable the rest API elements non-clickable
             $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({
