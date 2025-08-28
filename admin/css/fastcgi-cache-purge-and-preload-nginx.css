@@ -2851,3 +2851,29 @@ p.description {
         max-width: 100%;
     }
 }
+
+/* Inline save indicator for Related Pages toggles */
+.nppp-related-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 0px;
+    font-size: 12px;
+    vertical-align: middle;
+    min-width: 90px;
+}
+
+.nppp-related-status .dashicons { line-height: 1; }
+.nppp-related-status[data-state="saving"] .dashicons { animation: nppp-spin 1s linear infinite; }
+.nppp-related-status[data-state="saving"] { color: #2271b1; }
+.nppp-related-status[data-state="saved"] { color: #1a7f37; }
+.nppp-related-status[data-state="error"] { color: #d63638; }
+
+@keyframes nppp-spin { to { transform: rotate(360deg); } }
+
+.nppp-sr-only {
+    position: absolute !important;
+    height: 1px; width: 1px; overflow: hidden;
+    clip: rect(1px, 1px, 1px, 1px);
+    white-space: nowrap; border: 0; padding: 0; margin: -1px;
+}
