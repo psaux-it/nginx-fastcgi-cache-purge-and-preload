@@ -2885,3 +2885,7 @@ p.description {
     color:#e09f1f;
     font-weight:600;
 }
+
+.nppp-related-pages label:has(> input[name="nginx_cache_settings[nppp_related_apply_manual]"]) {
+    display: none !important;
+}
