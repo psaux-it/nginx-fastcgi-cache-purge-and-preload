@@ -204,6 +204,15 @@ $(document).ready(function() {
     if (!$nppTabs.hasClass('ui-tabs')) {
         $nppTabs.tabs({
             activate: function(event, ui) {
+                const newId = ui.newPanel && ui.newPanel.attr('id');
+                const oldId = ui.oldPanel && ui.oldPanel.attr('id');
+
+                // If we are LEAVING Status, stop Status-specific background work
+                if (oldId === 'status' && newId !== 'status') {
+                    npppStopWgetPolling();
+                    nppdisconnectObserver();
+                }
+
                 // Only trigger if it's a internal interaction (not direct link)
                 if (!isTabChangeFromHash) {
                     const tabId = ui.newPanel.attr('id');
@@ -314,8 +323,16 @@ $(document).ready(function() {
         const bar = document.getElementById("wpt-bar-inner");
         const status = document.getElementById("wpt-status");
 
-        // Only run while polling is active; if DOM isn’t ready yet, keep loop alive
+        // Only run while polling is active
         if (!npppPollActive) return;
+
+        // If Status tab is not visible anymore, stop safely.
+        if (!$('#status').is(':visible')) {
+            npppStopWgetPolling();
+            return;
+        }
+
+        // If DOM isn’t ready yet, keep loop alive
         if (!bar || !status || !bar.isConnected || !status.isConnected) {
             if (npppPollTimer) clearTimeout(npppPollTimer);
             npppPollTimer = setTimeout(fetchWgetProgress, 800);
