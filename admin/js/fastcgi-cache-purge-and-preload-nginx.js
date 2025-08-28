@@ -2565,7 +2565,9 @@ $(document).ready(function() {
         '#nginx_cache_email',
         '#nginx_cache_tracking_opt_in',
         '#nginx_cache_api_key',
-        '#nginx_cache_key_custom_regex'
+        '#nginx_cache_key_custom_regex',
+        '#nginx_cache_preload_proxy_port',
+        '#nginx_cache_preload_proxy_host'
     ];
 
     // Initialize originalValues with current field values
@@ -2791,7 +2793,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Update status tab metrics
 function npppupdateStatus() {
-    const { __ } = wp.i18n;
+    const { __, _x, _n, _nx } = wp.i18n;
 
     // Elements we need ready on DOM
     const elementsToCheck = [
