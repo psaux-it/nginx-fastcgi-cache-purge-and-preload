@@ -2877,3 +2877,11 @@ p.description {
     clip: rect(1px, 1px, 1px, 1px);
     white-space: nowrap; border: 0; padding: 0; margin: -1px;
 }
+
+/* Emphasize the related line inside the toast message */
+.nppp-toast .nppp-msg .nppp-related-line{
+    display:block;
+    margin-top:4px;
+    color:#e09f1f;
+    font-weight:600;
+}
