@@ -305,12 +305,22 @@ $(document).ready(function() {
         setTimeout(() => t.remove(), 160);
     }
 
+    let npppPollActive = false;
+    let npppPollTimer  = null;
+
     // Preload progress status
     function fetchWgetProgress() {
         const barText = document.getElementById("wpt-bar-text");
         const bar = document.getElementById("wpt-bar-inner");
         const status = document.getElementById("wpt-status");
-        if (!bar || !status) return;
+
+        // Only run while polling is active; if DOM isn’t ready yet, keep loop alive
+        if (!npppPollActive) return;
+        if (!bar || !status || !bar.isConnected || !status.isConnected) {
+            if (npppPollTimer) clearTimeout(npppPollTimer);
+            npppPollTimer = setTimeout(fetchWgetProgress, 800);
+            return;
+        }
 
         fetch(nppp_admin_data.wget_progress_api, {
             method: 'GET',
@@ -327,7 +337,8 @@ $(document).ready(function() {
             if (!data.log_found) {
                 const preloadRow = document.getElementById("nppp-preload-progress-row");
                 if (preloadRow) preloadRow.style.display = "none";
-                    return;
+                npppStopWgetPolling();
+                return;
             } else {
                 const preloadRow = document.getElementById("nppp-preload-progress-row");
                 if (preloadRow) preloadRow.style.display = "";
@@ -445,12 +456,29 @@ $(document).ready(function() {
             }
 
             if (pct < 100 && data.status === "running") {
-                setTimeout(fetchWgetProgress, 500);
+                if (npppPollTimer) clearTimeout(npppPollTimer);
+                npppPollTimer = setTimeout(fetchWgetProgress, 800);
+            } else {
+                npppStopWgetPolling();
             }
         })
         .catch(err => {
             console.error('Fetch preload progress failed:', err);
+            npppStopWgetPolling();
         });
+    }
+
+    // Polling guard (singleton)
+    function npppStartWgetPolling(){
+        if (npppPollActive) return;
+        npppPollActive = true;
+        fetchWgetProgress();
+    }
+
+    function npppStopWgetPolling(){
+        npppPollActive = false;
+        if (npppPollTimer) clearTimeout(npppPollTimer);
+        npppPollTimer = null;
     }
 
     // Function to load content for the 'Status' tab via AJAX
@@ -485,7 +513,7 @@ $(document).ready(function() {
                         const preloadRawStatus = preloadStatusSpan.dataset.statusRaw?.toLowerCase();
                         if (preloadRawStatus === "true" || preloadRawStatus === "progress") {
                             preloadProgressRow.style.display = "";
-                            fetchWgetProgress();
+                            npppStartWgetPolling();
                         } else {
                             preloadProgressRow.style.display = "none";
                         }
