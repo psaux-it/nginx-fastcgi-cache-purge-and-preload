@@ -76,6 +76,9 @@
             // Disable the preload wp schedule
             $('#nginx_cache_schedule').prop('disabled', true);
 
+            // disable preload proxy checkbox
+            $('#nginx_cache_preload_enable_proxy').prop('disabled', true);
+
             // Disable rest API preload stuff
             $('#nppp-preload-url .nppp-tooltip').css({
                 'opacity': '0.5',
