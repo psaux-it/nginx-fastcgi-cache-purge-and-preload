@@ -982,6 +982,112 @@ $(document).ready(function() {
         });
     });
 
+    // Auto-save: Related Pages
+    (function npppSetupRelatedAutoSave() {
+        const $npppRelWrappers = $('.nppp-related-pages').not('[data-nppp-rel-init]');
+        if (!$npppRelWrappers.length || !window.nppp_admin_data) return;
+
+        $npppRelWrappers.each(function () {
+            const $npppRelFS = $(this).attr('data-nppp-rel-init', '1');
+
+            // Inline status badge after this fieldset
+            const $npppRelStatus = $('<span/>', {
+                'class': 'nppp-related-status',
+                'aria-live': 'polite',
+                'aria-atomic': 'true'
+            }).insertAfter($npppRelFS);
+
+            const npppRelGet = () => ({
+                nppp_related_include_home:
+                    $npppRelFS.find('[name="nginx_cache_settings[nppp_related_include_home]"]').is(':checked') ? 'yes' : 'no',
+                nppp_related_include_category:
+                    $npppRelFS.find('[name="nginx_cache_settings[nppp_related_include_category]"]').is(':checked') ? 'yes' : 'no',
+                nppp_related_apply_manual:
+                    $npppRelFS.find('[name="nginx_cache_settings[nppp_related_apply_manual]"]').is(':checked') ? 'yes' : 'no',
+                nppp_related_preload_after_manual:
+                    $npppRelFS.find('[name="nginx_cache_settings[nppp_related_preload_after_manual]"]').is(':checked') ? 'yes' : 'no'
+            });
+
+            const npppRelDisable = (flag) => $npppRelFS.find('input[type=checkbox]').prop('disabled', flag);
+
+            const npppRelShowSaving = () => {
+                $npppRelStatus.attr('data-state', 'saving').html(
+                    '<span class="dashicons dashicons-update" aria-hidden="true"></span>' +
+                    '<span class="nppp-sr-only">' + __('Saving', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+                    '<span>' + __('Saving…', 'fastcgi-cache-purge-and-preload-nginx') + '</span>'
+                );
+            };
+            const npppRelShowSaved = () => {
+                $npppRelStatus.attr('data-state', 'saved').html(
+                    '<span class="dashicons dashicons-yes" aria-hidden="true"></span>' +
+                    '<span class="nppp-sr-only">' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+                    '<span>' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>'
+                );
+                setTimeout(() => { $npppRelStatus.attr('data-state', 'idle').empty(); }, 1800);
+            };
+            const npppRelShowError = (msg) => {
+                $npppRelStatus.attr('data-state', 'error').html(
+                    '<span class="dashicons dashicons-dismiss" aria-hidden="true"></span>' +
+                    '<span class="nppp-sr-only">' + __('Error', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+                    '<span>' + (msg || __('Failed to save', 'fastcgi-cache-purge-and-preload-nginx')) + '</span>'
+                );
+            };
+
+            const npppRelRevertTo = (v) => {
+                $npppRelFS.find('[name="nginx_cache_settings[nppp_related_include_home]"]').prop('checked', v.nppp_related_include_home === 'yes');
+                $npppRelFS.find('[name="nginx_cache_settings[nppp_related_include_category]"]').prop('checked', v.nppp_related_include_category === 'yes');
+                $npppRelFS.find('[name="nginx_cache_settings[nppp_related_apply_manual]"]').prop('checked', v.nppp_related_apply_manual === 'yes');
+                $npppRelFS.find('[name="nginx_cache_settings[nppp_related_preload_after_manual]"]').prop('checked', v.nppp_related_preload_after_manual === 'yes');
+            };
+
+            let npppRelLast = npppRelGet();
+            let npppRelSaving = false;
+
+            function npppRelSaveNow() {
+                if (npppRelSaving) return;
+                npppRelSaving = true;
+                npppRelDisable(true);
+                npppRelShowSaving();
+
+                const payload = npppRelGet();
+
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    method: 'POST',
+                    dataType: 'json',
+                    timeout: 15000,
+                    data: {
+                        action: 'nppp_update_related_fields',
+                        _wpnonce: nppp_admin_data.related_purge_nonce,
+                        fields: payload
+                    }
+                }).done((res) => {
+                    if (res && res.success) {
+                        npppRelLast = payload;
+                        npppRelShowSaved();
+                    } else {
+                        npppRelRevertTo(npppRelLast);
+                        const msg = (res && (res.message || (res.data && res.data.message))) || 'Failed to save';
+                        npppRelShowError(msg);
+                    }
+                }).fail((xhr) => {
+                    npppRelRevertTo(npppRelLast);
+                    const j = xhr && xhr.responseJSON;
+                    const msg = (j && (j.message || (j.data && j.data.message))) || 'Network error';
+                    npppRelShowError(msg);
+                }).always(() => {
+                    npppRelSaving = false;
+                    npppRelDisable(false);
+                });
+            }
+
+            const npppRelDebounce = (fn, wait) => { let t; return function(){ clearTimeout(t); t = setTimeout(fn, wait); }; };
+
+            // Only affects checkboxes INSIDE this fieldset
+            $npppRelFS.on('change', 'input[type=checkbox]', npppRelDebounce(npppRelSaveNow, 350));
+        });
+    })();
+
     // Update rest api status when state changes
     $('#nginx_cache_api').change(function() {
         // Calculate the notification position
