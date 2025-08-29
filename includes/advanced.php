@@ -544,12 +544,6 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                         // Build the URL
                         $host = trim($matches[1]);
                         $request_uri = trim($matches[2]);
-
-                        // Normalize percent-encoded sequences to lowercase to prevent cache misses
-                        $request_uri = preg_replace_callback('/%[0-9A-F]{2}/i', function ($matches) {
-                            return strtolower($matches[0]);
-                        }, $request_uri);
-
                         $constructed_url = $host . $request_uri;
 
                         // Test parsed URL via regex with FILTER_VALIDATE_URL
