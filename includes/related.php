@@ -155,12 +155,25 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
     $headers_mobile  = array('User-Agent' => NPPP_USER_AGENT_MOBILE);
 
     foreach ($urls as $u) {
-        $u = esc_url_raw($u);
-        // Desktop
-        wp_remote_get($u, array('timeout' => 3, 'redirection' => 1, 'blocking' => false, 'headers' => $headers_desktop));
-        // Mobile (optional)
+        if ( false === wp_http_validate_url($u)) {
+            continue;
+        }
+
+        // Use the canonical value produced upstream.
+        wp_remote_get($u, array(
+            'timeout'     => 3,
+            'redirection' => 1,
+            'blocking'    => false,
+            'headers'     => $headers_desktop,
+        ));
+
         if ($preload_mobile) {
-            wp_remote_get($u, array('timeout' => 3, 'redirection' => 1, 'blocking' => false, 'headers' => $headers_mobile));
+            wp_remote_get($u, array(
+                'timeout'     => 3,
+                'redirection' => 1,
+                'blocking'    => false,
+                'headers'     => $headers_mobile,
+            ));
         }
     }
 }
