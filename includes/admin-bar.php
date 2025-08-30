@@ -269,6 +269,14 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         // 2) Raw value (validated below; keep exact bytes)
         // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
         $candidate_raw = wp_unslash($_GET['from']);
+
+        // If the absolute URL starts with an encoded scheme, fully decode once.
+        if (strpos($candidate_raw, '://') === false
+            && preg_match('/^[a-z][a-z0-9+.\-]*%3A%2F%2F/i', $candidate_raw)) {
+            $candidate_raw = rawurldecode($candidate_raw);
+        }
+
+        // Now that it’s decoded, strip our transient args if present
         $candidate_raw = remove_query_arg(array('nppp_front','redirect_nonce'), $candidate_raw);
         $front_target = $candidate_raw;
 
@@ -295,10 +303,10 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         };
 
         $allowed = array();
-        if (!empty($home_parts['host']) )  $allowed[$norm($home_parts['host'])]  = true;
-        if (!empty($admin_parts['host']) ) $allowed[$norm($admin_parts['host'])] = true;
+        if (!empty($home_parts['host']))  $allowed[$norm($home_parts['host'])]  = true;
+        if (!empty($admin_parts['host'])) $allowed[$norm($admin_parts['host'])] = true;
 
-        if ( empty($ref_parts['host']) || ! isset( $allowed[ $norm($ref_parts['host']) ] ) ) {
+        if (empty($ref_parts['host']) || ! isset($allowed[$norm($ref_parts['host'])])) {
             nppp_front_error_notice(__('ERROR SECURITY: URL is not from our domain.', 'fastcgi-cache-purge-and-preload-nginx'), home_url('/'));
         }
 
