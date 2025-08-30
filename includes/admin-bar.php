@@ -17,10 +17,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Build the exact URL the browser is on (percent-encoded path preserved)
 function nppp_get_current_front_url() {
     $scheme = is_ssl() ? 'https' : 'http';
-    $host   = $_SERVER['HTTP_HOST'] ?? parse_url(home_url(), PHP_URL_HOST);
-    $req    = $_SERVER['REQUEST_URI'] ?? '/';
-    $req    = remove_query_arg(array('nppp_front', 'redirect_nonce'), $req);
-    $req    = '/' . ltrim($req, '/');
+
+    // Sanitize/unslash server vars; fall back to home_url() parts.
+    $home_host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
+    $host = isset($_SERVER['HTTP_HOST'])
+        ? sanitize_text_field(wp_unslash($_SERVER['HTTP_HOST']))
+        : $home_host;
+
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+    $req = isset($_SERVER['REQUEST_URI'])
+        ? wp_unslash($_SERVER['REQUEST_URI'])
+        : '/';
+
+    // Keep the raw path/query but strip our own args
+    $req = remove_query_arg(array('nppp_front', 'redirect_nonce'), $req);
+
+    // Normalize leading slash only
+    $req = '/' . ltrim( $req, '/' );
+
     return $scheme . '://' . $host . $req;
 }
 
@@ -252,7 +266,8 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
             nppp_front_error_notice(__('ERROR URL: Could not determine the current page URL.', 'fastcgi-cache-purge-and-preload-nginx'), home_url('/'));
         }
 
-        // 2) Raw value
+        // 2) Raw value (validated below; keep exact bytes)
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
         $candidate_raw = wp_unslash($_GET['from']);
         $candidate_raw = remove_query_arg(array('nppp_front','redirect_nonce'), $candidate_raw);
         $front_target = $candidate_raw;
