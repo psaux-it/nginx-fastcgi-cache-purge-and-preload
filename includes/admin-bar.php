@@ -14,6 +14,18 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Convert a Unicode hostname to its ASCII/Punycode form.
+function nppp_idna_host(string $host): string {
+    if (function_exists('idn_to_ascii')) {
+        $variant = defined('INTL_IDNA_VARIANT_UTS46') ? INTL_IDNA_VARIANT_UTS46 : 0;
+        $ascii = idn_to_ascii($host, 0, $variant);
+        if ($ascii) {
+            return $ascii;
+        }
+    }
+    return $host;
+}
+
 // Build the exact URL the browser is on (percent-encoded path preserved)
 function nppp_get_current_front_url() {
     $scheme = is_ssl() ? 'https' : 'http';
@@ -24,8 +36,8 @@ function nppp_get_current_front_url() {
         ? sanitize_text_field(wp_unslash($_SERVER['HTTP_HOST']))
         : $home_host;
 
-    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
     $req = isset($_SERVER['REQUEST_URI'])
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
         ? wp_unslash($_SERVER['REQUEST_URI'])
         : '/';
 
@@ -45,6 +57,8 @@ function nppp_maybe_encode_non_ascii_path_in_url(string $url): string {
         return $url;
     }
 
+    // punycode/normalize the host for the final URL
+    $host = nppp_idna_host($p['host']);
     $path = $p['path'] ?? '';
 
     // Only act if there are non-ASCII chars in the path
