@@ -999,13 +999,21 @@ $(document).ready(function() {
         });
     });
 
-    // Auto-save: Related Pages
+    // Related Pages
     (function npppSetupRelatedAutoSave() {
         const $npppRelWrappers = $('.nppp-related-pages').not('[data-nppp-rel-init]');
         if (!$npppRelWrappers.length || !window.nppp_admin_data) return;
 
         $npppRelWrappers.each(function () {
             const $npppRelFS = $(this).attr('data-nppp-rel-init', '1');
+
+            // Cache the dependency inputs + preload input
+            const $preload = $npppRelFS.find('[name="nginx_cache_settings[nppp_related_preload_after_manual]"]');
+            const $deps = $npppRelFS.find(
+                '[name="nginx_cache_settings[nppp_related_include_home]"],' +
+                '[name="nginx_cache_settings[nppp_related_include_category]"],' +
+                '[name="nginx_cache_settings[nppp_related_apply_manual]"]'
+            );
 
             // Inline status badge after this fieldset
             const $npppRelStatus = $('<span/>', {
@@ -1055,13 +1063,25 @@ $(document).ready(function() {
                 $npppRelFS.find('[name="nginx_cache_settings[nppp_related_include_category]"]').prop('checked', v.nppp_related_include_category === 'yes');
                 $npppRelFS.find('[name="nginx_cache_settings[nppp_related_apply_manual]"]').prop('checked', v.nppp_related_apply_manual === 'yes');
                 $npppRelFS.find('[name="nginx_cache_settings[nppp_related_preload_after_manual]"]').prop('checked', v.nppp_related_preload_after_manual === 'yes');
+                npppRelUpdatePreloadState();
             };
+
+            // Dependency enforcer (UI)
+            function npppRelUpdatePreloadState() {
+                const anyOn = $deps.toArray().some(el => el.checked);
+                $preload.prop('disabled', !anyOn).attr('aria-disabled', !anyOn ? 'true' : 'false');
+                if (!anyOn) $preload.prop('checked', false);
+            }
 
             let npppRelLast = npppRelGet();
             let npppRelSaving = false;
 
             function npppRelSaveNow() {
                 if (npppRelSaving) return;
+
+                // Enforce dependency in the DOM just before we read payload
+                npppRelUpdatePreloadState();
+
                 npppRelSaving = true;
                 npppRelDisable(true);
                 npppRelShowSaving();
@@ -1080,7 +1100,11 @@ $(document).ready(function() {
                     }
                 }).done((res) => {
                     if (res && res.success) {
-                        npppRelLast = payload;
+                        // Trust server’s normalized result
+                        const normalized =
+                            (res.data && (res.data.data || res.data.normalized || res.data)) || payload;
+                        npppRelLast = normalized;
+                        npppRelRevertTo(normalized);
                         npppRelShowSaved();
                     } else {
                         npppRelRevertTo(npppRelLast);
@@ -1095,12 +1119,19 @@ $(document).ready(function() {
                 }).always(() => {
                     npppRelSaving = false;
                     npppRelDisable(false);
+                    npppRelUpdatePreloadState();
                 });
             }
 
             const npppRelDebounce = (fn, wait) => { let t; return function(){ clearTimeout(t); t = setTimeout(fn, wait); }; };
 
-            // Only affects checkboxes INSIDE this fieldset
+            // Initialize gating immediately
+            npppRelUpdatePreloadState();
+
+            // When any dependency changes, update gating immediately
+            $deps.on('change', npppRelUpdatePreloadState);
+
+            // Debounce-save any checkbox change within this fieldset
             $npppRelFS.on('change', 'input[type=checkbox]', npppRelDebounce(npppRelSaveNow, 350));
         });
     })();
