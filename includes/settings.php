@@ -1819,9 +1819,6 @@ function nppp_nginx_cache_related_pages_callback() {
                     <span class="title"><?php esc_html_e( 'Also preload all included pages above', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     <span class="desc">
                         <?php esc_html_e( 'After a manual purge (On-Page, Advanced Tab), also preload the related pages you enabled above. When Auto Purge is ON, this happens only if Auto Preload is ON.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                        <?php if ( ! $has_related ) : ?>
-                            <em class="nppp-hint"><?php esc_html_e( 'Enable at least one above to unlock this.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></em>
-                        <?php endif; ?>
                     </span>
                 </span>
             </label>
