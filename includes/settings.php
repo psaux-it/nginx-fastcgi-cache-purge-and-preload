@@ -884,9 +884,9 @@ function nppp_update_related_fields() {
     ];
 
     // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- value is immediately unslashed, whitelisted by $allowed_keys, then sanitized below.
-    $posted = (isset($_POST['fields']) && is_array($_POST['fields']))
+    $posted = ( isset( $_POST['fields'] ) && is_array( $_POST['fields'] ) )
         // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- value is immediately unslashed, whitelisted by $allowed_keys, then sanitized below.
-        ? array_intersect_key(wp_unslash($_POST['fields']), array_flip($allowed_keys))
+        ? array_intersect_key( wp_unslash( $_POST['fields'] ), array_flip( $allowed_keys ) )
         : [];
 
     // sanitize incoming values
@@ -898,6 +898,16 @@ function nppp_update_related_fields() {
     foreach ($allowed_keys as $key) {
         $raw = isset($posted[$key]) ? $posted[$key] : null;
         $normalized[$key] = in_array($raw, ['yes','1',1,'true',true,'on'], true) ? 'yes' : 'no';
+    }
+
+    // Enforce dependency — if none of the three are ON, force preload to NO
+    $any_related = (
+        ($normalized['nppp_related_include_home'] ?? 'no') === 'yes' ||
+        ($normalized['nppp_related_include_category'] ?? 'no') === 'yes' ||
+        ($normalized['nppp_related_apply_manual'] ?? 'no') === 'yes'
+    );
+    if ( ! $any_related ) {
+        $normalized['nppp_related_preload_after_manual'] = 'no';
     }
 
     // Merge into existing options
@@ -1747,6 +1757,12 @@ function nppp_nginx_cache_related_pages_callback() {
     $cat  = $options['nppp_related_include_category'] ?? 'no';
     $shop = $options['nppp_related_apply_manual'] ?? 'no';
     $pre  = $options['nppp_related_preload_after_manual'] ?? 'no';
+
+    // UI gating
+    $has_related = ($home === 'yes' || $cat === 'yes' || $shop === 'yes');
+    if (!$has_related) {
+        $pre = 'no';
+    }
     ?>
     <fieldset class="nppp-related-pages nppp-ui">
 
@@ -1792,12 +1808,21 @@ function nppp_nginx_cache_related_pages_callback() {
         <div class="nppp-switch">
             <input id="nppp_rel_preload" type="checkbox"
                    name="nginx_cache_settings[nppp_related_preload_after_manual]"
-                   value="yes" <?php checked( 'yes', $pre ); ?> />
+                   value="yes"
+                   <?php
+                       checked( 'yes', $pre );
+                       echo $has_related ? '' : ' disabled="disabled" aria-disabled="true"';
+                   ?> />
             <label for="nppp_rel_preload">
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
                     <span class="title"><?php esc_html_e( 'Also preload all included pages above', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                    <span class="desc"><?php esc_html_e( 'After a manual purge (On-Page, Advanced Tab), also preload the related pages you enabled above. When Auto Purge is ON, this happens only if Auto Preload is ON.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="desc">
+                        <?php esc_html_e( 'After a manual purge (On-Page, Advanced Tab), also preload the related pages you enabled above. When Auto Purge is ON, this happens only if Auto Preload is ON.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        <?php if ( ! $has_related ) : ?>
+                            <em class="nppp-hint"><?php esc_html_e( 'Enable at least one above to unlock this.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></em>
+                        <?php endif; ?>
+                    </span>
                 </span>
             </label>
         </div>
