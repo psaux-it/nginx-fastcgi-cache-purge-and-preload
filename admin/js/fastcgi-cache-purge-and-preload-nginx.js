@@ -1069,8 +1069,30 @@ $(document).ready(function() {
             // Dependency enforcer (UI)
             function npppRelUpdatePreloadState() {
                 const anyOn = $deps.toArray().some(el => el.checked);
+
+                // gate the preload checkbox
                 $preload.prop('disabled', !anyOn).attr('aria-disabled', !anyOn ? 'true' : 'false');
                 if (!anyOn) $preload.prop('checked', false);
+
+                // manage the hint node inside the preload row's description
+                const $desc  = $npppRelFS.find('#nppp_rel_preload + label .desc');
+                const $hint  = $desc.find('.nppp-hint');
+
+                if (anyOn) {
+                    // at least one related is enabled -> remove hint if present
+                    if ($hint.length) $hint.remove();
+                } else {
+                    // none enabled -> ensure hint exists (but don't duplicate)
+                    if (!$hint.length) {
+                        const $newHint = $('<em/>', {
+                            'class': 'nppp-hint',
+                            html:
+                                '<span class="dashicons dashicons-lock" aria-hidden="true"></span>' +
+                                '<span>' + __('Enable at least one above to unlock this.', 'fastcgi-cache-purge-and-preload-nginx') + '</span>'
+                        });
+                        $desc.append($newHint);
+                    }
+                }
             }
 
             let npppRelLast = npppRelGet();
