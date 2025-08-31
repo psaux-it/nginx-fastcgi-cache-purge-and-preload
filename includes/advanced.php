@@ -396,6 +396,9 @@ function nppp_purge_cache_premium_callback() {
             if (!empty($settings['nppp_related_include_home']) && $settings['nppp_related_include_home'] === 'yes') {
                 $labels[] = esc_html__('Homepage', 'fastcgi-cache-purge-and-preload-nginx');
             }
+            if (!empty($settings['nppp_related_apply_manual']) && $settings['nppp_related_apply_manual'] === 'yes') {
+                $labels[] = esc_html__('Shop Page', 'fastcgi-cache-purge-and-preload-nginx');
+            }
             if (!empty($settings['nppp_related_include_category']) && $settings['nppp_related_include_category'] === 'yes') {
                 $labels[] = esc_html__('Category archive(s)', 'fastcgi-cache-purge-and-preload-nginx');
             }
