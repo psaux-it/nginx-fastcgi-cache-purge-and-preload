@@ -2852,23 +2852,6 @@ p.description {
     }
 }
 
-/* Inline save indicator for Related Pages toggles */
-.nppp-related-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-left: 0px;
-    font-size: 12px;
-    vertical-align: middle;
-    min-width: 90px;
-}
-
-.nppp-related-status .dashicons { line-height: 1; }
-.nppp-related-status[data-state="saving"] .dashicons { animation: nppp-spin 1s linear infinite; }
-.nppp-related-status[data-state="saving"] { color: #2271b1; }
-.nppp-related-status[data-state="saved"] { color: #1a7f37; }
-.nppp-related-status[data-state="error"] { color: #d63638; }
-
 @keyframes nppp-spin { to { transform: rotate(360deg); } }
 .nppp-sr-only {
     position: absolute !important;
@@ -2885,44 +2868,214 @@ p.description {
     font-weight:600;
 }
 
-/* Scope settings panel to avoid collisions */
-.nppp-ui{ margin:8px 0 0; padding:0; border:0; }
-.nppp-ui .nppp-switch{
-    background:#fff; border:1px solid #dcdcde; border-radius:6px;
-    padding:10px 12px; display:block; margin:0 0 8px;
-}
-.nppp-ui .nppp-switch:last-child{ margin-bottom:0; }
+/* Related Pages */
+.nppp-related-pages{
+    --nppp-accent: var(--wp-admin-theme-color, #0073AA);
+    --nppp-border: #dcdcde;
+    --nppp-text: #1d2327;
+    --nppp-sub: #646970;
+    --nppp-bg: #fff;
 
-/* accessible input (not display:none) */
-.nppp-ui .nppp-switch input{
-    position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;
-}
-
-/* label layout */
-.nppp-ui .nppp-switch label{
-    display:grid; grid-template-columns:44px 1fr; gap:12px; align-items:center;
-    cursor:pointer; margin:0;
+    margin: 4px 0 0;
+    padding: 0;
+    border: 0;
+    display: grid;
+    gap: 4px;
 }
 
-/* toggle pill */
-.nppp-ui .nppp-toggle{
-    width:44px; height:24px; border-radius:999px; background:#dcdcde; position:relative;
+/* one compact “row” */
+.nppp-related-pages .nppp-switch{ position: relative; max-width: 525px; }
+.nppp-related-pages .nppp-switch label{
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--nppp-bg);
+    border: 1px solid var(--nppp-border);
+    line-height: 1.3;
+    transition: background-color .12s ease, border-color .12s ease;
+    border-left: 3px solid red;
 }
-.nppp-ui .nppp-toggle::after{
-    content:""; position:absolute; top:3px; left:3px; width:18px; height:18px;
-    background:#fff; border-radius:50%; box-shadow:0 1px 2px rgba(0,0,0,.25);
-    transition:left .16s ease;
+.nppp-related-pages .nppp-switch label:hover{
+    background: #f6f7f7;
+    border-color: #cfcfd3;
 }
 
-/* checked state */
-.nppp-ui .nppp-switch input:checked + label .nppp-toggle{ background:#46b450; }
-.nppp-ui .nppp-switch input:checked + label .nppp-toggle::after{ left:23px; }
+/* keep native checkbox accessible but invisible */
+.nppp-related-pages .nppp-switch input[type="checkbox"]{
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+}
 
-/* text */
-.nppp-ui .nppp-text .title{ font-weight:600; line-height:1.35; display:block; margin:0; }
-.nppp-ui .nppp-text .desc{ color:#646970; font-size:12px; line-height:1.45; margin-top:2px; }
+/* tiny round “check pill” */
+.nppp-related-pages .nppp-toggle{
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 1px solid #bfc3c7;
+    background: #fff;
+    box-shadow: inset 0 0 0 2px transparent;
+    transition: border-color .12s ease, background-color .12s ease, box-shadow .12s ease;
+}
+.nppp-related-pages .nppp-toggle::after{
+    content: "";
+    position: absolute;
+    left: 3px; top: 4px;
+    width: 7px; height: 4px;
+    border: 2px solid transparent;
+    border-top: 0; border-right: 0;
+    transform: rotate(-45deg);
+    opacity: 0;
+    transition: opacity .1s ease;
+}
 
-/* respect WP dark border on focus */
-.nppp-ui .nppp-switch input:focus + label .nppp-toggle{
-    outline:2px solid #2271b1; outline-offset:2px;
+/* checked (subtle, no glow) */
+.nppp-related-pages input:checked + label .nppp-toggle{
+    background: var(--nppp-accent);
+    border-color: var(--nppp-accent);
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,.25);
+}
+.nppp-related-pages input:checked + label .nppp-toggle::after{
+    border-color: #fff;
+    opacity: 1;
+}
+.nppp-related-pages input:checked + label{
+    border-color: color-mix(in oklab, var(--nppp-accent) 35%, #cfd5da);
+    border-left: 3px solid green;
+}
+
+/* keyboard focus – crisp, compact */
+.nppp-related-pages input:focus-visible + label{
+    outline: 2px solid var(--nppp-accent);
+    outline-offset: 1px;
+}
+
+/* text – condensed */
+.nppp-related-pages .nppp-text{ display: block; }
+.nppp-related-pages .nppp-text .title{
+    color: var(--nppp-text);
+    font-weight: 600;
+    font-size: 13px;
+}
+.nppp-related-pages .nppp-text .desc{
+    display: block;
+    margin-top: 2px;
+    color: var(--nppp-sub);
+    font-size: 11px;
+}
+.nppp-related-pages .nppp-text br{ display: none; }
+
+/* gated/disabled row – minimal */
+.nppp-related-pages input[disabled] + label{
+    opacity: .6;
+    cursor: not-allowed;
+}
+.nppp-related-pages input[disabled] + label .nppp-toggle{
+    background: #eef0f3;
+    border-color: #d7dbe0;
+}
+
+/* inline autosave badge – tiny, unobtrusive */
+.nppp-related-status{
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 4px 0 0 2px;
+    padding: 0 6px;
+    font-size: 14px;
+    line-height: 18px;
+    color: #2b5d8a;
+    max-width: 80px;
+}
+.nppp-related-status .dashicons{ font-size: 13px; width: 13px; height: 13px; }
+
+.nppp-related-status[data-state="saved"]{
+    border-color: #d9f0e6; background: #eef8f3; color: #106a4a;
+}
+.nppp-related-status[data-state="error"]{
+    border-color: #f2d1d3; background: #fdeef0; color: #9d2627;
+}
+.nppp-related-status[data-state="saving"] .dashicons-update{
+    animation: nppp-mini-spin .9s linear infinite;
+}
+@keyframes nppp-mini-spin{ to { transform: rotate(360deg);} }
+
+/* dark mode polish */
+@media (prefers-color-scheme: dark){
+    .nppp-related-pages{
+        --nppp-border:#2a2f36; --nppp-bg:#1d2327; --nppp-text:#f0f0f1; --nppp-sub:#b7bcc5;
+    }
+    .nppp-related-pages .nppp-switch label{ background:#20262b; }
+    .nppp-related-pages .nppp-switch label:hover{ background:#242b31; border-color:#313842; }
+    .nppp-related-pages .nppp-toggle{ background:#2a3036; border-color:#4b5260; }
+    .nppp-related-status{ background:#1e2a34; border-color:#2b3a47; color:#b9d5ef; }
+}
+
+/* fill width on phones; keep it tight */
+@media screen and (max-width: 782px){
+    .nppp-related-pages .nppp-switch{ max-width: none; }
+    .nppp-related-pages .nppp-switch label{
+        grid-template-columns: 16px 1fr;
+        padding: 6px 8px;
+        border-left-width: 2px;
+    }
+    .nppp-related-status{
+        display: block;
+        margin: 4px 0 0;
+        max-width: none;
+        width: fit-content;
+    }
+}
+
+/* tap UX + pointer hint */
+.nppp-related-pages .nppp-switch label{
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+/* respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+    .nppp-related-status[data-state="saving"] .dashicons-update{ animation: none; }
+}
+
+/* high-contrast / forced colors */
+@media (forced-colors: active){
+    .nppp-related-pages input:focus-visible + label{ outline: 2px solid CanvasText; }
+}
+
+/* status text never overflows when width is constrained */
+.nppp-related-status{
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* compact warning pill (appears only when JS inserts .nppp-hint) */
+.nppp-related-pages .nppp-hint{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    margin-top:6px;
+    padding:3px 8px;
+    border:1px solid #f0d9a6;
+    background:#fff8e6;
+    color:#6b4e00;
+    border-radius:4px;
+    font-style:normal;
+    font-size:11px;
+    line-height:1.2;
+}
+.nppp-related-pages .nppp-hint .dashicons{
+    font-size:14px; width:14px; height:14px; line-height:1;
+}
+
+/* dark mode */
+@media (prefers-color-scheme: dark){
+    .nppp-related-pages .nppp-hint{
+        border-color:#4a3b18;
+        background:#2b2415;
+        color:#f3d69c;
+    }
 }
