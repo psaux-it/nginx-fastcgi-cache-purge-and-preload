@@ -2870,7 +2870,6 @@ p.description {
 .nppp-related-status[data-state="error"] { color: #d63638; }
 
 @keyframes nppp-spin { to { transform: rotate(360deg); } }
-
 .nppp-sr-only {
     position: absolute !important;
     height: 1px; width: 1px; overflow: hidden;
@@ -2886,6 +2885,44 @@ p.description {
     font-weight:600;
 }
 
-.nppp-related-pages label:has(> input[name="nginx_cache_settings[nppp_related_apply_manual]"]) {
-    display: none !important;
+/* Scope settings panel to avoid collisions */
+.nppp-ui{ margin:8px 0 0; padding:0; border:0; }
+.nppp-ui .nppp-switch{
+    background:#fff; border:1px solid #dcdcde; border-radius:6px;
+    padding:10px 12px; display:block; margin:0 0 8px;
+}
+.nppp-ui .nppp-switch:last-child{ margin-bottom:0; }
+
+/* accessible input (not display:none) */
+.nppp-ui .nppp-switch input{
+    position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;
+}
+
+/* label layout */
+.nppp-ui .nppp-switch label{
+    display:grid; grid-template-columns:44px 1fr; gap:12px; align-items:center;
+    cursor:pointer; margin:0;
+}
+
+/* toggle pill */
+.nppp-ui .nppp-toggle{
+    width:44px; height:24px; border-radius:999px; background:#dcdcde; position:relative;
+}
+.nppp-ui .nppp-toggle::after{
+    content:""; position:absolute; top:3px; left:3px; width:18px; height:18px;
+    background:#fff; border-radius:50%; box-shadow:0 1px 2px rgba(0,0,0,.25);
+    transition:left .16s ease;
+}
+
+/* checked state */
+.nppp-ui .nppp-switch input:checked + label .nppp-toggle{ background:#46b450; }
+.nppp-ui .nppp-switch input:checked + label .nppp-toggle::after{ left:23px; }
+
+/* text */
+.nppp-ui .nppp-text .title{ font-weight:600; line-height:1.35; display:block; margin:0; }
+.nppp-ui .nppp-text .desc{ color:#646970; font-size:12px; line-height:1.45; margin-top:2px; }
+
+/* respect WP dark border on focus */
+.nppp-ui .nppp-switch input:focus + label .nppp-toggle{
+    outline:2px solid #2271b1; outline-offset:2px;
 }
