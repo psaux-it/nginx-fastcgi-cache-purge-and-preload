@@ -206,6 +206,7 @@ function nppp_nginx_cache_settings_page() {
                                 </div>
                             </td>
                         </tr>
+                        <!-- Auto Purge Options Section -->
                         <tr valign="top">
                             <th scope="row">
                                 <span class="dashicons dashicons-trash"></span>
@@ -217,24 +218,38 @@ function nppp_nginx_cache_settings_page() {
                                         <?php nppp_nginx_cache_purge_on_update_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'This feature ensures automatic cache purging for both individual posts/pages and', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'the entire site whenever specific changes are made, ensuring up-to-date content.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'It also supports auto preloading of the cache after purging for enhanced performance.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'Automatically purges cache when content or site changes occurs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'Single-item events purge the page and, if enabled under Related Pages, also purge the Home page and/or Category archives. Site-wide events purge the entire cache.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'This setting does not warm cache by itself. To warm automatically after automatic purges, enable Auto Preload below.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
                                 <div class="cache-paths-info">
                                     <h4><?php echo esc_html__( 'The entire cache is automatically purged when:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
                                     <p>
-                                        <strong><?php echo esc_html__( 'THEME', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong> (<?php echo esc_html__( 'active', 'fastcgi-cache-purge-and-preload-nginx' ); ?>) <?php echo esc_html__( 'is switched or updated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
-                                        <strong><?php echo esc_html__( 'PLUGIN', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong> <?php echo esc_html__( 'is activated, updated, or deactivated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
-                                        <?php echo esc_html__( 'Compatible caching plugins trigger a cache purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <strong><?php echo esc_html__( 'Theme', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong> (<?php echo esc_html__( 'active', 'fastcgi-cache-purge-and-preload-nginx' ); ?>) <?php echo esc_html__( 'is switched or updated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
+                                        <strong><?php echo esc_html__( 'Plugin', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong> <?php echo esc_html__( 'is activated, updated, or deactivated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
+                                        <strong><?php echo esc_html__( 'Compatible Caching Plugins', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                                        <?php echo esc_html__( 'trigger a cache purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
+                                        <strong><?php echo esc_html__( 'Elementor Theme Templates', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                                        (<?php echo esc_html__( 'Header / Footer / Single / Archive / Popup', 'fastcgi-cache-purge-and-preload-nginx' ); ?>)
+                                        <?php echo esc_html__( 'are saved.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
+                                        <strong><?php echo esc_html__( 'Elementor Files / CSS', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                                        <?php echo esc_html__( 'are regenerated or cleared.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
                                     <br>
-                                    <h4><?php echo esc_html__( 'The cache for a POST/PAGE is automatically purged when:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
+                                    <h4><?php echo esc_html__( 'The cache for a single URL is automatically purged when:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
                                     <p>
-                                        <?php echo esc_html__( 'Changes are made to the content of the POST/PAGE.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
-                                        <?php echo esc_html__( 'A new COMMENT is approved or its status is changed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <strong><?php echo esc_html__( 'Post/Page', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                                        <?php echo esc_html__( 'content is changed (publish/update).', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
+                                        <strong><?php echo esc_html__( 'Comment', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                                        <?php echo esc_html__( 'is approved or its status is changed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p><br>
                                     <p>
-                                        <?php echo esc_html__( 'If Auto Preload is enabled, the cache for the single POST/PAGE or the entire cache will be automatically preloaded after the cache is purged.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <?php echo esc_html__( 'If Auto Preload is ON, single-item automatic purges will preload the page and—if Related Pages are enabled—the Home page and/or Category archives. Site-wide automatic purges will start a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
                                 </div>
                             </td>
@@ -247,14 +262,6 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_nginx_cache_related_pages_callback(); ?>
-                                <div class="key-regex-info" style="margin-top:8px;">
-                                    <p class="description">
-                                        <?php echo esc_html__( 'When Auto Purge is ON, these apply to single post/page purges triggered by updates/comments. For manual front-end “Purge This Page”, enable “Apply to manual one-page purges.”', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                    </p>
-                                    <p class="description">
-                                        <?php echo esc_html__( 'Auto Preload still controls related-page preloads in the auto flow. The “Also preload related pages after manual purge” checkbox affects only the manual one-page action.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                    </p>
-                                </div>
                             </td>
                         </tr>
                         <!-- Start Preload Options Section -->
@@ -876,7 +883,12 @@ function nppp_update_related_fields() {
         'nppp_related_preload_after_manual',
     ];
 
-    $posted = isset($_POST['fields']) && is_array($_POST['fields']) ? wp_unslash($_POST['fields']) : [];
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- value is immediately unslashed, whitelisted by $allowed_keys, then sanitized below.
+    $posted = (isset($_POST['fields']) && is_array($_POST['fields']))
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- value is immediately unslashed, whitelisted by $allowed_keys, then sanitized below.
+        ? array_intersect_key(wp_unslash($_POST['fields']), array_flip($allowed_keys))
+        : [];
+
     // sanitize incoming values
     foreach ($posted as $k => $v) {
         $posted[$k] = is_string($v) ? sanitize_text_field($v) : $v;
@@ -1729,38 +1741,69 @@ function nppp_nginx_cache_api_key_callback() {
 
 // Related Pages (single-URL purge only) callback
 function nppp_nginx_cache_related_pages_callback() {
-    $options = get_option('nginx_cache_settings', array());
+    $options = get_option( 'nginx_cache_settings', array() );
 
-    $include_home_checked     = (isset($options['nppp_related_include_home'])         && $options['nppp_related_include_home'] === 'yes') ? 'checked="checked"' : '';
-    $include_cat_checked      = (isset($options['nppp_related_include_category'])     && $options['nppp_related_include_category'] === 'yes') ? 'checked="checked"' : '';
-    $apply_manual_checked     = (isset($options['nppp_related_apply_manual'])         && $options['nppp_related_apply_manual'] === 'yes') ? 'checked="checked"' : '';
-    $preload_manual_checked   = (isset($options['nppp_related_preload_after_manual']) && $options['nppp_related_preload_after_manual'] === 'yes') ? 'checked="checked"' : '';
+    $home = $options['nppp_related_include_home'] ?? 'no';
+    $cat  = $options['nppp_related_include_category'] ?? 'no';
+    $shop = $options['nppp_related_apply_manual'] ?? 'no';
+    $pre  = $options['nppp_related_preload_after_manual'] ?? 'no';
     ?>
-    <fieldset class="nppp-related-pages">
-        <label style="display:block;margin-bottom:6px;">
-            <input type="checkbox"
+    <fieldset class="nppp-related-pages nppp-ui">
+
+        <div class="nppp-switch">
+            <input id="nppp_rel_home" type="checkbox"
                    name="nginx_cache_settings[nppp_related_include_home]"
-                   value="yes" <?php echo esc_attr($include_home_checked); ?> />
-            <?php echo esc_html__( 'Include Homepage when purging a single post/page', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-        </label>
-        <label style="display:block;margin-bottom:6px;">
-            <input type="checkbox"
-                   name="nginx_cache_settings[nppp_related_include_category]"
-                   value="yes" <?php echo esc_attr($include_cat_checked); ?> />
-            <?php echo esc_html__( 'Include related Category archives (for posts)', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-        </label>
-        <label style="display:block;margin-bottom:6px;">
-            <input type="checkbox"
+                   value="yes" <?php checked( 'yes', $home ); ?> />
+            <label for="nppp_rel_home">
+                <span class="nppp-toggle" aria-hidden="true"></span>
+                <span class="nppp-text">
+                    <span class="title"><?php esc_html_e( 'Purge the Homepage', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="desc"><?php esc_html_e( 'When a single post/page is purged, also purge the homepage.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
+                    <span class="desc"><?php esc_html_e( 'Always purged; preloaded only when Auto Preload is ON for auto events, or when "Also preload related pages” is ON for manual.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                </span>
+            </label>
+        </div>
+
+        <div class="nppp-switch">
+            <input id="nppp_rel_apply_manual" type="checkbox"
                    name="nginx_cache_settings[nppp_related_apply_manual]"
-                   value="yes" <?php echo esc_attr($apply_manual_checked); ?> />
-            <?php echo esc_html__( 'Apply to manual one-page purges (Front-end “Purge This Page”)', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-        </label>
-        <label style="display:block;">
-            <input type="checkbox"
+                   value="yes" <?php checked( 'yes', $shop ); ?> />
+            <label for="nppp_rel_apply_manual">
+                <span class="nppp-toggle" aria-hidden="true"></span>
+                <span class="nppp-text">
+                    <span class="title"><?php esc_html_e( 'Purge the Shop Page (WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="desc"><?php esc_html_e( 'When a product page is purged, also purge the WooCommerce shop page.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
+                </span>
+            </label>
+        </div>
+
+        <div class="nppp-switch">
+            <input id="nppp_rel_cat" type="checkbox"
+                   name="nginx_cache_settings[nppp_related_include_category]"
+                   value="yes" <?php checked( 'yes', $cat ); ?> />
+            <label for="nppp_rel_cat">
+                <span class="nppp-toggle" aria-hidden="true"></span>
+                <span class="nppp-text">
+                    <span class="title"><?php esc_html_e( 'Purge the post’s category archive(s)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="desc"><?php esc_html_e( 'For default “category” taxonomy on posts, purge all related category archive URLs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
+                    <span class="desc"><?php esc_html_e( 'Always purged; preloaded only when Auto Preload is ON for auto events, or when "Also preload all included pages” is ON for manual.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                </span>
+            </label>
+        </div>
+
+        <div class="nppp-switch">
+            <input id="nppp_rel_preload" type="checkbox"
                    name="nginx_cache_settings[nppp_related_preload_after_manual]"
-                   value="yes" <?php echo esc_attr($preload_manual_checked); ?> />
-            <?php echo esc_html__( 'Also preload related pages after manual purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-        </label>
+                   value="yes" <?php checked( 'yes', $pre ); ?> />
+            <label for="nppp_rel_preload">
+                <span class="nppp-toggle" aria-hidden="true"></span>
+                <span class="nppp-text">
+                    <span class="title"><?php esc_html_e( 'Also preload all included  pages', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="desc"><?php esc_html_e( 'Manual = front-end “Purge This Page” or Advanced tab. Auto purges follow your “Auto Preload” setting.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                </span>
+            </label>
+        </div>
+
     </fieldset>
     <?php
 }
