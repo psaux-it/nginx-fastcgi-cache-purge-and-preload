@@ -222,7 +222,7 @@ function nppp_nginx_cache_settings_page() {
                                     <?php echo esc_html__( 'Automatically purges cache when content or site changes occurs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Single-item events purge the page and, if enabled under Related Pages, also purge the Home page and/or Category archives. Site-wide events purge the entire cache.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Single-item events purge the page and, if enabled under Related Pages, also purge the Homepage, Shop Page and/or Category. Site-wide events purge the entire cache.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
                                     <?php echo esc_html__( 'This setting does not warm cache by itself. To warm automatically after automatic purges, enable Auto Preload below.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
@@ -249,7 +249,7 @@ function nppp_nginx_cache_settings_page() {
                                         <?php echo esc_html__( 'is approved or its status is changed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p><br>
                                     <p>
-                                        <?php echo esc_html__( 'If Auto Preload is ON, single-item automatic purges will preload the page and—if Related Pages are enabled—the Home page and/or Category archives. Site-wide automatic purges will start a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <?php echo esc_html__( 'If Auto Preload is ON, single-item automatic purges will preload the page and—if Related Pages are enabled—the Homepage, Shop Page and/or Category archives. Site-wide automatic purges will start a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
                                 </div>
                             </td>
@@ -1757,9 +1757,8 @@ function nppp_nginx_cache_related_pages_callback() {
             <label for="nppp_rel_home">
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
-                    <span class="title"><?php esc_html_e( 'Purge the Homepage', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="title"><?php esc_html_e( 'Always Purge the Homepage', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     <span class="desc"><?php esc_html_e( 'When a single post/page is purged, also purge the homepage.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
-                    <span class="desc"><?php esc_html_e( 'Always purged; preloaded only when Auto Preload is ON for auto events, or when "Also preload related pages” is ON for manual.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                 </span>
             </label>
         </div>
@@ -1771,7 +1770,7 @@ function nppp_nginx_cache_related_pages_callback() {
             <label for="nppp_rel_apply_manual">
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
-                    <span class="title"><?php esc_html_e( 'Purge the Shop Page (WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="title"><?php esc_html_e( 'Always Purge the Shop Page (WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     <span class="desc"><?php esc_html_e( 'When a product page is purged, also purge the WooCommerce shop page.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
                 </span>
             </label>
@@ -1784,9 +1783,8 @@ function nppp_nginx_cache_related_pages_callback() {
             <label for="nppp_rel_cat">
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
-                    <span class="title"><?php esc_html_e( 'Purge the post’s category archive(s)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                    <span class="desc"><?php esc_html_e( 'For default “category” taxonomy on posts, purge all related category archive URLs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
-                    <span class="desc"><?php esc_html_e( 'Always purged; preloaded only when Auto Preload is ON for auto events, or when "Also preload all included pages” is ON for manual.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="title"><?php esc_html_e( 'Always Purge category pages (posts & products)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="desc"><?php esc_html_e( 'When you purge a post or product, also purge its category (WordPress + WooCommerce).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
                 </span>
             </label>
         </div>
@@ -1798,8 +1796,8 @@ function nppp_nginx_cache_related_pages_callback() {
             <label for="nppp_rel_preload">
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
-                    <span class="title"><?php esc_html_e( 'Also preload all included  pages', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                    <span class="desc"><?php esc_html_e( 'Manual = front-end “Purge This Page” or Advanced tab. Auto purges follow your “Auto Preload” setting.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="title"><?php esc_html_e( 'Also preload all included pages above', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="desc"><?php esc_html_e( 'After a manual purge (On-Page, Advanced Tab), also preload the related pages you enabled above. When Auto Purge is ON, this happens only if Auto Preload is ON.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                 </span>
             </label>
         </div>
