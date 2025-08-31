@@ -1019,8 +1019,9 @@ $(document).ready(function() {
             const $npppRelStatus = $('<span/>', {
                 'class': 'nppp-related-status',
                 'aria-live': 'polite',
-                'aria-atomic': 'true'
-            }).insertAfter($npppRelFS);
+                'aria-atomic': 'true',
+                'role': 'status'
+            }).attr('data-state', 'idle').hide().insertAfter($npppRelFS);
 
             const npppRelGet = () => ({
                 nppp_related_include_home:
@@ -1034,29 +1035,38 @@ $(document).ready(function() {
             });
 
             const npppRelDisable = (flag) => $npppRelFS.find('input[type=checkbox]').prop('disabled', flag);
+            let npppRelHideTimer;
 
-            const npppRelShowSaving = () => {
-                $npppRelStatus.attr('data-state', 'saving').html(
-                    '<span class="dashicons dashicons-update" aria-hidden="true"></span>' +
-                    '<span class="nppp-sr-only">' + __('Saving', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
-                    '<span>' + __('Saving…', 'fastcgi-cache-purge-and-preload-nginx') + '</span>'
-                );
-            };
-            const npppRelShowSaved = () => {
-                $npppRelStatus.attr('data-state', 'saved').html(
-                    '<span class="dashicons dashicons-yes" aria-hidden="true"></span>' +
-                    '<span class="nppp-sr-only">' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
-                    '<span>' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>'
-                );
-                setTimeout(() => { $npppRelStatus.attr('data-state', 'idle').empty(); }, 1800);
-            };
-            const npppRelShowError = (msg) => {
-                $npppRelStatus.attr('data-state', 'error').html(
-                    '<span class="dashicons dashicons-dismiss" aria-hidden="true"></span>' +
-                    '<span class="nppp-sr-only">' + __('Error', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
-                    '<span>' + (msg || __('Failed to save', 'fastcgi-cache-purge-and-preload-nginx')) + '</span>'
-                );
-            };
+            function npppRelSetStatus(state, html, ttlMs) {
+                clearTimeout(npppRelHideTimer);
+                $npppRelStatus.attr('data-state', state).html(html).show();
+                if (ttlMs) {
+                    npppRelHideTimer = setTimeout(() => {
+                        $npppRelStatus.attr('data-state', 'idle').empty().hide();
+                    }, ttlMs);
+                }
+            }
+
+            const npppRelShowSaving = () => npppRelSetStatus(
+                'saving',
+                '<span class="dashicons dashicons-update" aria-hidden="true"></span>' +
+                '<span class="nppp-sr-only">' + __('Saving', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+                '<span>' + __('Saving…', 'fastcgi-cache-purge-and-preload-nginx') + '</span>'
+            );
+            const npppRelShowSaved = () => npppRelSetStatus(
+                'saved',
+                '<span class="dashicons dashicons-yes" aria-hidden="true"></span>' +
+                '<span class="nppp-sr-only">' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+                '<span>' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>',
+                1000
+            );
+            const npppRelShowError = (msg) => npppRelSetStatus(
+                'error',
+                '<span class="dashicons dashicons-dismiss" aria-hidden="true"></span>' +
+                '<span class="nppp-sr-only">' + __('Error', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+                '<span>' + (msg || __('Failed to save', 'fastcgi-cache-purge-and-preload-nginx')) + '</span>',
+                2000
+            );
 
             const npppRelRevertTo = (v) => {
                 $npppRelFS.find('[name="nginx_cache_settings[nppp_related_include_home]"]').prop('checked', v.nppp_related_include_home === 'yes');
