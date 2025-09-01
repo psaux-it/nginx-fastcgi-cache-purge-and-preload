@@ -19,22 +19,17 @@ if (! defined('NGINX_CACHE_LOG_FILE')) {
 
 // Define a constant for the desktop user agent
 if (!defined('NPPP_USER_AGENT')) {
-    define('NPPP_USER_AGENT', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36');
+    define('NPPP_USER_AGENT', 'NPP/2.1.4 (NginxCacheWarm; device=desktop; Desktop)');
 }
 
 // Define a constant for the mobile user agent
 if (!defined('NPPP_USER_AGENT_MOBILE')) {
-    define('NPPP_USER_AGENT_MOBILE', 'Mozilla/5.0 (Linux; Android 15; SM-G960U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.81 Mobile Safari/537.36');
+    define('NPPP_USER_AGENT_MOBILE', 'NPP/2.1.4 (NginxCacheWarm; device=mobile; Mobile)');
 }
 
 // Define a header constant for mimic real browser request
 if (!defined('NPPP_HEADER_ACCEPT')) {
     define('NPPP_HEADER_ACCEPT', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,' . '*' . '/' . '*;q=0.8');
-}
-
-// Define a header constant to mimic real browser encodings
-if (!defined('NPPP_HEADER_ACCEPT_ENCODING')) {
-    define('NPPP_HEADER_ACCEPT_ENCODING', 'Accept-Encoding: gzip, deflate, br');
 }
 
 // Prepare PATH and SAFEXEC_QUIET env
