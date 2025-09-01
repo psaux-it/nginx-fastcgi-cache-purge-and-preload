@@ -257,8 +257,8 @@ function nppp_nginx_cache_settings_page() {
                         <!-- Related post/page purge Options Section -->
                         <tr valign="top">
                             <th scope="row">
-                                <span class="dashicons dashicons-admin-home"></span>
-                                <?php echo esc_html__( 'Related Pages (single-URL purge only)', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                <span class="dashicons dashicons-plus-alt2"></span>
+                                <?php echo esc_html__( 'Purge Scope', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </th>
                             <td>
                                 <?php nppp_nginx_cache_related_pages_callback(); ?>
