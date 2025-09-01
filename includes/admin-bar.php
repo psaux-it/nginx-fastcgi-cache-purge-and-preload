@@ -74,7 +74,7 @@ function nppp_maybe_encode_non_ascii_path_in_url(string $url): string {
     }
 
     // Rebuild URL with the encoded path; everything else untouched
-    return $p['scheme'] . '://' . $p['host']
+    return $p['scheme'] . '://' . $host
          . (isset($p['port']) ? ':' . (int) $p['port'] : '')
          . $path
          . (isset($p['query']) ? '?' . $p['query'] : '')
@@ -217,20 +217,47 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
 
 // Handle button clicks with actions
 function nppp_handle_fastcgi_cache_actions_admin_bar() {
-    // Check action
-    if (!isset($_GET['_wpnonce']) || !isset($_GET['action'])) {
+    // Prevent interfere
+    if (
+        // AJAX
+        (function_exists('wp_doing_ajax') && wp_doing_ajax()) ||
+        (! function_exists('wp_doing_ajax') && defined('DOING_AJAX') && DOING_AJAX) ||
+
+        // CRON
+        (function_exists('wp_doing_cron') && wp_doing_cron()) ||
+        (! function_exists('wp_doing_cron') && defined('DOING_CRON') && DOING_CRON) ||
+
+        // WP-CLI
+        (defined('WP_CLI') && WP_CLI) ||
+
+        // REST
+        (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request() ) ||
+        (function_exists('wp_doing_rest') && wp_doing_rest()) ||
+        (function_exists('wp_is_json_request') && wp_is_json_request()) ||
+        (defined('REST_REQUEST') && REST_REQUEST)
+    ) {
         return;
     }
 
-    // Always re-check capability
+    // Check admin
+    if (! is_admin()) {
+        return;
+    }
+
+    // Check action
+    if (!isset($_GET['action'])) {
+        return;
+    }
+
+    // Check capability
     if (! current_user_can('manage_options')) {
         return;
     }
 
     // Bind nonce to the specific action
     $action = sanitize_key(wp_unslash($_GET['action'] ?? '' ));
-    $nonce  = sanitize_text_field(wp_unslash($_GET['_wpnonce'] ?? '' ));
 
+    // Map only OUR admin-bar actions
     $action_nonce_map = array(
         'nppp_purge_cache'          => 'purge_cache_nonce',
         'nppp_purge_cache_single'   => 'purge_cache_nonce',
@@ -238,13 +265,17 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         'nppp_preload_cache_single' => 'preload_cache_nonce',
     );
 
-    if (! isset($action_nonce_map[$action]) || ! wp_verify_nonce($nonce, $action_nonce_map[$action])) {
-        nppp_front_error_notice(__( 'ERROR SECURITY: Invalid or expired token.', 'fastcgi-cache-purge-and-preload-nginx' ), home_url( '/' ));
+    // Prevents hijacking other pages
+    if (! isset($action_nonce_map[$action])) {
         return;
     }
 
-    // Validate actions
-    if (! in_array($action, array_keys($action_nonce_map), true)) { return; }
+    // Validate nonce (only for our actions)
+    $nonce  = sanitize_text_field(wp_unslash($_GET['_wpnonce'] ?? '' ));
+    if (empty($nonce) || ! wp_verify_nonce($nonce, $action_nonce_map[$action])) {
+        nppp_front_error_notice(__( 'ERROR SECURITY: Invalid or expired token.', 'fastcgi-cache-purge-and-preload-nginx' ), home_url( '/' ));
+        return;
+    }
 
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
