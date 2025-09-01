@@ -27,6 +27,16 @@ if (!defined('NPPP_USER_AGENT_MOBILE')) {
     define('NPPP_USER_AGENT_MOBILE', 'Mozilla/5.0 (Linux; Android 15; SM-G960U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.81 Mobile Safari/537.36');
 }
 
+// Define a header constant for mimic real browser request
+if (!defined('NPPP_HEADER_ACCEPT')) {
+    define('NPPP_HEADER_ACCEPT', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,' . '*' . '/' . '*;q=0.8');
+}
+
+// Define a header constant to mimic real browser encodings
+if (!defined('NPPP_HEADER_ACCEPT_ENCODING')) {
+    define('NPPP_HEADER_ACCEPT_ENCODING', 'Accept-Encoding: gzip, deflate, br');
+}
+
 // Prepare PATH and SAFEXEC_QUIET env
 function nppp_prepare_request_env(bool $force = false): void {
     static $done = false;
