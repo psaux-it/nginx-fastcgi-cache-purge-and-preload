@@ -643,6 +643,7 @@ $(document).ready(function() {
         $.ajax({
             url: nppp_admin_data.ajaxurl,
             type: 'POST',
+            dataType: 'json',
             data: {
                 action: 'nppp_purge_cache_premium',
                 file_path: filePath,
@@ -711,6 +712,7 @@ $(document).ready(function() {
         $.ajax({
             url: nppp_admin_data.ajaxurl,
             type: 'POST',
+            dataType: 'json',
             data: {
                 action: 'nppp_preload_cache_premium',
                 cache_url: cacheUrl,
@@ -806,7 +808,7 @@ $(document).ready(function() {
                 $('#nginx_cache_send_mail').prop('checked', !$('#nginx_cache_send_mail').prop('checked'));
                 alert('Error updating option!');
             }
-        });
+        }, 'json');
     });
 
     // Update auto preload status when state changes
@@ -854,7 +856,7 @@ $(document).ready(function() {
                 $('#nginx_cache_auto_preload').prop('checked', !$('#nginx_cache_auto_preload').prop('checked'));
                 alert('Error updating option!');
             }
-        });
+        }, 'json');
     });
 
     // Update enable proxy status when state changes
@@ -901,7 +903,7 @@ $(document).ready(function() {
                 $('#nginx_cache_preload_enable_proxy').prop('checked', !$('#nginx_cache_preload_enable_proxy').prop('checked'));
                 alert('Error updating option!');
             }
-        });
+        }, 'json');
     });
 
     // Update preload mobile status when state changes
@@ -948,7 +950,7 @@ $(document).ready(function() {
                 $('#nginx_cache_auto_preload_mobile').prop('checked', !$('#nginx_cache_auto_preload_mobile').prop('checked'));
                 alert('Error updating option!');
             }
-        });
+        }, 'json');
     });
 
     // Update auto purge status when state changes
@@ -996,7 +998,7 @@ $(document).ready(function() {
                 $('#nginx_cache_purge_on_update').prop('checked', !$('#nginx_cache_purge_on_update').prop('checked'));
                 alert('Error updating option!');
             }
-        });
+        }, 'json');
     });
 
     // Related Pages
@@ -1213,7 +1215,7 @@ $(document).ready(function() {
                 $('#nginx_cache_api').prop('checked', !$('#nginx_cache_api').prop('checked'));
                 alert('Error updating option!');
             }
-        });
+        }, 'json');
     });
 
     // Click event handler for the #nginx-cache-schedule-set button
@@ -1241,6 +1243,7 @@ $(document).ready(function() {
         $.ajax({
             url: nppp_admin_data.ajaxurl,
             type: 'POST',
+            dataType: 'json',
             data: {
                 action: 'nppp_get_save_cron_expression',
                 nppp_cron_freq: npppcronEvent,
@@ -1255,6 +1258,7 @@ $(document).ready(function() {
                 $.ajax({
                     url: nppp_admin_data.ajaxurl,
                     type: 'GET',
+                    dataType: 'json',
                     data: {
                         action: 'nppp_get_active_cron_events_ajax',
                         _wpnonce: nppp_admin_data.get_save_cron_nonce
@@ -1474,6 +1478,7 @@ $(document).ready(function() {
         $.ajax({
             url: nppp_admin_data.ajaxurl,
             type: 'POST',
+            dataType: 'json',
             data: {
                 action: 'nppp_clear_nginx_cache_logs',
                 _wpnonce: nppp_admin_data.clear_logs_nonce
@@ -1484,6 +1489,7 @@ $(document).ready(function() {
                 $.ajax({
                     url: nppp_admin_data.ajaxurl,
                     type: 'GET',
+                    dataType: 'json',
                     data: {
                         action: 'nppp_get_nginx_cache_logs',
                         _wpnonce: nppp_admin_data.clear_logs_nonce
@@ -1530,6 +1536,7 @@ $(document).ready(function() {
         $.ajax({
             url: nppp_admin_data.ajaxurl,
             method: 'POST',
+            dataType: 'json',
             data: {
                 action: 'nppp_update_api_key_option',
                 _wpnonce: nppp_admin_data.api_key_nonce
@@ -1565,6 +1572,7 @@ $(document).ready(function() {
         $.ajax({
             url: nppp_admin_data.ajaxurl,
             method: 'POST',
+            dataType: 'json',
             data: {
                 action: 'nppp_update_default_reject_regex_option',
                 _wpnonce: nppp_admin_data.reject_regex_nonce
@@ -1600,6 +1608,7 @@ $(document).ready(function() {
         $.ajax({
             url: nppp_admin_data.ajaxurl,
             method: 'POST',
+            dataType: 'json',
             data: {
                 action: 'nppp_update_default_reject_extension_option',
                 _wpnonce: nppp_admin_data.reject_extension_nonce
@@ -1635,6 +1644,7 @@ $(document).ready(function() {
         $.ajax({
             url: nppp_admin_data.ajaxurl,
             method: 'POST',
+            dataType: 'json',
             data: {
                 action: 'nppp_update_default_cache_key_regex_option',
                 _wpnonce: nppp_admin_data.cache_key_regex_nonce
@@ -1683,6 +1693,7 @@ $(document).ready(function() {
         $.ajax({
             url: nppp_admin_data.ajaxurl,
             type: 'POST',
+            dataType: 'json',
             data: {
                 action: 'nppp_clear_plugin_cache',
                 _wpnonce: nppp_admin_data.plugin_cache_nonce
@@ -1797,6 +1808,7 @@ $(document).ready(function() {
         $.ajax({
             url: nppp_admin_data.ajaxurl,
             type: 'POST',
+            dataType: 'json',
             data: {
                 action: 'nppp_restart_systemd_service',
                 _wpnonce: nppp_admin_data.systemd_service_nonce
@@ -2330,6 +2342,7 @@ $(document).ready(function() {
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
             type: 'GET',
+            dataType: 'json',
             data: {
                 action: 'nppp_update_api_key_copy_value',
                 _wpnonce: nppp_admin_data.api_key_copy_nonce
@@ -2386,6 +2399,7 @@ $(document).ready(function() {
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
             type: 'GET',
+            dataType: 'json',
             data: {
                 action: 'nppp_rest_api_purge_url_copy',
                 _wpnonce: nppp_admin_data.api_purge_url_copy_nonce
@@ -2442,6 +2456,7 @@ $(document).ready(function() {
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
             type: 'GET',
+            dataType: 'json',
             data: {
                 action: 'nppp_rest_api_preload_url_copy',
                 _wpnonce: nppp_admin_data.api_preload_url_copy_nonce
