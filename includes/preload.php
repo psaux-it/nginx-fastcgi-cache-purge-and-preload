@@ -281,7 +281,7 @@ function nppp_detect_premature_process(
         'wget ' .
         '--quiet --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-        '--ignore-length --timeout=5 --tries=1 --ignore-case ' .
+        '--ignore-length --timeout=5 --tries=1 --ignore-case --compression=auto ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -293,7 +293,6 @@ function nppp_detect_premature_process(
         '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
         '--domains='      . escapeshellarg($domain_list) . ' ' .
         '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
         '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
         escapeshellarg($fdomain);
 
@@ -559,7 +558,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 'nohup wget ' .
                 '--no-verbose --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
                 '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-                '--ignore-length --timeout=5 --tries=1 --ignore-case ' .
+                '--ignore-length --timeout=5 --tries=1 --ignore-case --compression=auto ' .
                 '-e robots=off ' .
                 '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
                 '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -571,7 +570,6 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
                 '--domains='      . escapeshellarg($domain_list) . ' ' .
                 '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-                '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
                 '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
                 escapeshellarg($fdomain) . ' ' .
                 '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
@@ -773,7 +771,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             'nohup wget ' .
             '--no-verbose --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-            '--ignore-length --timeout=5 --tries=1 --ignore-case ' .
+            '--ignore-length --timeout=5 --tries=1 --ignore-case --compression=auto ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -785,7 +783,6 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
             '--domains='      . escapeshellarg($domain_list) . ' ' .
             '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
             '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
             escapeshellarg($fdomain) . ' ' .
             '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
@@ -983,7 +980,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         'nohup wget ' .
         '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-        '--ignore-length --timeout=5 --tries=1 ' .
+        '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -992,7 +989,6 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
         '--domains='      . escapeshellarg($domain_list) . ' ' .
         '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
         '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
         escapeshellarg($current_page_url) . ' ' .
         '>/dev/null 2>&1 & echo $!';
@@ -1025,7 +1021,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
             'nohup wget ' .
             '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-            '--ignore-length --timeout=5 --tries=1 ' .
+            '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -1034,7 +1030,6 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--domains='      . escapeshellarg($domain_list) . ' ' .
             '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
             '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
             escapeshellarg($current_page_url) . ' ' .
             '>/dev/null 2>&1 & echo $!';
@@ -1270,7 +1265,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         'nohup wget ' .
         '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-        '--ignore-length --timeout=5 --tries=1 ' .
+        '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -1279,7 +1274,6 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
         '--domains='      . escapeshellarg($domain_list) . ' ' .
         '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
         '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
         escapeshellarg($current_page_url) . ' ' .
         '>/dev/null 2>&1 & echo $!';
@@ -1312,7 +1306,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             'nohup wget ' .
             '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-            '--ignore-length --timeout=5 --tries=1 ' .
+            '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -1321,7 +1315,6 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--domains='      . escapeshellarg($domain_list) . ' ' .
             '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
             '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
             escapeshellarg($current_page_url) . ' ' .
             '>/dev/null 2>&1 & echo $!';
