@@ -281,7 +281,7 @@ function nppp_detect_premature_process(
         'wget ' .
         '--quiet --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-        '--ignore-length --timeout=5 --tries=1 ' .
+        '--ignore-length --timeout=5 --tries=1 --ignore-case ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -559,7 +559,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 'nohup wget ' .
                 '--no-verbose --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
                 '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-                '--ignore-length --timeout=5 --tries=1 ' .
+                '--ignore-length --timeout=5 --tries=1 --ignore-case ' .
                 '-e robots=off ' .
                 '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
                 '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -773,7 +773,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             'nohup wget ' .
             '--no-verbose --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-            '--ignore-length --timeout=5 --tries=1 ' .
+            '--ignore-length --timeout=5 --tries=1 --ignore-case ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
