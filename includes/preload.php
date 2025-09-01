@@ -279,7 +279,7 @@ function nppp_detect_premature_process(
     $testCommand =
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'wget ' .
-        '--quiet --recursive --no-cache --no-cookies --no-directories --delete-after ' .
+        '--quiet --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
         '--ignore-length --timeout=5 --tries=1 ' .
         '-e robots=off ' .
@@ -292,6 +292,8 @@ function nppp_detect_premature_process(
         '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
         '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
         '--domains='      . escapeshellarg($domain_list) . ' ' .
+        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
         '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
         escapeshellarg($fdomain);
 
@@ -496,7 +498,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                     $reason = ($host === '')
                         ? __('Could not parse site host from URL.', 'fastcgi-cache-purge-and-preload-nginx')
                         : __('Please check Exclude Endpoints and Exclude File Extensions settings syntax.', 'fastcgi-cache-purge-and-preload-nginx');
-                    
+
                     // Translators: 1: domain URL, 2: failure reason
                     nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %1$s. %2$s', 'fastcgi-cache-purge-and-preload-nginx'), esc_html($fdomain), esc_html($reason)));
                     return;
@@ -555,7 +557,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             $command =
                 ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
                 'nohup wget ' .
-                '--no-verbose --recursive --no-cache --no-cookies --no-directories --delete-after ' .
+                '--no-verbose --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
                 '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
                 '--ignore-length --timeout=5 --tries=1 ' .
                 '-e robots=off ' .
@@ -568,6 +570,8 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
                 '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
                 '--domains='      . escapeshellarg($domain_list) . ' ' .
+                '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+                '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
                 '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
                 escapeshellarg($fdomain) . ' ' .
                 '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
@@ -708,7 +712,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 $reason = ($host === '')
                     ? __('Could not parse site host from URL.', 'fastcgi-cache-purge-and-preload-nginx')
                     : __('Please check Exclude Endpoints and Exclude File Extensions settings syntax.', 'fastcgi-cache-purge-and-preload-nginx');
-                    
+
                 // Translators: 1: domain URL, 2: failure reason
                 nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %1$s. %2$s', 'fastcgi-cache-purge-and-preload-nginx'), esc_html($fdomain), esc_html($reason)));
                 return;
@@ -767,7 +771,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         $command =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--no-verbose --recursive --no-cache --no-cookies --no-directories --delete-after ' .
+            '--no-verbose --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
             '--ignore-length --timeout=5 --tries=1 ' .
             '-e robots=off ' .
@@ -780,6 +784,8 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
             '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
             '--domains='      . escapeshellarg($domain_list) . ' ' .
+            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
             '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
             escapeshellarg($fdomain) . ' ' .
             '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
@@ -985,6 +991,8 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
         '--domains='      . escapeshellarg($domain_list) . ' ' .
+        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
         '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
         escapeshellarg($current_page_url) . ' ' .
         '>/dev/null 2>&1 & echo $!';
@@ -1025,6 +1033,8 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--domains='      . escapeshellarg($domain_list) . ' ' .
+            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
             '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
             escapeshellarg($current_page_url) . ' ' .
             '>/dev/null 2>&1 & echo $!';
@@ -1268,6 +1278,8 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
         '--domains='      . escapeshellarg($domain_list) . ' ' .
+        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
         '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
         escapeshellarg($current_page_url) . ' ' .
         '>/dev/null 2>&1 & echo $!';
@@ -1308,6 +1320,8 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--domains='      . escapeshellarg($domain_list) . ' ' .
+            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT_ENCODING)) . ' ' .
             '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
             escapeshellarg($current_page_url) . ' ' .
             '>/dev/null 2>&1 & echo $!';
