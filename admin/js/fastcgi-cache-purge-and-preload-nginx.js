@@ -1111,10 +1111,9 @@ $(document).ready(function() {
             function npppRelSaveNow() {
                 if (npppRelSaving) return;
 
-                // Enforce dependency in the DOM just before we read payload
                 npppRelUpdatePreloadState();
-
                 npppRelSaving = true;
+                $npppRelFS.addClass('is-saving');
                 npppRelDisable(true);
                 npppRelShowSaving();
 
@@ -1150,6 +1149,7 @@ $(document).ready(function() {
                     npppRelShowError(msg);
                 }).always(() => {
                     npppRelSaving = false;
+                    $npppRelFS.removeClass('is-saving');
                     npppRelDisable(false);
                     npppRelUpdatePreloadState();
                 });
