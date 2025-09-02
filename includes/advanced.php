@@ -949,7 +949,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // Check if any URLs were extracted
     if (empty($urls)) {
         return [
-            'error' => __( 'Cache is empty. Click <strong>Preload All</strong> to warm the cache.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'error' => __( 'Cache is empty. Click <strong>Preload All</strong> to warm Nginx cache first and try again.', 'fastcgi-cache-purge-and-preload-nginx' )
         ];
     }
 
