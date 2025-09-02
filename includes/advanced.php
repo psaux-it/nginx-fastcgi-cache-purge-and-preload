@@ -353,7 +353,6 @@ function nppp_premium_html($nginx_cache_path) {
 
         // Stop execution if no cached content is found due to an empty cache or cache key regex error.
         return '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;' . __( 'Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . $error_message . '</span>
