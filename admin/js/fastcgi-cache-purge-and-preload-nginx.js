@@ -626,6 +626,100 @@ $(document).ready(function() {
         showPreloader();
     });
 
+    // Change HIT/MISS on fly
+    function npppSetStatus($row, isHit){
+        // if this is a responsive "child" row, target its parent
+        var $main = $row.hasClass('child') ? $row.prev('tr') : $row;
+
+        // main row status cell
+        var $status = $main.find('td.nppp-status');
+        $status.removeClass('is-hit is-miss')
+            .addClass(isHit ? 'is-hit' : 'is-miss')
+            .html('<strong>' + (isHit ? 'HIT' : 'MISS') + '</strong>');
+
+        // responsive child: match by label text, update .dtr-data
+        var $child = $main.next('.child');
+        if ($child.length){
+            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_status) ? nppp_admin_data.col_cache_status : 'Cache Status';
+            $child.find('.dtr-details li').each(function(){
+                var $li = $(this);
+                if ($li.find('.dtr-title').text().trim() === label){
+                    $li.find('.dtr-data')
+                    .removeClass('is-hit is-miss')
+                    .addClass('nppp-status ' + (isHit ? 'is-hit' : 'is-miss'))
+                    .html('<strong>' + (isHit ? 'HIT' : 'MISS') + '</strong>');
+                }
+            });
+        }
+    }
+
+    // Change Cache Path on fly in table
+    function npppUpdateCachePath($row, pathText){
+        var $main = $row.hasClass('child') ? $row.prev('tr') : $row;
+
+        // main row cell
+        $main.find('td.nppp-cache-path').text(pathText);
+
+        // responsive child: match by label text, update .dtr-data
+        var $child = $main.next('.child');
+        if ($child.length){
+            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_path) ? nppp_admin_data.col_cache_path : 'Cache Path';
+            $child.find('.dtr-details li').each(function(){
+                var $li = $(this);
+                if ($li.find('.dtr-title').text().trim() === label){
+                    $li.find('.dtr-data').text(pathText);
+                }
+            });
+        }
+    }
+
+    // Tiny helper to attach file path to purge button on the same row
+    function npppAttachPurgeFile(row, filePath) {
+        var mainRow = row.hasClass('child') ? row.prev('tr') : row;
+        var purgeBtn;
+
+        if (mainRow.hasClass('dtr-expanded')) {
+            purgeBtn = mainRow.next('.child').find('.nppp-purge-btn');
+        } else {
+            purgeBtn = mainRow.find('.nppp-purge-btn');
+        }
+
+        purgeBtn.attr('data-file', filePath);
+        purgeBtn.prop('disabled', false).removeClass('disabled');
+
+        npppUpdateCachePath(mainRow, filePath);
+    }
+
+    // Quick retry helper
+    function npppLocateCacheFile(row, url, attempt) {
+        attempt = attempt || 1;
+
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'nppp_locate_cache_file',
+                cache_url: url,
+                _wpnonce: nppp_admin_data.premium_nonce_locate
+            }
+        }).done(function(r) {
+            if (r && r.success && r.data && r.data.file_path) {
+                npppAttachPurgeFile(row, r.data.file_path);
+            } else if (attempt < 2) {
+                // short backoff, try once more
+                setTimeout(function(){ npppLocateCacheFile(row, url, attempt+1); }, 800);
+            } else {
+                // we already flipped to HIT, so user can refresh later
+                npppToast(__('Cache warmed. “Purge” will be enabled after a short while or refresh.','fastcgi-cache-purge-and-preload-nginx'), 'info');
+            }
+        }).fail(function() {
+            if (attempt < 2) {
+                setTimeout(function(){ npppLocateCacheFile(row, url, attempt+1); }, 800);
+            }
+        });
+    }
+
     // Handle click event for purge buttons in advanced tab
     $(document).on('click', '.nppp-purge-btn', function(e) {
         e.preventDefault();
@@ -659,6 +753,9 @@ $(document).ready(function() {
                     if (row.hasClass('child')) {
                         row = row.prev('tr');
                     }
+
+                    npppSetStatus(row, false);
+                    npppUpdateCachePath(row, '—');
 
                     // find the preload button
                     var preloadBtn;
@@ -724,10 +821,17 @@ $(document).ready(function() {
                 npppToast(msg, type);
 
                 if (response && response.success) {
+                    // Was MISS before flipping?
+                    var wasMiss =
+                        row.find('.nppp-status').hasClass('is-miss') ||
+                        (row.hasClass('child') && row.prev('tr').find('.nppp-status').hasClass('is-miss'));
+
                     // Check if the row is expanded on mobile
                     if (row.hasClass('child')) {
                         row = row.prev('tr');
                     }
+
+                    npppSetStatus(row, true);
 
                     // find the purge button
                     var purgeBtn;
@@ -748,6 +852,14 @@ $(document).ready(function() {
                     }
                     $('tr.purged-row').removeClass('purged-row');
                     setTimeout(function() { row.addClass('purged-row'); }, 0);
+
+                    var filePath = (response && response.data && response.data.file_path) ? response.data.file_path : '';
+                    if (filePath){
+                        npppAttachPurgeFile(row, filePath);
+                    } else if (wasMiss) {
+                        // fallback: locate it quickly
+                        npppLocateCacheFile(row, cacheUrl);
+                    }
                 } else {
                     // on error
                     btn.prop('disabled', false).removeClass('disabled');
