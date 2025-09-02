@@ -450,7 +450,7 @@ function nppp_premium_html($nginx_cache_path) {
                 ?>
                 <tr>
                     <td><?php echo esc_html( $row['url'] ); ?></td>
-                    <td><?php echo esc_html( $row['file_path'] ); ?></td>
+                    <td class="nppp-cache-path"><?php echo esc_html( $row['file_path'] ); ?></td>
                     <td><?php echo esc_html( $row['category'] ); ?></td>
                     <td class="nppp-status <?php echo esc_attr($status_class); ?>">
                         <strong><?php echo esc_html($status_text); ?></strong>
@@ -815,6 +815,88 @@ function nppp_preload_cache_premium_callback() {
         }
     } else {
         wp_send_json_error('Preload Cache URL validation failed.');
+    }
+}
+
+// Update Purge button data if missing before and hit now
+function nppp_locate_cache_file_ajax() {
+    if ( ! current_user_can('manage_options') ) {
+        wp_send_json_error( __( 'Permission denied.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    // Nonce
+    if ( empty($_POST['_wpnonce']) || ! wp_verify_nonce( sanitize_text_field( wp_unslash($_POST['_wpnonce']) ), 'locate_cache_file_nonce' ) ) {
+        wp_send_json_error( __( 'Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    $cache_url = isset($_POST['cache_url']) ? esc_url_raw( wp_unslash($_POST['cache_url']) ) : '';
+    if ( ! $cache_url || ! filter_var($cache_url, FILTER_VALIDATE_URL) ) {
+        wp_send_json_error( __( 'Invalid URL.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    $settings = get_option('nginx_cache_settings');
+    $nginx_cache_path = isset($settings['nginx_cache_path']) ? $settings['nginx_cache_path'] : '';
+
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ( $wp_filesystem === false || ! $wp_filesystem->is_dir($nginx_cache_path) ) {
+        wp_send_json_error( __( 'Cache directory not accessible.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    // Cache-key regex (same as extractor uses)
+    $regex = isset($settings['nginx_cache_key_custom_regex'])
+             ? base64_decode($settings['nginx_cache_key_custom_regex'])
+             : nppp_fetch_default_regex_for_cache_key();
+
+    // Build the target match key from the URL we just preloaded
+    $needle_key = nppp_url_match_key( $cache_url );
+
+    // Only scan *recent* files (default 10 minutes) for speed
+    $window_secs = apply_filters('nppp_locate_recent_window', 600);
+    $now = time();
+    $found_path = '';
+
+    try {
+        $iter = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ( $iter as $file ) {
+            $pathname = $file->getPathname();
+            if ( ! $wp_filesystem->is_file($pathname) ) { continue; }
+            if ( ($now - $file->getMTime()) > $window_secs ) { continue; }
+
+            // Read small files entirely (FS API), skip redirects & non-GET
+            $content = $wp_filesystem->get_contents($pathname);
+            if ( $content === false || $content === '' ) { continue; }
+            if (strpos($content, 'Status: 301 ') !== false || strpos($content, 'Status: 302 ') !== false) { continue; }
+            if ( ! preg_match('/KEY:\s.*GET/', $content) ) { continue; }
+
+            if ( preg_match($regex, $content, $m) && isset($m[1], $m[2]) ) {
+                $host = trim($m[1]);
+                $uri  = trim($m[2]);
+
+                // Rebuild encoded URL like the extractor does
+                $https = wp_is_using_https();
+                $final_encoded = ($https ? 'https://' : 'http://') . filter_var($host . $uri, FILTER_SANITIZE_URL);
+
+                if ( filter_var($final_encoded, FILTER_VALIDATE_URL) ) {
+                    $key = nppp_url_match_key($final_encoded);
+                    if ( $key === $needle_key ) {
+                        $found_path = $pathname;
+                        break;
+                    }
+                }
+            }
+        }
+    } catch ( Exception $e ) {
+        // swallow – we’ll just fail gracefully
+    }
+
+    if ( $found_path ) {
+        wp_send_json_success( array('file_path' => $found_path) );
+    } else {
+        wp_send_json_error( __( 'Cache file not found yet. Try again in a moment.', 'fastcgi-cache-purge-and-preload-nginx' ) );
     }
 }
 
