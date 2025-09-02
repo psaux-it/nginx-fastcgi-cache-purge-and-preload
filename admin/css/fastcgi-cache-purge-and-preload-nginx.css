@@ -3121,3 +3121,9 @@ p.description {
 /* collapses the badge when empty or idle */
 .nppp-related-status:empty,
 .nppp-related-status[data-state="idle"] { display: none; }
+
+#nppp-premium-table td.nppp-status.is-hit   > strong { color: #3CB371; font-weight: 700; }
+#nppp-premium-table td.nppp-status.is-miss  > strong { color: #d9534f; font-weight: 700; }
+
+.dtr-data.nppp-status.is-hit  strong { color: #3CB371; font-weight: 700; }
+.dtr-data.nppp-status.is-miss strong { color: #d9534f; font-weight: 700; }
