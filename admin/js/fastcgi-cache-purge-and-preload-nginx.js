@@ -666,7 +666,7 @@ $(document).ready(function() {
         // Responsive child sync
         var $child = $main.next('.child');
         if ($child.length){
-            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_status) ? nppp_admin_data.col_cache_status : 'Cache Status';
+            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_status) ? nppp_admin_data.col_cache_status : 'Status';
             $child.find('.dtr-details li').each(function(){
                 var $li = $(this);
                 if ($li.find('.dtr-title').text().trim() === label){
@@ -2066,10 +2066,10 @@ $(document).ready(function() {
 
             // Set column widths
             columnDefs: [
-                { width: "21%", targets: 0, className: 'text-left' }, // Cached URL
+                { width: "23%", targets: 0, className: 'text-left' }, // Cached URL
                 { width: "37%", targets: 1, className: 'text-left' }, // Cache Path
-                { width: "10%", targets: 2, className: 'text-left' }, // Content Category
-                { width: "5%", targets: 3, className: 'text-left' }, // Cache Method
+                { width: "8%", targets: 2, className: 'text-left' },  // Content
+                { width: "5%", targets: 3, className: 'text-left' },  // Status
                 { width: "12%", targets: 4, className: 'text-left' }, // Cache Date
                 { width: "15%", targets: 5, className: 'text-left' }, // Actions
                 { responsivePriority: 1, targets: 0 }, // Cached URL gets priority for responsiveness
