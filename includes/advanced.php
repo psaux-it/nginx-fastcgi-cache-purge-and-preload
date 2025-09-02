@@ -433,8 +433,8 @@ function nppp_premium_html($nginx_cache_path) {
             <tr>
                 <th><?php esc_html_e( 'Cached URL', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Cache Path', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                <th><?php esc_html_e( 'Content Category', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                <th><?php esc_html_e( 'Cache Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Content', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Cache Date', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Action', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
             </tr>
