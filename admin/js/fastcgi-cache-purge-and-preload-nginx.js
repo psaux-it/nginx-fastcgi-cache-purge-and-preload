@@ -626,18 +626,44 @@ $(document).ready(function() {
         showPreloader();
     });
 
+    function npppDT(){
+        return $.fn.dataTable.isDataTable('#nppp-premium-table')
+        ? $('#nppp-premium-table').DataTable()
+        : null;
+    }
+
+    // Highlight row
+    function npppFlashRow($row){
+        var $main  = $row.hasClass('child') ? $row.prev('tr') : $row;
+        var $child = $main.next('.child');
+
+        // add highlight
+        $main.addClass('purged-row');
+        if ($child.length) $child.addClass('purged-row');
+
+        // remove after your CSS animation finishes (adjust 900ms to your CSS)
+        setTimeout(function(){
+            $main.removeClass('purged-row');
+            if ($child.length) $child.removeClass('purged-row');
+        }, 900);
+    }
+
     // Change HIT/MISS on fly
     function npppSetStatus($row, isHit){
         // if this is a responsive "child" row, target its parent
         var $main = $row.hasClass('child') ? $row.prev('tr') : $row;
 
-        // main row status cell
+        // DOM update (desktop)
         var $status = $main.find('td.nppp-status');
         $status.removeClass('is-hit is-miss')
             .addClass(isHit ? 'is-hit' : 'is-miss')
             .html('<strong>' + (isHit ? 'HIT' : 'MISS') + '</strong>');
 
-        // responsive child: match by label text, update .dtr-data
+        // invalidate JUST this cell in DT cache (no redraw)
+        var dt = npppDT();
+        if (dt && $status.length) dt.cell($status[0]).invalidate('dom');
+
+        // Responsive child sync
         var $child = $main.next('.child');
         if ($child.length){
             var label = (window.nppp_admin_data && nppp_admin_data.col_cache_status) ? nppp_admin_data.col_cache_status : 'Cache Status';
@@ -658,7 +684,12 @@ $(document).ready(function() {
         var $main = $row.hasClass('child') ? $row.prev('tr') : $row;
 
         // main row cell
-        $main.find('td.nppp-cache-path').text(pathText);
+        var $cell = $main.find('td.nppp-cache-path');
+        $cell.text(pathText);
+
+        // invalidate JUST this cell in DT cache (no redraw)
+        var dt = npppDT();
+        if (dt && $cell.length) dt.cell($cell[0]).invalidate('dom');
 
         // responsive child: match by label text, update .dtr-data
         var $child = $main.next('.child');
@@ -775,8 +806,7 @@ $(document).ready(function() {
                     if (btn.css('background-color') === 'rgb(67, 160, 71)') {
                         btn.css('background-color', '');
                     }
-                    $('tr.purged-row').removeClass('purged-row');
-                    setTimeout(function() { row.addClass('purged-row'); }, 0);
+                    npppFlashRow(row);
                 } else {
                     // on error
                     btn.prop('disabled', false).removeClass('disabled');
@@ -850,8 +880,7 @@ $(document).ready(function() {
                     if (btn.css('background-color') === 'rgb(67, 160, 71)') {
                         btn.css('background-color', '');
                     }
-                    $('tr.purged-row').removeClass('purged-row');
-                    setTimeout(function() { row.addClass('purged-row'); }, 0);
+                    npppFlashRow(row);
 
                     var filePath = (response && response.data && response.data.file_path) ? response.data.file_path : '';
                     if (filePath){
@@ -2011,7 +2040,8 @@ $(document).ready(function() {
 
     // Function to initialize DataTables.js for premium table
     function initializePremiumTable() {
-        var table = $('#nppp-premium-table').DataTable({
+        var $tbl  = $('#nppp-premium-table');
+        var table = $tbl.DataTable({
             autoWidth: false,
             responsive: true,
             paging: true,
@@ -2053,6 +2083,12 @@ $(document).ready(function() {
                 hideEmptyCells();
             }
         });
+
+        // clear one-shot highlight before any redraw
+        $tbl.off('page.dt.nppp')
+            .on('page.dt.nppp', function () {
+                $(this).find('tr.purged-row, tr.child.purged-row').removeClass('purged-row');
+            });
 
         // Apply styles whenever the table is redrawn (e.g., after pagination)
         table.on('draw', function() {
