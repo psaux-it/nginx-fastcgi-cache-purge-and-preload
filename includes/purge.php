@@ -610,7 +610,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 if ($safexec_path && function_exists('stat')) {
                     $is_root_owner = false;
                     $has_suid      = false;
-    
+
                     $info = @stat($safexec_path);
                     if ($info && isset($info['uid'], $info['mode'])) {
                         $is_root_owner = ($info['uid'] === 0);
