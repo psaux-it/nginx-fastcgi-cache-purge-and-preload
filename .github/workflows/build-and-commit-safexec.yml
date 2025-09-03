@@ -1,4 +1,4 @@
-name: build-and-commit-safexec
+name: safexec CI
 
 on:
   push:
