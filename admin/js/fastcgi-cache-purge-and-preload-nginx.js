@@ -645,6 +645,9 @@ $(document).ready(function() {
         showPreloader();
     });
 
+    // IMPORTANT
+    var npppPreloadInProgress = false;
+
     function npppDT(){
         return $.fn.dataTable.isDataTable('#nppp-premium-table')
         ? $('#nppp-premium-table').DataTable()
@@ -756,7 +759,7 @@ $(document).ready(function() {
 
         // compute exp backoff + a dash of jitter
         var delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
-        delay += Math.floor(Math.random() * 60); // 0–60ms jitter
+        delay += Math.floor(Math.random() * 60);
 
         var $main = row.hasClass('child') ? row.prev('tr') : row;
 
@@ -794,6 +797,10 @@ $(document).ready(function() {
                     npppAttachPurgeFile($main, r.data.file_path);
                     $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
                     $main.removeData('npppLocateReqId');
+
+                    // Release global lock + re-enable all preload buttons
+                    npppPreloadInProgress = false;
+                    $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
                 } else if (attempt < maxAttempts) {
                     setTimeout(function () {
                         npppLocateCacheFile($main, url, attempt + 1, opts);
@@ -803,6 +810,10 @@ $(document).ready(function() {
                     npppUpdateCachePath($main, '—');
                     $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
                     npppToast(__('Cache warmed. “Purge” will be enabled after a short while or refresh.', 'fastcgi-cache-purge-and-preload-nginx'), 'info');
+
+                    // Release global lock
+                    npppPreloadInProgress = false;
+                    $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
                 }
             }).fail(function () {
                 if (!npppInDom($main)) return;
@@ -905,6 +916,17 @@ $(document).ready(function() {
     $(document).on('click', '.nppp-preload-btn', function(e) {
         e.preventDefault();
 
+        // If another preload is already running, bail out
+        if (npppPreloadInProgress) {
+            npppToast(__('Preload is in progress, please wait…', 'fastcgi-cache-purge-and-preload-nginx'), 'info');
+            return;
+        }
+        npppPreloadInProgress = true;
+
+        // Disable ALL preload buttons while this one runs
+        var allBtns = $('.nppp-preload-btn');
+        allBtns.prop('disabled', true).addClass('disabled');
+
         // Get the data
         var btn = $(this);
         var cacheUrl = btn.data('url');
@@ -964,8 +986,15 @@ $(document).ready(function() {
                     var filePath = (response && response.data && response.data.file_path) ? response.data.file_path : '';
                     if (filePath){
                         npppAttachPurgeFile(row, filePath);
+                        // Release lock here because locate is not called
+                        npppPreloadInProgress = false;
+                        $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
                     } else if (wasMiss) {
                         npppLocateCacheFile(row, cacheUrl, 1, { initialDelay: 300 });
+                    } else {
+                        // also unlock in case nothing else runs
+                        npppPreloadInProgress = false;
+                        $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
                     }
                 } else {
                     // on error
