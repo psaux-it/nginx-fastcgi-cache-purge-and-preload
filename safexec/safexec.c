@@ -1,27 +1,36 @@
-/**
- * safexec - A secure privilege-dropping and cgroup-isolating wrapper for PHP's shell_exec
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * safexec.c - Secure privilege-dropping wrapper for controlled shell execution
  *
  * Purpose:
- * --------
- * This code is written for the NPP (Nginx Cache Purge Preload for WordPress):
- *   to safely launch `shell_exec` from within a PHP context, ensuring:
- *   - The process runs as an unprivileged user (`nobody`)
- *   - It is detached from the PHP-FPM service's cgroup2
- *   - It cannot retain inherited privileges
- *   - It cannot kill arbitrary processes (only those it owns or is authorized to)
+ *   Execute a restricted set of external programs (wget, curl, etc.) safely
+ *   from higher-level contexts such as PHP. Written primarily as a safe
+ *   backend for PHP's shell_exec() in NPP (Nginx Cache Purge Preload).
  *
- * Motivation:
- * -----------
- * Directly calling `shell_exec()` with user inputs in PHP runs the command as the FPM pool user, which:
- *   - Inherits the service's cgroup slice (`system-php-fpm.slice`)
- *   - Poses a security risk if an attacker injects malicious commands
- *   - Prevents full isolation or proper resource restriction
+ * Security model:
+ *   - Only allowlisted binaries may run
+ *   - Drops privileges to 'nobody' (or PHP-FPM's original user as fallback)
+ *   - Clears environment; blocks LD_PRELOAD and dangerous vars
+ *   - Closes inherited file descriptors (stdin/stdout/stderr only preserved)
+ *   - Isolates processes into a private "nppp.*" cgroup v2 (Linux),
+ *     or falls back to rlimits/nice/ionice on non-Linux systems
+ *   - Provides controlled --kill=<pid> that succeeds only if:
+ *         • the process is owned by 'nobody'
+ *         • AND the process lives in a safexec "nppp.*" cgroup
+ *   - Refuses to exec if privilege drop fails (payload never runs as root)
  *
- * By using this wrapper:
- *   ✓ Drops privileges to the `nobody` user before execution
- *   ✓ Isolates the process into a neutral cgroup2 to fully detach from php-fpm's slice
- *   ✓ Prevents privilege escalation and lateral movement from injected code
- *   ✓ Provides a controlled kill interface
+ * Safety note:
+ *   safexec cannot be used to run arbitrary programs, regain root privileges,
+ *   or interfere with system processes. It is deliberately limited to
+ *   sandboxed invocations of known tools from PHP contexts.
+ *
+ * Portability / Feature matrix:
+ *   - Linux:   Full support (cgroup v2, pidfd kill, ioprio, rlimits)
+ *   - BSD/UNIX: Partial (rlimits only; no cgroup v2, no pidfd)
+ *   - macOS:   Partial (rlimits only; no cgroup, no pidfd)
+ *
+ * (C) 2025 Hasan Calisir [hasan.calisir@psauxit.com]
+ * Version:  1.9.2 (2025)
  */
 
 #define _GNU_SOURCE 1
