@@ -818,6 +818,22 @@ function nppp_preload_cache_premium_callback() {
     }
 }
 
+// Uses file_get_contents() length arg (C-level).
+function nppp_head_fast($path, $max = 16384) {
+    $data = @file_get_contents($path, false, null, 0, $max);
+    return ($data === false) ? '' : $data;
+}
+
+// Partial read with WP_Filesystem fallback.
+function nppp_read_head($wp_filesystem, $path, $max = 16384) {
+    $buf = nppp_head_fast($path, $max);
+    if ($buf !== '') return $buf;
+
+    // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
+    $all = $wp_filesystem->get_contents($path);
+    return ($all === false || $all === '') ? '' : substr($all, 0, $max);
+}
+
 // Update Purge button data if missing before and hit now
 function nppp_locate_cache_file_ajax() {
     if ( ! current_user_can('manage_options') ) {
@@ -863,16 +879,32 @@ function nppp_locate_cache_file_ajax() {
 
         foreach ( $iter as $file ) {
             $pathname = $file->getPathname();
-            if ( ! $wp_filesystem->is_file($pathname) ) { continue; }
-            if ( ($now - $file->getMTime()) > $window_secs ) { continue; }
+            if (! $wp_filesystem->is_file($pathname)) { continue; }
+            if (($now - $file->getMTime()) > $window_secs) { continue; }
 
-            // Read small files entirely (FS API), skip redirects & non-GET
-            $content = $wp_filesystem->get_contents($pathname);
-            if ( $content === false || $content === '' ) { continue; }
+            // Read only the head (binary-safe) — KEY line is at the top
+            $head_bytes_primary  = apply_filters('nppp_locate_head_bytes', 16384);
+            $head_bytes_fallback = apply_filters('nppp_locate_head_bytes_fallback', 32768);
+
+            $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
+            if ($content === '') { continue; }
+
+            // quick skips near top
             if (strpos($content, 'Status: 301 ') !== false || strpos($content, 'Status: 302 ') !== false) { continue; }
-            if ( ! preg_match('/KEY:\s.*GET/', $content) ) { continue; }
 
-            if ( preg_match($regex, $content, $m) && isset($m[1], $m[2]) ) {
+            // KEY marker might be just after a tiny binary header; try a bigger head once
+            if (!preg_match('/KEY:\s.*GET/', $content)) {
+                if (strlen($content) === $head_bytes_primary) {
+                    $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_fallback);
+                    if ($content === '') { continue; }
+                    if (strpos($content, 'Status: 301 ') !== false || strpos($content, 'Status: 302 ') !== false) { continue; }
+                    if (!preg_match('/KEY:\s.*GET/', $content)) { continue; }
+                } else {
+                    continue;
+                }
+            }
+
+            if (preg_match($regex, $content, $m) && isset($m[1], $m[2])) {
                 $host = trim($m[1]);
                 $uri  = trim($m[2]);
 
@@ -882,7 +914,7 @@ function nppp_locate_cache_file_ajax() {
 
                 if ( filter_var($final_encoded, FILTER_VALIDATE_URL) ) {
                     $key = nppp_url_match_key($final_encoded);
-                    if ( $key === $needle_key ) {
+                    if ($key === $needle_key) {
                         $found_path = $pathname;
                         break;
                     }
@@ -890,13 +922,12 @@ function nppp_locate_cache_file_ajax() {
             }
         }
     } catch ( Exception $e ) {
-        // swallow – we’ll just fail gracefully
     }
 
-    if ( $found_path ) {
-        wp_send_json_success( array('file_path' => $found_path) );
+    if ($found_path) {
+        wp_send_json_success( array('file_path' => $found_path));
     } else {
-        wp_send_json_error( __( 'Cache file not found yet. Try again in a moment.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        wp_send_json_error( __('Cache file not found yet. Try again in a moment.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 }
 
