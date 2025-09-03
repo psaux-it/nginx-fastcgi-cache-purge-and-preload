@@ -580,21 +580,40 @@ $(document).ready(function() {
             },
             success: function(response) {
                 if (response.trim() !== '') {
-                    // Insert the response HTML into the Advanced tab placeholder
-                    // Set initial opacity to 0 for fade-in effect
-                    $premiumPlaceholder.html(response).css('opacity', 0).show();
+                    // Clean teardown if a previous DT exists (prevents lingering handlers)
+                    var tblSel = '#nppp-premium-table';
+                    if ($.fn.dataTable.isDataTable(tblSel)) {
+                        $(tblSel).DataTable().destroy(true);
+                    }
 
-                    // Initialize DataTables.js for the advanced table within the loaded content
+                    // Inject fresh HTML and show placeholder
+                    $premiumPlaceholder
+                        .stop(true, true)
+                        .css('opacity', 0)
+                        .html(response)
+                        .show();
+
+                    // Init DT for the newly injected table
                     initializePremiumTable();
 
                     // Recalculate column widths for responsive layout
-                    $('#nppp-premium-table').DataTable().responsive.recalc();
+                    if ($.fn.dataTable.isDataTable(tblSel)) {
+                        var dtNow = $(tblSel).DataTable();
+                        dtNow.columns.adjust();
+                        if (dtNow.responsive) dtNow.responsive.recalc();
+                    }
 
                     // Hide the preloader now that content is loaded
                     hidePreloader();
 
-                    // Animate the opacity to 1 over 200 milliseconds for a fade-in effect
-                    $premiumPlaceholder.animate({ opacity: 1 }, 100);
+                    // Recalc again after the fade-in completes
+                    $premiumPlaceholder.animate({ opacity: 1 }, 100, function () {
+                        if ($.fn.dataTable.isDataTable(tblSel)) {
+                            var dtLater = $(tblSel).DataTable();
+                            dtLater.columns.adjust();
+                            if (dtLater.responsive) dtLater.responsive.recalc();
+                        }
+                    });
                 } else {
                     console.error('Empty response received for Premium tab.');
                     // Hide the preloader since loading failed
@@ -741,6 +760,10 @@ $(document).ready(function() {
 
         var $main = row.hasClass('child') ? row.prev('tr') : row;
 
+        function npppInDom($el) {
+            return $el && $el.length && document.contains($el[0]);
+        }
+
         if (attempt === 1) {
             var resolving = (window.nppp_admin_data && nppp_admin_data.str_resolving_path)
                 ? nppp_admin_data.str_resolving_path
@@ -764,6 +787,7 @@ $(document).ready(function() {
                     _wpnonce: nppp_admin_data.premium_nonce_locate
                 }
             }).done(function (r) {
+                if (!npppInDom($main)) return;
                 if ($main.data('npppLocateReqId') !== reqId) return;
 
                 if (r && r.success && r.data && r.data.file_path) {
@@ -781,11 +805,14 @@ $(document).ready(function() {
                     npppToast(__('Cache warmed. “Purge” will be enabled after a short while or refresh.', 'fastcgi-cache-purge-and-preload-nginx'), 'info');
                 }
             }).fail(function () {
+                if (!npppInDom($main)) return;
                 if ($main.data('npppLocateReqId') !== reqId) return;
 
                 if (attempt < maxAttempts) {
                     setTimeout(function () {
-                        npppLocateCacheFile($main, url, attempt + 1, opts);
+                        if (npppInDom($main)) {
+                            npppLocateCacheFile($main, url, attempt + 1, opts);
+                        }
                     }, delay);
                 } else {
                     // final fail: clear cell, stop spinner
@@ -2091,7 +2118,18 @@ $(document).ready(function() {
 
     // Function to initialize DataTables.js for premium table
     function initializePremiumTable() {
-        var $tbl  = $('#nppp-premium-table');
+        var $tbl = $('#nppp-premium-table');
+        if (!$tbl.length) return;
+
+        // Already initialised?
+        if ($.fn.dataTable.isDataTable($tbl)) {
+            $tbl.DataTable().columns.adjust().responsive.recalc();
+            applyCategoryStyles();
+            //hideEmptyCells();
+            return;
+        }
+
+        // Initialise
         var table = $tbl.DataTable({
             autoWidth: false,
             responsive: true,
@@ -2131,7 +2169,7 @@ $(document).ready(function() {
             // Ensure callback on table draw for initial load
             initComplete: function() {
                 applyCategoryStyles();
-                hideEmptyCells();
+                //hideEmptyCells();
             }
         });
 
@@ -2141,10 +2179,10 @@ $(document).ready(function() {
                 $(this).find('tr.purged-row, tr.child.purged-row').removeClass('purged-row');
             });
 
-        // Apply styles whenever the table is redrawn (e.g., after pagination)
+        // Apply styles whenever the table is redrawn
         table.on('draw', function() {
             applyCategoryStyles();
-            hideEmptyCells();
+            //hideEmptyCells();
         });
     }
 
@@ -2224,11 +2262,6 @@ $(document).ready(function() {
                         'font-weight': 'bold'
                     });
             }
-            // Apply styles to the Cache Method column (4th column)
-            var $cacheMethodCell = $(this).find('td').eq(3);
-            $cacheMethodCell.css({
-                'color': 'green'
-            });
         });
     }
 
@@ -2250,9 +2283,8 @@ $(document).ready(function() {
             // Loop through each cell
             cells.forEach(function(cell) {
                 // Check if the cell is empty
-                if (cell.textContent.trim() === '') {
-                    // If empty, hide the cell
-                    cell.style.display = 'none';
+                if (cell && cell.textContent.trim() === '') {
+                    cell.textContent = '—';
                 }
             });
         });
@@ -2489,8 +2521,22 @@ $(document).ready(function() {
         }
     });
 
+    // Copy clipborad function
+    async function npppCopy(text){
+        try { await navigator.clipboard.writeText(String(text)); return true; }
+        catch(e){
+            const i=document.createElement('input');
+            i.value=String(text);
+            document.body.appendChild(i);
+            i.select();
+            const ok=document.execCommand('copy');
+            document.body.removeChild(i);
+            return ok;
+        }
+    }
+
     // Unique ID copy clipboard
-    jQuery('#nppp-unique-id').click(function(event) {
+    jQuery('#nppp-unique-id').on('click', async function (event) {
         var uniqueIdElement = jQuery(this);
         var clickToRevealSpan = uniqueIdElement.find('span');
         var clickToRevealSpanOffset = clickToRevealSpan.offset();
@@ -2498,12 +2544,7 @@ $(document).ready(function() {
         var notificationTop = clickToRevealSpanOffset.top;
 
         var uniqueId = uniqueIdElement.data('unique-id');
-        var tempInput = document.createElement('input');
-        tempInput.value = uniqueId;
-        document.body.appendChild(tempInput);
-        tempInput.select();
-        document.execCommand('copy');
-        document.body.removeChild(tempInput);
+        await npppCopy(uniqueId);
 
         // Show a small notification just after the 'Unique ID' text
         var notification = document.createElement('div');
@@ -2522,11 +2563,11 @@ $(document).ready(function() {
         document.body.appendChild(notification);
 
         setTimeout(function() {
-            notification.style.opacity = '0'; // Fade out
+            notification.style.opacity = '0';
             setTimeout(function() {
-                document.body.removeChild(notification); // Remove notification after fade out
+                document.body.removeChild(notification);
             }, 300);
-        }, 3000); // Remove notification after 3 seconds
+        }, 2000);
     });
 
     // Click event handler for copying the API key to clipboard
@@ -2537,7 +2578,7 @@ $(document).ready(function() {
         var notificationLeft = clickToCopySpanOffset.left + clickToCopySpan.outerWidth() + 10;
         var notificationTop = clickToCopySpanOffset.top;
 
-        // Perform AJAX request to fetch the latest API key
+        // Perform AJAX request to fetch the API key
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
             type: 'GET',
@@ -2546,16 +2587,11 @@ $(document).ready(function() {
                 action: 'nppp_update_api_key_copy_value',
                 _wpnonce: nppp_admin_data.api_key_copy_nonce
             },
-            success: function(response) {
+            success: async function(response) {
                 var apiKey = response.data.api_key;
 
                 // Copy the API key to clipboard
-                var tempInput = document.createElement('input');
-                tempInput.value = apiKey;
-                document.body.appendChild(tempInput);
-                tempInput.select();
-                document.execCommand('copy');
-                document.body.removeChild(tempInput);
+                await npppCopy(apiKey);
 
                 // Show a small notification indicating successful copy
                 var notification = document.createElement('div');
@@ -2574,11 +2610,11 @@ $(document).ready(function() {
                 document.body.appendChild(notification);
 
                 setTimeout(function() {
-                    notification.style.opacity = '0'; // Fade out
+                    notification.style.opacity = '0';
                     setTimeout(function() {
-                        document.body.removeChild(notification); // Remove notification after fade out
+                        document.body.removeChild(notification);
                     }, 300);
-                }, 3000); // Remove notification after 3 seconds
+                }, 2000);
             },
             error: function(xhr, status, error) {
                 console.error('Error fetching API key:', error);
@@ -2586,7 +2622,7 @@ $(document).ready(function() {
         });
     });
 
-     // Click event handler for copying the API purge curl URL to clipboard
+    // Click event handler for copying the Purge URL to clipboard
     jQuery('#nppp-purge-url').click(function(event) {
         var purgeUrlElement = jQuery(this);
         var clickToCopySpan = purgeUrlElement.find('span');
@@ -2594,7 +2630,7 @@ $(document).ready(function() {
         var notificationLeft = clickToCopySpanOffset.left + clickToCopySpan.outerWidth() + 10;
         var notificationTop = clickToCopySpanOffset.top;
 
-        // Perform AJAX request to fetch the latest API key
+        // Perform AJAX request to fetch the Purge URL
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
             type: 'GET',
@@ -2603,16 +2639,11 @@ $(document).ready(function() {
                 action: 'nppp_rest_api_purge_url_copy',
                 _wpnonce: nppp_admin_data.api_purge_url_copy_nonce
             },
-            success: function(response) {
+            success: async function(response) {
                 var purgeUrl = response.data;
 
-                // Copy the API key to clipboard
-                var tempInput = document.createElement('input');
-                tempInput.value = purgeUrl;
-                document.body.appendChild(tempInput);
-                tempInput.select();
-                document.execCommand('copy');
-                document.body.removeChild(tempInput);
+                // Copy the Purge URL to clipboard
+                await npppCopy(purgeUrl);
 
                 // Show a small notification indicating successful copy
                 var notification = document.createElement('div');
@@ -2631,19 +2662,19 @@ $(document).ready(function() {
                 document.body.appendChild(notification);
 
                 setTimeout(function() {
-                    notification.style.opacity = '0'; // Fade out
+                    notification.style.opacity = '0';
                     setTimeout(function() {
-                        document.body.removeChild(notification); // Remove notification after fade out
+                        document.body.removeChild(notification);
                     }, 300);
-                }, 3000); // Remove notification after 3 seconds
+                }, 2000);
             },
             error: function(xhr, status, error) {
-                console.error('Error fetching API key:', error);
+                console.error('Error fetching Purge URL:', error);
             }
         });
     });
 
-     // Click event handler for copying the API purge curl URL to clipboard
+    // Click event handler for copying the Preload URL to clipboard
     jQuery('#nppp-preload-url').click(function(event) {
         var preloadUrlElement = jQuery(this);
         var clickToCopySpan = preloadUrlElement.find('span');
@@ -2651,7 +2682,7 @@ $(document).ready(function() {
         var notificationLeft = clickToCopySpanOffset.left + clickToCopySpan.outerWidth() + 10;
         var notificationTop = clickToCopySpanOffset.top;
 
-        // Perform AJAX request to fetch the latest API key
+        // Perform AJAX request to fetch the Preload URL
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
             type: 'GET',
@@ -2660,16 +2691,11 @@ $(document).ready(function() {
                 action: 'nppp_rest_api_preload_url_copy',
                 _wpnonce: nppp_admin_data.api_preload_url_copy_nonce
             },
-            success: function(response) {
+            success: async function(response) {
                 var preloadUrl = response.data;
 
-                // Copy the API key to clipboard
-                var tempInput = document.createElement('input');
-                tempInput.value = preloadUrl;
-                document.body.appendChild(tempInput);
-                tempInput.select();
-                document.execCommand('copy');
-                document.body.removeChild(tempInput);
+                // Copy the Preload URL to clipboard
+                await npppCopy(preloadUrl);
 
                 // Show a small notification indicating successful copy
                 var notification = document.createElement('div');
@@ -2688,14 +2714,14 @@ $(document).ready(function() {
                 document.body.appendChild(notification);
 
                 setTimeout(function() {
-                    notification.style.opacity = '0'; // Fade out
+                    notification.style.opacity = '0';
                     setTimeout(function() {
-                        document.body.removeChild(notification); // Remove notification after fade out
+                        document.body.removeChild(notification);
                     }, 300);
-                }, 3000); // Remove notification after 3 seconds
+                }, 2000);
             },
             error: function(xhr, status, error) {
-                console.error('Error fetching API key:', error);
+                console.error('Error fetching Preload URL:', error);
             }
         });
     });
