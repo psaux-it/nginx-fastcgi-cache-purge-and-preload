@@ -3127,3 +3127,48 @@ p.description {
 
 .dtr-data.nppp-status.is-hit  strong { color: #3CB371; font-weight: 700; }
 .dtr-data.nppp-status.is-miss strong { color: #d9534f; font-weight: 700; }
+
+/* Inline spinner after Cache Path text while resolving */
+td.nppp-cache-path.is-resolving {
+    /* tweak these to fit your UI */
+    --nppp-spin-size: 14px;
+    --nppp-spin-thickness: 2px;
+    --nppp-spin-offset: -2px; /* vertical alignment vs text baseline */
+    --nppp-spin-color-strong: rgba(0,0,0,.65);
+    --nppp-spin-color-weak:   rgba(0,0,0,.15);
+}
+
+td.nppp-cache-path.is-resolving::after {
+    content: "";
+    display: inline-block;
+    width: var(--nppp-spin-size);
+    height: var(--nppp-spin-size);
+    margin-left: 8px;
+    vertical-align: var(--nppp-spin-offset);
+    border-radius: 50%;
+    background:
+        conic-gradient(
+            from 0turn,
+            transparent 12%,
+            var(--nppp-spin-color-strong) 32%,
+            var(--nppp-spin-color-weak) 62%,
+            transparent 100%
+        );
+        -webkit-mask: radial-gradient(
+            farthest-side,
+            transparent calc(100% - var(--nppp-spin-thickness)),
+            #000 0
+        );
+        mask: radial-gradient(
+            farthest-side,
+            transparent calc(100% - var(--nppp-spin-thickness)),
+            #000 0
+        );
+
+    animation: nppp-spin-arc .8s linear infinite;
+}
+
+@keyframes nppp-spin-arc { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) {
+    td.nppp-cache-path.is-resolving::after { animation: none; }
+}
