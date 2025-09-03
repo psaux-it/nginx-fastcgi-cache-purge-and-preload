@@ -721,34 +721,86 @@ $(document).ready(function() {
         npppUpdateCachePath(mainRow, filePath);
     }
 
-    // Quick retry helper
-    function npppLocateCacheFile(row, url, attempt) {
+    // Quick retry helper (backoff + UX polish + stale-response guard + optional initial delay)
+    function npppLocateCacheFile(row, url, attempt, opts) {
         attempt = attempt || 1;
+        opts = opts || {};
 
-        $.ajax({
-            url: nppp_admin_data.ajaxurl,
-            type: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'nppp_locate_cache_file',
-                cache_url: url,
-                _wpnonce: nppp_admin_data.premium_nonce_locate
-            }
-        }).done(function(r) {
-            if (r && r.success && r.data && r.data.file_path) {
-                npppAttachPurgeFile(row, r.data.file_path);
-            } else if (attempt < 2) {
-                // short backoff, try once more
-                setTimeout(function(){ npppLocateCacheFile(row, url, attempt+1); }, 800);
-            } else {
-                // we already flipped to HIT, so user can refresh later
-                npppToast(__('Cache warmed. “Purge” will be enabled after a short while or refresh.','fastcgi-cache-purge-and-preload-nginx'), 'info');
-            }
-        }).fail(function() {
-            if (attempt < 2) {
-                setTimeout(function(){ npppLocateCacheFile(row, url, attempt+1); }, 800);
-            }
-        });
+        var maxAttempts   = opts.maxAttempts   || 4;
+        var baseDelay     = opts.baseDelay     || 250;
+        var maxDelay      = opts.maxDelay      || 1500;
+        var initialDelay  = (attempt === 1)
+            ? (opts.initialDelay != null
+            ? opts.initialDelay
+            : (window.nppp_admin_data && +nppp_admin_data.locate_initial_delay) || 400)
+        : 0;
+
+        // compute exp backoff + a dash of jitter
+        var delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
+        delay += Math.floor(Math.random() * 60); // 0–60ms jitter
+
+        var $main = row.hasClass('child') ? row.prev('tr') : row;
+
+        if (attempt === 1) {
+            var resolving = (window.nppp_admin_data && nppp_admin_data.str_resolving_path)
+                ? nppp_admin_data.str_resolving_path
+                : '(resolving path…)';
+            npppUpdateCachePath($main, resolving);
+            $main.find('td.nppp-cache-path').addClass('is-resolving spinner--arc');
+        }
+
+        // Tag this attempt; newer attempts win
+        var reqId = Date.now() + ':' + attempt;
+        $main.data('npppLocateReqId', reqId);
+
+        function doRequest() {
+            $.ajax({
+                url: nppp_admin_data.ajaxurl,
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    action: 'nppp_locate_cache_file',
+                    cache_url: url,
+                    _wpnonce: nppp_admin_data.premium_nonce_locate
+                }
+            }).done(function (r) {
+                if ($main.data('npppLocateReqId') !== reqId) return;
+
+                if (r && r.success && r.data && r.data.file_path) {
+                    npppAttachPurgeFile($main, r.data.file_path);
+                    $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
+                    $main.removeData('npppLocateReqId');
+                } else if (attempt < maxAttempts) {
+                    setTimeout(function () {
+                        npppLocateCacheFile($main, url, attempt + 1, opts);
+                    }, delay);
+                } else {
+                    // final fallback: keep HIT, clear cell, stop spinner
+                    npppUpdateCachePath($main, '—');
+                    $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
+                    npppToast(__('Cache warmed. “Purge” will be enabled after a short while or refresh.', 'fastcgi-cache-purge-and-preload-nginx'), 'info');
+                }
+            }).fail(function () {
+                if ($main.data('npppLocateReqId') !== reqId) return;
+
+                if (attempt < maxAttempts) {
+                    setTimeout(function () {
+                        npppLocateCacheFile($main, url, attempt + 1, opts);
+                    }, delay);
+                } else {
+                    // final fail: clear cell, stop spinner
+                    npppUpdateCachePath($main, '—');
+                    $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
+                }
+            });
+        }
+
+        // Small grace period before the very first probe
+        if (initialDelay > 0) {
+            setTimeout(doRequest, initialDelay);
+        } else {
+            doRequest();
+        }
     }
 
     // Handle click event for purge buttons in advanced tab
@@ -886,8 +938,7 @@ $(document).ready(function() {
                     if (filePath){
                         npppAttachPurgeFile(row, filePath);
                     } else if (wasMiss) {
-                        // fallback: locate it quickly
-                        npppLocateCacheFile(row, cacheUrl);
+                        npppLocateCacheFile(row, cacheUrl, 1, { initialDelay: 300 });
                     }
                 } else {
                     // on error
