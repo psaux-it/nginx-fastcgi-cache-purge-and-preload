@@ -1,37 +1,93 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * safexec.c - Secure privilege-dropping wrapper for controlled shell execution
+ * safexec.c — Secure privilege-dropping wrapper for controlled shell execution
  *
- * Purpose:
- *   Execute a restricted set of external programs (wget, curl, etc.) safely
- *   from higher-level contexts such as PHP. Written primarily as a safe
- *   backend for PHP's shell_exec() in NPP (Nginx Cache Purge Preload).
+ * Purpose
+ * -------
+ * Safely execute a *restricted* set of external programs (wget, curl, etc.)
+ * from higher-level contexts such as PHP. Designed primarily as the backend
+ * for shell_exec() in NPP (Nginx Cache Purge Preload).
  *
- * Security model:
- *   - Only allowlisted binaries may run
- *   - Drops privileges to 'nobody' (or PHP-FPM's original user as fallback)
- *   - Clears environment; blocks LD_PRELOAD and dangerous vars
- *   - Closes inherited file descriptors (stdin/stdout/stderr only preserved)
- *   - Isolates processes into a private "nppp.*" cgroup v2 (Linux),
- *     or falls back to rlimits/nice/ionice on non-Linux systems
- *   - Provides controlled --kill=<pid> that succeeds only if:
- *         • the process is owned by 'nobody'
- *         • AND the process lives in a safexec "nppp.*" cgroup
- *   - Refuses to exec if privilege drop fails (payload never runs as root)
+ * Security model
+ * --------------
+ *  - Strict allowlist: only known-safe binaries run (see ALLOWED_BINS).
+ *  - Never exec as root: drop to 'nobody' first; if that fails, drop to the
+ *    original caller (e.g., PHP-FPM worker). If we still have euid==0, abort.
+ *  - Environment is sanitized early (clearenv); only minimal PATH/LANG are set.
+ *    For wget/curl, an optional vetted LD_PRELOAD may be injected (see below).
+ *  - All inherited FDs >= 3 are closed before exec (stdin/out/err preserved).
+ *  - Linux: process is moved into its own cgroup v2 child "nppp.<pid>" under
+ *    /sys/fs/cgroup/nppp when available; otherwise fall back to rlimits +
+ *    (optional) nice/ionice. Controllers are enabled on the parent when possible.
+ *  - --kill=<pid>: only succeeds if the target is owned by 'nobody' *and*
+ *    belongs to an "nppp.*" safexec cgroup; uses pidfd when available (race-safe).
+ *  - PR_SET_NO_NEW_PRIVS is enabled before exec to prevent privilege regain.
  *
- * Safety note:
- *   safexec cannot be used to run arbitrary programs, regain root privileges,
- *   or interfere with system processes. It is deliberately limited to
- *   sandboxed invocations of known tools from PHP contexts.
+ * Optional normalization (pctnorm)
+ * --------------------------------
+ * If enabled, safexec can normalize percent-encodings for wget/curl by
+ * preloading a shared object:
+ *    - SAFEXEC_PCTNORM=1|0         (default 1)
+ *    - SAFEXEC_PCTNORM_SO=/path/to/libnpp_norm.so
+ *    - SAFEXEC_PCTNORM_CASE=upper|lower|off  (default upper)
+ * The .so is injected *only* for wget/curl, and only if it is root:root,
+ * a regular file, and not group/other-writable. When injected, safexec sets:
+ *    - LD_PRELOAD=<SO>, PCTNORM_CASE=<value>
+ * Otherwise, env remains minimal (PATH, LANG).
  *
- * Portability / Feature matrix:
- *   - Linux:   Full support (cgroup v2, pidfd kill, ioprio, rlimits)
- *   - BSD/UNIX: Partial (rlimits only; no cgroup v2, no pidfd)
- *   - macOS:   Partial (rlimits only; no cgroup, no pidfd)
+ * Detach / isolation mode
+ * -----------------------
+ * SAFEXEC_DETACH=auto|cgv2|rlimits|off
+ *    auto     : prefer cgroup v2; fall back to rlimits if unavailable.
+ *    cgv2     : require cgroup v2; fail if not possible.
+ *    rlimits  : skip cgroup; apply rlimits (+ optional nice/ionice).
+ *    off      : no isolation tweaks.
+ * On glibc builds, SAFEXEC_DETACH is read via secure_getenv(); on musl,
+ * getenv() is used (musl does not provide secure_getenv()).
  *
- * (C) 2025 Hasan Calisir [hasan.calisir@psauxit.com]
- * Version:  1.9.2 (2025)
+ * Other controls
+ * --------------
+ * SAFEXEC_QUIET=0|1            : suppress informational messages (default 0)
+ * SAFEXEC_SAFE_CWD=-1|0|1      : if 1, chdir to /tmp (or /) when CWD is
+ *                                inaccessible; if -1 (default), enable only
+ *                                for interactive sessions (any stdio is a TTY).
+ *
+ * Behavior notes
+ * --------------
+ *  - If not installed setuid-root (or euid!=0 at runtime), safexec enters
+ *    *pass-through* mode: no privilege drop or isolation is applied; it simply
+ *    execs the target (still enforcing the allowlist).
+ *  - A per-run cgroup name "nppp.<pid>" is used to avoid stale limits. Empty
+ *    stale "nppp.*" groups may be cleaned up automatically.
+ *  - When /tmp is not writable by the final euid and the command is wget with
+ *    "-P /tmp", safexec rewrites the destination to "/tmp/nppp-cache/<euid>"
+ *    if a safe, root-owned sticky parent exists. Otherwise it leaves "-P /tmp"
+ *    untouched and warns.
+ *
+ * Portability / features
+ * ----------------------
+ *  - Linux:   cgroup v2 join, pidfd-based kill (when kernel supports it),
+ *             ioprio (when available), rlimits, closefrom via /proc/self/fd,
+ *             PR_SET_NO_NEW_PRIVS, PR_SET_DUMPABLE(0).
+ *  - BSD/macOS/other POSIX: rlimits + FD closing; no cgroup/pidfd.
+ *
+ * Install (recommended)
+ * ---------------------
+ *   chown root:root safexec && chmod 4755 safexec   (avoid nosuid mounts)
+ * Without setuid root, you only get pass-through mode (still allowlisted).
+ *
+ * Limitations
+ * -----------
+ *  - Not a general-purpose sandbox: only constrains *this* child process and
+ *    its descendants. It does not provide syscall-level filtering.
+ *  - Only allowlisted tools may run; arbitrary commands/pipelines are rejected.
+ *
+ * Copyright
+ * ---------
+ * (C) 2025 Hasan Calisir <hasan.calisir@psauxit.com>
+ * Version: 1.9.2 (2025)
  */
+
 
 #define _GNU_SOURCE 1
 
@@ -149,6 +205,20 @@ static int s_fprintf(FILE *stream, const char *fmt, ...) {
 static void s_perror(const char *s) {
     if (!QUIET) perror(s);
 }
+
+// Safe .so (must be root:root, regular file, and !group/other-writable)
+static int is_secure_so(const char *path) {
+    int fd = open(path, O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
+    if (fd < 0) return 0;
+    struct stat st;
+    int ok = (fstat(fd, &st) == 0) &&
+             S_ISREG(st.st_mode) &&
+             st.st_uid == 0 &&
+             ((st.st_mode & 022) == 0);
+    close(fd);
+    return ok;
+}
+static char *dup_or_null(const char *s) { return s ? strdup(s) : NULL; }
 
 // snprintf wrapper that errors on truncation to quiet -Wformat-truncation
 static int safe_snprintf(char *dst, size_t dstsz, const char *fmt, ...) {
@@ -700,7 +770,7 @@ static void apply_rlimits_and_sched(const nppp_limits *L) {
         (void)setrlimit(RLIMIT_NOFILE, &r);
     }
 #endif
-    
+
     // NPROC
 #ifdef RLIMIT_NPROC
     if (L->rlimit_nproc < 0) {
@@ -1075,6 +1145,13 @@ int main(int argc, char *argv[]) {
     nppp_limits LIM = nppp_default_limits();
     enum detach_mode mode = parse_detach_mode();
 
+    // capture pctnorm prefs BEFORE we clear the env
+    int   pct_enable = env_flag("SAFEXEC_PCTNORM", 1);  // default ON
+    char *pct_so     = dup_or_null(getenv("SAFEXEC_PCTNORM_SO"));
+    char *pct_case   = dup_or_null(getenv("SAFEXEC_PCTNORM_CASE"));
+
+    #define FREE_PCT() do { free(pct_so); free(pct_case); pct_so=NULL; pct_case=NULL; } while (0)
+
     // Sanitize env and process state before any NSS/library lookups
     sanitize_process_early();
 
@@ -1084,6 +1161,7 @@ int main(int argc, char *argv[]) {
     char cgname[64];
     if (safe_snprintf(cgname, sizeof cgname, "nppp.%ld", (long)getpid()) != 0) {
         s_fprintf(stderr, "Error: failed to compose cgroup name\n");
+        FREE_PCT();
         return 1;
     }
 
@@ -1106,10 +1184,12 @@ int main(int argc, char *argv[]) {
                 isolated = 1;
             } else if (mode == DET_CGV2) {
                 s_fprintf(stderr, "Error: cgroup v2 requested but join failed\n");
+                FREE_PCT();
                 return 1;
             }
         } else if (mode == DET_CGV2) {
             s_fprintf(stderr, "Error: cgroup v2 requested but not available\n");
+            FREE_PCT();
             return 1;
         }
     }
@@ -1146,6 +1226,7 @@ post_drop:
     // Never, ever exec as root. If privilege drop didn’t stick, bail out.
     if (geteuid() == 0) {
         s_fprintf(stderr, "Fatal: safexec cannot be used as root; refusing to exec (privilege drop failed).\n");
+        FREE_PCT();
         return 1;
     }
 
@@ -1169,21 +1250,38 @@ post_drop:
     }
 #endif
 
+    // pctnorm injection: only for wget/curl, only if enabled.
+    if (pct_enable && (is_prog(argv[prog_i], "wget") || is_prog(argv[prog_i], "curl"))) {
+        const char *so = pct_so ? pct_so : "/usr/local/lib/npp/libnpp_norm.so";
+        if (is_secure_so(so)) {
+            setenv("LD_PRELOAD", so, 1);
+            setenv("PCTNORM_CASE", pct_case && *pct_case ? pct_case : "upper", 1);
+        } else {
+            s_fprintf(stderr, "Info: not injecting pctnorm (unsafe or missing so: %s)\n", so);
+        }
+    }
+
     // Close all inherited fds except stdio before exec
     closefrom_safe(3);
 
     fflush(NULL);
     execvp(argv[1], &argv[1]);
-    s_perror("safexec: execvp");
-    _exit(1);
+
+    {
+        int saved = errno;
+        FREE_PCT();
+        errno = saved;
+        s_perror("safexec: execvp");
+        _exit(1);
+    }
 
 drop_to_fpm_user:
 
     // Drop to original FPM user (ruid/rgid). If this fails, refuse to run.
     if (was_root) {
-        if (setgroups(0, NULL) != 0) { s_perror("setgroups (fallback)"); return 1; }
-        if (setgid(rgid) != 0)       { s_perror("setgid (fallback)");    return 1; }
-        if (setuid(ruid) != 0)       { s_perror("setuid (fallback)");    return 1; }
+        if (setgroups(0, NULL) != 0) { s_perror("setgroups (fallback)"); FREE_PCT(); return 1; }
+        if (setgid(rgid) != 0)       { s_perror("setgid (fallback)");    FREE_PCT(); return 1; }
+        if (setuid(ruid) != 0)       { s_perror("setuid (fallback)");    FREE_PCT(); return 1; }
     }
 
     // If not was_root, we’re already the caller; nothing to do
