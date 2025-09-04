@@ -1250,14 +1250,25 @@ post_drop:
     }
 #endif
 
-    // pctnorm injection: only for wget/curl, only if enabled.
+    /* pctnorm injection: only for wget/curl, only if enabled. */
     if (pct_enable && (is_prog(argv[prog_i], "wget") || is_prog(argv[prog_i], "curl"))) {
         const char *so = pct_so ? pct_so : "/usr/local/lib/npp/libnpp_norm.so";
         if (is_secure_so(so)) {
+            const char *case_val = (pct_case && *pct_case) ? pct_case : "upper";
             setenv("LD_PRELOAD", so, 1);
-            setenv("PCTNORM_CASE", pct_case && *pct_case ? pct_case : "upper", 1);
+            setenv("PCTNORM_CASE", case_val, 1);
+            s_fprintf(stderr,
+                      "Info: pctnorm inject: LD_PRELOAD=%s PCTNORM_CASE=%s (prog=%s)\n",
+                      so, case_val, base_of(argv[prog_i]));
         } else {
             s_fprintf(stderr, "Info: not injecting pctnorm (unsafe or missing so: %s)\n", so);
+        }
+    } else {
+        /* Make it explicit why we didn't inject, to aid debugging */
+        if (!pct_enable) {
+            s_fprintf(stderr, "Info: pctnorm disabled via SAFEXEC_PCTNORM=0\n");
+        } else {
+            s_fprintf(stderr, "Info: pctnorm not applicable (prog=%s)\n", base_of(argv[prog_i]));
         }
     }
 
