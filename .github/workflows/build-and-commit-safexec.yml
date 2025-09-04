@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "safexec/safexec.c"
+      - "safexec/libnpp_norm.c" 
       - ".github/workflows/build-and-commit-safexec.yml"
   workflow_dispatch: {}
 
@@ -30,8 +31,13 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y file coreutils binutils
+          mkdir -p safexec/bin
 
-      # Build static x86_64 (musl) with Alpine's GCC
+      ############################################
+      # build- safexec (musl) — x64 + arm64
+      ############################################
+
+      # Build static x86_64 (musl) with Alpine
       - name: Build x86_64 static (musl)
         run: |
           set -euo pipefail
@@ -60,15 +66,69 @@ jobs:
                 -Wl,-z,relro,-z,now safexec/safexec.c -o safexec/safexec-aarch64-linux-musl
             aarch64-linux-musl-strip safexec/safexec-aarch64-linux-musl
           '
+      ############################################################
+      # build- libnpp_norm.so (LD_PRELOAD shim) — glibc + musl for x64 + arm64
+      ############################################################
+
+      # x86_64 (glibc) — build in Debian
+      - name: Build libnpp_norm (x86_64, glibc)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD":/src -w /src debian:stable-slim bash -euxo pipefail -c '
+            apt-get update
+            apt-get install -y --no-install-recommends build-essential binutils
+            gcc -O2 -pipe -fPIC -D_GNU_SOURCE -Wall -Wextra -Wformat=2 \
+                -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-x86_64-glibc.so \
+                -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
+            strip --strip-unneeded safexec/libnpp_norm-x86_64-glibc.so
+          '
+
+      # x86_64 (musl) — build in Alpine
+      - name: Build libnpp_norm (x86_64, musl)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD":/src -w /src/safexec alpine:3.21 sh -euxc '
+            apk add --no-cache build-base musl-dev
+            gcc -O2 -pipe -fPIC -D_GNU_SOURCE -Wall -Wextra -Wformat=2 \
+                -shared libnpp_norm.c -o libnpp_norm-x86_64-musl.so \
+                -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
+            strip --strip-unneeded libnpp_norm-x86_64-musl.so
+          '
+
+      # aarch64 (glibc) — build in dockcross glibc toolchain
+      - name: Build libnpp_norm (aarch64, glibc)
+        run: |
+          set -euo pipefail
+          docker run --rm dockcross/linux-arm64 > ./dockcross.arm64
+          chmod +x ./dockcross.arm64
+          ./dockcross.arm64 bash -euxc '
+            ${CC:-aarch64-linux-gnu-gcc} -O2 -pipe -fPIC -D_GNU_SOURCE -Wall -Wextra -Wformat=2 \
+                -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-aarch64-glibc.so \
+                -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
+            ${STRIP:-aarch64-linux-gnu-strip} --strip-unneeded safexec/libnpp_norm-aarch64-glibc.so
+          '
+
+      # aarch64 (musl) — build in dockcross musl toolchain
+      - name: Build libnpp_norm (aarch64, musl)
+        run: |
+          set -euo pipefail
+          docker run --rm dockcross/linux-arm64-musl > ./dockcross.musl.arm64
+          chmod +x ./dockcross.musl.arm64
+          ./dockcross.musl.arm64 bash -euxc '
+            aarch64-linux-musl-gcc -O2 -pipe -fPIC -D_GNU_SOURCE -Wall -Wextra -Wformat=2 \
+                -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-aarch64-musl.so \
+                -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
+            aarch64-linux-musl-strip --strip-unneeded safexec/libnpp_norm-aarch64-musl.so
+          '
 
       # Fix ownership of artifacts created by containers
       - name: Fix artifact ownership
         run: |
           set -euo pipefail
-          sudo chown "$(id -u)":"$(id -g)" safexec/safexec-*-linux-musl
+          sudo chown "$(id -u)":"$(id -g)" safexec/safexec-*-linux-musl safexec/libnpp_norm-*.so
     
-      # Sanity check: confirm the binaries are static BEFORE checksums
-      - name: Verify binaries are static
+      # Sanity check: confirm the safexec binaries are static before checksums
+      - name: Verify safexec binaries are static
         run: |
           set -euo pipefail
           ls -l safexec/safexec-*-linux-musl
@@ -84,52 +144,224 @@ jobs:
           set -euo pipefail
           docker run --privileged --rm tonistiigi/binfmt --install arm64
 
-      # Runtime smoke test (x86_64, minimal)
-      - name: Runtime smoke test (x86_64)
+      ############################################
+      # E2E smoke tests hybrid safexec + shim  (musl:glibc | x86_64:aarch64
+      ############################################
+
+      - name: E2E runtime smoke test(x86_64, musl)
         run: |
           set -euo pipefail
           docker run --rm --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v "$PWD":/src -w / alpine:3.21 sh -euxc '
-            apk add --no-cache coreutils wget
-            cp /src/safexec/safexec-x86_64-linux-musl /usr/local/bin/safexec
-            chown root:root /usr/local/bin/safexec
-            chmod 4755 /usr/local/bin/safexec
-            adduser -D -s /bin/sh fpm
-            su -s /bin/sh -c "/usr/local/bin/safexec --help" fpm
-            su -s /bin/sh -c "/usr/local/bin/safexec wget --version >/dev/null" fpm
-          '
+              apk add --no-cache coreutils wget busybox-extras
 
-      # Runtime smoke test (aarch64, minimal; runs via qemu)
-      - name: Runtime smoke test (aarch64)
+              # Install safexec (setuid-root) and the shim (root-owned, not writable)
+              install -D /src/safexec/safexec-x86_64-linux-musl /usr/local/bin/safexec
+              chown root:root /usr/local/bin/safexec
+              chmod 4755 /usr/local/bin/safexec
+
+              install -D /src/safexec/libnpp_norm-x86_64-musl.so /usr/local/lib/npp/libnpp_norm.so
+              chown root:root /usr/local/lib/npp/libnpp_norm.so
+              chmod 0644 /usr/local/lib/npp/libnpp_norm.so
+
+              # Unprivileged user (simulates PHP-FPM worker)
+              adduser -D -s /bin/sh fpm
+
+              # Helper to capture first request-line
+              capture() {
+                local out="$1"
+                ( nc -l -p 8080 > "$out" & echo $! > "$out.pid" )
+                sleep 0.2
+              }
+              stopcap() {
+                local out="$1"
+                sleep 0.2
+                kill "$(cat "$out.pid")" 2>/dev/null || true
+              }
+
+              # 1) upper => %2F%2A
+              capture /tmp/req1
+              su -s /bin/sh -c "
+                export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2f%2a || true
+              " fpm
+              stopcap /tmp/req1
+              head -n1 /tmp/req1 | tee /tmp/line1
+              grep -q "GET /%2F%2A " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
+
+              # 2) lower => %2f%2a
+              capture /tmp/req2
+              su -s /bin/sh -c "
+                export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=lower SAFEXEC_DETACH=auto;
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2F%2A || true
+              " fpm
+              stopcap /tmp/req2
+              head -n1 /tmp/req2 | tee /tmp/line2
+              grep -q "GET /%2f%2a " /tmp/line2 && echo "PASS" || { echo "FAIL"; exit 1; }
+
+              # 3) off => preserved mixed case
+              capture /tmp/req3
+              su -s /bin/sh -c "
+                export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=off SAFEXEC_DETACH=auto;
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2f%2A || true
+              " fpm
+              stopcap /tmp/req3
+              head -n1 /tmp/req3 | tee /tmp/line3
+              grep -q "GET /%2f%2A " /tmp/line3 && echo "PASS" || { echo "FAIL"; exit 1; }
+            '
+
+      - name: E2E runtime smoke test (aarch64, musl)
         run: |
           set -euo pipefail
-          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w / alpine:3.21 sh -euxc '
-            apk add --no-cache coreutils wget
-            cp /src/safexec/safexec-aarch64-linux-musl /usr/local/bin/safexec
-            chown root:root /usr/local/bin/safexec
-            chmod 4755 /usr/local/bin/safexec
-            adduser -D -s /bin/sh fpm
-            su -s /bin/sh -c "/usr/local/bin/safexec --help >/dev/null" fpm
-            su -s /bin/sh -c "/usr/local/bin/safexec wget --version >/dev/null" fpm
-          '
+          docker run --rm --platform=linux/arm64 --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v "$PWD":/src -w / alpine:3.21 sh -euxc '
+              apk add --no-cache coreutils wget busybox-extras
+
+              # Install safexec (setuid-root) and the shim (root-owned, not writable)
+              install -D /src/safexec/safexec-aarch64-linux-musl /usr/local/bin/safexec
+              chown root:root /usr/local/bin/safexec
+              chmod 4755 /usr/local/bin/safexec
+
+              install -D /src/safexec/libnpp_norm-aarch64-musl.so /usr/local/lib/npp/libnpp_norm.so
+              chown root:root /usr/local/lib/npp/libnpp_norm.so
+              chmod 0644 /usr/local/lib/npp/libnpp_norm.so
+
+              # Unprivileged user (simulates PHP-FPM worker)
+              adduser -D -s /bin/sh fpm
+
+              # Helper to capture first request-line
+              capture() { ( nc -l -p 8080 > "$1" & echo $! > "$1.pid" ); sleep 0.2; }
+              stopcap() { sleep 0.2; kill "$(cat "$1.pid")" 2>/dev/null || true; }
+
+              # Minimal upper => %2F%2A
+              capture /tmp/req1
+              su -s /bin/sh -c "
+                export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2f%2a || true
+              " fpm
+              stopcap /tmp/req1
+              head -n1 /tmp/req1 | tee /tmp/line1
+              grep -q "GET /%2F%2A " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
+            '
+
+      - name: E2E runtime smoke test (x86_64, glibc)
+        run: |
+          set -euo pipefail
+          docker run --rm --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v "$PWD":/src -w / debian:stable-slim bash -euxo pipefail -c '
+              apt-get update
+              apt-get install -y --no-install-recommends ca-certificates wget netcat-openbsd
+
+              # Install safexec (setuid-root) and the shim (root-owned, not writable)
+              install -D /src/safexec/safexec-x86_64-linux-musl /usr/local/bin/safexec
+              chown root:root /usr/local/bin/safexec
+              chmod 4755 /usr/local/bin/safexec
+
+              install -D /src/safexec/libnpp_norm-x86_64-glibc.so /usr/local/lib/npp/libnpp_norm.so
+              chown root:root /usr/local/lib/npp/libnpp_norm.so
+              chmod 0644 /usr/local/lib/npp/libnpp_norm.so
+
+              # Unprivileged user (simulates PHP-FPM worker)
+              useradd -m -s /bin/bash fpm
+
+              # Helpers to capture the first request-line
+              capture() { ( nc -l 8080 > "$1" & echo $! > "$1.pid" ); sleep 0.3; }
+              stopcap() { sleep 0.3; kill "$(cat "$1.pid")" 2>/dev/null || true; }
+
+              # 1) upper => %2F%2A
+              capture /tmp/req1
+              su - fpm -c "
+                export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2f%2a || true
+              "
+              stopcap /tmp/req1
+              head -n1 /tmp/req1 | tee /tmp/line1
+              grep -q "GET /%2F%2A " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
+
+              # 2) lower => %2f%2a
+              capture /tmp/req2
+              su - fpm -c "
+                export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=lower SAFEXEC_DETACH=auto;
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2F%2A || true
+              "
+              stopcap /tmp/req2
+              head -n1 /tmp/req2 | tee /tmp/line2
+              grep -q "GET /%2f%2a " /tmp/line2 && echo "PASS" || { echo "FAIL"; exit 1; }
+
+              # 3) off => preserved mixed case
+              capture /tmp/req3
+              su - fpm -c "
+                export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=off SAFEXEC_DETACH=auto;
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2f%2A || true
+              "
+              stopcap /tmp/req3
+              head -n1 /tmp/req3 | tee /tmp/line3
+              grep -q "GET /%2f%2A " /tmp/line3 && echo "PASS" || { echo "FAIL"; exit 1; }
+            '
+
+      - name: E2E runtime smoke test (aarch64, glibc)
+        run: |
+          set -euo pipefail
+          docker run --rm --platform=linux/arm64 --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v "$PWD":/src -w / debian:stable-slim bash -euxo pipefail -c '
+              apt-get update
+              apt-get install -y --no-install-recommends ca-certificates wget netcat-openbsd
+
+              # Install safexec (setuid-root) and the shim (root-owned, not writable)
+              install -D /src/safexec/safexec-aarch64-linux-musl /usr/local/bin/safexec
+              chown root:root /usr/local/bin/safexec
+              chmod 4755 /usr/local/bin/safexec
+
+              install -D /src/safexec/libnpp_norm-aarch64-glibc.so /usr/local/lib/npp/libnpp_norm.so
+              chown root:root /usr/local/lib/npp/libnpp_norm.so
+              chmod 0644 /usr/local/lib/npp/libnpp_norm.so
+
+              # Unprivileged user (simulates PHP-FPM worker)
+              useradd -m -s /bin/bash fpm
+
+              # Helpers to capture the first request-line
+              capture() { ( nc -l 8080 > "$1" & echo $! > "$1.pid" ); sleep 0.3; }
+              stopcap() { sleep 0.3; kill "$(cat "$1.pid")" 2>/dev/null || true; }
+
+              # Minimal upper => %2F%2A
+              capture /tmp/req1
+              su - fpm -c "
+                export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2f%2a || true
+              "
+              stopcap /tmp/req1
+              head -n1 /tmp/req1 | tee /tmp/line1
+              grep -q "GET /%2F%2A " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
+            '
+
+      # STAGE INTO BIN
+      - name: Stage artifacts into bin/
+        run: |
+          set -euo pipefail
+          mv safexec/safexec-*-linux-musl safexec/bin/
+          mv safexec/libnpp_norm-*.so safexec/bin/
 
       # Make checksums (per-file + combined)
       - name: Generate checksums
         run: |
           set -euo pipefail
-          cd safexec
+          cd safexec/bin
+          # safexec (static)
           for f in safexec-*-linux-musl; do
             test -x "$f"
             sha256sum "$f" > "$f.sha256"
           done
-          sha256sum safexec-*-linux-musl | sort > SHA256SUMS
+          # shim (shared)
+          for f in libnpp_norm-*.so; do
+            test -f "$f"
+            sha256sum "$f" > "$f.sha256"
+          done
+          sha256sum safexec-*-linux-musl libnpp_norm-*.so | sort > SHA256SUMS
 
       # Create signed SLSA provenance linked to the exact digests of the files above
       - name: Generate SLSA provenance for build artifacts
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
-            safexec/safexec-*-linux-musl
-            safexec/SHA256SUMS
+            safexec/bin/safexec-*-linux-musl
+            safexec/bin/libnpp_norm-*.so
+            safexec/bin/SHA256SUMS
 
       # Commit back to repo
       - name: Commit binaries & checksums back to repo
@@ -140,20 +372,20 @@ jobs:
           set -euo pipefail
 
           # Ensure executable bit for produced binaries
-          chmod 755 safexec/safexec-*-linux-musl || true
+          chmod 755 safexec/bin/safexec-*-linux-musl || true
 
           # Configure Git identity
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           # Add only the binaries and checksum files
-          git add safexec/safexec-*-linux-musl safexec/*.sha256 safexec/SHA256SUMS || true
+          git add safexec/bin/safexec-*-linux-musl safexec/bin/libnpp_norm-*.so safexec/bin/*.sha256 safexec/bin/SHA256SUMS || true
 
           # Commit only if there are staged changes
           if git diff --cached --quiet; then
-            echo "No binary changes to commit."
+            echo "No artifact changes to commit."
             exit 0
           fi
 
-          git commit -m "ci: build safexec (musl) binaries [skip ci]"
+          git commit -m "ci: build safexec + libnpp_norm (glibc/musl)"
           git push origin HEAD:${GITHUB_REF#refs/heads/}
