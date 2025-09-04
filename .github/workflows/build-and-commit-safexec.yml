@@ -16,9 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
+      actions: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -120,6 +123,15 @@ jobs:
           done
           sha256sum safexec-*-linux-musl | sort > SHA256SUMS
 
+      # Create signed SLSA provenance linked to the exact digests of the files above
+      - name: Generate SLSA provenance for build artifacts
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            safexec/safexec-*-linux-musl
+            safexec/SHA256SUMS
+
+      # Commit back to repo
       - name: Commit binaries & checksums back to repo
         if: github.ref_type == 'branch'
         env:
