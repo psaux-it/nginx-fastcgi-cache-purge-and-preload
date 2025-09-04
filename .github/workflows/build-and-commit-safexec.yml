@@ -77,7 +77,7 @@ jobs:
           docker run --rm -v "$PWD":/src -w /src debian:stable-slim bash -euxo pipefail -c '
             apt-get update
             apt-get install -y --no-install-recommends build-essential binutils
-            gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 \
+            gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
                 -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-x86_64-glibc.so \
                 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
             strip --strip-unneeded safexec/libnpp_norm-x86_64-glibc.so
@@ -89,7 +89,7 @@ jobs:
           set -euo pipefail
           docker run --rm -v "$PWD":/src -w /src/safexec alpine:3.21 sh -euxc '
             apk add --no-cache build-base musl-dev
-            gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 \
+            gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
                 -shared libnpp_norm.c -o libnpp_norm-x86_64-musl.so \
                 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
             strip --strip-unneeded libnpp_norm-x86_64-musl.so
@@ -102,7 +102,7 @@ jobs:
           docker run --rm dockcross/linux-arm64 > ./dockcross.arm64
           chmod +x ./dockcross.arm64
           ./dockcross.arm64 bash -euxc '
-            aarch64-unknown-linux-gnu-gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 \
+            aarch64-unknown-linux-gnu-gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
                 -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-aarch64-glibc.so \
                 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
             aarch64-unknown-linux-gnu-strip --strip-unneeded safexec/libnpp_norm-aarch64-glibc.so
@@ -115,7 +115,7 @@ jobs:
           docker run --rm dockcross/linux-arm64-musl > ./dockcross.musl.arm64
           chmod +x ./dockcross.musl.arm64
           ./dockcross.musl.arm64 bash -euxc '
-            aarch64-linux-musl-gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 \
+            aarch64-linux-musl-gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
                 -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-aarch64-musl.so \
                 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
             aarch64-linux-musl-strip --strip-unneeded safexec/libnpp_norm-aarch64-musl.so
@@ -152,7 +152,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v "$PWD":/src -w / alpine:3.21 sh -euxc '
-              apk add --no-cache coreutils wget busybox-extras
+              apk add --no-cache coreutils wget busybox-extras perl socat openssl
 
               # Install safexec (setuid-root) and the shim (root-owned, not writable)
               install -D /src/safexec/safexec-x86_64-linux-musl /usr/local/bin/safexec
@@ -166,54 +166,71 @@ jobs:
               # Unprivileged user (simulates PHP-FPM worker)
               adduser -D -s /bin/sh fpm
 
-              # Helper to capture first request-line
-              capture() {
-                local out="$1"
-                ( nc -l -p 8080 > "$out" & echo $! > "$out.pid" )
-                sleep 0.2
+              # Helpers
+              chmod +x /src/safexec/tests/oneshot.pl
+              openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+                -subj "/CN=127.0.0.1" \
+                -addext "subjectAltName=IP:127.0.0.1" \
+                -keyout /tmp/key.pem -out /tmp/cert.pem >/dev/null 2>&1
+
+              start_https() {
+                socat -T1 OPENSSL-LISTEN:8080,reuseaddr,cert=/tmp/cert.pem,key=/tmp/key.pem,verify=0 \
+                  SYSTEM:/src/safexec/tests/oneshot.pl >/dev/null 2>&1 &
+                echo $! > /tmp/req1.pid
+                sleep 0.5
               }
-              stopcap() {
-                local out="$1"
-                sleep 0.2
-                kill "$(cat "$out.pid")" 2>/dev/null || true
+
+              stop_https() {
+                test -f /tmp/req1.pid && kill -9 "$(cat /tmp/req1.pid)" 2>/dev/null || true
+                sleep 0.5
               }
 
               # 1) upper => %2F%2A
-              capture /tmp/req1
+              start_https
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 || true
+                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
               " fpm
-              stopcap /tmp/req1
+              stop_https
               head -n1 /tmp/req1 | tee /tmp/line1
               grep -q "GET /%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
 
               # 2) lower => %2f%2a
-              capture /tmp/req2
+              start_https
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=lower SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 || true
+                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 >/dev/null || true
               " fpm
-              stopcap /tmp/req2
-              head -n1 /tmp/req2 | tee /tmp/line2
+              stop_https
+              head -n1 /tmp/req1 | tee /tmp/line2
               grep -q "GET /%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 " /tmp/line2 && echo "PASS" || { echo "FAIL"; exit 1; }
 
               # 3) off => preserved mixed case
-              capture /tmp/req3
+              start_https
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=off SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 || true
+                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
               " fpm
-              stopcap /tmp/req3
-              head -n1 /tmp/req3 | tee /tmp/line3
+              stop_https
+              head -n1 /tmp/req1 | tee /tmp/line3
               grep -q "GET /%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 " /tmp/line3 && echo "PASS" || { echo "FAIL"; exit 1; }
+
+              # 3.1) off => preserved mixed case
+              start_https
+              su -s /bin/sh -c "
+                export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=off SAFEXEC_DETACH=auto;
+                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 >/dev/null || true
+              " fpm
+              stop_https
+              head -n1 /tmp/req1 | tee /tmp/line4
+              grep -q "GET /%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 " /tmp/line4 && echo "PASS" || { echo "FAIL"; exit 1; }
             '
 
       - name: E2E runtime smoke test (aarch64, musl)
         run: |
           set -euo pipefail
           docker run --rm --platform=linux/arm64 --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v "$PWD":/src -w / alpine:3.21 sh -euxc '
-              apk add --no-cache coreutils wget busybox-extras
+              apk add --no-cache coreutils wget busybox-extras perl socat openssl
 
               # Install safexec (setuid-root) and the shim (root-owned, not writable)
               install -D /src/safexec/safexec-aarch64-linux-musl /usr/local/bin/safexec
@@ -227,17 +244,32 @@ jobs:
               # Unprivileged user (simulates PHP-FPM worker)
               adduser -D -s /bin/sh fpm
 
-              # Helper to capture first request-line
-              capture() { ( nc -l -p 8080 > "$1" & echo $! > "$1.pid" ); sleep 0.2; }
-              stopcap() { sleep 0.2; kill "$(cat "$1.pid")" 2>/dev/null || true; }
+              # Helpers
+              chmod +x /src/safexec/tests/oneshot.pl
+              openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+                -subj "/CN=127.0.0.1" \
+                -addext "subjectAltName=IP:127.0.0.1" \
+                -keyout /tmp/key.pem -out /tmp/cert.pem >/dev/null 2>&1
+
+              start_https() {
+                socat -T1 OPENSSL-LISTEN:8080,reuseaddr,cert=/tmp/cert.pem,key=/tmp/key.pem,verify=0 \
+                  SYSTEM:/src/safexec/tests/oneshot.pl >/dev/null 2>&1 &
+                echo $! > /tmp/req1.pid
+                sleep 0.5
+              }
+
+              stop_https() {
+                test -f /tmp/req1.pid && kill -9 "$(cat /tmp/req1.pid)" 2>/dev/null || true
+                sleep 0.5
+              }
 
               # Minimal upper => %2F%2A
-              capture /tmp/req1
+              start_https
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 || true
+                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
               " fpm
-              stopcap /tmp/req1
+              stop_https
               head -n1 /tmp/req1 | tee /tmp/line1
               grep -q "GET /%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
             '
@@ -247,7 +279,7 @@ jobs:
           set -euo pipefail
           docker run --rm --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v "$PWD":/src -w / debian:stable-slim bash -euxo pipefail -c '
               apt-get update
-              apt-get install -y --no-install-recommends ca-certificates wget netcat-openbsd
+              apt-get install -y --no-install-recommends ca-certificates wget netcat-openbsd perl socat openssl
 
               # Install safexec (setuid-root) and the shim (root-owned, not writable)
               install -D /src/safexec/safexec-x86_64-linux-musl /usr/local/bin/safexec
@@ -261,39 +293,64 @@ jobs:
               # Unprivileged user (simulates PHP-FPM worker)
               useradd -m -s /bin/bash fpm
 
-              # Helpers to capture the first request-line
-              capture() { ( nc -l 8080 > "$1" & echo $! > "$1.pid" ); sleep 0.3; }
-              stopcap() { sleep 0.3; kill "$(cat "$1.pid")" 2>/dev/null || true; }
+              # Helpers
+              chmod +x /src/safexec/tests/oneshot.pl
+              openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+                -subj "/CN=127.0.0.1" \
+                -addext "subjectAltName=IP:127.0.0.1" \
+                -keyout /tmp/key.pem -out /tmp/cert.pem >/dev/null 2>&1
+
+              start_https() {
+                socat -T1 OPENSSL-LISTEN:8080,reuseaddr,cert=/tmp/cert.pem,key=/tmp/key.pem,verify=0 \
+                  SYSTEM:/src/safexec/tests/oneshot.pl >/dev/null 2>&1 &
+                echo $! > /tmp/req1.pid
+                sleep 0.5
+              }
+
+              stop_https() {
+                test -f /tmp/req1.pid && kill -9 "$(cat /tmp/req1.pid)" 2>/dev/null || true
+                sleep 0.5
+              }
 
               # 1) upper => %2F%2A
-              capture /tmp/req1
+              start_https
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 || true
+                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
               "
-              stopcap /tmp/req1
+              stop_https
               head -n1 /tmp/req1 | tee /tmp/line1
               grep -q "GET /%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
 
               # 2) lower => %2f%2a
-              capture /tmp/req2
+              start_https
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=lower SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 || true
+                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 >/dev/null || true
               "
-              stopcap /tmp/req2
-              head -n1 /tmp/req2 | tee /tmp/line2
+              stop_https
+              head -n1 /tmp/req1 | tee /tmp/line2
               grep -q "GET /%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 " /tmp/line2 && echo "PASS" || { echo "FAIL"; exit 1; }
 
               # 3) off => preserved mixed case
-              capture /tmp/req3
+              start_https
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=off SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 || true
+                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 >/dev/null || true
               "
-              stopcap /tmp/req3
-              head -n1 /tmp/req3 | tee /tmp/line3
+              stop_https
+              head -n1 /tmp/req1 | tee /tmp/line3
               grep -q "GET /%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 " /tmp/line3 && echo "PASS" || { echo "FAIL"; exit 1; }
+
+              # 3.1) off => preserved mixed case
+              start_https
+              su - fpm -c "
+                export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=off SAFEXEC_DETACH=auto;
+                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
+              "
+              stop_https
+              head -n1 /tmp/req1 | tee /tmp/line4
+              grep -q "GET /%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 " /tmp/line4 && echo "PASS" || { echo "FAIL"; exit 1; }
             '
 
       - name: E2E runtime smoke test (aarch64, glibc)
@@ -301,7 +358,7 @@ jobs:
           set -euo pipefail
           docker run --rm --platform=linux/arm64 --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v "$PWD":/src -w / debian:stable-slim bash -euxo pipefail -c '
               apt-get update
-              apt-get install -y --no-install-recommends ca-certificates wget netcat-openbsd
+              apt-get install -y --no-install-recommends ca-certificates wget netcat-openbsd perl socat openssl
 
               # Install safexec (setuid-root) and the shim (root-owned, not writable)
               install -D /src/safexec/safexec-aarch64-linux-musl /usr/local/bin/safexec
@@ -315,17 +372,32 @@ jobs:
               # Unprivileged user (simulates PHP-FPM worker)
               useradd -m -s /bin/bash fpm
 
-              # Helpers to capture the first request-line
-              capture() { ( nc -l 8080 > "$1" & echo $! > "$1.pid" ); sleep 0.3; }
-              stopcap() { sleep 0.3; kill "$(cat "$1.pid")" 2>/dev/null || true; }
+              # Helpers
+              chmod +x /src/safexec/tests/oneshot.pl
+              openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+                -subj "/CN=127.0.0.1" \
+                -addext "subjectAltName=IP:127.0.0.1" \
+                -keyout /tmp/key.pem -out /tmp/cert.pem >/dev/null 2>&1
+
+              start_https() {
+                socat -T1 OPENSSL-LISTEN:8080,reuseaddr,cert=/tmp/cert.pem,key=/tmp/key.pem,verify=0 \
+                  SYSTEM:/src/safexec/tests/oneshot.pl >/dev/null 2>&1 &
+                echo $! > /tmp/req1.pid
+                sleep 0.5
+              }
+
+              stop_https() {
+                test -f /tmp/req1.pid && kill -9 "$(cat /tmp/req1.pid)" 2>/dev/null || true
+                sleep 0.5
+              }
 
               # Minimal upper => %2F%2A
-              capture /tmp/req1
+              start_https
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 || true
+                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
               "
-              stopcap /tmp/req1
+              stop_https
               head -n1 /tmp/req1 | tee /tmp/line1
               grep -q "GET /%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
             '
