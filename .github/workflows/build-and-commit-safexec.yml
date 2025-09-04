@@ -192,21 +192,21 @@ jobs:
               capture /tmp/req2
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=lower SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2F%2A || true
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 || true
               " fpm
               stopcap /tmp/req2
               head -n1 /tmp/req2 | tee /tmp/line2
-              grep -q "GET /%2f%2a " /tmp/line2 && echo "PASS" || { echo "FAIL"; exit 1; }
+              grep -q "GET /%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 " /tmp/line2 && echo "PASS" || { echo "FAIL"; exit 1; }
 
               # 3) off => preserved mixed case
               capture /tmp/req3
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=off SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2f%2A || true
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 || true
               " fpm
               stopcap /tmp/req3
               head -n1 /tmp/req3 | tee /tmp/line3
-              grep -q "GET /%2f%2A " /tmp/line3 && echo "PASS" || { echo "FAIL"; exit 1; }
+              grep -q "GET /%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 " /tmp/line3 && echo "PASS" || { echo "FAIL"; exit 1; }
             '
 
       - name: E2E runtime smoke test (aarch64, musl)
@@ -235,11 +235,11 @@ jobs:
               capture /tmp/req1
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2f%2a || true
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 || true
               " fpm
               stopcap /tmp/req1
               head -n1 /tmp/req1 | tee /tmp/line1
-              grep -q "GET /%2F%2A " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
+              grep -q "GET /%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
             '
 
       - name: E2E runtime smoke test (x86_64, glibc)
@@ -269,31 +269,31 @@ jobs:
               capture /tmp/req1
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2f%2a || true
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 || true
               "
               stopcap /tmp/req1
               head -n1 /tmp/req1 | tee /tmp/line1
-              grep -q "GET /%2F%2A " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
+              grep -q "GET /%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
 
               # 2) lower => %2f%2a
               capture /tmp/req2
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=lower SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2F%2A || true
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 || true
               "
               stopcap /tmp/req2
               head -n1 /tmp/req2 | tee /tmp/line2
-              grep -q "GET /%2f%2a " /tmp/line2 && echo "PASS" || { echo "FAIL"; exit 1; }
+              grep -q "GET /%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 " /tmp/line2 && echo "PASS" || { echo "FAIL"; exit 1; }
 
               # 3) off => preserved mixed case
               capture /tmp/req3
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=off SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2f%2A || true
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 || true
               "
               stopcap /tmp/req3
               head -n1 /tmp/req3 | tee /tmp/line3
-              grep -q "GET /%2f%2A " /tmp/line3 && echo "PASS" || { echo "FAIL"; exit 1; }
+              grep -q "GET /%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 " /tmp/line3 && echo "PASS" || { echo "FAIL"; exit 1; }
             '
 
       - name: E2E runtime smoke test (aarch64, glibc)
@@ -323,11 +323,11 @@ jobs:
               capture /tmp/req1
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2f%2a || true
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 || true
               "
               stopcap /tmp/req1
               head -n1 /tmp/req1 | tee /tmp/line1
-              grep -q "GET /%2F%2A " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
+              grep -q "GET /%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
             '
 
       # STAGE INTO BIN
