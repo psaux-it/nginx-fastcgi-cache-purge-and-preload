@@ -119,6 +119,11 @@
 #define likely(x)   __builtin_expect(!!(x),1)
 #define unlikely(x) __builtin_expect(!!(x),0)
 
+/* ===== we’ll remember from the original URL ======= */
+#ifndef PCT_TRIPLET_CAP
+#define PCT_TRIPLET_CAP 8192
+#endif
+
 /* ======= Real function pointers (guarded per toggle) ======= */
 #if PCT_WANT_SEND
 static ssize_t (*real_send)(int, const void*, size_t, int) = NULL;
@@ -205,6 +210,119 @@ static inline void resolve_tls_if_needed(void) {
 }
 #endif
 
+/* ===== Preserve-original-case =====
+ * We capture the percent-triplet hex case from the *first* http(s) URL in argv,
+ * and later "repaint" the outgoing request-target when PCTNORM_CASE=off.
+ */
+static signed char g_trip_hex[PCT_TRIPLET_CAP][2];
+static size_t      g_trip_count = 0;
+static pthread_once_t argv_once = PTHREAD_ONCE_INIT;
+
+/* classify hex letter case; return +1 (A-F), -1 (a-f), 0 (digit/non-hex) */
+static inline signed char hex_letter_case(unsigned char c) {
+    if (c >= 'A' && c <= 'F') return +1;
+    if (c >= 'a' && c <= 'f') return -1;
+    return 0; /* includes digits */
+}
+
+/* scan a C-string segment for %xx and record the case of hex letters */
+static void collect_triplet_cases_from_segment(const char *s) {
+    if (!s) return;
+    for (const unsigned char *p = (const unsigned char*)s; p[0] && p[1] && p[2]; ++p) {
+        if (p[0] == '%' && isxdigit(p[1]) && isxdigit(p[2])) {
+            if (g_trip_count < PCT_TRIPLET_CAP) {
+                g_trip_hex[g_trip_count][0] = hex_letter_case(p[1]);
+                g_trip_hex[g_trip_count][1] = hex_letter_case(p[2]);
+                g_trip_count++;
+            } else {
+                return; /* cap reached */
+            }
+            p += 2;
+        }
+    }
+}
+
+/* crude but safe parse of first http(s) URL in /proc/self/cmdline and capture path+query */
+static void init_argv_triplet_map(void) {
+    int fd = open("/proc/self/cmdline", O_RDONLY);
+    if (fd < 0) return;
+    char buf[8192];
+    ssize_t n = read(fd, buf, sizeof buf - 1);
+    close(fd);
+    if (n <= 0) return;
+    buf[n] = '\0';
+
+    /* /proc/self/cmdline is NUL-separated argv */
+    char *p = buf;
+    while (p < buf + n) {
+        size_t len = strlen(p);
+        if (len == 0) break;
+
+        if (!strncasecmp(p, "http://", 7) || !strncasecmp(p, "https://", 8)) {
+            const char *u = p;
+            const char *path = strstr(u, "://");
+            if (path) {
+                path += 3; /* skip "://" */
+                /* skip authority host[:port] */
+                while (*path && *path != '/' && *path != '?' && *path != '#') path++;
+                /* capture path + query (fragment not transmitted) */
+                if (*path == '/' || *path == '?') {
+                    /* terminate at '#' or NUL */
+                    const char *end = path;
+                    while (*end && *end != '#') end++;
+                    char *tmp = (char*)malloc((size_t)(end - path + 1));
+                    if (tmp) {
+                        memcpy(tmp, path, (size_t)(end - path));
+                        tmp[end - path] = '\0';
+                        collect_triplet_cases_from_segment(tmp);
+                        free(tmp);
+                    }
+                }
+            }
+            break; /* only first URL */
+        }
+
+        p += len + 1;
+    }
+}
+
+/* ensure one-time argv capture */
+static inline void ensure_triplet_map(void) {
+    (void)pthread_once(&argv_once, init_argv_triplet_map);
+}
+
+/* repaint %xx in request-target (first line) from captured map */
+static void repaint_triplets_from_url(unsigned char *line, size_t line_len) {
+    if (g_trip_count == 0) return;
+
+    const unsigned char *sp1 = memchr(line, ' ', line_len);
+    if (!sp1) return;
+    size_t rem = line_len - (size_t)(sp1 - line) - 1;
+    const unsigned char *sp2 = memchr(sp1 + 1, ' ', rem);
+    if (!sp2) return;
+
+    unsigned char *q = (unsigned char *)(sp1 + 1);
+    unsigned char *end = (unsigned char *)sp2;
+    size_t idx = 0;
+
+    while (q + 2 < end) {
+        if (*q == '%' && isxdigit(*(q+1)) && isxdigit(*(q+2))) {
+            if (idx >= g_trip_count) return; /* nothing more to paint */
+            /* apply recorded case only to letters; digits left unchanged */
+            signed char c1 = g_trip_hex[idx][0];
+            signed char c2 = g_trip_hex[idx][1];
+            if (c1 > 0)      *(q+1) = (unsigned char)toupper(*(q+1));
+            else if (c1 < 0) *(q+1) = (unsigned char)tolower(*(q+1));
+            if (c2 > 0)      *(q+2) = (unsigned char)toupper(*(q+2));
+            else if (c2 < 0) *(q+2) = (unsigned char)tolower(*(q+2));
+            idx++;
+            q += 3;
+        } else {
+            q++;
+        }
+    }
+}
+
 /* ======= Small helpers (ctype-safe) ======= */
 static inline int is_hex_uc(unsigned char c) { return isxdigit((int)c); }
 static inline unsigned char to_uc(unsigned char c) { return (unsigned char)toupper((int)c); }
@@ -281,8 +399,7 @@ static inline void case_triplets_in_target(unsigned char *line, size_t line_len,
 static int maybe_normalize_first_line_copy(const unsigned char *in, size_t n,
                                            unsigned char **outbuf, size_t *outlen)
 {
-    ensure_config();
-    if (pctnorm_case == 0) return -1;
+     ensure_config();
 
     if (unlikely(n < 4)) return -1;
     if (!begins_with_http_method(in, n)) return -1;
@@ -290,11 +407,31 @@ static int maybe_normalize_first_line_copy(const unsigned char *in, size_t n,
     size_t line_end = find_reqline_end(in, n);
     if (line_end == 0) return -1;
 
+    /* FAST EXIT: no '%' in request-target -> never touch */
     if (!target_has_percent(in, line_end)) return -1;
 
+    /* At this point we know there are percent triplets in the first line. */
+    if (pctnorm_case == 0) {
+        /* Only now do the (lazy) argv scan, and only once. */
+        ensure_triplet_map();
+
+        /* If we have nothing captured, repainting can’t help; do nothing. */
+        if (g_trip_count == 0) return -1;
+
+        /* Make a copy and repaint from recorded cases. */
+        unsigned char *tmp = (unsigned char *)malloc(n);
+        if (unlikely(!tmp)) return -1;
+        memcpy(tmp, in, n);
+        repaint_triplets_from_url(tmp, line_end);
+
+        *outbuf = tmp;
+        *outlen = n;
+        return 0;
+    }
+
+    /* upper/lower modes: keep existing behavior */
     unsigned char *tmp = (unsigned char *)malloc(n);
     if (unlikely(!tmp)) return -1;
-
     memcpy(tmp, in, n);
     case_triplets_in_target(tmp, line_end, pctnorm_case);
 
