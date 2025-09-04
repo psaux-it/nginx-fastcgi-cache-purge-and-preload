@@ -182,11 +182,11 @@ jobs:
               capture /tmp/req1
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%2f%2a || true
+                /usr/local/bin/safexec wget -qO- http://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 || true
               " fpm
               stopcap /tmp/req1
               head -n1 /tmp/req1 | tee /tmp/line1
-              grep -q "GET /%2F%2A " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
+              grep -q "GET /%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 " /tmp/line1 && echo "PASS" || { echo "FAIL"; exit 1; }
 
               # 2) lower => %2f%2a
               capture /tmp/req2
