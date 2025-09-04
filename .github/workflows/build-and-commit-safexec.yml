@@ -77,7 +77,7 @@ jobs:
           docker run --rm -v "$PWD":/src -w /src debian:stable-slim bash -euxo pipefail -c '
             apt-get update
             apt-get install -y --no-install-recommends build-essential binutils
-            gcc -O2 -pipe -fPIC -D_GNU_SOURCE -Wall -Wextra -Wformat=2 \
+            gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 \
                 -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-x86_64-glibc.so \
                 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
             strip --strip-unneeded safexec/libnpp_norm-x86_64-glibc.so
@@ -89,7 +89,7 @@ jobs:
           set -euo pipefail
           docker run --rm -v "$PWD":/src -w /src/safexec alpine:3.21 sh -euxc '
             apk add --no-cache build-base musl-dev
-            gcc -O2 -pipe -fPIC -D_GNU_SOURCE -Wall -Wextra -Wformat=2 \
+            gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 \
                 -shared libnpp_norm.c -o libnpp_norm-x86_64-musl.so \
                 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
             strip --strip-unneeded libnpp_norm-x86_64-musl.so
@@ -102,10 +102,10 @@ jobs:
           docker run --rm dockcross/linux-arm64 > ./dockcross.arm64
           chmod +x ./dockcross.arm64
           ./dockcross.arm64 bash -euxc '
-            ${CC:-aarch64-linux-gnu-gcc} -O2 -pipe -fPIC -D_GNU_SOURCE -Wall -Wextra -Wformat=2 \
+            aarch64-unknown-linux-gnu-gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 \
                 -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-aarch64-glibc.so \
                 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
-            ${STRIP:-aarch64-linux-gnu-strip} --strip-unneeded safexec/libnpp_norm-aarch64-glibc.so
+            aarch64-unknown-linux-gnu-strip --strip-unneeded safexec/libnpp_norm-aarch64-glibc.so
           '
 
       # aarch64 (musl) — build in dockcross musl toolchain
@@ -115,7 +115,7 @@ jobs:
           docker run --rm dockcross/linux-arm64-musl > ./dockcross.musl.arm64
           chmod +x ./dockcross.musl.arm64
           ./dockcross.musl.arm64 bash -euxc '
-            aarch64-linux-musl-gcc -O2 -pipe -fPIC -D_GNU_SOURCE -Wall -Wextra -Wformat=2 \
+            aarch64-linux-musl-gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 \
                 -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-aarch64-musl.so \
                 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
             aarch64-linux-musl-strip --strip-unneeded safexec/libnpp_norm-aarch64-musl.so
