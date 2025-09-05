@@ -32,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y file coreutils binutils
+          sudo apt-get install -y file coreutils binutils sudo
           mkdir -p safexec/bin
 
       ############################################
@@ -461,6 +461,28 @@ jobs:
             safexec/bin/*.sha256
             safexec/bin/SHA256SUMS
 
+      - name: Fix workspace perms & exclude build dirs
+        run: |
+          set -euo pipefail
+          # Hand all files back to the runner (some were created by root in containers)
+          sudo chown -R "$(id -u)":"$(id -g)" .
+
+          # Remove container-created packaging worktrees if present
+          sudo rm -rf pkg-safexec-*-single || true
+
+          # Keep build outputs out of Git so they don't get stashed/committed
+          mkdir -p .git/info
+          for p in safexec/bin/ safexec/deb/ pkg-safexec-*/; do
+            grep -qxF "$p" .git/info/exclude 2>/dev/null || echo "$p" >> .git/info/exclude
+          done
+
+      - name: Final clean of packaging worktrees (authoritative)
+        run: |
+          set -euo pipefail
+          # Ensure no root-owned worktrees remain before git checkout
+          sudo chown -R "$(id -u)":"$(id -g)" pkg-safexec-*-single 2>/dev/null || true
+          sudo rm -rf pkg-safexec-*-single || true
+
       # Commit back to repo
       - name: Commit binaries & checksums back to repo
         if: github.ref_type == 'branch'
@@ -574,7 +596,12 @@ jobs:
       - name: Build .deb (amd64)
         run: |
           set -euo pipefail
-          bash safexec/helpers/deb.sh --arch amd64 --version "${{ steps.ver.outputs.deb }}"
+          docker run --rm -v "$PWD":/src -w /src debian:bullseye-slim bash -euxo pipefail -c '
+            apt-get update
+            apt-get install -y --no-install-recommends devscripts debhelper dpkg-dev lintian build-essential sudo fakeroot
+            chmod +x safexec/helpers/deb.sh
+            bash safexec/helpers/deb.sh --arch amd64 --version '"${{ steps.ver.outputs.deb }}"'
+          '
 
       - name: Enable binfmt for arm64
         run: |
@@ -584,12 +611,17 @@ jobs:
       - name: Build .deb (arm64)
         run: |
           set -euo pipefail
-          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src debian:stable-slim bash -euxo pipefail -c '
+          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src debian:bullseye-slim bash -euxo pipefail -c '
             apt-get update
             apt-get install -y --no-install-recommends devscripts debhelper dpkg-dev lintian build-essential sudo fakeroot
             chmod +x safexec/helpers/deb.sh
             bash safexec/helpers/deb.sh --arch arm64 --version '"${{ steps.ver.outputs.deb }}"'
           '
+
+      - name: Fix ownership of deb build outputs
+        run: |
+          set -euo pipefail
+          sudo chown -R "$(id -u)":"$(id -g)" .
 
       - name: Collect .debs into safexec/deb/
         run: |
@@ -600,6 +632,11 @@ jobs:
           cd safexec/deb
           ls -1 *.deb
           sha256sum *.deb | sort > SHA256SUMS
+
+      - name: Clean packaging worktrees
+        run: |
+          set -euo pipefail
+          sudo rm -rf pkg-safexec-*-single || true
 
       - name: Generate SLSA provenance (deb packages)
         uses: actions/attest-build-provenance@v3
@@ -616,6 +653,28 @@ jobs:
             safexec/deb/*.deb
             safexec/deb/SHA256SUMS
           if-no-files-found: error
+
+      - name: Fix workspace perms & exclude build dirs
+        run: |
+          set -euo pipefail
+          # Hand all files back to the runner (some were created by root in containers)
+          sudo chown -R "$(id -u)":"$(id -g)" .
+
+          # Remove container-created packaging worktrees if present
+          sudo rm -rf pkg-safexec-*-single || true
+
+          # Keep build outputs out of Git so they don't get stashed/committed
+          mkdir -p .git/info
+          for p in safexec/bin/ safexec/deb/ pkg-safexec-*/; do
+            grep -qxF "$p" .git/info/exclude 2>/dev/null || echo "$p" >> .git/info/exclude
+          done
+
+      - name: Final clean of packaging worktrees (authoritative)
+        run: |
+          set -euo pipefail
+          # Ensure no root-owned worktrees remain before git checkout
+          sudo chown -R "$(id -u)":"$(id -g)" pkg-safexec-*-single 2>/dev/null || true
+          sudo rm -rf pkg-safexec-*-single || true
 
       - name: Commit .deb packages back to repo
         if: github.ref_type == 'branch'
