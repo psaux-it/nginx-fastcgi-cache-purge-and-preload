@@ -157,26 +157,27 @@ EOF
 cat > debian/rules <<'MAKE'
 #!/usr/bin/make -f
 export DH_VERBOSE=1
+.RECIPEPREFIX := >
 
 SAFEEXEC_BIN := #SAFEEXEC_BIN#
 SHIM_GLIBC   := #SHIM_GLIBC#
 TRIPLET_GLIBC := #TRIPLET_GLIBC#
 
 %:
-        dh $@
+> dh $@
 
 override_dh_auto_build:
-        # nothing to build (binary-only packaging)
+> : # nothing to build (binary-only packaging)
 
 override_dh_auto_install:
-        set -e; \
-        install -m 0755 -D "$(SAFEEXEC_BIN)" debian/safexec/usr/bin/safexec; \
-        install -m 0644 -D "$(SHIM_GLIBC)" "debian/safexec/usr/lib/$(TRIPLET_GLIBC)/npp/libnpp_norm.so"; \
-        install -d -m 0755 debian/safexec/usr/lib/npp
+> set -e; \
+> install -m 0755 -D "$(SAFEEXEC_BIN)" debian/safexec/usr/bin/safexec; \
+> install -m 0644 -D "$(SHIM_GLIBC)" "debian/safexec/usr/lib/$(TRIPLET_GLIBC)/npp/libnpp_norm.so"; \
+> install -d -m 0755 debian/safexec/usr/lib/npp
 
 override_dh_fixperms:
-        dh_fixperms
-        # SUID handled via dpkg-statoverride in postinst
+> dh_fixperms
+> # SUID handled via dpkg-statoverride in postinst
 MAKE
 sed -i "s|#SAFEEXEC_BIN#|$SAFEEXEC_BIN|g" debian/rules
 sed -i "s|#SHIM_GLIBC#|$SHIM_GLIBC|g"   debian/rules
@@ -299,7 +300,7 @@ EOF
 # deps
 say "Installing build deps (if needed)…"
 sudo apt-get update -y >/dev/null 2>&1 || true
-sudo apt-get install -y debhelper devscripts dpkg-dev lintian >/dev/null
+sudo apt-get install -y debhelper devscripts dpkg-dev lintian debhelper-compat fakeroot build-essential >/dev/null
 ok "Build deps present"
 
 say "Building .deb…"
