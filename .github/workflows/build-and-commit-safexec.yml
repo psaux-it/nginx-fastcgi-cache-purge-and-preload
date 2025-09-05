@@ -72,11 +72,11 @@ jobs:
       # build- libnpp_norm.so (LD_PRELOAD shim) — glibc + musl for x64 + arm64
       ############################################################
 
-      # x86_64 (glibc) — build in Debian
+      # x86_64 (glibc) — build in Debian (bullseye) older glibc (≥2.31)
       - name: Build libnpp_norm (x86_64, glibc)
         run: |
           set -euo pipefail
-          docker run --rm -v "$PWD":/src -w /src debian:stable-slim bash -euxo pipefail -c '
+          docker run --rm -v "$PWD":/src -w /src debian:bullseye-slim bash -euxo pipefail -c '
             apt-get update
             apt-get install -y --no-install-recommends build-essential binutils
             gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
@@ -96,18 +96,23 @@ jobs:
                 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
             strip --strip-unneeded libnpp_norm-x86_64-musl.so
           '
+      # Enable qemu/binfmt
+      - name: Enable binfmt for arm64 (early)
+        run: |
+          set -euo pipefail
+          docker run --privileged --rm tonistiigi/binfmt --install arm64
 
-      # aarch64 (glibc) — build in dockcross glibc toolchain
+      # aarch64 (glibc) — build in Ubuntu focal (arm64) older glibc (≥2.31)
       - name: Build libnpp_norm (aarch64, glibc)
         run: |
           set -euo pipefail
-          docker run --rm dockcross/linux-arm64 > ./dockcross.arm64
-          chmod +x ./dockcross.arm64
-          ./dockcross.arm64 bash -euxc '
-            aarch64-unknown-linux-gnu-gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
-                -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-aarch64-glibc.so \
-                -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
-            aarch64-unknown-linux-gnu-strip --strip-unneeded safexec/libnpp_norm-aarch64-glibc.so
+          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src ubuntu:20.04 bash -euxo pipefail -c '
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential binutils
+            gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
+              -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-aarch64-glibc.so \
+              -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
+            strip --strip-unneeded safexec/libnpp_norm-aarch64-glibc.so
           '
 
       # aarch64 (musl) — build in dockcross musl toolchain
@@ -505,7 +510,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            devscripts debhelper dpkg-dev lintian build-essential fakeroot
+            devscripts debhelper dpkg-dev lintian build-essential fakeroot sudo debhelper-compat
 
       - name: Resolve version from safexec -v
         id: ver
@@ -554,7 +559,7 @@ jobs:
           set -euo pipefail
           docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src debian:stable-slim bash -euxo pipefail -c '
             apt-get update
-            apt-get install -y --no-install-recommends devscripts debhelper dpkg-dev lintian build-essential fakeroot
+            apt-get install -y --no-install-recommends devscripts debhelper dpkg-dev lintian build-essential sudo fakeroot
             chmod +x safexec/helpers/deb.sh
             bash safexec/helpers/deb.sh --arch arm64 --version '"${{ steps.ver.outputs.deb }}"'
           '
