@@ -21,6 +21,10 @@ ok()    { printf '%s✓%s  %s\n' "$c_grn" "$c_rst" "$*"; }
 warn()  { printf '%s!%s  %s\n' "$c_ylw" "$c_rst" "$*"; }
 die()   { printf '%s✗ ERROR:%s %s\n' "$c_red" "$c_rst" "$*" >&2; exit 1; }
 
+# policy knobs
+SUITE="${SUITE:-unstable}"
+STDVER="${STDVER:-4.6.2}"
+
 # ---------- parse args ----------
 ARCH=""; VERSION=""
 while [[ $# -gt 0 ]]; do
@@ -116,7 +120,7 @@ Section: utils
 Priority: optional
 Maintainer: $MAINT
 Build-Depends: debhelper-compat (= 13)
-Standards-Version: 4.7.0
+Standards-Version: ${STDVER}
 Homepage: $HOMEPAGE
 Rules-Requires-Root: no
 
@@ -141,7 +145,7 @@ EOF
 # changelog
 DATE_RFC2822="$(LC_ALL=C date -R)"
 cat > debian/changelog <<EOF
-safexec (${VERSION}) unstable; urgency=medium
+safexec (${VERSION}) ${SUITE}; urgency=medium
 
   * Binary-only release for Debian/Ubuntu (glibc shim only).
     - Installs safexec to /usr/bin/safexec (static musl).
@@ -175,9 +179,8 @@ override_dh_auto_install:
 > install -m 0644 -D "$(SHIM_GLIBC)" "debian/safexec/usr/lib/$(TRIPLET_GLIBC)/npp/libnpp_norm.so"; \
 > install -d -m 0755 debian/safexec/usr/lib/npp
 
-override_dh_fixperms:
-> dh_fixperms
-> # SUID handled via dpkg-statoverride in postinst
+override_dh_missing:
+> dh_missing --fail-missing
 MAKE
 sed -i "s|#SAFEEXEC_BIN#|$SAFEEXEC_BIN|g" debian/rules
 sed -i "s|#SHIM_GLIBC#|$SHIM_GLIBC|g"   debian/rules
@@ -225,12 +228,12 @@ EOF
 sed -i "s|#TRIPLET_GLIBC#|$CPU_TRIPLET_GLIBC|g" debian/safexec.postinst
 chmod +x debian/safexec.postinst
 
-# prerm: tidy statoverride
-cat > debian/safexec.prerm <<'EOF'
+# postrm: tidy statoverride on remove
+cat > debian/safexec.postrm <<'EOF'
 #!/bin/sh
 set -e
 case "$1" in
-  remove|deconfigure)
+  remove)
     if dpkg-statoverride --list /usr/bin/safexec >/dev/null 2>&1; then
       dpkg-statoverride --remove /usr/bin/safexec || true
     fi
@@ -239,7 +242,7 @@ esac
 #DEBHELPER#
 exit 0
 EOF
-chmod +x debian/safexec.prerm
+chmod +x debian/safexec.postrm
 
 # manpage + list
 mkdir -p debian/man
