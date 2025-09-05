@@ -40,7 +40,7 @@ jobs:
       ############################################
 
       # Build static x86_64 (musl) with Alpine
-      - name: Build x86_64 static (musl)
+      - name: Build safexec (x86_64 static musl)
         run: |
           set -euo pipefail
           docker run --rm -v "$PWD":/src -w /src/safexec alpine:3.21 sh -euxc '
@@ -51,7 +51,7 @@ jobs:
           '
 
       # Build static aarch64 (musl) with dockcross
-      - name: Build aarch64 static (musl)
+      - name: Build safexec (aarch64 static musl)
         run: |
           set -euo pipefail
           # Generate dockcross wrapper for the musl ARM64 toolchain
@@ -73,7 +73,7 @@ jobs:
       ############################################################
 
       # x86_64 (glibc) — build in Debian (bullseye) older glibc (≥2.31)
-      - name: Build libnpp_norm (x86_64, glibc)
+      - name: Build libnpp_norm shim (x86_64, glibc)
         run: |
           set -euo pipefail
           docker run --rm -v "$PWD":/src -w /src debian:bullseye-slim bash -euxo pipefail -c '
@@ -81,29 +81,31 @@ jobs:
             apt-get install -y --no-install-recommends build-essential binutils
             gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
                 -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-x86_64-glibc.so \
-                -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
+                -Wl,-z,relro,-z,now -Wl,-z,noexecstack -Wl,-soname,libnpp_norm.so \
+                -Wl,--as-needed -ldl -pthread
             strip --strip-unneeded safexec/libnpp_norm-x86_64-glibc.so
           '
 
       # x86_64 (musl) — build in Alpine
-      - name: Build libnpp_norm (x86_64, musl)
+      - name: Build libnpp_norm shim (x86_64, musl)
         run: |
           set -euo pipefail
           docker run --rm -v "$PWD":/src -w /src/safexec alpine:3.21 sh -euxc '
             apk add --no-cache build-base musl-dev
             gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
                 -shared libnpp_norm.c -o libnpp_norm-x86_64-musl.so \
-                -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
+                -Wl,-z,relro,-z,now -Wl,-z,noexecstack -Wl,-soname,libnpp_norm.so \
+                -Wl,--as-needed -ldl -pthread
             strip --strip-unneeded libnpp_norm-x86_64-musl.so
           '
       # Enable qemu/binfmt
-      - name: Enable binfmt for arm64 (early)
+      - name: Enable binfmt for arm64
         run: |
           set -euo pipefail
           docker run --privileged --rm tonistiigi/binfmt --install arm64
 
       # aarch64 (glibc) — build in Ubuntu focal (arm64) older glibc (≥2.31)
-      - name: Build libnpp_norm (aarch64, glibc)
+      - name: Build libnpp_norm shim (aarch64, glibc)
         run: |
           set -euo pipefail
           docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src ubuntu:20.04 bash -euxo pipefail -c '
@@ -111,12 +113,13 @@ jobs:
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential binutils
             gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
               -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-aarch64-glibc.so \
-              -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
+              -Wl,-z,relro,-z,now -Wl,-z,noexecstack -Wl,-soname,libnpp_norm.so \
+              -Wl,--as-needed -ldl -pthread
             strip --strip-unneeded safexec/libnpp_norm-aarch64-glibc.so
           '
 
       # aarch64 (musl) — build in dockcross musl toolchain
-      - name: Build libnpp_norm (aarch64, musl)
+      - name: Build libnpp_norm shim (aarch64, musl)
         run: |
           set -euo pipefail
           docker run --rm dockcross/linux-arm64-musl > ./dockcross.musl.arm64
@@ -124,15 +127,27 @@ jobs:
           ./dockcross.musl.arm64 bash -euxc '
             aarch64-linux-musl-gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
                 -shared safexec/libnpp_norm.c -o safexec/libnpp_norm-aarch64-musl.so \
-                -Wl,-z,relro,-z,now -Wl,-z,noexecstack -ldl -pthread
+                -Wl,-z,relro,-z,now -Wl,-z,noexecstack -Wl,-soname,libnpp_norm.so \
+                -Wl,--as-needed -ldl -pthread
             aarch64-linux-musl-strip --strip-unneeded safexec/libnpp_norm-aarch64-musl.so
           '
+
+      # Sanity: SONAME must be libnpp_norm.so on all shims
+      - name: Verify SONAME on shims
+        run: |
+         set -euo pipefail
+         for so in safexec/libnpp_norm-*-glibc.so safexec/libnpp_norm-*-musl.so; do
+           test -f "$so" || { echo "Missing $so"; exit 1; }
+           echo "Checking SONAME for $so"
+           readelf -d "$so" | grep -E 'SONAME.*libnpp_norm\.so' >/dev/null \
+             || { echo "Bad/missing SONAME in $so"; exit 1; }
+         done
 
       # Fix ownership of artifacts created by containers
       - name: Fix artifact ownership
         run: |
           set -euo pipefail
-          sudo chown "$(id -u)":"$(id -g)" safexec/safexec-*-linux-musl safexec/libnpp_norm-*.so
+          sudo chown "$(id -u)":"$(id -g)" safexec/safexec-*-linux-musl safexec/libnpp_norm-*.so || true
     
       # Sanity check: confirm the safexec binaries are static before checksums
       - name: Verify safexec binaries are static
@@ -144,12 +159,6 @@ jobs:
             # Fail if an INTERP segment exists (means dynamically linked)
             ! readelf -lW "$f" | grep -q INTERP
           done
-
-      # Enable qemu/binfmt so we can run arm64 containers on x86_64 runner
-      - name: Enable binfmt for arm64
-        run: |
-          set -euo pipefail
-          docker run --privileged --rm tonistiigi/binfmt --install arm64
 
       ############################################
       # E2E smoke tests hybrid safexec + shim  (musl:glibc | x86_64:aarch64
@@ -459,25 +468,41 @@ jobs:
           GITHUB_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
+          BRANCH="${GITHUB_REF#refs/heads/}"
 
-          # Ensure executable bit for produced binaries
+          # Ensure executable bit for produced binaries (harmless if none)
           chmod 755 safexec/bin/safexec-*-linux-musl || true
 
-          # Configure Git identity
+          # Git identity
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Add only the binaries and checksum files
+          # Make sure we're up-to-date with the remote branch
+          git fetch --prune origin
+          git checkout -B "${BRANCH}" "origin/${BRANCH}"
+
+          # Stage artifacts
           git add safexec/bin/safexec-*-linux-musl safexec/bin/libnpp_norm-*.so safexec/bin/*.sha256 safexec/bin/SHA256SUMS || true
 
-          # Commit only if there are staged changes
+          # Nothing to do?
           if git diff --cached --quiet; then
             echo "No artifact changes to commit."
             exit 0
           fi
 
           git commit -m "ci: build safexec + libnpp_norm (glibc/musl)"
-          git push origin HEAD:${GITHUB_REF#refs/heads/}
+
+          # Rebase onto latest remote and push; retry once to beat races
+          for attempt in 1 2; do
+            git pull --rebase --autostash origin "${BRANCH}" && \
+            git push origin "HEAD:${BRANCH}" && exit 0
+            echo "Push attempt ${attempt} failed; refetching and retrying..."
+            sleep 2
+            git fetch --prune origin
+          done
+
+          echo "Giving up after 2 attempts."
+          exit 1
 
   build-and-attest-debs:
     name: Build & attest Debian packages
@@ -596,12 +621,31 @@ jobs:
           GITHUB_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
+          BRANCH="${GITHUB_REF#refs/heads/}"
+
+          # Ensure we track the remote branch and have its latest commits
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch --prune origin
+          git checkout -B "${BRANCH}" "origin/${BRANCH}"
+
           git add safexec/deb/*.deb safexec/deb/SHA256SUMS || true
           if git diff --cached --quiet; then
             echo "No .deb changes to commit."
             exit 0
           fi
+
           git commit -m "ci: add Debian packages for ${{ steps.ver.outputs.deb }}"
-          git push origin HEAD:${GITHUB_REF#refs/heads/}
+
+          # Integrate remote updates, then push. Retry once to beat races.
+          for attempt in 1 2; do
+            git pull --rebase --autostash origin "${BRANCH}" && \
+            git push origin "HEAD:${BRANCH}" && exit 0
+            echo "Push attempt ${attempt} failed; refetching and retrying..."
+            sleep 2
+            git fetch --prune origin
+          done
+
+          echo "Giving up after 2 attempts."
+          exit 1
