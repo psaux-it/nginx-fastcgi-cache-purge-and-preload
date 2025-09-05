@@ -437,6 +437,16 @@ jobs:
             safexec/bin/libnpp_norm-*.so
             safexec/bin/SHA256SUMS
 
+      - name: Upload safexec build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: safexec-binaries
+          path: |
+            safexec/bin/safexec-*-linux-musl
+            safexec/bin/libnpp_norm-*.so
+            safexec/bin/*.sha256
+            safexec/bin/SHA256SUMS
+
       # Commit back to repo
       - name: Commit binaries & checksums back to repo
         if: github.ref_type == 'branch'
@@ -480,6 +490,15 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
+      - name: Download safexec build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: safexec-binaries
+          path: safexec/bin
+
+      - name: Ensure exec bit on safexec
+        run: chmod 755 safexec/bin/safexec-*-linux-musl || true
 
       - name: Ensure Debian tooling
         run: |
@@ -525,17 +544,27 @@ jobs:
           set -euo pipefail
           bash safexec/helpers/deb.sh --arch amd64 --version "${{ steps.ver.outputs.deb }}"
 
+      - name: Enable binfmt for arm64
+        run: |
+          set -euo pipefail
+          docker run --privileged --rm tonistiigi/binfmt --install arm64
+
       - name: Build .deb (arm64)
         run: |
           set -euo pipefail
-          bash safexec/helpers/deb.sh --arch arm64 --version "${{ steps.ver.outputs.deb }}"
+          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src debian:stable-slim bash -euxo pipefail -c '
+            apt-get update
+            apt-get install -y --no-install-recommends devscripts debhelper dpkg-dev lintian build-essential fakeroot
+            chmod +x safexec/helpers/deb.sh
+            bash safexec/helpers/deb.sh --arch arm64 --version '"${{ steps.ver.outputs.deb }}"'
+          '
 
       - name: Collect .debs into safexec/deb/
         run: |
           set -euo pipefail
           mkdir -p safexec/deb
-          mv safexec_*_${{ steps.ver.outputs.deb }}_amd64.deb safexec/deb/ 2>/dev/null || true
-          mv safexec_*_${{ steps.ver.outputs.deb }}_arm64.deb safexec/deb/ 2>/dev/null || true
+          mv "safexec_${{ steps.ver.outputs.deb }}_amd64.deb" safexec/deb/ 2>/dev/null || true
+          mv "safexec_${{ steps.ver.outputs.deb }}_arm64.deb" safexec/deb/ 2>/dev/null || true
           cd safexec/deb
           ls -1 *.deb
           sha256sum *.deb | sort > SHA256SUMS
