@@ -472,7 +472,7 @@ jobs:
 
           # Keep build outputs out of Git so they don't get stashed/committed
           mkdir -p .git/info
-          for p in safexec/bin/ safexec/deb/ pkg-safexec-*/; do
+          for p in safexec/bin/ pkg-safexec-*/; do
             grep -qxF "$p" .git/info/exclude 2>/dev/null || echo "$p" >> .git/info/exclude
           done
 
@@ -665,7 +665,7 @@ jobs:
 
           # Keep build outputs out of Git so they don't get stashed/committed
           mkdir -p .git/info
-          for p in safexec/bin/ safexec/deb/ pkg-safexec-*/; do
+          for p in safexec/bin/ pkg-safexec-*/; do
             grep -qxF "$p" .git/info/exclude 2>/dev/null || echo "$p" >> .git/info/exclude
           done
 
@@ -696,7 +696,10 @@ jobs:
           git checkout -B "${BRANCH}" "origin/${BRANCH}"
           git stash pop || true
 
-          git add safexec/deb/*.deb safexec/deb/SHA256SUMS || true
+          # Defuse any local ignore for safexec/deb and force-add the .deb files (in case repo .gitignore blocks them)
+          sed -i -E '/^safexec\/deb\/[[:space:]]*$/d' .git/info/exclude 2>/dev/null || true
+          git add -f safexec/deb/*.deb safexec/deb/SHA256SUMS || true
+
           if git diff --cached --quiet; then
             echo "No .deb changes to commit."
             exit 0
