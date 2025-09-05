@@ -4,7 +4,8 @@ on:
   push:
     paths:
       - "safexec/safexec.c"
-      - "safexec/libnpp_norm.c" 
+      - "safexec/libnpp_norm.c"
+      - "safexec/helpers/deb.sh"
       - ".github/workflows/build-and-commit-safexec.yml"
   workflow_dispatch: {}
 
@@ -460,4 +461,98 @@ jobs:
           fi
 
           git commit -m "ci: build safexec + libnpp_norm (glibc/musl)"
+          git push origin HEAD:${GITHUB_REF#refs/heads/}
+
+  deb-packages:
+    name: Build .deb packages
+    needs: build-commit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      actions: read
+    env:
+      DEB_REV: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Ensure Debian tooling
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            devscripts debhelper dpkg-dev lintian
+
+      - name: Detect version from safexec -v
+        id: ver
+        run: |
+          set -euo pipefail
+          BIN="safexec/bin/safexec-x86_64-linux-musl"
+          if [[ ! -x "$BIN" ]]; then
+            # fallback if only arm64 was rebuilt for some reason
+            BIN="safexec/bin/safexec-aarch64-linux-musl"
+          fi
+          [[ -x "$BIN" ]] || { echo "safexec binary not found in safexec/bin"; exit 1; }
+          BASE_VER="$("$BIN" -v | awk '{print $2}')"
+          echo "base=$BASE_VER" >> "$GITHUB_OUTPUT"
+          echo "deb=${BASE_VER}-${DEB_REV}" >> "$GITHUB_OUTPUT"
+          echo "Detected: ${BASE_VER}-${DEB_REV}"
+
+      - name: Make deb.sh executable
+        run: chmod +x safexec/helpers/deb.sh
+
+      - name: Build .deb (amd64)
+        run: |
+          set -euo pipefail
+          bash safexec/helpers/deb.sh --arch amd64 --version "${{ steps.ver.outputs.deb }}"
+
+      - name: Build .deb (arm64)
+        run: |
+          set -euo pipefail
+          bash safexec/helpers/deb.sh --arch arm64 --version "${{ steps.ver.outputs.deb }}"
+
+      - name: Collect .debs into safexec/deb/
+        run: |
+          set -euo pipefail
+          mkdir -p safexec/deb
+          mv safexec_*_${{ steps.ver.outputs.deb }}_amd64.deb safexec/deb/ 2>/dev/null || true
+          mv safexec_*_${{ steps.ver.outputs.deb }}_arm64.deb safexec/deb/ 2>/dev/null || true
+          cd safexec/deb
+          ls -1 *.deb
+          sha256sum *.deb | sort > SHA256SUMS
+
+      - name: Generate SLSA provenance (deb packages)
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            safexec/deb/*.deb
+            safexec/deb/SHA256SUMS
+
+      - name: Upload debs as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: safexec-debs-${{ steps.ver.outputs.deb }}
+          path: |
+            safexec/deb/*.deb
+            safexec/deb/SHA256SUMS
+          if-no-files-found: error
+
+      - name: Commit .deb packages back to repo
+        if: github.ref_type == 'branch'
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add safexec/deb/*.deb safexec/deb/SHA256SUMS || true
+          if git diff --cached --quiet; then
+            echo "No .deb changes to commit."
+            exit 0
+          fi
+          git commit -m "ci: add Debian packages for ${{ steps.ver.outputs.deb }}"
           git push origin HEAD:${GITHUB_REF#refs/heads/}
