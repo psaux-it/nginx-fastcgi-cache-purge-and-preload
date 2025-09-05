@@ -108,7 +108,7 @@ jobs:
       - name: Build libnpp_norm shim (aarch64, glibc)
         run: |
           set -euo pipefail
-          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src ubuntu:20.04 bash -euxo pipefail -c '
+          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src debian:bullseye-slim bash -euxo pipefail -c '
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential binutils
             gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
@@ -479,7 +479,9 @@ jobs:
 
           # Make sure we're up-to-date with the remote branch
           git fetch --prune origin
+          git stash push -u -m "ci-artifacts" || true
           git checkout -B "${BRANCH}" "origin/${BRANCH}"
+          git stash pop || true
 
           # Stage artifacts
           git add safexec/bin/safexec-*-linux-musl safexec/bin/libnpp_norm-*.so safexec/bin/*.sha256 safexec/bin/SHA256SUMS || true
@@ -627,8 +629,13 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          mkdir -p .git/info
+          printf 'safexec/bin/\n' >> .git/info/exclude
+
           git fetch --prune origin
+          git stash push -u -m "ci-artifacts" || true
           git checkout -B "${BRANCH}" "origin/${BRANCH}"
+          git stash pop || true
 
           git add safexec/deb/*.deb safexec/deb/SHA256SUMS || true
           if git diff --cached --quiet; then
