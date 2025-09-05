@@ -199,7 +199,6 @@ static void pctnorm_load_config(void) {
 }
 static inline void ensure_config(void) { (void)pthread_once(&config_once, pctnorm_load_config); }
 
-
 /* Lazy re-resolve TLS symbols in case libssl/gnutls were dlopen()'d later. */
 #if PCT_WANT_TLS
 static inline void resolve_tls_if_needed(void) {
@@ -242,47 +241,81 @@ static void collect_triplet_cases_from_segment(const char *s) {
     }
 }
 
+/* Bounded substring search: returns pointer to first occurrence of needle
+   in haystack (bounded by hlen), or NULL if not found. */
+static inline const char *bounded_strstr_n(const char *hay, size_t hlen,
+                                    const char *needle, size_t nlen)
+{
+    if (!hay || !needle || nlen == 0) return hay;
+    if (hlen < nlen) return NULL;
+
+#if defined(__GLIBC__) || defined(__linux__) || defined(__APPLE__) || \
+    defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+    return (const char *)memmem(hay, hlen, needle, nlen);
+#else
+    const char *end = hay + (hlen - nlen) + 1;
+    for (const char *p = hay; p < end; ++p) {
+        if (p[0] == needle[0] && memcmp(p, needle, nlen) == 0)
+            return p;
+    }
+    return NULL;
+#endif
+}
+
 /* crude but safe parse of first http(s) URL in /proc/self/cmdline and capture path+query */
 static void init_argv_triplet_map(void) {
     int fd = open("/proc/self/cmdline", O_RDONLY);
     if (fd < 0) return;
+
     char buf[8192];
     ssize_t n = read(fd, buf, sizeof buf - 1);
     close(fd);
     if (n <= 0) return;
+
+    /* Add a sentinel NUL so plain C-string ops on copies are safe.
+       The valid range is [buf, buf+n). endbuf does NOT include extra NUL. */
     buf[n] = '\0';
+    char *p = buf;
+    char *endbuf = buf + n;
 
     /* /proc/self/cmdline is NUL-separated argv */
-    char *p = buf;
-    while (p < buf + n) {
-        size_t len = strlen(p);
+    while (p < endbuf) {
+        size_t remain = (size_t)(endbuf - p);
+
+        /* Find next NUL within bounds */
+        const char *nul = memchr(p, '\0', remain);
+        if (!nul) break;
+        size_t len = (size_t)(nul - p);
         if (len == 0) break;
 
         if (!strncasecmp(p, "http://", 7) || !strncasecmp(p, "https://", 8)) {
             const char *u = p;
-            const char *path = strstr(u, "://");
+            const char *path = bounded_strstr_n(u, len, "://", 3);
             if (path) {
-                path += 3; /* skip "://" */
+                path += 3;
+
                 /* skip authority host[:port] */
                 while (*path && *path != '/' && *path != '?' && *path != '#') path++;
+
                 /* capture path + query (fragment not transmitted) */
                 if (*path == '/' || *path == '?') {
-                    /* terminate at '#' or NUL */
                     const char *end = path;
                     while (*end && *end != '#') end++;
-                    char *tmp = (char*)malloc((size_t)(end - path + 1));
+
+                    size_t seglen = (size_t)(end - path);
+                    char *tmp = (char*)malloc(seglen + 1);
                     if (tmp) {
-                        memcpy(tmp, path, (size_t)(end - path));
-                        tmp[end - path] = '\0';
+                        memcpy(tmp, path, seglen);
+                        tmp[seglen] = '\0';
                         collect_triplet_cases_from_segment(tmp);
                         free(tmp);
                     }
                 }
             }
-            break; /* only first URL */
+            break;
         }
 
-        p += len + 1;
+        p = (char *)nul + 1;
     }
 }
 
