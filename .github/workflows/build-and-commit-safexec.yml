@@ -167,7 +167,7 @@ jobs:
               adduser -D -s /bin/sh fpm
 
               # Helpers
-              chmod +x /src/safexec/tests/oneshot.pl
+              chmod +x /src/safexec/helpers/oneshot.pl
               openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
                 -subj "/CN=127.0.0.1" \
                 -addext "subjectAltName=IP:127.0.0.1" \
@@ -175,7 +175,7 @@ jobs:
 
               start_https() {
                 socat -T1 OPENSSL-LISTEN:8080,reuseaddr,cert=/tmp/cert.pem,key=/tmp/key.pem,verify=0 \
-                  SYSTEM:/src/safexec/tests/oneshot.pl >/dev/null 2>&1 &
+                  SYSTEM:/src/safexec/helpers/oneshot.pl >/dev/null 2>&1 &
                 echo $! > /tmp/req1.pid
                 sleep 0.5
               }
@@ -245,7 +245,7 @@ jobs:
               adduser -D -s /bin/sh fpm
 
               # Helpers
-              chmod +x /src/safexec/tests/oneshot.pl
+              chmod +x /src/safexec/helpers/oneshot.pl
               openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
                 -subj "/CN=127.0.0.1" \
                 -addext "subjectAltName=IP:127.0.0.1" \
@@ -253,7 +253,7 @@ jobs:
 
               start_https() {
                 socat -T1 OPENSSL-LISTEN:8080,reuseaddr,cert=/tmp/cert.pem,key=/tmp/key.pem,verify=0 \
-                  SYSTEM:/src/safexec/tests/oneshot.pl >/dev/null 2>&1 &
+                  SYSTEM:/src/safexec/helpers/oneshot.pl >/dev/null 2>&1 &
                 echo $! > /tmp/req1.pid
                 sleep 0.5
               }
@@ -294,7 +294,7 @@ jobs:
               useradd -m -s /bin/bash fpm
 
               # Helpers
-              chmod +x /src/safexec/tests/oneshot.pl
+              chmod +x /src/safexec/helpers/oneshot.pl
               openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
                 -subj "/CN=127.0.0.1" \
                 -addext "subjectAltName=IP:127.0.0.1" \
@@ -302,7 +302,7 @@ jobs:
 
               start_https() {
                 socat -T1 OPENSSL-LISTEN:8080,reuseaddr,cert=/tmp/cert.pem,key=/tmp/key.pem,verify=0 \
-                  SYSTEM:/src/safexec/tests/oneshot.pl >/dev/null 2>&1 &
+                  SYSTEM:/src/safexec/helpers/oneshot.pl >/dev/null 2>&1 &
                 echo $! > /tmp/req1.pid
                 sleep 0.5
               }
@@ -373,7 +373,7 @@ jobs:
               useradd -m -s /bin/bash fpm
 
               # Helpers
-              chmod +x /src/safexec/tests/oneshot.pl
+              chmod +x /src/safexec/helpers/oneshot.pl
               openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
                 -subj "/CN=127.0.0.1" \
                 -addext "subjectAltName=IP:127.0.0.1" \
@@ -381,7 +381,7 @@ jobs:
 
               start_https() {
                 socat -T1 OPENSSL-LISTEN:8080,reuseaddr,cert=/tmp/cert.pem,key=/tmp/key.pem,verify=0 \
-                  SYSTEM:/src/safexec/tests/oneshot.pl >/dev/null 2>&1 &
+                  SYSTEM:/src/safexec/helpers/oneshot.pl >/dev/null 2>&1 &
                 echo $! > /tmp/req1.pid
                 sleep 0.5
               }
