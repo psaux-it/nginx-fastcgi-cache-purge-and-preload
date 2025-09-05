@@ -50,39 +50,48 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.repository.default_branch }}
 
+      # Get debs
       - name: Collect .deb files to upload
         id: files
         shell: bash
         run: |
           set -euo pipefail
           VER='${{ steps.tag.outputs.ver }}'
-          shopt -s nullglob
 
-          # try to match by safexec version in the filename; if not found, fall back to newest per-arch
-          pick_latest() { ls -1v $1 2>/dev/null | tail -n1 || true; }
+          gather_latest() {
+            local pattern="$1"
+            local matches=()
+            # expand the glob safely; if no match, array stays empty
+            shopt -s nullglob
+            matches=( $pattern )
+            shopt -u nullglob
 
-          AMD="$(ls safexec/deb/safexec_${VER}-*_amd64.deb 2>/dev/null | head -n1 || true)"
-          ARM="$(ls safexec/deb/safexec_${VER}-*_arm64.deb 2>/dev/null | head -n1 || true)"
+            ((${#matches[@]})) || { echo ""; return; }
+            printf '%s\n' "${matches[@]}" | sort -V | tail -n1
+          }
 
-          if [[ -z "$AMD" ]]; then AMD="$(pick_latest 'safexec/deb/safexec_*_amd64.deb')"; fi
-          if [[ -z "$ARM" ]]; then ARM="$(pick_latest 'safexec/deb/safexec_*_arm64.deb')"; fi
+          AMD="$(gather_latest "safexec/deb/safexec_${VER}-*_amd64.deb")"
+          ARM="$(gather_latest "safexec/deb/safexec_${VER}-*_arm64.deb")"
+
+          # fallback to newest per-arch if tag-specific not found
+          [[ -n "$AMD" ]] || AMD="$(gather_latest "safexec/deb/safexec_*_amd64.deb")"
+          [[ -n "$ARM" ]] || ARM="$(gather_latest "safexec/deb/safexec_*_arm64.deb")"
 
           FILES=()
-          [[ -n "$AMD" && -f "$AMD" ]] && FILES+=("$AMD")
-          [[ -n "$ARM" && -f "$ARM" ]] && FILES+=("$ARM")
-          [[ -f "safexec/deb/SHA256SUMS" ]] && FILES+=("safexec/deb/SHA256SUMS")
+          [[ -n "${AMD:-}" && -f "$AMD" ]] && FILES+=("$AMD")
+          [[ -n "${ARM:-}" && -f "$ARM" ]] && FILES+=("$ARM")
+          [[ -f safexec/deb/SHA256SUMS ]] && FILES+=("safexec/deb/SHA256SUMS")
 
-          if [[ ${#FILES[@]} -eq 0 ]]; then
-            echo "No .deb files found in safexec/deb/"
-            exit 1
+          if ((${#FILES[@]}==0)); then
+            echo "No matching .deb files under safexec/deb/"; exit 1
           fi
 
-          printf 'Resolved files:\n%s\n' "${FILES[@]}"
-          {
-            echo 'files<<__EOL__'
-            printf '%s\n' "${FILES[@]}"
-            echo '__EOL__'
-          } >> "$GITHUB_OUTPUT"
+          printf 'files<<__EOL__\n' >> "$GITHUB_OUTPUT"
+          printf '%s\n' "${FILES[@]}" >> "$GITHUB_OUTPUT"
+          printf '__EOL__\n' >> "$GITHUB_OUTPUT"
+
+          echo "Resolved files:"
+          printf '  %s\n' "${FILES[@]}"
 
       - name: Upload assets (overwrite if already present)
         env:
@@ -94,7 +103,9 @@ jobs:
           echo "${GH_TOKEN}" | gh auth login --with-token
           gh release view "${TAG_NAME}" >/dev/null
 
-          mapfile -t TO_UPLOAD < <(printf '%s\n' "${{ steps.files.outputs.files }}")
+          # read multiline output variable into an array
+          mapfile -t FILES < <(printf '%s\n' "${{ steps.files.outputs.files }}")
           echo "Uploading to ${TAG_NAME}:"
-          printf '  %s\n' "${TO_UPLOAD[@]}"
-          gh release upload "${TAG_NAME}" "${TO_UPLOAD[@]}" --clobber
+          printf '  %s\n' "${FILES[@]}"
+
+          gh release upload "${TAG_NAME}" "${FILES[@]}" --clobber
