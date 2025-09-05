@@ -14,7 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-commit:
+  safexec-build-test-attest:
+    name: Build & test safexec binaries
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -27,7 +28,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ensure host tools
+      - name: Install host build tools
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -35,7 +36,7 @@ jobs:
           mkdir -p safexec/bin
 
       ############################################
-      # build- safexec (musl) — x64 + arm64
+      # build-safexec (musl) — x64 + arm64
       ############################################
 
       # Build static x86_64 (musl) with Alpine
@@ -404,7 +405,7 @@ jobs:
             '
 
       # STAGE INTO BIN
-      - name: Stage artifacts into bin/
+      - name: Stage build artifacts
         run: |
           set -euo pipefail
           mv safexec/safexec-*-linux-musl safexec/bin/
@@ -463,9 +464,9 @@ jobs:
           git commit -m "ci: build safexec + libnpp_norm (glibc/musl)"
           git push origin HEAD:${GITHUB_REF#refs/heads/}
 
-  deb-packages:
-    name: Build .deb packages
-    needs: build-commit
+  build-and-attest-debs:
+    name: Build & attest Debian packages
+    needs: safexec-build-test-attest
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -487,20 +488,34 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             devscripts debhelper dpkg-dev lintian
 
-      - name: Detect version from safexec -v
+      - name: Resolve version from safexec -v
         id: ver
+        env:
+          DEB_REV: ${{ env.DEB_REV }}
+        shell: bash
         run: |
           set -euo pipefail
+
           BIN="safexec/bin/safexec-x86_64-linux-musl"
-          if [[ ! -x "$BIN" ]]; then
-            # fallback if only arm64 was rebuilt for some reason
-            BIN="safexec/bin/safexec-aarch64-linux-musl"
-          fi
+          [[ -x "$BIN" ]] || BIN="safexec/bin/safexec-aarch64-linux-musl"
           [[ -x "$BIN" ]] || { echo "safexec binary not found in safexec/bin"; exit 1; }
-          BASE_VER="$("$BIN" -v | awk '{print $2}')"
-          echo "base=$BASE_VER" >> "$GITHUB_OUTPUT"
-          echo "deb=${BASE_VER}-${DEB_REV}" >> "$GITHUB_OUTPUT"
-          echo "Detected: ${BASE_VER}-${DEB_REV}"
+
+          # Only take the first line
+          FIRST_LINE="$("$BIN" -v | head -n1)"
+          BASE_VER="$(printf '%s\n' "$FIRST_LINE" | awk '{print $2}')"
+
+          # (Optional) sanity-check it looks like N.N or N.N.N
+          if ! printf '%s' "$BASE_VER" | grep -Eq '^[0-9]+(\.[0-9]+){1,2}$'; then
+            echo "Could not parse version from: $FIRST_LINE"
+            exit 1
+          fi
+
+          echo "Detected safexec version: $BASE_VER (DEB_REV=${DEB_REV:-1})"
+
+          {
+            printf 'base=%s\n' "$BASE_VER"
+            printf 'deb=%s-%s\n' "$BASE_VER" "${DEB_REV:-1}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Make deb.sh executable
         run: chmod +x safexec/helpers/deb.sh
