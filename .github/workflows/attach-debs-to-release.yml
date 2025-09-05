@@ -95,17 +95,20 @@ jobs:
 
       - name: Upload assets (overwrite if already present)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}   # provided by Actions; no manual login needed
           TAG_NAME: ${{ steps.tag.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "${GH_TOKEN}" | gh auth login --with-token
-          gh release view "${TAG_NAME}" >/dev/null
+
+          # sanity: release exists
+          gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null
 
           # read multiline output variable into an array
           mapfile -t FILES < <(printf '%s\n' "${{ steps.files.outputs.files }}")
-          echo "Uploading to ${TAG_NAME}:"
+
+          echo "Uploading to ${TAG_NAME} on ${GITHUB_REPOSITORY}:"
           printf '  %s\n' "${FILES[@]}"
 
-          gh release upload "${TAG_NAME}" "${FILES[@]}" --clobber
+          # upload and overwrite if already present
+          gh release upload "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber "${FILES[@]}"
