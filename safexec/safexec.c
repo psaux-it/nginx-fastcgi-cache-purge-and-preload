@@ -206,15 +206,70 @@ static void s_perror(const char *s) {
     if (!QUIET) perror(s);
 }
 
-// Safe .so (must be root:root, regular file, and !group/other-writable)
+/* Allowed roots */
+static const char *const TRUSTED_LIB_ROOTS[] = {
+    "/usr/lib",
+    "/lib",
+    "/usr/lib64",
+    "/lib64",
+    NULL
+};
+
+static int has_trusted_root(const char *real) {
+    for (const char *const *p = TRUSTED_LIB_ROOTS; *p; ++p) {
+        size_t n = strlen(*p);
+        /* must be prefix and either exactly equal or followed by '/' */
+        if (strncmp(real, *p, n) == 0 && (real[n] == '\0' || real[n] == '/'))
+            return 1;
+    }
+    return 0;
+}
+
+/* Check that the path (already absolute) contains a component exactly "npp" */
+static int path_has_component_npp(const char *abs) {
+    /* Walk components between '/' ... '/' boundaries */
+    const char *p = abs;
+    while (*p) {
+        /* skip repeated '/' */
+        while (*p == '/') p++;
+        if (!*p) break;
+        const char *start = p;
+        while (*p && *p != '/') p++;
+        size_t len = (size_t)(p - start);
+        if (len == 3 && start[0] == 'n' && start[1] == 'p' && start[2] == 'p')
+            return 1;
+    }
+    return 0;
+}
+
 static int is_secure_so(const char *path) {
-    int fd = open(path, O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
-    if (fd < 0) return 0;
+    if (!path || !*path) return 0;
+
+    /* Resolve to a canonical absolute path (resolves all symlinks) */
+    char real[PATH_MAX];
+    if (!realpath(path, real)) return 0;
+
+    /* 1) Must be under one of the trusted roots */
+    if (!has_trusted_root(real)) return 0;
+
+    /* 2) Must include a path component exactly named "npp" somewhere below the root */
+    if (!path_has_component_npp(real)) return 0;
+
+    /* 3) Reject final symlink and TOCTOU: open final target with O_NOFOLLOW */
+    int fd = open(real, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
+        /* If ELOOP, final component is a symlink -> reject */
+        return 0;
+    }
+
+    /* 4) Ownership/permissions: root:root, regular file, not group/other writable */
     struct stat st;
     int ok = (fstat(fd, &st) == 0) &&
              S_ISREG(st.st_mode) &&
              st.st_uid == 0 &&
+             st.st_gid == 0 &&
              ((st.st_mode & 022) == 0);
+
     close(fd);
     return ok;
 }
