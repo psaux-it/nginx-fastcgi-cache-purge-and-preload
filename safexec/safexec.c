@@ -103,6 +103,7 @@
 #include <grp.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <locale.h>
 
 #ifdef __linux__
 #include <sys/prctl.h>
@@ -932,11 +933,34 @@ static int is_all_digits(const char *s) {
     return 1;
 }
 
+/* Try C.UTF-8 → en_US.UTF-8 → C, and keep env consistent. */
+static void set_locale_utf8_best_effort(void) {
+    /* Try C.UTF-8 first (works on modern glibc & musl/Alpine) */
+    if (setlocale(LC_CTYPE, "C.UTF-8")) {
+        setenv("LANG", "C.UTF-8", 1);
+        setenv("LC_CTYPE", "C.UTF-8", 1);
+        setenv("CHARSET", "UTF-8", 1);  /* helps BusyBox wget */
+        return;
+    }
+    /* Fallback for older glibc (e.g., CentOS 7) */
+    if (setlocale(LC_CTYPE, "en_US.UTF-8")) {
+        setenv("LANG", "en_US.UTF-8", 1);
+        setenv("LC_CTYPE", "en_US.UTF-8", 1);
+        setenv("CHARSET", "UTF-8", 1);
+        return;
+    }
+    /* Last resort: plain C (ASCII). Still deterministic. */
+    setlocale(LC_CTYPE, "C");
+    setenv("LANG", "C", 1);
+    setenv("LC_CTYPE", "C", 1);
+    setenv("CHARSET", "ASCII", 1);
+}
+
 // Sanitize environment & process state early
 static void sanitize_process_early(void) {
     clearenv_portable();
     setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/run/current-system/sw/bin", 1);
-    setenv("LANG", "C", 1);
+    set_locale_utf8_best_effort();
     umask(077);
 #ifdef __linux__
     (void)prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
