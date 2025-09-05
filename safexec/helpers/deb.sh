@@ -22,7 +22,7 @@ warn()  { printf '%s!%s  %s\n' "$c_ylw" "$c_rst" "$*"; }
 die()   { printf '%s✗ ERROR:%s %s\n' "$c_red" "$c_rst" "$*" >&2; exit 1; }
 
 # policy knobs
-SUITE="${SUITE:-unstable}"
+SUITE=bookworm
 STDVER="${STDVER:-4.6.2}"
 
 # ---------- parse args ----------
