@@ -51,8 +51,9 @@ case "$ARCH" in
   *) die "Unsupported --arch: $ARCH (use amd64 or arm64)" ;;
 esac
 
-ROOT="$(pwd)"
-SRC_DIR="$ROOT/nginx-fastcgi-cache-purge-and-preload/safexec"
+script_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+ROOT="$(cd "$script_dir/../.." && pwd)"
+SRC_DIR="$ROOT/safexec"
 BIN_DIR="$SRC_DIR/bin"
 
 # Prebuilt artifacts:
