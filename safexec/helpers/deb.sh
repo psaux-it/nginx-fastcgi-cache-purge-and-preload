@@ -22,8 +22,8 @@ warn()  { printf '%s!%s  %s\n' "$c_ylw" "$c_rst" "$*"; }
 die()   { printf '%s✗ ERROR:%s %s\n' "$c_red" "$c_rst" "$*" >&2; exit 1; }
 
 # policy knobs
-SUITE=bookworm
-STDVER="${STDVER:-4.6.2}"
+SUITE=${SUITE:-unstable}
+STDVER="${STDVER:-4.5.1}"
 
 # ---------- parse args ----------
 ARCH=""; VERSION=""
@@ -84,7 +84,7 @@ cd "$PKG_ROOT"
 say "Preparing debian/ skeleton…"
 mkdir -p debian debian/source
 MAINT="Hasan Calisir <hasan.calisir@psauxit.com>"
-HOMEPAGE="https://github.com/psauxit/nginx-fastcgi-cache-purge-and-preload"
+HOMEPAGE="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload"
 
 # -------- quilt vs native: create orig.tar.gz and mirror upstream into tree --------
 UPSTREAM_VER="$VERSION"; SOURCE_FORMAT="3.0 (native)"
@@ -181,6 +181,9 @@ override_dh_auto_install:
 
 override_dh_missing:
 > dh_missing --fail-missing
+
+override_dh_shlibdeps:
+> dh_shlibdeps -X/usr/bin/safexec
 MAKE
 sed -i "s|#SAFEEXEC_BIN#|$SAFEEXEC_BIN|g" debian/rules
 sed -i "s|#SHIM_GLIBC#|$SHIM_GLIBC|g"   debian/rules
