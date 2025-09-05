@@ -155,13 +155,13 @@ jobs:
               apk add --no-cache coreutils wget busybox-extras perl socat openssl
 
               # Install safexec (setuid-root) and the shim (root-owned, not writable)
-              install -D /src/safexec/safexec-x86_64-linux-musl /usr/local/bin/safexec
-              chown root:root /usr/local/bin/safexec
-              chmod 4755 /usr/local/bin/safexec
+              install -D /src/safexec/safexec-x86_64-linux-musl /usr/bin/safexec
+              chown root:root /usr/bin/safexec
+              chmod 4755 /usr/bin/safexec
 
-              install -D /src/safexec/libnpp_norm-x86_64-musl.so /usr/local/lib/npp/libnpp_norm.so
-              chown root:root /usr/local/lib/npp/libnpp_norm.so
-              chmod 0644 /usr/local/lib/npp/libnpp_norm.so
+              install -D /src/safexec/libnpp_norm-x86_64-musl.so /usr/lib/npp/libnpp_norm.so
+              chown root:root /usr/lib/npp/libnpp_norm.so
+              chmod 0644 /usr/lib/npp/libnpp_norm.so
 
               # Unprivileged user (simulates PHP-FPM worker)
               adduser -D -s /bin/sh fpm
@@ -189,7 +189,7 @@ jobs:
               start_https
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
+                /usr/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
               " fpm
               stop_https
               head -n1 /tmp/req1 | tee /tmp/line1
@@ -199,7 +199,7 @@ jobs:
               start_https
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=lower SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 >/dev/null || true
+                /usr/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 >/dev/null || true
               " fpm
               stop_https
               head -n1 /tmp/req1 | tee /tmp/line2
@@ -209,7 +209,7 @@ jobs:
               start_https
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=off SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
+                /usr/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
               " fpm
               stop_https
               head -n1 /tmp/req1 | tee /tmp/line3
@@ -219,7 +219,7 @@ jobs:
               start_https
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=off SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 >/dev/null || true
+                /usr/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 >/dev/null || true
               " fpm
               stop_https
               head -n1 /tmp/req1 | tee /tmp/line4
@@ -233,13 +233,13 @@ jobs:
               apk add --no-cache coreutils wget busybox-extras perl socat openssl
 
               # Install safexec (setuid-root) and the shim (root-owned, not writable)
-              install -D /src/safexec/safexec-aarch64-linux-musl /usr/local/bin/safexec
-              chown root:root /usr/local/bin/safexec
-              chmod 4755 /usr/local/bin/safexec
+              install -D /src/safexec/safexec-aarch64-linux-musl /usr/bin/safexec
+              chown root:root /usr/bin/safexec
+              chmod 4755 /usr/bin/safexec
 
-              install -D /src/safexec/libnpp_norm-aarch64-musl.so /usr/local/lib/npp/libnpp_norm.so
-              chown root:root /usr/local/lib/npp/libnpp_norm.so
-              chmod 0644 /usr/local/lib/npp/libnpp_norm.so
+              install -D /src/safexec/libnpp_norm-aarch64-musl.so /usr/lib/npp/libnpp_norm.so
+              chown root:root /usr/lib/npp/libnpp_norm.so
+              chmod 0644 /usr/lib/npp/libnpp_norm.so
 
               # Unprivileged user (simulates PHP-FPM worker)
               adduser -D -s /bin/sh fpm
@@ -267,7 +267,7 @@ jobs:
               start_https
               su -s /bin/sh -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
+                /usr/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
               " fpm
               stop_https
               head -n1 /tmp/req1 | tee /tmp/line1
@@ -282,13 +282,13 @@ jobs:
               apt-get install -y --no-install-recommends ca-certificates wget netcat-openbsd perl socat openssl
 
               # Install safexec (setuid-root) and the shim (root-owned, not writable)
-              install -D /src/safexec/safexec-x86_64-linux-musl /usr/local/bin/safexec
-              chown root:root /usr/local/bin/safexec
-              chmod 4755 /usr/local/bin/safexec
+              install -D /src/safexec/safexec-x86_64-linux-musl /usr/bin/safexec
+              chown root:root /usr/bin/safexec
+              chmod 4755 /usr/bin/safexec
 
-              install -D /src/safexec/libnpp_norm-x86_64-glibc.so /usr/local/lib/npp/libnpp_norm.so
-              chown root:root /usr/local/lib/npp/libnpp_norm.so
-              chmod 0644 /usr/local/lib/npp/libnpp_norm.so
+              install -D /src/safexec/libnpp_norm-x86_64-glibc.so /usr/lib/npp/libnpp_norm.so
+              chown root:root /usr/lib/npp/libnpp_norm.so
+              chmod 0644 /usr/lib/npp/libnpp_norm.so
 
               # Unprivileged user (simulates PHP-FPM worker)
               useradd -m -s /bin/bash fpm
@@ -316,7 +316,7 @@ jobs:
               start_https
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
+                /usr/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
               "
               stop_https
               head -n1 /tmp/req1 | tee /tmp/line1
@@ -326,7 +326,7 @@ jobs:
               start_https
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=lower SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 >/dev/null || true
+                /usr/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 >/dev/null || true
               "
               stop_https
               head -n1 /tmp/req1 | tee /tmp/line2
@@ -336,7 +336,7 @@ jobs:
               start_https
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=off SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 >/dev/null || true
+                /usr/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%E6%B0%B4%E6%BB%B4%E8%BD%AE%E9%94%BB%E7%A2%B3%E5%8D%95%E6%91%87 >/dev/null || true
               "
               stop_https
               head -n1 /tmp/req1 | tee /tmp/line3
@@ -346,7 +346,7 @@ jobs:
               start_https
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=off SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
+                /usr/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
               "
               stop_https
               head -n1 /tmp/req1 | tee /tmp/line4
@@ -361,13 +361,13 @@ jobs:
               apt-get install -y --no-install-recommends ca-certificates wget netcat-openbsd perl socat openssl
 
               # Install safexec (setuid-root) and the shim (root-owned, not writable)
-              install -D /src/safexec/safexec-aarch64-linux-musl /usr/local/bin/safexec
-              chown root:root /usr/local/bin/safexec
-              chmod 4755 /usr/local/bin/safexec
+              install -D /src/safexec/safexec-aarch64-linux-musl /usr/bin/safexec
+              chown root:root /usr/bin/safexec
+              chmod 4755 /usr/bin/safexec
 
-              install -D /src/safexec/libnpp_norm-aarch64-glibc.so /usr/local/lib/npp/libnpp_norm.so
-              chown root:root /usr/local/lib/npp/libnpp_norm.so
-              chmod 0644 /usr/local/lib/npp/libnpp_norm.so
+              install -D /src/safexec/libnpp_norm-aarch64-glibc.so /usr/lib/npp/libnpp_norm.so
+              chown root:root /usr/lib/npp/libnpp_norm.so
+              chmod 0644 /usr/lib/npp/libnpp_norm.so
 
               # Unprivileged user (simulates PHP-FPM worker)
               useradd -m -s /bin/bash fpm
@@ -395,7 +395,7 @@ jobs:
               start_https
               su - fpm -c "
                 export SAFEXEC_PCTNORM=1 SAFEXEC_PCTNORM_CASE=upper SAFEXEC_DETACH=auto;
-                /usr/local/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
+                /usr/bin/safexec wget --ca-certificate=/tmp/cert.pem -qO- https://127.0.0.1:8080/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87 >/dev/null || true
               "
               stop_https
               head -n1 /tmp/req1 | tee /tmp/line1
