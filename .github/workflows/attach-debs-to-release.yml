@@ -1,0 +1,105 @@
+name: Attach .deb assets to release
+
+on:
+  release:
+    types: [published, edited, prereleased]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: attach-debs-${{ github.event.release.tag_name || github.ref || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  attach-debs:
+    name: Upload .deb files to GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect release tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          [[ -n "${TAG}" ]] || { echo "No tag found"; exit 1; }
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "ver=${TAG#v}" >> "$GITHUB_OUTPUT"   # strip leading v
+
+      - name: Resolve .deb files (try tag match, else fallback to newest)
+        id: files
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${{ steps.tag.outputs.ver }}"
+          shopt -s nullglob
+
+          have_any=false
+
+          pick_latest() {
+            local pattern="$1"
+            local f
+            f="$(ls -1v ${pattern} 2>/dev/null | tail -n1 || true)"
+            printf '%s' "$f"
+          }
+
+          # 1) Try exact tag version (e.g. 2.1.3-*)
+          AMD=""; ARM=""
+          AMD="$(pick_latest "safexec/deb/safexec_${VER}-*_amd64.deb")"
+          ARM="$(pick_latest "safexec/deb/safexec_${VER}-*_arm64.deb")"
+
+          if [[ -n "$AMD" || -n "$ARM" ]]; then
+            echo "Found debs for tag version: ${VER}"
+            have_any=true
+          else
+            echo "No debs for tag ${VER}; falling back to newest safexec debs present."
+            # 2) Fallback to newest available per arch
+            AMD="$(pick_latest 'safexec/deb/safexec_*_amd64.deb')"
+            ARM="$(pick_latest 'safexec/deb/safexec_*_arm64.deb')"
+            [[ -n "$AMD" || -n "$ARM" ]] && have_any=true
+          fi
+
+          [[ "$have_any" == true ]] || { echo "No .deb files found under safexec/deb/"; exit 1; }
+
+          SUMS="safexec/deb/SHA256SUMS"
+
+          FILES=()
+          [[ -n "$AMD" && -f "$AMD" ]] && FILES+=("$AMD")
+          [[ -n "$ARM" && -f "$ARM" ]] && FILES+=("$ARM")
+          [[ -f "$SUMS" ]] && FILES+=("$SUMS")
+
+          printf 'Resolved files:\n'
+          printf '  %s\n' "${FILES[@]}"
+
+          {
+            printf 'files<<__EOL__\n'
+            printf '%s\n' "${FILES[@]}"
+            printf '__EOL__\n'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload assets to the release (overwrite if present)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.tag.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "${GH_TOKEN}" | gh auth login --with-token
+          gh release view "${TAG_NAME}" >/dev/null
+
+          mapfile -t TO_UPLOAD < <(printf '%s\n' "${{ steps.files.outputs.files }}")
+
+          echo "Uploading to ${TAG_NAME}:"
+          printf '  %s\n' "${TO_UPLOAD[@]}"
+
+          gh release upload "${TAG_NAME}" "${TO_UPLOAD[@]}" --clobber
