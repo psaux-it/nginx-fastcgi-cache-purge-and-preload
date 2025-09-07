@@ -1,0 +1,108 @@
+name: Merge release SHA256SUMS
+
+on:
+  # Fire whenever either of the two upload workflows completes
+  workflow_run:
+    workflows:
+      - Attach .deb assets to release
+      - Attach .rpm assets to release
+    types: [completed]
+
+  # Allow manual re-run for a specific tag if needed
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach merged SHA256SUMS to (e.g. v2.1.3). Leave empty to use latest."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: merge-sha256sums-${{ github.event.workflow_run.head_branch || inputs.tag || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  merge-and-upload:
+    # Only proceed automatically if the upstream workflow concluded successfully,
+    # or always proceed when run manually.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      REPO: ${{ github.repository }}
+
+    steps:
+      - name: Resolve target tag
+        id: tag
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          echo "${{ github.token }}" | gh auth login --with-token
+
+          if [[ -n "${INPUT_TAG}" ]]; then
+            TAG="${INPUT_TAG}"
+          else
+            # Use the most recent release (the attach workflows are release-driven)
+            TAG="$(gh release view --repo "$REPO" --json tagName -q .tagName)"
+          fi
+
+          [[ -n "$TAG" ]] || { echo "Could not determine release tag"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Using release: $TAG"
+
+      - name: Guard: ensure BOTH .deb and .rpm assets exist on the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          json="$(gh release view "$TAG_NAME" --repo "$REPO" --json assets)"
+          debs=$(jq '[.assets[].name | select(endswith(".deb"))] | length' <<<"$json")
+          rpms=$(jq '[.assets[].name | select(endswith(".rpm"))] | length' <<<"$json")
+
+          echo "Found $debs .deb and $rpms .rpm assets on $TAG_NAME"
+
+          if (( debs < 1 || rpms < 1 )); then
+            echo "Both asset types not present yet; exiting neutral so this job re-triggers after the other workflow finishes."
+            # Exit code 78 marks the job neutral (not failed) in GitHub Actions
+            exit 78
+          fi
+
+      - name: Checkout default branch (to read repo checksum files)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Merge safexec/deb/SHA256SUMS + safexec/rpm/SHA256SUMS -> SHA256SUMS
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          [[ -f safexec/deb/SHA256SUMS ]] || { echo "Missing safexec/deb/SHA256SUMS"; exit 1; }
+          [[ -f safexec/rpm/SHA256SUMS ]] || { echo "Missing safexec/rpm/SHA256SUMS"; exit 1; }
+
+          # Normalize to "hash␠␠filename" with bare filenames (no dirs), dedupe, and sort.
+          awk '{h=$1; $1=""; sub(/^[ \t]+/,""); f=$0; gsub(/^.*\//,"",f); printf "%s  %s\n",h,f }' \
+            safexec/deb/SHA256SUMS safexec/rpm/SHA256SUMS \
+            | sort -u > SHA256SUMS
+
+          echo "Merged SHA256SUMS:"
+          cat SHA256SUMS
+
+      - name: Upload unified SHA256SUMS (overwrite if present)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG_NAME" --repo "$REPO" --clobber SHA256SUMS
