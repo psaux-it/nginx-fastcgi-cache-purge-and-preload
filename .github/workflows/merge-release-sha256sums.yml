@@ -55,7 +55,7 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Using release: $TAG"
 
-      - name: Guard: ensure BOTH .deb and .rpm assets exist on the release
+      - name: Guard ensure BOTH .deb and .rpm assets exist on the release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
