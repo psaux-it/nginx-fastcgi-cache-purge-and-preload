@@ -718,3 +718,142 @@ jobs:
 
           echo "Giving up after 2 attempts."
           exit 1
+
+  build-and-attest-rpms:
+    name: Build & attest RPM packages
+    needs: safexec-build-test-attest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Download safexec build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: safexec-binaries
+          path: safexec/bin
+
+      - name: Ensure exec bits
+        run: |
+          chmod 755 safexec/bin/safexec-*-linux-musl || true
+          chmod +x safexec/helpers/rpm.sh
+
+      # Resolve version from safexec -v
+      - name: Resolve version from safexec -v
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="safexec/bin/safexec-x86_64-linux-musl"
+          [[ -x "$BIN" ]] || BIN="safexec/bin/safexec-aarch64-linux-musl"
+          [[ -x "$BIN" ]] || { echo "safexec binary not found in safexec/bin"; exit 1; }
+          FIRST_LINE="$("$BIN" -v | head -n1)"
+          BASE_VER="$(printf '%s\n' "$FIRST_LINE" | awk '{print $2}')"
+          [[ "$BASE_VER" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || { echo "Bad version: $BASE_VER"; exit 1; }
+          echo "base=$BASE_VER" >> "$GITHUB_OUTPUT"
+          # For RPM we pass version as VERSION-REL; pick 1 as default release
+          echo "rpm=${BASE_VER}-1" >> "$GITHUB_OUTPUT"
+
+      # Build x86_64 RPM on Rocky 10
+      - name: Build RPM (x86_64 / Rocky 10)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD":/src -w /src rockylinux:10 bash -euxo pipefail -c '
+            # speed up metadata a bit
+            dnf -y makecache
+            bash safexec/helpers/rpm.sh --arch amd64 --version '"${{ steps.ver.outputs.rpm }}"'
+            chown -R 1000:1000 /src/pkg-safexec-amd64-rpm || true
+          '
+
+      # Enable arm64 binfmt
+      - name: Enable binfmt for arm64
+        run: docker run --privileged --rm tonistiigi/binfmt --install arm64
+
+      # Build aarch64 RPM on Rocky 10 (arm64 container)
+      - name: Build RPM (aarch64 / Rocky 10)
+        run: |
+          set -euo pipefail
+          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src rockylinux:10 bash -euxo pipefail -c '
+            dnf -y makecache
+            bash safexec/helpers/rpm.sh --arch arm64 --version '"${{ steps.ver.outputs.rpm }}"'
+            chown -R 1000:1000 /src/pkg-safexec-arm64-rpm || true
+          '
+
+      - name: Collect RPMs -> safexec/rpm
+        run: |
+          set -euo pipefail
+          mkdir -p safexec/rpm
+          find pkg-safexec-*-rpm/rpmbuild/RPMS -type f -name "safexec-*.rpm" -print -exec cp -v {} safexec/rpm/ \;
+          cd safexec/rpm
+          ls -1 *.rpm
+          sha256sum *.rpm | sort > SHA256SUMS
+
+      - name: Generate SLSA provenance (RPM packages)
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            safexec/rpm/*.rpm
+            safexec/rpm/SHA256SUMS
+
+      - name: Upload RPMs as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: safexec-rpms-${{ steps.ver.outputs.rpm }}
+          path: |
+            safexec/rpm/*.rpm
+            safexec/rpm/SHA256SUMS
+          if-no-files-found: error
+
+      - name: Clean packaging worktrees
+        run: |
+          sudo chown -R "$(id -u)":"$(id -g)" pkg-safexec-*-rpm 2>/dev/null || true
+          sudo rm -rf pkg-safexec-*-rpm || true
+
+      - name: Commit RPMs back to repo
+        if: github.ref_type == 'branch'
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          BRANCH="${GITHUB_REF#refs/heads/}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # keep temp build dirs ignored; allow safexec/rpm to be committed
+          mkdir -p .git/info
+          {
+            echo 'pkg-safexec-*/'
+            echo 'safexec/bin/'
+          } >> .git/info/exclude
+
+          git fetch --prune origin
+          git stash push -u -m "ci-artifacts" || true
+          git checkout -B "${BRANCH}" "origin/${BRANCH}"
+          git stash pop || true
+
+          git add -f safexec/rpm/*.rpm safexec/rpm/SHA256SUMS || true
+          if git diff --cached --quiet; then
+            echo "No RPM changes to commit."
+            exit 0
+          fi
+
+          git commit -m "ci: add RPM packages for ${{ steps.ver.outputs.rpm }}"
+
+          for attempt in 1 2; do
+            git pull --rebase --autostash origin "${BRANCH}" && \
+            git push origin "HEAD:${BRANCH}" && exit 0
+            echo "Push attempt ${attempt} failed; retrying…"
+            sleep 2
+            git fetch --prune origin
+          done
+
+          echo "Giving up after 2 attempts."
+          exit 1
