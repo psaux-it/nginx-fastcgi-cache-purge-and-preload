@@ -765,7 +765,7 @@ jobs:
       - name: Build RPM (x86_64 / Rocky 10)
         run: |
           set -euo pipefail
-          docker run --rm -v "$PWD":/src -w /src rockylinux:10 bash -euxo pipefail -c '
+          docker run --rm -v "$PWD":/src -w /src quay.io/rockylinux/rockylinux:10 bash -euxo pipefail -c '
             # speed up metadata a bit
             dnf -y makecache
             bash safexec/helpers/rpm.sh --arch amd64 --version '"${{ steps.ver.outputs.rpm }}"'
@@ -780,7 +780,7 @@ jobs:
       - name: Build RPM (aarch64 / Rocky 10)
         run: |
           set -euo pipefail
-          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src rockylinux:10 bash -euxo pipefail -c '
+          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src quay.io/rockylinux/rockylinux:10 bash -euxo pipefail -c '
             dnf -y makecache
             bash safexec/helpers/rpm.sh --arch arm64 --version '"${{ steps.ver.outputs.rpm }}"'
             chown -R 1000:1000 /src/pkg-safexec-arm64-rpm || true
