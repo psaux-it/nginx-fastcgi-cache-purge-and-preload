@@ -155,15 +155,55 @@
 #define SAFEXEC_QUIET_DEFAULT 0
 #endif
 
-// Allow list
+// Optional buckets (compile-time)
+// Enable at build time e.g. -DSAFEXEC_WITH_GS -DSAFEXEC_WITH_DB -DSAFEXEC_WITH_RSYNC_GIT
+
+#ifdef SAFEXEC_WITH_GS
+  // Ghostscript (PS/PDF rasterize) – riskier, off by default
+  #define SAFEXEC_GS_TOOLS  "gs",
+#else
+  #define SAFEXEC_GS_TOOLS
+#endif
+
+#ifdef SAFEXEC_WITH_POPPLER
+  #define SAFEXEC_POPPLER_TOOLS  "pdfinfo","pdftoppm","pdftocairo",
+#else
+  #define SAFEXEC_POPPLER_TOOLS
+#endif
+
+#ifdef SAFEXEC_WITH_DB
+  // Database clients/dumpers (enable only where intended)
+  #define SAFEXEC_DB_TOOLS  "mysqldump","mysql","mariadb-dump","mariadb","pg_dump","pg_restore","psql","redis-cli",
+#else
+  #define SAFEXEC_DB_TOOLS
+#endif
+
+#ifdef SAFEXEC_WITH_RSYNC_GIT
+  // File sync / VCS (can indirectly use ssh; be careful)
+  #define SAFEXEC_SYNC_VCS_TOOLS  "rsync","git",
+#else
+  #define SAFEXEC_SYNC_VCS_TOOLS
+#endif
+
+// Rebuild the final table including optional buckets
 static const char *const ALLOWED_BINS[] = {
+    // Fetch
     "wget","curl",
-    "tar","gzip","gunzip","xz","zip","unzip",
-    "ffmpeg","ffprobe",
-    "magick","convert","identify","composite",
-    "wkhtmltopdf","pdftk","gs","pandoc","soffice",
-    "mysqldump","mysql",
-    "git","rsync",
+    // Archives
+    "tar","gzip","gunzip","xz","unxz","zip","unzip",
+    // Checksums
+    "sha256sum","sha512sum","shasum","b2sum","cksum",
+    // Media / images
+    "ffmpeg","ffprobe","magick","convert","identify",
+    // Docs
+    "wkhtmltopdf","pdftk","pandoc",
+
+    // Optional buckets:
+    SAFEXEC_GS_TOOLS
+    SAFEXEC_POPPLER_TOOLS
+    SAFEXEC_DB_TOOLS
+    SAFEXEC_SYNC_VCS_TOOLS
+
     NULL
 };
 
@@ -207,37 +247,14 @@ static void s_perror(const char *s) {
     if (!QUIET) perror(s);
 }
 
-/* Allowed roots */
 static const char *const TRUSTED_LIB_ROOTS[] = {
-    "/usr/lib",
-    "/lib",
-    "/usr/lib64",
-    "/lib64",
-    NULL
+    "/usr/lib", "/lib", "/usr/lib64", "/lib64", NULL
 };
 
 static int has_trusted_root(const char *real) {
     for (const char *const *p = TRUSTED_LIB_ROOTS; *p; ++p) {
         size_t n = strlen(*p);
-        /* must be prefix and either exactly equal or followed by '/' */
         if (strncmp(real, *p, n) == 0 && (real[n] == '\0' || real[n] == '/'))
-            return 1;
-    }
-    return 0;
-}
-
-/* Check that the path (already absolute) contains a component exactly "npp" */
-static int path_has_component_npp(const char *abs) {
-    /* Walk components between '/' ... '/' boundaries */
-    const char *p = abs;
-    while (*p) {
-        /* skip repeated '/' */
-        while (*p == '/') p++;
-        if (!*p) break;
-        const char *start = p;
-        while (*p && *p != '/') p++;
-        size_t len = (size_t)(p - start);
-        if (len == 3 && start[0] == 'n' && start[1] == 'p' && start[2] == 'p')
             return 1;
     }
     return 0;
@@ -246,31 +263,23 @@ static int path_has_component_npp(const char *abs) {
 static int is_secure_so(const char *path) {
     if (!path || !*path) return 0;
 
-    /* Resolve to a canonical absolute path (resolves all symlinks) */
     char real[PATH_MAX];
     if (!realpath(path, real)) return 0;
 
-    /* 1) Must be under one of the trusted roots */
     if (!has_trusted_root(real)) return 0;
 
-    /* 2) Must include a path component exactly named "npp" somewhere below the root */
-    if (!path_has_component_npp(real)) return 0;
+    const char *base = strrchr(real, '/');
+    base = base ? base + 1 : real;
+    if (strcmp(base, "libnpp_norm.so") != 0) return 0;
 
-    /* 3) Reject final symlink and TOCTOU: open final target with O_NOFOLLOW */
     int fd = open(real, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-    if (fd < 0) {
-        /* If ELOOP, final component is a symlink -> reject */
-        return 0;
-    }
+    if (fd < 0) return 0;
 
-    /* 4) Ownership/permissions: root:root, regular file, not group/other writable */
     struct stat st;
     int ok = (fstat(fd, &st) == 0) &&
              S_ISREG(st.st_mode) &&
-             st.st_uid == 0 &&
-             st.st_gid == 0 &&
+             st.st_uid == 0 && st.st_gid == 0 &&
              ((st.st_mode & 022) == 0);
-
     close(fd);
     return ok;
 }
@@ -387,22 +396,22 @@ static int pidfd_send_signal_wrap(int pidfd, int sig) {
 
 // Limits
 typedef struct {
-    const char *mem_max_v2;  // bytes or "max" (e.g., "268435456" or "max")
-    int pids_max;            // -1 unlimited
-    int cpu_weight_v2;       // 1..10000 (default 100)
-    const char *io_max;      // e.g. "8:0 rbps=1048576 wbps=1048576" (bytes/sec, optional)
-    int rlimit_cpu_secs;     // <0 => unlimited, 0 => skip, >0 => set
-    unsigned long long rlimit_as_bytes; // 0 => unlimited, >0 => set
-    int rlimit_nofile;       // <0 => unlimited, 0 => skip, >0 => set
-    int rlimit_nproc;        // <0 => unlimited, 0 => skip, >0 => set
-    int nice_adj;            // 0 => leave as-is
-    int ioprio_class;        // 0 => leave as-is; 1=RT,2=BE,3=IDLE
-    int ioprio_data;         // 0..7
+    const char *mem_max_v2;                  // bytes or "max" (e.g., "268435456" or "max")
+    int pids_max;                            // -1 unlimited
+    int cpu_weight_v2;                       // 1..10000 (default 100)
+    const char *io_max;                      // e.g. "8:0 rbps=1048576 wbps=1048576" (bytes/sec, optional)
+    int rlimit_cpu_secs;                     // <0 => unlimited, 0 => skip, >0 => set
+    unsigned long long rlimit_as_bytes;      // 0 => unlimited, >0 => set
+    int rlimit_nofile;                       // <0 => unlimited, 0 => skip, >0 => set
+    int rlimit_nproc;                        // <0 => unlimited, 0 => skip, >0 => set
+    int nice_adj;                            // 0 => leave as-is
+    int ioprio_class;                        // 0 => leave as-is; 1=RT,2=BE,3=IDLE
+    int ioprio_data;                         // 0..7
 } nppp_limits;
 
 static nppp_limits nppp_default_limits(void) {
     nppp_limits L = {
-        .mem_max_v2 = NULL,                 // v2: explicitly unlimited
+        .mem_max_v2 = NULL,                  // v2: explicitly unlimited
         .pids_max = -1,                      // unlimited
         .cpu_weight_v2 = 0,                  // don't write -> kernel default (100)
         .io_max = NULL,
@@ -902,14 +911,167 @@ static int is_prog(const char *arg, const char *name) {
     return strcmp(base_of(arg), name) == 0;
 }
 
-// Find the real target program, skipping benign wrappers (e.g., nohup)
+// Trusted path resolution (pin allowed tool to an absolute path)
+static const char *const TRUSTED_BIN_DIRS[] = {
+    /* Linux */
+    "/usr/bin",
+    "/bin",
+    "/usr/local/bin",
+    "/usr/sbin",
+    "/sbin",
+    "/usr/local/sbin",
+
+    /* NixOS */
+    "/run/current-system/sw/bin",
+
+    /* BSDs */
+    "/usr/local/sbin",
+    "/usr/pkg/bin",
+    "/usr/pkg/sbin",
+
+#ifdef __APPLE__
+    /* macOS package managers */
+    "/opt/homebrew/bin",
+    "/opt/local/bin",
+    "/opt/local/sbin",
+#endif
+
+    NULL
+};
+
+static int find_in_trusted_path(const char *base, char *out, size_t outsz) {
+    for (const char *const *d = TRUSTED_BIN_DIRS; *d; ++d) {
+        char cand[PATH_MAX];
+        if (safe_snprintf(cand, sizeof cand, "%s/%s", *d, base) != 0) continue;
+
+        struct stat st;
+        if (lstat(cand, &st) == 0 && S_ISREG(st.st_mode) && access(cand, X_OK) == 0) {
+            // Refuse symlink hops: lstat != stat means link/indirect
+            struct stat st2;
+            if (stat(cand, &st2) != 0) continue;
+            if (st.st_ino != st2.st_ino || st.st_dev != st2.st_dev) continue;
+
+            if (safe_snprintf(out, outsz, "%s", cand) == 0) return 0;
+        }
+    }
+    return -1;
+}
+
+// Simple wrapper finder
+static int is_signed_int(const char *s) {
+    if (!s || !*s) return 0;
+    if (*s == '+' || *s == '-') ++s;
+    if (!*s) return 0;
+    for (const unsigned char *p=(const unsigned char*)s; *p; ++p)
+        if (*p < '0' || *p > '9') return 0;
+    return 1;
+}
+
+static int is_name_eq_value(const char *s) {
+    if (!s) return 0;
+    const char *eq = strchr(s, '=');
+    return (eq && eq != s);
+}
+
+static int looks_like_option(const char *s) {
+    if (!s || !*s) return 0;
+    if (strcmp(s, "--") == 0) return 1;
+    return (s[0] == '-' && s[1] != '\0');
+}
+
+static int is_shell_name(const char *b) {
+    return strcmp(b, "sh")   == 0 ||
+           strcmp(b, "bash") == 0 ||
+           strcmp(b, "dash") == 0 ||
+           strcmp(b, "ash")  == 0 ||
+           strcmp(b, "zsh")  == 0 ||
+           strcmp(b, "ksh")  == 0 ||
+           strcmp(b, "fish") == 0;
+}
+
+static int is_wrapper_name(const char *b) {
+    return strcmp(b, "nohup")   == 0 ||
+           strcmp(b, "nice")    == 0 ||
+           strcmp(b, "timeout") == 0 ||
+           strcmp(b, "stdbuf")  == 0 ||
+           strcmp(b, "env")     == 0 ||
+           strcmp(b, "ionice")  == 0 ||
+           strcmp(b, "taskset") == 0 ||
+           strcmp(b, "setsid")  == 0 ||
+           strcmp(b, "chrt")    == 0 ||
+           strcmp(b, "time")    == 0;
+}
+
+// Return 1 if NAME=VALUE is allowed to appear in the prelude; 0 => reject.
+static int is_assignment_allowed(const char *s) {
+    const char *eq = strchr(s, '=');
+    if (!eq || eq == s) return 0;
+    size_t n = (size_t)(eq - s);
+
+    // Forbid known-dangerous knobs
+    static const char *deny[] = {
+        "PATH","IFS",
+        "LD_PRELOAD","LD_AUDIT","LD_LIBRARY_PATH","LD_DEBUG",
+        "LD_ASSUME_KERNEL","LD_ORIGIN_PATH","LD_BIND_NOW",
+        "DYLD_*",
+        "PYTHONPATH","PERL5OPT","RUBYOPT","GEM_HOME","GEM_PATH",
+        "GCONV_PATH","LOCPATH","TZDIR","MALLOC_CONF",
+        NULL
+    };
+
+    for (int i = 0; deny[i]; ++i) {
+        const char *d = deny[i];
+        size_t dn = strlen(d);
+        if (dn && d[dn-1] == '*') {
+            /* prefix match for patterns like DYLD_* */
+            if (strncmp(s, d, dn-1) == 0) return 0;
+        } else if (n == dn && strncmp(s, d, n) == 0) {
+            return 0;
+        }
+    }
+
+    // Minimal allowlist for proxy envs (upper & lower)
+    static const char *allow[] = {
+        "HTTP_PROXY","HTTPS_PROXY","ALL_PROXY","NO_PROXY",
+        "http_proxy","https_proxy","all_proxy","no_proxy",
+        NULL
+    };
+    for (int i = 0; allow[i]; ++i) {
+        const char *a = allow[i];
+        if (strlen(a) == n && strncmp(s, a, n) == 0) return 1;
+    }
+
+    /* Default: reject unknown assignments (safer) */
+    return 0;
+}
+
+// Find first allowed tool
 static int find_target_prog_index(int argc, char **argv) {
-    int i = 1; // argv[0] = safexec
-    while (i < argc) {
-        const char *b = base_of(argv[i]);
-        if (strcmp(b, "nohup") == 0) { i++; continue; }  // allows: safexec nohup wget ...
-        // Add more wrappers later if needed, e.g.:
-        // if (strcmp(b, "nice") == 0) { i++; continue; }
+    int i = 1;
+    for (; i < argc; ++i) {
+        const char *tok = argv[i];
+        const char *b = base_of(tok);
+
+        // If this token is an allowed tool name, stop here -> target found
+        if (is_allowed_bin(b)) return i;
+
+        // Explicitly deny shells in the prelude (env sh -c …, /bin/sh -c …, etc.)
+        if (is_shell_name(b)) {
+            s_fprintf(stderr, "Info: rejecting shell interpreter before tool: '%s'\n", tok);
+            break;
+        }
+
+        // Otherwise allow it as part of the prelude if it looks benign:
+        if (is_wrapper_name(b))        continue;
+        if (looks_like_option(tok))    continue;
+        if (is_name_eq_value(tok)) {
+            if (!is_assignment_allowed(tok)) {
+                s_fprintf(stderr, "Info: rejecting dangerous assignment before tool: '%s'\n", tok);
+                break;
+            }
+            continue;
+        }
+        if (is_signed_int(tok))        continue;
         break;
     }
     return i;
@@ -1197,6 +1359,22 @@ int main(int argc, char *argv[]) {
         s_fprintf(stderr, "Error: '%s' is not allowed by safexec.\n", prog_base);
         return 1;
     }
+
+    // Resolve allowed tool to an absolute, trusted path and pin argv[prog_i]
+    char abs_tool[PATH_MAX];
+    if (find_in_trusted_path(prog_base, abs_tool, sizeof abs_tool) != 0) {
+        s_fprintf(stderr, "Error: cannot resolve trusted path for '%s'\n", prog_base);
+        return 1;
+    }
+
+    /* Pin the argv token so wrappers (env/timeout/nice) exec the same path */
+    argv[prog_i] = strdup(abs_tool);
+    if (!argv[prog_i]) {
+        s_fprintf(stderr, "Error: OOM while pinning tool path\n");
+        return 1;
+    }
+
+    s_fprintf(stderr, "Info: pinned tool '%s' -> '%s'\n", prog_base, abs_tool);
 
     // PASS-THROUGH MODE
     if (geteuid() != 0) {
