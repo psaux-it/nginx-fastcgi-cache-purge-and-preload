@@ -1,0 +1,106 @@
+name: Attach .rpm assets to release
+
+on:
+  release:
+    types: [published, edited, prereleased]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach assets to (e.g. v2.1.3)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: attach-rpms-${{ github.event.release.tag_name || inputs.tag || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  attach-rpms:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine target tag
+        id: tag
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            TAG="${{ github.event.release.tag_name }}"
+          elif [[ -n "${INPUT_TAG}" ]]; then
+            TAG="${INPUT_TAG}"
+          else
+            echo "No tag provided on manual run; trying latest release…"
+            echo "${{ github.token }}" | gh auth login --with-token
+            TAG="$(gh release view --json tagName -q .tagName)"
+          fi
+          [[ -n "$TAG" ]] || { echo "Could not resolve a tag."; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "ver=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Will attach to release: $TAG"
+
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Collect .rpm files to upload
+        id: files
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER='${{ steps.tag.outputs.ver }}'
+
+          gather_latest() {
+            local pattern="$1"
+            local matches=()
+            shopt -s nullglob
+            matches=( $pattern )
+            shopt -u nullglob
+            ((${#matches[@]})) || { echo ""; return; }
+            # sort -V handles el8/el9/el10 suffixes nicely
+            printf '%s\n' "${matches[@]}" | sort -V | tail -n1
+          }
+
+          # Tag-specific search first (e.g., safexec-1.9.2-1.el10.x86_64.rpm)
+          AMD="$(gather_latest "safexec/rpm/safexec-${VER}-*.x86_64.rpm")"
+          ARM="$(gather_latest "safexec/rpm/safexec-${VER}-*.aarch64.rpm")"
+
+          # Fallback to newest per arch if tag-specific not found
+          [[ -n "$AMD" ]] || AMD="$(gather_latest "safexec/rpm/safexec-*.x86_64.rpm")"
+          [[ -n "$ARM" ]] || ARM="$(gather_latest "safexec/rpm/safexec-*.aarch64.rpm")"
+
+          FILES=()
+          [[ -n "${AMD:-}" && -f "$AMD" ]] && FILES+=("$AMD")
+          [[ -n "${ARM:-}" && -f "$ARM" ]] && FILES+=("$ARM")
+          [[ -f safexec/rpm/SHA256SUMS ]] && FILES+=("safexec/rpm/SHA256SUMS")
+
+          if ((${#FILES[@]}==0)); then
+            echo "No matching .rpm files under safexec/rpm/"; exit 1
+          fi
+
+          printf 'files<<__EOL__\n' >> "$GITHUB_OUTPUT"
+          printf '%s\n' "${FILES[@]}" >> "$GITHUB_OUTPUT"
+          printf '__EOL__\n' >> "$GITHUB_OUTPUT"
+
+          echo "Resolved files:"
+          printf '  %s\n' "${FILES[@]}"
+
+      - name: Upload assets (overwrite if already present)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.tag.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null
+          mapfile -t FILES < <(printf '%s\n' "${{ steps.files.outputs.files }}")
+
+          echo "Uploading to ${TAG_NAME} on ${GITHUB_REPOSITORY}:"
+          printf '  %s\n' "${FILES[@]}"
+
+          gh release upload "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber "${FILES[@]}"
