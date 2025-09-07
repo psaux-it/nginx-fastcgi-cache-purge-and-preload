@@ -6,8 +6,8 @@ set -euo pipefail
 #   - Builds one RPM: safexec-<Version>-<Release>.<arch>.rpm
 #   - Installs:
 #       /usr/bin/safexec                       (static musl binary)
-#       %{_libdir}/npp/libnpp_norm.so          (glibc shim; _libdir=/usr/lib64 or /usr/lib)
-#       /usr/lib/npp/libnpp_norm.so ->         %{_libdir}/npp/libnpp_norm.so (packaged symlink)
+#       %{_libdir}/libnpp_norm.so              (glibc shim; _libdir=/usr/lib64 or /usr/lib)
+#       /usr/lib/npp/libnpp_norm.so ->         %{_libdir}/libnpp_norm.so (packaged symlink)
 #   - SUID: %attr(4755,root,root) in %files
 #   - No compilation; uses prebuilt artifacts from safexec/bin/
 #   - Debuginfo disabled for prebuilt static payloads
@@ -95,16 +95,26 @@ allowlist, early environment sanitization, cgroup/rlimits isolation, and safe
 privilege drop. It can optionally inject an LD_PRELOAD shim (libnpp_norm.so)
 to normalize or preserve percent-encoding hex case in HTTP request-targets.
 .SH ENVIRONMENT
+Config variables are split between \fIsafexec\fR and the \fIshim\fR:
+
 .TP
-.B PCTNORM_CASE
-upper | lower | off
+.B SAFEXEC_PCTNORM=1|0  (safexec)
+Enable/disable LD_PRELOAD injection for wget/curl. Default: \fB1\fR (enabled).
+
 .TP
-.B SAFEXEC_PCTNORM_SO
-Absolute path to libnpp_norm.so.
-Recommended path:
- %{_libdir}/npp/libnpp_norm.so
-A convenience symlink is also provided:
- /usr/lib/npp/libnpp_norm.so
+.B SAFEXEC_PCTNORM_SO=\fI/path/to/libnpp_norm.so\fR  (safexec)
+Path to the shim. Default: \fB/usr/lib/npp/libnpp_norm.so\fR (a stable symlink
+to the canonical file under \fB%{_libdir}/libnpp_norm.so\fR).
+
+.TP
+.B SAFEXEC_PCTNORM_CASE=upper|lower|off  (safexec)
+Value passed through to the shim as \fBPCTNORM_CASE\fR. Default: \fBupper\fR.
+
+.TP
+.B PCTNORM_CASE=upper|lower|off  (shim)
+What the shim actually reads to decide percent-triplet hex case. Set by
+safexec when injection occurs. Default: \fBupper\fR.
+
 .SH AUTHOR
 Hasan Calisir
 EOF
@@ -113,10 +123,16 @@ README_RPM="$RPMTOP/SOURCES/README.RPM"
 cat > "$README_RPM" <<'EOF'
 safexec installs:
   - /usr/bin/safexec (prebuilt, static musl for portability)
-  - %{_libdir}/npp/libnpp_norm.so   (glibc shim; %{_libdir} expands to /usr/lib64 or /usr/lib)
+  - %{_libdir}/libnpp_norm.so   (glibc shim; %{_libdir} is /usr/lib64 or /usr/lib)
 
-A convenience symlink is packaged:
-  - /usr/lib/npp/libnpp_norm.so -> %{_libdir}/npp/libnpp_norm.so
+A stable entrypoint symlink is packaged:
+  - /usr/lib/npp/libnpp_norm.so -> %{_libdir}/libnpp_norm.so
+
+Env (quick ref):
+  - SAFEXEC_PCTNORM=1|0             (default 1; safexec)
+  - SAFEXEC_PCTNORM_SO=/path/to/so  (default /usr/lib/npp/libnpp_norm.so; safexec)
+  - SAFEXEC_PCTNORM_CASE=upper|lower|off (default upper; safexec -> shim)
+  - PCTNORM_CASE=upper|lower|off    (read by shim)
 
 If you must drop SUID locally:
   sudo chmod 0755 /usr/bin/safexec
@@ -199,8 +215,8 @@ triplet case (%xx) on the HTTP request-target for cache-key stability.
 
 This package ships:
   - /usr/bin/safexec (prebuilt, static musl for portability)
-  - %{_libdir}/npp/libnpp_norm.so   (LD_PRELOAD shim)
-  - /usr/lib/npp/libnpp_norm.so -> %{_libdir}/npp/libnpp_norm.so
+  - %{_libdir}/libnpp_norm.so       (LD_PRELOAD shim)
+  - /usr/lib/npp/libnpp_norm.so -> %{_libdir}/libnpp_norm.so
 
 %prep
 # nothing
@@ -215,11 +231,11 @@ rm -rf "%{buildroot}"
 install -Dm0755 "%{SOURCE0}" "%{buildroot}/usr/bin/safexec"
 
 # shim in canonical libdir
-install -Dm0644 "%{SOURCE1}" "%{buildroot}%{_libdir}/npp/libnpp_norm.so"
+install -Dm0644 "%{SOURCE1}" "%{buildroot}%{_libdir}/libnpp_norm.so"
 
 # convenience symlink (package it directly; no need for %post)
 install -d "%{buildroot}/usr/lib/npp"
-ln -s ../%{_lib}/npp/libnpp_norm.so "%{buildroot}/usr/lib/npp/libnpp_norm.so"
+ln -s "%{_libdir}/libnpp_norm.so" "%{buildroot}/usr/lib/npp/libnpp_norm.so"
 
 # manpage
 install -Dm0644 "%{SOURCE2}" "%{buildroot}%{_mandir}/man1/safexec.1"
@@ -232,18 +248,16 @@ install -Dm0644 "%{SOURCE4}" "%{buildroot}/usr/share/licenses/%{name}/LICENSE"
 %license /usr/share/licenses/%{name}/LICENSE
 %doc     /usr/share/doc/%{name}/README.RPM
 %attr(4755,root,root) /usr/bin/safexec
-%{_libdir}/npp/libnpp_norm.so
+%{_libdir}/libnpp_norm.so
+%dir /usr/lib/npp
 /usr/lib/npp/libnpp_norm.so
 %{_mandir}/man1/safexec.1*
 
 %changelog
 * __DATE_RPM__ __MAINT__ - __RPM_VERSION__-__RPM_RELEASE__
-- Binary-only RPM (glibc shim only).
-  - Installs /usr/bin/safexec (static musl).
-  - Installs shim to %{_libdir}/npp.
-  - Packages convenience symlink under /usr/lib/npp.
-  - SUID via %%attr(4755,root,root).
-  - Adds man page and portability notes.
+- Install real shim at %{_libdir}/libnpp_norm.so
+- Provide stable symlink /usr/lib/npp/libnpp_norm.so -> %{_libdir}/libnpp_norm.so
+- Keep safexec static (SUID) and ship man/docs
 EOSPEC
 
 DATE_RPM="$(LC_ALL=C date '+%a %b %d %Y')"
