@@ -11,17 +11,25 @@
  * Security model
  * --------------
  *  - Strict allowlist: only known-safe binaries run (see ALLOWED_BINS).
+ *  - Absolute-path pinning: the chosen tool is resolved to a real, non-symlink
+ *    file under trusted system dirs before exec (e.g. /usr/bin, /bin, /usr/local/{bin,sbin},
+ *    /usr/sbin, /sbin, /run/current-system/sw/bin, plus platform-specific prefixes).
+ *    If not found, execution is refused.
  *  - Never exec as root: drop to 'nobody' first; if that fails, drop to the
  *    original caller (e.g., PHP-FPM worker). If we still have euid==0, abort.
- *  - Environment is sanitized early (clearenv); only minimal PATH/LANG are set.
- *    For wget/curl, an optional vetted LD_PRELOAD may be injected (see below).
- *  - All inherited FDs >= 3 are closed before exec (stdin/out/err preserved).
- *  - Linux: process is moved into its own cgroup v2 child "nppp.<pid>" under
- *    /sys/fs/cgroup/nppp when available; otherwise fall back to rlimits +
- *    (optional) nice/ionice. Controllers are enabled on the parent when possible.
+ *  - Environment is sanitized early (clearenv); minimal PATH/LANG/LC_CTYPE/CHARSET
+ *    are set, umask is forced to 077, and PR_SET_DUMPABLE(0) disables core dumps.
+ *    PR_SET_NO_NEW_PRIVS(1) is set before exec to prevent privilege regain.
+ *  - All inherited FDs >= 3 are closed before exec via /proc/self/fd (with a
+ *    sysconf fallback).
+ *  - Linux: process is moved into its own cgroup v2 child "nppp.<pid>" **under
+ *    /sys/fs/cgroup/nppp**; if unavailable, fall back to rlimits (+ optional
+ *    nice/ionice). Controllers are enabled on the parent when possible; cpuset
+ *    values are propagated to the child. Threaded subtrees are handled with
+ *    cgroup.threads and child marked "threaded" when required.
  *  - --kill=<pid>: only succeeds if the target is owned by 'nobody' *and*
- *    belongs to an "nppp.*" safexec cgroup; uses pidfd when available (race-safe).
- *  - PR_SET_NO_NEW_PRIVS is enabled before exec to prevent privilege regain.
+ *    belongs to an "nppp.*" safexec cgroup; uses pidfd when available (race-safe),
+ *    otherwise falls back to kill(). Ownership is checked via /proc/<pid>/status.
  *
  * Optional normalization (pctnorm)
  * --------------------------------
@@ -30,10 +38,12 @@
  *    - SAFEXEC_PCTNORM=1|0         (default 1)
  *    - SAFEXEC_PCTNORM_SO=/path/to/libnpp_norm.so
  *    - SAFEXEC_PCTNORM_CASE=upper|lower|off  (default upper)
- * The .so is injected *only* for wget/curl, and only if it is root:root,
- * a regular file, and not group/other-writable. When injected, safexec sets:
+ * The .so is injected *only* for wget/curl, and only if it is a regular file,
+ * root:root, not group/other-writable, and located beneath a trusted lib root
+ * (/usr/lib, /lib, /usr/lib64, /lib64). The basename must be "libnpp_norm.so".
+ * When injected, safexec sets:
  *    - LD_PRELOAD=<SO>, PCTNORM_CASE=<value>
- * Otherwise, env remains minimal (PATH, LANG).
+ * Otherwise, env remains minimal (PATH, LANG/LC_CTYPE/CHARSET).
  *
  * Detach / isolation mode
  * -----------------------
@@ -55,21 +65,30 @@
  * Behavior notes
  * --------------
  *  - If not installed setuid-root (or euid!=0 at runtime), safexec enters
- *    *pass-through* mode: no privilege drop or isolation is applied; it simply
- *    execs the target (still enforcing the allowlist).
+ *    *pass-through* mode: it still enforces the allowlist and absolute-path
+ *    pinning, but does not sanitize the environment, drop privileges, or apply
+ *    isolation (no cgroups/rlimits/NNP).
  *  - A per-run cgroup name "nppp.<pid>" is used to avoid stale limits. Empty
  *    stale "nppp.*" groups may be cleaned up automatically.
+ *  - Locale: attempts C.UTF-8 → en_US.UTF-8 → C; sets CHARSET to aid BusyBox wget.
  *  - When /tmp is not writable by the final euid and the command is wget with
  *    "-P /tmp", safexec rewrites the destination to "/tmp/nppp-cache/<euid>"
- *    if a safe, root-owned sticky parent exists. Otherwise it leaves "-P /tmp"
- *    untouched and warns.
+ *    if a safe, root-owned sticky parent exists ("/tmp/nppp-cache" is ensured
+ *    root:root 01777). Otherwise it leaves "-P /tmp" untouched and warns.
+ *  - Symlink note: on platforms without O_NOFOLLOW, open-time symlink protection
+ *    is reduced (compile-time fallback).
  *
  * Portability / features
  * ----------------------
- *  - Linux:   cgroup v2 join, pidfd-based kill (when kernel supports it),
- *             ioprio (when available), rlimits, closefrom via /proc/self/fd,
- *             PR_SET_NO_NEW_PRIVS, PR_SET_DUMPABLE(0).
+ *  - Linux:   cgroup v2 join (under /sys/fs/cgroup/nppp), pidfd-based kill (when
+ *             kernel supports it), ioprio (when available), rlimits, closefrom
+ *             via /proc/self/fd, PR_SET_NO_NEW_PRIVS, PR_SET_DUMPABLE(0).
  *  - BSD/macOS/other POSIX: rlimits + FD closing; no cgroup/pidfd.
+ *
+ * Optional tool buckets (build-time)
+ * ----------------------------------
+ *  Enable extra allowlisted tools with:
+ *    -DSAFEXEC_WITH_GS, -DSAFEXEC_WITH_POPPLER, -DSAFEXEC_WITH_DB, -DSAFEXEC_WITH_RSYNC_GIT
  *
  * Install (recommended)
  * ---------------------
@@ -583,6 +602,50 @@ static int cgv2_self_dir(char *out, size_t outsz) {
     }
     fclose(f);
     return rc;
+}
+
+// Summary report
+static void report_summary(const char *abs_tool, const char *cgroup_hint) {
+    uid_t ruid = getuid(), euid = geteuid();
+    gid_t rgid = getgid(), egid = getegid();
+
+    // Resolve cwd
+    char cwd[PATH_MAX]; const char *cwdp = getcwd(cwd, sizeof cwd) ? cwd : "(unavailable)";
+
+    s_fprintf(stderr,
+      "Summary: user=%ld:%ld (ruid=%ld rgid=%ld) cwd=%s tool=%s\n",
+      (long)euid, (long)egid, (long)ruid, (long)rgid, cwdp, abs_tool);
+
+#ifdef __linux__
+    int nnpr = prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
+    s_fprintf(stderr, "Summary: no_new_privs=%s\n", (nnpr == 0) ? "on" : "off");
+#endif
+
+    if (cgroup_hint && *cgroup_hint)
+        s_fprintf(stderr, "Summary: cgroup=%s\n", cgroup_hint);
+
+    // Print effective cgroup v2 limits if present
+    char cgdir[PATH_MAX];
+    if (cgv2_self_dir(cgdir, sizeof cgdir) == 0) {
+        #define SHOW(file,label) \
+            do { \
+                char pathbuf[PATH_MAX]; \
+                if (safe_snprintf(pathbuf, sizeof pathbuf, "%s/" file, cgdir) == 0) { \
+                    char tok[256] = {0}; \
+                    if (read_token(pathbuf, tok, sizeof tok) == 0) \
+                        s_fprintf(stderr, "Summary: " label "=%s\n", tok); \
+                } \
+            } while (0)
+        SHOW("memory.max","memory.max");
+        SHOW("pids.max","pids.max");
+        SHOW("cpu.weight","cpu.weight");
+        SHOW("io.max","io.max");
+        SHOW("cpuset.cpus","cpuset.cpus");
+        SHOW("cpuset.mems","cpuset.mems");
+        #undef SHOW
+    } else {
+        s_fprintf(stderr, "Summary: cgroup=(none; rlimits in effect)\n");  
+    }
 }
 
 static int cgv2_enable_one_at(const char *parent, const char *tok) {
@@ -1528,6 +1591,11 @@ post_drop:
             s_fprintf(stderr, "Info: LD_PRELOAD shim not applicable (prog=%s)\n", base_of(argv[prog_i]));
         }
     }
+
+    // Summary
+    char selfcg[PATH_MAX] = {0};
+    if (cgv2_self_dir(selfcg, sizeof selfcg) != 0) selfcg[0] = '\0';
+     report_summary(abs_tool, selfcg);
 
     // Close all inherited fds except stdio before exec
     closefrom_safe(3);
