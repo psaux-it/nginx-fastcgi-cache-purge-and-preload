@@ -1,6 +1,8 @@
-# safexec (secure, privilege-dropping wrapper)
+| <img width="90" height="90" alt="Image" src="https://github.com/user-attachments/assets/fc121fa8-813c-4eb3-bf7a-6628f4d8353a" />  | safexec (secure, privilege-dropping wrapper) |
+|---|---|
 
-[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](./LICENSE)
+
+[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](./LICENSE) [![safexec CI](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/actions/workflows/build-and-commit-safexec.yml/badge.svg)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/actions/workflows/build-and-commit-safexec.yml)
 
 `safexec` is a secure, privilege-dropping wrapper for executing a restricted set of tools (e.g., `wget`, `curl`) from higher-level contexts such as **PHP’s `shell_exec()`**.  
 It is written as the backend for **NPP (Nginx Cache Purge Preload for Wordpress)** and pairs with an optional LD_PRELOAD library, **`libnpp_norm.so`**, that normalizes percent-encoded HTTP request-lines during cache preloading to ensure consistent Nginx cache keys.
