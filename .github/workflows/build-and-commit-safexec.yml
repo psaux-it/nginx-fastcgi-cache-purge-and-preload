@@ -6,6 +6,7 @@ on:
       - "safexec/safexec.c"
       - "safexec/libnpp_norm.c"
       - "safexec/helpers/deb.sh"
+      - "safexec/helpers/rpm.sh"
       - ".github/workflows/build-and-commit-safexec.yml"
   workflow_dispatch: {}
 
