@@ -210,6 +210,42 @@ cat > debian/safexec.postinst <<'EOF'
 #!/bin/sh
 set -e
 
+_check_nosuid() {
+  _p=$1
+
+  # Prefer findmnt if available
+  if command -v findmnt >/dev/null 2>&1; then
+    _opts=$(findmnt -T "$_p" -no OPTIONS 2>/dev/null || true)
+    _mp=$(findmnt -T "$_p" -no TARGET 2>/dev/null || true)
+  fi
+
+  # Fallback: parse /proc/self/mountinfo and pick the longest matching mountpoint
+  if [ -z "${_opts:-}" ] || [ -z "${_mp:-}" ]; then
+    _abs=$(readlink -f "$_p" 2>/dev/null || echo "$_p")
+    _line=$(
+      awk -v ABS="$_abs" '
+        {
+          mp=$5; opts=$6;
+          # collect options until the " - " separator
+          for (i=7;i<=NF;i++) { if ($i=="-") break; opts=opts" "$i }
+          # match if ABS is exactly mp or under mp/
+          if (index(ABS, mp) == 1 && (ABS==mp || substr(ABS, length(mp)+1,1)=="/")) {
+            if (length(mp) > best) { best=length(mp); bmp=mp; bopts=opts }
+          }
+        }
+        END { if (best>0) print bmp "|" bopts }
+      ' /proc/self/mountinfo
+    )
+    _mp=${_line%%|*}
+    _opts=${_line#*|}
+  fi
+
+  # Warn if nosuid present (treat options as a comma list)
+  case ",${_opts}," in
+    *,nosuid,*) echo "Warning: filesystem '${_mp:-?}' that contains $_p is mounted with 'nosuid'. The SUID bit on safexec will be ignored (pass-through mode only)." >&2 ;;
+  esac
+}
+
 case "$1" in
   configure)
     # Ensure suid bit via statoverride (policy-compliant)
@@ -222,6 +258,8 @@ case "$1" in
     # Create convenience symlink /usr/lib/npp/libnpp_norm.so -> ../<triplet>/npp/libnpp_norm.so
     mkdir -p /usr/lib/npp
     ln -snf "../${TRIPLET_GLIBC}/npp/libnpp_norm.so" /usr/lib/npp/libnpp_norm.so
+
+    _check_nosuid "/usr/bin/safexec"
     ;;
 esac
 
