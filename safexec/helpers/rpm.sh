@@ -253,6 +253,48 @@ install -Dm0644 "%{SOURCE4}" "%{buildroot}/usr/share/licenses/%{name}/LICENSE"
 /usr/lib/npp/libnpp_norm.so
 %{_mandir}/man1/safexec.1*
 
+%post
+# keep non-empty
+/bin/true
+
+check_nosuid() {
+  _p="$1"
+
+  # Try findmnt first
+  if command -v findmnt >/dev/null 2>&1; then
+    _opts="$(findmnt -T "$_p" -no OPTIONS 2>/dev/null || true)"
+    _mp="$(findmnt -T "$_p" -no TARGET  2>/dev/null || true)"
+  fi
+
+  # Fallback: parse /proc/self/mountinfo (longest matching mountpoint)
+  if [ -z "${_opts:-}" ] || [ -z "${_mp:-}" ]; then
+    _abs="$(readlink -f "$_p" 2>/dev/null || echo "$_p")"
+    _line="$(
+      awk -v ABS="$_abs" '
+        BEGIN { best=0; bmp=""; bopts="" }
+        {
+          mp=$5; opts=$6;
+          for (i=7;i<=NF;i++) { if ($i=="-") break; opts=opts" "$i }
+          if (index(ABS, mp) == 1 && (ABS==mp || substr(ABS, length(mp)+1,1)=="/")) {
+            if (length(mp) > best) { best=length(mp); bmp=mp; bopts=opts }
+          }
+        }
+        END { if (best>0) print bmp "|" bopts }
+      ' /proc/self/mountinfo
+    )"
+    if [ -n "$_line" ]; then
+      _mp="${_line%%|*}"
+      _opts="${_line#*|}"
+    fi
+  fi
+
+  case ",${_opts}," in
+    *,nosuid,*) echo "Warning: filesystem '${_mp:-?}' that contains $_p is mounted with 'nosuid'. The SUID bit on safexec will be ignored (pass-through mode only)." >&2 ;;
+  esac
+}
+
+check_nosuid "/usr/bin/safexec"
+
 %changelog
 * __DATE_RPM__ __MAINT__ - __RPM_VERSION__-__RPM_RELEASE__
 - Install real shim at %{_libdir}/libnpp_norm.so
