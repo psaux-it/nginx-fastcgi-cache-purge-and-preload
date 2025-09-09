@@ -1942,11 +1942,27 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
         </div>
     <?php endif; ?>
 
-    <p class="description" style="margin-top:6px;"><?php echo esc_html__( 'Fix cache misses caused by mixed-case percent-encoding during cache preloading (on-fly).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+    <p class="description" style="margin-top:6px;"><?php echo esc_html__( 'Fix cache misses caused by mixed-case percent-encoding during cache preloading (on-the-fly).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
     <p class="description"><?php echo esc_html__( 'Different environments may send %xx hex in different cases during cache preloading; Nginx treats these as different cache keys, which can cause misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
     <p class="description"><?php echo esc_html__( 'Enable this if your URLs contain non-ASCII characters (Japanese/Chinese) or if you see %xx-encoded bytes in paths.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
     <p class="description"><?php echo esc_html__( 'Normalizing the hex case during cache preloading makes cache keys consistent and prevents Nginx cache misses after preloading completes.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-    <p class="description"><?php echo esc_html__( 'Requirements: safexec installed (see the Help tab).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+    <p class="description"><?php echo esc_html__( 'Requirements: safexec installed (see the Help tab).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p><br>
+    <p class="description">
+        <strong><?php echo esc_html_x('OFF', 'toggle option', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong>
+        — <?php echo esc_html__( 'Use when your URLs are ASCII-only and you never see %xx bytes.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+    </p>
+    <p class="description">
+        <strong><?php echo esc_html_x('PRESERVE', 'toggle option', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong>
+        — <?php echo esc_html__( 'Normalize percent-encoding without changing hex case (keeps original upper/lower). Good default when encoded bytes appear but case consistency is unknown.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+    </p>
+    <p class="description">
+        <strong><?php echo esc_html_x('UPPER', 'toggle option', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong>
+        — <?php echo esc_html__( 'Force %xx hex to uppercase during preloading to stay consistent with browser behaviour.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+    </p>
+    <p class="description">
+        <strong><?php echo esc_html_x('LOWER', 'toggle option', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong>
+        — <?php echo esc_html__( 'Force %xx hex to lowercase during preloading to stay consistent with browser behaviour.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+    </p>
     <?php
 }
 
