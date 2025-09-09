@@ -327,16 +327,9 @@ function nppp_nginx_cache_settings_page() {
                                 <div class="nppp-onoffswitch-proxy">
                                     <?php nppp_nginx_cache_enable_proxy_callback(); ?>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'Turn this ON only if you specifically benefit from a proxy. Typical use cases:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Legacy setups that relied on proxy-based %xx normalization. Prefer "URL Normalization" for mixed-case %xx cache keys going forward.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Debug/inspect preload traffic (record, replay, HAR capture).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Add or override headers for origin access (Authorization, custom auth, cookies).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Use client certificates / mTLS through the proxy when the origin requires it.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Force a fixed egress IP for allowlists or WAFs (egress control via the proxy).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Apply throttling, backoff, or retry policies at the proxy to protect the origin.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Override DNS/host mapping for staging or split-horizon testing.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Your network mandates an outbound proxy to reach the Internet.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'If enabling, follow the Help tab to install/configure mitmproxy and set the proxy URL/port.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Routes preload requests through your HTTP proxy (e.g. mitmproxy) so the cache is warmed via the proxy.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Enable if you need proxy features (debugging/inspection, custom headers, mTLS, fixed egress IP, corporate proxy, DNS overrides).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'If enabling, follow the Help tab for example use cases, keep in mind to set the proxy URL/PORT below.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Note: A proxy adds latency to cache preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
