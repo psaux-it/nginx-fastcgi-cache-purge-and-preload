@@ -3271,7 +3271,6 @@ td.nppp-cache-path.is-resolving::after {
 #pctnorm-off + .nppp-pctnorm__seg,
 #pctnorm-off + .nppp-segcontrol-seg{
     justify-content:flex-start;
-    transform:translateX(10px);
 }
 
 /* disabled (scoped) */
@@ -3313,9 +3312,15 @@ td.nppp-cache-path.is-resolving::after {
   }
 }
 
-/* Allow native tooltip on disabled pctnorm */
-#nppp-pctnorm .nppp-pctnorm__radio[disabled] + .nppp-pctnorm__seg{
-    opacity:.55;
-    cursor:not-allowed;
-    pointer-events:auto;
-}
+/* While saving: block clicks but keep appearance */
+#nppp-pctnorm.is-saving { cursor: progress; }
+#nppp-pctnorm.is-saving .nppp-pctnorm__seg { pointer-events: none; }
+
+/* True unavailable (safexec missing) – keep your greyed look */
+#nppp-pctnorm[aria-disabled="true"] .nppp-pctnorm__seg { opacity: .55; cursor: not-allowed; }
+
+/* Keep native title tooltip on labels even when permanently disabled */
+#nppp-pctnorm[aria-disabled="true"] .nppp-pctnorm__radio[disabled] + .nppp-pctnorm__seg { pointer-events: none; }
+
+#pctnorm-off + .nppp-pctnorm__seg,
+#pctnorm-off + .nppp-segcontrol-seg{ text-indent: 10px; }
