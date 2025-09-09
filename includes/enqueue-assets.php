@@ -134,6 +134,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'premium_nonce_locate' => wp_create_nonce('locate_cache_file_nonce'),
         'col_cache_path'   => __( 'Cache Path', 'fastcgi-cache-purge-and-preload-nginx' ),
         'col_cache_status' => __( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'pctnorm_nonce' => wp_create_nonce('nppp-update-pctnorm-mode'),
     ));
 }
 
