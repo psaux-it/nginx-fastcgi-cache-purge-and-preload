@@ -42,6 +42,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_preload_enable_proxy', 'Enable Proxy', 'nppp_nginx_cache_enable_proxy_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_preload_proxy_host', 'Proxy Host', 'nppp_nginx_cache_proxy_host_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_preload_proxy_port', 'Proxy Port', 'nppp_nginx_cache_proxy_port_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_pctnorm_mode', 'Percent-encoding Case', 'nppp_nginx_cache_pctnorm_mode_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -351,6 +352,15 @@ function nppp_nginx_cache_settings_page() {
                             <td>
                                 <?php nppp_nginx_cache_proxy_port_callback(); ?>
                                 <p class="description"><?php echo esc_html__('Enter the proxy port (e.g., 8080).', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row">
+                                <span class="dashicons dashicons-editor-code"></span>
+                                <?php echo esc_html__( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <?php nppp_nginx_cache_pctnorm_mode_callback(); ?>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -922,6 +932,40 @@ function nppp_update_related_fields() {
         'message' => __('Related pages preferences saved.', 'fastcgi-cache-purge-and-preload-nginx'),
         'data'    => $normalized,
     ]);
+}
+
+// AJAX callback function to update percent-encode case
+function nppp_update_pctnorm_mode() {
+    // Capability
+    if ( ! current_user_can('manage_options') ) {
+        wp_send_json_error(__('Permission denied.', 'fastcgi-cache-purge-and-preload-nginx'), 403);
+    }
+
+    // Nonce
+    check_ajax_referer('nppp-update-pctnorm-mode', '_wpnonce');
+
+    // Validate value
+    $val = isset($_POST['mode']) ? sanitize_text_field(wp_unslash($_POST['mode'])) : '';
+    $allowed = array( 'off', 'upper', 'lower' );
+    if (! in_array( $val, $allowed, true)) {
+        wp_send_json_error(__( 'Invalid mode.', 'fastcgi-cache-purge-and-preload-nginx'), 400);
+    }
+
+    // Save
+    update_option('nginx_cache_pctnorm_mode', $val);
+
+    // Nice label for UI
+    $label = strtoupper($val);
+
+    wp_send_json_success( array(
+        'saved' => $val,
+        'label' => $label,
+        'message' => sprintf(
+            /* Translators: %s is OFF/UPPER/LOWER */
+            __( 'Percent-encoding: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $label
+        )
+    ));
 }
 
 // AJAX callback function to update auto preload option
@@ -1825,6 +1869,34 @@ function nppp_nginx_cache_related_pages_callback() {
         </div>
 
     </fieldset>
+    <?php
+}
+
+// Related Pages (single-URL purge only) callback
+function nppp_nginx_cache_pctnorm_mode_callback() {
+    $current = get_option('nginx_cache_pctnorm_mode', 'off');
+    ?>
+    <fieldset id="nppp-pctnorm" class="nppp-segcontrol nppp-segcontrol--sm nppp-segcontrol--flat" role="radiogroup"
+        aria-label="<?php esc_attr_e( 'Percent-encoding Case', 'nppp' ); ?>">
+
+        <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-off"
+               name="nginx_cache_pctnorm_mode" value="off"   <?php checked( $current, 'off' ); ?> />
+        <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-off">OFF</label>
+
+        <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-upper"
+               name="nginx_cache_pctnorm_mode" value="upper" <?php checked( $current, 'upper' ); ?> />
+        <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-upper">UPPER</label>
+
+        <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-lower"
+               name="nginx_cache_pctnorm_mode" value="lower" <?php checked( $current, 'lower' ); ?> />
+        <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-lower">LOWER</label>
+
+        <span class="nppp-segcontrol-thumb nppp-pctnorm__thumb" aria-hidden="true"></span>
+    </fieldset>
+
+    <p class="description" style="margin-top:6px;">
+        <?php esc_html_e( 'Normalize percent-encoded octets in URLs. UPPER = A–F, LOWER = a–f, OFF = leave as-is.', 'nppp' ); ?>
+    </p>
     <?php
 }
 
