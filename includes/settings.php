@@ -936,35 +936,26 @@ function nppp_update_related_fields() {
 
 // AJAX callback function to update percent-encode case
 function nppp_update_pctnorm_mode() {
-    // Capability
     if ( ! current_user_can('manage_options') ) {
-        wp_send_json_error(__('Permission denied.', 'fastcgi-cache-purge-and-preload-nginx'), 403);
+        wp_send_json_error( __( 'Permission denied.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
     }
+    check_ajax_referer( 'nppp-update-pctnorm-mode', '_wpnonce' );
 
-    // Nonce
-    check_ajax_referer('nppp-update-pctnorm-mode', '_wpnonce');
-
-    // Validate value
-    $val = isset($_POST['mode']) ? sanitize_text_field(wp_unslash($_POST['mode'])) : '';
+    $val = isset($_POST['mode']) ? sanitize_text_field( wp_unslash($_POST['mode']) ) : '';
     $allowed = array( 'off', 'upper', 'lower' );
-    if (! in_array( $val, $allowed, true)) {
-        wp_send_json_error(__( 'Invalid mode.', 'fastcgi-cache-purge-and-preload-nginx'), 400);
+    if ( ! in_array( $val, $allowed, true ) ) {
+        wp_send_json_error( __( 'Invalid mode.', 'fastcgi-cache-purge-and-preload-nginx' ), 400 );
     }
 
-    // Save
-    update_option('nginx_cache_pctnorm_mode', $val);
+    $opts = get_option( 'nginx_cache_settings', array() );
+    $opts['nginx_cache_pctnorm_mode'] = $val;
+    update_option( 'nginx_cache_settings', $opts );
 
-    // Nice label for UI
-    $label = strtoupper($val);
-
+    $label = strtoupper( $val );
     wp_send_json_success( array(
-        'saved' => $val,
-        'label' => $label,
-        'message' => sprintf(
-            /* Translators: %s is OFF/UPPER/LOWER */
-            __( 'Percent-encoding: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-            $label
-        )
+        'saved'   => $val,
+        'label'   => $label,
+        'message' => sprintf( __( 'Percent-encoding: %s', 'fastcgi-cache-purge-and-preload-nginx' ), $label ),
     ));
 }
 
@@ -1874,21 +1865,22 @@ function nppp_nginx_cache_related_pages_callback() {
 
 // Related Pages (single-URL purge only) callback
 function nppp_nginx_cache_pctnorm_mode_callback() {
-    $current = get_option('nginx_cache_pctnorm_mode', 'off');
+    $opts    = get_option('nginx_cache_settings', array());
+    $current = isset($opts['nginx_cache_pctnorm_mode']) ? $opts['nginx_cache_pctnorm_mode'] : 'off';
     ?>
     <fieldset id="nppp-pctnorm" class="nppp-segcontrol nppp-segcontrol--sm nppp-segcontrol--flat" role="radiogroup"
         aria-label="<?php esc_attr_e( 'Percent-encoding Case', 'nppp' ); ?>">
 
         <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-off"
-               name="nginx_cache_pctnorm_mode" value="off"   <?php checked( $current, 'off' ); ?> />
+               name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="off"   <?php checked( $current, 'off' ); ?> />
         <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-off">OFF</label>
 
         <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-upper"
-               name="nginx_cache_pctnorm_mode" value="upper" <?php checked( $current, 'upper' ); ?> />
+               name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="upper" <?php checked( $current, 'upper' ); ?> />
         <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-upper">UPPER</label>
 
         <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-lower"
-               name="nginx_cache_pctnorm_mode" value="lower" <?php checked( $current, 'lower' ); ?> />
+               name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="lower" <?php checked( $current, 'lower' ); ?> />
         <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-lower">LOWER</label>
 
         <span class="nppp-segcontrol-thumb nppp-pctnorm__thumb" aria-hidden="true"></span>
@@ -2155,6 +2147,13 @@ function nppp_nginx_cache_settings_sanitize($input) {
     $sanitized_input['nppp_related_include_category']      = (isset($input['nppp_related_include_category'])      && $input['nppp_related_include_category'] === 'yes') ? 'yes' : 'no';
     $sanitized_input['nppp_related_apply_manual']          = (isset($input['nppp_related_apply_manual'])          && $input['nppp_related_apply_manual'] === 'yes') ? 'yes' : 'no';
     $sanitized_input['nppp_related_preload_after_manual']  = (isset($input['nppp_related_preload_after_manual'])  && $input['nppp_related_preload_after_manual'] === 'yes') ? 'yes' : 'no';
+
+    // Sanitize pctnorm
+    if (!empty($input['nginx_cache_pctnorm_mode']) ) {
+        $mode = sanitize_text_field($input['nginx_cache_pctnorm_mode']);
+        $allowed = array('off','upper','lower');
+        $sanitized_input['nginx_cache_pctnorm_mode'] = in_array($mode, $allowed, true) ? $mode : 'off';
+    }
 
     // Sanitize and validate cache limit rate
     if (!empty($input['nginx_cache_limit_rate'])) {
@@ -2441,6 +2440,7 @@ function nppp_defaults_on_plugin_activation() {
         'nppp_related_include_category'     => 'no',
         'nppp_related_apply_manual'         => 'no',
         'nppp_related_preload_after_manual' => 'no',
+        'nginx_cache_pctnorm_mode'          => 'off',
     );
 
     // Retrieve existing options (if any)
