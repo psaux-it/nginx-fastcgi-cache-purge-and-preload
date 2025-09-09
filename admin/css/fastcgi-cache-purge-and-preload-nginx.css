@@ -3312,3 +3312,10 @@ td.nppp-cache-path.is-resolving::after {
     min-width: 0;
   }
 }
+
+/* Allow native tooltip on disabled pctnorm */
+#nppp-pctnorm .nppp-pctnorm__radio[disabled] + .nppp-pctnorm__seg{
+    opacity:.55;
+    cursor:not-allowed;
+    pointer-events:auto;
+}
