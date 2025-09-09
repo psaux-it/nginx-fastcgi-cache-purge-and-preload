@@ -1054,6 +1054,8 @@ $(document).ready(function() {
         function debounce(fn, wait){ let t; return function(){ clearTimeout(t); t=setTimeout(() => fn.apply(this, arguments), wait); }; }
 
         const saveNow = debounce(function(){
+            if ($wrap.hasClass('is-saving')) return;
+
             const $checked = $radios.filter(':checked');
             if (!$checked.length) return;
 
@@ -1061,7 +1063,7 @@ $(document).ready(function() {
             if (mode === lastVal) return;
 
             // Disable during save
-            $radios.prop('disabled', true);
+            $wrap.addClass('is-saving');
 
             $.ajax({
                 url: nppp_admin_data.ajaxurl,
@@ -1095,12 +1097,15 @@ $(document).ready(function() {
                 showMiniBadge(msg, false);
             })
             .always(function(){
-                $radios.prop('disabled', false);
+                $wrap.removeClass('is-saving');
             });
         }, 200);
 
         // Save on change
-        $wrap.on('change', 'input[name="nginx_cache_settings[nginx_cache_pctnorm_mode]"]', saveNow);
+        $wrap.on('change', 'input[name="nginx_cache_settings[nginx_cache_pctnorm_mode]"]', function(){
+            if ($wrap.hasClass('is-saving')) return;
+            saveNow();
+        });
     })();
 
     // Update send mail status when state changes
