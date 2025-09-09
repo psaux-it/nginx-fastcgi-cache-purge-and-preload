@@ -3172,3 +3172,143 @@ td.nppp-cache-path.is-resolving::after {
 @media (prefers-reduced-motion: reduce) {
     td.nppp-cache-path.is-resolving::after { animation: none; }
 }
+
+/* ===========================================================
+   Percent-encoding Case control (OFF / UPPER / LOWER)
+=========================================================== */
+#nppp-pctnorm{
+    --pct-bg:#fff;
+    --pct-border:#f1f1f1;
+    --pct-text:#000;
+    --pct-on:#66b317;
+    --pct-off:#ea1919;
+
+    position:relative;
+    display:inline-grid;
+    grid-template-columns:1fr 1fr 1fr;
+    align-items:center;
+    height:34px;
+    padding:3px;
+    background:var(--pct-bg);
+    border:2px solid var(--pct-border);
+    box-sizing:border-box;
+    line-height:0;
+    overflow:hidden;
+    margin:0;
+}
+
+/* keep radios accessible but invisible */
+#nppp-pctnorm .nppp-pctnorm__radio,
+#nppp-pctnorm .nppp-segcontrol-radio{
+    position:absolute;
+    opacity:0;
+    width:1px;
+    height:1px;
+    margin:0;
+    padding:0;
+    border:0;
+}
+
+/* each segment (label) = inner well height */
+#nppp-pctnorm .nppp-pctnorm__seg,
+#nppp-pctnorm .nppp-segcontrol-seg{
+    position:relative;
+    z-index:2;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    line-height:24px;
+    padding:0 8px;
+    font:600 14px/1.1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",Arial,sans-serif;
+    color:var(--pct-text);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    cursor:pointer;
+    transition:color .14s ease, transform .08s ease;
+    -webkit-tap-highlight-color:transparent;
+}
+#nppp-pctnorm .nppp-pctnorm__seg:active,
+#nppp-pctnorm .nppp-segcontrol-seg:active{ transform:scale(.985); }
+
+/* keyboard focus (contained; won’t affect other widgets) */
+#nppp-pctnorm .nppp-pctnorm__radio:focus-visible + .nppp-pctnorm__seg,
+#nppp-pctnorm .nppp-segcontrol-radio:focus-visible + .nppp-segcontrol-seg{
+    box-shadow: inset 0 0 0 2px #1366D6;
+}
+
+/* sliding thumb (colored background) */
+#nppp-pctnorm .nppp-pctnorm__thumb,
+#nppp-pctnorm .nppp-segcontrol-thumb{
+    position:absolute;
+    z-index:1;
+    inset:3px;
+    height:24px;
+    width:calc((100% - 6px)/3);
+    background:#c9d9ec;
+    transform:translateX(0%);
+    transition:transform .22s cubic-bezier(.3,.9,.3,1), background-color .14s ease;
+    border-radius:0;
+}
+
+/* placement + color per selection (IDs already in your markup) */
+#pctnorm-off:checked   ~ .nppp-pctnorm__thumb,
+#pctnorm-off:checked   ~ .nppp-segcontrol-thumb{ transform:translateX(0%);   background:var(--pct-off); }
+#pctnorm-upper:checked ~ .nppp-pctnorm__thumb,
+#pctnorm-upper:checked ~ .nppp-segcontrol-thumb{ transform:translateX(100%); background:var(--pct-on);  }
+#pctnorm-lower:checked ~ .nppp-pctnorm__thumb,
+#pctnorm-lower:checked ~ .nppp-segcontrol-thumb{ transform:translateX(200%); background:var(--pct-on);  }
+
+/* active label = white text for contrast */
+#pctnorm-off:checked   + .nppp-pctnorm__seg,
+#pctnorm-upper:checked + .nppp-pctnorm__seg,
+#pctnorm-lower:checked + .nppp-pctnorm__seg,
+#pctnorm-off:checked   + .nppp-segcontrol-seg,
+#pctnorm-upper:checked + .nppp-segcontrol-seg,
+#pctnorm-lower:checked + .nppp-segcontrol-seg{ color:#fff; }
+
+/* OFF text nudged ~10px from the left edge */
+#pctnorm-off + .nppp-pctnorm__seg,
+#pctnorm-off + .nppp-segcontrol-seg{
+    justify-content:flex-start;
+    transform:translateX(10px);
+}
+
+/* disabled (scoped) */
+#nppp-pctnorm .nppp-pctnorm__radio[disabled] + .nppp-pctnorm__seg,
+#nppp-pctnorm .nppp-segcontrol-radio[disabled] + .nppp-segcontrol-seg{
+    opacity:.55;
+    cursor:not-allowed;
+    pointer-events:none;
+}
+
+/* dark mode (scoped) */
+@media (prefers-color-scheme: dark){
+    #nppp-pctnorm{ --pct-bg:#1d2327; --pct-border:#2a2f36; --pct-text:#b7bcc5; }
+}
+
+/* reduced motion */
+@media (prefers-reduced-motion: reduce){
+    #nppp-pctnorm .nppp-pctnorm__thumb,
+    #nppp-pctnorm .nppp-segcontrol-thumb,
+    #nppp-pctnorm .nppp-pctnorm__seg,
+    #nppp-pctnorm .nppp-segcontrol-seg{ transition:none; }
+}
+
+/* small mobile tweak: wider tap area, same heights */
+@media (max-width: 480px){
+    #nppp-pctnorm{ width:100%; }
+    #nppp-pctnorm .nppp-pctnorm__seg,
+    #nppp-pctnorm .nppp-segcontrol-seg{ font-size:13px; padding:0 6px; }
+    #pctnorm-off + .nppp-pctnorm__seg,
+    #pctnorm-off + .nppp-segcontrol-seg{ transform:translateX(8px); }
+}
+
+/* Mobile: make the pctnorm control 70% wide and centered */
+@media (max-width: 768px){
+  #nppp-pctnorm{
+    width: 70%;
+    margin-inline: auto;
+    min-width: 0;
+  }
+}
