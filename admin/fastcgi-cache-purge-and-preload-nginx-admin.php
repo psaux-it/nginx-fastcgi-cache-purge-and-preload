@@ -32,67 +32,84 @@ if (!defined('NPPP_HEADER_ACCEPT')) {
     define('NPPP_HEADER_ACCEPT', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,' . '*' . '/' . '*;q=0.8');
 }
 
-// Prepare PATH and SAFEXEC_QUIET env
+// Prepare PATH and SAFEXEC related env
 function nppp_prepare_request_env(bool $force = false): void {
     static $done = false;
-    if ($done) {
+
+    // allow re-run when forced
+    if ($done && !$force) {
         return;
     }
 
-    // If env funcs are disabled, just bail; calls will still run with the server's PATH.
     if (!function_exists('getenv') || !function_exists('putenv')) {
         $done = true;
         return;
     }
 
-    // Merge PATH once (adds common sbin/bin dirs if missing)
+    // register the shutdown restore ONCE
+    if (empty($GLOBALS['NPPP__RESTORE_REGISTERED'])) {
+        register_shutdown_function(static function () {
+            // PATH
+            if (array_key_exists('NPPP__ORIG_PATH', $GLOBALS)) {
+                $orig = $GLOBALS['NPPP__ORIG_PATH'];
+                if ($orig === null) putenv('PATH'); else putenv("PATH={$orig}");
+            }
+
+            // Always unset safexec related envs
+            putenv('SAFEXEC_QUIET');
+            putenv('SAFEXEC_PCTNORM');
+            putenv('SAFEXEC_PCTNORM_CASE');
+            putenv('SAFEXEC_DETACH');
+        });
+        $GLOBALS['NPPP__RESTORE_REGISTERED'] = true;
+    }
+
+    // PATH
     $need = ['/usr/local/sbin','/usr/local/bin','/usr/sbin','/usr/bin','/sbin','/bin'];
     $orig_path = getenv('PATH');
     $parts = $orig_path ? array_filter(explode(':', (string)$orig_path), fn($p) => $p !== '' && $p !== '.') : [];
     $merged = array_values(array_unique(array_merge($need, $parts)));
     $new_path = implode(':', $merged);
 
-    // Track what we change so we can restore at shutdown (prevents leaking into the FPM worker)
-    $GLOBALS['NPPP__ORIG_PATH'] = ($orig_path === false) ? null : $orig_path;
+    // Save only once so $force runs don't clobber the true original
+    if (!array_key_exists('NPPP__ORIG_PATH', $GLOBALS)) {
+        $GLOBALS['NPPP__ORIG_PATH'] = ($orig_path === false) ? null : $orig_path;
+    }
+
     if ($new_path !== $orig_path) {
         putenv("PATH={$new_path}");
     }
 
-    // ALWAYS quiet safexec during the request; restore original later
-    $orig_quiet = getenv('SAFEXEC_QUIET');
-    $GLOBALS['NPPP__ORIG_SAFEXEC_QUIET'] = ($orig_quiet === false) ? null : (string)$orig_quiet;
+    // Always quiet safexec
+    putenv('SAFEXEC_QUIET=1');
 
-    // Only mark "changed" if we actually need to flip it
-    if ($orig_quiet !== '1') {
-        putenv('SAFEXEC_QUIET=1');
-        $GLOBALS['NPPP__QUIET_WAS_CHANGED'] = true;
-    } else {
-        $GLOBALS['NPPP__QUIET_WAS_CHANGED'] = false;
+    // safexec mode (off|upper|lower|preserve)
+    $opts = get_option('nginx_cache_settings', []);
+    $mode = isset($opts['nginx_cache_pctnorm_mode']) ? strtolower((string)$opts['nginx_cache_pctnorm_mode']) : 'off';
+    if (!in_array($mode, ['off','upper','lower','preserve'], true)) $mode = 'off';
+
+    switch ($mode) {
+        case 'upper':
+            putenv('SAFEXEC_PCTNORM=1');
+            putenv('SAFEXEC_PCTNORM_CASE=upper');
+            break;
+        case 'lower':
+            putenv('SAFEXEC_PCTNORM=1');
+            putenv('SAFEXEC_PCTNORM_CASE=lower');
+            break;
+        case 'preserve':
+            putenv('SAFEXEC_PCTNORM=1');
+            putenv('SAFEXEC_PCTNORM_CASE=off');
+            break;
+        case 'off':
+        default:
+            putenv('SAFEXEC_PCTNORM=0');
+            putenv('SAFEXEC_PCTNORM_CASE');
+            break;
     }
 
-    // Restore at end of request so nothing bleeds into the next request on the same worker
-    register_shutdown_function(static function () {
-        // Restore PATH
-        if (array_key_exists('NPPP__ORIG_PATH', $GLOBALS)) {
-            $orig = $GLOBALS['NPPP__ORIG_PATH'];
-            if ($orig === null) {
-                // PATH was originally undefined
-                putenv('PATH');
-            } elseif (getenv('PATH') !== $orig) {
-                putenv("PATH={$orig}");
-            }
-        }
-
-        // Restore SAFEXEC_QUIET to its original value if we changed it
-        if (array_key_exists('NPPP__ORIG_SAFEXEC_QUIET', $GLOBALS) && !empty($GLOBALS['NPPP__QUIET_WAS_CHANGED'])) {
-            $orig = $GLOBALS['NPPP__ORIG_SAFEXEC_QUIET'];
-            if ($orig === null) {
-                putenv('SAFEXEC_QUIET'); // unset
-            } else {
-                putenv("SAFEXEC_QUIET={$orig}");
-            }
-        }
-    });
+    // Detach behavior for this request
+    putenv('SAFEXEC_DETACH=auto');
 
     $done = true;
 }
