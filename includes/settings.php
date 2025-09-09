@@ -945,7 +945,7 @@ function nppp_update_pctnorm_mode() {
     check_ajax_referer( 'nppp-update-pctnorm-mode', '_wpnonce' );
 
     $val = isset($_POST['mode']) ? sanitize_text_field( wp_unslash($_POST['mode']) ) : '';
-    $allowed = array( 'off', 'upper', 'lower' );
+    $allowed = array( 'off', 'upper', 'lower', 'preserve' );
     if ( ! in_array( $val, $allowed, true ) ) {
         wp_send_json_error( __( 'Invalid mode.', 'fastcgi-cache-purge-and-preload-nginx' ), 400 );
     }
@@ -1881,7 +1881,7 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
         $current = 'off';
     }
 
-    // Shown as native tooltip + data attribute for future JS, if you want
+    // Shown as native tooltip
     if (!$safexec_path) {
         $status_note = esc_html__( 'Unavailable: safexec not found. Install it to enable URL Normalization (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
     } elseif (!$safexec_ok) {
@@ -1901,22 +1901,35 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
               <?php if ( $is_disabled ) : ?>
                   data-note="<?php echo esc_attr($status_note); ?>"
               <?php endif; ?>
-              aria-label="<?php esc_attr_e( 'Percent-encoding Case', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
+              aria-label="<?php echo esc_attr_x( 'Percent-encoding case', 'settings field label', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
 
         <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-off"
                name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="off"
                <?php checked( $current, 'off' ); echo $is_disabled ? ' disabled' : ''; ?> />
-        <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-off">OFF</label>
+        <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-off">
+                <?php echo esc_html_x( 'OFF', 'toggle option', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </label>
+
+        <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-preserve"
+               name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="preserve"
+               <?php checked( $current, 'preserve' ); echo $is_disabled ? ' disabled' : ''; ?> />
+        <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-preserve">
+                <?php echo esc_html_x( 'PRESERVE', 'toggle option', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </label>
 
         <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-upper"
                name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="upper"
                <?php checked( $current, 'upper' ); echo $is_disabled ? ' disabled' : ''; ?> />
-        <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-upper">UPPER</label>
+        <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-upper">
+                <?php echo esc_html_x( 'UPPER', 'toggle option', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </label>
 
         <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-lower"
                name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="lower"
                <?php checked( $current, 'lower' ); echo $is_disabled ? ' disabled' : ''; ?> />
-        <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-lower">LOWER</label>
+        <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-lower">
+               <?php echo esc_html_x( 'LOWER', 'toggle option', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </label>
         <span class="nppp-segcontrol-thumb nppp-pctnorm__thumb" aria-hidden="true"></span>
     </fieldset>
 
@@ -2196,7 +2209,7 @@ function nppp_nginx_cache_settings_sanitize($input) {
     // Sanitize pctnorm
     if (!empty($input['nginx_cache_pctnorm_mode']) ) {
         $mode = sanitize_text_field($input['nginx_cache_pctnorm_mode']);
-        $allowed = array('off','upper','lower');
+        $allowed = array('off','upper','lower','preserve');
         $sanitized_input['nginx_cache_pctnorm_mode'] = in_array($mode, $allowed, true) ? $mode : 'off';
     }
 
