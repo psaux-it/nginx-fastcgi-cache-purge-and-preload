@@ -1011,6 +1011,98 @@ $(document).ready(function() {
         });
     });
 
+    // === Percent-encoding Case (pctnorm) autosave ===
+    (function npppPctnormAutoSave() {
+        const $wrap = $('#nppp-pctnorm');
+        if (!$wrap.length || !window.nppp_admin_data) return;
+
+        const $radios = $wrap.find('input[name="nginx_cache_pctnorm_mode"]');
+        if (!$radios.length) return;
+
+        // Track last committed value to allow revert on failure
+        let lastVal = $radios.filter(':checked').val();
+
+        // Lightweight inline badge
+        function showMiniBadge(text, ok=true){
+            const off = $wrap.offset();
+            if (!off) return;
+            const $badge = $('<div/>', {
+                text,
+                class: 'nppp-mini-badge'
+            }).css({
+                position: 'absolute',
+                left: off.left + $wrap.outerWidth() + 10,
+                top:  off.top  + 2,
+                backgroundColor: ok ? '#50C878' : '#D32F2F',
+                color: '#fff',
+                padding: '6px 10px',
+                fontSize: '12px',
+                fontWeight: 700,
+                borderRadius: '4px',
+                zIndex: 9999,
+                opacity: 1,
+                transition: 'opacity .3s ease'
+            }).appendTo(document.body);
+
+            setTimeout(() => {
+                $badge.css('opacity', 0);
+                setTimeout(() => $badge.remove(), 300);
+            }, 1200);
+        }
+
+        // Debounce helper
+        function debounce(fn, wait){ let t; return function(){ clearTimeout(t); t=setTimeout(() => fn.apply(this, arguments), wait); }; }
+
+        const saveNow = debounce(function(){
+            const $checked = $radios.filter(':checked');
+            if (!$checked.length) return;
+
+            const mode = $checked.val();
+            if (mode === lastVal) return;
+
+            // Disable during save
+            $radios.prop('disabled', true);
+
+            $.ajax({
+                url: nppp_admin_data.ajaxurl,
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    action: 'nppp_update_pctnorm_mode',
+                    mode: mode,
+                    _wpnonce: nppp_admin_data.pctnorm_nonce
+                }
+            })
+            .done(function(resp){
+                if (resp && resp.success) {
+                    lastVal = mode;
+                    showMiniBadge(
+                        (resp.data && resp.data.message) || __('Percent-encoding.', 'fastcgi-cache-purge-and-preload-nginx'),
+                        true
+                    );
+                } else {
+                    // revert on error
+                    $radios.filter('[value="'+ lastVal +'"]').prop('checked', true);
+                    const msg = (resp && (resp.message || (resp.data && resp.data))) || __('Failed to save.', 'fastcgi-cache-purge-and-preload-nginx');
+                    showMiniBadge(msg, false);
+                }
+            })
+            .fail(function(xhr){
+                // revert on ajax fail
+                $radios.filter('[value="'+ lastVal +'"]').prop('checked', true);
+                const j = xhr && xhr.responseJSON;
+                const msg = (j && (j.message || (j.data && j.data))) || __('Network error.', 'fastcgi-cache-purge-and-preload-nginx');
+                showMiniBadge(msg, false);
+            })
+            .always(function(){
+                $radios.prop('disabled', false);
+            });
+        }, 200);
+
+        // Save on change
+        $wrap.on('change', 'input[name="nginx_cache_pctnorm_mode"]', saveNow);
+    })();
+
     // Update send mail status when state changes
     $('#nginx_cache_send_mail').change(function() {
         // Calculate the notification position
