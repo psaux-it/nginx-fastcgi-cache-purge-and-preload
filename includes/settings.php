@@ -1875,6 +1875,12 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     $safexec_ok   = $safexec_path && nppp_is_safexec_usable($safexec_path, false);
     $is_disabled = ! $safexec_ok;
 
+    if ($is_disabled && $current !== 'off') {
+        $opts['nginx_cache_pctnorm_mode'] = 'off';
+        update_option('nginx_cache_settings', $opts);
+        $current = 'off';
+    }
+
     // Shown as native tooltip + data attribute for future JS, if you want
     if (!$safexec_path) {
         $status_note = esc_html__( 'Unavailable: safexec not found. Install it to enable URL Normalization (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
