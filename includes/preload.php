@@ -115,7 +115,7 @@ function nppp_find_safexec_path() {
     // Set env
     nppp_prepare_request_env(true);
 
-    $default_path = '/usr/local/bin/safexec';
+    $default_path = '/usr/bin/safexec';
     if ($wp_filesystem->exists($default_path)) {
         return $default_path;
     }
