@@ -1024,6 +1024,17 @@ $(document).ready(function() {
 
         // Lightweight inline badge
         function showMiniBadge(text, ok=true){
+            // WordPress admin's common breakpoint
+            const isMobile = window.matchMedia && window.matchMedia('(max-width: 782px)').matches;
+
+            // On mobile, use the global toast
+            if (isMobile) {
+                // map ok -> toast type
+                const type = ok ? 'success' : 'error';
+                npppToast(String(text), type, 3000);
+                return;
+            }
+
             const off = $wrap.offset();
             if (!off) return;
             const $badge = $('<div/>', {
