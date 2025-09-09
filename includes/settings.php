@@ -327,11 +327,17 @@ function nppp_nginx_cache_settings_page() {
                                 <div class="nppp-onoffswitch-proxy">
                                     <?php nppp_nginx_cache_enable_proxy_callback(); ?>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'Enable this feature to route preload requests through a local proxy (mitmproxy).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'This helps unify percent-encoding (uppercase vs lowercase) in URLs, matching browser behavior.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Without this feature, Nginx may generate separate cache keys for uppercase/lowercase percent-encoded URLs, leading to cache misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Only use this if you encounter such a problem. Please see the Help tab for setup instructions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'For example, use this when your site has non-ASCII URLs (like Chinese or Japanese) and you experience cache misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Turn this ON only if you specifically benefit from a proxy. Typical use cases:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Legacy setups that relied on proxy-based %xx normalization. Prefer "URL Normalization" for mixed-case %xx cache keys going forward.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Debug/inspect preload traffic (record, replay, HAR capture).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Add or override headers for origin access (Authorization, custom auth, cookies).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Use client certificates / mTLS through the proxy when the origin requires it.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Force a fixed egress IP for allowlists or WAFs (egress control via the proxy).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Apply throttling, backoff, or retry policies at the proxy to protect the origin.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Override DNS/host mapping for staging or split-horizon testing.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><span class="dashicons dashicons-yes" aria-hidden="true"></span><?php echo esc_html__( 'Your network mandates an outbound proxy to reach the Internet.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'If enabling, follow the Help tab to install/configure mitmproxy and set the proxy URL/port.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Note: A proxy adds latency to cache preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -1873,8 +1879,7 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     $current = isset($opts['nginx_cache_pctnorm_mode']) ? $opts['nginx_cache_pctnorm_mode'] : 'off';
     ?>
     <fieldset id="nppp-pctnorm" class="nppp-segcontrol nppp-segcontrol--sm nppp-segcontrol--flat" role="radiogroup"
-        aria-label="<?php esc_attr_e( 'Percent-encoding Case', 'nppp' ); ?>">
-
+        aria-label="<?php esc_attr_e( 'Percent-encoding Case', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
         <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-off"
                name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="off"   <?php checked( $current, 'off' ); ?> />
         <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-off">OFF</label>
@@ -1891,7 +1896,19 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     </fieldset>
 
     <p class="description" style="margin-top:6px;">
-        <?php esc_html_e( 'Normalize percent-encoded octets in URLs. UPPER = A–F, LOWER = a–f, OFF = leave as-is.', 'nppp' ); ?>
+        <?php echo esc_html__( 'Fix cache misses caused by mixed-case percent-encoding during cache preloading (on-fly).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+    </p>
+    <p class="description">
+        <?php echo esc_html__( 'Different environments may send %xx hex in different cases during cache preloading; Nginx treats these as different cache keys, which can cause misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+    </p>
+    <p class="description">
+        <?php echo esc_html__( 'Enable this if your URLs contain non-ASCII characters (Japanese/Chinese) or if you see %xx-encoded bytes in paths.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+    </p>
+    <p class="description">
+        <?php echo esc_html__( 'Normalizing the hex case during cache preloading makes cache keys consistent and prevents Nginx cache misses after preloading completes.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+    </p>
+    <p class="description">
+       <?php echo esc_html__( 'Requirements: safexec installed (see the Help tab).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
     </p>
     <?php
 }
