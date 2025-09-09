@@ -594,7 +594,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             $killed_by_safexec = false;
 
             if ($process_user === 'nobody') {
-                $safexec_path = '/usr/local/bin/safexec';
+                $safexec_path = '/usr/bin/safexec';
 
                 // If not present at default location, try to discover via system path
                 if (!$wp_filesystem->exists($safexec_path)) {
