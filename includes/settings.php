@@ -739,9 +739,13 @@ function nppp_handle_nginx_cache_settings_submission() {
 
                     // If there are no sanitize errors, proceed to update the settings
                     if (empty($errors)) {
+                        // PRESERVE UNTOUCHED KEYS — merge sanitized with existing
+                        $existing_options = (array) $existing_options;
+                        $merged = wp_parse_args($new_settings, $existing_options);
+
                         // Get the old and new opt-in values
                         $old_opt_in = isset($existing_options['nginx_cache_tracking_opt_in']) ? $existing_options['nginx_cache_tracking_opt_in'] : '1';
-                        $new_opt_in = isset($new_settings['nginx_cache_tracking_opt_in']) ? $new_settings['nginx_cache_tracking_opt_in'] : '1';
+                        $new_opt_in = isset($merged['nginx_cache_tracking_opt_in']) ? $merged['nginx_cache_tracking_opt_in'] : '1';
 
                         // Always delete the plugin permission cache when the form is submitted
                         $static_key_base = 'nppp';
@@ -750,7 +754,7 @@ function nppp_handle_nginx_cache_settings_submission() {
 
                         // Update the settings
                         // Note: This will re-encode 'nginx_cache_key_custom_regex' via sanitization
-                        update_option('nginx_cache_settings', $new_settings);
+                        update_option('nginx_cache_settings', $merged);
 
                         // Compare old and new opt-in values
                         if ($old_opt_in !== $new_opt_in) {
