@@ -1866,43 +1866,68 @@ function nppp_nginx_cache_related_pages_callback() {
     <?php
 }
 
-// Related Pages (single-URL purge only) callback
+// Percent encode URL Normalization callback
 function nppp_nginx_cache_pctnorm_mode_callback() {
     $opts    = get_option('nginx_cache_settings', array());
     $current = isset($opts['nginx_cache_pctnorm_mode']) ? $opts['nginx_cache_pctnorm_mode'] : 'off';
+
+    $safexec_path = nppp_find_safexec_path();
+    $safexec_ok   = $safexec_path && nppp_is_safexec_usable($safexec_path, false);
+    $is_disabled = ! $safexec_ok;
+
+    // Shown as native tooltip + data attribute for future JS, if you want
+    if (!$safexec_path) {
+        $status_note = esc_html__( 'Unavailable: safexec not found. Install it to enable URL Normalization (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif (!$safexec_ok) {
+        $status_note = esc_html__( 'Unavailable: safexec is present but not SUID/root-owned. Fix permissions to enable URL Normalization (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
+    } else {
+        $status_note = '';
+    }
+
+    $fieldset_aria    = $is_disabled ? ' aria-disabled="true"' : '';
+    $fieldset_title   = $is_disabled ? ' title="' . esc_attr( $status_note ) . '"' : '';
+    $fieldset_class   = 'nppp-segcontrol nppp-segcontrol--sm nppp-segcontrol--flat' . ( $is_disabled ? ' nppp-is-disabled' : '' );
     ?>
-    <fieldset id="nppp-pctnorm" class="nppp-segcontrol nppp-segcontrol--sm nppp-segcontrol--flat" role="radiogroup"
-        aria-label="<?php esc_attr_e( 'Percent-encoding Case', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
+    <fieldset id="nppp-pctnorm"
+              class="<?php echo esc_attr($fieldset_class); ?>"
+              role="radiogroup"
+              <?php echo $fieldset_aria . $fieldset_title; ?>
+              <?php if ( $is_disabled ) : ?>
+                  data-note="<?php echo esc_attr($status_note); ?>"
+              <?php endif; ?>
+              aria-label="<?php esc_attr_e( 'Percent-encoding Case', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
+
         <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-off"
-               name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="off"   <?php checked( $current, 'off' ); ?> />
+               name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="off"
+               <?php checked( $current, 'off' ); echo $is_disabled ? ' disabled' : ''; ?> />
         <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-off">OFF</label>
 
         <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-upper"
-               name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="upper" <?php checked( $current, 'upper' ); ?> />
+               name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="upper"
+               <?php checked( $current, 'upper' ); echo $is_disabled ? ' disabled' : ''; ?> />
         <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-upper">UPPER</label>
 
         <input class="nppp-segcontrol-radio nppp-pctnorm__radio" type="radio" id="pctnorm-lower"
-               name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="lower" <?php checked( $current, 'lower' ); ?> />
+               name="nginx_cache_settings[nginx_cache_pctnorm_mode]" value="lower"
+               <?php checked( $current, 'lower' ); echo $is_disabled ? ' disabled' : ''; ?> />
         <label class="nppp-segcontrol-seg nppp-pctnorm__seg" for="pctnorm-lower">LOWER</label>
-
         <span class="nppp-segcontrol-thumb nppp-pctnorm__thumb" aria-hidden="true"></span>
     </fieldset>
 
-    <p class="description" style="margin-top:6px;">
-        <?php echo esc_html__( 'Fix cache misses caused by mixed-case percent-encoding during cache preloading (on-fly).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-    </p>
-    <p class="description">
-        <?php echo esc_html__( 'Different environments may send %xx hex in different cases during cache preloading; Nginx treats these as different cache keys, which can cause misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-    </p>
-    <p class="description">
-        <?php echo esc_html__( 'Enable this if your URLs contain non-ASCII characters (Japanese/Chinese) or if you see %xx-encoded bytes in paths.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-    </p>
-    <p class="description">
-        <?php echo esc_html__( 'Normalizing the hex case during cache preloading makes cache keys consistent and prevents Nginx cache misses after preloading completes.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-    </p>
-    <p class="description">
-       <?php echo esc_html__( 'Requirements: safexec installed (see the Help tab).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-    </p>
+    <?php if ($is_disabled) : ?>
+        <div class="nppp-related-pages" aria-live="polite">
+            <div class="nppp-hint" role="note" style="max-width:max-content;">
+                <span class="dashicons dashicons-info-outline" aria-hidden="true"></span>
+                <?php echo esc_html( $status_note ); ?>
+           </div>
+        </div>
+    <?php endif; ?>
+
+    <p class="description" style="margin-top:6px;"><?php echo esc_html__( 'Fix cache misses caused by mixed-case percent-encoding during cache preloading (on-fly).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+    <p class="description"><?php echo esc_html__( 'Different environments may send %xx hex in different cases during cache preloading; Nginx treats these as different cache keys, which can cause misses.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+    <p class="description"><?php echo esc_html__( 'Enable this if your URLs contain non-ASCII characters (Japanese/Chinese) or if you see %xx-encoded bytes in paths.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+    <p class="description"><?php echo esc_html__( 'Normalizing the hex case during cache preloading makes cache keys consistent and prevents Nginx cache misses after preloading completes.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+    <p class="description"><?php echo esc_html__( 'Requirements: safexec installed (see the Help tab).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
     <?php
 }
 
