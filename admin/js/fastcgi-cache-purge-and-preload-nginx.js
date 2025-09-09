@@ -1016,7 +1016,7 @@ $(document).ready(function() {
         const $wrap = $('#nppp-pctnorm');
         if (!$wrap.length || !window.nppp_admin_data) return;
 
-        const $radios = $wrap.find('input[name="nginx_cache_pctnorm_mode"]');
+        const $radios = $wrap.find('input[name="nginx_cache_settings[nginx_cache_pctnorm_mode]"]');
         if (!$radios.length) return;
 
         // Track last committed value to allow revert on failure
@@ -1100,7 +1100,7 @@ $(document).ready(function() {
         }, 200);
 
         // Save on change
-        $wrap.on('change', 'input[name="nginx_cache_pctnorm_mode"]', saveNow);
+        $wrap.on('change', 'input[name="nginx_cache_settings[nginx_cache_pctnorm_mode]"]', saveNow);
     })();
 
     // Update send mail status when state changes
