@@ -3311,7 +3311,7 @@ td.nppp-cache-path.is-resolving::after {
 /* Mobile: make the pctnorm control 70% wide and centered */
 @media (max-width: 768px){
   #nppp-pctnorm{
-    width: 70%;
+    width: 100%;
     margin-inline: auto;
     min-width: 0;
   }
@@ -3328,4 +3328,4 @@ td.nppp-cache-path.is-resolving::after {
 #nppp-pctnorm[aria-disabled="true"] .nppp-pctnorm__radio[disabled] + .nppp-pctnorm__seg { pointer-events: none; }
 
 #pctnorm-off + .nppp-pctnorm__seg,
-#pctnorm-off + .nppp-segcontrol-seg{ text-indent: 10px; }
+#pctnorm-off + .nppp-segcontrol-seg{ text-indent: 20px; }
