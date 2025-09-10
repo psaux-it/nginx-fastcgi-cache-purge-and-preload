@@ -98,6 +98,22 @@ $(document).ready(function() {
         });
     }
 
+    // Toggle the FAB from outside
+    function npppFabSet(forceHidden) {
+        var fab = document.querySelector('.nppp-scrollfab');
+        if (!fab) return;
+
+        if (forceHidden) {
+            // lock it hidden regardless of scroll
+            fab.setAttribute('data-lock', 'true');
+            fab.setAttribute('data-hidden', 'true');
+        } else {
+            // unlock and re-evaluate via scroll logic
+            fab.removeAttribute('data-lock');
+            window.dispatchEvent(new Event('scroll'));
+        }
+    }
+
     // Function to handle tab content activation
     function npppActivateTab(tabId) {
         // Hide all content placeholders
@@ -112,10 +128,12 @@ $(document).ready(function() {
                 nppdisconnectObserver();
                 $settingsPlaceholder.show();
                 nppphighlightSubmenu('.nppp-submenu ul li a', 900);
+                npppFabSet(false);
                 break;
             case 'status':
                 showPreloader();
                 loadStatusTabContent();
+                npppFabSet(true);
                 // Warn the user if a systemd service restart
                 // is required due to missing fuse cache path mounts
                 const statusTabContent = document.querySelector('#status');
@@ -129,10 +147,12 @@ $(document).ready(function() {
                 showPreloader();
                 nppdisconnectObserver();
                 loadPremiumTabContent();
+                npppFabSet(true);
                 break;
             case 'help':
                 nppdisconnectObserver();
                 $helpPlaceholder.show();
+                npppFabSet(true);
                 break;
         }
     }
@@ -284,7 +304,7 @@ $(document).ready(function() {
             var btnBottom = document.createElement('button');
             btnBottom.type = 'button';
             btnBottom.setAttribute('aria-label', 'Go to bottom');
-            btnBottom.textContent = '↓ Bottom';
+            btnBottom.textContent = '↓ Bot';
 
             fab.appendChild(btnTop);
             fab.appendChild(btnBottom);
@@ -317,7 +337,20 @@ $(document).ready(function() {
             // Show/hide controls after you scroll a bit
             var lastStateHidden = true;
             function onScroll() {
-                var hidden = window.scrollY < 400;
+                // if locked, stay hidden no matter what
+                if (fab.getAttribute('data-lock') === 'true') {
+                    if (fab.getAttribute('data-hidden') !== 'true') {
+                        fab.setAttribute('data-hidden', 'true');
+                    }
+                    return;
+                }
+
+                // only allow the FAB on the Settings tab
+                var onSettings = $('#settings').is(':visible');
+
+                // require some scroll depth AND being on Settings
+                var hidden = !onSettings || window.scrollY < 400;
+
                 if (hidden !== lastStateHidden) {
                     fab.setAttribute('data-hidden', hidden ? 'true' : 'false');
                     lastStateHidden = hidden;
@@ -353,6 +386,12 @@ $(document).ready(function() {
                 setTimeout(onScroll, 0);
             });
         }
+    })();
+
+    // Ensure FAB visibility matches the current tab on load
+    (function syncFabOnce(){
+        var id = ($('#nppp-nginx-tabs .ui-tabs-panel:visible').attr('id')) || (location.hash || '#settings').slice(1);
+        npppFabSet(id !== 'settings');
     })();
 
     // Listen for hash changes (URL changes) and re-activate the correct tab
