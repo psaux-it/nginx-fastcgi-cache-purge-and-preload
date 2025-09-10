@@ -284,22 +284,31 @@ $(document).ready(function() {
     }
     function npppInferType(msg, fallback='info'){
         if (/success/i.test(msg)) return 'success';
-        if (/error/i.test(msg)) return 'error';
-        if (/info/i.test(msg))  return 'info';
+        if (/error|fail|denied|invalid/i.test(msg)) return 'error';
+        if (/info|notice|warning/i.test(msg)) return 'info';
         return fallback;
     }
     function npppToast(message, type='info', timeout=4500){
         const c = npppEnsureToastContainer();
+
+        // Map legacy types
+        const map = {
+            success: 'nppp-is-success',
+            error:   'nppp-is-error',
+            info:    'nppp-is-info',
+            warning: 'nppp-is-info'
+        };
+        const variant = map[(type || 'info').toLowerCase()] || 'nppp-is-info';
+
         const t = document.createElement('div');
-        t.className = 'nppp-toast ' + (type || 'info');
+        t.className = 'nppp-toast ' + variant;
         t.setAttribute('role', 'status');
-        t.setAttribute('aria-live', 'polite');
+        t.setAttribute('aria-live', (variant === 'nppp-is-error') ? 'assertive' : 'polite');
         t.innerHTML = `
             <span class="nppp-ico" aria-hidden="true"></span>
             <span class="nppp-close" aria-label="${__('Dismiss','fastcgi-cache-purge-and-preload-nginx')}">×</span>
             <div class="nppp-msg"></div>
         `;
-        // allow safe server HTML
         t.querySelector('.nppp-msg').innerHTML = message;
         t.querySelector('.nppp-close').onclick = () => npppDismissToast(t);
         c.prepend(t);
@@ -998,11 +1007,15 @@ $(document).ready(function() {
                     }
                 } else {
                     // on error
+                    npppPreloadInProgress = false;
+                    allBtns.prop('disabled', false).removeClass('disabled');
                     btn.prop('disabled', false).removeClass('disabled');
                 }
             },
             error: function(xhr, status, error) {
                 npppToast(error || __('AJAX error','fastcgi-cache-purge-and-preload-nginx'), 'error');
+                npppPreloadInProgress = false;
+                allBtns.prop('disabled', false).removeClass('disabled');
                 btn.prop('disabled', false).removeClass('disabled');
             },
             complete: function() {
