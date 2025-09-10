@@ -264,6 +264,97 @@ $(document).ready(function() {
     // Call on page load to handle deep linking (activate tab based on URL hash)
     activateTabFromHash();
 
+    // Scroll FAB + anchor offset (scoped)
+    (function () {
+        // Only run on our screen
+        var $container = $('#nppp-nginx-tabs');
+        if (!$container.length) return;
+
+        // Create back-to-top / bottom controls (only once)
+        if (!document.querySelector('.nppp-scrollfab')) {
+            var fab = document.createElement('div');
+            fab.className = 'nppp-scrollfab';
+            fab.setAttribute('data-hidden', 'true');
+
+            var btnTop = document.createElement('button');
+            btnTop.type = 'button';
+            btnTop.setAttribute('aria-label', 'Back to top');
+            btnTop.textContent = '↑ Top';
+
+            var btnBottom = document.createElement('button');
+            btnBottom.type = 'button';
+            btnBottom.setAttribute('aria-label', 'Go to bottom');
+            btnBottom.textContent = '↓ Bottom';
+
+            fab.appendChild(btnTop);
+            fab.appendChild(btnBottom);
+            document.body.appendChild(fab);
+
+            // Helpers
+            function wpAdminBarOffset() {
+                var bar = document.getElementById('wpadminbar');
+                return (bar ? bar.offsetHeight : 0) + 8;
+            }
+            function prefersNoMotion() {
+                return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            }
+            function smoothScrollTo(y) {
+                if (prefersNoMotion()) {
+                    window.scrollTo(0, y);
+                } else {
+                    window.scrollTo({ top: y, behavior: 'smooth' });
+                }
+            }
+
+            // Top / Bottom clicks
+            btnTop.addEventListener('click', function () {
+                smoothScrollTo(0);
+            });
+            btnBottom.addEventListener('click', function () {
+                smoothScrollTo(document.documentElement.scrollHeight);
+            });
+
+            // Show/hide controls after you scroll a bit
+            var lastStateHidden = true;
+            function onScroll() {
+                var hidden = window.scrollY < 400;
+                if (hidden !== lastStateHidden) {
+                    fab.setAttribute('data-hidden', hidden ? 'true' : 'false');
+                    lastStateHidden = hidden;
+                }
+            }
+            window.addEventListener('scroll', onScroll, { passive: true });
+            onScroll();
+
+            // Anchor jumps INSIDE our container should respect the admin bar
+            $container.on('click', 'a[href^="#"]', function (e) {
+                var href = $(this).attr('href');
+                if (!href || href === '#') return;
+
+                var id = href.slice(1);
+                var target = document.getElementById(id);
+                if (!target) return;
+
+                // Skip if it's a tab link (let your tabs code handle it)
+                var tabIds = ['settings','status','premium','help'];
+                if (tabIds.indexOf(id) !== -1) return;
+
+                e.preventDefault();
+                var rect = target.getBoundingClientRect();
+                var y = window.scrollY + rect.top - wpAdminBarOffset() - 8;
+                smoothScrollTo(y);
+
+                // keep URL hash tidy without firing your hashchange logic
+                history.replaceState(null, '', '#' + id);
+            });
+
+            // Re-evaluate FAB visibility after tab switches
+            $container.on('tabsactivate', function () {
+                setTimeout(onScroll, 0);
+            });
+        }
+    })();
+
     // Listen for hash changes (URL changes) and re-activate the correct tab
     $(window).on('hashchange', function() {
         activateTabFromHash();
