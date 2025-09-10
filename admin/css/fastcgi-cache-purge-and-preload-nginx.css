@@ -2803,7 +2803,12 @@ p.description {
 #nppp-toast-container{
     position:fixed; right:12px; z-index:999999;
     display:flex; flex-direction:column; gap:10px;
+    /* fallback in case JS hasn't set top inline yet */
+    top:12px;
 }
+/* Ensure visibility even if some plugin sets .error {display:none} */
+#nppp-toast-container .nppp-toast{ display:block; }
+
 .nppp-toast{
     min-width:280px; max-width:420px; padding:12px 14px 12px 44px;
     border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.18);
@@ -2818,29 +2823,30 @@ p.description {
     font:20px/1 dashicons; width:24px; text-align:center;
 }
 
-.nppp-toast.success{ border-left-color:#46b450; }
-.nppp-toast.success .nppp-ico:before{ content:"\f147"; color:#46b450; }
-.nppp-toast.error{ border-left-color:#dc3232; }
-.nppp-toast.error .nppp-ico:before{ content:"\f158"; color:#dc3232; }
-.nppp-toast.info{ border-left-color:#ffb900; }
-.nppp-toast.info .nppp-ico:before{ content:"\f469"; color:#ffb900; }
+/* namespaced variants */
+.nppp-toast.nppp-is-success{ border-left-color:#46b450; }
+.nppp-toast.nppp-is-success .nppp-ico:before{ content:"\f147"; color:#46b450; }
 
-@keyframes nppp-slide-in{ from{ transform:translateX(8px); opacity:0 } to{ transform:translateX(0); opacity:1 } }
-@keyframes nppp-slide-out{ to{ transform:translateX(8px); opacity:0 } }
+.nppp-toast.nppp-is-error{ border-left-color:#dc3232; }
+.nppp-toast.nppp-is-error .nppp-ico:before{ content:"\f158"; color:#dc3232; }
+
+.nppp-toast.nppp-is-info{ border-left-color:#ffb900; }
+.nppp-toast.nppp-is-info .nppp-ico:before{ content:"\f469"; color:#ffb900; }
+
+/* Optional (back-compat shim): if any old code still emits .success/.error/.info,
+   keep them working but only inside our container to avoid global collisions */
+#nppp-toast-container .nppp-toast.success{ border-left-color:#46b450; }
+#nppp-toast-container .nppp-toast.success .nppp-ico:before{ content:"\f147"; color:#46b450; }
+#nppp-toast-container .nppp-toast.error{ border-left-color:#dc3232; }
+#nppp-toast-container .nppp-toast.error .nppp-ico:before{ content:"\f158"; color:#dc3232; }
+#nppp-toast-container .nppp-toast.info{ border-left-color:#ffb900; }
+#nppp-toast-container .nppp-toast.info .nppp-ico:before{ content:"\f469"; color:#ffb900; }
 
 /* Mobile: wider, below admin bar */
 @media (max-width:782px){
     #nppp-toast-container{ right:8px; left:8px; }
     .nppp-toast{ max-width:unset; }
 }
-
-/* Small inline spinner for buttons */
-.nppp-inline-spinner{
-    display:inline-block; width:14px; height:14px; margin-left:8px; vertical-align:-2px;
-    border:2px solid rgba(0,0,0,.15); border-top-color:rgba(0,0,0,.55); border-radius:50%;
-    animation:nppp-spin .6s linear infinite;
-}
-@keyframes nppp-spin{ to{ transform:rotate(360deg) } }
 
 @media (max-width: 782px){
     body > #nppp-toast-container{
@@ -2852,6 +2858,16 @@ p.description {
     }
 }
 
+@keyframes nppp-slide-in{ from{ transform:translateX(8px); opacity:0 } to{ transform:translateX(0); opacity:1 } }
+@keyframes nppp-slide-out{ to{ transform:translateX(8px); opacity:0 } }
+
+/* Small inline spinner for buttons */
+.nppp-inline-spinner{
+    display:inline-block; width:14px; height:14px; margin-left:8px; vertical-align:-2px;
+    border:2px solid rgba(0,0,0,.15); border-top-color:rgba(0,0,0,.55); border-radius:50%;
+    animation:nppp-spin .6s linear infinite;
+}
+@keyframes nppp-spin{ to{ transform:rotate(360deg) } }
 @keyframes nppp-spin { to { transform: rotate(360deg); } }
 .nppp-sr-only {
     position: absolute !important;
