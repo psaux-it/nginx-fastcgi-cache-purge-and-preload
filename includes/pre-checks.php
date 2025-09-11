@@ -14,6 +14,59 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Nginx detector used by Setup.
+if (! function_exists('nppp_precheck_nginx_detected')) {
+    function nppp_precheck_nginx_detected(): bool {
+        // Honor "assume Nginx" (constant or runtime option)
+        if ((defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true)
+             || (bool) get_option('nppp_assume_nginx_runtime')) {
+            return true;
+        }
+
+        // Trust SERVER_SOFTWARE if present
+        if (isset($_SERVER['SERVER_SOFTWARE']) && stripos($_SERVER['SERVER_SOFTWARE'], 'nginx') !== false) {
+            return true;
+        }
+
+        // Infer from HTTP response headers (server/fastcgi hints)
+        if (function_exists('wp_remote_get') && function_exists('get_site_url')) {
+            $response = wp_remote_get(get_site_url());
+            if (is_array($response) && ! is_wp_error($response)) {
+                $headers = wp_remote_retrieve_headers($response);
+
+                foreach ($headers as $k => $v) {
+                    if (stripos((string)$k, 'fastcgi') !== false) {
+                        return true;
+                    }
+                }
+                if (isset($headers['server'])) {
+                    $sv = is_array($headers['server']) ? implode(' ', $headers['server']) : $headers['server'];
+                    if (stripos($sv, 'nginx') !== false) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Check for the SAPI name, not reliable
+        $sapi_name = php_sapi_name();
+        if (strpos($sapi_name, 'fpm-fcgi') !== false) {
+            return true;
+        }
+
+        // Filesystem hint
+        if (function_exists('nppp_initialize_wp_filesystem')) {
+            $fs = nppp_initialize_wp_filesystem();
+            if ($fs && function_exists('nppp_get_nginx_conf_paths')) {
+                $paths = nppp_get_nginx_conf_paths($fs);
+                if (! empty($paths)) return true;
+            }
+        }
+
+        return false;
+    }
+}
+
 // Check if the process is alive
 function nppp_is_process_alive($pid) {
     // Set env
@@ -91,10 +144,32 @@ function nppp_get_nginx_conf_paths($wp_filesystem) {
         }
     }
 
-    // Override with NPPP_ASSUME_NGINX if explicitly requested
+    // Assume-Nginx override: honor either the constant OR the runtime option
     if (empty($conf_paths)) {
-        if (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true) {
-            $conf_paths[] = dirname(plugin_dir_path(__FILE__)) . '/dummy-nginx.conf';
+        $assume_on = (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true)
+                  || (bool) get_option('nppp_assume_nginx_runtime');
+
+        if ($assume_on) {
+            // Shipped dummy file
+            $dummy = dirname(plugin_dir_path(__FILE__)) . '/dummy-nginx.conf';
+
+            if ($wp_filesystem->exists($dummy) && $wp_filesystem->is_readable($dummy)) {
+                $conf_paths[] = $dummy;
+            } else {
+                // Last-ditch writable fallback: create a minimal dummy in uploads.
+                $uploads = wp_upload_dir();
+                if (!empty($uploads['basedir'])) {
+                    $target = trailingslashit($uploads['basedir']) . 'nppp-dummy-nginx.conf';
+                    $fallback = "# nppp dummy\n"
+                        . "events {}\n"
+                        . "http { fastcgi_cache_path /dev/shm/nppp levels=1:2 keys_zone=nppp:10m; }\n";
+                    if ($wp_filesystem->put_contents($target, $fallback, FS_CHMOD_FILE)) {
+                        if ($wp_filesystem->exists($target) && $wp_filesystem->is_readable($target)) {
+                            $conf_paths[] = $target;
+                        }
+                    }
+                }
+            }
         }
     }
 
