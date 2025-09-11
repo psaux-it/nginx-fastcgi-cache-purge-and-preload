@@ -11,9 +11,7 @@
 
 namespace NPPP;
 
-// Exit if accessed directly.
 defined('ABSPATH') || exit;
-
 final class Setup {
     const RUNTIME_OPTION = 'nppp_assume_nginx_runtime';
     const REDIRECT_FLAG  = 'nppp_redirect_to_setup_once';
@@ -22,6 +20,7 @@ final class Setup {
 
     public function hooks(): void {
         // Activation redirect flag is set in main file via register_activation_hook
+        add_action('admin_init', [$this, 'nppp_auto_disable_assume_when_detected'], 99);
         add_action('admin_init', [$this, 'nppp_maybe_redirect_to_setup']);
         add_action('admin_menu', [$this, 'nppp_register_setup_page']);
         add_action('admin_init', [$this, 'nppp_gate_settings_until_setup']);
@@ -96,6 +95,8 @@ final class Setup {
         if ($nginx_detected) {
             echo '<div class="notice notice-success"><p>'
                 . esc_html__('Nginx detected. You’re all set — continue to Settings.', 'fastcgi-cache-purge-and-preload-nginx')
+                . '</p><p class="nppp-muted" style="margin:6px 0 0 0;">'
+                . esc_html__('Assume-Nginx mode was disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx')
                 . '</p></div>';
         } else {
             echo '<div class="notice notice-error"><p>'
@@ -294,6 +295,8 @@ services:
                 define('NPPP_ASSUME_NGINX', true);
             }
 
+            set_transient('nppp_assume_recently_enabled', 1, 60);
+
             if (! empty($_POST['write_wp_config'])) {
                 $this->nppp_try_write_wp_config_define();
             }
@@ -317,9 +320,22 @@ services:
     }
 
     // Detect nginx
+    private function nppp_is_nginx_detected_strict(): bool {
+        if (function_exists('nppp_precheck_nginx_detected')) {
+            // ask precheck to IGNORE assume mode
+            return (bool) nppp_precheck_nginx_detected(false);
+        }
+
+        // fallback (same as your current fallback)
+        if (isset($_SERVER['SERVER_SOFTWARE']) && stripos($_SERVER['SERVER_SOFTWARE'], 'nginx') !== false) {
+            return true;
+        }
+        return false;
+    }
+
     private function nppp_is_nginx_detected(): bool {
         if (function_exists('nppp_precheck_nginx_detected')) {
-            return (bool) nppp_precheck_nginx_detected();
+            return (bool) nppp_precheck_nginx_detected(true);
         }
 
         // fallback if pre-checks wasn't loaded for some reason
@@ -373,6 +389,58 @@ services:
         // One level up
         $up = dirname(ABSPATH) . '/wp-config.php';
         return file_exists($up) ? $up : null;
+    }
+
+    // Auto-disable Assume-Nginx when real detection passes
+    public function nppp_auto_disable_assume_when_detected(): void {
+        if (! current_user_can('manage_options')) return;
+
+        // skip immediately after enabling
+        if (get_transient('nppp_assume_recently_enabled')) return;
+
+        $detected = $this->nppp_is_nginx_detected_strict();
+        $assume_enabled = $this->nppp_assume_nginx_enabled();
+
+        if ($detected && $assume_enabled) {
+            delete_option(self::RUNTIME_OPTION);
+            $this->nppp_try_remove_wp_config_define();
+            update_option('nppp_assume_nginx_auto_disabled_notice', 1, false);
+        }
+
+        if (get_option('nppp_assume_nginx_auto_disabled_notice')) {
+            add_action('admin_notices', function () {
+                echo '<div class="notice notice-success is-dismissible"><p>'
+                    . esc_html__('SUCCESS ADMIN: Nginx was detected. Assume-Nginx mode has been disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx')
+                    . '</p></div>';
+                delete_option('nppp_assume_nginx_auto_disabled_notice');
+            });
+        }
+    }
+
+    // Remove define('NPPP_ASSUME_NGINX', true); from wp-config.php
+    private function nppp_try_remove_wp_config_define(): void {
+        if (! function_exists('request_filesystem_credentials')) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+        $creds = request_filesystem_credentials('', '', false, false, []);
+        if (! WP_Filesystem($creds)) return;
+        global $wp_filesystem;
+
+        $wp_config_path = $this->nppp_locate_wp_config_path();
+        if (! $wp_config_path || ! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
+            return;
+        }
+
+        $contents = $wp_filesystem->get_contents($wp_config_path);
+        if (! $contents) return;
+
+        // Match lines that define NPPP_ASSUME_NGINX as true
+        $pattern = "/^[ \\t]*define\\([\\\"']NPPP_ASSUME_NGINX[\\\"'][ \\t]*,[ \\t]*true[ \\t]*\\);[ \\t]*\r?\n?/mi";
+        $new = preg_replace($pattern, '', $contents);
+
+        if ($new !== null && $new !== $contents) {
+            $wp_filesystem->put_contents($wp_config_path, $new, FS_CHMOD_FILE);
+        }
     }
 
     private function nppp_dummy_nginx_conf(): string {
