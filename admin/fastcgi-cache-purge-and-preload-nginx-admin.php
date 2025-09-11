@@ -118,6 +118,7 @@ function nppp_prepare_request_env(bool $force = false): void {
 require_once dirname(__DIR__) . '/includes/enqueue-assets.php';
 require_once dirname(__DIR__) . '/includes/wp-filesystem.php';
 require_once dirname(__DIR__) . '/includes/pre-checks.php';
+require_once dirname(__DIR__) . '/includes/setup.php';
 require_once dirname(__DIR__) . '/includes/admin-bar.php';
 require_once dirname(__DIR__) . '/includes/log.php';
 require_once dirname(__DIR__) . '/includes/svg.php';
@@ -137,7 +138,6 @@ require_once dirname(__DIR__) . '/includes/update.php';
 require_once dirname(__DIR__) . '/includes/dashboard-widget.php';
 require_once dirname(__DIR__) . '/includes/compat-elementor.php';
 require_once dirname(__DIR__) . '/includes/compat-gutenberg.php';
-require_once dirname(__DIR__) . '/includes/setup.php';
 
 // Boot the Setup
 if (class_exists('\NPPP\Setup')) {
