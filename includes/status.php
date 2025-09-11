@@ -487,30 +487,48 @@ function nppp_check_duplicate_nginx_cache_paths($file, $wp_filesystem) {
     $transient_key = 'nppp_cache_paths_' . md5('nppp');
     $cached_result = get_transient($transient_key);
 
-    // Check if cached result exists else parse config
-    if ($cached_result === false || empty($cached_result['cache_paths'])) {
-        nppp_parse_nginx_config($file, $wp_filesystem);
+    // If nothing cached OR cached structure is missing/invalid, attempt a parse
+    $needs_parse = (
+        $cached_result === false ||
+        !is_array($cached_result) ||
+        !isset($cached_result['cache_paths']) ||
+        !is_array($cached_result['cache_paths']) ||
+        empty($cached_result['cache_paths'])
+    );
 
-        // Retrieve again the cached result
+    if ($needs_parse) {
+        // Rebuild the cache from the config
+        nppp_parse_nginx_config($file, $wp_filesystem);
         $cached_result = get_transient($transient_key);
     }
 
-    // Extract cache paths from the cached result
-    $cache_paths = $cached_result['cache_paths'];
+    // Safely extract cache paths
+    $cache_paths = [];
+    if (is_array($cached_result) && isset($cached_result['cache_paths']) && is_array($cached_result['cache_paths'])) {
+        $cache_paths = $cached_result['cache_paths'];
+    }
 
-    // Find duplicates
+    // If still nothing usable, there can't be duplicates
+    if (empty($cache_paths)) {
+        return false;
+    }
+
+    // Detect duplicates (case- and trailing-slash–insensitive), but return originals
     $unique_paths = [];
     $duplicates = [];
 
     foreach ($cache_paths as $directive => $paths) {
+        if (!is_array($paths)) { continue; }
         foreach ($paths as $path) {
-            // Normalize the path
+            if (!is_string($path) || $path === '') { continue; }
+
+            // Normalize once
             $normalized_path = rtrim(strtolower($path), '/');
 
-            if (in_array($path, $unique_paths)) {
+            if (in_array($normalized_path, $unique_paths, true)) {
                 $duplicates[] = $path;
             } else {
-                $unique_paths[] = $path;
+                $unique_paths[] = $normalized_path;
             }
         }
     }
