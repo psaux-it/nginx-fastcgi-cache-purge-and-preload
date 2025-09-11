@@ -59,6 +59,15 @@ function nppp_add_nginx_cache_settings_page() {
 
 // Displays the NPP Nginx Cache Settings page in the WordPress admin dashboard
 function nppp_nginx_cache_settings_page() {
+    // Setup first
+    if (class_exists('\NPPP\Setup')) {
+        $s = new \NPPP\Setup();
+        if ($s->nppp_needs_setup()) {
+            wp_safe_redirect( admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG) );
+            exit;
+        }
+    }
+
     if (isset($_GET['status_message']) && isset($_GET['message_type'])) {
         // Sanitize and validate the nonce
         $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
