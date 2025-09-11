@@ -120,6 +120,14 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         return;
     }
 
+    // Detect if setup is required
+    $needs_setup = false;
+    $setup_url   = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
+    if (class_exists('\NPPP\Setup')) {
+        $s = new \NPPP\Setup();
+        $needs_setup = $s->nppp_needs_setup();
+    }
+
     // Add top admin-bar menu for NPP
     $wp_admin_bar->add_menu(array(
         'id'    => 'fastcgi-cache-operations',
@@ -129,24 +137,30 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
             esc_url(plugin_dir_url(__FILE__) . '../admin/img/bar.png'),
             esc_html__('Nginx Cache', 'fastcgi-cache-purge-and-preload-nginx')
         ),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings'),
+        'href'  => $needs_setup
+            ? $setup_url
+            : admin_url('options-general.php?page=nginx_cache_settings'),
     ));
 
     // Add "Purge All" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
-        'id' => 'purge-cache',
-        'title' => __('Purge All', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href'   => wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce'),
+        'id'     => 'purge-cache',
+        'title'  => __('Purge All', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => $needs_setup
+            ? $setup_url
+            : wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce'),
         'meta'   => array('class' => 'nppp-action-trigger'),
     ));
 
     // Add "Preload All" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
-        'id' => 'preload-cache',
-        'title' => __('Preload All', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href' => wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce'),
+        'id'     => 'preload-cache',
+        'title'  => __('Preload All', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => $needs_setup
+            ? $setup_url
+            : wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce'),
         'meta'   => array('class' => 'nppp-action-trigger'),
     ));
 
@@ -155,7 +169,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         $request_uri = sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']));
 
         // Check if the URI does not contain 'wp-admin'
-        if (strpos($request_uri, 'wp-admin') === false) {
+        if (!$needs_setup && strpos($request_uri, 'wp-admin') === false) {
             $from_url = nppp_get_current_front_url();
 
             // Purge This Page
@@ -185,33 +199,33 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     // Add "Status" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
-        'id' => 'fastcgi-cache-status',
-        'title' => __('Status', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings#status'),
+        'id'     => 'fastcgi-cache-status',
+        'title'  => __('Status', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => admin_url('options-general.php?page=nginx_cache_settings#status'),
     ));
 
     // Add "Advanced" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
-        'id' => 'fastcgi-cache-advanced',
-        'title' => __('Advanced', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings#premium'),
+        'id'     => 'fastcgi-cache-advanced',
+        'title'  => __('Advanced', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => admin_url('options-general.php?page=nginx_cache_settings#premium'),
     ));
 
     // Add "Settings" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
-        'id' => 'fastcgi-cache-settings',
-        'title' => __('Settings', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings'),
+        'id'     => 'fastcgi-cache-settings',
+        'title'  => __('Settings', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => admin_url('options-general.php?page=nginx_cache_settings'),
     ));
 
     // Add "Help" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
-        'id' => 'fastcgi-cache-help',
-        'title' => __('Help', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings#help'),
+        'id'     => 'fastcgi-cache-help',
+        'title'  => __('Help', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => admin_url('options-general.php?page=nginx_cache_settings#help'),
     ));
 }
 
