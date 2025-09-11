@@ -16,10 +16,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Nginx detector used by Setup.
 if (! function_exists('nppp_precheck_nginx_detected')) {
-    function nppp_precheck_nginx_detected(): bool {
+    function nppp_precheck_nginx_detected(bool $honor_assume = true): bool {
         // Honor "assume Nginx" (constant or runtime option)
-        if ((defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true)
-             || (bool) get_option('nppp_assume_nginx_runtime')) {
+        if ($honor_assume && (
+            (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true)
+            || (bool) get_option('nppp_assume_nginx_runtime')
+        )) {
             return true;
         }
 
