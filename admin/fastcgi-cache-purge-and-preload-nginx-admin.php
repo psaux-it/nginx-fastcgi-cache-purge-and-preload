@@ -137,6 +137,32 @@ require_once dirname(__DIR__) . '/includes/update.php';
 require_once dirname(__DIR__) . '/includes/dashboard-widget.php';
 require_once dirname(__DIR__) . '/includes/compat-elementor.php';
 require_once dirname(__DIR__) . '/includes/compat-gutenberg.php';
+require_once dirname(__DIR__) . '/includes/setup.php';
+
+// Boot the Setup
+if (class_exists('\NPPP\Setup')) {
+    $nppp_setup = new \NPPP\Setup();
+    $nppp_setup->hooks();
+
+    // Late menu gate: if Nginx not detected and assume-mode is OFF,
+    // hide the normal Settings page and show a "Setup" page
+    add_action('admin_menu', function () use ($nppp_setup) {
+        if (! current_user_can('manage_options')) return;
+        if (method_exists($nppp_setup, 'nppp_needs_setup') && $nppp_setup->nppp_needs_setup()) {
+            // Real settings slug
+            remove_submenu_page('options-general.php', \NPPP\Setup::SETTINGS_SLUG);
+            // Make Setup visible under Settings
+            add_submenu_page(
+                'options-general.php',
+                __('NPP • Setup', 'fastcgi-cache-purge-and-preload-nginx'),
+                __('NPP • Setup', 'fastcgi-cache-purge-and-preload-nginx'),
+                'manage_options',
+                \NPPP\Setup::PAGE_SLUG,
+                [$nppp_setup, 'nppp_render_setup_page']
+            );
+        }
+    }, 99);
+}
 
 // Get the status of Auto Purge option
 $options = get_option('nginx_cache_settings');
@@ -208,6 +234,15 @@ add_action('wp_ajax_nppp_update_enable_proxy_option', 'nppp_update_enable_proxy_
 add_action('wp_ajax_nppp_update_related_fields', 'nppp_update_related_fields');
 add_action('wp_ajax_nppp_locate_cache_file', 'nppp_locate_cache_file_ajax');
 add_action('wp_ajax_nppp_update_pctnorm_mode', 'nppp_update_pctnorm_mode');
+add_action('load-settings_page_nginx_cache_settings', function () {
+    if (class_exists('\NPPP\Setup')) {
+        $s = new \NPPP\Setup();
+        if ($s->nppp_needs_setup()) {
+            wp_safe_redirect( admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG) );
+            exit;
+        }
+    }
+}, 0);
 $nppp_auto_purge
     ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions)
     : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions);
