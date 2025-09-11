@@ -11,7 +11,9 @@
 
 namespace NPPP;
 
+// Exit if accessed directly.
 defined('ABSPATH') || exit;
+
 final class Setup {
     const RUNTIME_OPTION = 'nppp_assume_nginx_runtime';
     const REDIRECT_FLAG  = 'nppp_redirect_to_setup_once';
