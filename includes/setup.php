@@ -292,7 +292,7 @@ services:
                      : '<span class="dashicons dashicons-no"></span> ' . esc_html__('No', 'fastcgi-cache-purge-and-preload-nginx')
         );
         $bits[] = sprintf('<p><strong>%s</strong> %s</p>',
-            esc_html__('Assume-Nginx mode:', 'fastcgi-cache-purge-and-preload-nginx'),
+            esc_html__('Assume-Nginx Mode:', 'fastcgi-cache-purge-and-preload-nginx'),
             $assume_enabled ? '<span class="dashicons dashicons-yes"></span> ' . esc_html__('Enabled', 'fastcgi-cache-purge-and-preload-nginx')
                             : '<span class="dashicons dashicons-no"></span> ' . esc_html__('Disabled', 'fastcgi-cache-purge-and-preload-nginx')
         );
