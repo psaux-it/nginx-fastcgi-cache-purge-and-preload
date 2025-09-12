@@ -303,6 +303,11 @@ services:
                 $this->nppp_try_write_wp_config_define();
             }
 
+            // Clear plugin caches after switching mode
+            if (function_exists('\\nppp_clear_plugin_cache')) {
+                \nppp_clear_plugin_cache();
+            }
+
             wp_safe_redirect(admin_url('admin.php?page=' . self::SETTINGS_SLUG));
             exit;
         }
@@ -323,9 +328,9 @@ services:
 
     // Detect nginx
     private function nppp_is_nginx_detected_strict(): bool {
-        if (function_exists('nppp_precheck_nginx_detected')) {
+        if (function_exists('\\nppp_precheck_nginx_detected')) {
             // ask precheck to IGNORE assume mode
-            return (bool) nppp_precheck_nginx_detected(false);
+            return (bool) \nppp_precheck_nginx_detected(false);
         }
 
         // fallback (same as your current fallback)
@@ -336,8 +341,8 @@ services:
     }
 
     private function nppp_is_nginx_detected(): bool {
-        if (function_exists('nppp_precheck_nginx_detected')) {
-            return (bool) nppp_precheck_nginx_detected(true);
+        if (function_exists('\\nppp_precheck_nginx_detected')) {
+            return (bool) \nppp_precheck_nginx_detected(true);
         }
 
         // fallback if pre-checks wasn't loaded for some reason
@@ -407,16 +412,42 @@ services:
             delete_option(self::RUNTIME_OPTION);
             $this->nppp_try_remove_wp_config_define();
             update_option('nppp_assume_nginx_auto_disabled_notice', 1, false);
+
+            // Clear plugin caches after switching back to detected mode
+            if (function_exists('\\nppp_clear_plugin_cache')) {
+                \nppp_clear_plugin_cache();
+            }
         }
 
-        if (get_option('nppp_assume_nginx_auto_disabled_notice')) {
-            add_action('admin_notices', function () {
-                echo '<div class="notice notice-success is-dismissible"><p>'
-                    . esc_html__('SUCCESS ADMIN: Nginx was detected. Assume-Nginx mode has been disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx')
-                    . '</p></div>';
-                delete_option('nppp_assume_nginx_auto_disabled_notice');
-            });
+        // Only proceed if we actually have a notice pending
+        if (! get_option('nppp_assume_nginx_auto_disabled_notice')) {
+            return;
         }
+
+        $hook_settings = 'settings_page_' . self::SETTINGS_SLUG;
+        $hook_setup    = 'admin_page_'    . self::PAGE_SLUG;
+
+        $attach_printer = static function () {
+            // Register a printer for this *same* request
+            add_action('admin_notices', static function () {
+                if (! function_exists('\\nppp_display_admin_notice')) {
+                    return;
+                }
+                \nppp_display_admin_notice(
+                    'success',
+                    __('SUCCESS ADMIN: Nginx was detected. Assume-Nginx mode has been disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx'),
+                    true,
+                    true
+                );
+            }, 1);
+
+            // Make it one-time
+            delete_option('nppp_assume_nginx_auto_disabled_notice');
+        };
+
+        // Attach on the two pages where we want to show it
+        add_action('admin_head-' . $hook_settings, $attach_printer, 1);
+        add_action('admin_head-' . $hook_setup,    $attach_printer, 1);
     }
 
     // Remove define('NPPP_ASSUME_NGINX', true); from wp-config.php
