@@ -99,7 +99,33 @@ final class Setup {
         </style>';
 
         echo '<div class="wrap">';
-        echo '<h1>' . esc_html__('NPP • Setup', 'fastcgi-cache-purge-and-preload-nginx') . '</h1>';
+        $page_title = ($strict_detected || $assume_enabled)
+            ? __('NPP • Setup Completed', 'fastcgi-cache-purge-and-preload-nginx')
+            : __('NPP • Complete Setup', 'fastcgi-cache-purge-and-preload-nginx');
+
+        // Logo
+        $logo_url = plugins_url('../admin/img/logo.png', __FILE__);
+
+        // Header
+        echo '<h1 class="wp-heading-inline">'
+            . '<img src="' . esc_url($logo_url) . '" alt="' . esc_attr__('NPP logo', 'fastcgi-cache-purge-and-preload-nginx') . '" class="nppp-logo" width="90" height="90" />'
+            . '<span class="nppp-title">' . esc_html($page_title) . '</span>'
+            . '</h1>';
+
+        echo '<hr class="wp-header-end">';
+
+        // Minimal styles for sizing/alignment
+        echo '<style>
+            .nppp-logo{
+                width:90px;height:90px;vertical-align:middle;margin-right:12px;
+                object-fit:contain;border-radius:0px;
+            }
+            .nppp-title{vertical-align:middle}
+            @media (max-width: 782px){
+                /* keep things tidy on small screens */
+                .nppp-logo{width:60px;height:60px;margin-right:10px}
+            }
+        </style>';
 
         // Top notice: success vs. action needed
         if ($strict_detected) {
@@ -134,7 +160,7 @@ final class Setup {
             . esc_html__('Why am I seeing this page?', 'fastcgi-cache-purge-and-preload-nginx')
             . '</strong> '
             . esc_html__(
-                'We couldn’t reliably confirm Nginx from within WordPress. This often happens when your site runs behind a proxy (Cloudflare, CDN, load balancer), inside a container, PLESK|cPanel or with a chroot/jail where /etc/nginx/nginx.conf is not found.',
+                'We couldn’t reliably confirm Nginx from within WordPress. This often happens when your site runs behind a proxy (Cloudflare, CDN, load balancer), in containers/VMs, in chroot/jail setups, on Plesk or cPanel, or when /etc/nginx/nginx.conf is not found.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . '</p></div>';
@@ -146,7 +172,7 @@ final class Setup {
 
         // Recommended path (bind/sync nginx.conf)
         echo '<div class="postbox nppp-card">';
-        echo '  <h2 class="hndle"><span>' . esc_html__('Recommended: Use your real nginx.conf', 'fastcgi-cache-purge-and-preload-nginx') . '</span></h2>';
+        echo '  <h2 class="hndle"><span>' . esc_html__('Recommended: Bind your live nginx.conf', 'fastcgi-cache-purge-and-preload-nginx') . '</span></h2>';
         echo '  <div class="inside">';
         echo '    <p>'
             . esc_html__(
@@ -155,7 +181,7 @@ final class Setup {
               )
             . ' <code>/etc/nginx/nginx.conf</code>. '
             . esc_html__(
-                'This lets the plugin fully functional and parse live cache paths, users, and keys.',
+                'This makes the plugin fully functional and lets it parse live cache paths, users, and keys.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . '</p>';
