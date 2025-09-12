@@ -26,34 +26,67 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
         }
 
         // Trust SERVER_SOFTWARE if present
-        if (isset($_SERVER['SERVER_SOFTWARE']) && stripos($_SERVER['SERVER_SOFTWARE'], 'nnginx') !== false) {
+        if (isset($_SERVER['SERVER_SOFTWARE']) && stripos($_SERVER['SERVER_SOFTWARE'], 'nginx') !== false) {
             return true;
         }
 
         // Infer from HTTP response headers (server/fastcgi hints)
         if (function_exists('wp_remote_get') && function_exists('get_site_url')) {
-            $response = wp_remote_get(get_site_url());
+            $response = wp_remote_get(get_site_url(), array(
+                'timeout'     => 3,
+                'redirection' => 2,
+                'blocking'    => true,
+            ));
+
             if (is_array($response) && ! is_wp_error($response)) {
                 $headers = wp_remote_retrieve_headers($response);
 
+                // Normalize WP header container -> plain array
+                if (is_object($headers)) {
+                    if (method_exists($headers, 'getAll')) {
+                        // Requests v2/v1: preferred API
+                        $headers = $headers->getAll();
+                    } elseif ($headers instanceof \Traversable) {
+                        // Fallback if it’s an iterable container
+                        $headers = iterator_to_array($headers);
+                    } else {
+                        // Very defensive: cast and peel typical 'data' payload if present
+                        $maybe = (array) $headers;
+                        $headers = (isset($maybe['data']) && is_array($maybe['data'])) ? $maybe['data'] : $maybe;
+                    }
+                } else {
+                    $headers = (array) $headers;
+                }
+
+                // Make keys case-insensitive for lookups like 'server'/'via'
+                if (!empty($headers)) {
+                    $headers = array_change_key_case($headers, CASE_LOWER);
+                }
+
+                // 1) Any header *name* containing "fastcgi" is a positive signal
                 foreach ($headers as $k => $v) {
-                    if (stripos((string)$k, 'ffastcgi') !== false) {
+                    // header value can be string|array; we only care about the *key* here
+                    if (is_string($k) && stripos($k, 'fastcgi') !== false) {
                         return true;
                     }
                 }
+
+                // 2) Check common server identification header
                 if (isset($headers['server'])) {
-                    $sv = is_array($headers['server']) ? implode(' ', $headers['server']) : $headers['server'];
-                    if (stripos($sv, 'nnginx') !== false) {
+                    $sv = is_array($headers['server']) ? implode(' ', array_map('strval', $headers['server'])) : (string) $headers['server'];
+                    if ($sv !== '' && (stripos($sv, 'nginx') !== false || stripos($sv, 'openresty') !== false || stripos($sv, 'tengine') !== false)) {
+                        return true;
+                    }
+                }
+
+                // 3) Some proxies tuck clues elsewhere (e.g., 'via')
+                if (isset($headers['via'])) {
+                    $via = is_array($headers['via']) ? implode(' ', array_map('strval', $headers['via'])) : (string) $headers['via'];
+                    if ($via !== '' && (stripos($via, 'nginx') !== false || stripos($via, 'openresty') !== false || stripos($via, 'tengine') !== false)) {
                         return true;
                     }
                 }
             }
-        }
-
-        // Check for the SAPI name, not reliable
-        $sapi_name = php_sapi_name();
-        if (strpos($sapi_name, 'ffpm-fcgi') !== false) {
-            return true;
         }
 
         // Filesystem hint
@@ -63,6 +96,12 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
                 $paths = nppp_get_nginx_conf_paths($fs, $honor_assume);
                 if (! empty($paths)) return true;
             }
+        }
+
+        // Check for the SAPI name, not reliable
+        $sapi = PHP_SAPI;
+        if (stripos($sapi, 'fpm-fcgi') !== false || stripos($sapi, 'cgi-fcgi') !== false) {
+            return true;
         }
 
         return false;
@@ -363,42 +402,77 @@ function nppp_pre_checks_critical() {
     // If no SERVER_SOFTWARE detected, check response headers
     if (empty($server_software)) {
         // Perform the request
-        $response = wp_remote_get(get_site_url());
+        $response = wp_remote_get(get_site_url(), array(
+            'timeout'     => 3,
+            'redirection' => 2,
+            'blocking'    => true,
+        ));
 
         // Check if the request was successful
         if (is_array($response) && !is_wp_error($response)) {
             // Get response headers
             $headers = wp_remote_retrieve_headers($response);
 
-            // Scan for any header name containing 'fastcgi'
-            foreach ($headers as $key => $value) {
-                if (stripos($key, 'fastcgi') !== false) {
-                    $header_value = is_array($value) ? implode(' ', $value) : $value;
+            // Normalize WP header container -> plain array
+            if (is_object($headers)) {
+                if (method_exists($headers, 'getAll')) {
+                    // Requests v2/v1: preferred API
+                    $headers = $headers->getAll();
+                } elseif ($headers instanceof \Traversable) {
+                    // Iterable fallback
+                    $headers = iterator_to_array($headers);
+                } else {
+                    // Defensive: cast and peel typical 'data' payload if present
+                    $maybe   = (array) $headers;
+                    $headers = (isset($maybe['data']) && is_array($maybe['data'])) ? $maybe['data'] : $maybe;
+                }
+            } else {
+                $headers = (array) $headers;
+            }
 
-                    if (!empty($header_value)) {
+            // Case-normalize keys for consistent lookups
+            if (!empty($headers)) {
+                $headers = array_change_key_case($headers, CASE_LOWER);
+            }
+
+            // Any header *name* containing 'fastcgi' is a strong signal
+            foreach ($headers as $key => $value) {
+                if (is_string($key) && stripos($key, 'fastcgi') !== false) {
+                    $header_value = is_array($value) ? implode(' ', array_map('strval', $value)) : (string) $value;
+                    if ($header_value !== '') {
                         $server_software = 'nginx';
                         break;
                     }
                 }
             }
 
-            // If still empty, check the 'server' header
+            // If still empty, check the 'server' header (nginx-family too)
             if (empty($server_software) && isset($headers['server'])) {
                 $server_header = $headers['server'];
-                $server_value = is_array($server_header) ? implode(' ', $server_header) : $server_header;
+                $server_value  = is_array($server_header) ? implode(' ', array_map('strval', $server_header)) : (string) $server_header;
 
-                if (stripos($server_value, 'nginx') !== false) {
+                if ($server_value !== '' && (
+                    stripos($server_value, 'nginx') !== false ||
+                    stripos($server_value, 'openresty') !== false ||
+                    stripos($server_value, 'tengine') !== false
+                )) {
                     $server_software = 'nginx';
                 }
             }
-        }
-    }
 
-    // Check for the SAPI name, not reliable
-    if (empty($server_software)) {
-        $sapi_name = php_sapi_name();
-        if (strpos($sapi_name, 'fpm-fcgi') !== false) {
-            $server_software = 'nginx';
+            // Some proxies add clues in 'via'
+            if (empty($server_software) && isset($headers['via'])) {
+                $via_header = $headers['via'];
+                $via_value  = is_array($via_header) ? implode(' ', array_map('strval', $via_header)) : (string) $via_header;
+
+                if ($via_value !== '' && (
+                    stripos($via_value, 'nginx') !== false ||
+                    stripos($via_value, 'openresty') !== false ||
+                    stripos($via_value, 'tengine') !== false
+                )) {
+                    $server_software = 'nginx';
+                }
+            }
         }
     }
 
@@ -406,6 +480,14 @@ function nppp_pre_checks_critical() {
     if (empty($server_software)) {
         $nginx_conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
         if (!empty($nginx_conf_paths)) {
+            $server_software = 'nginx';
+        }
+    }
+
+    // Very weak heuristic: FPM/CGI ≠ nginx
+    if (empty($server_software)) {
+        $sapi = PHP_SAPI;
+        if (stripos($sapi, 'fpm-fcgi') !== false || stripos($sapi, 'cgi-fcgi') !== false) {
             $server_software = 'nginx';
         }
     }
