@@ -78,12 +78,13 @@ final class Setup {
         $needs_setup        = $this->nppp_needs_setup();
 
         // Detection signals for UI
-        $strict_detected    = $this->nppp_is_nginx_detected_strict(); // real, ignores Assume
-        $assume_enabled     = $this->nppp_assume_nginx_enabled();     // current Assume state
-        $effective_detected = $this->nppp_is_nginx_detected();        // effective detection (honors Assume for heuristics)
+        $strict_detected    = $this->nppp_is_nginx_detected_strict();                         // real, ignores Assume
+        $assume_enabled     = $this->nppp_assume_nginx_enabled();                             // current Assume state
+        $effective_detected = $this->nppp_is_nginx_detected();                                // effective detection (honors Assume for heuristics)
+        $signals_detected   = (!$strict_detected && !$assume_enabled && $effective_detected); // Helper flag (no-conf but signals present)
         $nonce              = wp_create_nonce('nppp_setup_actions');
 
-        // Minor inline styles for nicer layout (keeps WP look & feel)
+        // Minor inline styles layout
         echo '<style>
             .nppp-grid{display:grid;gap:16px;grid-template-columns:1fr;max-width:980px}
             @media (min-width:960px){.nppp-grid{grid-template-columns:2fr 1fr}}
@@ -103,7 +104,7 @@ final class Setup {
                . esc_html__('Nginx detected. You’re all set — continue to Settings.', 'fastcgi-cache-purge-and-preload-nginx')
                . '</p>';
 
-            // show this line only if the auto-disable notice flag is set by the hook
+            // Show only if the auto-disable notice flag is set by the hook
             if (get_option('nppp_assume_nginx_auto_disabled_notice')) {
                 echo '<p class="nppp-muted" style="margin:6px 0 0 0;">'
                    . esc_html__('Assume-Nginx mode was disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx')
@@ -115,7 +116,10 @@ final class Setup {
             echo '<div class="notice notice-info"><p>'
                . esc_html__('Assume-Nginx is enabled. You can proceed to Settings. If you later bind the real nginx.conf, detection will switch to “detected” automatically.', 'fastcgi-cache-purge-and-preload-nginx')
                . '</p></div>';
-
+        } elseif ($signals_detected) {
+            echo '<div class="notice notice-warning"><p>'
+                . esc_html__('Nginx likely detected (via headers/server signature), but the real nginx.conf is not visible. Bind your real nginx.conf (recommended) or enable Assume-Nginx to proceed.', 'fastcgi-cache-purge-and-preload-nginx')
+                . '</p></div>';
         } else {
             echo '<div class="notice notice-error"><p>'
                . esc_html__('Nginx was not detected. This can be a false positive in proxy, Docker, or chrooted environments.', 'fastcgi-cache-purge-and-preload-nginx')
@@ -266,19 +270,26 @@ services:
 
     // Small helper to display what we currently know about detection.
     private function nppp_detection_debug_html(bool $nginx_detected, bool $assume_enabled): string {
+        // $nginx_detected here is "strict"
+        $effective = $this->nppp_is_nginx_detected();
+        $signals   = (!$nginx_detected && !$assume_enabled && $effective);
+
         $bits = [];
 
-        $bits[] = sprintf(
-            '<p><strong>%s</strong> %s</p>',
-            esc_html__('Nginx detected:', 'fastcgi-cache-purge-and-preload-nginx'),
-            $nginx_detected ? '<span class="dashicons dashicons-yes" aria-hidden="true"></span> ' . esc_html__('Yes', 'fastcgi-cache-purge-and-preload-nginx')
-                        : '<span class="dashicons dashicons-warning" aria-hidden="true"></span> ' . esc_html__('No', 'fastcgi-cache-purge-and-preload-nginx')
+        $bits[] = sprintf('<p><strong>%s</strong> %s</p>',
+            esc_html__('Nginx detected (strict):', 'fastcgi-cache-purge-and-preload-nginx'),
+            $nginx_detected ? '<span class="dashicons dashicons-yes"></span> ' . esc_html__('Yes', 'fastcgi-cache-purge-and-preload-nginx')
+                            : '<span class="dashicons dashicons-warning"></span> ' . esc_html__('No', 'fastcgi-cache-purge-and-preload-nginx')
         );
-        $bits[] = sprintf(
-            '<p><strong>%s</strong> %s</p>',
+        $bits[] = sprintf('<p><strong>%s</strong> %s</p>',
+            esc_html__('Signals suggest Nginx:', 'fastcgi-cache-purge-and-preload-nginx'),
+            $signals ? '<span class="dashicons dashicons-yes"></span> ' . esc_html__('Yes', 'fastcgi-cache-purge-and-preload-nginx')
+                     : esc_html__('No', 'fastcgi-cache-purge-and-preload-nginx')
+        );
+        $bits[] = sprintf('<p><strong>%s</strong> %s</p>',
             esc_html__('Assume-Nginx mode:', 'fastcgi-cache-purge-and-preload-nginx'),
-            $assume_enabled ? '<span class="dashicons dashicons-yes" aria-hidden="true"></span> ' . esc_html__('Enabled', 'fastcgi-cache-purge-and-preload-nginx')
-                        : esc_html__('Disabled', 'fastcgi-cache-purge-and-preload-nginx')
+            $assume_enabled ? '<span class="dashicons dashicons-yes"></span> ' . esc_html__('Enabled', 'fastcgi-cache-purge-and-preload-nginx')
+                            : esc_html__('Disabled', 'fastcgi-cache-purge-and-preload-nginx')
         );
 
         // Quick hints the detector uses (keep generic to avoid leaking env specifics)
@@ -334,7 +345,7 @@ services:
 
     // Do we need to block settings and run setup?
     public function nppp_needs_setup(): bool {
-        return (! $this->nppp_is_nginx_detected() ) && ( ! $this->nppp_assume_nginx_enabled());
+        return (! $this->nppp_is_nginx_detected_strict()) && (! $this->nppp_assume_nginx_enabled());
     }
 
     private function nppp_assume_nginx_enabled(): bool {
@@ -446,19 +457,16 @@ services:
         $attach_printer = static function () {
             // Register a printer for this *same* request
             add_action('admin_notices', static function () {
-                if (! function_exists('\\nppp_display_admin_notice')) {
-                    return;
+                if (function_exists('\\nppp_display_admin_notice')) {
+                    \nppp_display_admin_notice(
+                        'success',
+                        __('SUCCESS ADMIN: Nginx was detected. Assume-Nginx mode has been disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx'),
+                        true,
+                        true
+                    );
+                    delete_option('nppp_assume_nginx_auto_disabled_notice');
                 }
-                \nppp_display_admin_notice(
-                    'success',
-                    __('SUCCESS ADMIN: Nginx was detected. Assume-Nginx mode has been disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx'),
-                    true,
-                    true
-                );
             }, 1);
-
-            // Make it one-time
-            delete_option('nppp_assume_nginx_auto_disabled_notice');
         };
 
         // Attach on the two pages where we want to show it
