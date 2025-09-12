@@ -25,13 +25,28 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
             return true;
         }
 
+        // Filesystem hint FIRST (authoritative for "strict")
+        if (function_exists('nppp_initialize_wp_filesystem')) {
+            $fs = nppp_initialize_wp_filesystem();
+            if ($fs && function_exists('nppp_get_nginx_conf_paths')) {
+                $paths = nppp_get_nginx_conf_paths($fs, $honor_assume);
+                // In strict mode ($honor_assume=false)
+                if (!empty($paths)) {
+                    return true;
+                }
+            }
+        }
+
+        // Aggregate network/env signals (usable only when $honor_assume === true)
+        $signal_hit = false;
+
         // Trust SERVER_SOFTWARE if present
         if (isset($_SERVER['SERVER_SOFTWARE']) && stripos($_SERVER['SERVER_SOFTWARE'], 'nginx') !== false) {
-            return true;
+            $signal_hit = true;
         }
 
         // Infer from HTTP response headers (server/fastcgi hints)
-        if (function_exists('wp_remote_get') && function_exists('get_site_url')) {
+        if (!$signal_hit && function_exists('wp_remote_get') && function_exists('get_site_url')) {
             $response = wp_remote_get(get_site_url(), array(
                 'timeout'     => 3,
                 'redirection' => 2,
@@ -44,13 +59,10 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
                 // Normalize WP header container -> plain array
                 if (is_object($headers)) {
                     if (method_exists($headers, 'getAll')) {
-                        // Requests v2/v1: preferred API
                         $headers = $headers->getAll();
                     } elseif ($headers instanceof \Traversable) {
-                        // Fallback if it’s an iterable container
                         $headers = iterator_to_array($headers);
                     } else {
-                        // Very defensive: cast and peel typical 'data' payload if present
                         $maybe = (array) $headers;
                         $headers = (isset($maybe['data']) && is_array($maybe['data'])) ? $maybe['data'] : $maybe;
                     }
@@ -58,49 +70,49 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
                     $headers = (array) $headers;
                 }
 
-                // Make keys case-insensitive for lookups like 'server'/'via'
+                // Make keys case-insensitive for lookups
                 if (!empty($headers)) {
                     $headers = array_change_key_case($headers, CASE_LOWER);
                 }
 
-                // 1) Any header *name* containing "fastcgi" is a positive signal
+                // Any header *name* containing "fastcgi" is a positive signal
                 foreach ($headers as $k => $v) {
                     // header value can be string|array; we only care about the *key* here
                     if (is_string($k) && stripos($k, 'fastcgi') !== false) {
-                        return true;
+                        $signal_hit = true;
                     }
                 }
 
-                // 2) Check common server identification header
+                // Check common server identification header
                 if (isset($headers['server'])) {
                     $sv = is_array($headers['server']) ? implode(' ', array_map('strval', $headers['server'])) : (string) $headers['server'];
                     if ($sv !== '' && (stripos($sv, 'nginx') !== false || stripos($sv, 'openresty') !== false || stripos($sv, 'tengine') !== false)) {
-                        return true;
+                        $signal_hit = true;
                     }
                 }
 
-                // 3) Some proxies tuck clues elsewhere (e.g., 'via')
+                // Some proxies tuck clues elsewhere (e.g., 'via')
                 if (isset($headers['via'])) {
                     $via = is_array($headers['via']) ? implode(' ', array_map('strval', $headers['via'])) : (string) $headers['via'];
                     if ($via !== '' && (stripos($via, 'nginx') !== false || stripos($via, 'openresty') !== false || stripos($via, 'tengine') !== false)) {
-                        return true;
+                        $signal_hit = true;
                     }
                 }
-            }
-        }
-
-        // Filesystem hint
-        if (function_exists('nppp_initialize_wp_filesystem')) {
-            $fs = nppp_initialize_wp_filesystem();
-            if ($fs && function_exists('nppp_get_nginx_conf_paths')) {
-                $paths = nppp_get_nginx_conf_paths($fs, $honor_assume);
-                if (! empty($paths)) return true;
             }
         }
 
         // Check for the SAPI name, not reliable
-        $sapi = PHP_SAPI;
-        if (stripos($sapi, 'fpm-fcgi') !== false || stripos($sapi, 'cgi-fcgi') !== false) {
+        if (!$signal_hit) {
+            $sapi = PHP_SAPI;
+            if (stripos($sapi, 'fpm-fcgi') !== false || stripos($sapi, 'cgi-fcgi') !== false) {
+                $signal_hit = true;
+            }
+        }
+
+        // Only allow signal-based detection when we *honor assume*.
+        // In strict mode, signals are ignored so we don't auto-disable Assume-Nginx
+        // unless a real nginx.conf was actually found.
+        if ($honor_assume && $signal_hit) {
             return true;
         }
 
