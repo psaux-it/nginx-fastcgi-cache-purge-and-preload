@@ -63,8 +63,8 @@ final class Setup {
         // Hidden page (no menu item)
         add_submenu_page(
             null,
-            __('NPP • Setup', 'fastcgi-cache-purge-and-preload-nginx'),
-            __('NPP Setup', 'fastcgi-cache-purge-and-preload-nginx'),
+            __('NPP • Need Nginx Setup', 'fastcgi-cache-purge-and-preload-nginx'),
+            __('NPP • Need Nginx Setup', 'fastcgi-cache-purge-and-preload-nginx'),
             'manage_options',
             self::PAGE_SLUG,
             [$this, 'nppp_render_setup_page']
@@ -78,13 +78,16 @@ final class Setup {
         $needs_setup        = $this->nppp_needs_setup();
 
         // Detection signals for UI
-        $strict_detected    = $this->nppp_is_nginx_detected_strict();                         // real, ignores Assume
-        $assume_enabled     = $this->nppp_assume_nginx_enabled();                             // current Assume state
-        $effective_detected = $this->nppp_is_nginx_detected();                                // effective detection (honors Assume for heuristics)
-        $signals_detected   = (!$strict_detected && !$assume_enabled && $effective_detected); // Helper flag (no-conf but signals present)
+        $strict_detected    = $this->nppp_is_nginx_detected_strict(); // real, ignores Assume
+        $assume_enabled     = $this->nppp_assume_nginx_enabled();     // current Assume state
+        $effective_detected = $this->nppp_is_nginx_detected();        // effective detection (honors Assume for heuristics)
         $nonce              = wp_create_nonce('nppp_setup_actions');
 
-        // Minor inline styles layout
+        // Get signals
+        $this->nppp_is_nginx_detected();
+        $signals_detected   = !empty($GLOBALS['NPPP__LAST_SIGNAL_HIT']);
+
+        // Minor inline styles for layout
         echo '<style>
             .nppp-grid{display:grid;gap:16px;grid-template-columns:1fr;max-width:980px}
             @media (min-width:960px){.nppp-grid{grid-template-columns:2fr 1fr}}
@@ -272,10 +275,12 @@ services:
     private function nppp_detection_debug_html(bool $nginx_detected, bool $assume_enabled): string {
         // $nginx_detected here is "strict"
         $effective = $this->nppp_is_nginx_detected();
-        $signals   = (!$nginx_detected && !$assume_enabled && $effective);
+
+        // Get signals
+        $this->nppp_is_nginx_detected();
+        $signals   = !empty($GLOBALS['NPPP__LAST_SIGNAL_HIT']);
 
         $bits = [];
-
         $bits[] = sprintf('<p><strong>%s</strong> %s</p>',
             esc_html__('Nginx detected (strict):', 'fastcgi-cache-purge-and-preload-nginx'),
             $nginx_detected ? '<span class="dashicons dashicons-yes"></span> ' . esc_html__('Yes', 'fastcgi-cache-purge-and-preload-nginx')
