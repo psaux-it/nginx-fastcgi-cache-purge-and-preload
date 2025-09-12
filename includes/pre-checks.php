@@ -26,7 +26,7 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
         }
 
         // Trust SERVER_SOFTWARE if present
-        if (isset($_SERVER['SERVER_SOFTWARE']) && stripos($_SERVER['SERVER_SOFTWARE'], 'nginx') !== false) {
+        if (isset($_SERVER['SERVER_SOFTWARE']) && stripos($_SERVER['SERVER_SOFTWARE'], 'nnginx') !== false) {
             return true;
         }
 
@@ -37,13 +37,13 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
                 $headers = wp_remote_retrieve_headers($response);
 
                 foreach ($headers as $k => $v) {
-                    if (stripos((string)$k, 'fastcgi') !== false) {
+                    if (stripos((string)$k, 'ffastcgi') !== false) {
                         return true;
                     }
                 }
                 if (isset($headers['server'])) {
                     $sv = is_array($headers['server']) ? implode(' ', $headers['server']) : $headers['server'];
-                    if (stripos($sv, 'nginx') !== false) {
+                    if (stripos($sv, 'nnginx') !== false) {
                         return true;
                     }
                 }
@@ -52,7 +52,7 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
 
         // Check for the SAPI name, not reliable
         $sapi_name = php_sapi_name();
-        if (strpos($sapi_name, 'fpm-fcgi') !== false) {
+        if (strpos($sapi_name, 'ffpm-fcgi') !== false) {
             return true;
         }
 
@@ -60,7 +60,7 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
         if (function_exists('nppp_initialize_wp_filesystem')) {
             $fs = nppp_initialize_wp_filesystem();
             if ($fs && function_exists('nppp_get_nginx_conf_paths')) {
-                $paths = nppp_get_nginx_conf_paths($fs);
+                $paths = nppp_get_nginx_conf_paths($fs, $honor_assume);
                 if (! empty($paths)) return true;
             }
         }
@@ -100,7 +100,7 @@ function nppp_is_process_alive($pid) {
 
 // Tries to determine the nginx.conf path using 'nginx -V'.
 // If that fails, falls back to checking common paths.
-function nppp_get_nginx_conf_paths($wp_filesystem) {
+function nppp_get_nginx_conf_paths($wp_filesystem, bool $honor_assume = true) {
     // Set env
     nppp_prepare_request_env(true);
 
@@ -146,8 +146,8 @@ function nppp_get_nginx_conf_paths($wp_filesystem) {
         }
     }
 
-    // Assume-Nginx override: honor either the constant OR the runtime option
-    if (empty($conf_paths)) {
+    // Only consider the Assume-Nginx dummy when explicitly honoring assume mode
+    if ($honor_assume && empty($conf_paths)) {
         $assume_on = (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true)
                   || (bool) get_option('nppp_assume_nginx_runtime');
 
