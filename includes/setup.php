@@ -117,11 +117,11 @@ final class Setup {
 
         } elseif ($assume_enabled) {
             echo '<div class="notice notice-info"><p>'
-               . esc_html__('Assume-Nginx is enabled. You can proceed to Settings. If you later bind the real nginx.conf, detection will switch to “detected” automatically.', 'fastcgi-cache-purge-and-preload-nginx')
+               . esc_html__('Assume-Nginx mode is enabled. You can proceed to Settings. If you later bind the real nginx.conf, this mode will be disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx')
                . '</p></div>';
         } elseif ($signals_detected) {
             echo '<div class="notice notice-warning"><p>'
-                . esc_html__('Nginx likely detected (via headers/server signature), but the real nginx.conf is not visible. Bind your real nginx.conf (recommended) or enable Assume-Nginx to proceed.', 'fastcgi-cache-purge-and-preload-nginx')
+                . esc_html__('Nginx likely detected (via headers/server signature), but the real nginx.conf is not visible. Bind your real nginx.conf (recommended) or enable Assume-Nginx mode to proceed.', 'fastcgi-cache-purge-and-preload-nginx')
                 . '</p></div>';
         } else {
             echo '<div class="notice notice-error"><p>'
@@ -134,7 +134,7 @@ final class Setup {
             . esc_html__('Why am I seeing this page?', 'fastcgi-cache-purge-and-preload-nginx')
             . '</strong> '
             . esc_html__(
-                'We couldn’t reliably confirm Nginx from within WordPress. This often happens when your site runs behind a proxy (Cloudflare, CDN, load balancer), inside a container, or with a chroot/jail where /etc/nginx/nginx.conf is not visible.',
+                'We couldn’t reliably confirm Nginx from within WordPress. This often happens when your site runs behind a proxy (Cloudflare, CDN, load balancer), inside a container, PLESK|cPanel or with a chroot/jail where /etc/nginx/nginx.conf is not found.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . '</p></div>';
@@ -155,7 +155,7 @@ final class Setup {
               )
             . ' <code>/etc/nginx/nginx.conf</code>. '
             . esc_html__(
-                'This lets the plugin parse live cache paths, users, and keys.',
+                'This lets the plugin fully functional and parse live cache paths, users, and keys.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . '</p>';
@@ -183,11 +183,11 @@ services:
 
         // Quick enable (Assume-Nginx) card
         echo '<div class="postbox nppp-card">';
-        echo '  <h2 class="hndle"><span>' . esc_html__('Quick Enable: Assume-Nginx mode', 'fastcgi-cache-purge-and-preload-nginx') . '</span></h2>';
+        echo '  <h2 class="hndle"><span>' . esc_html__('Quick Enable: Assume-Nginx Mode', 'fastcgi-cache-purge-and-preload-nginx') . '</span></h2>';
         echo '  <div class="inside">';
         echo '    <p>'
             . esc_html__(
-                'Turn on Assume-Nginx to enable all plugin features immediately in non-standard or opaque environments.',
+                'Turn on Assume-Nginx mode to enable all plugin features immediately in non-standard or opaque environments.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . ' '
@@ -204,7 +204,7 @@ services:
         if ($needs_setup) {
             echo '      <div class="nppp-actions">';
             echo '        <button class="button button-primary" name="nppp_action" value="assume_on">'
-                . esc_html__('Enable Assume-Nginx now', 'fastcgi-cache-purge-and-preload-nginx')
+                . esc_html__('Enable Assume-Nginx Mode', 'fastcgi-cache-purge-and-preload-nginx')
                 . '</button>';
             echo '        <label>'
                 . '<input type="checkbox" name="write_wp_config" value="1" /> '
@@ -216,7 +216,7 @@ services:
                 . '</p>';
         } else {
             echo '      <p><em class="nppp-muted">'
-                . esc_html__('Assume-Nginx is already enabled or Nginx is detected.', 'fastcgi-cache-purge-and-preload-nginx')
+                . esc_html__('Assume-Nginx mode is already enabled or Nginx is detected.', 'fastcgi-cache-purge-and-preload-nginx')
                 . '</em></p>';
         }
 
@@ -249,7 +249,7 @@ services:
         echo '    <h2 class="hndle"><span>' . esc_html__('Dummy nginx.conf (fallback)', 'fastcgi-cache-purge-and-preload-nginx') . '</span></h2>';
         echo '    <div class="inside">';
         echo '      <p class="nppp-muted">'
-             . esc_html__('Used only when Assume-Nginx is enabled and the real config is not visible.', 'fastcgi-cache-purge-and-preload-nginx')
+             . esc_html__('Used only when Assume-Nginx mode is enabled and the real nginx.conf is not found.', 'fastcgi-cache-purge-and-preload-nginx')
              . '</p>';
         $show_dummy = isset($_GET['nppp_show_dummy']) && sanitize_text_field($_GET['nppp_show_dummy']) === '1';
         echo '      <p class="nppp-actions">';
@@ -289,19 +289,19 @@ services:
         $bits[] = sprintf('<p><strong>%s</strong> %s</p>',
             esc_html__('Signals suggest Nginx:', 'fastcgi-cache-purge-and-preload-nginx'),
             $signals ? '<span class="dashicons dashicons-yes"></span> ' . esc_html__('Yes', 'fastcgi-cache-purge-and-preload-nginx')
-                     : esc_html__('No', 'fastcgi-cache-purge-and-preload-nginx')
+                     : '<span class="dashicons dashicons-no"></span> ' . esc_html__('No', 'fastcgi-cache-purge-and-preload-nginx')
         );
         $bits[] = sprintf('<p><strong>%s</strong> %s</p>',
             esc_html__('Assume-Nginx mode:', 'fastcgi-cache-purge-and-preload-nginx'),
             $assume_enabled ? '<span class="dashicons dashicons-yes"></span> ' . esc_html__('Enabled', 'fastcgi-cache-purge-and-preload-nginx')
-                            : esc_html__('Disabled', 'fastcgi-cache-purge-and-preload-nginx')
+                            : '<span class="dashicons dashicons-no"></span> ' . esc_html__('Disabled', 'fastcgi-cache-purge-and-preload-nginx')
         );
 
         // Quick hints the detector uses (keep generic to avoid leaking env specifics)
         $hints  = '<ul style="margin-left:18px">';
         $hints .= '<li>' . esc_html__('Server signature (SERVER_SOFTWARE)', 'fastcgi-cache-purge-and-preload-nginx') . '</li>';
-        $hints .= '<li>' . esc_html__('HTTP headers (server / fastcgi hints)', 'fastcgi-cache-purge-and-preload-nginx') . '</li>';
-        $hints .= '<li>' . esc_html__('/etc/nginx/nginx.conf visibility or known paths', 'fastcgi-cache-purge-and-preload-nginx') . '</li>';
+        $hints .= '<li>' . esc_html__('HTTP headers (server / PHP hints)', 'fastcgi-cache-purge-and-preload-nginx') . '</li>';
+        $hints .= '<li>' . esc_html__('nginx.conf found at standard paths', 'fastcgi-cache-purge-and-preload-nginx') . '</li>';
         $hints .= '</ul>';
 
         $bits[] = '<p class="nppp-muted"><strong>' . esc_html__('Signals checked:', 'fastcgi-cache-purge-and-preload-nginx') . '</strong></p>' . $hints;
