@@ -74,10 +74,14 @@ final class Setup {
     public function nppp_render_setup_page(): void {
         if (! current_user_can('manage_options')) wp_die(__('Insufficient permissions.', 'fastcgi-cache-purge-and-preload-nginx'));
 
-        $needs_setup    = $this->nppp_needs_setup();
-        $nginx_detected = $this->nppp_is_nginx_detected();
-        $assume_enabled = $this->nppp_assume_nginx_enabled();
-        $nonce          = wp_create_nonce('nppp_setup_actions');
+        // Single source of truth for gating
+        $needs_setup        = $this->nppp_needs_setup();
+
+        // Detection signals for UI
+        $strict_detected    = $this->nppp_is_nginx_detected_strict(); // real, ignores Assume
+        $assume_enabled     = $this->nppp_assume_nginx_enabled();     // current Assume state
+        $effective_detected = $this->nppp_is_nginx_detected();        // effective detection (honors Assume for heuristics)
+        $nonce              = wp_create_nonce('nppp_setup_actions');
 
         // Minor inline styles for nicer layout (keeps WP look & feel)
         echo '<style>
@@ -94,16 +98,28 @@ final class Setup {
         echo '<h1>' . esc_html__('NPP • Setup', 'fastcgi-cache-purge-and-preload-nginx') . '</h1>';
 
         // Top notice: success vs. action needed
-        if ($nginx_detected) {
+        if ($strict_detected) {
             echo '<div class="notice notice-success"><p>'
-                . esc_html__('Nginx detected. You’re all set — continue to Settings.', 'fastcgi-cache-purge-and-preload-nginx')
-                . '</p><p class="nppp-muted" style="margin:6px 0 0 0;">'
-                . esc_html__('Assume-Nginx mode was disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx')
-                . '</p></div>';
+               . esc_html__('Nginx detected. You’re all set — continue to Settings.', 'fastcgi-cache-purge-and-preload-nginx')
+               . '</p>';
+
+            // show this line only if the auto-disable notice flag is set by the hook
+            if (get_option('nppp_assume_nginx_auto_disabled_notice')) {
+                echo '<p class="nppp-muted" style="margin:6px 0 0 0;">'
+                   . esc_html__('Assume-Nginx mode was disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx')
+                   . '</p>';
+            }
+            echo '</div>';
+
+        } elseif ($assume_enabled) {
+            echo '<div class="notice notice-info"><p>'
+               . esc_html__('Assume-Nginx is enabled. You can proceed to Settings. If you later bind the real nginx.conf, detection will switch to “detected” automatically.', 'fastcgi-cache-purge-and-preload-nginx')
+               . '</p></div>';
+
         } else {
             echo '<div class="notice notice-error"><p>'
-                . esc_html__('Nginx was not detected. This can be a false positive in proxy, Docker, or chrooted environments.', 'fastcgi-cache-purge-and-preload-nginx')
-                . '</p></div>';
+               . esc_html__('Nginx was not detected. This can be a false positive in proxy, Docker, or chrooted environments.', 'fastcgi-cache-purge-and-preload-nginx')
+               . '</p></div>';
         }
 
         // Why am I seeing this?
@@ -178,7 +194,7 @@ services:
         echo '      <input type="hidden" name="action" value="nppp_setup_actions" />';
         echo '      <input type="hidden" name="_wpnonce" value="' . esc_attr($nonce) . '" />';
 
-        if (! $nginx_detected && ! $assume_enabled) {
+        if ($needs_setup) {
             echo '      <div class="nppp-actions">';
             echo '        <button class="button button-primary" name="nppp_action" value="assume_on">'
                 . esc_html__('Enable Assume-Nginx now', 'fastcgi-cache-purge-and-preload-nginx')
@@ -217,7 +233,7 @@ services:
         echo '  <div class="postbox nppp-card">';
         echo '    <h2 class="hndle"><span>' . esc_html__('Detection Status', 'fastcgi-cache-purge-and-preload-nginx') . '</span></h2>';
         echo '    <div class="inside">';
-        echo          $this->nppp_detection_debug_html($nginx_detected, $assume_enabled);
+        echo          $this->nppp_detection_debug_html($strict_detected, $assume_enabled);
         echo '    </div>';
         echo '  </div>';
 
@@ -228,7 +244,7 @@ services:
         echo '      <p class="nppp-muted">'
              . esc_html__('Used only when Assume-Nginx is enabled and the real config is not visible.', 'fastcgi-cache-purge-and-preload-nginx')
              . '</p>';
-        $show_dummy = isset($_GET['nppp_show_dummy']);
+        $show_dummy = isset($_GET['nppp_show_dummy']) && sanitize_text_field($_GET['nppp_show_dummy']) === '1';
         echo '      <p class="nppp-actions">';
         echo '        <a class="button" href="' . esc_url( add_query_arg(['nppp_show_dummy' => $show_dummy ? '0' : '1']) ) . '">'
                . ($show_dummy ? esc_html__('Hide dummy nginx.conf', 'fastcgi-cache-purge-and-preload-nginx') : esc_html__('Show dummy nginx.conf', 'fastcgi-cache-purge-and-preload-nginx'))
