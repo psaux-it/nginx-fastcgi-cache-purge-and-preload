@@ -107,6 +107,14 @@ function nppp_check_perm_in_cache($check_path = false, $check_perm = false, $che
     // Get the cached result and path status
     $result = get_transient($transient_key);
 
+    // Normalize: callers compare against string 'true'/'false'
+    if ($result === false) {
+        $result = 'false';
+    } else {
+        // Be defensive in case something else was stored
+        $result = ($result === 'true') ? 'true' : 'false';
+    }
+
     if ($check_path) {
         $path_status = nppp_check_path();
 
