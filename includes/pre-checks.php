@@ -17,26 +17,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Nginx detector used by Setup.
 if (! function_exists('nppp_precheck_nginx_detected')) {
     function nppp_precheck_nginx_detected(bool $honor_assume = true): bool {
-        // Honor "assume Nginx" (constant or runtime option)
-        if ($honor_assume && (
-            (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true)
-            || (bool) get_option('nppp_assume_nginx_runtime')
-        )) {
-            return true;
-        }
-
-        // Filesystem hint FIRST (authoritative for "strict")
-        if (function_exists('nppp_initialize_wp_filesystem')) {
-            $fs = nppp_initialize_wp_filesystem();
-            if ($fs && function_exists('nppp_get_nginx_conf_paths')) {
-                $paths = nppp_get_nginx_conf_paths($fs, $honor_assume);
-                // In strict mode ($honor_assume=false)
-                if (!empty($paths)) {
-                    return true;
-                }
-            }
-        }
-
         // Aggregate network/env signals (usable only when $honor_assume === true)
         $signal_hit = false;
 
@@ -106,6 +86,29 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
             $sapi = PHP_SAPI;
             if (stripos($sapi, 'fpm-fcgi') !== false || stripos($sapi, 'cgi-fcgi') !== false) {
                 $signal_hit = true;
+            }
+        }
+
+        // Expose signals result for the Setup UI
+        $GLOBALS['NPPP__LAST_SIGNAL_HIT'] = (bool) $signal_hit;
+
+        // Honor "assume Nginx" (constant or runtime option)
+        if ($honor_assume && (
+            (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true)
+            || (bool) get_option('nppp_assume_nginx_runtime')
+        )) {
+            return true;
+        }
+
+        // Filesystem hint FIRST (authoritative for "strict")
+        if (function_exists('nppp_initialize_wp_filesystem')) {
+            $fs = nppp_initialize_wp_filesystem();
+            if ($fs && function_exists('nppp_get_nginx_conf_paths')) {
+                $paths = nppp_get_nginx_conf_paths($fs, $honor_assume);
+                // In strict mode ($honor_assume=false)
+                if (!empty($paths)) {
+                    return true;
+                }
             }
         }
 
