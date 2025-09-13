@@ -3504,3 +3504,32 @@ body.has-sticky-submit .nppp-scrollfab{
         box-sizing: border-box;
     }
 }
+
+#nppp-assume{
+    width:300px;
+    margin:10px 0 6px;
+    padding:6px 10px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    border:1px solid #e2b203;
+    background:#fff7d6;
+}
+
+/* Icon */
+#nppp-assume .dashicons{
+    font-size:20px;
+    color:#8a6d3b;
+}
+
+#nppp-assume .button.button-small{
+    margin-left:auto;
+}
+
+@media (max-width: 782px){
+    #nppp-assume{
+        width: 100% !important;
+        box-sizing: border-box !important;
+        flex-wrap: wrap !important;
+    }
+}
