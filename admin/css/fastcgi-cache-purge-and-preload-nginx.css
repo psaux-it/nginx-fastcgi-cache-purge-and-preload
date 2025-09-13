@@ -3492,3 +3492,15 @@ body.has-sticky-submit .nppp-scrollfab{
 
 .nppp-scrollfab[data-hidden="true"]{opacity:0;pointer-events:none}
 .nppp-scrollfab[data-hidden="false"]{opacity:1}
+
+@media (max-width: 375px){
+    .wrap{
+        overflow-x: hidden;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+    .wrap *{
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+}
