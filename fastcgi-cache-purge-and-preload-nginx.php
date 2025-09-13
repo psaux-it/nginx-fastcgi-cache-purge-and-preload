@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Define assume-nginx mode
+// Compatible mode
 if (! defined('NPPP_ASSUME_NGINX')) {
     $assume = get_option('nppp_assume_nginx_runtime');
     if ($assume) {
@@ -32,8 +32,16 @@ if (!defined('NPPP_PLUGIN_FILE')) {
     define('NPPP_PLUGIN_FILE', __FILE__);
 }
 
+// Autoloader
+require_once plugin_dir_path(__FILE__) . 'includes/autoload.php';
+
 // Load NPP
 require_once plugin_dir_path(__FILE__) . 'admin/fastcgi-cache-purge-and-preload-nginx-admin.php';
+
+// Boot the Setup
+if (class_exists('\NPPP\Setup')) {
+    \NPPP\Setup::init();
+}
 
 // Activation handler
 function nppp_on_activation() {
@@ -44,7 +52,7 @@ function nppp_on_activation() {
         update_option('nppp_redirect_to_setup_once', 1, false);
     }
 
-    // Initialize/refresh default plugin options
+    // Initialize default plugin options
     if (function_exists('nppp_defaults_on_plugin_activation')) {
         nppp_defaults_on_plugin_activation();
     }
