@@ -27,10 +27,18 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
 
         // Infer from HTTP response headers (server/fastcgi hints)
         if (!$signal_hit && function_exists('wp_remote_get') && function_exists('get_site_url')) {
-            $response = wp_remote_get(get_site_url(), array(
-                'timeout'     => 3,
-                'redirection' => 2,
+            // Make cheap HEAD request
+            $token     = substr(dechex(hrtime(true)), -8); // ucuz cache-buster
+            $probe_url = add_query_arg(['s' => 'nppp-' . $token, '_nppp' => $token], home_url('/'));
+            $response  = wp_remote_head($probe_url, array(
+                'timeout'     => 1,
+                'redirection' => 0,
                 'blocking'    => true,
+                'headers'     => array(
+                    'Cache-Control' => 'no-cache, no-store, max-age=0',
+                    'Pragma'        => 'no-cache',
+                    'User-Agent'    => 'NPPP-Precheck/2.1.3',
+                ),
             ));
 
             if (is_array($response) && ! is_wp_error($response)) {
@@ -416,11 +424,18 @@ function nppp_pre_checks_critical() {
 
     // If no SERVER_SOFTWARE detected, check response headers
     if (empty($server_software)) {
-        // Perform the request
-        $response = wp_remote_get(get_site_url(), array(
-            'timeout'     => 3,
-            'redirection' => 2,
+        // Make cheap HEAD request
+        $token     = substr(dechex(hrtime(true)), -8); // ucuz cache-buster
+        $probe_url = add_query_arg(['s' => 'nppp-' . $token, '_nppp' => $token], home_url('/'));
+        $response  = wp_remote_head($probe_url, array(
+            'timeout'     => 1,
+            'redirection' => 0,
             'blocking'    => true,
+            'headers'     => array(
+                'Cache-Control' => 'no-cache, no-store, max-age=0',
+                'Pragma'        => 'no-cache',
+                'User-Agent'    => 'NPPP-Precheck/2.1.3',
+            ),
         ));
 
         // Check if the request was successful
