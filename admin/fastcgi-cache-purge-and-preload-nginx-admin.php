@@ -118,7 +118,6 @@ function nppp_prepare_request_env(bool $force = false): void {
 require_once dirname(__DIR__) . '/includes/enqueue-assets.php';
 require_once dirname(__DIR__) . '/includes/wp-filesystem.php';
 require_once dirname(__DIR__) . '/includes/pre-checks.php';
-require_once dirname(__DIR__) . '/includes/setup.php';
 require_once dirname(__DIR__) . '/includes/admin-bar.php';
 require_once dirname(__DIR__) . '/includes/log.php';
 require_once dirname(__DIR__) . '/includes/svg.php';
@@ -141,24 +140,19 @@ require_once dirname(__DIR__) . '/includes/compat-gutenberg.php';
 
 // Boot the Setup
 if (class_exists('\NPPP\Setup')) {
-    $nppp_setup = new \NPPP\Setup();
-    $nppp_setup->hooks();
+    \NPPP\Setup::init();
 
-    // Late menu gate: if Nginx not detected and assume-mode is OFF,
-    // hide the normal Settings page and show a "Setup" page
-    add_action('admin_menu', function () use ($nppp_setup) {
+    add_action('admin_menu', function () {
         if (! current_user_can('manage_options')) return;
-        if (method_exists($nppp_setup, 'nppp_needs_setup') && $nppp_setup->nppp_needs_setup()) {
-            // Real settings slug
+        if (\NPPP\Setup::nppp_needs_setup()) {
             remove_submenu_page('options-general.php', \NPPP\Setup::SETTINGS_SLUG);
-            // Make Setup visible under Settings
             add_submenu_page(
                 'options-general.php',
                 __('NPP • Setup', 'fastcgi-cache-purge-and-preload-nginx'),
                 __('NPP • Setup', 'fastcgi-cache-purge-and-preload-nginx'),
                 'manage_options',
                 \NPPP\Setup::PAGE_SLUG,
-                [$nppp_setup, 'nppp_render_setup_page']
+                [\NPPP\Setup::class, 'nppp_render_setup_page']
             );
         }
     }, 99);
