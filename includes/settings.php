@@ -57,9 +57,24 @@ function nppp_add_nginx_cache_settings_page() {
     );
 }
 
+// Setup mode
+function nppp_is_assume_nginx_mode(): bool {
+    // wp-config.php hard override
+    if (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX) {
+        return true;
+    }
+
+    // Runtime option set by Setup
+    if ( (bool) get_option('nppp_assume_nginx_runtime', false) ) {
+        return true;
+    }
+
+    return false;
+}
+
 // Displays the NPP Nginx Cache Settings page in the WordPress admin dashboard
 function nppp_nginx_cache_settings_page() {
-    // Setup first
+    // Setup completed ?
     if (class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup()) {
         wp_safe_redirect( admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG) );
         exit;
@@ -125,6 +140,17 @@ function nppp_nginx_cache_settings_page() {
             </div>
         </div>
         <h2></h2>
+        <?php if (nppp_is_assume_nginx_mode()) : ?>
+        <div id="nppp-assume">
+            <span class="dashicons dashicons-warning" aria-hidden="true"></span>
+            <strong><?php echo esc_html__('Assume-Nginx Mode Active', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong>
+            <?php if (class_exists('\NPPP\Setup')): ?>
+                <a href="<?php echo esc_url( admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG) ); ?>" class="button button-small" style="margin-left:auto;">
+                    <?php echo esc_html__('Setup', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                </a>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
         <div id="nppp-nginx-tabs">
             <div class="tab-header-container">
                 <ul>
