@@ -1,6 +1,6 @@
 /**
  * Frontend JavaScript for FastCGI Cache Purge and Preload for Nginx
- * Description: This JavaScript file contains functions that disabling front-end admin bar actions for FastCGI Cache Purge and Preload for Nginx
+ * Description: This JavaScript file contains functions that disabling front-end preload actions for FastCGI Cache Purge and Preload for Nginx
  * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
