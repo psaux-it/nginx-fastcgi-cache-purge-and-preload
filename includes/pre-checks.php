@@ -26,7 +26,7 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
         }
 
         // Infer from HTTP response headers (server/fastcgi hints)
-        if (!$signal_hit && function_exists('wp_remote_get') && function_exists('get_site_url')) {
+        if (!$signal_hit && function_exists('wp_remote_head') && function_exists('get_site_url')) {
             // Make cheap HEAD request
             $token     = substr(dechex(hrtime(true)), -8);
             $probe_url = add_query_arg(['s' => 'nppp-' . $token, '_nppp' => $token], home_url('/'));
