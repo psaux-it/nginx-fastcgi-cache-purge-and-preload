@@ -196,6 +196,11 @@ function nppp_dashboard_widget() {
     // Fetch the NPP plugin settings from the database
     $settings = get_option('nginx_cache_settings', []);
 
+    // Need setup
+    $needs_setup = class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup();
+    $setup_url   = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
+    $settings_url = admin_url('options-general.php?page=nginx_cache_settings');
+
     // Check if the preload process is running
     $is_preload_alive = nppp_check_preload_status_widget();
 
@@ -269,14 +274,22 @@ function nppp_dashboard_widget() {
         // Output the "Purge All" and "Preload All" top buttons
         echo '<div style="display: flex; justify-content: space-between; align-items: center;">';
             // Purge All button
-            echo '<a href="' . esc_url(wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce')) . '"
+            echo '<a href="' . esc_url(
+                    $needs_setup
+                        ? $setup_url
+                        : wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce')
+                ) . '"
                     class="nppp-action-button"
                     data-action="nppp-widget-purge"
                     style="font-size: 14px; color: white; background-color: #d9534f; padding: 8px 12px; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; transition: background-color 0.3s ease; flex: 48%;">';
                 echo '<span class="dashicons dashicons-trash" style="font-size: 18px; margin-right: 8px;"></span>' . esc_html__('Purge All', 'fastcgi-cache-purge-and-preload-nginx');
             echo '</a>';
             // Preload All button
-            echo '<a href="' . esc_url(wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce')) . '"
+            echo '<a href="' . esc_url(
+                    $needs_setup
+                        ? $setup_url
+                        : wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce')
+                ) . '"
                     class="nppp-action-button"
                     data-action="nppp-widget-preload"
                     style="font-size: 14px; color: white; background-color: #3CB371; padding: 8px 12px; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; transition: background-color 0.3s ease; flex: 48%;">';
