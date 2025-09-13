@@ -229,12 +229,13 @@ add_action('wp_ajax_nppp_update_related_fields', 'nppp_update_related_fields');
 add_action('wp_ajax_nppp_locate_cache_file', 'nppp_locate_cache_file_ajax');
 add_action('wp_ajax_nppp_update_pctnorm_mode', 'nppp_update_pctnorm_mode');
 add_action('load-settings_page_nginx_cache_settings', function () {
-    if (class_exists('\NPPP\Setup')) {
-        $s = new \NPPP\Setup();
-        if ($s->nppp_needs_setup()) {
-            wp_safe_redirect( admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG) );
-            exit;
-        }
+    if ( ! current_user_can('manage_options') ) {
+        return;
+    }
+
+    if (class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup()) {
+        wp_safe_redirect( admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG) );
+        exit;
     }
 }, 0);
 $nppp_auto_purge
