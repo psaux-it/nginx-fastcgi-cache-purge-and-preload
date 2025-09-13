@@ -3506,7 +3506,7 @@ body.has-sticky-submit .nppp-scrollfab{
 }
 
 #nppp-assume{
-    width:300px;
+    width:302px;
     margin:10px 0 6px;
     padding:6px 10px;
     display:flex;
@@ -3514,6 +3514,8 @@ body.has-sticky-submit .nppp-scrollfab{
     gap:8px;
     border:1px solid #e2b203;
     background:#fff7d6;
+    margin-top: -15px;
+    margin-bottom: 20px;
 }
 
 /* Icon */
