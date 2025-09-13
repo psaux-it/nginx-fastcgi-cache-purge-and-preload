@@ -13,9 +13,9 @@ if ( ! defined('ABSPATH') ) { exit; }
 
 // simple per-request de-dupe so we don't purge twice if both hooks run.
 function nppp__el_mark_purged( $set = null ) {
-        static $did = false;
-        if ( $set === true ) { $did = true; }
-        return $did;
+    static $did = false;
+    if ( $set === true ) { $did = true; }
+    return $did;
 }
 
 // Elementor-specific purge triggers
