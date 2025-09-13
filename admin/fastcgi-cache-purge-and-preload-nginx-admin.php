@@ -138,26 +138,6 @@ require_once dirname(__DIR__) . '/includes/dashboard-widget.php';
 require_once dirname(__DIR__) . '/includes/compat-elementor.php';
 require_once dirname(__DIR__) . '/includes/compat-gutenberg.php';
 
-// Boot the Setup
-if (class_exists('\NPPP\Setup')) {
-    \NPPP\Setup::init();
-
-    add_action('admin_menu', function () {
-        if (! current_user_can('manage_options')) return;
-        if (\NPPP\Setup::nppp_needs_setup()) {
-            remove_submenu_page('options-general.php', \NPPP\Setup::SETTINGS_SLUG);
-            add_submenu_page(
-                'options-general.php',
-                __('NPP • Setup', 'fastcgi-cache-purge-and-preload-nginx'),
-                __('NPP • Setup', 'fastcgi-cache-purge-and-preload-nginx'),
-                'manage_options',
-                \NPPP\Setup::PAGE_SLUG,
-                [\NPPP\Setup::class, 'nppp_render_setup_page']
-            );
-        }
-    }, 99);
-}
-
 // Get the status of Auto Purge option
 $options = get_option('nginx_cache_settings');
 $nppp_auto_purge = isset($options['nginx_cache_purge_on_update']) && $options['nginx_cache_purge_on_update'] === 'yes';
@@ -228,16 +208,6 @@ add_action('wp_ajax_nppp_update_enable_proxy_option', 'nppp_update_enable_proxy_
 add_action('wp_ajax_nppp_update_related_fields', 'nppp_update_related_fields');
 add_action('wp_ajax_nppp_locate_cache_file', 'nppp_locate_cache_file_ajax');
 add_action('wp_ajax_nppp_update_pctnorm_mode', 'nppp_update_pctnorm_mode');
-add_action('load-settings_page_nginx_cache_settings', function () {
-    if ( ! current_user_can('manage_options') ) {
-        return;
-    }
-
-    if (class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup()) {
-        wp_safe_redirect( admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG) );
-        exit;
-    }
-}, 0);
 $nppp_auto_purge
     ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions)
     : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions);
