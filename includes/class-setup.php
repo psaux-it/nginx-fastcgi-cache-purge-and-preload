@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Setup controller for FastCGI Cache Purge and Preload for Nginx
