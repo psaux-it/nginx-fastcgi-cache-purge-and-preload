@@ -298,10 +298,17 @@ function nppp_plugin_requirements_met() {
         // If no SERVER_SOFTWARE detected, check response headers
         if (empty($server_software)) {
             // Perform the request
-            $response = wp_remote_get(get_site_url(), array(
-                'timeout'     => 3,
-                'redirection' => 2,
+            $token     = substr(dechex(hrtime(true)), -8);
+            $probe_url = add_query_arg(['s' => 'nppp-' . $token, '_nppp' => $token], home_url('/'));
+            $response  = wp_remote_head($probe_url, array(
+                'timeout'     => 2,
+                'redirection' => 0,
                 'blocking'    => true,
+                'headers'     => array(
+                    'Cache-Control' => 'no-cache, no-store, max-age=0',
+                    'Pragma'        => 'no-cache',
+                    'User-Agent'    => 'NPPP-Precheck/2.1.3',
+                ),
             ));
 
             // Check if the request was successful
