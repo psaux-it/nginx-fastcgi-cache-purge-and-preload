@@ -139,7 +139,6 @@ function nppp_nginx_cache_settings_page() {
                 </p>
             </div>
         </div>
-        <h2></h2>
         <?php if (nppp_is_assume_nginx_mode()) : ?>
         <div id="nppp-assume">
             <span class="dashicons dashicons-warning" aria-hidden="true"></span>
@@ -151,6 +150,7 @@ function nppp_nginx_cache_settings_page() {
             <?php endif; ?>
         </div>
         <?php endif; ?>
+        <h2></h2>
         <div id="nppp-nginx-tabs">
             <div class="tab-header-container">
                 <ul>
