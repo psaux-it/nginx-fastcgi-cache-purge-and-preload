@@ -120,13 +120,9 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         return;
     }
 
-    // Detect if setup is required
-    $needs_setup = false;
-    $setup_url   = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
-    if (class_exists('\NPPP\Setup')) {
-        $s = new \NPPP\Setup();
-        $needs_setup = $s->nppp_needs_setup();
-    }
+    // Setup completed?
+    $setup_url = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
+    $needs_setup = class_exists('\NPPP\Setup') ? \NPPP\Setup::nppp_needs_setup() : false;
 
     // Add top admin-bar menu for NPP
     $wp_admin_bar->add_menu(array(
