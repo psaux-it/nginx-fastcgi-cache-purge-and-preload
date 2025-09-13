@@ -1,3 +1,4 @@
+
 <?php
 /**
  * Setup controller for FastCGI Cache Purge and Preload for Nginx
@@ -20,13 +21,16 @@ final class Setup {
     const PAGE_SLUG      = 'nppp-setup';
     const SETTINGS_SLUG  = 'nginx_cache_settings';
 
-    public function hooks(): void {
+    /**
+     * Static bootstrap: register all WP hooks.
+     */
+    public static function init(): void {
         // Activation redirect flag is set in main file via register_activation_hook
-        add_action('admin_init', [$this, 'nppp_auto_disable_assume_when_detected'], 99);
-        add_action('admin_init', [$this, 'nppp_maybe_redirect_to_setup']);
-        add_action('admin_menu', [$this, 'nppp_register_setup_page']);
-        add_action('admin_init', [$this, 'nppp_gate_settings_until_setup']);
-        add_action('admin_post_nppp_setup_actions', [$this, 'nppp_handle_setup_post']);
+        add_action('admin_init', [__CLASS__, 'nppp_auto_disable_assume_when_detected'], 99);
+        add_action('admin_init', [__CLASS__, 'nppp_maybe_redirect_to_setup']);
+        add_action('admin_menu', [__CLASS__, 'nppp_register_setup_page']);
+        add_action('admin_init', [__CLASS__, 'nppp_gate_settings_until_setup']);
+        add_action('admin_post_nppp_setup_actions', [__CLASS__, 'nppp_handle_setup_post']);
     }
 
     // One-time redirect after activation
@@ -34,12 +38,12 @@ final class Setup {
         update_option(self::REDIRECT_FLAG, 1, false);
     }
 
-    public function nppp_maybe_redirect_to_setup(): void {
+    public static function nppp_maybe_redirect_to_setup(): void {
         if (! current_user_can('manage_options')) return;
 
         if (get_option(self::REDIRECT_FLAG)) {
             delete_option(self::REDIRECT_FLAG);
-            if ($this->nppp_needs_setup()) {
+            if (self::nppp_needs_setup()) {
                 wp_safe_redirect(admin_url('admin.php?page=' . self::PAGE_SLUG));
                 exit;
             }
@@ -47,9 +51,9 @@ final class Setup {
     }
 
     // Hide/redirect Settings if detection failed and assume-mode not enabled
-    public function nppp_gate_settings_until_setup(): void {
+    public static function nppp_gate_settings_until_setup(): void {
         if (! current_user_can('manage_options')) return;
-        if (! $this->nppp_needs_setup()) return;
+        if (! self::nppp_needs_setup()) return;
 
         // If admin tries to access Settings, bounce to Setup.
         $current_page = isset($_GET['page']) ? sanitize_key($_GET['page']) : '';
@@ -59,7 +63,7 @@ final class Setup {
         }
     }
 
-    public function nppp_register_setup_page(): void {
+    public static function nppp_register_setup_page(): void {
         // Hidden page (no menu item)
         add_submenu_page(
             null,
@@ -67,24 +71,24 @@ final class Setup {
             __('NPP • Need Nginx Setup', 'fastcgi-cache-purge-and-preload-nginx'),
             'manage_options',
             self::PAGE_SLUG,
-            [$this, 'nppp_render_setup_page']
+            [__CLASS__, 'nppp_render_setup_page']
         );
     }
 
-    public function nppp_render_setup_page(): void {
+    public static function nppp_render_setup_page(): void {
         if (! current_user_can('manage_options')) wp_die(__('Insufficient permissions.', 'fastcgi-cache-purge-and-preload-nginx'));
 
         // Single source of truth for gating
-        $needs_setup        = $this->nppp_needs_setup();
+        $needs_setup        = self::nppp_needs_setup();
 
         // Detection signals for UI
-        $strict_detected    = $this->nppp_is_nginx_detected_strict(); // real, ignores Assume
-        $assume_enabled     = $this->nppp_assume_nginx_enabled();     // current Assume state
-        $effective_detected = $this->nppp_is_nginx_detected();        // effective detection (honors Assume for heuristics)
+        $strict_detected    = self::nppp_is_nginx_detected_strict(); // real, ignores Assume
+        $assume_enabled     = self::nppp_assume_nginx_enabled();     // current Assume state
+        $effective_detected = self::nppp_is_nginx_detected();        // effective detection (honors Assume for heuristics)
         $nonce              = wp_create_nonce('nppp_setup_actions');
 
         // Get signals
-        $this->nppp_is_nginx_detected();
+        self::nppp_is_nginx_detected();
         $signals_detected   = !empty($GLOBALS['NPPP__LAST_SIGNAL_HIT']);
 
         // Minor inline styles for layout
@@ -122,7 +126,6 @@ final class Setup {
             }
             .nppp-title{vertical-align:middle}
             @media (max-width: 782px){
-                /* keep things tidy on small screens */
                 .nppp-logo{width:60px;height:60px;margin-right:10px}
             }
         </style>';
@@ -266,7 +269,7 @@ services:
         echo '  <div class="postbox nppp-card">';
         echo '    <h2 class="hndle"><span>' . esc_html__('Detection Status', 'fastcgi-cache-purge-and-preload-nginx') . '</span></h2>';
         echo '    <div class="inside">';
-        echo          $this->nppp_detection_debug_html($strict_detected, $assume_enabled);
+        echo          self::nppp_detection_debug_html($strict_detected, $assume_enabled);
         echo '    </div>';
         echo '  </div>';
 
@@ -285,7 +288,7 @@ services:
         echo '      </p>';
         if ($show_dummy) {
             echo '      <textarea readonly rows="14" style="width:100%;font-family:monospace;">'
-                . esc_textarea($this->nppp_dummy_nginx_conf())
+                . esc_textarea(self::nppp_dummy_nginx_conf())
                 . '</textarea>';
         }
         echo '    </div>';
@@ -298,12 +301,12 @@ services:
     }
 
     // Small helper to display what we currently know about detection.
-    private function nppp_detection_debug_html(bool $nginx_detected, bool $assume_enabled): string {
+    private static function nppp_detection_debug_html(bool $nginx_detected, bool $assume_enabled): string {
         // $nginx_detected here is "strict"
-        $effective = $this->nppp_is_nginx_detected();
+        $effective = self::nppp_is_nginx_detected();
 
         // Get signals
-        $this->nppp_is_nginx_detected();
+        self::nppp_is_nginx_detected();
         $signals   = !empty($GLOBALS['NPPP__LAST_SIGNAL_HIT']);
 
         $bits = [];
@@ -341,7 +344,7 @@ services:
         return implode('', $bits);
     }
 
-    public function nppp_handle_setup_post(): void {
+    public static function nppp_handle_setup_post(): void {
         if (! current_user_can('manage_options')) wp_die(__('Insufficient permissions.', 'fastcgi-cache-purge-and-preload-nginx'));
         check_admin_referer('nppp_setup_actions');
 
@@ -358,7 +361,7 @@ services:
             set_transient('nppp_assume_recently_enabled', 1, 60);
 
             if (! empty($_POST['write_wp_config'])) {
-                $this->nppp_try_write_wp_config_define();
+                self::nppp_try_write_wp_config_define();
             }
 
             // Clear plugin caches after switching mode
@@ -375,17 +378,17 @@ services:
     }
 
     // Do we need to block settings and run setup?
-    public function nppp_needs_setup(): bool {
-        return (! $this->nppp_is_nginx_detected_strict()) && (! $this->nppp_assume_nginx_enabled());
+    public static function nppp_needs_setup(): bool {
+        return (! self::nppp_is_nginx_detected_strict()) && (! self::nppp_assume_nginx_enabled());
     }
 
-    private function nppp_assume_nginx_enabled(): bool {
+    private static function nppp_assume_nginx_enabled(): bool {
         if (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX) return true;
         return (bool) get_option(self::RUNTIME_OPTION);
     }
 
     // Detect nginx
-    private function nppp_is_nginx_detected_strict(): bool {
+    private static function nppp_is_nginx_detected_strict(): bool {
         if (function_exists('\\nppp_precheck_nginx_detected')) {
             // ask precheck to IGNORE assume mode
             return (bool) \nppp_precheck_nginx_detected(false);
@@ -398,7 +401,7 @@ services:
         return false;
     }
 
-    private function nppp_is_nginx_detected(): bool {
+    private static function nppp_is_nginx_detected(): bool {
         if (function_exists('\\nppp_precheck_nginx_detected')) {
             return (bool) \nppp_precheck_nginx_detected(true);
         }
@@ -412,7 +415,7 @@ services:
     }
 
     // Insert of the define into wp-config.php
-    private function nppp_try_write_wp_config_define(): void {
+    private static function nppp_try_write_wp_config_define(): void {
         if (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX) {
             // still try to persist to file so future requests have it early.
         }
@@ -423,7 +426,7 @@ services:
         if (! WP_Filesystem($creds)) return;
         global $wp_filesystem;
 
-        $wp_config_path = $this->nppp_locate_wp_config_path();
+        $wp_config_path = self::nppp_locate_wp_config_path();
         if (! $wp_config_path || ! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
             return;
         }
@@ -448,7 +451,7 @@ services:
         $wp_filesystem->put_contents($wp_config_path, $contents, FS_CHMOD_FILE);
     }
 
-    private function nppp_locate_wp_config_path(): ?string {
+    private static function nppp_locate_wp_config_path(): ?string {
         // Standard location
         if (file_exists(ABSPATH . 'wp-config.php') ) return ABSPATH . 'wp-config.php';
         // One level up
@@ -457,18 +460,18 @@ services:
     }
 
     // Auto-disable Assume-Nginx when real detection passes
-    public function nppp_auto_disable_assume_when_detected(): void {
+    public static function nppp_auto_disable_assume_when_detected(): void {
         if (! current_user_can('manage_options')) return;
 
         // skip immediately after enabling
         if (get_transient('nppp_assume_recently_enabled')) return;
 
-        $detected = $this->nppp_is_nginx_detected_strict();
-        $assume_enabled = $this->nppp_assume_nginx_enabled();
+        $detected = self::nppp_is_nginx_detected_strict();
+        $assume_enabled = self::nppp_assume_nginx_enabled();
 
         if ($detected && $assume_enabled) {
             delete_option(self::RUNTIME_OPTION);
-            $this->nppp_try_remove_wp_config_define();
+            self::nppp_try_remove_wp_config_define();
             update_option('nppp_assume_nginx_auto_disabled_notice', 1, false);
 
             // Clear plugin caches after switching back to detected mode
@@ -506,7 +509,7 @@ services:
     }
 
     // Remove define('NPPP_ASSUME_NGINX', true); from wp-config.php
-    private function nppp_try_remove_wp_config_define(): void {
+    private static function nppp_try_remove_wp_config_define(): void {
         if (! function_exists('request_filesystem_credentials')) {
             require_once ABSPATH . 'wp-admin/includes/file.php';
         }
@@ -514,7 +517,7 @@ services:
         if (! WP_Filesystem($creds)) return;
         global $wp_filesystem;
 
-        $wp_config_path = $this->nppp_locate_wp_config_path();
+        $wp_config_path = self::nppp_locate_wp_config_path();
         if (! $wp_config_path || ! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
             return;
         }
@@ -531,7 +534,7 @@ services:
         }
     }
 
-    private function nppp_dummy_nginx_conf(): string {
+    private static function nppp_dummy_nginx_conf(): string {
         static $cached = null;
         if ($cached !== null) return $cached;
 
