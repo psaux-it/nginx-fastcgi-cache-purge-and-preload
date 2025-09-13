@@ -532,24 +532,40 @@ services:
     }
 
     private function nppp_dummy_nginx_conf(): string {
-        return <<<NGINX
-# Dummy nginx.conf for NPP assume-Nginx mode (fallback)
-# See plugin setup page for context and recommended real bind-mount of /etc/nginx/nginx.conf
-user dummy;
-worker_processes auto;
-events { worker_connections 1024; }
+        static $cached = null;
+        if ($cached !== null) return $cached;
+
+        // Prefer the shipped dummy file in the plugin root.
+        $candidates = [
+            dirname(plugin_dir_path(__FILE__)) . '/dummy-nginx.conf',
+            plugin_dir_path(__FILE__) . 'dummy-nginx.conf',
+        ];
+
+        foreach ($candidates as $path) {
+            $real = realpath($path) ?: $path;
+            if (is_readable($real)) {
+                $buf = @file_get_contents($real);
+                if ($buf !== false && $buf !== '') {
+                    return $cached = $buf;
+                }
+            }
+        }
+
+        // Last-resort inline fallback
+        return $cached = <<<'NGINX'
+user  dummy;
+worker_processes  auto;
+events {
+    worker_connections 1024;
+}
 http {
     include       mime.types;
     default_type  application/octet-stream;
-    # These stanzas are placeholders so the plugin can parse keys/paths in opaque environments.
-    proxy_cache_path /var/run/nginx-cache levels=1:2 keys_zone=npp:10m inactive=60m use_temp_path=off;
-    log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
-                      '\$status \$body_bytes_sent "\$http_referer" '
-                      '"\$http_user_agent"';
+    fastcgi_cache_path /var/run/nginx-fastcgi levels=1:2 keys_zone=npp_fcgi:10m inactive=60m use_temp_path=off;
+    fastcgi_cache_key "$scheme$request_method$host$request_uri";
     access_log  /var/log/nginx/access.log  main;
     sendfile        on;
     keepalive_timeout  65;
-    server { listen 80; server_name _; location / { return 200 "NPP dummy"; } }
 }
 NGINX;
     }
