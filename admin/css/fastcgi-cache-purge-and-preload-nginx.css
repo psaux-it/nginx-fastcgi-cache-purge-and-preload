@@ -3579,6 +3579,13 @@ body.has-sticky-submit .nppp-scrollfab{
     contain: paint;
 }
 
+/* Perf nudge for long pages / some GPUs */
+.nppp-aurora-canvas,
+.nppp-aurora-overlay {
+  image-rendering: optimizeQuality;
+  transform: translateZ(0);
+}
+
 .nppp-img-container,
 .nppp-buttons-wrapper{ position:relative; z-index:1; }
 
