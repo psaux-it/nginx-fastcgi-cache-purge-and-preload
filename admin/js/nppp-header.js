@@ -505,6 +505,10 @@
     requestAnimationFrame(ts => draw(ts/1000));
   }
 
+  // Defensive guard for hot-reloads / multiple inits
+  if (window.__NPPPAuroraCoreBooted) return;
+  window.__NPPPAuroraCoreBooted = true;
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', start, {once:true});
   } else {
@@ -520,7 +524,7 @@
  * Author: Hasan CALISIR
  * License: GPL-2.0+
  *
- * Usage: load AFTER core aurora file. No structural changes to the core.
+ * Usage: AFTER core aurora file. No structural changes to the core.
  * Relies on: window.NPPPAurora API, optional 'nppp:preload-progress' events.
  */
 
