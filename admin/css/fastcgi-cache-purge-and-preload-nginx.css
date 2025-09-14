@@ -3533,3 +3533,42 @@ body.has-sticky-submit .nppp-scrollfab{
         flex-wrap: wrap !important;
     }
 }
+
+/* ===== NPPP AURORA HEADER ===== */
+.nppp-header-content{
+    position: relative;
+    isolation: isolate;
+    background:#0b0e12;
+    color:#e6ebf2;
+    display:flex;
+    align-items:center;
+    gap:18px;
+    padding:14px 16px;
+    border-radius:10px;
+    overflow:hidden;
+}
+
+.nppp-aurora-canvas{
+    position:absolute;
+    inset:0;
+    z-index:0;
+    pointer-events:none;
+    display:block;
+}
+
+.nppp-header-content::before{
+    content:"";
+    position:absolute; inset:0;
+    background:
+        radial-gradient(1000px 320px at 85% 50%, rgba(0,220,255,0.06), transparent 60%),
+        radial-gradient(700px 260px at 95% 40%, rgba(160,255,200,0.05), transparent 60%);
+    z-index:0;
+    pointer-events:none;
+}
+
+.nppp-img-container,
+.nppp-buttons-wrapper{ position:relative; z-index:1; }
+
+@media (prefers-reduced-motion: reduce){
+    .nppp-aurora-canvas{ display:none; }
+}
