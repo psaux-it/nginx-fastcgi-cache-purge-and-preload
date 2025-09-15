@@ -1,3 +1,4 @@
+
 /**
  * JavaScript for Aurora Canvas Header Effect
  * Description: Aurora ribbons that react to plugin actions and preload progress (status, % complete, errors).
@@ -11,6 +12,10 @@
 (function(){
   'use strict';
 
+  // Defensive guard for hot-reloads / multiple inits
+  if (window.__NPPPAuroraCoreBooted) return;
+  window.__NPPPAuroraCoreBooted = true;
+
   // -------------------------------
   // Config (safe to tweak)
   // -------------------------------
@@ -21,13 +26,14 @@
     light: 60,
     alpha: 0.18,
     ribbons: 4,
-    thickness: 0.9,
+    thickness: 1.12,
     trail: 0.075,
     speed: 0.20,
     noiseScale: 0.0018,
     pulseEvery: [4, 6],
     ajaxPulseAmp: 1.25,
     ajaxPulseHueBias: 25,
+    autopulse: false,
 
     // Progress coupling
     progressEndpoint: null,              // will auto-fill from window.nppp_admin_data.wget_progress_api if present
@@ -35,6 +41,8 @@
     reactToAjax: true,                   // keep generic network pulses
     reactToProgressResponse: true,       // parse progress JSON and map to visuals
     reducedMotionFallbackAlpha: 0.10,    // lower glow when reduced motion is requested
+    trailFade: 0.08,                     // 0..1 (higher = faster fade)
+    trailFadePerSec: 5,
   };
 
   // Modes for semantic states
@@ -132,7 +140,9 @@
     _dprTimer: null,
     inView: true,
     _io: null,
-    _ro: null
+    _ro: null,
+    L: { x:0, y:0, w:0, h:0, tail:0 },
+    hasDrawn: false
   };
 
   function pickHost(){
@@ -159,14 +169,8 @@
     return canvas;
   }
 
-  function liveRect(){
-    const r = state.host.getBoundingClientRect();
-    const tail = Math.min(Math.max(160, r.width*0.25), 320);
-    return { x: -tail*0.25, y: 0, w: r.width + tail, h: r.height, tail };
-  }
-
   function resetRibbons(){
-    const L = liveRect();
+    const L = state.L;
     state.ribbons.length = 0;
     for(let i=0;i<CFG.ribbons;i++){
       const y = L.y + (L.h * (0.2 + 0.6*Math.random()));
@@ -183,21 +187,29 @@
 
   function resize(){
     if (!state.host || !state.canvas) return;
-    const r = state.host.getBoundingClientRect();
-    const w = Math.max(320, r.width|0);
-    const h = Math.max(80,  r.height|0);
-    state.W = w; state.H = h;
 
-    const wPx = (w*state.DPR)|0, hPx=(h*state.DPR)|0;
-    if (state.canvas.width!==wPx) state.canvas.width=wPx;
-    if (state.canvas.height!==hPx) state.canvas.height=hPx;
-    state.canvas.style.width = w+'px';
-    state.canvas.style.height = h+'px';
-    state.ctx.setTransform(state.DPR,0,0,state.DPR,0,0);
+    const r = state.host.getBoundingClientRect();
+    const tail = Math.min(Math.max(160, r.width * 0.25), 320);
+
+    // cache rect for draw()/resetRibbons()
+    state.L = { x: -tail * 0.25, y: 0, w: r.width + tail, h: r.height, tail };
+
+    state.W = Math.max(320, r.width | 0);
+    state.H = Math.max(80,  r.height | 0);
+
+    const wPx = (state.W * state.DPR) | 0;
+    const hPx = (state.H * state.DPR) | 0;
+    if (state.canvas.width  !== wPx) state.canvas.width  = wPx;
+    if (state.canvas.height !== hPx) state.canvas.height = hPx;
+    state.canvas.style.width  = state.W + 'px';
+    state.canvas.style.height = state.H + 'px';
+    state.ctx.setTransform(state.DPR, 0, 0, state.DPR, 0, 0);
+
     resetRibbons();
   }
 
   function schedulePulse(nowS){
+    if (!CFG.autopulse) { state.nextPulse = Infinity; return; }
     const [a,b] = CFG.pulseEvery;
     state.nextPulse = nowS + (a + Math.random()*(b-a));
   }
@@ -207,7 +219,7 @@
     state.lastPulseAt = t;
     for(const r of state.ribbons){
       r.amp = Math.min(2.2, r.amp * (1 + 0.25*amp));
-      r.hue = (r.hue + hueBias + 360) % 360;
+      r.hue = ((r.hue + hueBias) % 360 + 360) % 360;
     }
   }
 
@@ -223,13 +235,13 @@
     CFG.speed = targetSpeed;
 
     // alpha glow stronger in running, subtle when done/idle
-    const baseAlpha = (state.mode === MODE.RUNNING) ? 0.22 : (state.mode===MODE.DONE ? 0.14 : 0.18);
+    const baseAlpha = (state.mode === MODE.RUNNING) ? 0.26 : (state.mode===MODE.DONE ? 0.14 : 0.18);
     CFG.alpha = state.reduce ? CFG.reducedMotionFallbackAlpha : baseAlpha;
 
     // global hue drift toward “completion blue” as pct→1
     const completionHueBias = lerp(+18, -80, Math.pow(pct01, 0.9)); // shifts cooler near 100%
     for (const r of state.ribbons){
-      r.hue = (r.hue + completionHueBias/60) % 360; // slow drift
+      r.hue = ((r.hue + (completionHueBias/60)) % 360 + 360) % 360; // slow drift
     }
   }
 
@@ -247,12 +259,19 @@
 
     const dt = Math.min(0.05, nowS - state.then); state.then = nowS;
 
-    // faint trail to create “afterimage”
-    state.ctx.globalCompositeOperation = 'source-over';
-    state.ctx.fillStyle = `rgba(10,12,16,${CFG.trail})`;
-    state.ctx.fillRect(0,0,state.W,state.H);
+    // fade previous pixels by lowering alpha (no color tint)
+    if (state.hasDrawn) {
+      const k = CFG.trailFadePerSec;
+      const a = 1 - Math.exp(-k * dt);
+      state.ctx.save();
+      state.ctx.globalCompositeOperation = 'destination-out';
+      state.ctx.fillStyle = `rgba(0,0,0,${a})`;
+      state.ctx.fillRect(0, 0, state.W, state.H);
+      state.ctx.restore();
+    }
+    state.hasDrawn = false;
 
-    const L = liveRect();
+    const L = state.L;
     const t = nowS;
 
     applyProgressShaping();
@@ -287,17 +306,19 @@
       state.ctx.strokeStyle = grad;
       state.ctx.lineWidth = thickness;
       state.ctx.lineCap = 'round';
-      state.ctx.shadowColor = hslaStr(hue, sat, lig, 0.45);
-      const blurBoost = (state.mode === MODE.RUNNING) ? Math.floor(10 * clamp(state.pct/100,0,1)) : 0;
-      state.ctx.shadowBlur = Math.min(18, 10 + blurBoost);
+      state.ctx.shadowColor = hslaStr(hue, sat, lig, 0.44);
+      const blurBoost = (state.mode === MODE.RUNNING) ? Math.floor(8 * clamp(state.pct/100,0,1)) : 0;
+      state.ctx.shadowBlur = Math.min(16, 10 + blurBoost);
       state.ctx.stroke();
+
+      state.hasDrawn = true;
 
       r.amp = Math.max(1, r.amp - dt*0.25);
       r.x += (Math.sin(t*0.6 + r.seed)*0.5);
     }
 
     // ambient autopulse
-    if (!state.reduce && nowS >= state.nextPulse){
+    if (CFG.autopulse && !state.reduce && nowS >= state.nextPulse){
       pulse(1.0, 8);
       schedulePulse(nowS);
     }
@@ -481,9 +502,13 @@
     window.addEventListener('resize', resize, {passive:true});
 
     // Observe the host box size (width/height changes)
-    const _ro = new ResizeObserver(()=> {
-      // Keep DPR in sync (handles zoom) and resize canvas to host box
-      syncDPR();
+    const _ro = new ResizeObserver(()=>{
+      const r = state.host.getBoundingClientRect();
+      const W = Math.max(320, r.width | 0);
+      const H = Math.max(80,  r.height | 0);
+      const d = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      if (W === state.W && H === state.H && d === state.DPR) return;
+      state.DPR = d;
       resize();
     });
     _ro.observe(state.host);
@@ -504,10 +529,6 @@
     schedulePulse(t0);
     requestAnimationFrame(ts => draw(ts/1000));
   }
-
-  // Defensive guard for hot-reloads / multiple inits
-  if (window.__NPPPAuroraCoreBooted) return;
-  window.__NPPPAuroraCoreBooted = true;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', start, {once:true});
@@ -550,7 +571,7 @@
       sheen:    true,            // animated scanning light while RUNNING
       crackle:  true,            // brief red “static” on errors
       flare:    true,            // one-off cool flare when DONE
-      heartbeat:true             // tempo pulses accelerate near completion
+      heartbeat:false             // tempo pulses accelerate near completion
     },
     sheenSpeed: 1.0,             // px-ish per frame unit
     sheenAlpha: 0.06,            // peak opacity of sheen band
@@ -562,6 +583,8 @@
     heartbeatFastMs:  700,       // fastest pulse spacing near 100%
     tickEveryURLs: 75            // extra pop every N URLs processed
   };
+
+  const FRAME_MS = 1000 / 60;
 
   // ------------------------------
   // Internal patch state
@@ -583,7 +606,8 @@
     nextHeartbeatAt: 0,
     inView: true,
     _io: null,
-    _ro: null
+    _ro: null,
+    _then: 0
   };
 
   // ------------------------------
@@ -691,15 +715,31 @@
     // Overlay host removed? Tear down patch + restore API.
     if (!document.body.contains(S.host)) { window.NPPPAuroraPatchDispose?.(); return; }
 
+    // ---- dt smoothing (CPU spike / tab hop jitter reduce)
+    const now   = performance.now();
+    const rawDt = now - (S._then || now);
+    const dt    = Math.min(50, rawDt) || 0;
+    S._then     = now;
+
+    const willDrawSheen   = CFG.effects.sheen && S.running;
+    const willDrawCrackle = CFG.effects.crackle && S.crackle > 0.0025;
+    const willDrawFlare   = CFG.effects.flare   && S.flare   > 0.0025;
+
+    if (!willDrawSheen && !willDrawCrackle && !willDrawFlare) {
+      requestAnimationFrame(drawOverlay);
+      return;
+    }
+
     // keep DPR + size synced
     syncDPR();
 
     const ctx = S.ctx;
     ctx.clearRect(0,0,S.W,S.H);
+    const scale = Math.min(3, dt / FRAME_MS);
 
     // SHEEN
     if (CFG.effects.sheen && S.running){
-      S.scanT += CFG.sheenSpeed;
+      S.scanT += CFG.sheenSpeed * scale;
       const scanX = ((S.scanT % (S.W + 400)) - 200);
       const g = ctx.createLinearGradient(scanX-80, 0, scanX+80, 0);
       g.addColorStop(0,   'rgba(255,255,255,0)');
@@ -721,7 +761,7 @@
         ctx.fillRect(0, y|0, S.W, 1);
       }
       ctx.globalCompositeOperation = 'source-over';
-      S.crackle = Math.max(0, S.crackle - CFG.crackleDecay);
+      S.crackle = Math.max(0, S.crackle - CFG.crackleDecay * scale);
     }
 
     // FINISH FLARE
@@ -734,7 +774,7 @@
       ctx.fillStyle = g;
       ctx.fillRect(0,0,S.W,S.H);
       ctx.globalCompositeOperation = 'source-over';
-      S.flare = Math.max(0, S.flare - CFG.flareDecay);
+      S.flare = Math.max(0, S.flare - CFG.flareDecay * scale);
     }
 
     // continue loop
@@ -768,9 +808,13 @@
     resize();
 
     // Observe host box size and adapt overlay
-    const _ro = new ResizeObserver(()=> {
-      // DPR may change via zoom; keep it tight
-      S.DPR = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+    const _ro = new ResizeObserver(()=>{
+      const r = S.host.getBoundingClientRect();
+      const W = Math.max(320, r.width  | 0);
+      const H = Math.max(80,  r.height | 0);
+      const d = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      if (W === S.W && H === S.H && d === S.DPR) return;
+      S.DPR = d;
       resize();
     });
     _ro.observe(S.host);
@@ -778,6 +822,14 @@
 
     window.addEventListener('resize', resize, {passive:true});
     requestAnimationFrame(drawOverlay);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        S.nextHeartbeatAt = performance.now();
+      } else {
+        requestAnimationFrame(drawOverlay);
+      }
+    }, { passive: true });
 
     // Listen to your progress event (preferred)
     window.addEventListener('nppp:preload-progress', ev=>{
