@@ -133,6 +133,9 @@ $(document).ready(function() {
             case 'status':
                 showPreloader();
                 loadStatusTabContent();
+                if (window.NPPPAurora && typeof window.NPPPAurora.setProgressGate === 'function') {
+                    window.NPPPAurora.setProgressGate(true);
+                }
                 npppFabSet(true);
                 // Warn the user if a systemd service restart
                 // is required due to missing fuse cache path mounts
@@ -231,6 +234,19 @@ $(document).ready(function() {
                 if (oldId === 'status' && newId !== 'status') {
                     npppStopWgetPolling();
                     nppdisconnectObserver();
+                }
+
+                // Shut down aurora reactions off the Status tab
+                if (oldId === 'status' && newId !== 'status' && window.NPPPAurora) {
+                    if (typeof window.NPPPAurora.setProgressGate === 'function') {
+                        window.NPPPAurora.setProgressGate(false);
+                    }
+                    if (typeof window.NPPPAurora.setMode === 'function') {
+                        window.NPPPAurora.setMode('idle');
+                    }
+                    if (typeof window.NPPPAurora.setProgressPercent === 'function') {
+                        window.NPPPAurora.setProgressPercent(0);
+                    }
                 }
 
                 // Only trigger if it's a internal interaction (not direct link)
