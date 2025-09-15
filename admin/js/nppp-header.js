@@ -1,4 +1,3 @@
-
 /**
  * JavaScript for Aurora Canvas Header Effect
  * Description: Aurora ribbons that react to plugin actions and preload progress (status, % complete, errors).
@@ -38,11 +37,13 @@
     // Progress coupling
     progressEndpoint: null,              // will auto-fill from window.nppp_admin_data.wget_progress_api if present
     progressEndpointMatch: null,         // optional RegExp string to match endpoint
-    reactToAjax: true,                   // keep generic network pulses
+    reactToAjax: false,                   // keep generic network pulses
     reactToProgressResponse: true,       // parse progress JSON and map to visuals
     reducedMotionFallbackAlpha: 0.10,    // lower glow when reduced motion is requested
     trailFade: 0.08,                     // 0..1 (higher = faster fade)
     trailFadePerSec: 5,
+    disableProgressFX: true,
+    enablePulses: false,
   };
 
   // Modes for semantic states
@@ -142,7 +143,8 @@
     _io: null,
     _ro: null,
     L: { x:0, y:0, w:0, h:0, tail:0 },
-    hasDrawn: false
+    hasDrawn: false,
+    allowProgress: false
   };
 
   function pickHost(){
@@ -215,6 +217,7 @@
   }
 
   function pulse(amp=1, hueBias=0){
+    if (!CFG.enablePulses) return;
     const t = performance.now()/1000;
     state.lastPulseAt = t;
     for(const r of state.ribbons){
@@ -225,6 +228,7 @@
 
   // Map progress/mode to continuous parameters (speed, alpha, hue drift)
   function applyProgressShaping(){
+    if (CFG.disableProgressFX) return;
     const pct01 = clamp(state.pct/100, 0, 1);
 
     // speed ramps up gently while running, calm otherwise
@@ -261,7 +265,8 @@
 
     // fade previous pixels by lowering alpha (no color tint)
     if (state.hasDrawn) {
-      const k = CFG.trailFadePerSec;
+      const mode = state.mode;
+      const k = (mode === MODE.RUNNING) ? 1.4 : 5;
       const a = 1 - Math.exp(-k * dt);
       state.ctx.save();
       state.ctx.globalCompositeOperation = 'destination-out';
@@ -279,7 +284,7 @@
     for(const r of state.ribbons){
       const pathPoints = 120;
       const pct01 = clamp(state.pct/100, 0, 1);
-      const thickness = CFG.thickness * (0.8 + 0.4*Math.sin(t*0.7 + r.seed)) * (1 + 0.35*pct01);
+      const thickness = CFG.thickness * (0.8 + 0.4*Math.sin(t*0.7 + r.seed));
       const hue = r.hue;
       const sat = CFG.sat;
       const lig = CFG.light;
@@ -307,7 +312,9 @@
       state.ctx.lineWidth = thickness;
       state.ctx.lineCap = 'round';
       state.ctx.shadowColor = hslaStr(hue, sat, lig, 0.44);
-      const blurBoost = (state.mode === MODE.RUNNING) ? Math.floor(8 * clamp(state.pct/100,0,1)) : 0;
+      const blurBoost = (!CFG.disableProgressFX && state.mode === MODE.RUNNING)
+        ? Math.floor(8 * clamp(state.pct/100,0,1))
+        : 0;
       state.ctx.shadowBlur = Math.min(16, 10 + blurBoost);
       state.ctx.stroke();
 
@@ -334,11 +341,14 @@
   function setMode(mode){
     if (state.mode === mode) return;
     state.mode = mode;
-    switch(mode){
-      case MODE.RUNNING: pulse(1.4, 20); break;   // energetic warm bump
-      case MODE.DONE:    pulse(0.9, -40); break;  // cool calm
-      case MODE.ALERT:   pulse(2.0, -120); break; // red flash
-      default:           pulse(0.6, 6);
+
+    if (CFG.enablePulses) {
+      switch(mode){
+        case MODE.RUNNING: pulse(1.4, 20); break;   // energetic warm bump
+        case MODE.DONE:    pulse(0.9, -40); break;  // cool calm
+        case MODE.ALERT:   pulse(2.0, -120); break; // red flash
+        default:           pulse(0.6, 6);
+      }
     }
   }
 
@@ -351,10 +361,15 @@
   // -------------------------------
   const API = {
     pulse,
-    networkStart(){ if (CFG.reactToAjax) pulse(0.6, 6); },
-    networkEnd(ok=true){ if (CFG.reactToAjax) pulse(ok ? 0.8 : 1.1, ok ? 12 : -25); },
+    networkStart(){ if (CFG.reactToAjax && CFG.enablePulses) pulse(0.6, 6); },
+    networkEnd(ok=true){ if (CFG.reactToAjax && CFG.enablePulses) pulse(ok ? 0.8 : 1.1, ok ? 12 : -25); },
     setMode,                     // setMode('running'|'done'|'alert'|'idle')
     setProgressPercent,          // setProgressPercent(0..100)
+    setProgressGate(allow){
+      state.allowProgress = !!allow;
+      // expose for the overlay patch to read, too
+      try { window.NPPPAurora.__allowProgress = state.allowProgress; } catch(_){}
+    },
     dispose(){
       state.disposed = true;
       window.removeEventListener('resize', resize);
@@ -431,6 +446,7 @@
 
   // Convert REST payload → visual state
   function mapProgressDataToAurora(data){
+    if (!state.allowProgress) return;
     if (!data || typeof data!=='object') return;
 
     const total = Number(data.total) || 0;
@@ -442,15 +458,19 @@
       setMode(MODE.RUNNING);
       // subtle amplitude proportional to progress
       const amp = lerp(0.8, 1.6, clamp(pct/100, 0, 1));
-      pulse(amp, 10);
-      if (Number(data.errors) > 0){
+      if (CFG.enablePulses) {
+        pulse(amp, 10);
+      }
+      if (CFG.enablePulses && Number(data.errors) > 0){
         // brief alert ping on errors without leaving RUNNING mode
         pulse(1.8, -110);
       }
     } else if (data.status === 'done'){
       setMode(MODE.DONE);
       setProgressPercent(100);
-      pulse(0.9, -42);
+      if (CFG.enablePulses){
+        pulse(0.9, -42);
+      }
     } else {
       setMode(MODE.IDLE);
     }
@@ -646,6 +666,8 @@
   // Effect updaters
   // ------------------------------
   function onProgressData(data){
+    if (!window.NPPPAurora || window.NPPPAurora.__allowProgress === false) return;
+
     // Accepts your REST payload or a subset
     const total   = Number(data.total)   || 0;
     const checked = Number(data.checked) || 0;
@@ -714,6 +736,13 @@
 
     // Overlay host removed? Tear down patch + restore API.
     if (!document.body.contains(S.host)) { window.NPPPAuroraPatchDispose?.(); return; }
+
+    // Gate: if progress visuals are disabled, keep canvas clear
+    if (!window.NPPPAurora || window.NPPPAurora.__allowProgress === false) {
+      if (S.ctx) S.ctx.clearRect(0, 0, S.W, S.H);
+      requestAnimationFrame(drawOverlay);
+      return;
+    }
 
     // ---- dt smoothing (CPU spike / tab hop jitter reduce)
     const now   = performance.now();
