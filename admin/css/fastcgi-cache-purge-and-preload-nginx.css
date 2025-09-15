@@ -3538,7 +3538,7 @@ body.has-sticky-submit .nppp-scrollfab{
 .nppp-header-content{
     position: relative;
     isolation: isolate;
-    background:#0b0e12;
+    background:#000;
     color:#e6ebf2;
     display:flex;
     align-items:center;
@@ -3562,9 +3562,7 @@ body.has-sticky-submit .nppp-scrollfab{
 .nppp-header-content::before{
     content:"";
     position:absolute; inset:0;
-    background:
-        radial-gradient(1000px 320px at 85% 50%, rgba(0,220,255,0.06), transparent 60%),
-        radial-gradient(700px 260px at 95% 40%, rgba(160,255,200,0.05), transparent 60%);
+    background: none;
     z-index:0;
     pointer-events:none;
 }
@@ -3582,8 +3580,20 @@ body.has-sticky-submit .nppp-scrollfab{
 /* Perf nudge for long pages / some GPUs */
 .nppp-aurora-canvas,
 .nppp-aurora-overlay {
-  image-rendering: optimizeQuality;
-  transform: translateZ(0);
+    image-rendering: optimizeQuality;
+    transform: translateZ(0);
+}
+
+/* Force pure black background */
+.wrap .nppp-header-content,
+.nppp-header-content{
+    background: #000 !important;
+}
+
+/* Make sure canvases don’t bring their own bg */
+.nppp-aurora-canvas,
+.nppp-aurora-overlay{
+    background: transparent !important;
 }
 
 .nppp-img-container,
