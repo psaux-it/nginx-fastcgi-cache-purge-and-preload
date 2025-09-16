@@ -949,7 +949,9 @@ $(document).ready(function() {
                 if ($main.data('npppLocateReqId') !== reqId) return;
 
                 if (r && r.success && r.data && r.data.file_path) {
+                    npppSetStatus($main, true);
                     npppAttachPurgeFile($main, r.data.file_path);
+
                     $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
                     $main.removeData('npppLocateReqId');
 
@@ -1129,34 +1131,32 @@ $(document).ready(function() {
                         row = row.prev('tr');
                     }
 
-                    npppSetStatus(row, true);
+                    // locate the purge button (main vs child)
+                    var purgeBtn = row.hasClass('dtr-expanded')
+                        ? row.next('.child').find('.nppp-purge-btn')
+                        : row.find('.nppp-purge-btn');
 
-                    // find the purge button
-                    var purgeBtn;
-                    if (row.hasClass('dtr-expanded')) {
-                        purgeBtn = row.next('.child').find('.nppp-purge-btn');
-                    } else {
-                        purgeBtn = row.find('.nppp-purge-btn');
-                    }
-
-                    // state changes
-                    purgeBtn.css('background-color', '#43A047');
-                    purgeBtn.prop('disabled', false);
-                    purgeBtn.removeClass('disabled');
-                    setTimeout(function(){ purgeBtn.css('background-color',''); }, 1200);
-
-                    if (btn.css('background-color') === 'rgb(67, 160, 71)') {
-                        btn.css('background-color', '');
-                    }
                     npppFlashRow(row);
 
                     var filePath = (response && response.data && response.data.file_path) ? response.data.file_path : '';
                     if (filePath){
+                        npppSetStatus(row, true);
                         npppAttachPurgeFile(row, filePath);
-                        // Release lock here because locate is not called
+
+                        purgeBtn.css('background-color', '#43A047');
+                        setTimeout(function(){ purgeBtn.css('background-color',''); }, 1200);
+
                         npppPreloadInProgress = false;
                         $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
                     } else if (wasMiss) {
+                        // Keep MISS; show 'warming…' in cache-path cell and try to locate
+                        var resolving = (window.nppp_admin_data && nppp_admin_data.str_resolving_path)
+                            ? nppp_admin_data.str_resolving_path
+                            : '(Warming…)';
+                        npppUpdateCachePath(row, resolving);
+                        row.find('td.nppp-cache-path').addClass('is-resolving spinner--arc');
+
+                        // Let locator decide when to flip to HIT; it will also release the lock
                         npppLocateCacheFile(row, cacheUrl, 1, { initialDelay: 300 });
                     } else {
                         // also unlock in case nothing else runs
