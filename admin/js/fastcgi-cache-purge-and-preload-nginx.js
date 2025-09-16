@@ -881,6 +881,79 @@ $(document).ready(function() {
         }
     }
 
+    // Extract a human message from a WP AJAX response
+    function npppMsg(resp, fallback){
+        if (!resp) return fallback || '';
+        // success payloads usually have resp.data
+        var d = resp.data;
+        if (typeof d === 'string') return d;
+        if (d && typeof d.message === 'string') return d.message;
+        // legacy shape: sometimes message sits at top-level
+        if (typeof resp.message === 'string') return resp.message;
+        return fallback || '';
+    }
+
+    // Find the main (non-child) row by its URL cell text
+    function npppFindRowByUrl(url){
+        if (!url) return $();
+        url = String(url).trim();
+
+        var dt = npppDT();
+        if (dt) {
+            var match = $();
+            dt.rows().every(function(){
+                var $row  = $(this.node());
+                var $main = $row.hasClass('child') ? $row.prev('tr') : $row;
+                var text  = $main.find('td.nppp-url').text().trim();
+                if (text === url) {
+                    match = $main;
+                    return false;
+                }
+            });
+            return match;
+        }
+
+        // Non-DataTables fallback (shouldn’t be needed)
+        var $r = $('#nppp-premium-table tbody tr').filter(function(){
+            var $main = $(this).hasClass('child') ? $(this).prev('tr') : $(this);
+            return $main.find('td.nppp-url').text().trim() === url;
+        }).first();
+        return $r.hasClass('child') ? $r.prev('tr') : $r;
+    }
+
+    // Apply the "just purged" state to a row
+    function npppApplyPurgedState($row){
+        if (!$row || !$row.length) return;
+        var $main = $row.hasClass('child') ? $row.prev('tr') : $row;
+
+        // Status -> MISS
+        npppSetStatus($main, false);
+
+        // Clear cache path + purge button
+        npppUpdateCachePath($main, '—');
+
+        var $purgeBtn = $main.hasClass('dtr-expanded')
+            ? $main.next('.child').find('.nppp-purge-btn')
+            : $main.find('.nppp-purge-btn');
+
+        $purgeBtn.prop('disabled', true).addClass('disabled').removeAttr('data-file');
+
+        // Make preload available (unless it’s the global preload button you gate elsewhere)
+        var $preloadBtn = $main.hasClass('dtr-expanded')
+            ? $main.next('.child').find('.nppp-preload-btn')
+            : $main.find('.nppp-preload-btn');
+
+        if ($preloadBtn.length && !$preloadBtn.hasClass('nppp-general')) {
+            $preloadBtn.prop('disabled', false).removeClass('disabled');
+        }
+
+        npppFlashRow($main);
+
+        // Invalidate the row in DataTables cache (optional, light)
+        var dt = npppDT();
+        if (dt) dt.row($main).invalidate('dom');
+    }
+
     // Tiny helper to attach file path to purge button on the same row
     function npppAttachPurgeFile(row, filePath) {
         var mainRow = row.hasClass('child') ? row.prev('tr') : row;
@@ -1034,7 +1107,7 @@ $(document).ready(function() {
                 _wpnonce: nppp_admin_data.premium_nonce_purge
             },
             success: function(response) {
-                var msg  = (response && response.data) ? response.data : __('Purge completed.','fastcgi-cache-purge-and-preload-nginx');
+                var msg  = npppMsg(response, __('Purge completed.','fastcgi-cache-purge-and-preload-nginx'));
                 var type = (response && response.success) ? 'success' : npppInferType(msg, 'error');
                 npppToast(msg, type);
 
@@ -1066,6 +1139,28 @@ $(document).ready(function() {
                         btn.css('background-color', '');
                     }
                     npppFlashRow(row);
+
+                    // Update related rows returned by the server
+                    // Expected shape from PHP: response.data.affected_urls = [ "https://.../", ... ]
+                    var affected = response && response.data && response.data.affected_urls;
+                    if (affected && Array.isArray(affected) && affected.length) {
+                        // Get the clicked row's URL to avoid double-applying (harmless if we don't check)
+                        var thisUrl = row.find('td.nppp-url').text().trim();
+
+                        affected.forEach(function(u){
+                            u = String(u || '').trim();
+                            if (!u) return;
+
+                            var $rel = npppFindRowByUrl(u);
+                            if (!$rel.length) return;
+
+                            // Skip if it's the same row we already updated above
+                            if (thisUrl && u === thisUrl) return;
+
+                            // Apply "purged" visuals to each related row (Homepage/Shop/Category...)
+                            npppApplyPurgedState($rel);
+                        });
+                    }
                 } else {
                     // on error
                     btn.prop('disabled', false).removeClass('disabled');
