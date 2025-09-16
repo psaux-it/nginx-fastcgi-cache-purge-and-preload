@@ -434,7 +434,7 @@ $(document).ready(function() {
         if (/info|notice|warning/i.test(msg)) return 'info';
         return fallback;
     }
-    function npppToast(message, type='info', timeout=4500){
+    function npppToast(message, type='info', timeout=5500){
         const c = npppEnsureToastContainer();
 
         // Map legacy types
@@ -964,7 +964,19 @@ $(document).ready(function() {
                     // final fallback: keep HIT, clear cell, stop spinner
                     npppUpdateCachePath($main, '—');
                     $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
-                    npppToast(__('Cache warmed. “Purge” will be enabled after a short while or refresh.', 'fastcgi-cache-purge-and-preload-nginx'), 'info');
+                    var cleanUrl = String(url || '').trim();
+                    /* Translators: %s: the URL that failed cache verification */
+                    npppToast(
+                        sprintf(
+                            __(
+                                "Couldn't verify that the cache was warmed for %s. This URL may be bypassed by Nginx " +
+                                "or the cache hasn't warmed yet. Refresh to recheck.",
+                                'fastcgi-cache-purge-and-preload-nginx'
+                            ),
+                            cleanUrl
+                        ),
+                        'info'
+                    );
 
                     // Release global lock
                     npppPreloadInProgress = false;
