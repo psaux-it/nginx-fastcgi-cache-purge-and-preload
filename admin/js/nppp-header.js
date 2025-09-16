@@ -42,7 +42,7 @@
     reducedMotionFallbackAlpha: 0.10,    // lower glow when reduced motion is requested
     trailFade: 0.08,                     // 0..1 (higher = faster fade)
     trailFadePerSec: 5,
-    disableProgressFX: true,
+    disableProgressFX: false,
     enablePulses: false,
   };
 
@@ -266,7 +266,7 @@
     // fade previous pixels by lowering alpha (no color tint)
     if (state.hasDrawn) {
       const mode = state.mode;
-      const k = (mode === MODE.RUNNING) ? 1.4 : 5;
+      const k = (mode === MODE.RUNNING) ? 1.4 : 4;
       const a = 1 - Math.exp(-k * dt);
       state.ctx.save();
       state.ctx.globalCompositeOperation = 'destination-out';
