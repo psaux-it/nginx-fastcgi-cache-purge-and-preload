@@ -449,7 +449,7 @@ function nppp_premium_html($nginx_cache_path) {
                 $status_class = $is_hit ? 'is-hit' : 'is-miss';
                 ?>
                 <tr>
-                    <td><?php echo esc_html( $row['url'] ); ?></td>
+                    <td class="nppp-url"><?php echo esc_html( $row['url'] ); ?></td>
                     <td class="nppp-cache-path"><?php echo esc_html( $row['file_path'] ); ?></td>
                     <td><?php echo esc_html( $row['category'] ); ?></td>
                     <td class="nppp-status <?php echo esc_attr($status_class); ?>">
@@ -511,6 +511,27 @@ function nppp_log_and_send_success($success_message, $log_file_path) {
         nppp_custom_error_log('Log file not found!');
     }
     wp_send_json_success($success_message);
+}
+
+// Send related pages also to update their status on the fly in table
+function nppp_log_and_send_success_data($success_message, $log_file_path, $data_array) {
+    // Log a plain-text version
+    $for_log  = preg_replace('~<br\s*/?>~i', ' — ', (string) $success_message);
+    $log_text = trim(wp_strip_all_tags($for_log, false));
+
+    if (!empty($log_file_path)) {
+        nppp_perform_file_operation(
+            $log_file_path,
+            'append',
+            '[' . current_time('Y-m-d H:i:s') . '] ' . $log_text
+        );
+    } else {
+        nppp_custom_error_log('Log file not found!');
+    }
+
+    // Attach the message as "message" and anything else the caller passed
+    $payload = array_merge(array('message' => $success_message), (array) $data_array);
+    wp_send_json_success($payload);
 }
 
 // AJAX callback to load premium tab content
@@ -740,7 +761,24 @@ function nppp_purge_cache_premium_callback() {
                 . $preload_tail
                 . ')</span>';
         }
-        nppp_log_and_send_success($success_message, $log_file_path);
+        // Build affected list
+        $affected_urls = array();
+        if ($final_url) {
+            $affected_urls[] = nppp_display_human_url($final_url);
+        }
+        if (!empty($related_urls)) {
+            foreach ($related_urls as $rel) {
+                $affected_urls[] = nppp_display_human_url($rel);
+            }
+        }
+        $affected_urls = array_values(array_unique($affected_urls));
+
+        // Return structured payload so JS can update other rows
+        nppp_log_and_send_success_data(
+            $success_message,
+            $log_file_path,
+            array('affected_urls' => $affected_urls)
+        );
     } else {
         // Translators: %s is the page URL
         $error_message = sprintf( __( 'ERROR ADMIN: Nginx cache can not be purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url_decoded );
