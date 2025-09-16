@@ -647,7 +647,23 @@ function nppp_pre_checks() {
     }
 
     // Warn about empty cache
-    if ($has_files !== 'found' && $has_files !== 'error') {
+    $this_script_path = dirname(plugin_dir_path(__FILE__));
+    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+
+    $preload_running = false;
+    $pid = 0;
+
+    if ($wp_filesystem->exists($PIDFILE)) {
+        $raw = trim((string) nppp_perform_file_operation($PIDFILE, 'read'));
+        if ($raw !== '' && ctype_digit($raw)) {
+            $pid = (int) $raw;
+            if ($pid > 0 && nppp_is_process_alive($pid)) {
+                $preload_running = true;
+            }
+        }
+    }
+
+    if ($has_files !== 'found' && $has_files !== 'error' && !$preload_running) {
         nppp_display_pre_check_warning(__('GLOBAL WARNING CACHE: The Nginx cache is empty. Consider preloading the Nginx cache now!', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
