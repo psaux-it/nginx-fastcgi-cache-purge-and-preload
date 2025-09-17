@@ -105,9 +105,8 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
     // Valitade the sanitized url before process
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) !== false) {
-        // Remove http:// or https:// from the URL and append a forward slash
-        $url_to_search = preg_replace('#^https?://#', '', $current_page_url);
-        $url_to_search_exact = rtrim($url_to_search, '/') . '/';
+        // Remove http:// or https:// from the URL
+        $url_to_search_exact = preg_replace('#^https?://#', '', $current_page_url);
     } else {
         nppp_display_admin_notice('error', __( 'ERROR URL: HTTP_REFERRER URL can not validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
