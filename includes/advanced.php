@@ -914,6 +914,10 @@ function nppp_locate_cache_file_ajax() {
     $now = time();
     $found_path = '';
 
+    // Read only the head (binary-safe)
+    $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
+    $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
+
     try {
         $iter = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
@@ -925,26 +929,32 @@ function nppp_locate_cache_file_ajax() {
             if (! $wp_filesystem->is_file($pathname)) { continue; }
             if (($now - $file->getMTime()) > $window_secs) { continue; }
 
-            // Read only the head (binary-safe) — KEY line is at the top
-            $head_bytes_primary  = apply_filters('nppp_locate_head_bytes', 4096);
-            $head_bytes_fallback = apply_filters('nppp_locate_head_bytes_fallback', 32768);
-
             $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
             if ($content === '') { continue; }
 
-            // quick skips near top
-            if (strpos($content, 'Status: 301 ') !== false || strpos($content, 'Status: 302 ') !== false) { continue; }
-
-            // KEY marker might be just after a tiny binary header; try a bigger head once
-            if (!preg_match('/KEY:\s.*GET/', $content)) {
-                if (strlen($content) === $head_bytes_primary) {
+            $match = [];
+            if (!preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                // If we likely truncated at primary cap, try a single larger read
+                if (strlen($content) >= $head_bytes_primary) {
                     $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_fallback);
-                    if ($content === '') { continue; }
-                    if (strpos($content, 'Status: 301 ') !== false || strpos($content, 'Status: 302 ') !== false) { continue; }
-                    if (!preg_match('/KEY:\s.*GET/', $content)) { continue; }
+                    if ($content === '' || !preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                        continue;
+                    }
                 } else {
                     continue;
                 }
+            }
+
+            // Ignore redirects
+            if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
+                strpos($content, 'Status: 302 Found') !== false) {
+                continue;
+            }
+
+            // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
+            $key_line = $match[1];
+            if (strpos($key_line, 'GET') === false) {
+                continue;
             }
 
             if (preg_match($regex, $content, $m) && isset($m[1], $m[2])) {
@@ -992,6 +1002,10 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
+    // Read only the head (binary-safe)
+    $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
+    $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
+
     try {
         // Traverse the cache directory and its subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
@@ -1001,95 +1015,109 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
 
         $regex_tested = false;
         foreach ($cache_iterator as $file) {
-            if ($wp_filesystem->is_file($file->getPathname())) {
-                // Read file contents
-                $content = $wp_filesystem->get_contents($file->getPathname());
+            $path = $file->getPathname();
+            if (!$wp_filesystem->is_file($path)) { continue; }
 
-                // Exclude URLs with status 301 or 302
-                if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
-                    strpos($content, 'Status: 302 Found') !== false) {
+            $content = nppp_read_head($wp_filesystem, $path, $head_bytes_primary);
+            if ($content === '') { continue; }
+
+            $match = [];
+            if (!preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                if (strlen($content) >= $head_bytes_primary) {
+                    $content = nppp_read_head($wp_filesystem, $path, $head_bytes_fallback);
+                    if ($content === '' || !preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                        continue;
+                    }
+                } else {
                     continue;
                 }
+            }
 
-                // Skip all request methods except GET
-                if (!preg_match('/KEY:\s.*GET/', $content)) {
-                    continue;
-                }
+            // Ignore redirects
+            if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
+                strpos($content, 'Status: 302 Found') !== false) {
+                continue;
+            }
 
-                // Test regex only once
-                // Regex operations can be computationally expensive,
-                // especially when iterating over multiple files.
-                // So here we test regex only once
-                if (!$regex_tested) {
-                    if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
-                        // Build the URL
-                        $host = trim($matches[1]);
-                        $request_uri = trim($matches[2]);
-                        $constructed_url = $host . $request_uri;
+            // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
+            $key_line = $match[1];
+            if (strpos($key_line, 'GET') === false) {
+                continue;
+            }
 
-                        // Test parsed URL via regex with FILTER_VALIDATE_URL
-                        // We need to add prefix here
-                        $constructed_url_test = 'https://' . $constructed_url;
+            // Test regex only once
+            // Regex operations can be computationally expensive,
+            // especially when iterating over multiple files.
+            // So here we test regex only once
+            if (!$regex_tested) {
+                if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
+                    // Build the URL
+                    $host = trim($matches[1]);
+                    $request_uri = trim($matches[2]);
+                    $constructed_url = $host . $request_uri;
 
-                        // Test if the URL is in the expected format
-                        if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
-                            $regex_tested = true;
-                        } else {
-                            return [
-                                'error' => sprintf(
-                                    /* Translators: %1$s and %2$s are dynamic strings, $host$request_uri is string */
-                                    __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is parsing the string <strong>\$host\$request_uri</strong> correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
-                                    __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'),
-                                    __( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx')
-                                )
-                            ];
-                        }
+                    // Test parsed URL via regex with FILTER_VALIDATE_URL
+                    // We need to add prefix here
+                    $constructed_url_test = 'https://' . $constructed_url;
+
+                    // Test if the URL is in the expected format
+                    if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
+                        $regex_tested = true;
                     } else {
                         return [
                             'error' => sprintf(
-                                /* Translators: %1$s and %2$s are dynamic strings */
-                                __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
+                                /* Translators: %1$s and %2$s are dynamic strings, $host$request_uri is string */
+                                __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is parsing the string <strong>\$host\$request_uri</strong> correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
                                 __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'),
                                 __( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx')
                             )
                         ];
                     }
+                } else {
+                    return [
+                        'error' => sprintf(
+                            /* Translators: %1$s and %2$s are dynamic strings */
+                            __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
+                            __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'),
+                            __( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx')
+                        )
+                    ];
                 }
+            }
 
-                // Extract URLs using regex
-                if (preg_match($regex, $content, $matches)) {
-                    // Build the URL
-                    $host = trim($matches[1]);
-                    $request_uri = trim($matches[2]);
+            // Extract URLs using regex
+            if (preg_match($regex, $content, $matches)) {
+                // Build the URL
+                $host = trim($matches[1]);
+                $request_uri = trim($matches[2]);
 
-                    // Keep the encoded URI for internal consistency
-                    $constructed_url_encoded = $host . $request_uri;
+                // Keep the encoded URI for internal consistency
+                $constructed_url_encoded = $host . $request_uri;
 
-                    // Sanitize and validate the encoded URL
-                    $final_url_encoded = ($https_enabled ? 'https://' : 'http://') . $constructed_url_encoded;
+                // Sanitize and validate the encoded URL
+                $final_url_encoded = ($https_enabled ? 'https://' : 'http://') . $constructed_url_encoded;
 
-                    if (filter_var($final_url_encoded, FILTER_VALIDATE_URL) !== false) {
-                        // Decode URI only for displaying URLs in human-readable form
-                        $decoded_uri = rawurldecode($request_uri);
-                        $constructed_url_decoded = $host . $decoded_uri;
-                        $final_url = $https_enabled ? "https://$constructed_url_decoded" : "http://$constructed_url_decoded";
+                if (filter_var($final_url_encoded, FILTER_VALIDATE_URL) !== false) {
+                    // Decode URI only for displaying URLs in human-readable form
+                    $decoded_uri = rawurldecode($request_uri);
+                    $constructed_url_decoded = $host . $decoded_uri;
+                    $final_url = $https_enabled ? "https://$constructed_url_decoded" : "http://$constructed_url_decoded";
 
-                        // Get the file modification time for cache date
-                        $cache_timestamp = $file->getMTime();
-                        $cache_date = wp_date('Y-m-d H:i:s', $cache_timestamp);
+                    // Get the file modification time for cache date
+                    $cache_timestamp = $file->getMTime();
+                    $cache_date = wp_date('Y-m-d H:i:s', $cache_timestamp);
 
-                        // Categorize URLs
-                        $category = nppp_categorize_url($final_url);
+                    // Categorize URLs
+                    $category = nppp_categorize_url($final_url);
 
-                        // Store URL data
-                        $urls[] = array(
-                            'file_path'   => $file->getPathname(),
-                            'url'         => $final_url,
-                            'url_encoded' => $final_url_encoded,
-                            'category'    => $category,
-                            'cache_date'  => $cache_date
-                        );
-                    }
+                    // Store URL data
+                    $urls[] = array(
+                        'file_path'   => $file->getPathname(),
+                        'url'         => $final_url,
+                        'url_encoded' => $final_url_encoded,
+                        'category'    => $category,
+                        'cache_date'  => $cache_date
+                    );
                 }
             }
         }
