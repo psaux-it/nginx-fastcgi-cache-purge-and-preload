@@ -926,7 +926,7 @@ function nppp_locate_cache_file_ajax() {
             if (($now - $file->getMTime()) > $window_secs) { continue; }
 
             // Read only the head (binary-safe) — KEY line is at the top
-            $head_bytes_primary  = apply_filters('nppp_locate_head_bytes', 16384);
+            $head_bytes_primary  = apply_filters('nppp_locate_head_bytes', 4096);
             $head_bytes_fallback = apply_filters('nppp_locate_head_bytes_fallback', 32768);
 
             $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
