@@ -133,6 +133,10 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         return;
     }
 
+    // Read only the head (binary-safe)
+    $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
+    $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
+
     try {
         // Traverse the cache directory and its subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
@@ -151,10 +155,6 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
                     return;
                 }
-
-                // Read only the head (binary-safe)
-                $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
-                $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
 
                 $pathname = $file->getPathname();
                 $content  = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
