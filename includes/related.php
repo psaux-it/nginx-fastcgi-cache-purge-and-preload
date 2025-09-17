@@ -87,9 +87,7 @@ function nppp_purge_url_silent(string $nginx_cache_path, string $url): array {
 
     // Validate URL then build search key like nppp_purge_single does
     if (filter_var($url, FILTER_VALIDATE_URL) === false) return ['found' => false, 'deleted' => false];
-
-    $url_no_scheme = preg_replace('#^https?://#', '', $url);
-    $url_to_search = rtrim($url_no_scheme, '/') . '/';
+    $url_to_search = preg_replace('#^https?://#', '', $url);
 
     $settings = get_option('nginx_cache_settings');
     $regex = isset($settings['nginx_cache_key_custom_regex'])
