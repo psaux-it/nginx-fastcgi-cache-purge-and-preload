@@ -14,6 +14,27 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Fast head readers (minimal I/O)
+if (! function_exists('nppp_head_fast')) {
+    // Uses file_get_contents() length arg (C-level).
+    function nppp_head_fast($path, $max = 16384) {
+        $data = @file_get_contents($path, false, null, 0, $max);
+        return ($data === false) ? '' : $data;
+    }
+}
+
+if (! function_exists('nppp_read_head')) {
+    // Partial read with WP_Filesystem fallback.
+    function nppp_read_head($wp_filesystem, $path, $max = 16384) {
+        $buf = nppp_head_fast($path, $max);
+        if ($buf !== '') return $buf;
+
+        // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
+        $all = $wp_filesystem->get_contents($path);
+        return ($all === false || $all === '') ? '' : substr($all, 0, $max);
+    }
+}
+
 // Purge cache operation helper
 function nppp_purge_helper($nginx_cache_path, $tmp_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -131,17 +152,36 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     return;
                 }
 
-                // Read file contents
-                $content = $wp_filesystem->get_contents($file->getPathname());
+                // Read only the head (binary-safe)
+                $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
+                $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
 
-                // Exclude URLs with status 301 or 302
+                $pathname = $file->getPathname();
+                $content  = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
+                if ($content === '') { continue; }
+
+                $match = [];
+                if (!preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                    // Try fallback
+                    if (strlen($content) >= $head_bytes_primary) {
+                        $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_fallback);
+                        if ($content === '' || !preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+
+                // Ignore redirects
                 if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
                     strpos($content, 'Status: 302 Found') !== false) {
                     continue;
                 }
 
-                // Skip all request methods except GET
-                if (!preg_match('/KEY:\s.*GET/', $content)) {
+                // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
+                $key_line = $match[1];
+                if (strpos($key_line, 'GET') === false) {
                     continue;
                 }
 
