@@ -14,6 +14,27 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Fast head readers (minimal I/O)
+if (! function_exists('nppp_head_fast')) {
+    // Uses file_get_contents() length arg (C-level).
+    function nppp_head_fast( $path, $max = 16384 ) {
+        $data = @file_get_contents( $path, false, null, 0, $max );
+        return ($data === false) ? '' : $data;
+    }
+}
+
+if (! function_exists('nppp_read_head')) {
+    // Partial read with WP_Filesystem fallback.
+    function nppp_read_head( $wp_filesystem, $path, $max = 16384 ) {
+        $buf = nppp_head_fast( $path, $max );
+        if ( $buf !== '' ) return $buf;
+
+        // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
+        $all = $wp_filesystem->get_contents( $path );
+        return ( $all === false || $all === '' ) ? '' : substr( $all, 0, $max );
+    }
+}
+
 // To optimize performance and prevent redundancy, we use cached recursive permission checks.
 // This technique stores the results of time-consuming (expensive) permission verifications for reuse.
 // The results are cached for to reduce performance overhead, especially useful when the Nginx cache path is extensive.
@@ -308,6 +329,7 @@ function nppp_get_webserver_user() {
     // Find nginx.conf
     $conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
     $config_file = !empty($conf_paths) ? $conf_paths[0] : '/etc/nginx/nginx.conf';
+    $nginx_user_conf = '';
 
     // Check if the config file exists
     if (!$wp_filesystem->exists($config_file)) {
@@ -420,6 +442,10 @@ function nppp_get_in_cache_page_count() {
         return 'Undetermined';
     }
 
+    // Head-only read sizes
+    $head_bytes_primary  = (int) apply_filters( 'nppp_locate_head_bytes', 4096 );
+    $head_bytes_fallback = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
+
     try {
         $cache_iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
@@ -428,56 +454,74 @@ function nppp_get_in_cache_page_count() {
 
         $regex_tested = false;
         foreach ($cache_iterator as $file) {
-            if ($wp_filesystem->is_file($file->getPathname())) {
-                // Check if the file is readable
-                if (!$wp_filesystem->is_readable($file->getPathname())) {
-                    return 'Undetermined';
-                }
+            $pathname = $file->getPathname();
+            if (! $wp_filesystem->is_file($pathname)) {
+                continue;
+            }
 
-                // Read file contents
-                $content = $wp_filesystem->get_contents($file->getPathname());
+            // Okunabilir değilse global durum belirsiz
+            if (! $wp_filesystem->is_readable($pathname)) {
+                return 'Undetermined';
+            }
 
-                // Exclude URLs with status 301 or 302
-                if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
-                    strpos($content, 'Status: 302 Found') !== false) {
+            // Yalnızca başı oku
+            $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
+            if ($content === '') { continue; }
+
+            $match = [];
+            if (!preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                // Try fallback
+                if (strlen($content) >= $head_bytes_primary) {
+                    $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_fallback);
+                    if ($content === '' || !preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                        continue;
+                    }
+                } else {
                     continue;
                 }
+            }
 
-                // Skip all request methods except GET
-                if (!preg_match('/KEY:\s.*GET/', $content)) {
-                    continue;
-                }
+            // Ignore redirects
+            if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
+                strpos($content, 'Status: 302 Found') !== false) {
+                continue;
+            }
 
-                // Test regex only once
-                // Regex operations can be computationally expensive,
-                // especially when iterating over multiple files.
-                // So here we test cache key regex only once
-                if (!$regex_tested) {
-                    if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
-                        // Build the URL
-                        $host = trim($matches[1]);
-                        $request_uri = trim($matches[2]);
-                        $constructed_url = $host . $request_uri;
+            // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
+            $key_line = $match[1];
+            if (strpos($key_line, 'GET') === false) {
+                continue;
+            }
 
-                        // Test parsed URL via regex with FILTER_VALIDATE_URL
-                        // We need to add prefix here
-                        $constructed_url_test = 'https://' . $constructed_url;
+            // Test regex only once
+            // Regex operations can be computationally expensive,
+            // especially when iterating over multiple files.
+            // So here we test cache key regex only once
+            if (!$regex_tested) {
+                if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
+                    // Build the URL
+                    $host = trim($matches[1]);
+                    $request_uri = trim($matches[2]);
+                    $constructed_url = $host . $request_uri;
 
-                        // Test if the URL is in the expected format
-                        if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
-                            $regex_tested = true;
-                        } else {
-                            return 'RegexError';
-                        }
+                    // Test parsed URL via regex with FILTER_VALIDATE_URL
+                    // We need to add prefix here
+                    $constructed_url_test = 'https://' . $constructed_url;
+
+                    // Test if the URL is in the expected format
+                    if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
+                        $regex_tested = true;
                     } else {
                         return 'RegexError';
                     }
+                } else {
+                    return 'RegexError';
                 }
+            }
 
-                // Extract URLs using regex
-                if (preg_match($regex, $content, $matches)) {
-                    $urls_count++;
-                }
+            // Extract URLs using regex
+            if (preg_match($regex, $content, $matches)) {
+                $urls_count++;
             }
         }
     } catch (Exception $e) {
