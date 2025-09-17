@@ -155,7 +155,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
     $headers_mobile  = array('User-Agent' => NPPP_USER_AGENT_MOBILE);
 
     foreach ($urls as $u) {
-        if ( false === wp_http_validate_url($u)) {
+        if (false === wp_http_validate_url($u)) {
             continue;
         }
 
