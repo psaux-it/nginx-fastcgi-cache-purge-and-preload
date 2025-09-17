@@ -199,8 +199,9 @@ function nppp_parse_wget_log_urls( $wp_filesystem ) {
                 continue;
             }
 
-            // Preload must keep the exact logged URL (safe-sanitized)
-            $preload_url = esc_url_raw( $raw );
+            // Preload must keep the exact logged URL
+            $preload_url = $raw;
+            if ( filter_var( $preload_url, FILTER_VALIDATE_URL ) === false ) { continue; }
 
             // Human-friendly display: decode PATH only
             $display_url = nppp_display_human_url( $raw );
@@ -685,8 +686,8 @@ function nppp_purge_cache_premium_callback() {
         $constructed_url_test = 'https://' . $constructed_url;
 
         if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
-            $sanitized_url = filter_var($constructed_url, FILTER_SANITIZE_URL);
-            $final_url = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
+            $scheme    = $https_enabled ? 'https://' : 'http://';
+            $final_url = $scheme . $constructed_url;
         }
     }
 
@@ -813,8 +814,8 @@ function nppp_preload_cache_premium_callback() {
         wp_send_json_error('Failed to initialize WP Filesystem');
     }
 
-    // Get the file path from the AJAX request and sanitize it
-    $cache_url = isset($_POST['cache_url']) ? esc_url_raw(wp_unslash($_POST['cache_url'])) : '';
+    // Get the file path from the AJAX request
+    $cache_url = isset($_POST['cache_url']) ? trim( wp_unslash($_POST['cache_url']) ) : '';
 
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
@@ -883,7 +884,7 @@ function nppp_locate_cache_file_ajax() {
         wp_send_json_error( __( 'Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
     }
 
-    $cache_url = isset($_POST['cache_url']) ? esc_url_raw( wp_unslash($_POST['cache_url']) ) : '';
+    $cache_url = isset($_POST['cache_url']) ? trim( wp_unslash($_POST['cache_url']) ) : '';
     if ( ! $cache_url || ! filter_var($cache_url, FILTER_VALIDATE_URL) ) {
         wp_send_json_error( __( 'Invalid URL.', 'fastcgi-cache-purge-and-preload-nginx' ) );
     }
@@ -948,7 +949,7 @@ function nppp_locate_cache_file_ajax() {
 
                 // Rebuild encoded URL like the extractor does
                 $https = wp_is_using_https();
-                $final_encoded = ($https ? 'https://' : 'http://') . filter_var($host . $uri, FILTER_SANITIZE_URL);
+                $final_encoded = ($https ? 'https://' : 'http://') . ($host . $uri);
 
                 if ( filter_var($final_encoded, FILTER_VALIDATE_URL) ) {
                     $key = nppp_url_match_key($final_encoded);
@@ -1061,8 +1062,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                     $constructed_url_encoded = $host . $request_uri;
 
                     // Sanitize and validate the encoded URL
-                    $sanitized_url = filter_var($constructed_url_encoded, FILTER_SANITIZE_URL);
-                    $final_url_encoded = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
+                    $final_url_encoded = ($https_enabled ? 'https://' : 'http://') . $constructed_url_encoded;
 
                     if (filter_var($final_url_encoded, FILTER_VALIDATE_URL) !== false) {
                         // Decode URI only for displaying URLs in human-readable form
