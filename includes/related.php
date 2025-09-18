@@ -10,6 +10,27 @@
  * License: GPL-2.0+
  */
 
+// Fast head readers (minimal I/O)
+if (! function_exists('nppp_head_fast')) {
+    // Uses file_get_contents() length arg (C-level).
+    function nppp_head_fast($path, $max = 16384) {
+        $data = @file_get_contents($path, false, null, 0, $max);
+        return ($data === false) ? '' : $data;
+    }
+}
+
+if (! function_exists('nppp_read_head')) {
+    // Partial read with WP_Filesystem fallback.
+    function nppp_read_head($wp_filesystem, $path, $max = 16384) {
+        $buf = nppp_head_fast($path, $max);
+        if ($buf !== '') return $buf;
+
+        // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
+        $all = $wp_filesystem->get_contents($path);
+        return ($all === false || $all === '') ? '' : substr($all, 0, $max);
+    }
+}
+
 // Return related URLs for a primary single page URL, based on plugin options.
 function nppp_get_related_urls_for_single(string $primary_url): array {
     $settings = get_option( 'nginx_cache_settings', array() );
@@ -94,8 +115,14 @@ function nppp_purge_url_silent(string $nginx_cache_path, string $url): array {
              ? base64_decode($settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
+    $current_page_url_decoded = rawurldecode($url);
+
     $found = false;
     $deleted = false;
+
+    // Head-only read sizes
+    $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
+    $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
 
     try {
         $it = new RecursiveIteratorIterator(
@@ -103,16 +130,54 @@ function nppp_purge_url_silent(string $nginx_cache_path, string $url): array {
             RecursiveIteratorIterator::SELF_FIRST
         );
 
+        $regex_tested = false;
         foreach ($it as $file) {
-            if (!$wp_filesystem->is_file($file->getPathname())) continue;
+            $pathname = $file->getPathname();
+            if (!$wp_filesystem->is_file($pathname)) {
+                continue;
+            }
 
-            $content = $wp_filesystem->get_contents($file->getPathname());
+            // Check read and write permissions for each file
+            if (!$wp_filesystem->is_readable($pathname) || !$wp_filesystem->is_writable($pathname)) {
+                // Translators: %s is the page URL
+                nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge (related pages) failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ), true, false);
+            }
+
+            // Read only the head (binary-safe)
+            $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
+            if ($content === '') { continue; }
+
+            $match = [];
+            if (!preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                // Try fallback
+                if (strlen($content) >= $head_bytes_primary) {
+                    $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_fallback);
+                    if ($content === '' || !preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
+
+            // Ignore redirects
             if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
                 strpos($content, 'Status: 302 Found') !== false) {
                 continue;
             }
-            if (!preg_match('/KEY:\s.*GET/', $content)) {
+
+            // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
+            $key_line = $match[1];
+            if (strpos($key_line, 'GET') === false) {
                 continue;
+            }
+
+            // Validate regex just once (cheap sanity check)
+            if (!$regex_tested) {
+                if (!(preg_match($regex, $content, $tmp) && isset($tmp[1], $tmp[2]))) {
+                    break;
+                }
+                $regex_tested = true;
             }
 
             if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
@@ -121,12 +186,13 @@ function nppp_purge_url_silent(string $nginx_cache_path, string $url): array {
                     $found = true;
 
                     // extra safety
-                    $validation = nppp_validate_path($file->getPathname(), true);
+                    $validation = nppp_validate_path($pathname, true);
                     if ($validation !== true) break;
 
-                    if ($wp_filesystem->is_readable($file->getPathname()) &&
-                        $wp_filesystem->is_writable($file->getPathname())) {
-                        $deleted = (bool)$wp_filesystem->delete($file->getPathname());
+                    if ($wp_filesystem->is_readable($pathname) &&
+                        $wp_filesystem->is_writable($pathname)) {
+                        $deleted = (bool)$wp_filesystem->delete($pathname);
+                        if ($deleted) { nppp_display_admin_notice('success', sprintf( /* translators: %s: related page URL */ __('SUCCESS ADMIN: Nginx cache purged for related page %s', 'fastcgi-cache-purge-and-preload-nginx'), $current_page_url_decoded), true, false); }
                     }
                     break;
                 }
