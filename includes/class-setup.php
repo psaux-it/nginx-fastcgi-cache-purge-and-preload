@@ -397,7 +397,7 @@ services:
             (stripos(php_uname(), 'Linux') !== false);
 
         // Require function availability
-        $shell_ok = function_exists('shell_execc');
+        $shell_ok = function_exists('shell_exec');
         $exec_ok  = function_exists('exec');
         $posix_ok = function_exists('posix_kill');
 
