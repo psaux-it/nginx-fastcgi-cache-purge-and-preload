@@ -450,7 +450,12 @@ function nppp_premium_html($nginx_cache_path) {
                 $status_class = $is_hit ? 'is-hit' : 'is-miss';
                 ?>
                 <tr>
-                    <td class="nppp-url"><?php echo esc_html( $row['url'] ); ?></td>
+                    <td class="nppp-url">
+                        <a href="<?php echo esc_url( !empty($row['url_encoded']) ? $row['url_encoded'] : $row['url'] ); ?>"
+                            target="_blank" rel="noopener">
+                            <?php echo esc_html( $row['url'] ); ?>
+                        </a>
+                    </td>
                     <td class="nppp-cache-path"><?php echo esc_html( $row['file_path'] ); ?></td>
                     <td><?php echo esc_html( $row['category'] ); ?></td>
                     <td class="nppp-status <?php echo esc_attr($status_class); ?>">
