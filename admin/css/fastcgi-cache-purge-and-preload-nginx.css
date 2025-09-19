@@ -3612,3 +3612,17 @@ body.has-sticky-submit .nppp-scrollfab{
         color: #e6ebf2;
     }
 }
+
+/* link in the Cached URL cell */
+#nppp-premium-table td.nppp-url a {
+    color: dodgerblue !important;
+    text-decoration: none !important;
+}
+
+/* keep it consistent on hover/focus/visited */
+#nppp-premium-table td.nppp-url a:hover,
+#nppp-premium-table td.nppp-url a:focus,
+#nppp-premium-table td.nppp-url a:visited {
+    color: dodgerblue !important;
+    text-decoration: none !important;
+}
