@@ -127,6 +127,40 @@
             npppLockCheckbox('nginx_cache_settings[nppp_related_include_home]');
             npppLockCheckbox('nginx_cache_settings[nppp_related_include_category]');
             npppLockCheckbox('nginx_cache_settings[nppp_related_preload_after_manual]');
+            npppLockCheckbox('nginx_cache_settings[nppp_related_apply_manual]');
+
+            // Add hidden mirror so disabled controls still submit a value
+            function ensureHiddenMirror($form, name, value){
+                if (!$form.length || !name) return;
+                const sel = `input[type="hidden"][name="${name}"]`;
+                if (!$form.find(sel).length){
+                    $('<input>', { type:'hidden', name, value }).appendTo($form);
+                } else {
+                    $form.find(sel).val(value);
+                }
+            }
+
+            // Disable the pctnorm radiogroup cleanly and preserve its value
+            (function disablePctNorm(){
+                const $fs = $('#nppp-pctnorm');
+                if (!$fs.length) return;
+
+                const $form = $fs.closest('form');
+                const $radios = $fs.find('input[type="radio"]');
+                const name = $radios.first().attr('name');
+                const currentVal = $radios.filter(':checked').val();
+
+                // visuals + semantics
+                $fs.attr({'aria-disabled':'true'}).css({ opacity:.5, cursor:'not-allowed' });
+                $fs.find('label, .nppp-segcontrol-thumb').css('pointer-events','none');
+
+                // make non-interactive
+                $radios.prop('disabled', true).attr('tabindex','-1').off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                // hidden mirror for submit
+                ensureHiddenMirror($form, name, currentVal);
+            })();
 
             // disable the rest API elements non-clickable
             $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({
