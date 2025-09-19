@@ -162,7 +162,12 @@ final class Setup {
             . esc_html__('Why am I seeing this page?', 'fastcgi-cache-purge-and-preload-nginx')
             . '</strong> '
             . esc_html__(
-                'We couldn’t reliably confirm Nginx from within WordPress. This often happens when your site runs behind a proxy (Cloudflare, CDN, load balancer), in containers/VMs, in chroot/jail setups, on Plesk or cPanel, or when /etc/nginx/nginx.conf is not found.',
+                'We couldn’t reliably confirm Nginx from within WordPress. This often happens when your site runs behind a proxy (Cloudflare, CDN, load balancer), in containers/VMs, in chroot/jail setups, on Plesk or cPanel, or when nginx.conf is not found.',
+                'fastcgi-cache-purge-and-preload-nginx'
+              )
+            . ' '
+            . esc_html__(
+                'NPP does not directly interact with Nginx. For informational metrics (especially the Status tab), it only reads nginx.conf (read-only).',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . '</p></div>';
