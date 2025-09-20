@@ -951,7 +951,7 @@ $(document).ready(function() {
 
         // Invalidate the row in DataTables cache (optional, light)
         var dt = npppDT();
-        if (dt) dt.row($main).invalidate('dom');
+        if (dt) dt.row($main[0]).invalidate('dom');
     }
 
     // Tiny helper to attach file path to purge button on the same row
@@ -1143,6 +1143,8 @@ $(document).ready(function() {
                     // Update related rows returned by the server
                     // Expected shape from PHP: response.data.affected_urls = [ "https://.../", ... ]
                     var affected = response && response.data && response.data.affected_urls;
+                    var preloadAuto = !!(response && response.data && response.data.preload_auto);
+
                     if (affected && Array.isArray(affected) && affected.length) {
                         // Get the clicked row's URL to avoid double-applying (harmless if we don't check)
                         var thisUrl = row.find('td.nppp-url').text().trim();
@@ -1157,8 +1159,11 @@ $(document).ready(function() {
                             // Skip if it's the same row we already updated above
                             if (thisUrl && u === thisUrl) return;
 
-                            // Apply "purged" visuals to each related row (Homepage/Shop/Category...)
-                            npppApplyPurgedState($rel);
+                            // If auto-preload is enabled for related pages, do NOT flip to MISS
+                            // and do NOT detach data-file here; let preload warm it back to HIT.
+                            if (!preloadAuto) {
+                                npppApplyPurgedState($rel);
+                            }
                         });
                     }
                 } else {
