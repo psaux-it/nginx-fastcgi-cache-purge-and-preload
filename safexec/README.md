@@ -34,7 +34,7 @@ sudo apt install ./safexec_1.9.2-1_arm64.deb
 
 ### 🔹RHEL / CentOS / Fedora (RPM)
 
-Download the package and install with `rpm`:
+Download the package and install with `dnf`:
 
 ```bash
 # Download checksums
