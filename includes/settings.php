@@ -114,7 +114,7 @@ function nppp_nginx_cache_settings_page() {
            </div>
            <p class="nppp-loader-message"><?php echo esc_html__( 'Processing, please wait...', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
         </div>
-        <div class="nppp-header-content">
+        <div class="nppp-header-content" data-theme="aurora">
             <div class="nppp-img-container">
                 <img
                     src="<?php echo esc_url(plugins_url('../admin/img/logo.png', __FILE__)); ?>"
@@ -2029,6 +2029,53 @@ function nppp_log_error_message($message) {
     }
 }
 
+// Prevent command injections
+function nppp_single_line(string $s): string {
+    $s = str_replace("\0", '', $s);
+    $s = str_replace(["\r","\n","\t"], ' ', $s);
+    $s = preg_replace('/[\x00-\x08\x0B-\x1F\x7F\x80-\x9F]/', '', $s);
+    $s = trim($s);
+    if (strlen($s) > 4000) $s = substr($s, 0, 4000);
+    return $s;
+}
+
+function nppp_sanitize_reject_regex(string $rx): string {
+    return nppp_single_line($rx);
+}
+
+function nppp_sanitize_reject_extension_globs(string $s): string {
+    $s = nppp_single_line($s);
+    $parts = preg_split('/[,\s]+/', $s, -1, PREG_SPLIT_NO_EMPTY);
+    $out = [];
+    foreach ($parts as $p) {
+        $p = strtolower(trim($p));
+        if (preg_match('/^(?:\*\.)?[a-z0-9]+(?:\.[a-z0-9]+)*$/', $p) || preg_match('/^\.[a-z0-9]+(?:\.[a-z0-9]+)*$/', $p)) {
+            if ($p[0] === '.')      $p = '*'.$p;
+            elseif ($p[0] !== '*')  $p = '*.' . $p;
+            $out[$p] = true;
+        }
+    }
+    $out = array_slice(array_keys($out), 0, 200);
+    return implode(',', $out);
+}
+
+// Helpers
+function nppp_forbidden_shell_bytes_reason(string $s): ?string {
+    if (strpos($s, "\0") !== false) {
+        return __('ERROR OPTION: NUL byte is not allowed. (Reject Regex)', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+    if (preg_match('/[\r\n]/', $s)) {
+        return __('ERROR OPTION: Newline characters are not allowed. (Reject Regex)', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+    if (preg_match('/[\x00-\x08\x0B-\x1F\x7F\x80-\x9F]/', $s)) {
+        return __('ERROR OPTION: Control characters are not allowed. (Reject Regex)', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+    if (strlen($s) > 4000) {
+        return __('ERROR OPTION: Value too long (max 4000 chars). (Reject Regex)', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+    return null;
+}
+
 // Sanitize inputs
 function nppp_nginx_cache_settings_sanitize($input) {
     $sanitized_input = array();
@@ -2171,7 +2218,18 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize Reject Regex field
     if (!empty($input['nginx_cache_reject_regex'])) {
-        $sanitized_input['nginx_cache_reject_regex'] = preg_replace('/\\\\+/', '\\', $input['nginx_cache_reject_regex']);
+        $raw = $input['nginx_cache_reject_regex'];
+        if ($reason = nppp_forbidden_shell_bytes_reason($raw)) {
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'invalid-reject-regex',
+                $reason,
+                'error'
+            );
+            nppp_log_error_message($reason);
+        } else {
+            $sanitized_input['nginx_cache_reject_regex'] = nppp_sanitize_reject_regex($raw);
+        }
     }
 
     // Sanitize & validate custom cache key regex
@@ -2238,7 +2296,30 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize Reject extension field
     if (!empty($input['nginx_cache_reject_extension'])) {
-        $sanitized_input['nginx_cache_reject_extension'] = preg_replace('/\\\\+/', '\\', $input['nginx_cache_reject_extension']);
+        $raw = nppp_single_line($input['nginx_cache_reject_extension']);
+
+        // Tokenize by comma/whitespace only
+        $tokens = preg_split('/[,\s]+/', $raw, -1, PREG_SPLIT_NO_EMPTY);
+
+        $bad = [];
+        foreach ($tokens as $tok) {
+            // Only forms like: *.css  | .css  | css  | css.min.js
+            $ok = preg_match('/^(?:\*\.)?[a-z0-9]+(?:\.[a-z0-9]+)*$/i', $tok)
+                || preg_match('/^\.[a-z0-9]+(?:\.[a-z0-9]+)*$/i', $tok);
+            if (!$ok) $bad[] = $tok;
+        }
+
+        if ($bad) {
+            $preview = implode(', ', array_slice($bad, 0, 3));
+            $msg = sprintf(
+                __('ERROR OPTION: Invalid extension pattern(s): %s. Allowed examples: *.css, .css, css', 'fastcgi-cache-purge-and-preload-nginx'),
+                esc_html($preview) . (count($bad) > 3 ? '…' : '')
+            );
+            add_settings_error('nppp_nginx_cache_settings_group', 'invalid-reject-ext', $msg, 'error');
+            nppp_log_error_message($msg);
+        } else {
+            $sanitized_input['nginx_cache_reject_extension'] = nppp_sanitize_reject_extension_globs($raw);
+        }
     }
 
     // Sanitize Send Mail, Auto Preload, Auto Preload Mobile, Auto Purge, Cache Schedule, REST API, Opt-in, Related Pages
