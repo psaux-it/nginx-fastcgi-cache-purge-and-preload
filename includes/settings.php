@@ -2038,11 +2038,9 @@ function nppp_single_line(string $s): string {
     if (strlen($s) > 4000) $s = substr($s, 0, 4000);
     return $s;
 }
-
 function nppp_sanitize_reject_regex(string $rx): string {
     return nppp_single_line($rx);
 }
-
 function nppp_sanitize_reject_extension_globs(string $s): string {
     $s = nppp_single_line($s);
     $parts = preg_split('/[,\s]+/', $s, -1, PREG_SPLIT_NO_EMPTY);
@@ -2058,8 +2056,6 @@ function nppp_sanitize_reject_extension_globs(string $s): string {
     $out = array_slice(array_keys($out), 0, 200);
     return implode(',', $out);
 }
-
-// Helpers
 function nppp_forbidden_shell_bytes_reason(string $s): ?string {
     if (strpos($s, "\0") !== false) {
         return __('ERROR OPTION: NUL byte is not allowed. (Reject Regex)', 'fastcgi-cache-purge-and-preload-nginx');
@@ -2072,6 +2068,144 @@ function nppp_forbidden_shell_bytes_reason(string $s): ?string {
     }
     if (strlen($s) > 4000) {
         return __('ERROR OPTION: Value too long (max 4000 chars). (Reject Regex)', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+    return null;
+}
+
+// Sanitize + validate proxy host input.
+function nppp_is_valid_hostname(string $h): bool {
+    if ($h === '' || strlen($h) > 253) return false;
+    $labels = explode('.', $h);
+    foreach ($labels as $lab) {
+        $len = strlen($lab);
+        if ($len === 0 || $len > 63) return false;
+        if (!preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i', $lab)) return false;
+    }
+    return true;
+}
+function nppp_idn_to_ascii_host(string $host): ?string {
+    // If non-ASCII chars present, try converting.
+    if (preg_match('/[^\x00-\x7F]/', $host)) {
+        if (function_exists('idn_to_ascii')) {
+            if (defined('INTL_IDNA_VARIANT_UTS46')) {
+                $ascii = idn_to_ascii($host, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
+            } else {
+                $ascii = idn_to_ascii($host, IDNA_DEFAULT);
+            }
+            if ($ascii === false || $ascii === null) {
+                return null;
+            }
+            return $ascii;
+        }
+        return null;
+    }
+    return $host;
+}
+function nppp_is_valid_hostname_with_reason(string $h, ?string &$reason = null): bool {
+    if ($h === '') { $reason = 'empty'; return false; }
+    if (strlen($h) > 253) { $reason = 'too_long'; return false; }
+    $labels = explode('.', $h);
+    foreach ($labels as $lab) {
+        $len = strlen($lab);
+        if ($len === 0) { $reason = 'empty_label'; return false; }
+        if ($len > 63) { $reason = 'label_too_long'; return false; }
+        if (!preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i', $lab)) {
+            $reason = 'bad_chars'; return false;
+        }
+    }
+    return true;
+}
+function nppp_is_ipv4_like_hostname(string $h): bool {
+    return (bool) preg_match('/^\d{1,3}(?:\.\d{1,3}){3}$/', $h);
+}
+function nppp_sanitize_validate_proxy_host(string $raw, ?string &$err = null, ?string &$notice = null): ?string {
+    $s = nppp_single_line($raw);
+
+    // Strip scheme if pasted like http://host:port
+    $s = preg_replace('#^[a-z][a-z0-9+\-.]*://#i', '', $s);
+    $s = trim($s);
+
+    // Reject userinfo, path, query, fragments, spaces
+    if (preg_match('/[@\/?#\s]/', $s)) {
+        $err = __('ERROR OPTION: Proxy Host must not include credentials, path, query, fragments, or spaces.', 'fastcgi-cache-purge-and-preload-nginx');
+        return null;
+    }
+
+    // Trailing dot (FQDN.) -> normalize
+    $s = rtrim($s, '.');
+
+    // [IPv6] or [IPv6]:port — allow;
+    if (preg_match('/^\[([0-9A-Fa-f:.%]+)\](?::(\d{1,5}))?$/', $s, $m)) {
+        $ip6_raw = $m[1];
+        $port    = $m[2] ?? null;
+
+        $ip6_plain = preg_replace('/%.*/', '', $ip6_raw);
+        if (!filter_var($ip6_plain, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            $err = __('ERROR OPTION: Invalid IPv6 address.', 'fastcgi-cache-purge-and-preload-nginx');
+            return null;
+        }
+        if ($port !== null) {
+            $notice = __('NOTICE: Port ignored in Proxy Host. Use the Proxy Port field.', 'fastcgi-cache-purge-and-preload-nginx');
+        }
+        return '[' . $ip6_raw . ']';
+    }
+
+    // host:port (non-IPv6) — allow but ignore port, nudge user
+    if (preg_match('/^([^:]+):(\d{1,5})$/', $s, $m) && strpos($m[1], ':') === false) {
+        $s = $m[1];
+        $notice = __('NOTICE: Port ignored in Proxy Host. Use the Proxy Port field.', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    // Any remaining ":" means it's trying to be IPv6 but failed
+    if (strpos($s, ':') !== false) {
+        $plain = preg_replace('/%.*/', '', $s);
+        if (filter_var($plain, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            return '[' . $s . ']';
+        }
+        $err = __('ERROR OPTION: Unexpected ":" in host. Use [IPv6] or a valid hostname/IPv4; do not include ports or paths here.', 'fastcgi-cache-purge-and-preload-nginx');
+        return null;
+    }
+
+    // IPv4?
+    if (filter_var($s, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        return $s;
+    }
+
+    // Looks like IPv4 but invalid?
+    if (nppp_is_ipv4_like_hostname($s)) {
+        $err = __('ERROR OPTION: Value looks like an IPv4 address but is invalid.', 'fastcgi-cache-purge-and-preload-nginx');
+        return null;
+    }
+
+    // Normalize case and accept IDNs via Punycode
+    $host_input = strtolower($s);
+    $host_ascii = nppp_idn_to_ascii_host($host_input);
+    if ($host_ascii === null) {
+        $err = __('ERROR OPTION: Invalid internationalized domain name.', 'fastcgi-cache-purge-and-preload-nginx');
+        return null;
+    }
+
+    // Validate hostname with specific reasons
+    $why = null;
+    if (nppp_is_valid_hostname_with_reason($host_ascii, $why)) {
+        return $host_ascii;
+    }
+
+    switch ($why) {
+        case 'too_long':
+            $err = __('ERROR OPTION: Hostname too long (max 253 chars).', 'fastcgi-cache-purge-and-preload-nginx');
+            break;
+        case 'label_too_long':
+            $err = __('ERROR OPTION: A hostname label exceeds 63 characters.', 'fastcgi-cache-purge-and-preload-nginx');
+            break;
+        case 'empty_label':
+            $err = __('ERROR OPTION: Hostname contains empty labels (e.g., consecutive dots).', 'fastcgi-cache-purge-and-preload-nginx');
+            break;
+        case 'bad_chars':
+            $err = __('ERROR OPTION: Hostname contains invalid characters. Use letters, digits, and hyphens; labels must start/end alphanumeric.', 'fastcgi-cache-purge-and-preload-nginx');
+            break;
+        default:
+            $err = __('ERROR OPTION: Please enter a valid IP address or hostname for the Proxy Host.', 'fastcgi-cache-purge-and-preload-nginx');
     }
     return null;
 }
@@ -2403,27 +2537,18 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize and validate Proxy Host
     if (!empty($input['nginx_cache_preload_proxy_host'])) {
-        $proxy_host_raw = sanitize_text_field(trim($input['nginx_cache_preload_proxy_host']));
-        $proxy_host_raw = preg_replace( '#^[a-z][a-z0-9+\-.]*://#i', '', $proxy_host_raw );
-        $proxy_host     = preg_replace( '/[^a-z0-9\-.:]/i', '', $proxy_host_raw );
+        $notice = $err = null;
+        $host = nppp_sanitize_validate_proxy_host($input['nginx_cache_preload_proxy_host'], $err, $notice);
 
-        // Validate IP (IPv4 or IPv6)
-        if (filter_var($proxy_host, FILTER_VALIDATE_IP)) {
-            $sanitized_input['nginx_cache_preload_proxy_host'] = $proxy_host;
-        }
-        // Validate hostname (FQDN or short)
-        elseif (filter_var($proxy_host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
-            $sanitized_input['nginx_cache_preload_proxy_host'] = $proxy_host;
-        }
-        else {
-            add_settings_error(
-                'nppp_nginx_cache_settings_group',
-                'invalid-proxy-host',
-                __('ERROR OPTION: Please enter a valid IP address or hostname for the Proxy Host.', 'fastcgi-cache-purge-and-preload-nginx'),
-                'error'
-            );
-
-            nppp_log_error_message(__('ERROR OPTION: Invalid proxy host provided. Must be IPv4, IPv6, or valid hostname.', 'fastcgi-cache-purge-and-preload-nginx'));
+        if ($err) {
+            add_settings_error('nppp_nginx_cache_settings_group','invalid-proxy-host',$err,'error');
+            nppp_log_error_message($err);
+        } else {
+            if ($notice) {
+                add_settings_error('nppp_nginx_cache_settings_group','proxy-host-port-ignored',$notice,'notice');
+                nppp_log_error_message($notice);
+            }
+            $sanitized_input['nginx_cache_preload_proxy_host'] = $host;
         }
     }
 
