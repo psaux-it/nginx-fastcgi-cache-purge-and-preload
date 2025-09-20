@@ -15,7 +15,7 @@ You can install **safexec** using the `.deb` or `.rpm` packages from the [Releas
 
 ### 🔹Debian / Ubuntu (DEB)
 
-Download the package and install with `dpkg`:
+Download the package and install with `apt`:
 
 ```bash
 # Download checksums
