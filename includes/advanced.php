@@ -779,11 +779,21 @@ function nppp_purge_cache_premium_callback() {
         }
         $affected_urls = array_values(array_unique($affected_urls));
 
+        // Whether auto-preload for related pages is active
+        $preload_auto = (
+            !empty($settings['nppp_related_preload_after_manual'])
+            && $settings['nppp_related_preload_after_manual'] === 'yes'
+            && !empty($related_urls)
+        ) ? true : false;
+
         // Return structured payload so JS can update other rows
         nppp_log_and_send_success_data(
             $success_message,
             $log_file_path,
-            array('affected_urls' => $affected_urls)
+            array(
+                'affected_urls' => $affected_urls,
+                'preload_auto'  => $preload_auto,
+            )
         );
     } else {
         // Translators: %s is the page URL
