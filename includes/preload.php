@@ -52,52 +52,47 @@ function nppp_check_network_env(): array {
     ];
 }
 
+// Check proxy reachable
 function nppp_is_proxy_reachable(string $proxy_host, int $proxy_port, int $timeout = 1): array {
     $env = nppp_check_network_env();
 
-    if (!$env['dns_ok']) {
-        return [
-            'success' => false,
-            'code'    => 'dns_error',
-        ];
-    }
+    if (!$env['dns_ok'])      return ['success' => false, 'code' => 'dns_error'];
+    if (!$env['outbound_ok']) return ['success' => false, 'code' => 'network_error'];
 
-    if (!$env['outbound_ok']) {
-        return [
-            'success' => false,
-            'code'    => 'network_error',
-        ];
+    // Normalize for IP checks
+    $host_for_ip = $proxy_host;
+    if ($host_for_ip !== '' && $host_for_ip[0] === '[' && substr($host_for_ip, -1) === ']') {
+        $host_for_ip = substr($host_for_ip, 1, -1);
     }
+    $host_plain = preg_replace('/%.*/', '', $host_for_ip);
 
-    // Resolve IP
-    if (filter_var($proxy_host, FILTER_VALIDATE_IP)) {
-        $resolved_ip = $proxy_host;
+    // Decide what to pass to fsockopen()
+    if (filter_var($host_plain, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+        $target_host = "tcp://[$host_plain]";
+    } elseif (filter_var($host_plain, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        $target_host = $host_plain;
     } else {
         $resolved_ip = gethostbyname($proxy_host);
-        if ($resolved_ip === $proxy_host) {
-            return [
-                'success' => false,
-                'code'    => 'proxy_dns_fail',
-            ];
+        if ($resolved_ip === $proxy_host && function_exists('dns_get_record')) {
+            $aaaa = @dns_get_record($proxy_host, DNS_AAAA);
+            if (!empty($aaaa) && isset($aaaa[0]['ipv6'])) {
+                $resolved_ip = $aaaa[0]['ipv6'];
+            }
         }
+        if ($resolved_ip === $proxy_host) {
+            return ['success' => false, 'code' => 'proxy_dns_fail'];
+        }
+        $target_host = (strpos($resolved_ip, ':') !== false) ? "tcp://[$resolved_ip]" : $resolved_ip;
     }
 
     // Attempt connection
-    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen
-    $connection = @fsockopen($resolved_ip, $proxy_port, $errno, $errstr, $timeout);
+    $connection = @fsockopen($target_host, $proxy_port, $errno, $errstr, $timeout);
     if ($connection) {
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
         fclose($connection);
-        return [
-            'success' => true,
-            'code'    => 'ok',
-        ];
+        return ['success' => true, 'code' => 'ok'];
     }
 
-    return [
-        'success' => false,
-        'code'    => 'proxy_unreachable',
-    ];
+    return ['success' => false, 'code' => 'proxy_unreachable'];
 }
 
 // Attempts to locate the safexec binary in standard or PATH-based locations
