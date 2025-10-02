@@ -55,7 +55,8 @@ final class Setup {
         if (! self::nppp_needs_setup()) return;
 
         // If admin tries to access Settings, bounce to Setup.
-        $current_page = isset($_GET['page']) ? sanitize_key($_GET['page']) : '';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only check of current admin page; no state change.
+        $current_page = isset($_GET['page']) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
         if ($current_page === self::SETTINGS_SLUG) {
             wp_safe_redirect(admin_url('admin.php?page=' . self::PAGE_SLUG));
             exit;
@@ -66,8 +67,8 @@ final class Setup {
         // Hidden page (no menu item)
         add_submenu_page(
             null,
-            __('NPP • Need Nginx Setup', 'fastcgi-cache-purge-and-preload-nginx'),
-            __('NPP • Need Nginx Setup', 'fastcgi-cache-purge-and-preload-nginx'),
+            esc_html__('NPP • Need Nginx Setup', 'fastcgi-cache-purge-and-preload-nginx'),
+            esc_html__('NPP • Need Nginx Setup', 'fastcgi-cache-purge-and-preload-nginx'),
             'manage_options',
             self::PAGE_SLUG,
             [__CLASS__, 'nppp_render_setup_page']
@@ -75,7 +76,7 @@ final class Setup {
     }
 
     public static function nppp_render_setup_page(): void {
-        if (! current_user_can('manage_options')) wp_die(__('Insufficient permissions.', 'fastcgi-cache-purge-and-preload-nginx'));
+        if (! current_user_can('manage_options')) wp_die( esc_html__( 'Insufficient permissions.', 'fastcgi-cache-purge-and-preload-nginx' ) );
 
         // Single source of truth for gating
         $needs_setup        = self::nppp_needs_setup();
@@ -273,7 +274,7 @@ services:
         echo '  <div class="postbox nppp-card">';
         echo '    <h2 class="hndle"><span>' . esc_html__('Detection Status', 'fastcgi-cache-purge-and-preload-nginx') . '</span></h2>';
         echo '    <div class="inside">';
-        echo          self::nppp_detection_debug_html($strict_detected, $assume_enabled);
+        echo          wp_kses_post( self::nppp_detection_debug_html( $strict_detected, $assume_enabled ) );
         echo '    </div>';
         echo '  </div>';
 
@@ -284,7 +285,8 @@ services:
         echo '      <p class="nppp-muted">'
              . esc_html__('Used only when Assume-Nginx mode is enabled and the real nginx.conf is not found.', 'fastcgi-cache-purge-and-preload-nginx')
              . '</p>';
-        $show_dummy = isset($_GET['nppp_show_dummy']) && sanitize_text_field($_GET['nppp_show_dummy']) === '1';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- View-only toggle; no state change
+        $show_dummy = isset($_GET['nppp_show_dummy']) && sanitize_text_field( wp_unslash( $_GET['nppp_show_dummy'] ) ) === '1';
         echo '      <p class="nppp-actions">';
         echo '        <a class="button" href="' . esc_url( add_query_arg(['nppp_show_dummy' => $show_dummy ? '0' : '1']) ) . '">'
                . ($show_dummy ? esc_html__('Hide dummy nginx.conf', 'fastcgi-cache-purge-and-preload-nginx') : esc_html__('Show dummy nginx.conf', 'fastcgi-cache-purge-and-preload-nginx'))
@@ -315,7 +317,7 @@ services:
 
         $bits = [];
         $bits[] = sprintf('<p><strong>%s</strong> %s</p>',
-            esc_html__('Nginx detected (strict):', 'fastcgi-cache-purge-and-preload-nginx'),
+            esc_html__('nginx.conf detected (strict):', 'fastcgi-cache-purge-and-preload-nginx'),
             $nginx_detected ? '<span class="dashicons dashicons-yes"></span> ' . esc_html__('Yes', 'fastcgi-cache-purge-and-preload-nginx')
                             : '<span class="dashicons dashicons-warning"></span> ' . esc_html__('No', 'fastcgi-cache-purge-and-preload-nginx')
         );
@@ -349,7 +351,7 @@ services:
     }
 
     public static function nppp_handle_setup_post(): void {
-        if (! current_user_can('manage_options')) wp_die(__('Insufficient permissions.', 'fastcgi-cache-purge-and-preload-nginx'));
+        if (! current_user_can('manage_options')) wp_die( esc_html__( 'Insufficient permissions.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         check_admin_referer('nppp_setup_actions');
 
         $action = isset($_POST['nppp_action']) ? sanitize_key($_POST['nppp_action']) : '';
@@ -445,9 +447,10 @@ services:
             return (bool) \nppp_precheck_nginx_detected(false);
         }
 
-        // fallback (same as your current fallback)
-        if (isset($_SERVER['SERVER_SOFTWARE']) && stripos($_SERVER['SERVER_SOFTWARE'], 'nginx') !== false) {
-            return true;
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading server signature only; no state change.
+        $server_sw = isset($_SERVER['SERVER_SOFTWARE']) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) ) : '';
+        if ( $server_sw && stripos( $server_sw, 'nginx' ) !== false ) {
+             return true;
         }
         return false;
     }
@@ -458,7 +461,9 @@ services:
         }
 
         // fallback if pre-checks wasn't loaded for some reason
-        if (isset($_SERVER['SERVER_SOFTWARE']) && stripos($_SERVER['SERVER_SOFTWARE'], 'nginx') !== false) {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading server signature only; no state change.
+        $server_sw = isset($_SERVER['SERVER_SOFTWARE']) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) ) : '';
+        if ( $server_sw && stripos( $server_sw, 'nginx' ) !== false ) {
             return true;
         }
 
@@ -545,7 +550,7 @@ services:
                 if (function_exists('\\nppp_display_admin_notice')) {
                     \nppp_display_admin_notice(
                         'success',
-                        __('SUCCESS ADMIN: Nginx was detected. Assume-Nginx mode has been disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx'),
+                        esc_html__( 'SUCCESS ADMIN: Nginx was detected. Assume-Nginx mode has been disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx' ),
                         true,
                         true
                     );
@@ -606,21 +611,21 @@ services:
         }
 
         // Last-resort inline fallback
-        return $cached = <<<'NGINX'
-user  dummy;
-worker_processes  auto;
-events {
-    worker_connections 1024;
-}
-http {
-    include       mime.types;
-    default_type  application/octet-stream;
-    fastcgi_cache_path /var/run/nginx-fastcgi levels=1:2 keys_zone=npp_fcgi:10m inactive=60m use_temp_path=off;
-    fastcgi_cache_key "$scheme$request_method$host$request_uri";
-    access_log  /var/log/nginx/access.log  main;
-    sendfile        on;
-    keepalive_timeout  65;
-}
-NGINX;
+        return $cached = implode( "\n", array(
+            'user  dummy;',
+            'worker_processes  auto;',
+            'events {',
+            '    worker_connections 1024;',
+            '}',
+            'http {',
+            '    include       mime.types;',
+            '    default_type  application/octet-stream;',
+            '    fastcgi_cache_path /var/run/nginx-fastcgi levels=1:2 keys_zone=npp_fcgi:10m inactive=60m use_temp_path=off;',
+            '    fastcgi_cache_key "$scheme$request_method$host$request_uri";',
+            '    access_log  /var/log/nginx/access.log  main;',
+            '    sendfile        on;',
+            '    keepalive_timeout  65;',
+            '}',
+        ));
     }
 }
