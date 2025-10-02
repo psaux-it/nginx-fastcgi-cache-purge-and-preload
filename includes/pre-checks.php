@@ -42,7 +42,11 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
         $signal_hit = false;
 
         // Trust SERVER_SOFTWARE if present
-        if (isset($_SERVER['SERVER_SOFTWARE']) && stripos($_SERVER['SERVER_SOFTWARE'], 'nginx') !== false) {
+        $server_software = isset($_SERVER['SERVER_SOFTWARE'])
+            ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) )
+            : '';
+
+        if ( $server_software !== '' && stripos( $server_software, 'nginx' ) !== false ) {
             $signal_hit = true;
         }
 
