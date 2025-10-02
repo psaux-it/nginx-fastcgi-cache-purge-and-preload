@@ -544,6 +544,10 @@ function nppp_log_and_send_success_data($success_message, $log_file_path, $data_
 function nppp_load_premium_content_callback() {
     check_ajax_referer('load_premium_content_nonce', '_wpnonce');
 
+    if ( ! current_user_can('manage_options') ) {
+        wp_send_json_error( __( 'Permission denied.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
+    }
+
     // Retrieve plugin settings
     $options = get_option('nginx_cache_settings');
     $nginx_cache_path = isset($options['nginx_cache_path']) ? $options['nginx_cache_path'] : '';
