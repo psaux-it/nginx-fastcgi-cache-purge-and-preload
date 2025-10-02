@@ -44,7 +44,12 @@ function nppp_check_network_env(): array {
 
     // Check outbound connectivity
     // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen
-    $outbound_ok = @fsockopen($test_domain, 80, $errno, $errstr, 2) !== false;
+    $fp = @fsockopen($test_domain, 80, $errno, $errstr, 2);
+    $outbound_ok = ($fp !== false);
+    if ($fp) {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closing probe socket
+        @fclose($fp);
+    }
 
     return [
         'dns_ok'      => $dns_ok,
@@ -86,8 +91,10 @@ function nppp_is_proxy_reachable(string $proxy_host, int $proxy_port, int $timeo
     }
 
     // Attempt connection
+    // phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen,WordPress.WP.AlternativeFunctions.file_system_operations_fclose
     $connection = @fsockopen($target_host, $proxy_port, $errno, $errstr, $timeout);
     if ($connection) {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closing probe socket
         fclose($connection);
         return ['success' => true, 'code' => 'ok'];
     }
