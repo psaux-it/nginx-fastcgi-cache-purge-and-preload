@@ -727,8 +727,8 @@ function nppp_restart_systemd_service() {
             __('Systemd service restarted and is active. Plugin cache cleared.', 'fastcgi-cache-purge-and-preload-nginx')
         );
     } else {
-        /* Translators: %s is the systemd service status string (e.g. "failed") */
         $msg = sprintf(
+            /* Translators: %s is the systemd service status string (e.g. "failed") */
             __('Restart completed but the service is not active. Status: %s', 'fastcgi-cache-purge-and-preload-nginx'),
             $status
         );
