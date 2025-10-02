@@ -834,6 +834,7 @@ function nppp_preload_cache_premium_callback() {
     }
 
     // Get the file path from the AJAX request
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Source is trusted; nonce/cap checked; keep percent-encoding intact.
     $cache_url = isset($_POST['cache_url']) ? trim( wp_unslash($_POST['cache_url']) ) : '';
 
     // Get the plugin options
@@ -907,6 +908,7 @@ function nppp_locate_cache_file_ajax() {
         wp_send_json_error( __( 'Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
     }
 
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Source is trusted; nonce/cap checked; keep percent-encoding intact.
     $cache_url = isset($_POST['cache_url']) ? trim( wp_unslash($_POST['cache_url']) ) : '';
     if ( ! $cache_url || ! filter_var($cache_url, FILTER_VALIDATE_URL) ) {
         wp_send_json_error( __( 'Invalid URL.', 'fastcgi-cache-purge-and-preload-nginx' ) );
