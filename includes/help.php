@@ -2,7 +2,7 @@
 /**
  * FAQ for FastCGI Cache Purge and Preload for Nginx
  * Description: This help file contains informations about FastCGI Cache Purge and Preload for Nginx plugin usage.
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -200,28 +200,28 @@ function nppp_my_faq_html() {
 
                     <ol class="nginx-list" style="font-size: 14px;">
                         <li><strong>Debian / Ubuntu (.deb)</strong>
-                            <pre>wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/SHA256SUMS
+                            <pre>wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
 
 # x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/safexec_1.9.2-1_amd64.deb
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.2-1_amd64.deb
 sha256sum -c SHA256SUMS --ignore-missing
 sudo apt install ./safexec_1.9.2-1_amd64.deb
 
 # arm64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/safexec_1.9.2-1_arm64.deb
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.2-1_arm64.deb
 sha256sum -c SHA256SUMS --ignore-missing
 sudo apt install ./safexec_1.9.2-1_arm64.deb</pre>
                         </li>
 
                         <li><strong>RHEL / CentOS / Fedora (.rpm)</strong>
-                            <pre>wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/SHA256SUMS
+                            <pre>wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
 # x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/safexec-1.9.2-1.el10.x86_64.rpm
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.2-1.el10.x86_64.rpm
 sha256sum -c SHA256SUMS --ignore-missing
 sudo dnf install ./safexec-1.9.2-1.el10.x86_64.rpm
 
 # arm64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/safexec-1.9.2-1.el10.aarch64.rpm
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.2-1.el10.aarch64.rpm
 sha256sum -c SHA256SUMS --ignore-missing
 sudo dnf install ./safexec-1.9.2-1.el10.aarch64.rpm</pre>
                         </li>
