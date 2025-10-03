@@ -1,7 +1,7 @@
 /**
  * JavaScript for Aurora Canvas Header Effect
  * Description: Aurora ribbons that react to plugin actions and preload progress (status, % complete, errors).
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -561,7 +561,7 @@
 /**
  * Aurora Effects Patch (Drop-in)
  * Description: Feature-flagged overlay effects (sheen/crackle/flare) + tempo pulses
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * License: GPL-2.0+
  *
