@@ -1930,7 +1930,7 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     <fieldset id="nppp-pctnorm"
               class="<?php echo esc_attr($fieldset_class); ?>"
               role="radiogroup"
-              <?php echo $fieldset_aria . $fieldset_title; ?>
+              <?php echo wp_kses_post( $fieldset_aria . $fieldset_title ); ?>
               <?php if ( $is_disabled ) : ?>
                   data-note="<?php echo esc_attr($status_note); ?>"
               <?php endif; ?>
