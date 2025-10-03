@@ -2,7 +2,7 @@
 /**
  * Pre-checks for FastCGI Cache Purge and Preload for Nginx
  * Description: This pre-check file contains several critical checks for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -62,7 +62,7 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
                 'headers'     => array(
                     'Cache-Control' => 'no-cache, no-store, max-age=0',
                     'Pragma'        => 'no-cache',
-                    'User-Agent'    => 'NPPP-Precheck/2.1.3',
+                    'User-Agent'    => 'NPPP-Precheck/2.1.4',
                 ),
             ));
 
@@ -459,7 +459,7 @@ function nppp_pre_checks_critical() {
             'headers'     => array(
                 'Cache-Control' => 'no-cache, no-store, max-age=0',
                 'Pragma'        => 'no-cache',
-                'User-Agent'    => 'NPPP-Precheck/2.1.3',
+                'User-Agent'    => 'NPPP-Precheck/2.1.4',
             ),
         ));
 
