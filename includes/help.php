@@ -170,62 +170,84 @@ function nppp_my_faq_html() {
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <p style="font-size: 14px;">
-                            <strong>safexec</strong> is a hardened wrapper for PHP’s <code>shell_exec()</code>, <em>written in C specifically for NPP (Nginx Cache Purge &amp; Preload for WordPress)</em>, used to run helper commands more safely. It drops privileges to the <code>nobody</code> user, detaches from the PHP-FPM cgroup (on cgroup v2 systems), scrubs the environment, closes inherited file descriptors, and prevents privilege re-gain.
+                            <strong>safexec</strong> is a secure, privilege-dropping SUID wrapper for executing a set of tools from higher-level contexts such as PHP’s <strong>shell_exec()</strong>.
+                            It is written in C as the backend for <strong>NPP</strong> and pairs with an optional <strong>LD_PRELOAD</strong> shim library, <strong>libnpp_norm.so</strong>, that normalizes percent-encoded HTTP request-lines during cache preloading to ensure consistent Nginx cache keys.
                         </p>
 
-                        <h4>Why does NPP use it?</h4>
-                        <ul style="font-size: 14px;">
-                            <li><strong>Privilege drop:</strong> commands run as <code>nobody</code> instead of the PHP-FPM user.</li>
-                            <li><strong>cgroup isolation:</strong> moves the process to a neutral cgroup (when cgroup v2 is present).</li>
-                            <li><strong>Hardened exec:</strong> cleans PATH/LANG, sets <code>PR_SET_NO_NEW_PRIVS</code>, closes stray FDs.</li>
-                            <li><strong>Safer temp handling:</strong> rewrites <code>wget -P /tmp</code> to a safe per-user fallback if needed (e.g., <code>/tmp/nppp-cache/&lt;euid&gt;</code>).</li>
-                            <li><strong>Controlled termination:</strong> you can stop only safexec-owned jobs via <code>--kill=&lt;pid&gt;</code>.</li>
-                        </ul>
+                    <h4>Why does NPP need/use it?</h4>
+                    <ul style="font-size: 14px;">
+                        <li><strong>Privilege drop:</strong> commands run as <code>nobody</code>.</li>
+                        <li><strong>URL Normalization for Preload</strong></li>
+                    </ul>
 
-                        <h4>Benefits</h4>
-                        <ul style="font-size: 14px;">
-                            <li>Reduces risk from injected or misbehaving shell commands.</li>
-                            <li>Keeps preload/purge helpers isolated from WordPress/PHP-FPM.</li>
-                            <li>More predictable behavior on multi-tenant or container setups.</li>
-                        </ul>
+                    <h4>Benefits</h4>
+                    <ul style="font-size: 14px;">
+                        <li>Reduces risk from injected or misbehaving shell commands.</li>
+                        <li>Keeps preload process isolated from WordPress/PHP-FPM.</li>
+                    </ul>
 
-                        <h4>Is it recommended?</h4>
-                        <p style="font-size: 14px;">
-                            <strong>Yes.</strong> Using safexec is higly recommended for all user.
-                        </p>
+                    <h4>Is it recommended?</h4>
+                    <p style="font-size: 14px;">
+                        Cause NPP deeply use PHPs <em>shell_exec</em>, <strong>Yes,</strong> using safexec is <em>highly</em> recommended for all users.
+                    </p>
 
-                        <h4>How do I install it?</h4>
-                        <ol class="nginx-list" style="font-size: 14px;">
-                            <li>One liner auto install (requires root privileges) RECOMMENDED:<br>
-                                <pre><code>curl -fsSL https://psaux-it.github.io/install-safexec.sh | sudo sh</code></pre>
-                            </li>
-                            <li>Verify installation:<br>
-                                <pre><code>safexec --version</code></pre>
-                            </li>
-                            <li><em>Note:</em> Install safexec <u>inside</u> the WordPress/PHP-FPM container (not just the host) so NPP can call it.</li>
+                    <h4>How do I install it?</h4>
+                    <p style="font-size: 14px;">
+                        Use the  linux packages from the
+                        <a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases" target="_blank" rel="noopener">Releases page</a>.
+                        Below are quick examples—see GitHub for full details.
+                    </p>
 
-                            <li><strong>Manual install (alternative):</strong>
-                            <li>Download the binary from: <a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec" target="_blank" rel="noopener">GitHub &raquo; safexec</a></li>
-                            <li>Place it somewhere in your <code>PATH</code> (e.g., <code>/usr/local/bin</code>) as renamed <code>safexec</code>:</li>
-                            <pre><code>sudo cp safexec /usr/local/bin/safexec</code></pre>
-                            <li>Set secure ownership and setuid bit so it can drop privileges correctly:</li>
-                            <pre><code>sudo chown root:root /usr/local/bin/safexec</code></pre>
-                            <pre><code>sudo chmod 4755 /usr/local/bin/safexec</code></pre>
-                            <li>Verify:</li>
+                    <ol class="nginx-list" style="font-size: 14px;">
+                        <li><strong>Debian / Ubuntu (.deb)</strong>
+                            <pre>wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/SHA256SUMS
+
+# x86_64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/safexec_1.9.2-1_amd64.deb
+sha256sum -c SHA256SUMS --ignore-missing
+sudo apt install ./safexec_1.9.2-1_amd64.deb
+
+# arm64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/safexec_1.9.2-1_arm64.deb
+sha256sum -c SHA256SUMS --ignore-missing
+sudo apt install ./safexec_1.9.2-1_arm64.deb</pre>
+                        </li>
+
+                        <li><strong>RHEL / CentOS / Fedora (.rpm)</strong>
+                            <pre>wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/SHA256SUMS
+# x86_64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/safexec-1.9.2-1.el10.x86_64.rpm
+sha256sum -c SHA256SUMS --ignore-missing
+sudo dnf install ./safexec-1.9.2-1.el10.x86_64.rpm
+
+# arm64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/safexec-1.9.2-1.el10.aarch64.rpm
+sha256sum -c SHA256SUMS --ignore-missing
+sudo dnf install ./safexec-1.9.2-1.el10.aarch64.rpm</pre>
+                        </li>
+
+                        <li><strong>Verify:</strong>
                             <pre><code>safexec --version</code></pre>
-                            <li><em>Note:</em> If your target filesystem is mounted with <code>nosuid</code>, the setuid bit won’t take effect. Choose a mount point without <code>nosuid</code>.</li>
-                        </ol>
+                        </li>
 
-                        <h4>Optional: quick test</h4>
-                        <p style="font-size: 14px;">NPP uses safexec automatically, but you can test it manually:</p>
-                        <pre><code>safexec wget -qO- https://example.com</code></pre>
-                        <p style="font-size: 14px;">Terminate a long-running safexec job:</p>
-                        <pre><code>safexec --kill=&lt;pid&gt;</code></pre>
+                        <li><em>Note:</em> Install safexec <u>inside</u> the WordPress/PHP-FPM host or container so NPP can call it.</li>
+                      </ol>
 
-                        <p style="font-size: 14px;">
-                            <em>Note:</em> On systems without cgroup v2, safexec still runs (isolation becomes a no-op).
-                        </p>
-                    </div>
+                    <h4>Optional: quick test</h4>
+                    <p style="font-size: 14px;">NPP uses safexec automatically, but you can test it manually:</p>
+                    <pre>safexec wget -qO- https://example.com
+safexec --kill=&lt;pid&gt;
+                    </pre>
+
+                      <p style="font-size: 14px;">
+                          <em>Notes:</em> On systems without cgroup v2, isolation falls back to rlimits; without setuid-root, safexec runs in pass-through mode.
+                      </p>
+
+                      <p style="font-size: 12px; margin-top: 8px;">
+                          <strong>Full docs &amp; source:</strong>
+                          <a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec" target="_blank" rel="noopener">GitHub &raquo; safexec</a>
+                      </p>
+                  </div>
                 </div>
 
                 <h3 class="nppp-question">What is different about this plugin compared to other Nginx Cache Plugins?</h3>
@@ -372,7 +394,8 @@ function nppp_my_faq_html() {
                         <pre><code>https://example.com/product/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87/</code></pre>
                         <p style="font-size: 14px;">Nginx will not find a matching cache file. <strong>This is a classic cache mismatch caused by encoding inconsistency.</strong></p>
 
-                        <h4>✅ Solution: Normalize Encoding with mitmproxy</h4>
+                        <h4>✅ Solution 1 (Recommended): Normalize Encoding with safexec</h4>
+                        <h4>✅ Solution 2: Normalize Encoding with mitmproxy</h4>
                         <p style="font-size: 14px;"><strong>mitmproxy</strong> acts as a "man-in-the-middle" proxy between the NPP Preload (wget) and Nginx. It rewrites percent-encoded characters to a consistent casing <strong>on the fly</strong>, ensuring preload and browser requests use identical formats.</p>
 
                         <p style="font-size: 14px;">To fix cache misses caused by inconsistent percent-encoding (uppercase vs lowercase), follow these steps:</p>
