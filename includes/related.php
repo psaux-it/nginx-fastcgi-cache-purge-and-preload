@@ -3,7 +3,7 @@
  * Related purge helpers for FastCGI Cache Purge and Preload for Nginx
  * Description: Helper functions to purge (and optionally preload) related URLs—homepage and category archives—
  *              whenever a single post/page is purged (via auto purge, front-end action, or Advanced tab).
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
