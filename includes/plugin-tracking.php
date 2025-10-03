@@ -5,7 +5,7 @@
  * Description: This file handles tracking the plugin activation and deactivation status
  * and sends this information to the main API to track plugin statistics.
  *
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
