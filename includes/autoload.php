@@ -2,7 +2,7 @@
 /**
  * Lightweight autoloader for NPPP\
  * Description: Tries classmap; WordPress-style files; falls back to PSR-4; supports APCu path caching.
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
