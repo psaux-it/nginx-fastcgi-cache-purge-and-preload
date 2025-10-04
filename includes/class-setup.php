@@ -2,7 +2,7 @@
 /**
  * Setup controller for FastCGI Cache Purge and Preload for Nginx
  * Description: Handles activation redirect, gates Settings until Nginx is detected or Assume-Nginx is enabled, renders the hidden Setup admin page.
- * Version: 2.1.4
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -64,15 +64,23 @@ final class Setup {
     }
 
     public static function nppp_register_setup_page(): void {
+        if ( ! current_user_can('manage_options') ) return;
+
+        // Use a real parent to avoid PHP 8.1+ deprecation warnings.
+        $parent = 'admin.php';
+
         // Hidden page (no menu item)
-        add_submenu_page(
-            null,
+        $hook = add_submenu_page(
+            $parent,
             esc_html__('NPP • Need Nginx Setup', 'fastcgi-cache-purge-and-preload-nginx'),
             esc_html__('NPP • Need Nginx Setup', 'fastcgi-cache-purge-and-preload-nginx'),
             'manage_options',
             self::PAGE_SLUG,
             [__CLASS__, 'nppp_render_setup_page']
         );
+
+        // Run once-per-while OPcache refresh ONLY on this page
+        add_action('load-' . $hook, [__CLASS__, 'nppp_maybe_reset_opcache']);
     }
 
     public static function nppp_render_setup_page(): void {
@@ -108,7 +116,8 @@ final class Setup {
             : __('NPP • Complete Setup', 'fastcgi-cache-purge-and-preload-nginx');
 
         // Logo
-        $logo_url = plugins_url('../admin/img/logo.png', __FILE__);
+        $plugin_slug = basename( dirname( dirname( __FILE__ ) ) );
+        $logo_url    = trailingslashit( content_url( 'plugins/' . $plugin_slug ) ) . 'admin/img/logo.png';
 
         // Header
         echo '<h1 class="wp-heading-inline">'
@@ -588,6 +597,33 @@ services:
         if ($new !== null && $new !== $contents) {
             $wp_filesystem->put_contents($wp_config_path, $new, FS_CHMOD_FILE);
         }
+    }
+
+    /**
+     * OPcache: lightly and safely refresh when the Setup page loads.
+     * - Runs at most once per minute (transient gate).
+     * - Only executes on admin.php?page=nppp-setup (via load-$hook above).
+     * - No fatal if OPcache is disabled.
+    */
+    public static function nppp_maybe_reset_opcache(): void {
+        // Optional manual trigger: ?nppp_force_opcache=1 bypasses the cooldown
+        $force = isset($_GET['nppp_force_opcache']) && $_GET['nppp_force_opcache'] === '1';
+
+        if ( ! $force && get_transient('nppp_opcache_reset_done') ) {
+            return;
+        }
+
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_opcache_reset
+        if (function_exists('opcache_reset')) {
+            @opcache_reset();
+        } elseif (function_exists('opcache_invalidate')) {
+            // Minimal noop if reset is unavailable; invalidating this file ensures at least the Setup class is fresh.
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_opcache_invalidate
+            @opcache_invalidate(__FILE__, true);
+        }
+
+        // Cooldown so we don’t reset on every refresh
+        set_transient('nppp_opcache_reset_done', 1, MINUTE_IN_SECONDS);
     }
 
     private static function nppp_dummy_nginx_conf(): string {
