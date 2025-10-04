@@ -188,16 +188,22 @@ Release date: 2025-10-04
  * Treat it like a "site crawl snapshot": You can quickly review and analyze your whole actual Nginx Cache (HIT/MISS) and take action in one window.
  * Instantly spot pages that aren’t cached (MISS) and Preload them right away (or purge specific URLs) to keep performance sharp.
 * Major: Introduces safexec (privilege-dropping wrapper)
- * Hardened backend for NPP (written in C) to safely run PHP's shell_exec() commands safetly. (Check Plugin Help tab)
+ * Hardened backend for NPP (written in C) to safely run PHP's shell_exec() commands. (Check Plugin Help tab)
  * Drops privileges (nobody) and scrubs the environment; also normalizes URLs during Preload to avoid encoding-based cache misses.
+ * Control percent-encoded URLs during Preload (modes: OFF, PRESERVE, UPPER, LOWER)
  * Recommended for all users concerned about shell_exec usage in NPP.
-* Major: Introduces Purge Scope (Related Pages)
- * Choose to also purge the Homepage, Shop page, Category/Tag/Term archives, and Author archives related to the item you just purged.
- * You can enable "Related purge" when you manually purge a URL, and/or when WordPress auto-purges on content updates.
- * After a purge, the plugin can immediately preload those related URLs so they’re ready in cache again.
- * Posts purge their categories/tags; Products purge their product categories (and Shop Page); custom post types purge their custom taxonomies—all de-duplicated & normalized.
-* Major: Performance Optimization on disk I/O for large sites
-* UI/UX improvements: toast notifications, numerous polish updates and bug fixes, security updates, plus a new header animation that represents NPP.
+* Major: Introduces Purge Scope (Related Pages) (Credit: @pasqualerussi)
+ * Choose to always purge the Homepage, Shop page, Category archives, related to the item you just purged.
+ * You can enable "Related Purge" when you manually purge a URL, and/or when WordPress auto-purges on content updates.
+ * After a purge, also the plugin can immediately Preload those related URLs so they’re ready in cache again.
+* Major: Introduced Setup Wizard for first-time configuration. (Credit: @frallard)
+ * Added Assume-Nginx Mode for cases where Nginx detection fails or nginx.conf is inaccessible (e.g., behind proxies, in containers, or on Plesk/cPanel).
+ * Automatic disable of Assume-Nginx when real nginx.conf detected.
+ * Improved Nginx detection via HTTP headers and system signals.
+* Major: Optimized disk I/O performance for large sites.
+* UI/UX improvements: Toast notifications
+* Optimized Elementor and Gutenberg compatibility on Auto Purge.
+* Numerous polish updates and bug fixes, security updates, plus a new header animation that represents NPP.
 
 = 2.1.3 =
 
