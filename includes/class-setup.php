@@ -2,7 +2,7 @@
 /**
  * Setup controller for FastCGI Cache Purge and Preload for Nginx
  * Description: Handles activation redirect, gates Settings until Nginx is detected or Assume-Nginx is enabled, renders the hidden Setup admin page.
- * Version: 2.1.4
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -484,36 +484,67 @@ services:
         if (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX) {
             // still try to persist to file so future requests have it early.
         }
-        if (! function_exists('request_filesystem_credentials')) {
-            require_once ABSPATH . 'wp-admin/includes/file.php';
+
+        $wp_filesystem = nppp_initialize_wp_filesystem();
+        if ($wp_filesystem === false) {
+            nppp_display_admin_notice(
+                'error',
+                __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+            );
+            return;
         }
-        $creds = request_filesystem_credentials('', '', false, false, []);
-        if (! WP_Filesystem($creds)) return;
-        global $wp_filesystem;
 
         $wp_config_path = self::nppp_locate_wp_config_path();
-        if (! $wp_config_path || ! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
+        if (! $wp_config_path) return;
+
+        if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
+            if (!function_exists('WP_Filesystem')) {
+                require_once ABSPATH . 'wp-admin/includes/file.php';
+            }
+            $creds = request_filesystem_credentials(admin_url(''), '', false, dirname($wp_config_path), null);
+            if ($creds && WP_Filesystem($creds)) {
+                global $wp_filesystem;
+            }
+        }
+
+        // Re-check after the JIT re-init
+        if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
             return;
         }
 
         $contents = $wp_filesystem->get_contents($wp_config_path);
-        if (! $contents || strpos($contents, 'NPPP_ASSUME_NGINX') !== false) {
-            return;
-        }
+        if (! $contents) return;
+
+        $has_active_define = preg_match("/^[ \t]*define\(\s*['\"]NPPP_ASSUME_NGINX['\"]\s*,\s*true\s*\)\s*;/mi", $contents);
+        if ($has_active_define) return;
 
         $define_line = "define('NPPP_ASSUME_NGINX', true);\n";
+        $pos = strpos($contents, "That's all, stop editing!");
 
-        // Insert before "That's all, stop editing!"
-        $marker = "That's all, stop editing!";
-        $pos = strpos($contents, $marker);
+        // If not found (localized files), try the require line:
+        if ($pos === false) {
+            $reqPattern = "/require_once\s*\(\s*ABSPATH\s*\.\s*['\"]wp-settings\.php['\"]\s*\)\s*;\s*/mi";
+            if (preg_match($reqPattern, $contents, $m, PREG_OFFSET_CAPTURE)) {
+                $pos = $m[0][1];
+            }
+        }
 
+        // If still not found, safest is to prepend (so it runs before includes)
         if ($pos !== false) {
             $contents = substr_replace($contents, $define_line, $pos, 0);
         } else {
-            $contents .= "\n" . $define_line;
+            if (preg_match('/\A(\xEF\xBB\xBF)?<\?php(?:\s*declare\s*\([^)]*\)\s*;\s*)?/i', $contents, $m)) {
+                $insert_at = strlen($m[0]);
+                $contents  = substr_replace($contents, $define_line, $insert_at, 0);
+            } else {
+                $contents = "<?php\n" . $define_line . $contents;
+            }
         }
 
         $wp_filesystem->put_contents($wp_config_path, $contents, FS_CHMOD_FILE);
+        if (function_exists('opcache_invalidate')) {
+            @opcache_invalidate($wp_config_path, true);
+        }
     }
 
     private static function nppp_locate_wp_config_path(): ?string {
@@ -575,15 +606,31 @@ services:
 
     // Remove define('NPPP_ASSUME_NGINX', true); from wp-config.php
     private static function nppp_try_remove_wp_config_define(): void {
-        if (! function_exists('request_filesystem_credentials')) {
-            require_once ABSPATH . 'wp-admin/includes/file.php';
+        $wp_filesystem = nppp_initialize_wp_filesystem();
+        if ($wp_filesystem === false) {
+            nppp_display_admin_notice(
+                'error',
+                __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+            );
+            return;
         }
-        $creds = request_filesystem_credentials('', '', false, false, []);
-        if (! WP_Filesystem($creds)) return;
-        global $wp_filesystem;
 
         $wp_config_path = self::nppp_locate_wp_config_path();
-        if (! $wp_config_path || ! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
+        if (! $wp_config_path) return;
+
+        // If not writable, JIT re-init with a context
+        if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
+            if (!function_exists('WP_Filesystem')) {
+                require_once ABSPATH . 'wp-admin/includes/file.php';
+            }
+            $creds = request_filesystem_credentials(admin_url(''), '', false, dirname($wp_config_path), null);
+            if ($creds && WP_Filesystem($creds)) {
+                global $wp_filesystem;
+            }
+        }
+
+        // Re-check
+        if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
             return;
         }
 
@@ -591,11 +638,14 @@ services:
         if (! $contents) return;
 
         // Match lines that define NPPP_ASSUME_NGINX as true
-        $pattern = "/^[ \\t]*define\\([\\\"']NPPP_ASSUME_NGINX[\\\"'][ \\t]*,[ \\t]*true[ \\t]*\\);[ \\t]*\r?\n?/mi";
+        $pattern = "/^[ \t]*define\(\s*['\"]NPPP_ASSUME_NGINX['\"]\s*,\s*true\s*\)\s*;[^\r\n]*\r?\n?/mi";
         $new = preg_replace($pattern, '', $contents);
 
         if ($new !== null && $new !== $contents) {
             $wp_filesystem->put_contents($wp_config_path, $new, FS_CHMOD_FILE);
+            if (function_exists('opcache_invalidate')) {
+                @opcache_invalidate($wp_config_path, true);
+            }
         }
     }
 
