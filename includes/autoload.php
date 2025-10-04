@@ -2,7 +2,7 @@
 /**
  * Lightweight autoloader for NPPP\
  * Description: Tries classmap; WordPress-style files; falls back to PSR-4; supports APCu path caching.
- * Version: 2.1.4
+ * Version: 2.1.3
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -18,7 +18,7 @@ if ( ! defined('ABSPATH') ) {
 if (!isset($GLOBALS['NPPP_AUTOLOADER_REGISTERED'])) {
     $GLOBALS['NPPP_AUTOLOADER_REGISTERED'] = true;
 
-    spl_autoload_register(static function (string $class): bool {
+    $loader = static function (string $class): bool {
         $prefix  = 'NPPP\\';
         $baseDir = __DIR__ . '/';
 
@@ -84,5 +84,12 @@ if (!isset($GLOBALS['NPPP_AUTOLOADER_REGISTERED'])) {
         }
 
         return false;
-    }, false, true);
+    };
+
+    // PHP 8.4+
+    if (PHP_VERSION_ID >= 80400) {
+        spl_autoload_register($loader, prepend: true);
+    } else {
+        spl_autoload_register($loader, true, true);
+    }
 }
