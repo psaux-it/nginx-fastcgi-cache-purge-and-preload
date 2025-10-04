@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2025-10-03T22:48:13+00:00\n"
+"POT-Creation-Date: 2025-10-04T19:34:42+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: fastcgi-cache-purge-and-preload-nginx\n"
@@ -330,77 +330,77 @@ msgstr ""
 msgid "Cache is empty. Click <strong>Preload All</strong> to warm Nginx cache first and try again."
 msgstr ""
 
-#: includes/class-setup.php:70
-#: includes/class-setup.php:71
+#: includes/class-setup.php:75
+#: includes/class-setup.php:76
 msgid "NPP • Need Nginx Setup"
 msgstr ""
 
-#: includes/class-setup.php:79
-#: includes/class-setup.php:354
+#: includes/class-setup.php:87
+#: includes/class-setup.php:363
 msgid "Insufficient permissions."
 msgstr ""
 
-#: includes/class-setup.php:107
+#: includes/class-setup.php:115
 msgid "NPP • Setup Completed"
 msgstr ""
 
-#: includes/class-setup.php:108
+#: includes/class-setup.php:116
 msgid "NPP • Complete Setup"
 msgstr ""
 
-#: includes/class-setup.php:115
+#: includes/class-setup.php:124
 msgid "NPP logo"
 msgstr ""
 
-#: includes/class-setup.php:136
+#: includes/class-setup.php:145
 msgid "Nginx detected. You’re all set — continue to Settings."
 msgstr ""
 
-#: includes/class-setup.php:142
+#: includes/class-setup.php:151
 msgid "Assume-Nginx mode was disabled automatically."
 msgstr ""
 
-#: includes/class-setup.php:149
+#: includes/class-setup.php:158
 msgid "Assume-Nginx mode is enabled. You can proceed to Settings. If you later bind the real nginx.conf, this mode will be disabled automatically."
 msgstr ""
 
-#: includes/class-setup.php:153
+#: includes/class-setup.php:162
 msgid "Nginx likely detected (via headers/server signature), but the real nginx.conf is not visible. Bind your real nginx.conf (recommended) or enable Assume-Nginx mode to proceed."
 msgstr ""
 
-#: includes/class-setup.php:157
+#: includes/class-setup.php:166
 msgid "Nginx was not detected. This can be a false positive in proxy, Docker, or chrooted environments."
 msgstr ""
 
-#: includes/class-setup.php:163
+#: includes/class-setup.php:172
 msgid "Why am I seeing this page?"
 msgstr ""
 
-#: includes/class-setup.php:165
+#: includes/class-setup.php:174
 msgid "We couldn’t reliably confirm Nginx from within WordPress. This often happens when your site runs behind a proxy (Cloudflare, CDN, load balancer), in containers/VMs, in chroot/jail setups, on Plesk or cPanel, or when nginx.conf is not found."
 msgstr ""
 
-#: includes/class-setup.php:170
+#: includes/class-setup.php:179
 msgid "NPP does not directly interact with Nginx. For informational metrics (especially the Status tab), it only reads nginx.conf (read-only)."
 msgstr ""
 
-#: includes/class-setup.php:183
+#: includes/class-setup.php:192
 msgid "Recommended: Bind your live nginx.conf"
 msgstr ""
 
-#: includes/class-setup.php:186
+#: includes/class-setup.php:195
 msgid "For maximum accuracy, bind-mount or sync your actual nginx.conf into the WordPress environment at"
 msgstr ""
 
-#: includes/class-setup.php:191
+#: includes/class-setup.php:200
 msgid "This makes the plugin fully functional and lets it parse live cache paths, users, and keys."
 msgstr ""
 
-#: includes/class-setup.php:198
+#: includes/class-setup.php:207
 msgid "Example (Docker / compose)"
 msgstr ""
 
-#: includes/class-setup.php:201
+#: includes/class-setup.php:210
 msgid ""
 "# docker-compose.yml\n"
 "services:\n"
@@ -409,85 +409,85 @@ msgid ""
 "      - /host/etc/nginx/nginx.conf:/etc/nginx/nginx.conf:ro"
 msgstr ""
 
-#: includes/class-setup.php:213
+#: includes/class-setup.php:222
 msgid "Once mounted, reload this page — detection should pass automatically."
 msgstr ""
 
-#: includes/class-setup.php:220
+#: includes/class-setup.php:229
 msgid "Quick Enable: Assume-Nginx Mode"
 msgstr ""
 
-#: includes/class-setup.php:223
+#: includes/class-setup.php:232
 msgid "Turn on Assume-Nginx mode to enable all plugin features immediately in non-standard or opaque environments."
 msgstr ""
 
-#: includes/class-setup.php:228
+#: includes/class-setup.php:237
 msgid "This sets a runtime option; you can also persist it to wp-config.php for extra safety."
 msgstr ""
 
-#: includes/class-setup.php:241
+#: includes/class-setup.php:250
 msgid "Enable Assume-Nginx Mode"
 msgstr ""
 
-#: includes/class-setup.php:245
+#: includes/class-setup.php:254
 msgid "Also write define('NPPP_ASSUME_NGINX', true) to wp-config.php"
 msgstr ""
 
-#: includes/class-setup.php:249
+#: includes/class-setup.php:258
 msgid "Tip: Persisting to wp-config.php avoids surprises if options are reset."
 msgstr ""
 
-#: includes/class-setup.php:253
+#: includes/class-setup.php:262
 msgid "Assume-Nginx mode is already enabled or Nginx is detected."
 msgstr ""
 
-#: includes/class-setup.php:262
+#: includes/class-setup.php:271
 msgid "Go to Settings"
 msgstr ""
 
-#: includes/class-setup.php:275
+#: includes/class-setup.php:284
 msgid "Detection Status"
 msgstr ""
 
-#: includes/class-setup.php:283
+#: includes/class-setup.php:292
 msgid "Dummy nginx.conf (fallback)"
 msgstr ""
 
-#: includes/class-setup.php:286
+#: includes/class-setup.php:295
 msgid "Used only when Assume-Nginx mode is enabled and the real nginx.conf is not found."
 msgstr ""
 
-#: includes/class-setup.php:292
+#: includes/class-setup.php:301
 msgid "Hide dummy nginx.conf"
 msgstr ""
 
-#: includes/class-setup.php:292
+#: includes/class-setup.php:301
 msgid "Show dummy nginx.conf"
 msgstr ""
 
-#: includes/class-setup.php:320
+#: includes/class-setup.php:329
 msgid "nginx.conf detected (strict):"
 msgstr ""
 
-#: includes/class-setup.php:321
-#: includes/class-setup.php:326
+#: includes/class-setup.php:330
+#: includes/class-setup.php:335
 msgid "Yes"
 msgstr ""
 
-#: includes/class-setup.php:322
-#: includes/class-setup.php:327
+#: includes/class-setup.php:331
+#: includes/class-setup.php:336
 msgid "No"
 msgstr ""
 
-#: includes/class-setup.php:325
+#: includes/class-setup.php:334
 msgid "Signals suggest Nginx:"
 msgstr ""
 
-#: includes/class-setup.php:330
+#: includes/class-setup.php:339
 msgid "Assume-Nginx Mode:"
 msgstr ""
 
-#: includes/class-setup.php:331
+#: includes/class-setup.php:340
 #: includes/dashboard-widget.php:214
 #: includes/dashboard-widget.php:219
 #: includes/dashboard-widget.php:224
@@ -502,7 +502,7 @@ msgstr ""
 msgid "Enabled"
 msgstr ""
 
-#: includes/class-setup.php:332
+#: includes/class-setup.php:341
 #: includes/dashboard-widget.php:214
 #: includes/dashboard-widget.php:219
 #: includes/dashboard-widget.php:224
@@ -514,30 +514,28 @@ msgstr ""
 msgid "Disabled"
 msgstr ""
 
-#: includes/class-setup.php:337
+#: includes/class-setup.php:346
 msgid "Server signature (SERVER_SOFTWARE)"
 msgstr ""
 
-#: includes/class-setup.php:338
+#: includes/class-setup.php:347
 msgid "HTTP headers (server / PHP hints)"
 msgstr ""
 
-#: includes/class-setup.php:339
+#: includes/class-setup.php:348
 msgid "nginx.conf found at standard paths"
 msgstr ""
 
-#: includes/class-setup.php:342
+#: includes/class-setup.php:351
 msgid "Signals checked:"
 msgstr ""
 
-#: includes/class-setup.php:346
+#: includes/class-setup.php:355
 msgid "If your stack uses a proxy/CDN or containers, direct detection can fail even though Nginx is actually in front. Use the Recommended or Quick Enable options on the left."
 msgstr ""
 
-#: includes/class-setup.php:553
-msgid "SUCCESS ADMIN: Nginx was detected. Assume-Nginx mode has been disabled automatically."
-msgstr ""
-
+#: includes/class-setup.php:492
+#: includes/class-setup.php:613
 #: includes/configuration-parser.php:239
 #: includes/configuration-parser.php:398
 #: includes/configuration-parser.php:746
@@ -574,6 +572,10 @@ msgstr ""
 #: includes/wp-filesystem.php:261
 #: includes/wp-filesystem.php:302
 msgid "Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page."
+msgstr ""
+
+#: includes/class-setup.php:593
+msgid "SUCCESS ADMIN: Nginx was detected. Assume-Nginx mode has been disabled automatically."
 msgstr ""
 
 #: includes/configuration-parser.php:419
