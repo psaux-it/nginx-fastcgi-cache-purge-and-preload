@@ -103,7 +103,7 @@ function nppp_nginx_cache_settings_page() {
     }
 
     ?>
-    <div class="wrap">
+    <div id="nppp-admin" class="wrap">
         <div id="nppp-loader-overlay" aria-live="assertive" aria-busy="true">
             <div class="nppp-spinner-container">
                 <div class="nppp-loader"></div>
