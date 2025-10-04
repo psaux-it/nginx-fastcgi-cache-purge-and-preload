@@ -1,11 +1,11 @@
 === Nginx Cache Purge Preload ===
 Contributors: psauxit
-Donate link: https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/
+Donate link: https://github.com/sponsors/psaux-it
 Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.3
 Requires PHP: 7.4
 Tested up to: 6.8
-Stable tag: 2.1.3
+Stable tag: 2.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -35,6 +35,7 @@ Unlike other solutions that depend on Nginx modules, **NPP** directly manages ca
 ➡️ **For detailed integration steps and guidance:**
 
 • Visit the [NPP Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
+• Visit the [safexec Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec)
 • Explore [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) for easy deployments and developing NPP locally.
 • Refer to the **FAQ** or the plugin’s **Help tab** for further instructions.
 
@@ -176,6 +177,27 @@ Yes, please refer to the plugin settings **Help** tab.
 8. Front-end Admin Bar
 
 == Changelog ==
+
+= 2.1.4 =
+
+Release date: 2025-10-04
+
+* Major: Introduces Nginx Cache Analyzer
+ * The Advanced tab is now a unified cache dashboard that makes cache status obvious and actionable.
+ * See one clean list that combines URLs from your last preload and what’s currently in the cache—HITs and MISSes together.
+ * Treat it like a "site crawl snapshot": You can quickly review and analyze your whole actual Nginx Cache (HIT/MISS) and take action in one window.
+ * Instantly spot pages that aren’t cached (MISS) and Preload them right away (or purge specific URLs) to keep performance sharp.
+* Major: Introduces safexec (privilege-dropping wrapper)
+ * Hardened backend for NPP (written in C) to safely run PHP's shell_exec() commands safetly. (Check Plugin Help tab)
+ * Drops privileges (nobody) and scrubs the environment; also normalizes URLs during Preload to avoid encoding-based cache misses.
+ * Recommended for all users concerned about shell_exec usage in NPP.
+* Major: Introduces Purge Scope (Related Pages)
+ * Choose to also purge the Homepage, Shop page, Category/Tag/Term archives, and Author archives related to the item you just purged.
+ * You can enable "Related purge" when you manually purge a URL, and/or when WordPress auto-purges on content updates.
+ * After a purge, the plugin can immediately preload those related URLs so they’re ready in cache again.
+ * Posts purge their categories/tags; Products purge their product categories (and Shop Page); custom post types purge their custom taxonomies—all de-duplicated & normalized.
+* Major: Performance Optimization on disk I/O for large sites
+* UI/UX improvements: toast notifications, numerous polish updates and bug fixes, security updates, plus a new header animation that represents NPP.
 
 = 2.1.3 =
 
