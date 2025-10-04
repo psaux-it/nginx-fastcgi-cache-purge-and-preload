@@ -3626,3 +3626,14 @@ body.has-sticky-submit .nppp-scrollfab{
     color: dodgerblue !important;
     text-decoration: none !important;
 }
+
+#nppp-admin p.description,
+#nppp-admin .description {
+    color:#646970;
+    font-size:14px;
+    font-weight:400;
+    line-height:1.5;
+    display:block;
+    margin:2px 0 5px;
+    font-style:normal;
+}
