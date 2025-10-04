@@ -19,15 +19,15 @@ Download the package and install with `apt`:
 
 ```bash
 # Download checksums
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/SHA256SUMS
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
 
 # For x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/safexec_1.9.2-1_amd64.deb
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.2-1_amd64.deb
 sha256sum -c SHA256SUMS --ignore-missing
 sudo apt install ./safexec_1.9.2-1_amd64.deb
 
 # For AArch64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/safexec_1.9.2-1_arm64.deb
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.2-1_arm64.deb
 sha256sum -c SHA256SUMS --ignore-missing
 sudo apt install ./safexec_1.9.2-1_arm64.deb
 ```
@@ -38,15 +38,15 @@ Download the package and install with `dnf`:
 
 ```bash
 # Download checksums
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/SHA256SUMS
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
 
 # For x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/safexec-1.9.2-1.el10.x86_64.rpm
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.2-1.el10.x86_64.rpm
 sha256sum -c SHA256SUMS --ignore-missing
 sudo dnf install ./safexec-1.9.2-1.el10.x86_64.rpm
 
 # For AArch64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.3/safexec-1.9.2-1.el10.aarch64.rpm
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.2-1.el10.aarch64.rpm
 sha256sum -c SHA256SUMS --ignore-missing
 sudo dnf install ./safexec-1.9.2-1.el10.aarch64.rpm
 ```
