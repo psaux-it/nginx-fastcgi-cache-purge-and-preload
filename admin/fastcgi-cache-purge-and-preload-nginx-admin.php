@@ -1,7 +1,7 @@
 <?php
 /*
  * Load NPP
- * Version:           2.1.3
+ * Version:           2.1.4
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
  * License:           GPL-2.0+
@@ -19,12 +19,99 @@ if (! defined('NGINX_CACHE_LOG_FILE')) {
 
 // Define a constant for the desktop user agent
 if (!defined('NPPP_USER_AGENT')) {
-    define('NPPP_USER_AGENT', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36');
+    define('NPPP_USER_AGENT', 'NPP/2.1.4 (NginxCacheWarm; device=desktop; Desktop)');
 }
 
 // Define a constant for the mobile user agent
 if (!defined('NPPP_USER_AGENT_MOBILE')) {
-    define('NPPP_USER_AGENT_MOBILE', 'Mozilla/5.0 (Linux; Android 15; SM-G960U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.81 Mobile Safari/537.36');
+    define('NPPP_USER_AGENT_MOBILE', 'NPP/2.1.4 (NginxCacheWarm; device=mobile; Mobile)');
+}
+
+// Define a header constant for mimic real browser request
+if (!defined('NPPP_HEADER_ACCEPT')) {
+    define('NPPP_HEADER_ACCEPT', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,' . '*' . '/' . '*;q=0.8');
+}
+
+// Prepare PATH and SAFEXEC related env
+function nppp_prepare_request_env(bool $force = false): void {
+    static $done = false;
+
+    // allow re-run when forced
+    if ($done && !$force) {
+        return;
+    }
+
+    if (!function_exists('getenv') || !function_exists('putenv')) {
+        $done = true;
+        return;
+    }
+
+    // register the shutdown restore ONCE
+    if (empty($GLOBALS['NPPP__RESTORE_REGISTERED'])) {
+        register_shutdown_function(static function () {
+            // PATH
+            if (array_key_exists('NPPP__ORIG_PATH', $GLOBALS)) {
+                $orig = $GLOBALS['NPPP__ORIG_PATH'];
+                if ($orig === null) putenv('PATH'); else putenv("PATH={$orig}");
+            }
+
+            // Always unset safexec related envs
+            putenv('SAFEXEC_QUIET');
+            putenv('SAFEXEC_PCTNORM');
+            putenv('SAFEXEC_PCTNORM_CASE');
+            putenv('SAFEXEC_DETACH');
+        });
+        $GLOBALS['NPPP__RESTORE_REGISTERED'] = true;
+    }
+
+    // PATH
+    $need = ['/usr/local/sbin','/usr/local/bin','/usr/sbin','/usr/bin','/sbin','/bin'];
+    $orig_path = getenv('PATH');
+    $parts = $orig_path ? array_filter(explode(':', (string)$orig_path), fn($p) => $p !== '' && $p !== '.') : [];
+    $merged = array_values(array_unique(array_merge($need, $parts)));
+    $new_path = implode(':', $merged);
+
+    // Save only once so $force runs don't clobber the true original
+    if (!array_key_exists('NPPP__ORIG_PATH', $GLOBALS)) {
+        $GLOBALS['NPPP__ORIG_PATH'] = ($orig_path === false) ? null : $orig_path;
+    }
+
+    if ($new_path !== $orig_path) {
+        putenv("PATH={$new_path}");
+    }
+
+    // Always quiet safexec
+    putenv('SAFEXEC_QUIET=1');
+
+    // safexec mode (off|upper|lower|preserve)
+    $opts = get_option('nginx_cache_settings', []);
+    $mode = isset($opts['nginx_cache_pctnorm_mode']) ? strtolower((string)$opts['nginx_cache_pctnorm_mode']) : 'off';
+    if (!in_array($mode, ['off','upper','lower','preserve'], true)) $mode = 'off';
+
+    switch ($mode) {
+        case 'upper':
+            putenv('SAFEXEC_PCTNORM=1');
+            putenv('SAFEXEC_PCTNORM_CASE=upper');
+            break;
+        case 'lower':
+            putenv('SAFEXEC_PCTNORM=1');
+            putenv('SAFEXEC_PCTNORM_CASE=lower');
+            break;
+        case 'preserve':
+            putenv('SAFEXEC_PCTNORM=1');
+            putenv('SAFEXEC_PCTNORM_CASE=off');
+            break;
+        case 'off':
+        default:
+            putenv('SAFEXEC_PCTNORM=0');
+            putenv('SAFEXEC_PCTNORM_CASE');
+            break;
+    }
+
+    // Detach behavior for this request
+    putenv('SAFEXEC_DETACH=auto');
+
+    $done = true;
 }
 
 // Include plugin files
@@ -35,6 +122,7 @@ require_once dirname(__DIR__) . '/includes/admin-bar.php';
 require_once dirname(__DIR__) . '/includes/log.php';
 require_once dirname(__DIR__) . '/includes/svg.php';
 require_once dirname(__DIR__) . '/includes/settings.php';
+require_once dirname(__DIR__) . '/includes/related.php';
 require_once dirname(__DIR__) . '/includes/purge.php';
 require_once dirname(__DIR__) . '/includes/preload.php';
 require_once dirname(__DIR__) . '/includes/help.php';
@@ -47,6 +135,8 @@ require_once dirname(__DIR__) . '/includes/rest-api-helper.php';
 require_once dirname(__DIR__) . '/includes/plugin-tracking.php';
 require_once dirname(__DIR__) . '/includes/update.php';
 require_once dirname(__DIR__) . '/includes/dashboard-widget.php';
+require_once dirname(__DIR__) . '/includes/compat-elementor.php';
+require_once dirname(__DIR__) . '/includes/compat-gutenberg.php';
 
 // Get the status of Auto Purge option
 $options = get_option('nginx_cache_settings');
@@ -66,7 +156,6 @@ $page_cache_purge_actions = array(
 );
 
 // Add actions and filters
-add_action('init', 'nppp_load_i18n');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_check_for_plugin_update');
 add_action('admin_enqueue_scripts', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets');
@@ -116,6 +205,9 @@ add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_p
 add_action('npp_plugin_tracking_event', 'nppp_plugin_tracking', 10, 1);
 add_action('wp_dashboard_setup', 'nppp_add_dashboard_widget');
 add_action('wp_ajax_nppp_update_enable_proxy_option', 'nppp_update_enable_proxy_option');
+add_action('wp_ajax_nppp_update_related_fields', 'nppp_update_related_fields');
+add_action('wp_ajax_nppp_locate_cache_file', 'nppp_locate_cache_file_ajax');
+add_action('wp_ajax_nppp_update_pctnorm_mode', 'nppp_update_pctnorm_mode');
 $nppp_auto_purge
     ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions)
     : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions);

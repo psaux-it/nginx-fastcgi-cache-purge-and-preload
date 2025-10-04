@@ -2,7 +2,7 @@
 /**
  * Advanced table for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains advanced table functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -14,6 +14,269 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+/* =========================
+   Helpers for URL handling
+   ========================= */
+
+/**
+ * Human display form: decode %XX only in the PATH (segment-by-segment).
+ * Query remains as-is (encoded). No fragments.
+ */
+function nppp_display_human_url( $url, $force_scheme = null ) {
+    $p = wp_parse_url( $url );
+    if ( ! $p || empty( $p['host'] ) ) {
+        return $url;
+    }
+
+    $scheme = $force_scheme ?: ( isset($p['scheme']) ? $p['scheme'] : ( wp_is_using_https() ? 'https' : 'http' ) );
+    $host   = $p['host'];
+
+    $path = isset( $p['path'] ) ? $p['path'] : '/';
+    $segments = explode( '/', $path );
+    foreach ( $segments as &$seg ) {
+        $seg = rawurldecode( $seg );
+    }
+    $decoded_path = implode( '/', $segments );
+    if ( $decoded_path === '' ) {
+        $decoded_path = '/';
+    }
+
+    $query = ( isset( $p['query'] ) && $p['query'] !== '' ) ? '?' . $p['query'] : '';
+
+    return $scheme . '://' . $host . $decoded_path . $query;
+}
+
+/**
+ * Matching key that ignores encoding differences:
+ * - scheme normalized to current site scheme
+ * - host lowercased
+ * - path & query decoded
+ */
+function nppp_url_match_key( $url ) {
+    $p = wp_parse_url( $url );
+    if ( ! $p || empty( $p['host'] ) ) {
+        return strtolower( (string) $url );
+    }
+    $scheme = wp_is_using_https() ? 'https' : 'http';
+    $host   = strtolower( $p['host'] );
+    $path   = isset($p['path']) ? rawurldecode($p['path']) : '/';
+    $query  = isset($p['query']) ? rawurldecode($p['query']) : '';
+    return $scheme . '|' . $host . '|' . $path . '|' . $query;
+}
+
+// Is preload running
+function nppp_is_preload_running( $wp_filesystem ) {
+    $this_script_path = dirname( plugin_dir_path( __FILE__ ) );
+    $PIDFILE = rtrim( $this_script_path, '/' ) . '/cache_preload.pid';
+
+    if ( ! $wp_filesystem->exists( $PIDFILE ) ) {
+        return false;
+    }
+
+    $pid = intval( nppp_perform_file_operation( $PIDFILE, 'read' ) );
+    return ( $pid > 0 && nppp_is_process_alive( $pid ) );
+}
+
+/**
+ * Make any reject pattern safe for preg_match:
+ * - If it's already delimited properly (like ~...~ or #...#), keep it.
+ * - Otherwise, wrap it with ~ ... ~ so literal "/" inside doesn’t need escaping.
+ * - Always trims surrounding whitespace and trailing semicolons (from file parses).
+ */
+function nppp_compile_regex_delimiter_safe( $pattern ) {
+    $pattern = trim( (string) $pattern );
+    if ( $pattern === '' ) { return ''; }
+
+    // Strip a trailing semicolon if present (e.g., from PHP-like config files).
+    if ( substr($pattern, -1) === ';' ) {
+        $pattern = rtrim($pattern, ';');
+    }
+
+    // If looks like a delimited regex already: first == last and is a non-alnum
+    $first = substr($pattern, 0, 1);
+    $last  = substr($pattern, -1);
+    if ( $first === $last && !ctype_alnum($first) && $first !== '\\' ) {
+        // Already delimited. Just return as-is.
+        return $pattern;
+    }
+
+    // Not delimited → wrap with "~ ... ~" and escape any "~" inside
+    $body = str_replace('~', '\~', $pattern);
+
+    // Add 'i' for case-insensitive matches (URLs are case-insensitive in host/path typically)
+    return '~' . $body . '~i';
+}
+
+// Returns true if the wget log contains a FINISHED marker
+function nppp_wget_log_is_complete( $contents ) {
+    return (bool) preg_match('~^FINISHED\s+--\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}--~m', (string) $contents);
+}
+
+/** Plugin root */
+function nppp_get_plugin_root_path() {
+    return rtrim( dirname( plugin_dir_path( __FILE__ ) ), '/' );
+}
+
+/* ==========================================
+   Parse nppp-wget.log → MISS candidates map
+   ========================================== */
+
+function nppp_parse_wget_log_urls( $wp_filesystem ) {
+    $static_key_base = 'nppp';
+    $transient_key   = 'nppp_wget_urls_cache_' . md5( $static_key_base );
+
+    $plugin_root = nppp_get_plugin_root_path();
+    $log_path    = $plugin_root . '/nppp-wget.log';
+
+    // Detect live crawl
+    $preload_running = nppp_is_preload_running( $wp_filesystem );
+
+    // If preload running always get fresh crawl data
+    if ( $preload_running ) {
+        delete_transient( $transient_key );
+    } else {
+        $cached = get_transient( $transient_key );
+        if ( $cached !== false && is_array( $cached ) ) {
+            return $cached;
+        }
+    }
+
+    $urls = [];
+
+    if ( ! $wp_filesystem->exists( $log_path ) ) {
+        if ( ! $preload_running ) {
+            set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
+        }
+        return $urls;
+    }
+
+    $contents = $wp_filesystem->get_contents( $log_path );
+    if ( $contents === false || $contents === '' ) {
+        if ( ! $preload_running ) {
+            set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
+        }
+        return $urls;
+    }
+
+    // If preload is NOT running and log has NO FINISHED marker,
+    // we consider it an aborted/partial crawl → do NOT trust it.
+    if ( ! $preload_running && ! nppp_wget_log_is_complete( $contents ) ) {
+        delete_transient( $transient_key );
+        return $urls;
+    }
+
+    $site_host = wp_parse_url( get_site_url(), PHP_URL_HOST );
+    if ( empty( $site_host ) ) {
+        if ( ! $preload_running ) {
+            set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
+        }
+        return $urls;
+    }
+
+    // Load reject regex (DB override or default file), then compile safely
+    $settings      = get_option('nginx_cache_settings');
+    $reject_raw    = isset($settings['nginx_cache_reject_regex'])
+        ? $settings['nginx_cache_reject_regex']
+        : nppp_fetch_default_reject_regex();
+    $reject_regex  = nppp_compile_regex_delimiter_safe( $reject_raw );
+
+    // Regex
+    $line_regex = '~^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+URL:(\S+)~m';
+
+    if ( preg_match_all( $line_regex, $contents, $matches, PREG_SET_ORDER ) ) {
+        foreach ( $matches as $m ) {
+            $ts  = trim( $m[1] );
+            $raw = trim( $m[2] );
+
+            // Same-host only
+            $host = wp_parse_url( $raw, PHP_URL_HOST );
+            if ( ! $host || strcasecmp( $host, $site_host ) !== 0 ) {
+                continue;
+            }
+
+            // Apply reject pattern (if valid/compiled)
+            if ( $reject_regex !== '' && @preg_match( $reject_regex, $raw ) ) {
+                continue;
+            }
+
+            // Preload must keep the exact logged URL
+            $preload_url = $raw;
+            if ( filter_var( $preload_url, FILTER_VALIDATE_URL ) === false ) { continue; }
+
+            // Human-friendly display: decode PATH only
+            $display_url = nppp_display_human_url( $raw );
+
+            // Category for table
+            $category = nppp_categorize_url( $display_url );
+
+            // De-dupe by match key (encoding-insensitive)
+            $key = nppp_url_match_key( $raw );
+            if ( ! isset( $urls[ $key ] ) ) {
+                $urls[ $key ] = [
+                    'url'         => $display_url,
+                    'url_encoded' => $preload_url,
+                    'category'    => $category,
+                    'log_date'    => $ts,
+                ];
+            }
+        }
+    }
+
+    // Only persist when NOT running (stable snapshot)
+    if ( ! $preload_running ) {
+        set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
+    }
+
+    return $urls;
+}
+
+/* =====================================================
+   Merge HITs (cache scan) with MISSes (wget log result)
+   ===================================================== */
+
+function nppp_merge_cached_and_wget( $cached_urls, $wp_filesystem ) {
+    $rows = [];
+
+    // Map HITs by encoding-insensitive key
+    $hit_map = [];
+    foreach ( (array) $cached_urls as $item ) {
+        if ( empty( $item['url'] ) && empty( $item['url_encoded'] ) ) { continue; }
+
+        // Prefer url_encoded for key; fall back to url
+        $key_src = !empty($item['url_encoded']) ? $item['url_encoded'] : $item['url'];
+        $k = nppp_url_match_key( $key_src );
+        $hit_map[ $k ] = true;
+
+        // Ensure human display (decoded path)
+        $display_url = nppp_display_human_url( $item['url'] );
+
+        $rows[] = [
+            'url'         => $display_url,
+            'url_encoded' => $item['url_encoded'],
+            'file_path'   => $item['file_path'],
+            'category'    => $item['category'],
+            'cache_date'  => $item['cache_date'],
+            'status'      => 'HIT',
+        ];
+    }
+
+    // Add MISSes from wget
+    $wget_map = nppp_parse_wget_log_urls( $wp_filesystem );
+    foreach ( $wget_map as $k => $item ) {
+        if ( isset( $hit_map[ $k ] ) ) { continue; }
+        $rows[] = [
+            'url'         => $item['url'],
+            'url_encoded' => $item['url_encoded'],
+            'file_path'   => '—',
+            'category'    => $item['category'],
+            'cache_date'  => isset($item['log_date']) ? $item['log_date'] : '—',
+            'status'      => 'MISS',
+        ];
+    }
+
+    return $rows;
+}
+
 // Generate HTML
 function nppp_premium_html($nginx_cache_path) {
     // initialize WP_Filesystem
@@ -21,7 +284,7 @@ function nppp_premium_html($nginx_cache_path) {
 
     if ($wp_filesystem === false) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
+                    <h2>&nbsp;' . esc_html__( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . esc_html__( 'ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1070)', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
@@ -32,7 +295,7 @@ function nppp_premium_html($nginx_cache_path) {
     // Handle case where option doesn't exist
     if (empty($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
+                    <h2>&nbsp;' . esc_html__( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . esc_html__( 'ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1071)', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
@@ -43,7 +306,7 @@ function nppp_premium_html($nginx_cache_path) {
     // Handle case where cache directory doesn't exist
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
+                    <h2>&nbsp;' . esc_html__( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . esc_html__( 'ERROR PATH: The specified Nginx cache path was not found. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
@@ -54,7 +317,7 @@ function nppp_premium_html($nginx_cache_path) {
     // Check if the directory and its contents are readable softly and recursive
     if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
+                    <h2>&nbsp;' . esc_html__( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . esc_html__( 'ERROR PERMISSION: Please ensure proper permissions are set for the Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
@@ -63,7 +326,7 @@ function nppp_premium_html($nginx_cache_path) {
 
     } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;' . __( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
+                    <h2>&nbsp;' . esc_html__( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . esc_html__( 'ERROR PERMISSION: Please ensure proper permissions are set for the Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
@@ -74,10 +337,12 @@ function nppp_premium_html($nginx_cache_path) {
     // Check FastCGI Cache Key
     $config_data = nppp_parse_nginx_cache_key();
 
-    // Get extracted URLs
+    // Get extracted URLs (HITs)
     $extractedUrls = nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path);
 
-    // Check for errors
+    $hits = [];
+
+    // Check for errors, no need to display missing URLs at that point
     if (isset($extractedUrls['error'])) {
         // Sanitize and allow specific HTML tags
         $error_message = wp_kses(
@@ -89,33 +354,73 @@ function nppp_premium_html($nginx_cache_path) {
 
         // Stop execution if no cached content is found due to an empty cache or cache key regex error.
         return '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <h2>&nbsp;' . __( 'Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
                         <span style="font-size: 14px;">' . $error_message . '</span>
                     </p>
                 </div>';
+    } else {
+        $hits = $extractedUrls;
     }
+
+    // Merge HIT + MISS
+    $mergedRows = nppp_merge_cached_and_wget($hits, $wp_filesystem);
 
     // Warn about cache keys not found
     if ($config_data === false) {
         echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
+                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: No <span style="color: #f0c36d;">_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
               </div>';
     // Warn about cache keys not found
     } elseif (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
         echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO CACHE KEY: No <span style="color: #f0c36d;">fastcgi_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
+                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: No <span style="color: #f0c36d;">_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
               </div>';
     // Warn about the unsupported cache keys
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
         echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO CACHE KEY: <span style="color: #f0c36d;">Unsupported</span> cache keys found!', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
+                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: <span style="color: #f0c36d;">Unsupported</span> cache key found!', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
               </div>';
+    }
+    // Warn about the aborted Preload All
+    $plugin_root      = nppp_get_plugin_root_path();
+    $log_path         = $plugin_root . '/nppp-wget.log';
+    $preload_running  = nppp_is_preload_running( $wp_filesystem );
+    $wget_notice_html = '';
+
+    if ( ! $preload_running && $wp_filesystem->exists( $log_path ) ) {
+        $log_contents = $wp_filesystem->get_contents( $log_path );
+        if ( $log_contents && ! nppp_wget_log_is_complete( $log_contents ) ) {
+            /* Translators: "MISS" is a cache status label. Keep the <strong> tags. */
+            $wget_msg = __(
+                '<strong>Preload All</strong> was interrupted before finishing. The <strong>full crawl snapshot is incomplete</strong>, so uncached (<strong>MISS</strong>) URLs are hidden. Run <strong>Preload All</strong> again to rebuild snapshot.',
+                'fastcgi-cache-purge-and-preload-nginx'
+            );
+            $wget_notice_html = '<div style="background-color:#f9edbe;border-left:6px solid #f0c36d;padding:10px;margin-bottom:15px;max-width:max-content;">
+                <p style="margin:0;display:flex;align-items:center;">
+                    <span class="dashicons dashicons-warning" style="font-size:22px;color:#ffba00;margin-right:8px;"></span>
+                    <span style="font-size:14px;">' .
+                        wp_kses( $wget_msg, array( 'strong' => array() ) ) .
+                    '</span>
+                </p>
+            </div>';
+        }
     }
 
     // Output the premium tab content
     ob_start();
+    ?>
+    <?php
+    // Aborted wget/preload notice (may be empty)
+    echo wp_kses(
+        $wget_notice_html,
+        array(
+            'div'    => array( 'style' => true, 'class' => true ),
+            'p'      => array( 'style' => true, 'class' => true ),
+            'span'   => array( 'style' => true, 'class' => true, 'aria-hidden' => true ),
+            'strong' => array(),
+        )
+    );
     ?>
     <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
         <p style="margin: 0; display: flex; align-items: center;">
@@ -129,30 +434,53 @@ function nppp_premium_html($nginx_cache_path) {
             <tr>
                 <th><?php esc_html_e( 'Cached URL', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Cache Path', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                <th><?php esc_html_e( 'Content Category', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                <th><?php esc_html_e( 'Cache Method', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Content', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Cache Date', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Action', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
             </tr>
         </thead>
         <tbody>
-            <?php if (empty($extractedUrls)) : ?>
-                <tr><td colspan="6">No cached content available yet. Consider Preload Cache now.</td></tr>
-            <?php else :
-                foreach ($extractedUrls as $urlData) : ?>
-                    <tr>
-                        <td><?php echo esc_html($urlData['url']); ?></td>
-                        <td><?php echo esc_html($urlData['file_path']); ?></td>
-                        <td><?php echo esc_html($urlData['category']); ?></td>
-                        <td>GET</td>
-                        <td><?php echo esc_html($urlData['cache_date']); ?></td>
-                        <td>
-                            <button class="nppp-purge-btn" data-file="<?php echo esc_attr($urlData['file_path']); ?>"><span class="dashicons dashicons-trash" style="font-size: 16px; margin: 0; padding: 0;"></span> <?php echo esc_html__( 'Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
-                            <button class="nppp-preload-btn" data-url="<?php echo esc_attr($urlData['url_encoded']); ?>"><span class="dashicons dashicons-update" style="font-size: 16px; margin: 0; padding: 0;"></span> <?php echo esc_html__( 'Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?></button>
-                        </td>
-                    </tr>
-                <?php endforeach;
-            endif; ?>
+        <?php if ( empty($mergedRows) ) : ?>
+            <tr><td colspan="6"><?php esc_html_e( 'No cacheable URLs found yet.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></td></tr>
+        <?php else :
+            foreach ( $mergedRows as $row ) :
+                $is_hit = ( $row['status'] === 'HIT' );
+                $status_text  = $is_hit ? 'HIT' : 'MISS';
+                $status_class = $is_hit ? 'is-hit' : 'is-miss';
+                ?>
+                <tr>
+                    <td class="nppp-url">
+                        <a href="<?php echo esc_url( !empty($row['url_encoded']) ? $row['url_encoded'] : $row['url'] ); ?>"
+                            target="_blank" rel="noopener">
+                            <?php echo esc_html( $row['url'] ); ?>
+                        </a>
+                    </td>
+                    <td class="nppp-cache-path"><?php echo esc_html( $row['file_path'] ); ?></td>
+                    <td><?php echo esc_html( $row['category'] ); ?></td>
+                    <td class="nppp-status <?php echo esc_attr($status_class); ?>">
+                        <strong><?php echo esc_html($status_text); ?></strong>
+                    </td>
+                    <td><?php echo esc_html( $row['cache_date'] ); ?></td>
+                    <td>
+                        <button type="button"
+                                class="nppp-purge-btn"
+                                <?php echo $is_hit ? '' : 'disabled aria-disabled="true" title="' . esc_attr__('Not cached yet', 'fastcgi-cache-purge-and-preload-nginx') . '"'; ?>
+                                data-file="<?php echo $is_hit ? esc_attr($row['file_path']) : ''; ?>">
+                            <span class="dashicons dashicons-trash" style="font-size:16px;margin:0;padding:0;"></span>
+                            <?php echo esc_html__( 'Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </button>
+
+                        <button type="button"
+                                class="nppp-preload-btn"
+                                data-url="<?php echo esc_attr( $row['url_encoded'] ); ?>">
+                            <span class="dashicons dashicons-update" style="font-size:16px;margin:0;padding:0;"></span>
+                            <?php echo esc_html__( 'Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </button>
+                    </td>
+                </tr>
+            <?php endforeach;
+        endif; ?>
         </tbody>
     </table>
     <?php
@@ -175,11 +503,15 @@ function nppp_log_and_send_error($error_message, $log_file_path) {
 
 // Log and send success
 function nppp_log_and_send_success($success_message, $log_file_path) {
+    // Make a plain-text version for the log
+    $for_log  = preg_replace( '~<br\s*/?>~i', ' — ', (string) $success_message );
+    $log_text = trim( wp_strip_all_tags( $for_log, false ) );
+
     if (!empty($log_file_path)) {
         nppp_perform_file_operation(
             $log_file_path,
             'append',
-            '[' . current_time('Y-m-d H:i:s') . '] ' . $success_message
+            '[' . current_time('Y-m-d H:i:s') . '] ' . $log_text
         );
     } else {
         nppp_custom_error_log('Log file not found!');
@@ -187,9 +519,34 @@ function nppp_log_and_send_success($success_message, $log_file_path) {
     wp_send_json_success($success_message);
 }
 
+// Send related pages also to update their status on the fly in table
+function nppp_log_and_send_success_data($success_message, $log_file_path, $data_array) {
+    // Log a plain-text version
+    $for_log  = preg_replace('~<br\s*/?>~i', ' — ', (string) $success_message);
+    $log_text = trim(wp_strip_all_tags($for_log, false));
+
+    if (!empty($log_file_path)) {
+        nppp_perform_file_operation(
+            $log_file_path,
+            'append',
+            '[' . current_time('Y-m-d H:i:s') . '] ' . $log_text
+        );
+    } else {
+        nppp_custom_error_log('Log file not found!');
+    }
+
+    // Attach the message as "message" and anything else the caller passed
+    $payload = array_merge(array('message' => $success_message), (array) $data_array);
+    wp_send_json_success($payload);
+}
+
 // AJAX callback to load premium tab content
 function nppp_load_premium_content_callback() {
     check_ajax_referer('load_premium_content_nonce', '_wpnonce');
+
+    if ( ! current_user_can('manage_options') ) {
+        wp_send_json_error( __( 'Permission denied.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
+    }
 
     // Retrieve plugin settings
     $options = get_option('nginx_cache_settings');
@@ -288,7 +645,7 @@ function nppp_purge_cache_premium_callback() {
 
         // Check process is alive
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            $error_message = __( 'INFO ADMIN: Nginx cache purge has been halted due to ongoing cache preloading. You can stop Nginx cache preloading anytime via the "Purge All" option.', 'fastcgi-cache-purge-and-preload-nginx' );
+            $error_message = __( 'INFO ADMIN: Single-page purge skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion or use "Purge All" to cancel.', 'fastcgi-cache-purge-and-preload-nginx' );
             nppp_log_and_send_error($error_message, $log_file_path);
         }
     }
@@ -338,8 +695,8 @@ function nppp_purge_cache_premium_callback() {
         $constructed_url_test = 'https://' . $constructed_url;
 
         if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
-            $sanitized_url = filter_var($constructed_url, FILTER_SANITIZE_URL);
-            $final_url = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
+            $scheme    = $https_enabled ? 'https://' : 'http://';
+            $final_url = $scheme . $constructed_url;
         }
     }
 
@@ -372,7 +729,76 @@ function nppp_purge_cache_premium_callback() {
     if ($deleted) {
         // Translators: %s is the page URL
         $success_message = sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url_decoded );
-        nppp_log_and_send_success($success_message, $log_file_path);
+
+        $settings = get_option('nginx_cache_settings');
+        $related_urls = nppp_get_related_urls_for_single($final_url);
+
+        // Purge related silently (no extra notices, as this is an AJAX JSON response)
+        foreach ($related_urls as $rel) {
+            nppp_purge_url_silent($nginx_cache_path, $rel);
+        }
+
+        // Preload policy for manual (Advanced tab is manual)
+        if (!empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes') {
+            nppp_preload_urls_fire_and_forget($related_urls);
+        }
+
+        // Optionally make the success message clearer
+        if (!empty($related_urls)) {
+            $labels = [];
+            if (!empty($settings['nppp_related_include_home']) && $settings['nppp_related_include_home'] === 'yes') {
+                $labels[] = esc_html__('Homepage', 'fastcgi-cache-purge-and-preload-nginx');
+            }
+            if (!empty($settings['nppp_related_apply_manual']) && $settings['nppp_related_apply_manual'] === 'yes') {
+                $labels[] = esc_html__('Shop Page', 'fastcgi-cache-purge-and-preload-nginx');
+            }
+            if (!empty($settings['nppp_related_include_category']) && $settings['nppp_related_include_category'] === 'yes') {
+                $labels[] = esc_html__('Category archive(s)', 'fastcgi-cache-purge-and-preload-nginx');
+            }
+            $label_text = implode('/', $labels);
+
+            $preload_tail = (!empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes')
+                ? esc_html__(' purged & preloaded', 'fastcgi-cache-purge-and-preload-nginx')
+                : esc_html__(' purged', 'fastcgi-cache-purge-and-preload-nginx');
+
+            // Second line, colored
+            $success_message .= '<br><span class="nppp-related-line">('
+                . sprintf(
+                    /* Translators: %s is like "homepage/category archive(s)" */
+                    esc_html__('Related: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                    esc_html($label_text)
+                )
+                . $preload_tail
+                . ')</span>';
+        }
+        // Build affected list
+        $affected_urls = array();
+        if ($final_url) {
+            $affected_urls[] = nppp_display_human_url($final_url);
+        }
+        if (!empty($related_urls)) {
+            foreach ($related_urls as $rel) {
+                $affected_urls[] = nppp_display_human_url($rel);
+            }
+        }
+        $affected_urls = array_values(array_unique($affected_urls));
+
+        // Whether auto-preload for related pages is active
+        $preload_auto = (
+            !empty($settings['nppp_related_preload_after_manual'])
+            && $settings['nppp_related_preload_after_manual'] === 'yes'
+            && !empty($related_urls)
+        ) ? true : false;
+
+        // Return structured payload so JS can update other rows
+        nppp_log_and_send_success_data(
+            $success_message,
+            $log_file_path,
+            array(
+                'affected_urls' => $affected_urls,
+                'preload_auto'  => $preload_auto,
+            )
+        );
     } else {
         // Translators: %s is the page URL
         $error_message = sprintf( __( 'ERROR ADMIN: Nginx cache can not be purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url_decoded );
@@ -407,8 +833,9 @@ function nppp_preload_cache_premium_callback() {
         wp_send_json_error('Failed to initialize WP Filesystem');
     }
 
-    // Get the file path from the AJAX request and sanitize it
-    $cache_url = isset($_POST['cache_url']) ? esc_url_raw(wp_unslash($_POST['cache_url'])) : '';
+    // Get the file path from the AJAX request
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Source is trusted; nonce/cap checked; keep percent-encoding intact.
+    $cache_url = isset($_POST['cache_url']) ? trim( wp_unslash($_POST['cache_url']) ) : '';
 
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
@@ -450,6 +877,134 @@ function nppp_preload_cache_premium_callback() {
     }
 }
 
+// Uses file_get_contents() length arg (C-level).
+if (! function_exists('nppp_head_fast')) {
+    function nppp_head_fast($path, $max = 16384) {
+        $data = @file_get_contents($path, false, null, 0, $max);
+        return ($data === false) ? '' : $data;
+    }
+}
+
+// Partial read with WP_Filesystem fallback.
+if (! function_exists('nppp_read_head')) {
+    function nppp_read_head($wp_filesystem, $path, $max = 16384) {
+        $buf = nppp_head_fast($path, $max);
+        if ($buf !== '') return $buf;
+
+        // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
+        $all = $wp_filesystem->get_contents($path);
+        return ($all === false || $all === '') ? '' : substr($all, 0, $max);
+    }
+}
+
+// Update Purge button data if missing before and hit now
+function nppp_locate_cache_file_ajax() {
+    if ( ! current_user_can('manage_options') ) {
+        wp_send_json_error( __( 'Permission denied.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    // Nonce
+    if ( empty($_POST['_wpnonce']) || ! wp_verify_nonce( sanitize_text_field( wp_unslash($_POST['_wpnonce']) ), 'locate_cache_file_nonce' ) ) {
+        wp_send_json_error( __( 'Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Source is trusted; nonce/cap checked; keep percent-encoding intact.
+    $cache_url = isset($_POST['cache_url']) ? trim( wp_unslash($_POST['cache_url']) ) : '';
+    if ( ! $cache_url || ! filter_var($cache_url, FILTER_VALIDATE_URL) ) {
+        wp_send_json_error( __( 'Invalid URL.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    $settings = get_option('nginx_cache_settings');
+    $nginx_cache_path = isset($settings['nginx_cache_path']) ? $settings['nginx_cache_path'] : '';
+
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ( $wp_filesystem === false || ! $wp_filesystem->is_dir($nginx_cache_path) ) {
+        wp_send_json_error( __( 'Cache directory not accessible.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    // Cache-key regex (same as extractor uses)
+    $regex = isset($settings['nginx_cache_key_custom_regex'])
+             ? base64_decode($settings['nginx_cache_key_custom_regex'])
+             : nppp_fetch_default_regex_for_cache_key();
+
+    // Build the target match key from the URL we just preloaded
+    $needle_key = nppp_url_match_key( $cache_url );
+
+    // Only scan *recent* files (default 10 minutes) for speed
+    $window_secs = apply_filters('nppp_locate_recent_window', 600);
+    $now = time();
+    $found_path = '';
+
+    // Read only the head (binary-safe)
+    $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
+    $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
+
+    try {
+        $iter = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ( $iter as $file ) {
+            $pathname = $file->getPathname();
+            if (! $wp_filesystem->is_file($pathname)) { continue; }
+            if (($now - $file->getMTime()) > $window_secs) { continue; }
+
+            $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
+            if ($content === '') { continue; }
+
+            $match = [];
+            if (!preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                // If we likely truncated at primary cap, try a single larger read
+                if (strlen($content) >= $head_bytes_primary) {
+                    $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_fallback);
+                    if ($content === '' || !preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
+
+            // Ignore redirects
+            if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
+                strpos($content, 'Status: 302 Found') !== false) {
+                continue;
+            }
+
+            // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
+            $key_line = $match[1];
+            if (strpos($key_line, 'GET') === false) {
+                continue;
+            }
+
+            if (preg_match($regex, $content, $m) && isset($m[1], $m[2])) {
+                $host = trim($m[1]);
+                $uri  = trim($m[2]);
+
+                // Rebuild encoded URL like the extractor does
+                $https = wp_is_using_https();
+                $final_encoded = ($https ? 'https://' : 'http://') . ($host . $uri);
+
+                if ( filter_var($final_encoded, FILTER_VALIDATE_URL) ) {
+                    $key = nppp_url_match_key($final_encoded);
+                    if ($key === $needle_key) {
+                        $found_path = $pathname;
+                        break;
+                    }
+                }
+            }
+        }
+    } catch ( Exception $e ) {
+    }
+
+    if ($found_path) {
+        wp_send_json_success( array('file_path' => $found_path));
+    } else {
+        wp_send_json_error( __('Cache file not found yet. Try again in a moment.', 'fastcgi-cache-purge-and-preload-nginx'));
+    }
+}
+
 // Recursively traverses directories and extracts necessary data from files.
 // We already sanitized and validated the $nginx_cache_path
 // so for file_path we don't apply any sanitize and validate
@@ -468,6 +1023,10 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
+    // Read only the head (binary-safe)
+    $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
+    $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
+
     try {
         // Traverse the cache directory and its subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
@@ -477,102 +1036,109 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
 
         $regex_tested = false;
         foreach ($cache_iterator as $file) {
-            if ($wp_filesystem->is_file($file->getPathname())) {
-                // Read file contents
-                $content = $wp_filesystem->get_contents($file->getPathname());
+            $path = $file->getPathname();
+            if (!$wp_filesystem->is_file($path)) { continue; }
 
-                // Exclude URLs with status 301 or 302
-                if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
-                    strpos($content, 'Status: 302 Found') !== false) {
+            $content = nppp_read_head($wp_filesystem, $path, $head_bytes_primary);
+            if ($content === '') { continue; }
+
+            $match = [];
+            if (!preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                if (strlen($content) >= $head_bytes_primary) {
+                    $content = nppp_read_head($wp_filesystem, $path, $head_bytes_fallback);
+                    if ($content === '' || !preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                        continue;
+                    }
+                } else {
                     continue;
                 }
+            }
 
-                // Skip all request methods except GET
-                if (!preg_match('/KEY:\s.*GET/', $content)) {
-                    continue;
-                }
+            // Ignore redirects
+            if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
+                strpos($content, 'Status: 302 Found') !== false) {
+                continue;
+            }
 
-                // Test regex only once
-                // Regex operations can be computationally expensive,
-                // especially when iterating over multiple files.
-                // So here we test regex only once
-                if (!$regex_tested) {
-                    if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
-                        // Build the URL
-                        $host = trim($matches[1]);
-                        $request_uri = trim($matches[2]);
+            // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
+            $key_line = $match[1];
+            if (strpos($key_line, 'GET') === false) {
+                continue;
+            }
 
-                        // Normalize percent-encoded sequences to lowercase to prevent cache misses
-                        $request_uri = preg_replace_callback('/%[0-9A-F]{2}/i', function ($matches) {
-                            return strtolower($matches[0]);
-                        }, $request_uri);
+            // Test regex only once
+            // Regex operations can be computationally expensive,
+            // especially when iterating over multiple files.
+            // So here we test regex only once
+            if (!$regex_tested) {
+                if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
+                    // Build the URL
+                    $host = trim($matches[1]);
+                    $request_uri = trim($matches[2]);
+                    $constructed_url = $host . $request_uri;
 
-                        $constructed_url = $host . $request_uri;
+                    // Test parsed URL via regex with FILTER_VALIDATE_URL
+                    // We need to add prefix here
+                    $constructed_url_test = 'https://' . $constructed_url;
 
-                        // Test parsed URL via regex with FILTER_VALIDATE_URL
-                        // We need to add prefix here
-                        $constructed_url_test = 'https://' . $constructed_url;
-
-                        // Test if the URL is in the expected format
-                        if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
-                            $regex_tested = true;
-                        } else {
-                            return [
-                                'error' => sprintf(
-                                    /* Translators: %1$s and %2$s are dynamic strings, $host$request_uri is string */
-                                    __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is parsing the string <strong>\$host\$request_uri</strong> correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
-                                    __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'),
-                                    __( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx')
-                                )
-                            ];
-                        }
+                    // Test if the URL is in the expected format
+                    if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
+                        $regex_tested = true;
                     } else {
                         return [
                             'error' => sprintf(
-                                /* Translators: %1$s and %2$s are dynamic strings */
-                                __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
+                                /* Translators: %1$s and %2$s are dynamic strings, $host$request_uri is string */
+                                __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is parsing the string <strong>\$host\$request_uri</strong> correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
                                 __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'),
                                 __( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx')
                             )
                         ];
                     }
+                } else {
+                    return [
+                        'error' => sprintf(
+                            /* Translators: %1$s and %2$s are dynamic strings */
+                            __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
+                            __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'),
+                            __( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx')
+                        )
+                    ];
                 }
+            }
 
-                // Extract URLs using regex
-                if (preg_match($regex, $content, $matches)) {
-                    // Build the URL
-                    $host = trim($matches[1]);
-                    $request_uri = trim($matches[2]);
+            // Extract URLs using regex
+            if (preg_match($regex, $content, $matches)) {
+                // Build the URL
+                $host = trim($matches[1]);
+                $request_uri = trim($matches[2]);
 
-                    // Keep the encoded URI for internal consistency
-                    $constructed_url_encoded = $host . $request_uri;
+                // Keep the encoded URI for internal consistency
+                $constructed_url_encoded = $host . $request_uri;
 
-                    // Sanitize and validate the encoded URL
-                    $sanitized_url = filter_var($constructed_url_encoded, FILTER_SANITIZE_URL);
-                    $final_url_encoded = $https_enabled ? "https://$sanitized_url" : "http://$sanitized_url";
+                // Sanitize and validate the encoded URL
+                $final_url_encoded = ($https_enabled ? 'https://' : 'http://') . $constructed_url_encoded;
 
-                    if (filter_var($final_url_encoded, FILTER_VALIDATE_URL) !== false) {
-                        // Decode URI only for displaying URLs in human-readable form
-                        $decoded_uri = rawurldecode($request_uri);
-                        $constructed_url_decoded = $host . $decoded_uri;
-                        $final_url = $https_enabled ? "https://$constructed_url_decoded" : "http://$constructed_url_decoded";
+                if (filter_var($final_url_encoded, FILTER_VALIDATE_URL) !== false) {
+                    // Decode URI only for displaying URLs in human-readable form
+                    $decoded_uri = rawurldecode($request_uri);
+                    $constructed_url_decoded = $host . $decoded_uri;
+                    $final_url = $https_enabled ? "https://$constructed_url_decoded" : "http://$constructed_url_decoded";
 
-                        // Get the file modification time for cache date
-                        $cache_timestamp = $file->getMTime();
-                        $cache_date = wp_date('Y-m-d H:i:s', $cache_timestamp);
+                    // Get the file modification time for cache date
+                    $cache_timestamp = $file->getMTime();
+                    $cache_date = wp_date('Y-m-d H:i:s', $cache_timestamp);
 
-                        // Categorize URLs
-                        $category = nppp_categorize_url($final_url);
+                    // Categorize URLs
+                    $category = nppp_categorize_url($final_url);
 
-                        // Store URL data
-                        $urls[] = array(
-                            'file_path'   => $file->getPathname(),
-                            'url'         => $final_url,
-                            'url_encoded' => $final_url_encoded,
-                            'category'    => $category,
-                            'cache_date'  => $cache_date
-                        );
-                    }
+                    // Store URL data
+                    $urls[] = array(
+                        'file_path'   => $file->getPathname(),
+                        'url'         => $final_url,
+                        'url_encoded' => $final_url_encoded,
+                        'category'    => $category,
+                        'cache_date'  => $cache_date
+                    );
                 }
             }
         }
@@ -586,7 +1152,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // Check if any URLs were extracted
     if (empty($urls)) {
         return [
-            'error' => __( 'No cached content found. Please use <strong>Preload All</strong> to warm Nginx cache first and try again.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'error' => __( 'Cache is empty. Click <strong>Preload All</strong> to warm Nginx cache first and try again.', 'fastcgi-cache-purge-and-preload-nginx' )
         ];
     }
 
@@ -595,202 +1161,170 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
 
 // Categorizes a URL based on WordPress permalink structures and template files.
 function nppp_categorize_url($url) {
-    // Static cache array to store results during the request
-    static $url_cache = array();
+    static $url_cache = [];
+    static $rewrite_rules = null;
+    static $all_post_types = null;
+    static $taxonomies = null;
 
-    // Check if the URL is already cached in the static cache
     if (isset($url_cache[$url])) {
         return $url_cache[$url];
     }
 
-    // Generate a unique cache key for the transient
     $cache_key = 'nppp_category_' . md5($url);
-
-    // Try to get the category from the transient cache
-    $category = get_transient($cache_key);
-
-    if ($category !== false) {
-        // Cache the result in the static cache as well
-        $url_cache[$url] = $category;
-        return $category;
+    $cached = get_transient($cache_key);
+    if ($cached !== false) {
+        $url_cache[$url] = $cached;
+        return $cached;
     }
 
-    // Ensure the URL is on the same host
-    $site_url    = get_site_url();
+    $site_url = get_site_url();
     $parsed_site = wp_parse_url($site_url);
-    $parsed_url  = wp_parse_url($url);
+    $parsed_url = wp_parse_url($url);
 
     if (!isset($parsed_url['host']) || $parsed_url['host'] !== $parsed_site['host']) {
         $category = 'EXTERNAL';
-        // Cache the result
-        $url_cache[$url] = $category;
         set_transient($cache_key, $category, MONTH_IN_SECONDS);
+        $url_cache[$url] = $category;
         return $category;
     }
 
-    // Remove query parameters and fragment
     $path = isset($parsed_url['path']) ? $parsed_url['path'] : '';
-
-    // Remove leading and trailing slashes
     $request = trim($path, '/');
+    $request = preg_replace('#/page/\d+/?$#', '', $request);
 
-    // Attempt to get the post ID from the URL
-    $post_id = url_to_postid($url);
-
-    if ($post_id) {
-        // Get the post type
-        $post_type = get_post_type($post_id);
-
-        // Get all registered post types (cache this as well)
-        static $all_post_types = null;
-        if ($all_post_types === null) {
-            $all_post_types = get_post_types(array(), 'objects');
-        }
-
-        if (isset($all_post_types[$post_type])) {
-            $post_type_object = $all_post_types[$post_type];
-            $category = strtoupper($post_type_object->labels->singular_name);
-        } else {
-            $category = strtoupper($post_type);
-        }
-
-        // Cache the result
-        $url_cache[$url] = $category;
-        set_transient($cache_key, $category, MONTH_IN_SECONDS);
-        return $category;
+    if ($request === '') {
+        $category = 'HOMEPAGE';
     } else {
-        global $wp_rewrite;
-
-        // Initialize query variables
-        $query_vars = array();
-
-        // Try to match the URL to rewrite rules
-        if (!empty($wp_rewrite->wp_rewrite_rules())) {
-            // Get rewrite rules (cache this as well)
-            static $rewrite_rules = null;
-            if ($rewrite_rules === null) {
-                $rewrite_rules = $wp_rewrite->wp_rewrite_rules();
+        $post_id = url_to_postid($url);
+        if ($post_id) {
+            $post_type = get_post_type($post_id);
+            if ($all_post_types === null) {
+                $all_post_types = get_post_types([], 'objects');
             }
 
-            foreach ($rewrite_rules as $match => $query) {
-                // If the request matches a rewrite rule
-                if (preg_match("#^$match#", $request, $matches)) {
-                    // Build the query vars
-                    $query = preg_replace("#^.+\?#", '', $query);
-
-                    // Substitute matches into the query
-                    $query = addslashes(WP_MatchesMapRegex::apply($query, $matches));
-
-                    parse_str($query, $query_vars);
-
-                    break;
-                }
-            }
-        }
-
-        // If query vars were populated, determine content type
-        if (!empty($query_vars)) {
-            if (!empty($query_vars['category_name']) || !empty($query_vars['cat'])) {
-                $category = 'CATEGORY';
-            } elseif (!empty($query_vars['tag']) || !empty($query_vars['tag_id'])) {
-                $category = 'TAG';
-            } elseif (!empty($query_vars['author_name']) || !empty($query_vars['author'])) {
-                $category = 'AUTHOR';
-            } elseif (!empty($query_vars['post_type'])) {
-                $post_type = $query_vars['post_type'];
-
-                // Handle array of post types
-                if (is_array($post_type)) {
-                    $post_type = reset($post_type);
-                }
-
-                // Get all registered post types (already cached above)
-                if (isset($all_post_types[$post_type])) {
-                    $post_type_object = $all_post_types[$post_type];
-                    $category = strtoupper($post_type_object->labels->singular_name);
-                } else {
-                    $category = strtoupper($post_type);
-                }
-            } elseif (!empty($query_vars['year']) || !empty($query_vars['monthnum']) || !empty($query_vars['day'])) {
-                $category = 'DATE_ARCHIVE';
-            } elseif (!empty($query_vars['s'])) {
-                $category = 'SEARCH_RESULTS';
+            if (isset($all_post_types[$post_type])) {
+                $category = strtoupper($all_post_types[$post_type]->labels->singular_name);
             } else {
-                $category = 'UNKNOWN';
+                $category = strtoupper($post_type);
             }
         } else {
-            // Check for taxonomy terms
-            static $taxonomies = null;
-            if ($taxonomies === null) {
-                $taxonomies = get_taxonomies(array(), 'objects');
+            global $wp_rewrite;
+            $query_vars = [];
+
+            if (!empty($wp_rewrite->wp_rewrite_rules())) {
+                if ($rewrite_rules === null) {
+                    $rewrite_rules = $wp_rewrite->wp_rewrite_rules();
+                }
+
+                foreach ($rewrite_rules as $match => $query) {
+                    if (preg_match("#^$match#", $request, $matches)) {
+                        $query = preg_replace("#^.+\?#", '', $query);
+                        $query = addslashes(WP_MatchesMapRegex::apply($query, $matches));
+                        parse_str($query, $query_vars);
+                        break;
+                    }
+                }
             }
 
-            $found = false;
-            foreach ($taxonomies as $taxonomy) {
-                $taxonomy_slug = isset($taxonomy->rewrite['slug']) ? $taxonomy->rewrite['slug'] : $taxonomy->name;
+            if (!empty($query_vars)) {
+                if (!empty($query_vars['category_name']) || !empty($query_vars['cat'])) {
+                    $category = 'CATEGORY';
+                } elseif (!empty($query_vars['tag']) || !empty($query_vars['tag_id'])) {
+                    $category = 'TAG';
+                } elseif (!empty($query_vars['author_name']) || !empty($query_vars['author'])) {
+                    $category = 'AUTHOR';
+                } elseif (!empty($query_vars['post_type'])) {
+                    $post_type = is_array($query_vars['post_type']) ? reset($query_vars['post_type']) : $query_vars['post_type'];
+                    if ($all_post_types === null) {
+                        $all_post_types = get_post_types([], 'objects');
+                    }
+                    if (isset($all_post_types[$post_type])) {
+                        $category = strtoupper($all_post_types[$post_type]->labels->singular_name);
+                    } else {
+                        $category = strtoupper($post_type);
+                    }
+                } elseif (!empty($query_vars['year']) || !empty($query_vars['monthnum']) || !empty($query_vars['day'])) {
+                    $category = 'DATE_ARCHIVE';
+                } elseif (!empty($query_vars['s'])) {
+                    $category = 'SEARCH_RESULTS';
+                }
+            }
 
-                if ($taxonomy_slug) {
-                    $pattern = '#^' . preg_quote($taxonomy_slug, '#') . '/([^/]+)/?$#';
+            if (empty($category)) {
+                if ($taxonomies === null) {
+                    $taxonomies = get_taxonomies(['public' => true], 'objects');
+                    foreach (['product_cat', 'product_tag'] as $tax) {
+                        if (!isset($taxonomies[$tax]) && taxonomy_exists($tax)) {
+                            $taxonomies[$tax] = get_taxonomy($tax);
+                        }
+                    }
+                }
 
+                foreach ($taxonomies as $taxonomy) {
+                    $slug = $taxonomy->rewrite['slug'] ?? $taxonomy->name;
+                    if (!$slug) continue;
+
+                    $pattern = '#^' . preg_quote($slug, '#') . '(/[^/]+(?:/[^/]+)*)?(?:/page/\d+)?/?$#';
                     if (preg_match($pattern, $request, $matches)) {
-                        $term_slug = $matches[1];
-                        $term      = get_term_by('slug', $term_slug, $taxonomy->name);
+                        $term_path = isset($matches[1]) ? trim($matches[1], '/') : '';
 
-                        if ($term && !is_wp_error($term)) {
-                            $category = strtoupper($taxonomy->labels->singular_name);
-                            $found = true;
-                            break;
+                        if ($taxonomy->hierarchical) {
+                            $slugs = explode('/', $term_path);
+                            $parent = 0;
+                            $term = null;
+
+                            foreach ($slugs as $slug_part) {
+                                $term = get_term_by('slug', $slug_part, $taxonomy->name);
+                                if (!$term || is_wp_error($term) || (int) $term->parent !== (int) $parent) {
+                                    $term = null;
+                                    break;
+                                }
+                                $parent = $term->term_id;
+                            }
+
+                            if ($term) {
+                                $category = strtoupper($taxonomy->labels->singular_name);
+                                break;
+                            }
+                        } else {
+                            $slug_part = basename($term_path);
+                            $term = get_term_by('slug', $slug_part, $taxonomy->name);
+                            if ($term && !is_wp_error($term)) {
+                                $category = strtoupper($taxonomy->labels->singular_name);
+                                break;
+                            }
                         }
                     }
                 }
             }
 
-            if (!$found) {
-                // Check for author archives
+            if (empty($category)) {
                 $author_base = $wp_rewrite->author_base ?: 'author';
-
-                $pattern = '#^' . preg_quote($author_base, '#') . '/([^/]+)/?$#';
-
-                if (preg_match($pattern, $request, $matches)) {
-                    $author_nicename = $matches[1];
-                    $author          = get_user_by('slug', $author_nicename);
-
-                    if ($author) {
-                        $category = 'AUTHOR';
-                    } else {
-                        $category = 'UNKNOWN';
-                    }
+                if (preg_match('#^' . preg_quote($author_base, '#') . '/([^/]+)/?$#', $request, $matches)) {
+                    $author = get_user_by('slug', $matches[1]);
+                    $category = $author ? 'AUTHOR' : 'UNKNOWN';
                 } else {
-                    // Check for date archives
                     $date_structure = $wp_rewrite->get_date_permastruct();
-
                     if ($date_structure) {
                         $date_regex = str_replace(
-                            array('%year%', '%monthnum%', '%day%'),
-                            array('([0-9]{4})', '([0-9]{1,2})', '([0-9]{1,2})'),
+                            ['%year%', '%monthnum%', '%day%'],
+                            ['([0-9]{4})', '([0-9]{1,2})', '([0-9]{1,2})'],
                             $date_structure
                         );
                         $date_regex = '!^' . trim($date_regex, '/') . '/?$!';
-
-                        if (preg_match($date_regex, $request)) {
-                            $category = 'DATE_ARCHIVE';
-                        } else {
-                            $category = 'UNKNOWN';
-                        }
+                        $category = preg_match($date_regex, $request) ? 'DATE_ARCHIVE' : 'UNKNOWN';
                     } else {
                         $category = 'UNKNOWN';
                     }
                 }
             }
         }
-
-        // Allow customization via filter
-        $category = apply_filters('nppp_categorize_url_result', $category, $url);
-
-        // Cache the result
-        $url_cache[$url] = $category;
-        set_transient($cache_key, $category, MONTH_IN_SECONDS);
-
-        return $category;
     }
+
+    $category = apply_filters('nppp_categorize_url_result', $category ?: 'UNKNOWN', $url);
+
+    $url_cache[$url] = $category;
+    set_transient($cache_key, $category, MONTH_IN_SECONDS);
+
+    return $category;
 }

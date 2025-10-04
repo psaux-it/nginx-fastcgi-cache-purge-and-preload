@@ -2,7 +2,7 @@
 /**
  * Purge action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -12,6 +12,27 @@
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
+}
+
+// Fast head readers (minimal I/O)
+if (! function_exists('nppp_head_fast')) {
+    // Uses file_get_contents() length arg (C-level).
+    function nppp_head_fast($path, $max = 16384) {
+        $data = @file_get_contents($path, false, null, 0, $max);
+        return ($data === false) ? '' : $data;
+    }
+}
+
+if (! function_exists('nppp_read_head')) {
+    // Partial read with WP_Filesystem fallback.
+    function nppp_read_head($wp_filesystem, $path, $max = 16384) {
+        $buf = nppp_head_fast($path, $max);
+        if ($buf !== '') return $buf;
+
+        // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
+        $all = $wp_filesystem->get_contents($path);
+        return ($all === false || $all === '') ? '' : substr($all, 0, $max);
+    }
 }
 
 // Purge cache operation helper
@@ -80,6 +101,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     // Get the status of Auto Preload option
     $options = get_option('nginx_cache_settings');
     $nppp_auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
+    $chain_autopreload = ($nppp_auto_purge && $nppp_auto_preload);
 
     // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
     $nginx_cache_settings = get_option('nginx_cache_settings');
@@ -97,20 +119,23 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
         if ($pid > 0 && nppp_is_process_alive($pid)) {
             // Translators: %s is the page URL
-            nppp_display_admin_notice('info', sprintf( __( 'INFO: Nginx auto cache purge for page %s has been halted due to ongoing cache preloading. You can stop Nginx cache preloading anytime via the "Purge All" option.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
+            nppp_display_admin_notice('info', sprintf( __( 'INFO: Single-page purge for %s skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion or use "Purge All" to cancel.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
             return;
         }
     }
 
     // Valitade the sanitized url before process
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) !== false) {
-        // Remove http:// or https:// from the URL and append a forward slash
-        $url_to_search = preg_replace('#^https?://#', '', $current_page_url);
-        $url_to_search_exact = rtrim($url_to_search, '/') . '/';
+        // Remove http:// or https:// from the URL
+        $url_to_search_exact = preg_replace('#^https?://#', '', $current_page_url);
     } else {
-        nppp_display_admin_notice('error', __( 'ERROR URL: HTTP_REFERRER URL can not validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        nppp_display_admin_notice('error', __( 'ERROR URL: URL can not validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
+
+    // Read only the head (binary-safe)
+    $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
+    $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
 
     try {
         // Traverse the cache directory and its subdirectories
@@ -131,17 +156,32 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     return;
                 }
 
-                // Read file contents
-                $content = $wp_filesystem->get_contents($file->getPathname());
+                $pathname = $file->getPathname();
+                $content  = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
+                if ($content === '') { continue; }
 
-                // Exclude URLs with status 301 or 302
+                $match = [];
+                if (!preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                    // Try fallback
+                    if (strlen($content) >= $head_bytes_primary) {
+                        $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_fallback);
+                        if ($content === '' || !preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+
+                // Ignore redirects
                 if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
                     strpos($content, 'Status: 302 Found') !== false) {
                     continue;
                 }
 
-                // Skip all request methods except GET
-                if (!preg_match('/KEY:\s.*GET/', $content)) {
+                // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
+                $key_line = $match[1];
+                if (strpos($key_line, 'GET') === false) {
                     continue;
                 }
 
@@ -208,26 +248,37 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                         return;
                     }
 
-                    // Perform the purge action (delete the file)
+                    // Perform the purge action
                     $deleted = $wp_filesystem->delete($cache_path);
                     if ($deleted) {
-                        if (!$nppp_auto_purge && !$nppp_auto_preload) {
-                            // Translators: %s is the page URL
-                            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
+                        if ($chain_autopreload) {
+                            nppp_preload_cache_on_update($current_page_url, true);
                         } else {
-                            if ($nppp_auto_purge && $nppp_auto_preload) {
-                                nppp_preload_cache_on_update($current_page_url, true);
-                            } elseif ($nppp_auto_purge) {
-                                // Translators: %s is the page URL
-                                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
-                            } elseif ($nppp_auto_preload) {
-                                // Translators: %s is the page URL
-                                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
-                            }
+                            // Translators: %s: full page URL that had its cache purged.
+                            nppp_display_admin_notice('success', sprintf(__( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
                         }
                     } else {
-                        // Translators: %s is the page URL
-                        nppp_display_admin_notice('error', __( 'ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page $current_page_url_decoded. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                        // Translators: %s: full page URL that failed to purge.
+                        nppp_display_admin_notice('error', sprintf(__( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
+                    }
+
+                    // Handle related homepage/category purge + optional preload
+                    $is_manual = !$nppp_auto_purge;
+                    $related_urls = nppp_get_related_urls_for_single($current_page_url);
+
+                    // Purge related silently
+                    foreach ($related_urls as $rel) {
+                        nppp_purge_url_silent($nginx_cache_path, $rel);
+                    }
+
+                    // Decide preload policy
+                    $settings = get_option('nginx_cache_settings');
+                    $should_preload_related =
+                        ($is_manual && !empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes')
+                        || (!$is_manual && !empty($settings['nginx_cache_auto_preload']) && $settings['nginx_cache_auto_preload'] === 'yes');
+
+                    if ($should_preload_related) {
+                        nppp_preload_urls_fire_and_forget($related_urls);
                     }
                     return;
                 }
@@ -239,16 +290,34 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         return;
     }
 
-    // If the URL is not found in the cache, check auto preload status
+    // If not found in the cache
     if (!$found) {
-        // Check if auto preload is enabled
-        if ($nppp_auto_preload) {
-            // Trigger the preload function
+        // Check preload chain
+        if ($chain_autopreload) {
+            // Trigger the preload
             nppp_preload_cache_on_update($current_page_url, false);
         } else {
-            // Display admin notice if auto preload is not enabled
             // Translators: %s is the page URL
             nppp_display_admin_notice('info', sprintf( __( 'INFO ADMIN: Nginx cache purge attempted, but the page %s is not currently found in the cache.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
+        }
+
+        // Even if the single wasn’t found in cache, keep related in sync
+        $is_manual = !$nppp_auto_purge;
+        $related_urls = nppp_get_related_urls_for_single($current_page_url);
+
+        // Purge related silently
+        foreach ($related_urls as $rel) {
+            nppp_purge_url_silent($nginx_cache_path, $rel);
+        }
+
+        // Decide preload policy
+        $settings = get_option('nginx_cache_settings');
+        $should_preload_related =
+            ($is_manual && !empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes')
+            || (!$is_manual && !empty($settings['nginx_cache_auto_preload']) && $settings['nginx_cache_auto_preload'] === 'yes');
+
+        if ($should_preload_related) {
+            nppp_preload_urls_fire_and_forget($related_urls);
         }
     }
 }
@@ -257,23 +326,56 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 // Purge cache automatically for update (post/page)
 // Purge cache automatically for status changes (post/page)
 // This function hooks into the 'transition_post_status' action
+// Also check compat-{elementor,gutenberg}.php
 function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     static $did_purge = [];
 
-    // 0) Bail out on REST, AJAX, or Cron unless Elementor/Yoast/WPBakery saving
-    $allowed_ajax_actions = ['elementor_ajax', 'wpseo_elementor_save', 'vc_save'];
-    $is_allowed_builder = isset($_POST['action']) && in_array($_POST['action'], $allowed_ajax_actions, true); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    // -1) Bail on invalid post objects.
+    if (! ($post instanceof WP_Post)) {
+        return;
+    }
+
+    // -0.1) Early quit if auto purge disabled
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] !== 'yes') {
+        return;
+    }
+
+    // 0) Avoid duplicate purge with Gutenberg + metabox second request.
+    //    When block editor saves legacy metaboxes it posts to post.php with this flag.
+    // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+    if (isset($_REQUEST['meta-box-loader'])) {
+        return;
+    }
+
+    // 0.1) Skip REST entirely — compat-gutenberg (rest_after_insert_*) already purges.
+    if (
+        ( function_exists( 'wp_is_serving_rest_request' ) && wp_is_serving_rest_request() ) ||
+        ( function_exists( 'wp_is_rest_request' ) && wp_is_rest_request() ) ||
+        ( defined( 'REST_REQUEST' ) && REST_REQUEST )
+    ) {
+        return;
+    }
+
+    // 0.2) Allow only specific AJAX save routes (Quick/Bulk Edit, WPBakery).
+    $allowed_ajax_actions = [
+        'inline-save', // Quick Edit
+        'vc_save',     // WPBakery
+        'bulk_edit',   // Bulk Edit
+    ];
+
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    $current_ajax_action = isset( $_POST['action'] ) ? sanitize_key( wp_unslash( $_POST['action'] ) ) : '';
 
     if (
-        (
-            (function_exists('wp_is_rest_request') && wp_is_rest_request()) ||
-            (defined('REST_REQUEST') && REST_REQUEST) ||
-            (function_exists('wp_doing_ajax') && wp_doing_ajax()) ||
-            (defined('DOING_AJAX') && DOING_AJAX) ||
-            (function_exists('wp_doing_cron') && wp_doing_cron()) ||
-            (defined('DOING_CRON') && DOING_CRON)
-        ) && ! $is_allowed_builder
+        ( ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) || ( defined( 'DOING_AJAX' ) && DOING_AJAX ) ) &&
+        ! in_array( $current_ajax_action, $allowed_ajax_actions, true )
     ) {
+        return;
+    }
+
+    // 0.3) Skip WP-Cron runs.
+    if ( ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) || ( defined( 'DOING_CRON' ) && DOING_CRON ) ) {
         return;
     }
 
@@ -291,7 +393,7 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         return;
     }
 
-    // 3) Drop CPTs
+    // 3) Drop some reported CPTs
     $post_url = get_permalink($post->ID);
     $excluded_patterns = [
         'wp-global-styles-',
@@ -304,17 +406,11 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         }
     }
 
-    // 4) Feature flag
-    $nginx_cache_settings = get_option('nginx_cache_settings');
-    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] !== 'yes') {
-        return;
-    }
-
-    // 5) Prep cache path
+    // 4) Prep cache path
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : '/dev/shm/change-me-now';
 
-    // 6) Purge logic
-    // Priority 1: Handle Status Changes (publish from trash, draft, or pending)
+    // 5) Purge logic
+    // Priority A: Handle Status Changes (publish from trash, draft, or pending)
     if ('publish' === $new_status) {
         // If the post was moved from trash to publish, purge the cache
         if ('trash' === $old_status) {
@@ -331,8 +427,18 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         }
     }
 
-    // Priority 2: Handle Content Updates (publish to publish with content change)
+    // Priority B: Handle Content Updates (publish to publish with content change)
     if ('publish' === $new_status && 'publish' === $old_status) {
+        $is_quick_edit = ( $current_ajax_action === 'inline-save' );
+        $is_bulk_edit  = ( $current_ajax_action === 'bulk_edit' );
+
+        // Quick/Bulk Edit often adjust slug/taxonomies only; always purge.
+        if ($is_quick_edit || $is_bulk_edit) {
+            nppp_purge_single( $nginx_cache_path, $post_url, true );
+            $did_purge[ $post->ID ] = true;
+            return;
+        }
+
         // Check if the content was updated (modified time differs from the original post time)
         if (get_post_modified_time('U', true, $post) > get_post_time('U', true, $post)) {
             nppp_purge_single($nginx_cache_path, $post_url, true);
@@ -506,6 +612,10 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
     }
 
     $options = get_option('nginx_cache_settings');
+
+    // Set env
+    nppp_prepare_request_env(true);
+
     $auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
 
     // Clear the scheduled preload status event immediately
@@ -521,41 +631,90 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
         // Check if the preload process is alive
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            // Try to kill the process with SIGTERM
-            if (defined('SIGTERM') && @posix_kill($pid, SIGTERM) === false) {
-                // Log if SIGTERM is failed
-                // Translators: %s is the process PID
-                nppp_display_admin_notice('info', sprintf( __( 'INFO PROCESS: Failed to terminate the ongoing Nginx cache Preload process (PID: %s) using posix_kill', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
-                sleep(1);
+            $process_user = trim(shell_exec("ps -o user= -p " . escapeshellarg($pid)));
+            $killed_by_safexec = false;
 
-                // Check again if the process is still alive after SIGTERM
+            if ($process_user === 'nobody') {
+                $safexec_path = '/usr/bin/safexec';
+
+                // If not present at default location, try to discover via system path
+                if (!$wp_filesystem->exists($safexec_path)) {
+                    $detected = trim(shell_exec('command -v safexec 2>/dev/null'));
+                    if (!empty($detected)) {
+                        $safexec_path = $detected;
+                    } else {
+                        $safexec_path = false;
+                    }
+                }
+
+                // Check for safexec binary and SUID
+                if ($safexec_path && function_exists('stat')) {
+                    $is_root_owner = false;
+                    $has_suid      = false;
+
+                    $info = @stat($safexec_path);
+                    if ($info && isset($info['uid'], $info['mode'])) {
+                        $is_root_owner = ($info['uid'] === 0);
+                        $has_suid      = ($info['mode'] & 04000) === 04000;
+                    }
+
+                    if ($is_root_owner && $has_suid) {
+                        $output = shell_exec(escapeshellcmd($safexec_path) . " --kill=" . escapeshellarg($pid) . " 2>&1");
+
+                        if (strpos($output, 'Killed PID') !== false) {
+                            usleep(250000);
+
+                            if (!nppp_is_process_alive($pid)) {
+                                // Translators: %s is the process PID
+                                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using safexec', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
+                                $killed_by_safexec = true;
+                            } else {
+                                // Translators: %s is the process PID
+                                nppp_display_admin_notice('info', sprintf(__('INFO PROCESS: Failed to terminate using safexec, falling back to posix_kill for PID %s', 'fastcgi-cache-purge-and-preload-nginx'), $pid), true, false);
+                            }
+                        }
+                    } else {
+                        // Translators: %s is the process PID
+                        nppp_display_admin_notice('info', sprintf(__('INFO PROCESS: safexec not privileged, falling back to posix_kill for PID %s', 'fastcgi-cache-purge-and-preload-nginx'), $pid), true, false);
+                    }
+                } else {
+                    // Translators: %s is the process PID
+                    nppp_display_admin_notice('info', sprintf(__('INFO PROCESS: safexec not found, falling back to posix_kill for PID %s', 'fastcgi-cache-purge-and-preload-nginx'), $pid), true, false);
+                }
+            }
+
+            if (!$killed_by_safexec) {
+                $signal_sent = false;
+
+                if (defined('SIGTERM')) {
+                    @posix_kill($pid, SIGTERM);
+                    $signal_sent = true;
+                    usleep(300000);
+                }
+
                 if (nppp_is_process_alive($pid)) {
-                    // Fallback: Use shell_exec to send SIGKILL
+                    // Process still alive, try kill -9
                     $kill_path = trim(shell_exec('command -v kill'));
                     if (!empty($kill_path)) {
                         shell_exec(escapeshellcmd("$kill_path -9 $pid"));
-                        usleep(400000);
+                        usleep(300000);
 
-                        // Check again if the process is still alive after SIGKILL
                         if (!nppp_is_process_alive($pid)) {
-                            // Log success after SIGKILL
                             // Translators: %s is the process PID
-                            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using manual fallback mechanism SIGKILL', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
+                            nppp_display_admin_notice('success', sprintf(__('SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) forcefully terminated (SIGKILL)', 'fastcgi-cache-purge-and-preload-nginx'), $pid), true, false);
                         } else {
-                            // Log failure if fallback didn't work
-                            nppp_display_admin_notice('error', __( 'ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx' ), true, false);
+                            nppp_display_admin_notice('error', __('ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx'));
                             return;
                         }
                     } else {
-                        // Log failure if the kill command is not found
-                        nppp_display_admin_notice('error', __( 'ERROR PROCESS: Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx' ), true, false);
+                        nppp_display_admin_notice('error', __('ERROR PROCESS: "kill" command not available. Failed to stop the ongoing Nginx cache Preload process. Please wait for the Preload process to finish and try Purge All again.', 'fastcgi-cache-purge-and-preload-nginx'));
                         return;
                     }
+                } else {
+                    $method = $signal_sent ? 'SIGTERM' : 'check';
+                    // Translators: %1$s is the PID, %2$s is the termination method (e.g., posix_kill, kill -9).
+                    nppp_display_admin_notice('success', sprintf(__('SUCCESS PROCESS: Preload process (PID: %1$s) terminated using %2$s.', 'fastcgi-cache-purge-and-preload-nginx'), $pid, $method), true, false);
                 }
-            } else {
-                // Log if SIGTERM is successfully sent
-                // Translators: %s is the process PID
-                nppp_display_admin_notice('success', sprintf( __( 'SUCCESS PROCESS: The ongoing Nginx cache Preload process (PID: %s) terminated using posix_kill', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ), true, false);
             }
 
             // If on-going preload action halted via purge

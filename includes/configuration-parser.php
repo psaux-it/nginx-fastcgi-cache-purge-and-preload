@@ -2,7 +2,7 @@
 /**
  * Nginx config parser functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Nginx config parser functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -16,6 +16,7 @@ if (!defined('ABSPATH')) {
 
 // Function to execute a shell command and get the output
 function nppp_get_command_output($command) {
+    nppp_prepare_request_env(true);
     return trim(shell_exec($command));
 }
 
@@ -139,6 +140,28 @@ function nppp_check_libfuse_version() {
     return $result;
 }
 
+// Function to check safexec version
+function nppp_check_safexec_version() {
+    $transient_key = 'nppp_safexec_version_' . md5('nppp');
+    $cached = get_transient($transient_key);
+    if ($cached !== false) {
+        return $cached;
+    }
+
+    $installed_version = 'Unknown';
+
+    // Check if safexec is in PATH
+    if (nppp_get_command_output('command -v safexec')) {
+        $line = nppp_get_command_output("safexec -v 2>&1 | awk 'NR==1{print \$2}'");
+        if (!empty($line)) {
+            $installed_version = trim($line);
+        }
+    }
+
+    set_transient($transient_key, $installed_version, MONTH_IN_SECONDS);
+    return $installed_version;
+}
+
 // Function to check nginx cache path fuse mount points
 function nppp_check_fuse_cache_paths($cache_paths) {
     // Ask result in cache first
@@ -151,6 +174,9 @@ function nppp_check_fuse_cache_paths($cache_paths) {
     if ($cached_result !== false) {
         return $cached_result;
     }
+
+    // Set env
+    nppp_prepare_request_env(true);
 
     $fuse_paths = [];
 
@@ -313,6 +339,9 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = t
 
 // Function to get Nginx version, PHP version
 function nppp_get_nginx_info() {
+    // Set env
+    nppp_prepare_request_env(true);
+
     $nginx_version = 'Unknown';
     $php_version = 'Unknown';
 
@@ -411,23 +440,43 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                         <td class="status" id="npppNginxVersion">
                             <?php if ($nginx_info['nginx_version'] === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: orange;"> <?php echo esc_html($nginx_info['nginx_version']); ?></span>
+                                <span style="color: orange; font-size: 14px; font-weight: bold;">
+                                    <?php echo esc_html($nginx_info['nginx_version']); ?>
+                                </span>
                             <?php else: ?>
                                 <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span><?php echo esc_html($nginx_info['nginx_version']); ?></span>
                             <?php endif; ?>
                         </td>
                     </tr>
-                    <!-- Section for OpenSSL Version -->
+                    <!-- Section for PHP Version -->
                     <tr>
                         <td class="action"><?php esc_html_e('PHP Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppOpenSSLVersion">
                             <?php if ($nginx_info['php_version'] === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: orange;"> <?php echo esc_html($nginx_info['php_version']); ?></span>
+                                <span style="color: orange; font-size: 14px; font-weight: bold;">
+                                    <?php echo esc_html($nginx_info['php_version']); ?>
+                                </span>
                             <?php else: ?>
                                 <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span><?php echo esc_html($nginx_info['php_version']); ?></span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <!-- Section for safexec Version -->
+                    <tr>
+                        <td class="action"><?php esc_html_e('safexec Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="status" id="npppSafexecVersion">
+                            <?php $safexec_version = nppp_check_safexec_version(); ?>
+                            <?php if ($safexec_version === 'Unknown'): ?>
+                                <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: orange; font-size: 14px; font-weight: bold;">
+                                    <?php echo esc_html($safexec_version); ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span><?php echo esc_html($safexec_version); ?></span>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -620,6 +669,9 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
 
 // Handles the AJAX request to restart the systemd service
 function nppp_restart_systemd_service() {
+    // Set env
+    nppp_prepare_request_env(true);
+
     // Define the systemd service name
     $service_name = 'npp-wordpress.service';
 
@@ -667,14 +719,20 @@ function nppp_restart_systemd_service() {
     $status_command = 'sudo ' . escapeshellcmd($systemctl_path) . ' is-active ' . escapeshellcmd($service_name);
     $status = trim(shell_exec($status_command));
 
-    // Return response based on the service status
     if ($status === 'active') {
-        // Service is active, clear plugin cache
-        $cache_cleared_message = nppp_clear_plugin_cache();
+        // Clear plugin cache
+        nppp_clear_plugin_cache();
 
-        wp_send_json_success('Systemd service restarted and is active. ' . $cache_cleared_message);
+        wp_send_json_success(
+            __('Systemd service restarted and is active. Plugin cache cleared.', 'fastcgi-cache-purge-and-preload-nginx')
+        );
     } else {
-        wp_send_json_error('Restart completed but the service is not active. Status: ' . $status);
+        $msg = sprintf(
+            /* Translators: %s is the systemd service status string (e.g. "failed") */
+            __('Restart completed but the service is not active. Status: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+            $status
+        );
+        wp_send_json_error($msg);
     }
 }
 

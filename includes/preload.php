@@ -2,7 +2,7 @@
 /**
  * Preload action functions for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains preload action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -44,7 +44,12 @@ function nppp_check_network_env(): array {
 
     // Check outbound connectivity
     // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen
-    $outbound_ok = @fsockopen($test_domain, 80, $errno, $errstr, 2) !== false;
+    $fp = @fsockopen($test_domain, 80, $errno, $errstr, 2);
+    $outbound_ok = ($fp !== false);
+    if ($fp) {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closing probe socket
+        @fclose($fp);
+    }
 
     return [
         'dns_ok'      => $dns_ok,
@@ -52,52 +57,167 @@ function nppp_check_network_env(): array {
     ];
 }
 
+// Check proxy reachable
 function nppp_is_proxy_reachable(string $proxy_host, int $proxy_port, int $timeout = 1): array {
     $env = nppp_check_network_env();
 
-    if (!$env['dns_ok']) {
-        return [
-            'success' => false,
-            'code'    => 'dns_error',
-        ];
-    }
+    if (!$env['dns_ok'])      return ['success' => false, 'code' => 'dns_error'];
+    if (!$env['outbound_ok']) return ['success' => false, 'code' => 'network_error'];
 
-    if (!$env['outbound_ok']) {
-        return [
-            'success' => false,
-            'code'    => 'network_error',
-        ];
+    // Normalize for IP checks
+    $host_for_ip = $proxy_host;
+    if ($host_for_ip !== '' && $host_for_ip[0] === '[' && substr($host_for_ip, -1) === ']') {
+        $host_for_ip = substr($host_for_ip, 1, -1);
     }
+    $host_plain = preg_replace('/%.*/', '', $host_for_ip);
 
-    // Resolve IP
-    if (filter_var($proxy_host, FILTER_VALIDATE_IP)) {
-        $resolved_ip = $proxy_host;
+    // Decide what to pass to fsockopen()
+    if (filter_var($host_plain, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+        $target_host = "tcp://[$host_plain]";
+    } elseif (filter_var($host_plain, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        $target_host = $host_plain;
     } else {
         $resolved_ip = gethostbyname($proxy_host);
-        if ($resolved_ip === $proxy_host) {
-            return [
-                'success' => false,
-                'code'    => 'proxy_dns_fail',
-            ];
+        if ($resolved_ip === $proxy_host && function_exists('dns_get_record')) {
+            $aaaa = @dns_get_record($proxy_host, DNS_AAAA);
+            if (!empty($aaaa) && isset($aaaa[0]['ipv6'])) {
+                $resolved_ip = $aaaa[0]['ipv6'];
+            }
         }
+        if ($resolved_ip === $proxy_host) {
+            return ['success' => false, 'code' => 'proxy_dns_fail'];
+        }
+        $target_host = (strpos($resolved_ip, ':') !== false) ? "tcp://[$resolved_ip]" : $resolved_ip;
     }
 
     // Attempt connection
-    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen
-    $connection = @fsockopen($resolved_ip, $proxy_port, $errno, $errstr, $timeout);
+    // phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen,WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+    $connection = @fsockopen($target_host, $proxy_port, $errno, $errstr, $timeout);
     if ($connection) {
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closing probe socket
         fclose($connection);
-        return [
-            'success' => true,
-            'code'    => 'ok',
-        ];
+        return ['success' => true, 'code' => 'ok'];
     }
 
-    return [
-        'success' => false,
-        'code'    => 'proxy_unreachable',
-    ];
+    return ['success' => false, 'code' => 'proxy_unreachable'];
+}
+
+// Attempts to locate the safexec binary in standard or PATH-based locations
+function nppp_find_safexec_path() {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem === false) {
+        nppp_display_admin_notice(
+            'error',
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return false;
+    }
+
+    // Set env
+    nppp_prepare_request_env(true);
+
+    $default_path = '/usr/bin/safexec';
+    if ($wp_filesystem->exists($default_path)) {
+        return $default_path;
+    }
+
+    $detected = trim(shell_exec('command -v safexec 2>/dev/null'));
+    return !empty($detected) ? $detected : false;
+}
+
+// Checks if the given safexec path is root-owned and SUID-enabled
+function nppp_is_safexec_usable($path, $notify = true) {
+    if (!function_exists('stat')) {
+        return false;
+    }
+
+    // Prevent interfere with REST and others
+    $notify = $notify && !(
+        (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) ||
+        (function_exists('wp_doing_rest') && wp_doing_rest()) ||
+        (defined('REST_REQUEST') && REST_REQUEST) ||
+        (function_exists('wp_doing_ajax') && wp_doing_ajax()) ||
+        (defined('DOING_AJAX') && DOING_AJAX) ||
+        (function_exists('wp_doing_cron') && wp_doing_cron()) ||
+        (defined('DOING_CRON') && DOING_CRON) ||
+        (defined('WP_CLI') && WP_CLI)
+    );
+
+    if (empty($path)) {
+        if ($notify) {
+            nppp_display_admin_notice('info', __('INFO SAFEXEC: safexec not found. Starting preload as the PHP-FPM user. To enable security hardening, installing safexec is strongly recommended. See the Help tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
+        }
+        return false;
+    }
+
+    $p = @realpath($path) ?: $path;
+    $info = @stat($p);
+
+    if ($info === false) {
+        if ($notify) {
+            // Translators: %s = safexec path
+            nppp_display_admin_notice('info', sprintf(__('INFO SAFEXEC: safexec at %s is not accessible. Starting preload as the PHP-FPM user.', 'fastcgi-cache-purge-and-preload-nginx'), $p), true, false);
+        }
+        return false;
+    }
+
+    $is_root_owner = ($info['uid'] === 0);
+    $has_suid      = ($info['mode'] & 04000) === 04000;
+
+    if (!($is_root_owner && $has_suid)) {
+        if ($notify) {
+            $euid = function_exists('posix_geteuid') ? (int)@posix_geteuid() : -1;
+            // Translators: 1 = user id of fpm user (integer)
+            nppp_display_admin_notice('info', sprintf(__('INFO SAFEXEC: safexec is in pass-through mode (euid=%1$d). Starting preload as the PHP-FPM user. To fix it, see the Help Tab', 'fastcgi-cache-purge-and-preload-nginx'), $euid), true, false);
+        }
+        return false;
+    }
+
+    return true;
+}
+
+// PATCH: CVE ID: CVE-2025-6213
+// https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
+function nppp_referer_is_allowed(string $url): bool {
+    $ref  = wp_parse_url($url);
+    $home = wp_parse_url(home_url());
+
+    if (!$ref || !$home) return false;
+
+    // only http/https
+    $scheme = strtolower($ref['scheme'] ?? '');
+    if (!in_array($scheme, ['http','https'], true)) return false;
+
+    // normalize hosts (lowercase, trim trailing dot, punycode)
+    $norm = function (?string $h): string {
+        $h = strtolower(rtrim((string)$h, '.'));
+        if ($h === '') return '';
+        if (function_exists('idn_to_ascii')) {
+            $ascii = idn_to_ascii($h, 0, INTL_IDNA_VARIANT_UTS46);
+            if (is_string($ascii) && $ascii !== '') $h = $ascii;
+        }
+        return $h;
+    };
+
+    $ref_host  = $norm($ref['host']  ?? '');
+    $home_host = $norm($home['host'] ?? '');
+
+    if ($ref_host === '' || $home_host === '') return false;
+
+    // treat www.<host> == <host>
+    $strip_www = function ($h) {
+        return preg_replace('/^www\./i', '', (string) $h);
+    };
+    $ref_base  = $strip_www($ref_host);
+    $home_base = $strip_www($home_host);
+
+    // (optional) require same port if home_url() includes one
+    $home_port = $home['port'] ?? null;
+    $ref_port  = $ref['port']  ?? null;
+    $port_ok   = ($home_port === null) || ((string)$home_port === (string)$ref_port);
+
+    return ($ref_base === $home_base) && $port_ok;
 }
 
 // Check if a preload process fails immediately—too fast.
@@ -115,6 +235,9 @@ function nppp_detect_premature_process(
     string $NPPP_DYNAMIC_USER_AGENT
 ) {
     $test_process = false;
+
+    // Set env
+    nppp_prepare_request_env(true);
 
     // Get proxy options
     $proxy_settings = nppp_get_proxy_settings();
@@ -138,19 +261,43 @@ function nppp_detect_premature_process(
         }
     }
 
-    $testCommand = "wget --quiet --recursive --no-cache --no-cookies --no-directories --delete-after " .
-                   "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-                   "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-                   "-e use_proxy=$use_proxy " .
-                   "-e http_proxy=$http_proxy " .
-                   "-e https_proxy=$https_proxy " .
-                   "-P \"$tmp_path\" " .
-                   "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-                   "--wait=$nginx_cache_wait " .
-                   "--reject-regex='\"$nginx_cache_reject_regex\"' " .
-                   "--reject='\"$nginx_cache_reject_extension\"' " .
-                   "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
-                   "\"$fdomain\" ";
+    // Create preload domain allowlist
+    $parsed = wp_parse_url($fdomain);
+    $host = strtolower($parsed['host'] ?? '');
+    if ($host === '') {
+        return false;
+    }
+    $base_host = preg_replace('/^www\./i', '', $host);
+    $www_host  = 'www.' . $base_host;
+    $domain_list = implode(',', array_unique([$base_host, $www_host]));
+
+    // Wrap with literal double quotes
+    $dq = function ($s) { return '"' . $s . '"'; };
+
+    // Check safexec availability
+    $safexec_path = nppp_find_safexec_path();
+    $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', false);
+
+    $testCommand =
+        ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+        'wget ' .
+        '--quiet --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
+        '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+        '--ignore-length --timeout=5 --tries=1 --ignore-case --compression=auto ' .
+        '-e robots=off ' .
+        '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+        '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+        '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+        '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+        '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+        '--wait=' . ((int)$nginx_cache_wait) . ' ' .
+        '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
+        '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
+        '--domains='      . escapeshellarg($domain_list) . ' ' .
+        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+        '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
+        '-- ' .
+        escapeshellarg($fdomain);
 
     // Redirect all I/O to /dev/null so wget can never block on pipes
     $descriptors = [
@@ -173,7 +320,7 @@ function nppp_detect_premature_process(
         $test_pid = $status['pid'];
         $running  = $status['running'];
 
-        // If process not running after 100ms;
+        // If process not running after 300ms;
         if (!$running) {
             $exitCode  = $status['exitcode'];
 
@@ -184,14 +331,21 @@ function nppp_detect_premature_process(
                 $test_process = false;
             }
         } else {
-            // Test process is live; terminate it
+            // If safexec is available, kill nobody process
+            if ($use_safexec) {
+                $kill_cmd = escapeshellcmd($safexec_path) . " --kill=" . (int)($test_pid) . " 2>&1";
+                $output = shell_exec($kill_cmd);
+            }
+
+            // Terminate softly
             if (!defined('SIGTERM')) {
                 define('SIGTERM', 15);
             }
 
+            // Fallback to hard SIGKILL
             if (!@posix_kill($test_pid, SIGTERM)) {
                 $kill_path = trim(shell_exec('command -v kill'));
-                shell_exec(escapeshellcmd("$kill_path -9 $test_pid"));
+                shell_exec(escapeshellcmd("$kill_path -9 " . (int)$test_pid));
             }
             $test_process = true;
         }
@@ -243,6 +397,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         $NPPP_DYNAMIC_USER_AGENT = NPPP_USER_AGENT;
     }
 
+    // Set env
+    nppp_prepare_request_env(true);
+
     // Get proxy options
     $proxy_settings = nppp_get_proxy_settings();
     $use_proxy  = $proxy_settings['use_proxy'];
@@ -251,10 +408,19 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
     // Create domain allowlist
     $parsed = wp_parse_url($fdomain);
-    $host = $parsed['host'];
+    $host = strtolower($parsed['host'] ?? '');
+    if (!function_exists('proc_open') || !is_callable('proc_open')) {
+        if ($host === '') {
+            nppp_display_admin_notice('error', __('ERROR URL: Could not parse site host for Nginx Cache Preloading.', 'fastcgi-cache-purge-and-preload-nginx'));
+            return;
+        }
+    }
     $base_host = preg_replace('/^www\./i', '', $host);
     $www_host  = 'www.' . $base_host;
     $domain_list = implode(',', array_unique([$base_host, $www_host]));
+
+    // Wrap with literal double quotes
+    $dq = function ($s) { return '"' . $s . '"'; };
 
     // Here, we check the source of the preload request. There are several possible routes.
     // If nppp_is_auto_preload is false, it means we arrived here through one of the following routes:
@@ -331,8 +497,12 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                     }
                     return;
                 } elseif ($test_result === false) {
-                    // Translators: %s = domain name
-                    nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %s. Please check Exclude Endpoints and Exclude File Extensions settings syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
+                    $reason = ($host === '')
+                        ? __('Could not parse site host from URL.', 'fastcgi-cache-purge-and-preload-nginx')
+                        : __('Please check Exclude Endpoints and Exclude File Extensions settings syntax.', 'fastcgi-cache-purge-and-preload-nginx');
+
+                    // Translators: 1: domain URL, 2: failure reason
+                    nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %1$s. %2$s', 'fastcgi-cache-purge-and-preload-nginx'), esc_html($fdomain), esc_html($reason)));
                     return;
                 } elseif ($test_result !== true) {
                     // Translators: %s = domain name
@@ -375,32 +545,45 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 }
             }
 
+            // Check safexec available
+            $safexec_path = nppp_find_safexec_path();
+            $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
+
             // Start cache preloading for whole website (Preload All)
             // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
             // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
             //    speeding up cache preloading via reducing latency we use --no-check-certificate .
             //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-            $command = "nohup wget --no-verbose --recursive --no-cache --no-cookies --no-directories --delete-after " .
-                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-                "-e use_proxy=$use_proxy " .
-                "-e http_proxy=$http_proxy " .
-                "-e https_proxy=$https_proxy " .
-                "-P \"$tmp_path\" " .
-                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-                "--wait=$nginx_cache_wait " .
-                "--reject-regex='\"$nginx_cache_reject_regex\"' " .
-                "--reject='\"$nginx_cache_reject_extension\"' " .
-                "--domains=$domain_list " .
-                "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
-                "\"$fdomain\" > \"$log_path\" 2>&1 & echo \$!";
+
+            // Main
+            $command =
+                ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+                'nohup wget ' .
+                '--no-verbose --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
+                '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+                '--ignore-length --timeout=5 --tries=1 --ignore-case --compression=auto ' .
+                '-e robots=off ' .
+                '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+                '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+                '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+                '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+                '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+                '--wait=' . ((int)$nginx_cache_wait) . ' ' .
+                '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
+                '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
+                '--domains='      . escapeshellarg($domain_list) . ' ' .
+                '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+                '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
+                '-- ' .
+                escapeshellarg($fdomain) . ' ' .
+                '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
 
             // We are ready to call main command
             $output = shell_exec($command);
 
             // Get the process ID
             $parts = explode(" ", $output);
-            $pid = end($parts);
+            $pid = trim(end($parts));
             nppp_perform_file_operation($PIDFILE, 'write', $pid);
 
             // Create a DateTime object for the current time in WordPress timezone
@@ -528,8 +711,12 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 }
                 return;
             } elseif ($test_result === false) {
-                // Translators: %s = domain name
-                nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %s. Please check Exclude Endpoints and Exclude File Extensions settings syntax.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
+                $reason = ($host === '')
+                    ? __('Could not parse site host from URL.', 'fastcgi-cache-purge-and-preload-nginx')
+                    : __('Please check Exclude Endpoints and Exclude File Extensions settings syntax.', 'fastcgi-cache-purge-and-preload-nginx');
+
+                // Translators: 1: domain URL, 2: failure reason
+                nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %1$s. %2$s', 'fastcgi-cache-purge-and-preload-nginx'), esc_html($fdomain), esc_html($reason)));
                 return;
             } elseif ($test_result !== true) {
                 // Translators: %s = domain name
@@ -572,32 +759,45 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             }
         }
 
+        // Check safexec available
+        $safexec_path = nppp_find_safexec_path();
+        $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
+
         // Start cache preloading for whole website (Preload All)
         // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
         // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
         //    speeding up cache preloading via reducing latency we use --no-check-certificate .
         //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-        $command = "nohup wget --no-verbose --recursive --no-cache --no-cookies --no-directories --delete-after " .
-                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-                "-e use_proxy=$use_proxy " .
-                "-e http_proxy=$http_proxy " .
-                "-e https_proxy=$https_proxy " .
-                "-P \"$tmp_path\" " .
-                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-                "--wait=$nginx_cache_wait " .
-                "--reject-regex='\"$nginx_cache_reject_regex\"' " .
-                "--reject='\"$nginx_cache_reject_extension\"' " .
-                "--domains=$domain_list " .
-                "--user-agent='\"". $NPPP_DYNAMIC_USER_AGENT ."\"' " .
-                "\"$fdomain\" > \"$log_path\" 2>&1 & echo \$!";
+
+        // Main
+        $command =
+            ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+            'nohup wget ' .
+            '--no-verbose --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
+            '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+            '--ignore-length --timeout=5 --tries=1 --ignore-case --compression=auto ' .
+            '-e robots=off ' .
+            '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+            '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+            '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+            '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+            '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+            '--wait=' . ((int)$nginx_cache_wait) . ' ' .
+            '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
+            '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
+            '--domains='      . escapeshellarg($domain_list) . ' ' .
+            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+            '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
+            '-- ' .
+            escapeshellarg($fdomain) . ' ' .
+            '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
 
         // We are ready to call main command
         $output = shell_exec($command);
 
         // Get the process ID
         $parts = explode(" ", $output);
-        $pid = end($parts);
+        $pid   = trim(end($parts));
         nppp_perform_file_operation($PIDFILE, 'write', $pid);
 
         // Create a DateTime object for the current time in WordPress timezone
@@ -666,25 +866,15 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         return;
     }
 
-    // Valitade the sanitized url before process
+    // PATCH: CVE ID: CVE-2025-6213
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) === false) {
         nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
 
-    // Checks if the HTTP referrer originated from our own host domain
-    $referrer_parsed_url = wp_parse_url($current_page_url);
-    $home_url = home_url();
-    $parsed_home_url = wp_parse_url($home_url);
-
-    if ($referrer_parsed_url['host'] !== $parsed_home_url['host']) {
-        nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx' ));
-        return;
-    }
-
     // PATCH: CVE ID: CVE-2025-6213
-    if (preg_match('/[;&|`$<>"]/', $current_page_url)) {
-        nppp_display_admin_notice('error', __( 'ERROR SECURITY: The URL contains potentially dangerous characters and has been blocked to prevent command injection.', 'fastcgi-cache-purge-and-preload-nginx' ));
+    if (!nppp_referer_is_allowed($current_page_url)) {
+        nppp_display_admin_notice('error', __('ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
@@ -706,6 +896,9 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
+    // Set env
+    nppp_prepare_request_env(true);
+
     // Check Preload Mobile enabled
     $preload_mobile = false;
     if (isset($nginx_cache_settings['nginx_cache_auto_preload_mobile']) && $nginx_cache_settings['nginx_cache_auto_preload_mobile'] === 'yes') {
@@ -720,6 +913,20 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
+
+    // Wrap with literal double quotes
+    $dq = function ($s) { return '"' . $s . '"'; };
+
+    // Create domain allowlist
+    $parsed = wp_parse_url($current_page_url);
+    $host = strtolower($parsed['host'] ?? '');
+    if ($host === '') {
+        nppp_display_admin_notice('error', __('ERROR URL: Could not parse site host for Nginx Cache Preloading.', 'fastcgi-cache-purge-and-preload-nginx'));
+        return;
+    }
+    $base_host = preg_replace('/^www\./i', '', $host);
+    $www_host  = 'www.' . $base_host;
+    $domain_list = implode(',', array_unique([$base_host, $www_host]));
 
     // Test proxy and server network
     if ($use_proxy === 'yes') {
@@ -757,25 +964,40 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         }
     }
 
+    // Check safexec available
+    $safexec_path = nppp_find_safexec_path();
+    $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
+
     // Start cache preloading for single post/page (when manual On-page preload action triggers)
     // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
     // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
     //    speeding up cache preloading via reducing latency we use --no-check-certificate .
     //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-    // 3. --recursive removed here that we need single URL request
-    // 4. --wait removed we need single HTTP request
-    // 5. --reject-regex removed that preload URL already verified
-    // 6. --reject removed that we don't use --recursive
-    $command_desktop = "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
-                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-                "-e use_proxy=$use_proxy " .
-                "-e http_proxy=$http_proxy " .
-                "-e https_proxy=$https_proxy " .
-                "-P \"$tmp_path\" " .
-                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-                "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
-                "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+    // 3. --recursive removed
+    // 4. --wait removed
+    // 5. --reject-regex removed
+    // 6. --reject removed
+
+    // PATCH: CVE ID: CVE-2025-6213
+    // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
+    $command_desktop =
+        ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+        'nohup wget ' .
+        '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
+        '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+        '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
+        '-e robots=off ' .
+        '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+        '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+        '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+        '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+        '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+        '--domains='      . escapeshellarg($domain_list) . ' ' .
+        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+        '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
+        '-- ' .
+        escapeshellarg($current_page_url) . ' ' .
+        '>/dev/null 2>&1 & echo $!';
 
     // Trigger desktop preload and get PID
     $output_desktop = shell_exec($command_desktop);
@@ -783,7 +1005,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     // Extract the PID and store it in the array for desktop
     if ($output_desktop !== null) {
         $parts_desktop = explode(" ", $output_desktop);
-        $pid_desktop = end($parts_desktop);
+        $pid_desktop = trim(end($parts_desktop));
 
         // Check if the desktop process is still running
         $isRunning_desktop = nppp_is_process_alive($pid_desktop);
@@ -798,16 +1020,26 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 
     // Preload cache also for Mobile
     if ($preload_mobile) {
-        $command_mobile = "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
-                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-                "-e use_proxy=$use_proxy " .
-                "-e http_proxy=$http_proxy " .
-                "-e https_proxy=$https_proxy " .
-                "-P \"$tmp_path\" " .
-                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-                "--user-agent='\"". NPPP_USER_AGENT_MOBILE ."\"' " .
-                "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+        // PATCH: CVE ID: CVE-2025-6213
+        // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
+        $command_mobile =
+            ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+            'nohup wget ' .
+            '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
+            '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+            '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
+            '-e robots=off ' .
+            '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+            '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+            '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+            '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+            '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+            '--domains='      . escapeshellarg($domain_list) . ' ' .
+            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+            '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
+            '-- ' .
+            escapeshellarg($current_page_url) . ' ' .
+            '>/dev/null 2>&1 & echo $!';
 
         // Trigger preload for mobile
         $output_mobile = shell_exec($command_mobile);
@@ -815,7 +1047,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         // Extract the PID and store it in the array for mobile
         if ($output_mobile !== null) {
             $parts_mobile = explode(" ", $output_mobile);
-            $pid_mobile = end($parts_mobile);
+            $pid_mobile  = trim(end($parts_mobile));
 
             // Check if the mobile process is still running
             $isRunning_mobile = nppp_is_process_alive($pid_mobile);
@@ -903,27 +1135,17 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         return;
     }
 
-    // Valitade the sanitized url before process
     // PATCH: CVE ID: CVE-2025-6213
+    // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) === false) {
         nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
 
-    // Checks if the HTTP referrer originated from our own host domain
     // PATCH: CVE ID: CVE-2025-6213
-    $referrer_parsed_url = wp_parse_url($current_page_url);
-    $home_url = home_url();
-    $parsed_home_url = wp_parse_url($home_url);
-
-    if ($referrer_parsed_url['host'] !== $parsed_home_url['host']) {
-        nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx' ));
-        return;
-    }
-
-    // PATCH: CVE ID: CVE-2025-6213
-    if (preg_match('/[;&|`$<>"]/', $current_page_url)) {
-        nppp_display_admin_notice('error', __( 'ERROR SECURITY: The URL contains potentially dangerous characters and has been blocked to prevent command injection.', 'fastcgi-cache-purge-and-preload-nginx' ));
+    // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
+    if (!nppp_referer_is_allowed($current_page_url)) {
+        nppp_display_admin_notice('error', __('ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
@@ -933,9 +1155,12 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
+    // Set env
+    nppp_prepare_request_env(true);
+
     // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';
-    $default_limit_rate = 1024;
+    $default_limit_rate = 5120;
 
     // Get the necessary data for preload action from plugin options
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
@@ -976,6 +1201,20 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
 
+    // Wrap with literal double quotes
+    $dq = function ($s) { return '"' . $s . '"'; };
+
+    // Create domain allowlist
+    $parsed = wp_parse_url($current_page_url);
+    $host = strtolower($parsed['host'] ?? '');
+    if ($host === '') {
+        nppp_display_admin_notice('error', __('ERROR URL: Could not parse site host for Nginx Cache Preloading.', 'fastcgi-cache-purge-and-preload-nginx'));
+        return;
+    }
+    $base_host = preg_replace('/^www\./i', '', $host);
+    $www_host  = 'www.' . $base_host;
+    $domain_list = implode(',', array_unique([$base_host, $www_host]));
+
     // Test proxy and server network
     if ($use_proxy === 'yes') {
         // Parse proxy IP and Port
@@ -1012,25 +1251,40 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         }
     }
 
+    // Check safexec available
+    $safexec_path = nppp_find_safexec_path();
+    $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
+
     // Start cache preloading for single post/page (when Auto Purge & Auto Preload enabled both)
     // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
     // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
     //    speeding up cache preloading via reducing latency we use --no-check-certificate .
     //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
-    // 3. --recursive removed here that we need single URL request
-    // 4. --wait removed we need single HTTP request
-    // 5. --reject-regex removed that preload URL already verified
-    // 6. --reject removed that we don't use --recursive
-    $command_desktop = "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
-                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-                "-e use_proxy=$use_proxy " .
-                "-e http_proxy=$http_proxy " .
-                "-e https_proxy=$https_proxy " .
-                "-P \"$tmp_path\" " .
-                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-                "--user-agent='\"". NPPP_USER_AGENT ."\"' " .
-                "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+    // 3. --recursive removed
+    // 4. --wait removed
+    // 5. --reject-regex removed
+    // 6. --reject removed
+
+    // PATCH: CVE ID: CVE-2025-6213
+    // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
+    $command_desktop =
+        ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+        'nohup wget ' .
+        '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
+        '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+        '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
+        '-e robots=off ' .
+        '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+        '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+        '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+        '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+        '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+        '--domains='      . escapeshellarg($domain_list) . ' ' .
+        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+        '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
+        '-- ' .
+        escapeshellarg($current_page_url) . ' ' .
+        '>/dev/null 2>&1 & echo $!';
 
     // Trigger desktop preload and get PID
     $output_desktop = shell_exec($command_desktop);
@@ -1038,7 +1292,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // Extract the PID and store it in the array for desktop
     if ($output_desktop !== null) {
         $parts_desktop = explode(" ", $output_desktop);
-        $pid_desktop = end($parts_desktop);
+        $pid_desktop = trim(end($parts_desktop));
 
         // Check if the desktop process is still running
         $isRunning_desktop = nppp_is_process_alive($pid_desktop);
@@ -1053,16 +1307,26 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
 
     // Preload cache also for Mobile
     if ($preload_mobile) {
-        $command_mobile = "nohup wget --quiet --no-cache --no-cookies --no-directories --delete-after " .
-                "--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since " .
-                "--ignore-length --timeout=5 --tries=1 -e robots=off " .
-                "-e use_proxy=$use_proxy " .
-                "-e http_proxy=$http_proxy " .
-                "-e https_proxy=$https_proxy " .
-                "-P \"$tmp_path\" " .
-                "--limit-rate=\"$nginx_cache_limit_rate\"k " .
-                "--user-agent='\"". NPPP_USER_AGENT_MOBILE ."\"' " .
-                "\"$current_page_url\" >/dev/null 2>&1 & echo \$!";
+        // PATCH: CVE ID: CVE-2025-6213
+        // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
+        $command_mobile =
+            ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
+            'nohup wget ' .
+            '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
+            '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
+            '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
+            '-e robots=off ' .
+            '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+            '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+            '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+            '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+            '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
+            '--domains='      . escapeshellarg($domain_list) . ' ' .
+            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
+            '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
+            '-- ' .
+            escapeshellarg($current_page_url) . ' ' .
+            '>/dev/null 2>&1 & echo $!';
 
         // Trigger preload for mobile
         $output_mobile = shell_exec($command_mobile);
@@ -1070,7 +1334,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         // Extract the PID and store it in the array for mobile
         if ($output_mobile !== null) {
             $parts_mobile = explode(" ", $output_mobile);
-            $pid_mobile = end($parts_mobile);
+            $pid_mobile  = trim(end($parts_mobile));
 
             // Check if the mobile process is still running
             $isRunning_mobile = nppp_is_process_alive($pid_mobile);
@@ -1085,10 +1349,13 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     }
 
     // Handling success and error messages
-    $devices = ['desktop', 'mobile'];
+    $devices = $preload_mobile ? array('desktop', 'mobile') : array('desktop');
 
     // Get the process ID
     foreach ($devices as $device) {
+        $success_message = '';
+        $error_message   = '';
+
         if (isset($pids[$device])) {
             // Determine the success message based on auto purge status
             if ($found) {

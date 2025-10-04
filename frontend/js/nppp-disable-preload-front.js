@@ -1,6 +1,6 @@
 /**
  * Frontend JavaScript for FastCGI Cache Purge and Preload for Nginx
- * Description: This JavaScript file contains functions that disabling front-end admin bar actions for FastCGI Cache Purge and Preload for Nginx
+ * Description: This JavaScript file contains functions that disabling front-end preload actions for FastCGI Cache Purge and Preload for Nginx
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
@@ -16,10 +16,6 @@
         // Select the buttons
         var npppAllButtonsfront = {
             npppPreload: $('#wp-admin-bar-preload-cache'),
-            npppPurge: $('#wp-admin-bar-purge-cache'),
-            npppStatus: $('#wp-admin-bar-fastcgi-cache-status'),
-            npppAdvanced: $('#wp-admin-bar-fastcgi-cache-advanced'),
-            purgeButtonSinglefront: $('#wp-admin-bar-purge-cache-single'),
             preloadButtonSinglefront: $('#wp-admin-bar-preload-cache-single')
         };
 

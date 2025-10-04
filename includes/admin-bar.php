@@ -2,7 +2,7 @@
 /**
  * WP Admin Bar code for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains Admin Bar code for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -14,12 +14,115 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Convert a Unicode hostname to its ASCII/Punycode form.
+function nppp_idna_host(string $host): string {
+    if (function_exists('idn_to_ascii')) {
+        $variant = defined('INTL_IDNA_VARIANT_UTS46') ? INTL_IDNA_VARIANT_UTS46 : 0;
+        $ascii = idn_to_ascii($host, 0, $variant);
+        if ($ascii) {
+            return $ascii;
+        }
+    }
+    return $host;
+}
+
+// Build the exact URL the browser is on (percent-encoded path preserved)
+function nppp_get_current_front_url() {
+    $scheme = is_ssl() ? 'https' : 'http';
+
+    // Sanitize/unslash server vars; fall back to home_url() parts.
+    $home_host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
+    $host = isset($_SERVER['HTTP_HOST'])
+        ? sanitize_text_field(wp_unslash($_SERVER['HTTP_HOST']))
+        : $home_host;
+
+    $req = isset($_SERVER['REQUEST_URI'])
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+        ? wp_unslash($_SERVER['REQUEST_URI'])
+        : '/';
+
+    // Keep the raw path/query but strip our own args
+    $req = remove_query_arg(array('nppp_front', 'redirect_nonce'), $req);
+
+    // Normalize leading slash only
+    $req = '/' . ltrim( $req, '/' );
+
+    return $scheme . '://' . $host . $req;
+}
+
+// Punycode host + percent-encoded path
+function nppp_maybe_encode_non_ascii_path_in_url(string $url): string {
+    $p = wp_parse_url($url);
+    if (!is_array($p) || empty($p['scheme']) || empty($p['host'])) {
+        return $url;
+    }
+
+    // punycode/normalize the host for the final URL
+    $host = nppp_idna_host($p['host']);
+    $path = $p['path'] ?? '';
+
+    // Only act if there are non-ASCII chars in the path
+    if ($path !== '' && preg_match('/[^\x00-\x7F]/u', $path)) {
+        // Encode only the non-ASCII chars to %XX
+        $path = preg_replace_callback('/[^\x00-\x7F]/u', static function ($m) {
+            $bytes = unpack('C*', $m[0]);
+            return implode('', array_map(
+                static fn($b) => sprintf('%%%02X', $b),
+                $bytes
+            ));
+        }, $path);
+    }
+
+    // Rebuild URL with the encoded path; everything else untouched
+    return $p['scheme'] . '://' . $host
+         . (isset($p['port']) ? ':' . (int) $p['port'] : '')
+         . $path
+         . (isset($p['query']) ? '?' . $p['query'] : '')
+         . (isset($p['fragment']) ? '#' . $p['fragment'] : '');
+}
+
+// Send an error back to the *front page* (same page if safe) using your existing transient modal.
+function nppp_front_error_notice(string $msg, ?string $target_url = null, string $type = 'error') : void {
+    // 1) Log the message
+    if (function_exists('nppp_display_admin_notice')) {
+        nppp_display_admin_notice($type, $msg, true, false);
+    }
+
+    // 2) Choose a safe front-end target (http/https + same host); else fall back to home.
+    $safe = home_url('/');
+    if ($target_url && wp_http_validate_url($target_url)) {
+        $t = wp_parse_url($target_url);
+        $h = wp_parse_url($safe);
+        if (!empty($t['scheme']) && in_array(strtolower($t['scheme']), ['http','https'], true)
+            && !empty($t['host']) && !empty($h['host'])
+            && strtolower($t['host']) === strtolower($h['host'])) {
+            $safe = $target_url;
+        }
+    }
+
+    // 3) Nuke any previous output so headers can be sent
+    while (ob_get_level() > 0) { @ob_end_clean(); }
+
+    // 4) Store the message and redirect
+    $key   = 'nppp_front_message_' . uniqid('', true);
+    $nonce = wp_create_nonce('nppp_redirect_nonce');
+    set_transient($key, array('message' => $msg, 'type' => $type), 60);
+
+    $redirect_url = add_query_arg(['nppp_front' => $key, 'redirect_nonce' => $nonce], $safe);
+    wp_safe_redirect($redirect_url);
+    exit;
+}
+
 // Add NPP menu to WordPress admin-bar
 function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     // Check if the user has permissions to manage options
     if (!current_user_can('manage_options')) {
         return;
     }
+
+    // Setup completed?
+    $setup_url = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
+    $needs_setup = class_exists('\NPPP\Setup') ? \NPPP\Setup::nppp_needs_setup() : false;
 
     // Add top admin-bar menu for NPP
     $wp_admin_bar->add_menu(array(
@@ -30,24 +133,30 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
             esc_url(plugin_dir_url(__FILE__) . '../admin/img/bar.png'),
             esc_html__('Nginx Cache', 'fastcgi-cache-purge-and-preload-nginx')
         ),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings'),
+        'href'  => $needs_setup
+            ? $setup_url
+            : admin_url('options-general.php?page=nginx_cache_settings'),
     ));
 
     // Add "Purge All" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
-        'id' => 'purge-cache',
-        'title' => __('Purge All', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href'   => wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce'),
+        'id'     => 'purge-cache',
+        'title'  => __('Purge All', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => $needs_setup
+            ? $setup_url
+            : wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache'), 'purge_cache_nonce'),
         'meta'   => array('class' => 'nppp-action-trigger'),
     ));
 
     // Add "Preload All" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
-        'id' => 'preload-cache',
-        'title' => __('Preload All', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href' => wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce'),
+        'id'     => 'preload-cache',
+        'title'  => __('Preload All', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => $needs_setup
+            ? $setup_url
+            : wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache'), 'preload_cache_nonce'),
         'meta'   => array('class' => 'nppp-action-trigger'),
     ));
 
@@ -56,21 +165,29 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         $request_uri = sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']));
 
         // Check if the URI does not contain 'wp-admin'
-        if (strpos($request_uri, 'wp-admin') === false) {
-            // Purge
-            $wp_admin_bar->add_menu(array(
+        if (!$needs_setup && strpos($request_uri, 'wp-admin') === false) {
+            $from_url = nppp_get_current_front_url();
+
+            // Purge This Page
+            $wp_admin_bar->add_menu( array(
                 'parent' => 'fastcgi-cache-operations',
-                'id' => 'purge-cache-single',
-                'title' => __('Purge This Page', 'fastcgi-cache-purge-and-preload-nginx'),
-                'href'  => wp_nonce_url(admin_url('admin.php?action=nppp_purge_cache_single'), 'purge_cache_nonce'),
+                'id'     => 'purge-cache-single',
+                'title'  => __( 'Purge This Page', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'href'   => wp_nonce_url(
+                    add_query_arg( 'from', $from_url, admin_url('admin.php?action=nppp_purge_cache_single') ),
+                    'purge_cache_nonce'
+                ),
             ));
 
-            // Preload
-            $wp_admin_bar->add_menu(array(
+            // Preload This Page
+            $wp_admin_bar->add_menu( array(
                 'parent' => 'fastcgi-cache-operations',
-                'id' => 'preload-cache-single',
-                'title' => __('Preload This Page', 'fastcgi-cache-purge-and-preload-nginx'),
-                'href'  => wp_nonce_url(admin_url('admin.php?action=nppp_preload_cache_single'), 'preload_cache_nonce'),
+                'id'     => 'preload-cache-single',
+                'title'  => __( 'Preload This Page', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'href'   => wp_nonce_url(
+                    add_query_arg( 'from', $from_url, admin_url('admin.php?action=nppp_preload_cache_single') ),
+                    'preload_cache_nonce'
+                ),
             ));
         }
     }
@@ -78,54 +195,95 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     // Add "Status" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
-        'id' => 'fastcgi-cache-status',
-        'title' => __('Status', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings#status'),
+        'id'     => 'fastcgi-cache-status',
+        'title'  => __('Status', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => admin_url('options-general.php?page=nginx_cache_settings#status'),
     ));
 
     // Add "Advanced" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
-        'id' => 'fastcgi-cache-advanced',
-        'title' => __('Advanced', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings#premium'),
+        'id'     => 'fastcgi-cache-advanced',
+        'title'  => __('Advanced', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => admin_url('options-general.php?page=nginx_cache_settings#premium'),
     ));
 
     // Add "Settings" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
-        'id' => 'fastcgi-cache-settings',
-        'title' => __('Settings', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings'),
+        'id'     => 'fastcgi-cache-settings',
+        'title'  => __('Settings', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => admin_url('options-general.php?page=nginx_cache_settings'),
     ));
 
     // Add "Help" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
-        'id' => 'fastcgi-cache-help',
-        'title' => __('Help', 'fastcgi-cache-purge-and-preload-nginx'),
-        'href' => admin_url('options-general.php?page=nginx_cache_settings#help'),
+        'id'     => 'fastcgi-cache-help',
+        'title'  => __('Help', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => admin_url('options-general.php?page=nginx_cache_settings#help'),
     ));
 }
 
 // Handle button clicks with actions
 function nppp_handle_fastcgi_cache_actions_admin_bar() {
+    // Prevent interfere
+    if (
+        // AJAX
+        (function_exists('wp_doing_ajax') && wp_doing_ajax()) ||
+        (! function_exists('wp_doing_ajax') && defined('DOING_AJAX') && DOING_AJAX) ||
+
+        // CRON
+        (function_exists('wp_doing_cron') && wp_doing_cron()) ||
+        (! function_exists('wp_doing_cron') && defined('DOING_CRON') && DOING_CRON) ||
+
+        // WP-CLI
+        (defined('WP_CLI') && WP_CLI) ||
+
+        // REST
+        (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request() ) ||
+        (function_exists('wp_doing_rest') && wp_doing_rest()) ||
+        (function_exists('wp_is_json_request') && wp_is_json_request()) ||
+        (defined('REST_REQUEST') && REST_REQUEST)
+    ) {
+        return;
+    }
+
+    // Check admin
+    if (! is_admin()) {
+        return;
+    }
+
     // Check action
-    if (!isset($_GET['_wpnonce']) || !isset($_GET['action'])) {
+    if (!isset($_GET['action'])) {
         return;
     }
 
-    // Sanitize and verify nonce
-    $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
-    $action = isset($_GET['action']) ? sanitize_text_field(wp_unslash($_GET['action'])) : '';
-
-    if (!wp_verify_nonce($nonce, 'purge_cache_nonce') && !wp_verify_nonce($nonce, 'preload_cache_nonce')) {
+    // Check capability
+    if (! current_user_can('manage_options')) {
         return;
     }
 
-    // Validate actions
-    $allowed_actions = ['nppp_purge_cache', 'nppp_preload_cache', 'nppp_purge_cache_single', 'nppp_preload_cache_single'];
-    if (!in_array($action, $allowed_actions, true)) {
+    // Bind nonce to the specific action
+    $action = sanitize_key(wp_unslash($_GET['action'] ?? '' ));
+
+    // Map only OUR admin-bar actions
+    $action_nonce_map = array(
+        'nppp_purge_cache'          => 'purge_cache_nonce',
+        'nppp_purge_cache_single'   => 'purge_cache_nonce',
+        'nppp_preload_cache'        => 'preload_cache_nonce',
+        'nppp_preload_cache_single' => 'preload_cache_nonce',
+    );
+
+    // Prevents hijacking other pages
+    if (! isset($action_nonce_map[$action])) {
+        return;
+    }
+
+    // Validate nonce (only for our actions)
+    $nonce  = sanitize_text_field(wp_unslash($_GET['_wpnonce'] ?? '' ));
+    if (empty($nonce) || ! wp_verify_nonce($nonce, $action_nonce_map[$action])) {
+        nppp_front_error_notice(__( 'ERROR SECURITY: Invalid or expired token.', 'fastcgi-cache-purge-and-preload-nginx' ), home_url( '/' ));
         return;
     }
 
@@ -155,47 +313,73 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
 
     // Only process URL for single-page actions
     if (in_array($action, ['nppp_purge_cache_single', 'nppp_preload_cache_single'], true)) {
-        if (isset($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_REFERER'])) {
-            // esc_url_raw: sanitize without altering percent-encoded characters
-            $current_page_url = esc_url_raw(wp_unslash($_SERVER['HTTP_REFERER']));
+        // Build URL (raw)
+        // PATCH: CVE ID: CVE-2025-6213
 
-            // Validate format
-            // PATCH: CVE ID: CVE-2025-6213
-            if (! filter_var($current_page_url, FILTER_VALIDATE_URL)) {
-                nppp_display_admin_notice('error', __('ERROR SECURITY: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
-                return;
-            }
-
-            // Enforce same-site origin
-            // PATCH: CVE ID: CVE-2025-6213
-            $site_host = wp_parse_url(home_url(), PHP_URL_HOST);
-            $url_host  = wp_parse_url($current_page_url, PHP_URL_HOST);
-
-            if ($site_host !== $url_host) {
-                nppp_display_admin_notice('error', __('ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
-                return;
-            }
-
-            // Defense-in-depth: check for command injection to shell
-            // PATCH: CVE ID: CVE-2025-6213
-            if (preg_match('/[;&|`$<>"]/', $current_page_url)) {
-                nppp_display_admin_notice('error', __('ERROR SECURITY: The URL contains potentially dangerous characters and has been blocked to prevent command injection.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
-                return;
-            }
-
-        } else {
-            global $wp;
-            if (empty($wp->request)) {
-                $wp->parse_request();
-            }
-            $current_page_url = esc_url_raw(trailingslashit(home_url(add_query_arg($_GET, $wp->request))));
+        // 1) Require ?from=
+        if (! isset($_GET['from']) || $_GET['from'] === '' || is_array($_GET['from'])) {
+            nppp_front_error_notice(__('ERROR URL: Could not determine the current page URL.', 'fastcgi-cache-purge-and-preload-nginx'), home_url('/'));
         }
+
+        // 2) Raw value (validated below; keep exact bytes)
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+        $candidate_raw = wp_unslash($_GET['from']);
+
+        // If the absolute URL starts with an encoded scheme, fully decode once.
+        if (strpos($candidate_raw, '://') === false
+            && preg_match('/^[a-z][a-z0-9+.\-]*%3A%2F%2F/i', $candidate_raw)) {
+            $candidate_raw = rawurldecode($candidate_raw);
+        }
+
+        // Now that it’s decoded, strip our transient args if present
+        $candidate_raw = remove_query_arg(array('nppp_front','redirect_nonce'), $candidate_raw);
+        $front_target = $candidate_raw;
+
+        // 3) Only encode path if it has non-ASCII; otherwise keep EXACTLY as supplied
+        $candidate_ascii = nppp_maybe_encode_non_ascii_path_in_url($candidate_raw);
+
+        // 4) Validations
+        if (!filter_var($candidate_ascii, FILTER_VALIDATE_URL)) {
+            nppp_front_error_notice(__('ERROR SECURITY: URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx'), $front_target);
+        }
+
+        // 5) Security: Same-site + port
+        $ref_parts   = wp_parse_url($candidate_ascii);
+        $home_parts  = wp_parse_url(home_url());
+        $admin_parts = wp_parse_url(admin_url());
+
+        $norm = static function($h) {
+            $h = strtolower(rtrim( (string)$h, '.'));
+            if (function_exists('idn_to_ascii')) {
+                $x = idn_to_ascii( $h, 0, defined('INTL_IDNA_VARIANT_UTS46') ? INTL_IDNA_VARIANT_UTS46 : 0 );
+                if ($x) $h = $x;
+            }
+            return $h;
+        };
+
+        $allowed = array();
+        if (!empty($home_parts['host']))  $allowed[$norm($home_parts['host'])]  = true;
+        if (!empty($admin_parts['host'])) $allowed[$norm($admin_parts['host'])] = true;
+
+        if (empty($ref_parts['host']) || ! isset($allowed[$norm($ref_parts['host'])])) {
+            nppp_front_error_notice(__('ERROR SECURITY: URL is not from our domain.', 'fastcgi-cache-purge-and-preload-nginx'), home_url('/'));
+        }
+
+        $ref_port   = isset($ref_parts['port']) ? (int)$ref_parts['port'] : null;
+        $home_port  = isset($home_parts['port']) ? (int)$home_parts['port'] : null;
+        $admin_port = isset($admin_parts['port']) ? (int)$admin_parts['port'] : null;
+        if (null !== $ref_port && $ref_port !== $home_port && $ref_port !== $admin_port) {
+            nppp_front_error_notice(__('ERROR SECURITY: URL port mismatch.', 'fastcgi-cache-purge-and-preload-nginx'), $front_target);
+        }
+
+        // Ready to go
+        $current_page_url = $candidate_ascii;
     }
 
     // Start output buffering to capture the output of the actions
     ob_start();
 
-    switch ($_GET['action']) {
+    switch ($action) {
         case 'nppp_purge_cache':
             nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, false);
             break;
@@ -258,8 +442,6 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         );
     }
 
-    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-    header('Pragma: no-cache');
     wp_safe_redirect($redirect_url);
     exit();
 }

@@ -2,7 +2,7 @@
 /**
  * FAQ for FastCGI Cache Purge and Preload for Nginx
  * Description: This help file contains informations about FastCGI Cache Purge and Preload for Nginx plugin usage.
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -166,6 +166,90 @@ function nppp_my_faq_html() {
                     </div>
                 </div>
 
+                <h3 class="nppp-question">What is safexec?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <p style="font-size: 14px;">
+                            <strong>safexec</strong> is a secure, privilege-dropping SUID wrapper for executing a set of tools from higher-level contexts such as PHP’s <strong>shell_exec()</strong>.
+                            It is written in C as the backend for <strong>NPP</strong> and pairs with an optional <strong>LD_PRELOAD</strong> shim library, <strong>libnpp_norm.so</strong>, that normalizes percent-encoded HTTP request-lines during cache preloading to ensure consistent Nginx cache keys.
+                        </p>
+
+                    <h4>Why does NPP need/use it?</h4>
+                    <ul style="font-size: 14px;">
+                        <li><strong>Privilege drop:</strong> commands run as <code>nobody</code>.</li>
+                        <li><strong>URL Normalization for Preload</strong></li>
+                    </ul>
+
+                    <h4>Benefits</h4>
+                    <ul style="font-size: 14px;">
+                        <li>Reduces risk from injected or misbehaving shell commands.</li>
+                        <li>Keeps preload process isolated from WordPress/PHP-FPM.</li>
+                    </ul>
+
+                    <h4>Is it recommended?</h4>
+                    <p style="font-size: 14px;">
+                        Cause NPP deeply use PHPs <em>shell_exec</em>, <strong>Yes,</strong> using safexec is <em>highly</em> recommended for all users.
+                    </p>
+
+                    <h4>How do I install it?</h4>
+                    <p style="font-size: 14px;">
+                        Use the  linux packages from the
+                        <a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases" target="_blank" rel="noopener">Releases page</a>.
+                        Below are quick examples—see GitHub for full details.
+                    </p>
+
+                    <ol class="nginx-list" style="font-size: 14px;">
+                        <li><strong>Debian / Ubuntu (.deb)</strong>
+                            <pre>wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
+
+# x86_64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.2-1_amd64.deb
+sha256sum -c SHA256SUMS --ignore-missing
+sudo apt install ./safexec_1.9.2-1_amd64.deb
+
+# arm64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.2-1_arm64.deb
+sha256sum -c SHA256SUMS --ignore-missing
+sudo apt install ./safexec_1.9.2-1_arm64.deb</pre>
+                        </li>
+
+                        <li><strong>RHEL / CentOS / Fedora (.rpm)</strong>
+                            <pre>wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
+# x86_64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.2-1.el10.x86_64.rpm
+sha256sum -c SHA256SUMS --ignore-missing
+sudo dnf install ./safexec-1.9.2-1.el10.x86_64.rpm
+
+# arm64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.2-1.el10.aarch64.rpm
+sha256sum -c SHA256SUMS --ignore-missing
+sudo dnf install ./safexec-1.9.2-1.el10.aarch64.rpm</pre>
+                        </li>
+
+                        <li><strong>Verify:</strong>
+                            <pre><code>safexec --version</code></pre>
+                        </li>
+
+                        <li><em>Note:</em> Install safexec <u>inside</u> the WordPress/PHP-FPM host or container so NPP can call it.</li>
+                      </ol>
+
+                    <h4>Optional: quick test</h4>
+                    <p style="font-size: 14px;">NPP uses safexec automatically, but you can test it manually:</p>
+                    <pre>safexec wget -qO- https://example.com
+safexec --kill=&lt;pid&gt;
+                    </pre>
+
+                      <p style="font-size: 14px;">
+                          <em>Notes:</em> On systems without cgroup v2, isolation falls back to rlimits; without setuid-root, safexec runs in pass-through mode.
+                      </p>
+
+                      <p style="font-size: 12px; margin-top: 8px;">
+                          <strong>Full docs &amp; source:</strong>
+                          <a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec" target="_blank" rel="noopener">GitHub &raquo; safexec</a>
+                      </p>
+                  </div>
+                </div>
+
                 <h3 class="nppp-question">What is different about this plugin compared to other Nginx Cache Plugins?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
@@ -310,7 +394,8 @@ function nppp_my_faq_html() {
                         <pre><code>https://example.com/product/%e6%b0%b4%e6%bb%b4%e8%bd%ae%e9%94%bb%e7%a2%b3%e5%8d%95%e6%91%87/</code></pre>
                         <p style="font-size: 14px;">Nginx will not find a matching cache file. <strong>This is a classic cache mismatch caused by encoding inconsistency.</strong></p>
 
-                        <h4>✅ Solution: Normalize Encoding with mitmproxy</h4>
+                        <h4>✅ Solution 1 (Recommended): Normalize Encoding with safexec</h4>
+                        <h4>✅ Solution 2: Normalize Encoding with mitmproxy</h4>
                         <p style="font-size: 14px;"><strong>mitmproxy</strong> acts as a "man-in-the-middle" proxy between the NPP Preload (wget) and Nginx. It rewrites percent-encoded characters to a consistent casing <strong>on the fly</strong>, ensuring preload and browser requests use identical formats.</p>
 
                         <p style="font-size: 14px;">To fix cache misses caused by inconsistent percent-encoding (uppercase vs lowercase), follow these steps:</p>
@@ -344,7 +429,7 @@ function nppp_my_faq_html() {
                         <p style="font-size: 14px;">Depending on how the NPP plugin generates cache keys on your system, choose the appropriate script:</p>
 
                         <p><strong>1. percent_encode_lowercase.py</strong> – It forcibly rewrites the percent-encoded characters in NPP plugin preload requests to lowercase for consistency:</p>
-                        <pre><code>from mitmproxy import http, ctx
+                        <pre>from mitmproxy import http, ctx
 import re
 
 percent_encoded_re = re.compile(r'%[0-9A-Fa-f]{2}')
@@ -355,10 +440,10 @@ def request(flow: http.HTTPFlow) -> None:
 
     if new_path != path:
         flow.request.path = new_path
-        ctx.log.info(f"Rewriting path: {path} → {new_path}")</code></pre>
+        ctx.log.info(f"Rewriting path: {path} → {new_path}")</pre>
 
                         <p><strong>2. percent_encode_uppercase.py</strong> – It forcibly rewrites the percent-encoded characters in NPP plugin preload requests to uppercase for consistency:</p>
-                        <pre><code>from mitmproxy import http, ctx
+                        <pre>from mitmproxy import http, ctx
 import re
 
 percent_encoded_re = re.compile(r'%[0-9a-f]{2}')
@@ -369,7 +454,7 @@ def request(flow: http.HTTPFlow) -> None:
 
     if new_path != path:
         flow.request.path = new_path
-        ctx.log.info(f"Rewriting path: {path} → {new_path}")</code></pre>
+        ctx.log.info(f"Rewriting path: {path} → {new_path}")</pre>
 
                         <h4>🔧 Example systemd service for mitmproxy:</h4>
                         <ul style="font-size: 14px;">
@@ -378,7 +463,7 @@ def request(flow: http.HTTPFlow) -> None:
                             <li><strong>Allow-Hosts:</strong> Set <code>yourdomain.com</code></li>
                         </ul>
 
-                        <pre><code>[Unit]
+                        <pre>[Unit]
 Description=Mitmproxy - Normalize Percent-Encoding
 After=network.target
 
@@ -397,7 +482,30 @@ StandardOutput=append:/var/log/mitmproxy.log
 StandardError=append:/var/log/mitmproxy.log
 
 [Install]
-WantedBy=multi-user.target</code></pre>
+WantedBy=multi-user.target</pre>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">Why am I seeing -GLOBAL ERROR SERVER: The plugin is not functional on your environment. It requires an Nginx web server.-?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <p style="font-size: 14px;">
+                            This message appears when the plugin cannot detect a running Nginx server or valid <code>nginx.conf</code> in your environment. This is common in reverse proxy setups (e.g., Apache in front of Nginx), containerized environments, or jailed systems (like <strong>cPanel</strong>, <strong>aaPanel</strong>, etc.).
+                        </p>
+                        <p style="font-size: 14px;">
+                            🔧 To force plugin activation in such non-standard environments, define the following constant in your <code>wp-config.php</code>:
+                        </p>
+                        <pre><code>define('NPPP_ASSUME_NGINX', true);</code></pre>
+                        <p style="font-size: 14px;">
+                            This override enables full plugin functionality even when Nginx auto-detection fails.
+                        </p>
+                        <p style="font-size: 14px;">
+                            ✅ <strong>Preferred Solution:</strong> For best accuracy, bind-mount or sync your actual <code>nginx.conf</code> file into the WordPress environment (jail/chroot/container) at:
+                        </p>
+                        <pre><code>/etc/nginx/nginx.conf</code></pre>
+                        <p style="font-size: 14px;">
+                            This lets the plugin auto-parse your live Nginx configuration to accurately detect cache paths, user directives, and cache key settings.
+                        </p>
                     </div>
                 </div>
 

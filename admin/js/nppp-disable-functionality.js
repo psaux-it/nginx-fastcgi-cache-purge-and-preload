@@ -1,7 +1,7 @@
 /**
  * JavaScript for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains code to disable plugin functionality in unsupported environments for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -74,6 +74,9 @@
             // disable auto preload checkbox
             $('#nginx_cache_auto_preload').prop('disabled', true);
 
+            // disable preload proxy checkbox
+            $('#nginx_cache_preload_enable_proxy').prop('disabled', true);
+
             // disable preload mobile checkbox
             $('#nginx_cache_auto_preload_mobile').prop('disabled', true);
 
@@ -97,6 +100,67 @@
 
             // disable generate API key button
             $('#api-key-button').prop('disabled', true);
+
+            // Related purge checkboxes (lock + detach)
+            function npppLockCheckbox(name){
+                const $cb = $(`input[type="checkbox"][name="${name}"]`);
+                if (!$cb.length) return;
+
+                // force on, grey out, make non-interactive
+                $cb.prop('checked', true)
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'title':'Locked in unsupported environment'})
+                    .off('click change')
+                    .on('click.npppLock change.npppLock', function(e){ e.preventDefault(); return false; });
+
+                // grey the label/row too (optional)
+                $cb.closest('label, .form-table tr, p').css({ opacity:.5, cursor:'not-allowed' });
+
+                // disabled inputs don't submit; ensure "yes" still posts
+                const $form = $cb.closest('form');
+                if ($form.length && !$form.find(`input[type="hidden"][name="${name}"]`).length){
+                    $('<input>', {type:'hidden', name, value:'yes'}).appendTo($form);
+                }
+            }
+
+            // call for each setting
+            npppLockCheckbox('nginx_cache_settings[nppp_related_include_home]');
+            npppLockCheckbox('nginx_cache_settings[nppp_related_include_category]');
+            npppLockCheckbox('nginx_cache_settings[nppp_related_preload_after_manual]');
+            npppLockCheckbox('nginx_cache_settings[nppp_related_apply_manual]');
+
+            // Add hidden mirror so disabled controls still submit a value
+            function ensureHiddenMirror($form, name, value){
+                if (!$form.length || !name) return;
+                const sel = `input[type="hidden"][name="${name}"]`;
+                if (!$form.find(sel).length){
+                    $('<input>', { type:'hidden', name, value }).appendTo($form);
+                } else {
+                    $form.find(sel).val(value);
+                }
+            }
+
+            // Disable the pctnorm radiogroup cleanly and preserve its value
+            (function disablePctNorm(){
+                const $fs = $('#nppp-pctnorm');
+                if (!$fs.length) return;
+
+                const $form = $fs.closest('form');
+                const $radios = $fs.find('input[type="radio"]');
+                const name = $radios.first().attr('name');
+                const currentVal = $radios.filter(':checked').val();
+
+                // visuals + semantics
+                $fs.attr({'aria-disabled':'true'}).css({ opacity:.5, cursor:'not-allowed' });
+                $fs.find('label, .nppp-segcontrol-thumb').css('pointer-events','none');
+
+                // make non-interactive
+                $radios.prop('disabled', true).attr('tabindex','-1').off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                // hidden mirror for submit
+                ensureHiddenMirror($form, name, currentVal);
+            })();
 
             // disable the rest API elements non-clickable
             $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({

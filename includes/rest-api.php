@@ -2,7 +2,7 @@
 /**
  * Rest API for FastCGI Cache Purge and Preload for Nginx
  * Description: This file contains rest api functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -16,29 +16,45 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Retrieve the client's IP address, considering proxies.
 function nppp_get_client_ip() {
-    // Check for HTTP_CLIENT_IP
-    if (isset($_SERVER['HTTP_CLIENT_IP']) && ! empty($_SERVER['HTTP_CLIENT_IP'])) {
-        return sanitize_text_field(wp_unslash($_SERVER['HTTP_CLIENT_IP']));
-    }
+    // Mask last octet
+    $mask_ip = function($ip) {
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            $parts = explode('.', $ip);
+            $parts[3] = '**';
+            return implode('.', $parts);
+        }
+        return $ip;
+    };
 
-    // Check for HTTP_X_FORWARDED_FOR (handles multiple IPs)
+    // Check for HTTP_X_FORWARDED_FOR (Real IP)
     if (isset($_SERVER['HTTP_X_FORWARDED_FOR']) && ! empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        // Sanitize the entire X-Forwarded-For header
-        $sanitized_x_forwarded_for = sanitize_text_field(wp_unslash($_SERVER['HTTP_X_FORWARDED_FOR']));
-
-        // Handle multiple IP addresses (comma-separated)
-        $ip_addresses = explode(',', $sanitized_x_forwarded_for);
+        $xff = sanitize_text_field(wp_unslash($_SERVER['HTTP_X_FORWARDED_FOR']));
+        $ip_list = explode(',', $xff);
 
         // Trim whitespace from the first IP address
-        if (isset($ip_addresses[0])) {
-            $client_ip = trim($ip_addresses[0]);
-            return sanitize_text_field($client_ip);
+        if (isset($ip_list[0])) {
+            $ip = trim($ip_list[0]);
+            $ip = sanitize_text_field($ip);
+            if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                return $mask_ip($ip);
+            }
         }
     }
 
     // Check for REMOTE_ADDR
     if (isset($_SERVER['REMOTE_ADDR']) && ! empty($_SERVER['REMOTE_ADDR'])) {
-        return sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
+        $ip = sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
+        if (filter_var($ip, FILTER_VALIDATE_IP)) {
+            return $mask_ip($ip);
+        }
+    }
+
+    // Check for HTTP_CLIENT_IP
+    if (isset($_SERVER['HTTP_CLIENT_IP']) && ! empty($_SERVER['HTTP_CLIENT_IP'])) {
+        $ip = sanitize_text_field(wp_unslash($_SERVER['HTTP_CLIENT_IP']));
+        if (filter_var($ip, FILTER_VALIDATE_IP)) {
+            return $mask_ip($ip);
+        }
     }
 
     // If none of the above, return empty string
