@@ -56,6 +56,7 @@ function nppp_prepare_request_env(bool $force = false): void {
             }
 
             // Always unset safexec related envs
+            putenv('SAFEXEC_SAFE_CWD');
             putenv('SAFEXEC_QUIET');
             putenv('SAFEXEC_PCTNORM');
             putenv('SAFEXEC_PCTNORM_CASE');
@@ -82,6 +83,9 @@ function nppp_prepare_request_env(bool $force = false): void {
 
     // Always quiet safexec
     putenv('SAFEXEC_QUIET=1');
+
+    // Force hop to a safe CWD if current dir isn’t traversable
+    putenv('SAFEXEC_SAFE_CWD=1');
 
     // safexec mode (off|upper|lower|preserve)
     $opts = get_option('nginx_cache_settings', []);
