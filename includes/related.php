@@ -1,6 +1,6 @@
 <?php
 /**
- * Related purge helpers for FastCGI Cache Purge and Preload for Nginx
+ * Related purge helpers for Nginx Cache Purge and Preload
  * Description: Helper functions to purge (and optionally preload) related URLs—homepage and category archives—
  *              whenever a single post/page is purged (via auto purge, front-end action, or Advanced tab).
  * Version: 2.1.4
@@ -9,6 +9,11 @@
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
  */
+
+// Exit if accessed directly.
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 // Fast head readers (minimal I/O)
 if (! function_exists('nppp_head_fast')) {
