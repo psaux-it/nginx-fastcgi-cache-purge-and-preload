@@ -794,7 +794,7 @@ function nppp_handle_nginx_cache_settings_submission() {
                         }
 
                         // Redirect with success message
-                        wp_redirect(add_query_arg(array(
+                        wp_safe_redirect(add_query_arg(array(
                             'status_message' => urlencode(__('Plugin cache (permission) cleared, settings saved successfully!', 'fastcgi-cache-purge-and-preload-nginx')),
                             'message_type' => 'success',
                             'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
@@ -807,7 +807,7 @@ function nppp_handle_nginx_cache_settings_submission() {
                             $error_messages[] = esc_html($error['message']);
                         }
 
-                        wp_redirect(add_query_arg(array(
+                        wp_safe_redirect(add_query_arg(array(
                             'status_message' => urlencode(implode(', ', $error_messages)),
                             'message_type' => 'error',
                             'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
