@@ -657,7 +657,18 @@ services:
     */
     public static function nppp_maybe_reset_opcache(): void {
         // Optional manual trigger: ?nppp_force_opcache=1 bypasses the cooldown
-        $force = isset($_GET['nppp_force_opcache']) && $_GET['nppp_force_opcache'] === '1';
+        if ( ! current_user_can('manage_options') ) {
+            return;
+        }
+
+        $force = false;
+        if ( isset( $_GET['nppp_force_opcache'] ) ) {
+            $force_request = sanitize_text_field( wp_unslash( $_GET['nppp_force_opcache'] ) );
+            if ( $force_request === '1' ) {
+                $nonce = isset( $_GET['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ) : '';
+                $force = (bool) wp_verify_nonce( $nonce, 'nppp_setup_actions' );
+            }
+        }
 
         if ( ! $force && get_transient('nppp_opcache_reset_done') ) {
             return;
