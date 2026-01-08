@@ -18,7 +18,7 @@ if ( ! defined('ABSPATH') ) {
 if (!isset($GLOBALS['NPPP_AUTOLOADER_REGISTERED'])) {
     $GLOBALS['NPPP_AUTOLOADER_REGISTERED'] = true;
 
-    $loader = static function (string $class): bool {
+    $nppp_loader = static function (string $class): bool {
         $prefix  = 'NPPP\\';
         $baseDir = __DIR__ . '/';
 
@@ -88,8 +88,8 @@ if (!isset($GLOBALS['NPPP_AUTOLOADER_REGISTERED'])) {
 
     // PHP 8.4+
     if (PHP_VERSION_ID >= 80400) {
-        spl_autoload_register($loader, prepend: true);
+        spl_autoload_register($nppp_loader, prepend: true);
     } else {
-        spl_autoload_register($loader, true, true);
+        spl_autoload_register($nppp_loader, true, true);
     }
 }
