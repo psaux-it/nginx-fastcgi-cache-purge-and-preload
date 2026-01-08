@@ -143,11 +143,11 @@ require_once dirname(__DIR__) . '/includes/compat-elementor.php';
 require_once dirname(__DIR__) . '/includes/compat-gutenberg.php';
 
 // Get the status of Auto Purge option
-$options = get_option('nginx_cache_settings');
-$nppp_auto_purge = isset($options['nginx_cache_purge_on_update']) && $options['nginx_cache_purge_on_update'] === 'yes';
+$nppp_options = get_option('nginx_cache_settings');
+$nppp_auto_purge = isset($nppp_options['nginx_cache_purge_on_update']) && $nppp_options['nginx_cache_purge_on_update'] === 'yes';
 
 // Add support on well known Cache Plugins
-$page_cache_purge_actions = array(
+$nppp_page_cache_purge_actions = array(
     'after_rocket_clean_domain',                // WP Rocket
     'hyper_cache_purged',                       // Hyper Cache
     'w3tc_flush_all',                           // W3 Total Cache
@@ -213,8 +213,8 @@ add_action('wp_ajax_nppp_update_related_fields', 'nppp_update_related_fields');
 add_action('wp_ajax_nppp_locate_cache_file', 'nppp_locate_cache_file_ajax');
 add_action('wp_ajax_nppp_update_pctnorm_mode', 'nppp_update_pctnorm_mode');
 $nppp_auto_purge
-    ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions)
-    : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $page_cache_purge_actions);
+    ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $nppp_page_cache_purge_actions)
+    : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $nppp_page_cache_purge_actions);
 $nppp_auto_purge
     ? (class_exists('autoptimizeCache') && add_action('autoptimize_action_cachepurged', 'nppp_purge_callback'))
     : (class_exists('autoptimizeCache') && remove_action('autoptimize_action_cachepurged', 'nppp_purge_callback'));
