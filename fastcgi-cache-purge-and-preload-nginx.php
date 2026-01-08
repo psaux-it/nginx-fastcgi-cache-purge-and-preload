@@ -21,8 +21,8 @@ if (!defined('ABSPATH')) {
 
 // Compatible mode
 if (! defined('NPPP_ASSUME_NGINX')) {
-    $assume = get_option('nppp_assume_nginx_runtime');
-    if ($assume) {
+    $nppp_assume_nginx_runtime = get_option('nppp_assume_nginx_runtime');
+    if ($nppp_assume_nginx_runtime) {
         define('NPPP_ASSUME_NGINX', true);
     }
 }
