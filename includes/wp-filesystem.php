@@ -98,6 +98,41 @@ function nppp_perform_file_operation($file_path, $operation, $data = null) {
     }
 }
 
+// Validate purge path to avoid deleting webroot or content directories in extreme situations.
+function nppp_validate_purge_path($directory_path) {
+    $real_path = realpath($directory_path);
+
+    if ($real_path === false) {
+        return new WP_Error('directory_traversal', __('Directory traversal detected or invalid path.', 'fastcgi-cache-purge-and-preload-nginx'));
+    }
+
+    $unsafe_roots = array();
+    if (defined('ABSPATH')) {
+        $unsafe_roots[] = ABSPATH;
+    }
+    if (defined('WP_CONTENT_DIR')) {
+        $unsafe_roots[] = WP_CONTENT_DIR;
+    }
+    if (defined('WP_PLUGIN_DIR')) {
+        $unsafe_roots[] = WP_PLUGIN_DIR;
+    }
+    if (defined('WPMU_PLUGIN_DIR')) {
+        $unsafe_roots[] = WPMU_PLUGIN_DIR;
+    }
+
+    foreach ($unsafe_roots as $root) {
+        $root_real = realpath($root);
+        if ($root_real && strpos(trailingslashit($real_path), trailingslashit($root_real)) === 0) {
+            return new WP_Error(
+                'unsafe_cache_path',
+                __('Unsafe cache path: refusing to purge inside WordPress directories. Please set the Nginx cache path outside the WordPress installation.', 'fastcgi-cache-purge-and-preload-nginx')
+            );
+        }
+    }
+
+    return $real_path;
+}
+
 // Purge cache with WP_Filesystem
 function nppp_wp_purge($directory_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -110,12 +145,10 @@ function nppp_wp_purge($directory_path) {
         return;
     }
 
-    // Resolve the absolute path
-    $real_path = realpath($directory_path);
-
-    // Check if the realpath is valid
-    if ($real_path === false) {
-        return new WP_Error('directory_traversal', __('Directory traversal detected or invalid path.', 'fastcgi-cache-purge-and-preload-nginx'));
+    // Resolve and validate the absolute path.
+    $real_path = nppp_validate_purge_path($directory_path);
+    if (is_wp_error($real_path)) {
+        return $real_path;
     }
 
     // Ensure the resolved path doesn't traverse outside the intended directory structure
@@ -234,6 +267,12 @@ function nppp_wp_remove_directory($directory_path, $recursive = true) {
 
     // Check if the directory exists before attempting to remove it
     if ($wp_filesystem->is_dir($directory_path)) {
+        // Validate the purge path
+        $real_path = nppp_validate_purge_path($directory_path);
+        if (is_wp_error($real_path)) {
+            return $real_path;
+        }
+
         // Attempt to remove the directory
         $result = $wp_filesystem->delete($directory_path, $recursive);
 
