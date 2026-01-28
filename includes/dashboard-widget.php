@@ -196,6 +196,15 @@ function nppp_dashboard_widget() {
     // Fetch the NPP plugin settings from the database
     $settings = get_option('nginx_cache_settings', []);
 
+    // URL Normalization
+    $pctnorm_mode = isset($settings['nginx_cache_pctnorm_mode']) ? $settings['nginx_cache_pctnorm_mode'] : 'off';
+    $pctnorm_enabled = $pctnorm_mode !== 'off';
+
+    if ($pctnorm_enabled && function_exists('nppp_find_safexec_path') && function_exists('nppp_is_safexec_usable')) {
+        $safexec_path = nppp_find_safexec_path();
+        $pctnorm_enabled = $safexec_path && nppp_is_safexec_usable($safexec_path, false);
+    }
+
     // Need setup
     $needs_setup = class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup();
     $setup_url   = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
@@ -228,6 +237,11 @@ function nppp_dashboard_widget() {
             'label' => __('Proxy', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nginx_cache_preload_enable_proxy']) && $settings['nginx_cache_preload_enable_proxy'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon'   => 'dashicons-randomize'
+        ],
+        'url_normalization' => [
+            'label' => __('URL Normalization', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status' => $pctnorm_enabled ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
+            'icon' => 'dashicons-admin-links'
         ],
         'scheduled_cache' => [
             'label' => __('Scheduled Cache', 'fastcgi-cache-purge-and-preload-nginx'),
