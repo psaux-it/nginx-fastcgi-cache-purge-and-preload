@@ -747,7 +747,7 @@ function nppp_handle_nginx_cache_settings_submission() {
             if (wp_verify_nonce($nonce, 'nginx_cache_settings_nonce')) {
                 // Capability check
                 if (!current_user_can('manage_options')) {
-                    wp_die('You do not have sufficient permissions to access this page.');
+                    wp_die(esc_html__('You do not have sufficient permissions to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
                 }
 
                 // Check if 'nginx_cache_settings' is set in the POST data
