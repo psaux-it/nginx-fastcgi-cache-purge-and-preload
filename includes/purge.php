@@ -280,6 +280,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     if ($should_preload_related) {
                         nppp_preload_urls_fire_and_forget($related_urls);
                     }
+
+                    // Cloudflare purge cache
+                    $post_id = (int) url_to_postid($current_page_url);
+                    do_action('nppp_purged_urls', array_merge(array($current_page_url), $related_urls), $current_page_url, $post_id, (bool) $nppp_auto_purge);
+
                     return;
                 }
             }
@@ -319,6 +324,10 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         if ($should_preload_related) {
             nppp_preload_urls_fire_and_forget($related_urls);
         }
+
+        // Cloudflare purge cache
+        $post_id = (int) url_to_postid($current_page_url);
+        do_action('nppp_purged_urls', array_merge(array($current_page_url), $related_urls), $current_page_url, $post_id, (bool) $nppp_auto_purge);
     }
 }
 
