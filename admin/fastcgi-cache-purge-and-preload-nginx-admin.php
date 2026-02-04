@@ -139,6 +139,7 @@ require_once dirname(__DIR__) . '/includes/rest-api-helper.php';
 require_once dirname(__DIR__) . '/includes/plugin-tracking.php';
 require_once dirname(__DIR__) . '/includes/update.php';
 require_once dirname(__DIR__) . '/includes/dashboard-widget.php';
+require_once dirname(__DIR__) . '/includes/compat-cloudflare.php';
 require_once dirname(__DIR__) . '/includes/compat-elementor.php';
 require_once dirname(__DIR__) . '/includes/compat-gutenberg.php';
 
