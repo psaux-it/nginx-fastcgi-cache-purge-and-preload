@@ -178,5 +178,21 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_urls' ) ) {
     }
 }
 
+if ( ! function_exists( 'nppp_cloudflare_apo_sync_option_enabled' ) ) {
+    function nppp_cloudflare_apo_sync_option_enabled( $enabled, string $context = '' ): bool {
+        $options = get_option( 'nginx_cache_settings', array() );
+        if ( ! nppp_cloudflare_apo_is_available() && isset( $options['nppp_cloudflare_apo_sync'] ) && $options['nppp_cloudflare_apo_sync'] !== 'no' ) {
+            $options['nppp_cloudflare_apo_sync'] = 'no';
+            update_option( 'nginx_cache_settings', $options );
+        }
+        if ( isset( $options['nppp_cloudflare_apo_sync'] ) && $options['nppp_cloudflare_apo_sync'] === 'no' ) {
+            return false;
+        }
+
+        return (bool) $enabled;
+    }
+}
+
+add_filter( 'nppp_sync_cloudflare_apo_enabled', 'nppp_cloudflare_apo_sync_option_enabled', 10, 5 );
 add_action( 'nppp_purged_all', 'nppp_cloudflare_apo_purge_all' );
 add_action( 'nppp_purged_urls', 'nppp_cloudflare_apo_purge_urls', 10, 4 );
