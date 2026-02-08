@@ -1670,7 +1670,12 @@ function nppp_nginx_cache_cloudflare_apo_sync_callback() {
         <span class="nppp-onoffswitch-switch-cloudflare"></span>
     </label>
     <?php if ( ! $is_available ) : ?>
-        <p class="description"><?php echo esc_html__( 'Cloudflare APO plugin not detected. Install and configure it to enable sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+        <div class="nppp-related-pages" aria-live="polite">
+            <em class="nppp-hint" role="note" style="max-width:max-content; opacity: 0.5;">
+                <span class="dashicons dashicons-lock" aria-hidden="true"></span>
+                <?php echo esc_html__( 'Cloudflare APO plugin not detected. Install and configure it to enable sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            </em>
+        </div>
     <?php endif; ?>
     <?php
 }
