@@ -45,6 +45,47 @@ if ( ! function_exists( 'nppp_cloudflare_apo_get_hooks' ) ) {
 }
 
 /**
+ * Normalize host for safe comparisons (lowercase + IDN to ASCII).
+ */
+if ( ! function_exists( 'nppp_cloudflare_apo_normalize_host' ) ) {
+    function nppp_cloudflare_apo_normalize_host( string $host ): string {
+        $host = strtolower( trim( $host ) );
+
+        // Normalize IDN if Cloudflare plugin is present (polyfill-safe).
+        if ( class_exists( '\Cloudflare\APO\IntlUtil' ) ) {
+            $ascii = \Cloudflare\APO\IntlUtil::idn_to_ascii( $host, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
+            if ( is_string( $ascii ) && $ascii !== '' ) {
+                $host = strtolower( $ascii );
+            }
+        }
+
+        return $host;
+    }
+}
+
+/**
+ * True if host is exactly the zone base OR a real subdomain of it.
+ */
+if ( ! function_exists( 'nppp_cloudflare_apo_host_in_zone' ) ) {
+    function nppp_cloudflare_apo_host_in_zone( string $host, string $zone_base ): bool {
+        $host      = nppp_cloudflare_apo_normalize_host( $host );
+        $zone_base = nppp_cloudflare_apo_normalize_host( $zone_base );
+
+        if ( $host === '' || $zone_base === '' ) {
+            return false;
+        }
+
+        if ( $host === $zone_base ) {
+            return true;
+        }
+
+        // Uses Cloudflare plugin helper that enforces the '.' boundary.
+        return class_exists( '\Cloudflare\APO\WordPress\Utils' )
+            && \Cloudflare\APO\WordPress\Utils::isSubdomainOf( $host, $zone_base );
+    }
+}
+
+/**
  * Build and cache a Cloudflare runtime bundle (client + datastore + zone tag).
  * Cached per-request.
  */
@@ -74,6 +115,15 @@ if ( ! function_exists( 'nppp_cloudflare_apo_get_runtime' ) ) {
             $config      = new \Cloudflare\APO\Integration\DefaultConfig( $config_raw );
             $logger      = new \Cloudflare\APO\Integration\DefaultLogger( $config->getValue( 'debug' ) );
             $store       = new \Cloudflare\APO\WordPress\DataStore( $logger );
+
+            // If CF plugin isn't authenticated/configured, don't try to purge.
+            if ( method_exists( $store, 'getClientV4APIKey' ) ) {
+                $key = $store->getClientV4APIKey();
+                if ( empty( $key ) ) {
+                    return null;
+                }
+            }
+
             $wp_api      = new \Cloudflare\APO\WordPress\WordPressAPI( $store );
             $integration = new \Cloudflare\APO\Integration\DefaultIntegration( $config, $wp_api, $store, $logger );
             $client      = new \Cloudflare\APO\WordPress\WordPressClientAPI( $integration );
@@ -119,7 +169,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_get_runtime' ) ) {
             return null;
         }
 
-        // IMPORTANT: normalize to base domain for host matching (handles www vs apex).
+        // Normalize to base domain for host matching (handles www vs apex).
         $domain_base = preg_replace( '#^www\.#i', '', $domain );
         if ( ! is_string( $domain_base ) || $domain_base === '' ) {
             $domain_base = $domain;
@@ -188,7 +238,9 @@ if ( ! function_exists( 'nppp_cloudflare_apo_queue_urls' ) ) {
 
 if ( ! function_exists( 'nppp_cloudflare_apo_flush_queue' ) ) {
     function nppp_cloudflare_apo_flush_queue(): void {
+        // If we did a purge-all, don't bother with file purges.
         if ( ! empty( $GLOBALS['NPPP_CF_APO_PURGE_ALL_RAN'] ) ) {
+            $GLOBALS['NPPP_CF_APO_URL_QUEUE'] = array();
             return;
         }
 
@@ -197,6 +249,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_flush_queue' ) ) {
             return;
         }
 
+        // Clear queue early to avoid re-entrancy issues.
         $GLOBALS['NPPP_CF_APO_URL_QUEUE'] = array();
 
         nppp_cloudflare_apo_purge_exact_urls( $urls );
@@ -204,7 +257,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_flush_queue' ) ) {
 }
 
 /**
- * Purge ONLY the exact URLs NPP purged.
+ * Purge ONLY the exact URLs NPP purged (strict sync).
  */
 if ( ! function_exists( 'nppp_cloudflare_apo_purge_exact_urls' ) ) {
     function nppp_cloudflare_apo_purge_exact_urls( array $urls ): void {
@@ -217,31 +270,40 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_exact_urls' ) ) {
             return;
         }
 
+        // Clean, validate, dedupe.
         $urls = array_values( array_unique( array_filter( $urls, 'is_string' ) ) );
         if ( empty( $urls ) ) {
             return;
         }
 
-        // Keep only URLs in this zone (use base domain to handle www vs apex).
-        $domain_base = $runtime['domain_base'];
-        $urls        = array_values(
-            array_filter(
-                $urls,
-                static function ( string $url ) use ( $domain_base ): bool {
-                    $host = wp_parse_url( $url, PHP_URL_HOST );
-                    return is_string( $host ) && \Cloudflare\APO\WordPress\Utils::strEndsWith( $host, $domain_base );
-                }
-            )
-        );
+        // Keep only URLs in this zone (use base domain; safe subdomain matching).
+        $domain_base = (string) $runtime['domain_base'];
+        $filtered    = array();
 
+        foreach ( $urls as $url ) {
+            if ( false === wp_http_validate_url( $url ) ) {
+                continue;
+            }
+            $host = wp_parse_url( $url, PHP_URL_HOST );
+            if ( ! is_string( $host ) || $host === '' ) {
+                continue;
+            }
+            if ( nppp_cloudflare_apo_host_in_zone( $host, $domain_base ) ) {
+                $filtered[] = $url;
+            }
+        }
+
+        $urls = array_values( array_unique( $filtered ) );
         if ( empty( $urls ) ) {
             return;
         }
 
+        // Cloudflare purge limit: 30 files per request.
         foreach ( array_chunk( $urls, 30 ) as $chunk ) {
             $runtime['client']->zonePurgeFiles( $runtime['zone_tag'], $chunk );
         }
 
+        // Mobile variant if APO Cache By Device Type is enabled.
         $device_setting = $runtime['store']->getPluginSetting(
             \Cloudflare\APO\API\Plugin::SETTING_AUTOMATIC_PLATFORM_OPTIMIZATION_CACHE_BY_DEVICE_TYPE
         );
@@ -254,15 +316,14 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_exact_urls' ) ) {
         if ( $device_on ) {
             foreach ( array_chunk( $urls, 30 ) as $chunk ) {
                 $mobile = array_map(
-                    static function ( string $url ): array {
+                    static function ( string $u ): array {
                         return array(
-                            'url'     => $url,
+                            'url'     => $u,
                             'headers' => array( 'CF-Device-Type' => 'mobile' ),
                         );
                     },
                     $chunk
                 );
-
                 $runtime['client']->zonePurgeFiles( $runtime['zone_tag'], $mobile );
             }
         }
@@ -282,7 +343,8 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_all' ) ) {
         $hooks = nppp_cloudflare_apo_get_hooks();
         if ( $hooks ) {
             $GLOBALS['NPPP_CF_APO_PURGE_ALL_RAN'] = true;
-            $hooks->purgeCacheEverything();
+            $GLOBALS['NPPP_CF_APO_URL_QUEUE']    = array();
+            $hooks->purgeCacheEverything(); // CF plugin checks APO/PSC enabled internally.
         }
     }
 }
@@ -297,6 +359,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_urls' ) ) {
             return;
         }
 
+        // Queue + flush once at shutdown for efficiency.
         nppp_cloudflare_apo_queue_urls( $urls );
     }
 }
@@ -321,6 +384,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_sync_option_enabled' ) ) {
             return false;
         }
 
+        // If enabled but CF plugin isn't available, force-disable to avoid misleading state.
         if ( ! nppp_cloudflare_apo_is_available() ) {
             $options['nppp_cloudflare_apo_sync'] = 'no';
             update_option( 'nginx_cache_settings', $options );
