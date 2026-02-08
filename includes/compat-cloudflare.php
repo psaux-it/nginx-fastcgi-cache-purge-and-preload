@@ -185,11 +185,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_sync_option_enabled' ) ) {
             $options['nppp_cloudflare_apo_sync'] = 'no';
             update_option( 'nginx_cache_settings', $options );
         }
-        if ( isset( $options['nppp_cloudflare_apo_sync'] ) && $options['nppp_cloudflare_apo_sync'] === 'no' ) {
-            return false;
-        }
-
-        return (bool) $enabled;
+        return isset( $options['nppp_cloudflare_apo_sync'] ) && $options['nppp_cloudflare_apo_sync'] === 'yes';
     }
 }
 
