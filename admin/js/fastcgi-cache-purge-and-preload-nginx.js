@@ -1628,6 +1628,53 @@ $(document).ready(function() {
         }, 'json');
     });
 
+    // Update Cloudflare APO sync status when state changes
+    $('#nppp_cloudflare_apo_sync').change(function() {
+        var cloudflareElement = jQuery(this);
+        var clickToCopySpanCloudflare = cloudflareElement.next('.nppp-onoffswitch-label-cloudflare');
+        var clickToCopySpanOffsetCloudflare = clickToCopySpanCloudflare.offset();
+        var notificationLeftCloudflare = clickToCopySpanOffsetCloudflare.left + clickToCopySpanCloudflare.outerWidth() + 10;
+        var notificationTopCloudflare = clickToCopySpanOffsetCloudflare.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action: 'nppp_update_cloudflare_apo_sync_option',
+            cloudflare_sync: isChecked,
+            _wpnonce: nppp_admin_data.cloudflare_apo_sync_nonce
+        }, function(response) {
+            // Handle response
+            if (response.success) {
+                // Show a small notification indicating successfully saved option
+                var notification = document.createElement('div');
+                notification.textContent = '✔';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftCloudflare + 'px';
+                notification.style.top = notificationTopCloudflare + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
+            } else {
+                // Error updating option, revert checkbox
+                $('#nppp_cloudflare_apo_sync').prop('checked', !$('#nppp_cloudflare_apo_sync').prop('checked'));
+                alert('Error updating option!');
+            }
+        }, 'json');
+    });
+
     // Related Pages
     (function npppSetupRelatedAutoSave() {
         const $npppRelWrappers = $('.nppp-related-pages').not('[data-nppp-rel-init]');
@@ -2728,6 +2775,39 @@ $(document).ready(function() {
             $('.nppp-onoffswitch-switch').css('background', '#ea1919');
             $('.nppp-on').css('color', '#000000');
             $('.nppp-off').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for Cloudflare APO sync
+    var isCloudflareChecked = $('#nppp_cloudflare_apo_sync').prop('checked');
+    // Update the toggle switch based on the checkbox state
+    if (isCloudflareChecked) {
+        // Checkbox is checked, toggle switch to On
+        $('.nppp-onoffswitch-switch-cloudflare').css('background', '#66b317');
+        $('.nppp-on-cloudflare').css('color', '#ffffff');
+        $('.nppp-off-cloudflare').css('color', '#000000');
+    } else {
+        // Checkbox is unchecked, toggle switch to Off
+        $('.nppp-onoffswitch-switch-cloudflare').css('background', '#ea1919');
+        $('.nppp-on-cloudflare').css('color', '#000000');
+        $('.nppp-off-cloudflare').css('color', '#ffffff');
+    }
+
+    // Add event listener to the original checkbox
+    $('#nppp_cloudflare_apo_sync').change(function() {
+        // Check if the checkbox is checked
+        var isCloudflareChecked = $(this).prop('checked');
+        // Update the toggle switch based on the checkbox state
+        if (isCloudflareChecked) {
+            // Checkbox is checked, toggle switch to On
+            $('.nppp-onoffswitch-switch-cloudflare').css('background', '#66b317');
+            $('.nppp-on-cloudflare').css('color', '#ffffff');
+            $('.nppp-off-cloudflare').css('color', '#000000');
+        } else {
+            // Checkbox is unchecked, toggle switch to Off
+            $('.nppp-onoffswitch-switch-cloudflare').css('background', '#ea1919');
+            $('.nppp-on-cloudflare').css('color', '#000000');
+            $('.nppp-off-cloudflare').css('color', '#ffffff');
         }
     });
 
