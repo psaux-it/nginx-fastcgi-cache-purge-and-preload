@@ -738,6 +738,19 @@ function nppp_purge_cache_premium_callback() {
             nppp_purge_url_silent($nginx_cache_path, $rel);
         }
 
+        // Cloudflare purge cache (sync with advanced single-page purge)
+        $purged_urls = array_merge($final_url ? array($final_url) : array(), $related_urls);
+        $purged_urls = array_values(array_filter($purged_urls));
+        if (!empty($purged_urls)) {
+            do_action(
+                'nppp_purged_urls',
+                $purged_urls,
+                $final_url,
+                $final_url ? (int) url_to_postid($final_url) : 0,
+                false
+            );
+        }
+
         // Preload policy for manual (Advanced tab is manual)
         if (!empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes') {
             nppp_preload_urls_fire_and_forget($related_urls);
