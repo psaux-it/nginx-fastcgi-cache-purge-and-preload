@@ -291,7 +291,7 @@ function nppp_nginx_cache_settings_page() {
                         <tr valign="top">
                             <th scope="row">
                                 <span class="dashicons dashicons-cloud"></span>
-                                <?php echo esc_html__( 'Cloudflare APO Sync', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                <?php echo esc_html__( 'Cloudflare Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </th>
                             <td>
                                 <div class="nppp-auto-preload-container">
@@ -300,10 +300,13 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Sync Cloudflare APO cache purges with Nginx purges to keep both caches aligned.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Sync Cloudflare cache purges to keep both caches aligned.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Requires the official Cloudflare APO WordPress plugin and a valid APO configuration.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Independent from “Auto Purge”. When ON, Cloudflare cache is purged whenever Nginx cache purges (URLs or purge-all).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'Requires the official Cloudflare WordPress plugin with APO or PSC enabled and authentication completed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                             </td>
                         </tr>
