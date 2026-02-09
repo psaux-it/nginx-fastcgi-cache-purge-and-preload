@@ -17,6 +17,14 @@ if ( ! function_exists( 'nppp_cloudflare_apo_is_available' ) ) {
     }
 }
 
+if ( ! function_exists( 'nppp_cloudflare_apo_log' ) ) {
+    function nppp_cloudflare_apo_log( string $message, string $type = 'info' ): void {
+        if ( function_exists( 'nppp_display_admin_notice' ) ) {
+            nppp_display_admin_notice( $type, $message, true, false );
+        }
+    }
+}
+
 if ( ! function_exists( 'nppp_cloudflare_apo_get_hooks' ) ) {
     function nppp_cloudflare_apo_get_hooks() {
         static $hooks = null;
@@ -93,21 +101,28 @@ if ( ! function_exists( 'nppp_cloudflare_apo_get_runtime' ) ) {
     function nppp_cloudflare_apo_get_runtime(): ?array {
         static $runtime = null;
 
+        if ( $runtime === false ) {
+            return null;
+        }
+
         if ( is_array( $runtime ) ) {
             return $runtime;
         }
 
         if ( ! nppp_cloudflare_apo_is_available() ) {
+            $runtime = false;
             return null;
         }
 
         $config_path = trailingslashit( CLOUDFLARE_PLUGIN_DIR ) . 'config.json';
         if ( ! is_readable( $config_path ) ) {
+            $runtime = false;
             return null;
         }
 
         $config_raw = file_get_contents( $config_path );
         if ( ! is_string( $config_raw ) || '' === $config_raw ) {
+            $runtime = false;
             return null;
         }
 
@@ -120,6 +135,11 @@ if ( ! function_exists( 'nppp_cloudflare_apo_get_runtime' ) ) {
             if ( method_exists( $store, 'getClientV4APIKey' ) ) {
                 $key = $store->getClientV4APIKey();
                 if ( empty( $key ) ) {
+                    nppp_cloudflare_apo_log(
+                        __( 'Cloudflare cache purge skipped: Cloudflare plugin is not authenticated.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        'warning'
+                    );
+                    $runtime = false;
                     return null;
                 }
             }
@@ -128,6 +148,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_get_runtime' ) ) {
             $integration = new \Cloudflare\APO\Integration\DefaultIntegration( $config, $wp_api, $store, $logger );
             $client      = new \Cloudflare\APO\WordPress\WordPressClientAPI( $integration );
         } catch ( \Throwable $e ) {
+            $runtime = false;
             return null;
         }
 
@@ -150,6 +171,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_get_runtime' ) ) {
 
         $candidates = array_values( array_unique( array_filter( $candidates, 'is_string' ) ) );
         if ( empty( $candidates ) ) {
+            $runtime = false;
             return null;
         }
 
@@ -166,6 +188,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_get_runtime' ) ) {
         }
 
         if ( $domain === '' || $zone_tag === '' ) {
+            $runtime = false;
             return null;
         }
 
@@ -262,17 +285,28 @@ if ( ! function_exists( 'nppp_cloudflare_apo_flush_queue' ) ) {
 if ( ! function_exists( 'nppp_cloudflare_apo_purge_exact_urls' ) ) {
     function nppp_cloudflare_apo_purge_exact_urls( array $urls ): void {
         $runtime = nppp_cloudflare_apo_get_runtime();
+
         if ( ! $runtime ) {
             return;
         }
 
         if ( ! nppp_cloudflare_apo_is_html_cache_enabled( $runtime['store'] ) ) {
+            nppp_cloudflare_apo_log(
+                __( 'Cloudflare cache purge skipped: APO/Plugin-Specific Cache is disabled.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'info'
+            );
             return;
         }
+
+        $input_count = count( $urls );
 
         // Clean, validate, dedupe.
         $urls = array_values( array_unique( array_filter( $urls, 'is_string' ) ) );
         if ( empty( $urls ) ) {
+            nppp_cloudflare_apo_log(
+                __( 'Cloudflare cache purge skipped: no URLs provided for purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'info'
+            );
             return;
         }
 
@@ -295,12 +329,60 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_exact_urls' ) ) {
 
         $urls = array_values( array_unique( $filtered ) );
         if ( empty( $urls ) ) {
+            nppp_cloudflare_apo_log(
+                sprintf(
+                    /* translators: %d is input URL count. */
+                    __( 'Cloudflare cache purge skipped: no URLs matched the active zone (input=%d).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    (int) $input_count
+                ),
+                'info'
+            );
             return;
         }
 
-        // Cloudflare purge limit: 30 files per request.
-        foreach ( array_chunk( $urls, 30 ) as $chunk ) {
-            $runtime['client']->zonePurgeFiles( $runtime['zone_tag'], $chunk );
+        $total   = count( $urls );
+        $chunks  = array_chunk( $urls, 30 );
+        $reqs    = count( $chunks );
+        $failed  = 0;
+        $err_msg = '';
+
+        foreach ( $chunks as $chunk ) {
+            try {
+                // zonePurgeFiles usually returns bool-like; if it throws, we treat as failure.
+                $ok = (bool) $runtime['client']->zonePurgeFiles( $runtime['zone_tag'], $chunk );
+                if ( ! $ok ) {
+                    $failed++;
+                }
+            } catch ( \Throwable $e ) {
+                $failed++;
+                if ( $err_msg === '' ) {
+                    $err_msg = $e->getMessage();
+                }
+            }
+        }
+
+        if ( $failed === 0 ) {
+            nppp_cloudflare_apo_log(
+                sprintf(
+                    /* translators: 1: URL count, 2: request count */
+                    __( 'Cloudflare cache purge completed: %1$d URL(s) in %2$d request(s).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    (int) $total,
+                    (int) $reqs
+                ),
+                'success'
+            );
+        } else {
+            nppp_cloudflare_apo_log(
+                sprintf(
+                    /* translators: 1: URL count, 2: request count, 3: failed count, 4: error */
+                    __( 'Cloudflare cache purge finished with errors: URLs=%1$d, requests=%2$d, failed=%3$d. %4$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    (int) $total,
+                    (int) $reqs,
+                    (int) $failed,
+                    $err_msg !== '' ? $err_msg : ''
+                ),
+                'error'
+            );
         }
 
         // Mobile variant if APO Cache By Device Type is enabled.
@@ -314,6 +396,9 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_exact_urls' ) ) {
             && $device_setting[ \Cloudflare\APO\API\Plugin::SETTING_VALUE_KEY ] !== 'off';
 
         if ( $device_on ) {
+            $failed  = 0;
+            $err_msg = '';
+
             foreach ( array_chunk( $urls, 30 ) as $chunk ) {
                 $mobile = array_map(
                     static function ( string $u ): array {
@@ -324,7 +409,40 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_exact_urls' ) ) {
                     },
                     $chunk
                 );
-                $runtime['client']->zonePurgeFiles( $runtime['zone_tag'], $mobile );
+
+                try {
+                    $ok = (bool) $runtime['client']->zonePurgeFiles( $runtime['zone_tag'], $mobile );
+                    if ( ! $ok ) {
+                        $failed++;
+                    }
+                } catch ( \Throwable $e ) {
+                    $failed++;
+                    if ( $err_msg === '' ) {
+                        $err_msg = $e->getMessage();
+                    }
+                }
+            }
+
+            if ( $failed === 0 ) {
+                nppp_cloudflare_apo_log(
+                    sprintf(
+                        /* translators: %d is URL count */
+                        __( 'Cloudflare mobile cache purge completed: %d URL(s).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        (int) $total
+                    ),
+                    'success'
+                );
+            } else {
+                nppp_cloudflare_apo_log(
+                    sprintf(
+                        /* translators: 1: URL count, 2: failed count, 3: error */
+                        __( 'Cloudflare mobile cache purge finished with errors: URLs=%1$d, failed=%2$d. %3$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        (int) $total,
+                        (int) $failed,
+                        $err_msg !== '' ? $err_msg : ''
+                    ),
+                    'error'
+                );
             }
         }
     }
@@ -340,11 +458,59 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_all' ) ) {
             return;
         }
 
-        $hooks = nppp_cloudflare_apo_get_hooks();
-        if ( $hooks ) {
-            $GLOBALS['NPPP_CF_APO_PURGE_ALL_RAN'] = true;
-            $GLOBALS['NPPP_CF_APO_URL_QUEUE']    = array();
-            $hooks->purgeCacheEverything(); // CF plugin checks APO/PSC enabled internally.
+        $runtime = nppp_cloudflare_apo_get_runtime();
+        if ( ! $runtime ) {
+            return;
+        }
+
+        if ( ! nppp_cloudflare_apo_is_html_cache_enabled( $runtime['store'] ) ) {
+            nppp_cloudflare_apo_log(
+                __( 'Cloudflare purge-all cache skipped: APO/Plugin-Specific Cache is disabled.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'info'
+            );
+            return;
+        }
+
+        $GLOBALS['NPPP_CF_APO_PURGE_ALL_RAN'] = true;
+        $GLOBALS['NPPP_CF_APO_URL_QUEUE']    = array();
+
+        try {
+            // Direct API call with boolean success.
+            if ( method_exists( $runtime['client'], 'zonePurgeCache' ) ) {
+                $ok = (bool) $runtime['client']->zonePurgeCache( $runtime['zone_tag'] );
+
+                nppp_cloudflare_apo_log(
+                    $ok
+                        ? __( 'Cloudflare purge-all cache completed.', 'fastcgi-cache-purge-and-preload-nginx' )
+                        : __( 'Cloudflare purge-all cache failed (no success response).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $ok ? 'success' : 'error'
+                );
+                return;
+            }
+
+            // Fallback: use Hooks if the client method is unavailable.
+            $hooks = nppp_cloudflare_apo_get_hooks();
+            if ( $hooks ) {
+                $hooks->purgeCacheEverything();
+                nppp_cloudflare_apo_log(
+                    __( 'Cloudflare purge-all cache request sent (Hooks fallback).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    'success'
+                );
+                return;
+            }
+
+            nppp_cloudflare_apo_log(
+                __( 'Cloudflare purge-all cache skipped: purge method unavailable.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'warning'
+            );
+        } catch ( \Throwable $e ) {
+            nppp_cloudflare_apo_log(
+                sprintf(
+                    __( 'Cloudflare purge-all cache failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $e->getMessage()
+                ),
+                'error'
+            );
         }
     }
 }
