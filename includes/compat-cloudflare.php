@@ -506,6 +506,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_all' ) ) {
         } catch ( \Throwable $e ) {
             nppp_cloudflare_apo_log(
                 sprintf(
+                    /* translators: %s is the error message returned by Cloudflare (or the Cloudflare plugin client). */
                     __( 'Cloudflare purge-all cache failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $e->getMessage()
                 ),
