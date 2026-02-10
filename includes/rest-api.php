@@ -14,9 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Retrieve the client's IP address, considering proxies.
-function nppp_get_client_ip() {
-    // Mask last octet
+// Retrieve the client's IP address, considering trusted proxies.
+function nppp_get_client_ip($mask_for_log = false) {
     $mask_ip = function($ip) {
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
             $parts = explode('.', $ip);
@@ -26,39 +25,40 @@ function nppp_get_client_ip() {
         return $ip;
     };
 
-    // Check for HTTP_X_FORWARDED_FOR (Real IP)
-    if (isset($_SERVER['HTTP_X_FORWARDED_FOR']) && ! empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+    $remote_addr = '';
+    if (isset($_SERVER['REMOTE_ADDR']) && ! empty($_SERVER['REMOTE_ADDR'])) {
+        $candidate_remote_addr = sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
+        if (filter_var($candidate_remote_addr, FILTER_VALIDATE_IP)) {
+            $remote_addr = $candidate_remote_addr;
+        }
+    }
+
+    $client_ip = $remote_addr;
+
+    // Trust forwarded headers only when the direct peer is a trusted proxy.
+    $trusted_proxies = apply_filters('nppp_rest_trusted_proxies', array());
+    if (
+        ! empty($remote_addr) &&
+        is_array($trusted_proxies) &&
+        in_array($remote_addr, $trusted_proxies, true) &&
+        isset($_SERVER['HTTP_X_FORWARDED_FOR']) &&
+        ! empty($_SERVER['HTTP_X_FORWARDED_FOR'])
+    ) {
         $xff = sanitize_text_field(wp_unslash($_SERVER['HTTP_X_FORWARDED_FOR']));
         $ip_list = explode(',', $xff);
-
-        // Trim whitespace from the first IP address
         if (isset($ip_list[0])) {
-            $ip = trim($ip_list[0]);
-            $ip = sanitize_text_field($ip);
-            if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                return $mask_ip($ip);
+            $forwarded_ip = sanitize_text_field(trim($ip_list[0]));
+            if (filter_var($forwarded_ip, FILTER_VALIDATE_IP)) {
+                $client_ip = $forwarded_ip;
             }
         }
     }
 
-    // Check for REMOTE_ADDR
-    if (isset($_SERVER['REMOTE_ADDR']) && ! empty($_SERVER['REMOTE_ADDR'])) {
-        $ip = sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
-        if (filter_var($ip, FILTER_VALIDATE_IP)) {
-            return $mask_ip($ip);
-        }
+    if (empty($client_ip)) {
+        return '';
     }
 
-    // Check for HTTP_CLIENT_IP
-    if (isset($_SERVER['HTTP_CLIENT_IP']) && ! empty($_SERVER['HTTP_CLIENT_IP'])) {
-        $ip = sanitize_text_field(wp_unslash($_SERVER['HTTP_CLIENT_IP']));
-        if (filter_var($ip, FILTER_VALIDATE_IP)) {
-            return $mask_ip($ip);
-        }
-    }
-
-    // If none of the above, return empty string
-    return '';
+    return $mask_for_log ? $mask_ip($client_ip) : $client_ip;
 }
 
 // Determine the endpoint action based on the current route.
@@ -119,7 +119,7 @@ function nppp_add_cors_and_no_cache_headers($served, $result, $request) {
 // Log NPP REST API calls
 function nppp_log_api_request($endpoint, $status) {
     // Get the IP address
-    $ip_address = nppp_get_client_ip();
+    $ip_address = nppp_get_client_ip(true);
 
     // Determine log prefix based on the status
     $log_prefix = (strpos($status, 'ERROR') !== false) ? 'ERROR API' : 'API REQUEST';
@@ -173,8 +173,9 @@ function nppp_log_api_request($endpoint, $status) {
 }
 
 // Rate limit API requests
-function nppp_api_rate_limit_check($ip_address, $endpoint) {
-    $transient_key = 'nppp_rate_limit_' . md5($ip_address . $endpoint);
+function nppp_api_rate_limit_check($ip_address, $endpoint, $api_key) {
+    $api_key_hash = hash('sha256', $api_key);
+    $transient_key = 'nppp_rate_limit_' . md5($api_key_hash . '|' . $ip_address . '|' . $endpoint);
 
     // Set rate limit based on the endpoint, 1 request in 1 Minute
     $rate_limit = ($endpoint === 'purge') ? 1 : 1;
@@ -248,18 +249,9 @@ function nppp_validate_and_rate_limit_endpoint($request) {
         $api_key = sanitize_text_field($api_key);
     }
 
-    // Get the IP address for rate limiting
-    $ip_address = nppp_get_client_ip();
-
     // Get the current route to determine the endpoint
     $route = $request->get_route();
     $endpoint = nppp_get_endpoint_action($route);
-
-    // Perform rate limit check
-    $rate_limit = nppp_api_rate_limit_check($ip_address, $endpoint);
-    if (is_wp_error($rate_limit)) {
-        return $rate_limit;
-    }
 
     // Validate API key format
     if (!preg_match('/^[a-f0-9]{64}$/i', $api_key)) {
@@ -275,6 +267,15 @@ function nppp_validate_and_rate_limit_endpoint($request) {
     if (!hash_equals($stored_key, $api_key)) {
         nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
         return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
+    }
+
+        // Get the IP address for rate limiting
+    $ip_address = nppp_get_client_ip();
+
+    // Perform rate limit check for authenticated clients
+    $rate_limit = nppp_api_rate_limit_check($ip_address, $endpoint, $api_key);
+    if (is_wp_error($rate_limit)) {
+        return $rate_limit;
     }
 
     // Everything passed
