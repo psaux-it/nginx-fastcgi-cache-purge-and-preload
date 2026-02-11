@@ -419,6 +419,56 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
     return ['cache_keys' => $cache_keys];
 }
 
+// Resolve plugin root path from the main plugin file.
+function nppp_get_plugin_root_path_for_perm() {
+    $plugin_root = '';
+
+    if (defined('NPPP_PLUGIN_FILE') && NPPP_PLUGIN_FILE) {
+        $plugin_root = plugin_dir_path(NPPP_PLUGIN_FILE);
+    }
+
+    // Fallback for edge-cases where the main plugin constant is unavailable.
+    if ($plugin_root === '') {
+        $plugin_root = dirname(__DIR__) . '/';
+    }
+
+    return rtrim(wp_normalize_path($plugin_root), '/');
+}
+
+// Validate plugin directory write permissions
+function nppp_plugin_path_write_check($wp_filesystem = null) {
+    if ($wp_filesystem === null) {
+        $wp_filesystem = nppp_initialize_wp_filesystem();
+    }
+
+    if ($wp_filesystem === false) {
+        return __( 'GLOBAL ERROR PATH: Failed to initialize filesystem for plugin path validation.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    $plugin_root = nppp_get_plugin_root_path_for_perm();
+    $plugins_root = defined('WP_PLUGIN_DIR') ? wp_normalize_path(WP_PLUGIN_DIR) : '';
+
+    // Global plugins directory should be writable for fresh installs/runtime-created files.
+    if ($plugins_root !== '' && (!$wp_filesystem->is_dir($plugins_root) || !$wp_filesystem->is_writable($plugins_root))) {
+        return sprintf(
+            // Translators: %s is the global WordPress plugins directory path.
+            __('GLOBAL ERROR PATH: WordPress plugins directory is not writable: %s. Plugin runtime features may require write access.', 'fastcgi-cache-purge-and-preload-nginx'),
+            $plugins_root
+        );
+    }
+
+    // Current plugin directory must be writable for runtime-created files/logging.
+    if (!$wp_filesystem->is_dir($plugin_root) || !$wp_filesystem->is_writable($plugin_root)) {
+        return sprintf(
+            // Translators: %s is the plugin path.
+            __('GLOBAL ERROR PATH: Plugin directory is not writable: %s. Logging and runtime features require write access.', 'fastcgi-cache-purge-and-preload-nginx'),
+            $plugin_root
+        );
+    }
+
+    return true;
+}
+
 // Function to check if plugin critical requirements are met
 function nppp_pre_checks_critical() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -437,6 +487,12 @@ function nppp_pre_checks_critical() {
     // Check if the operating system is Linux and the web server is nginx
     if (!nppp_is_linux()) {
         return __('GLOBAL ERROR OPT: Plugin is not functional on your environment. The plugin requires Linux operating system.', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    // Logging/runtime files require writable plugin + log paths.
+    $path_write_check = nppp_plugin_path_write_check($wp_filesystem);
+    if ($path_write_check !== true) {
+        return $path_write_check;
     }
 
     // Initialize $server_software variable
