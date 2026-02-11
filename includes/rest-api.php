@@ -195,7 +195,7 @@ function nppp_nginx_cache_register_purge_endpoint() {
     register_rest_route('nppp_nginx_cache/v2', '/purge', array(
         'methods' => 'POST',
         'callback' => 'nppp_nginx_cache_purge_endpoint',
-        'permission_callback' => '__return_true',
+        'permission_callback' => 'nppp_validate_and_rate_limit_endpoint',
     ));
 }
 
@@ -204,7 +204,7 @@ function nppp_nginx_cache_register_preload_endpoint() {
     register_rest_route('nppp_nginx_cache/v2', '/preload', array(
         'methods' => 'POST',
         'callback' => 'nppp_nginx_cache_preload_endpoint',
-        'permission_callback' => '__return_true',
+        'permission_callback' => 'nppp_validate_and_rate_limit_endpoint',
     ));
 }
 
@@ -281,12 +281,6 @@ function nppp_nginx_cache_purge_endpoint($request) {
     // Start output buffering for purge endpoint
     ob_start();
 
-    // Validate the API key and check rate limit
-    $validation = nppp_validate_and_rate_limit_endpoint($request);
-    if (is_wp_error($validation)) {
-        return $validation;
-    }
-
     // Log the successful purge API call
     // Not hit the rate limit, authentication errors
     nppp_log_api_request('purge', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'));
@@ -323,12 +317,6 @@ function nppp_nginx_cache_purge_endpoint($request) {
 function nppp_nginx_cache_preload_endpoint($request) {
     // Start output buffering for preload endpoint
     ob_start();
-
-    // Validate the API key and check rate limit
-    $validation = nppp_validate_and_rate_limit_endpoint($request);
-    if (is_wp_error($validation)) {
-        return $validation;
-    }
 
     // Log the successful preload API call
     // Not hit the rate limit, authentication errors
