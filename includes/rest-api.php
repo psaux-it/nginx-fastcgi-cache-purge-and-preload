@@ -241,6 +241,12 @@ function nppp_validate_and_rate_limit_endpoint($request) {
     $route = $request->get_route();
     $endpoint = nppp_get_endpoint_action($route);
 
+    // Fail closed for unexpected route/action mapping.
+    if ('' === $endpoint) {
+        nppp_log_api_request('global', __('ERROR 404 INVALID ENDPOINT', 'fastcgi-cache-purge-and-preload-nginx'));
+        return new WP_Error('invalid_endpoint', __('NPP REST API endpoint is invalid.', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 404));
+    }
+
     // Validate API key format
     if (!preg_match('/^[a-f0-9]{64}$/i', $api_key)) {
         nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
