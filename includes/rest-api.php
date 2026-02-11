@@ -263,13 +263,19 @@ function nppp_validate_and_rate_limit_endpoint($request) {
     $options = get_option('nginx_cache_settings');
     $stored_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : '';
 
+    // Fail closed on invalid option type. hash_equals() requires strings.
+    if (!is_string($stored_key)) {
+        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
+        return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
+    }
+
     // Authentication check
     if (!hash_equals($stored_key, $api_key)) {
         nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
         return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
     }
 
-        // Get the IP address for rate limiting
+    // Get the IP address for rate limiting
     $ip_address = nppp_get_client_ip();
 
     // Perform rate limit check for authenticated clients
