@@ -291,14 +291,6 @@ function nppp_plugin_requirements_met() {
     // Set env
     nppp_prepare_request_env(true);
 
-    // Validate plugin paths writeability (critical for runtime).
-    if (function_exists('nppp_plugin_path_write_check')) {
-        $path_write_check = nppp_plugin_path_write_check($wp_filesystem);
-        if ($path_write_check !== true) {
-            return false;
-        }
-    }
-
     // Check if the operating system is Linux
     if (nppp_is_linux()) {
         // Initialize $server_software variable
