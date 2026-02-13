@@ -1,7 +1,7 @@
 <?php
 /**
- * Pre-checks for FastCGI Cache Purge and Preload for Nginx
- * Description: This pre-check file contains several critical checks for FastCGI Cache Purge and Preload for Nginx
+ * Environment pre-checks for Nginx Cache Purge Preload
+ * Description: Validates required server, filesystem, and plugin runtime prerequisites.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

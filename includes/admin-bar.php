@@ -1,7 +1,7 @@
 <?php
 /**
- * WP Admin Bar code for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains Admin Bar code for FastCGI Cache Purge and Preload for Nginx
+ * Admin bar integration for Nginx Cache Purge Preload
+ * Description: Adds admin-bar cache actions and routes them to plugin purge/preload workflows.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

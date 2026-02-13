@@ -1,7 +1,7 @@
 <?php
 /**
- * Lightweight autoloader for NPPP\
- * Description: Tries classmap; WordPress-style files; falls back to PSR-4; supports APCu path caching.
+ * Class autoloader for Nginx Cache Purge Preload
+ * Description: Resolves plugin classes via classmap, WordPress-style paths, and PSR-4 fallback with caching.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

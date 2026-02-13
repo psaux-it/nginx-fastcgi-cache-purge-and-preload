@@ -1,7 +1,7 @@
 <?php
 /**
- * Logging & WP admin notices function for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contain logging & wp admin notices function for FastCGI Cache Purge and Preload for Nginx
+ * Logging and admin notice helpers for Nginx Cache Purge Preload
+ * Description: Centralizes plugin log writes and standardized WordPress admin notice rendering.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

@@ -1,7 +1,7 @@
 <?php
 /**
- * FAQ for FastCGI Cache Purge and Preload for Nginx
- * Description: This help file contains informations about FastCGI Cache Purge and Preload for Nginx plugin usage.
+ * Help and FAQ renderer for Nginx Cache Purge Preload
+ * Description: Outputs plugin documentation, onboarding guidance, and support information in admin.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
@@ -120,7 +120,7 @@ function nppp_my_faq_html() {
                     <div class="nppp-answer-content">
                         <ol class="nginx-list">
                             <pre><code>bash &lt;(curl -Ss https://psaux-it.github.io/install.sh)</code></pre>
-                            <li>The <code>install.sh</code> script serves as a wrapper for executing the main <code>fastcgi_ops_root.sh</code> script from <a href="https://psaux-it.github.io">psaux-it.github.io</a>. This bash script is designed for the FastCGI Cache Purge and Preload for Nginx WordPress plugin (NPP).</li>
+                            <li>The <code>install.sh</code> script serves as a wrapper for executing the main <code>fastcgi_ops_root.sh</code> script from <a href="https://psaux-it.github.io">psaux-it.github.io</a>. This bash script is designed for the Nginx Cache Purge Preload WordPress plugin (NPP).</li>
                             <li>The script first attempts to automatically identify the <strong>PHP-FPM-USER</strong> (also known as the PHP process owner or website user) along with their associated Nginx Cache Paths.</li>
                             <li>If it cannot automatically match the PHP-FPM-USER with their respective Nginx Cache Path, it provides an easy manual setup option using the <code>manual-configs.nginx</code> file.</li>
                             <li>According to matches this script automates the management of Nginx Cache Paths. It utilizes <strong>bindfs</strong> to create a FUSE mount of the original Nginx Cache Paths, enabling the <strong>PHP-FPM-USER</strong> to write to these directories with the necessary permissions automatically.</li>
@@ -553,7 +553,7 @@ listen = /var/run/php-fcgi-websiteuser.sock</code></pre>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h1>GDPR Compliance and Data Collection</h1>
-                        <p>The <strong>FastCGI Cache Purge and Preload for Nginx</strong> plugin collects essential technical data to improve plugin functionality and performance, while fully adhering to <strong>GDPR</strong> (General Data Protection Regulation) guidelines. Below, we outline the data we collect and explain how it complies with GDPR principles.</p>
+                        <p>The <strong>Nginx Cache Purge Preload</strong> plugin collects essential technical data to improve plugin functionality and performance, while fully adhering to <strong>GDPR</strong> (General Data Protection Regulation) guidelines. Below, we outline the data we collect and explain how it complies with GDPR principles.</p>
 
                         <h2>What Data Does the Plugin Collect?</h2>
                         <p>NPP only collects technical data related to its functionality. Specifically, we collect the following metrics:</p>

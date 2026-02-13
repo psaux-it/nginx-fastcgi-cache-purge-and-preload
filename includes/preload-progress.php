@@ -1,7 +1,7 @@
 <?php
 /**
- * Rest API for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains rest api preload progress functions for FastCGI Cache Purge and Preload for Nginx
+ * Preload progress REST endpoint for Nginx Cache Purge Preload
+ * Description: Exposes authenticated progress data for running preload jobs.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

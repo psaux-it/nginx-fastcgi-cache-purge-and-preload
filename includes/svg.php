@@ -1,7 +1,7 @@
 <?php
 /**
- * SVG icon code for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains svg icon code for FastCGI Cache Purge and Preload for Nginx
+ * SVG icon helpers for Nginx Cache Purge Preload
+ * Description: Provides reusable SVG icon output utilities for plugin admin interfaces.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

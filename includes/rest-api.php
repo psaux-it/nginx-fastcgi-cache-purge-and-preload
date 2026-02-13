@@ -1,7 +1,7 @@
 <?php
 /**
- * Rest API for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains rest api functions for FastCGI Cache Purge and Preload for Nginx
+ * REST API endpoints for Nginx Cache Purge Preload
+ * Description: Registers API callbacks for cache purge and preload actions with request validation.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

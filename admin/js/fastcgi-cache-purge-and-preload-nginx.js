@@ -1,6 +1,6 @@
 /**
- * JavaScript for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains code to manage the plugin's admin interface for FastCGI Cache Purge and Preload for Nginx
+ * Admin interface scripts for Nginx Cache Purge Preload
+ * Description: Handles interactive behavior for plugin settings, tabs, and admin actions.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

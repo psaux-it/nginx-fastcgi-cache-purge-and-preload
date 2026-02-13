@@ -1,7 +1,7 @@
 <?php
 /**
- * Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Description: Elementor integration — purge Nginx cache when Elementor saves content or regenerates CSS.
+ * Elementor cache purge integration for Nginx Cache Purge Preload
+ * Description: Triggers targeted Nginx cache purges when Elementor saves content or regenerates CSS.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

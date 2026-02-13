@@ -1,6 +1,6 @@
 /**
- * JavaScript for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains wp dashboard widget preloader effect for FastCGI Cache Purge and Preload for Nginx
+ * Dashboard widget scripts for Nginx Cache Purge Preload
+ * Description: Controls preload animation and refresh behavior in the WordPress dashboard widget.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

@@ -1,7 +1,7 @@
 <?php
 /**
- * Nginx config parser functions for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains Nginx config parser functions for FastCGI Cache Purge and Preload for Nginx
+ * Nginx configuration parser for Nginx Cache Purge Preload
+ * Description: Reads server config fragments to detect cache paths, keys, and runtime settings.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

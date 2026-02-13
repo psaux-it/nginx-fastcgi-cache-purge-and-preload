@@ -1,6 +1,6 @@
 /**
- * JavaScript for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains code to disable plugin functionality in unsupported environments for FastCGI Cache Purge and Preload for Nginx
+ * Unsupported-environment guards for Nginx Cache Purge Preload
+ * Description: Disables plugin actions in admin when required runtime conditions are not met.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

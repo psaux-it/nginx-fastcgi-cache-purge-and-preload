@@ -1,7 +1,7 @@
 <?php
 /**
- * WP_Filesytem functions for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains WP_Filesytem functions for FastCGI Cache Purge and Preload for Nginx
+ * WordPress filesystem helpers for Nginx Cache Purge Preload
+ * Description: Wraps WP_Filesystem operations, logging, and permission-safe file access utilities.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

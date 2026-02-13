@@ -1,7 +1,7 @@
 <?php
 /**
- * Send mail code for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains send mail code for FastCGI Cache Purge and Preload for Nginx
+ * Email notification handlers for Nginx Cache Purge Preload
+ * Description: Sends completion and status emails for preload and related background tasks.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

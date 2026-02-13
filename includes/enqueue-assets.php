@@ -1,7 +1,7 @@
 <?php
 /**
- * Enqueue custom CSS and JavaScript files for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains enqueue assets functions for FastCGI Cache Purge and Preload for Nginx
+ * Admin asset loading for Nginx Cache Purge Preload
+ * Description: Enqueues plugin CSS and JavaScript assets required by admin pages and tabs.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

@@ -1,7 +1,7 @@
 <?php
 /**
- * Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Description: Gutenberg integration — purge Nginx cache when posts are saved via REST (block editor).
+ * Gutenberg cache purge integration for Nginx Cache Purge Preload
+ * Description: Purges related Nginx cache entries when block editor content is saved via REST.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

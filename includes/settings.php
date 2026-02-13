@@ -1,7 +1,7 @@
 <?php
 /**
- * Settings page for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains settings page functions for FastCGI Cache Purge and Preload for Nginx
+ * Settings page handlers for Nginx Cache Purge Preload
+ * Description: Registers, sanitizes, and renders plugin configuration fields in the WordPress admin.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

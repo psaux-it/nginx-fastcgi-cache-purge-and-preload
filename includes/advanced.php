@@ -1,7 +1,7 @@
 <?php
 /**
- * Advanced table for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains advanced table functions for FastCGI Cache Purge and Preload for Nginx
+ * Advanced tab handlers for Nginx Cache Purge Preload
+ * Description: Implements advanced admin actions for targeted URL purge and preload tasks.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

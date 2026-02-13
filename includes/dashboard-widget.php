@@ -1,7 +1,7 @@
 <?php
 /**
- * Dashboard widget for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains dashboard widget functions for FastCGI Cache Purge and Preload for Nginx
+ * Dashboard widget module for Nginx Cache Purge Preload
+ * Description: Renders WordPress dashboard status widgets and recent preload/purge summaries.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

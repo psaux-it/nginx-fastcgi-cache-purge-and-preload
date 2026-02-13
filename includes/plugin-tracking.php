@@ -1,7 +1,7 @@
 <?php
 /**
- * Plugin Tracking API for Nginx Cache Purge and Preload for WordPress
- * Description: This file contains plugin tracking functions for Nginx Cache Purge and Preload
+ * Plugin tracking client for Nginx Cache Purge Preload
+ * Description: Sends opt-in telemetry and lifecycle events to the plugin tracking API.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

@@ -1,7 +1,7 @@
 <?php
 /**
- * REST API Helper for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains REST API related code for FastCGI Cache Purge and Preload for Nginx
+ * REST API bootstrap helpers for Nginx Cache Purge Preload
+ * Description: Loads and wires REST helper modules, including preload progress endpoints.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

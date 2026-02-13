@@ -1,7 +1,7 @@
 <?php
 /**
- * Preload action related schedule cron events for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains preload action related schedule cron events functions for FastCGI Cache Purge and Preload for Nginx
+ * Cron scheduling utilities for Nginx Cache Purge Preload
+ * Description: Manages preload-related cron events and reports active plugin schedules.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

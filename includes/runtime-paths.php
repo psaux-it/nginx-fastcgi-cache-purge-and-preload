@@ -1,7 +1,7 @@
 <?php
 /**
- * Runtime-path helpers for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains functions to set runtime path for FastCGI Cache Purge and Preload for Nginx.
+ * Runtime path helpers for Nginx Cache Purge Preload
+ * Description: Resolves and creates runtime directories and files used by plugin operations.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

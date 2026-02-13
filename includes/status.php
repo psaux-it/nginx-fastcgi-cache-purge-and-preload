@@ -1,7 +1,7 @@
 <?php
 /**
- * Status page for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains functions which shows information about FastCGI Cache Purge and Preload for Nginx
+ * Status page renderer for Nginx Cache Purge Preload
+ * Description: Collects and displays runtime diagnostics, cache details, and health information.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

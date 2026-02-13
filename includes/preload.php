@@ -1,7 +1,7 @@
 <?php
 /**
- * Preload action functions for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains preload action functions for FastCGI Cache Purge and Preload for Nginx
+ * Cache preload handlers for Nginx Cache Purge Preload
+ * Description: Builds URL queues and executes preload requests for Nginx cache warming.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

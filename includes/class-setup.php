@@ -1,7 +1,7 @@
 <?php
 /**
- * Setup controller for FastCGI Cache Purge and Preload for Nginx
- * Description: Handles activation redirect, gates Settings until Nginx is detected or Assume-Nginx is enabled, renders the hidden Setup admin page.
+ * Setup controller for Nginx Cache Purge Preload
+ * Description: Handles activation routing and setup gating until compatible Nginx conditions are met.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com

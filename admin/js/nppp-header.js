@@ -1,6 +1,6 @@
 /**
- * JavaScript for Aurora Canvas Header Effect
- * Description: Aurora ribbons that react to plugin actions and preload progress (status, % complete, errors).
+ * Aurora header effect script for Nginx Cache Purge Preload
+ * Description: Renders animated admin-header ribbons tied to plugin action and preload status updates.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
