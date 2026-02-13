@@ -32,6 +32,9 @@ if (!defined('NPPP_PLUGIN_FILE')) {
     define('NPPP_PLUGIN_FILE', __FILE__);
 }
 
+// Runtime Path
+require_once plugin_dir_path(__FILE__) . 'includes/runtime-paths.php';
+
 // Autoloader
 require_once plugin_dir_path(__FILE__) . 'includes/autoload.php';
 

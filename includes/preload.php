@@ -385,7 +385,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     $default_reject_extension = nppp_fetch_default_reject_extension();
     $nginx_cache_reject_extension = isset($nginx_cache_settings['nginx_cache_reject_extension']) ? $nginx_cache_settings['nginx_cache_reject_extension'] : $default_reject_extension;
     $nginx_cache_wait = isset($nginx_cache_settings['nginx_cache_wait_request']) ? $nginx_cache_settings['nginx_cache_wait_request'] : $default_wait_time;
-    $log_path = rtrim($this_script_path, '/') . '/nppp-wget.log';
+    $log_path = nppp_get_runtime_file('nppp-wget.log');
 
     // Determine which USER_AGENT to use
     // Check Preload Mobile is enabled
@@ -1168,7 +1168,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
 
     // Extra data for preload action
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Check Preload Mobile enabled

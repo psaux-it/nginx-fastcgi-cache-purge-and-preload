@@ -67,7 +67,7 @@ function nppp_url_match_key( $url ) {
 // Is preload running
 function nppp_is_preload_running( $wp_filesystem ) {
     $this_script_path = dirname( plugin_dir_path( __FILE__ ) );
-    $PIDFILE = rtrim( $this_script_path, '/' ) . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     if ( ! $wp_filesystem->exists( $PIDFILE ) ) {
         return false;
@@ -126,7 +126,7 @@ function nppp_parse_wget_log_urls( $wp_filesystem ) {
     $transient_key   = 'nppp_wget_urls_cache_' . md5( $static_key_base );
 
     $plugin_root = nppp_get_plugin_root_path();
-    $log_path    = $plugin_root . '/nppp-wget.log';
+    $log_path    = nppp_get_runtime_file('nppp-wget.log');
 
     // Detect live crawl
     $preload_running = nppp_is_preload_running( $wp_filesystem );
@@ -384,7 +384,7 @@ function nppp_premium_html($nginx_cache_path) {
     }
     // Warn about the aborted Preload All
     $plugin_root      = nppp_get_plugin_root_path();
-    $log_path         = $plugin_root . '/nppp-wget.log';
+    $log_path         = nppp_get_runtime_file('nppp-wget.log');
     $preload_running  = nppp_is_preload_running( $wp_filesystem );
     $wget_notice_html = '';
 
@@ -636,7 +636,7 @@ function nppp_purge_cache_premium_callback() {
 
     // Get the PID file path
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     // First, check if any cache preloading action is in progress.
     // Purging the cache for a single page or post in Advanced tab while cache preloading is in progress can cause issues
@@ -861,7 +861,7 @@ function nppp_preload_cache_premium_callback() {
 
     // Preload action options
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
     $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;

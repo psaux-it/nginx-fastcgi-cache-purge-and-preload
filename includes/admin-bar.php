@@ -305,7 +305,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     // Get extra data for purge & preload actions
     $fdomain = get_site_url();
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     $nppp_single_action = false;

@@ -31,8 +31,8 @@ function nppp_nginx_cache_register_preload_progress_endpoint() {
 // Tracks and returns Nginx cache preload progress.
 function nppp_nginx_cache_preload_progress($request) {
     $plugin_path = dirname(plugin_dir_path(__FILE__));
-    $log_path = rtrim($plugin_path, '/') . '/nppp-wget.log';
-    $pid_path = rtrim($plugin_path, '/') . '/cache_preload.pid';
+    $log_path = nppp_get_runtime_file('nppp-wget.log');
+    $pid_path = nppp_get_runtime_file('cache_preload.pid');
 
     $checked = 0;
     $errors = 0;

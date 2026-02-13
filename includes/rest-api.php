@@ -125,7 +125,7 @@ function nppp_log_api_request($endpoint, $status) {
     // Check if the log file path is defined
     if (!defined('NGINX_CACHE_LOG_FILE')) {
         // If the log file path is not defined or empty
-        define('NGINX_CACHE_LOG_FILE', dirname(__FILE__) . '/../fastcgi_ops.log');
+        define('NGINX_CACHE_LOG_FILE', nppp_get_runtime_file('fastcgi_ops.log'));
     }
 
     // Sanitize the file path to prevent directory traversal
@@ -296,7 +296,7 @@ function nppp_nginx_cache_purge_endpoint($request) {
     $default_cache_path = '/dev/shm/change-me-now';
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Call purge action
@@ -346,7 +346,7 @@ function nppp_nginx_cache_preload_endpoint($request) {
     // Extra data for preload action
     $fdomain = get_site_url();
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Call preload action

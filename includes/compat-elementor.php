@@ -36,7 +36,7 @@ function nppp__el_after_save( $post_id, $editor_data ) {
     if ( nppp__el_mark_purged() ) return;
 
     $cache_path = $opts['nginx_cache_path'] ?? '/dev/shm/change-me-now';
-    $pidfile    = rtrim(dirname(plugin_dir_path(__FILE__)), '/') . '/cache_preload.pid';
+    $pidfile    = nppp_get_runtime_file('cache_preload.pid');
     $tmp        = rtrim($cache_path, '/') . '/tmp';
 
     if ( get_post_status( $post_id ) !== 'publish' ) {
@@ -67,7 +67,7 @@ function nppp__el_document_after_save( $document, $data ) {
     if ( nppp__el_mark_purged() ) return;
 
     $cache_path = $opts['nginx_cache_path'] ?? '/dev/shm/change-me-now';
-    $pidfile    = rtrim(dirname(plugin_dir_path(__FILE__)), '/') . '/cache_preload.pid';
+    $pidfile    = nppp_get_runtime_file('cache_preload.pid');
     $tmp        = rtrim($cache_path, '/') . '/tmp';
 
     $post_id = method_exists($document, 'get_main_id') ? $document->get_main_id() : 0;
@@ -94,7 +94,7 @@ function nppp__el_clear_files() {
     if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
 
     $cache_path = $opts['nginx_cache_path'] ?? '/dev/shm/change-me-now';
-    $pidfile    = rtrim(dirname(plugin_dir_path(__FILE__)), '/') . '/cache_preload.pid';
+    $pidfile    = nppp_get_runtime_file('cache_preload.pid');
     $tmp        = rtrim($cache_path, '/') . '/tmp';
 
     // Elementor regenerated CSS → purge all (site-wide impact)

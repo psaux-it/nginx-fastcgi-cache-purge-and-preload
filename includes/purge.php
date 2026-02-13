@@ -96,7 +96,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
     // Get the PIDFILE location
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     // Get the status of Auto Preload option
     $options = get_option('nginx_cache_settings');
@@ -470,7 +470,7 @@ function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
         $default_cache_path = '/dev/shm/change-me-now';
         $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
         $this_script_path = dirname(plugin_dir_path(__FILE__));
-        $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+        $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
         $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
         // Check for the theme update
@@ -508,7 +508,7 @@ function nppp_purge_cache_plugin_activation_deactivation() {
         $default_cache_path = '/dev/shm/change-me-now';
         $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
         $this_script_path = dirname(plugin_dir_path(__FILE__));
-        $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+        $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
         $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
         // Purge cache for plugin activation - deactivation
@@ -528,7 +528,7 @@ function nppp_purge_cache_on_theme_switch($new_name, $new_theme, $old_theme) {
         $default_cache_path = '/dev/shm/change-me-now';
         $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
         $this_script_path = dirname(plugin_dir_path(__FILE__));
-        $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+        $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
         $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
         // Trigger the purge action
@@ -906,7 +906,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         // Extra data for preload action
         $fdomain = get_site_url();
         $this_script_path = dirname(plugin_dir_path(__FILE__));
-        $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+        $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
         $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
         // Check route of request
@@ -928,7 +928,7 @@ function nppp_purge_callback() {
     $default_cache_path = '/dev/shm/change-me-now';
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Call the main purge function

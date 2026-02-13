@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Define a constant for the log file path
 if (! defined('NGINX_CACHE_LOG_FILE')) {
-    define('NGINX_CACHE_LOG_FILE', dirname(__DIR__) . '/fastcgi_ops.log');
+    define('NGINX_CACHE_LOG_FILE', nppp_get_runtime_file('fastcgi_ops.log'));
 }
 
 // Define a constant for the desktop user agent

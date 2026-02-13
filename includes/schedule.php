@@ -303,7 +303,7 @@ function nppp_get_preload_start_time() {
 
     // Define a constant for the log file path
     if ( ! defined( 'NGINX_CACHE_LOG_FILE' ) ) {
-        define('NGINX_CACHE_LOG_FILE', dirname(__FILE__) . '/../fastcgi_ops.log');
+        define('NGINX_CACHE_LOG_FILE', nppp_get_runtime_file('fastcgi_ops.log'));
     }
 
     // Check if the log file constant is defined
@@ -411,7 +411,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
     }
 
     // Get preload pid file
-    $PIDFILE = dirname(__FILE__) . '/../cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     // Check if there is an ongoing preload process active
     if ($wp_filesystem->exists($PIDFILE)) {
@@ -457,7 +457,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
             // Extra data for preload action
             $fdomain = get_site_url();
             $this_script_path = dirname(plugin_dir_path(__FILE__));
-            $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+            $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
             $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
             // Start the preload action with $user_agent set to true
@@ -502,7 +502,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
 
         // Define plugin path and log file
         $plugin_path = dirname(plugin_dir_path( __FILE__ ));
-        $log_path = rtrim($plugin_path, '/') . '/nppp-wget.log';
+        $log_path = nppp_get_runtime_file('nppp-wget.log');
 
         // Initialize final total
         $final_total = 0;
@@ -638,7 +638,7 @@ function nppp_create_scheduled_event_preload_callback() {
     // Extra data for preload action
     $fdomain = get_site_url();
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Start the preload action

@@ -746,7 +746,7 @@ function nppp_pre_checks() {
 
     // Warn about empty cache
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     $preload_running = false;
     $pid = 0;

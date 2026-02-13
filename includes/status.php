@@ -186,7 +186,7 @@ function nppp_check_preload_status() {
     }
 
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));

@@ -37,7 +37,7 @@ function nppp_get_last_preload_complete_date() {
 
     // Define a constant for the log file path
     if ( ! defined( 'NGINX_CACHE_LOG_FILE' ) ) {
-        define('NGINX_CACHE_LOG_FILE', dirname(__FILE__) . '/../fastcgi_ops.log');
+        define('NGINX_CACHE_LOG_FILE', nppp_get_runtime_file('fastcgi_ops.log'));
     }
 
     // Check if the log file constant is defined
@@ -96,7 +96,7 @@ function nppp_check_preload_status_widget() {
     }
 
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
