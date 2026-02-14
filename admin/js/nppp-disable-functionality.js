@@ -186,7 +186,7 @@
                 ensureHiddenMirror($form, name, currentVal);
             })();
 
-            // disable the rest API elements non-clickable
+            // Make REST API helper elements non-clickable.
             $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
@@ -194,7 +194,7 @@
                 $(this).off('click');
             });
 
-            // ensure the parent <p> tags are also non-clickable
+            // Ensure parent <p> containers are also non-clickable.
             $('#nppp-api-key, #nppp-purge-url, #nppp-preload-url').css({
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
