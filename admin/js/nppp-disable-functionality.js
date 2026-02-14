@@ -162,6 +162,30 @@
                 ensureHiddenMirror($form, name, currentVal);
             })();
 
+            // Disable Cloudflare APO sync toggle and preserve current value
+            (function disableCloudflareApoSync(){
+                const $cloudflareToggle = $('#nppp_cloudflare_apo_sync');
+                if (!$cloudflareToggle.length) return;
+
+                const $form = $cloudflareToggle.closest('form');
+                const name = $cloudflareToggle.attr('name');
+                const currentVal = $cloudflareToggle.is(':checked') ? 'yes' : 'no';
+
+                $cloudflareToggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                $cloudflareToggle
+                    .closest('.nppp-onoffswitch-cloudflare')
+                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .find('.nppp-onoffswitch-label-cloudflare')
+                    .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+
+                ensureHiddenMirror($form, name, currentVal);
+            })();
+
             // disable the rest API elements non-clickable
             $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({
                 'opacity': '0.5',
