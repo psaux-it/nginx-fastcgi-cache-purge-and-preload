@@ -120,7 +120,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         return;
     }
 
-    // Setup completed?
+    // Check whether setup has been completed.
     $setup_url = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
     $needs_setup = class_exists('\NPPP\Setup') ? \NPPP\Setup::nppp_needs_setup() : false;
 
