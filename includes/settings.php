@@ -75,7 +75,7 @@ function nppp_is_assume_nginx_mode(): bool {
 
 // Displays the NPP Nginx Cache Settings page in the WordPress admin dashboard
 function nppp_nginx_cache_settings_page() {
-    // Setup completed ?
+    // Redirect to setup if setup has not been completed yet.
     if (class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup()) {
         wp_safe_redirect( admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG) );
         exit;
