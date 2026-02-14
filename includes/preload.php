@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Get proxy options
+// Read proxy preload settings.
 function nppp_get_proxy_settings() {
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $proxy_host = isset($nginx_cache_settings['nginx_cache_preload_proxy_host']) && !empty($nginx_cache_settings['nginx_cache_preload_proxy_host'])
@@ -132,7 +132,7 @@ function nppp_is_safexec_usable($path, $notify = true) {
         return false;
     }
 
-    // Prevent interfere with REST and others
+    // Prevent interference with REST, AJAX, and Cron responses.
     $notify = $notify && !(
         (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) ||
         (function_exists('wp_doing_rest') && wp_doing_rest()) ||
@@ -239,7 +239,7 @@ function nppp_detect_premature_process(
     // Set env
     nppp_prepare_request_env(true);
 
-    // Get proxy options
+    // Read proxy preload settings.
     $proxy_settings = nppp_get_proxy_settings();
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
@@ -400,7 +400,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     // Set env
     nppp_prepare_request_env(true);
 
-    // Get proxy options
+    // Read proxy preload settings.
     $proxy_settings = nppp_get_proxy_settings();
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
@@ -908,7 +908,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     // Initialize an array to hold the PIDs for both desktop and mobile preload processes
     $pids = [];
 
-    // Get proxy options
+    // Read proxy preload settings.
     $proxy_settings = nppp_get_proxy_settings();
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
@@ -1195,7 +1195,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // Initialize an array to hold the PIDs for both desktop and mobile preload processes
     $pids = [];
 
-    // Get proxy options
+    // Read proxy preload settings.
     $proxy_settings = nppp_get_proxy_settings();
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
