@@ -227,7 +227,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
 
 // Handle button clicks with actions
 function nppp_handle_fastcgi_cache_actions_admin_bar() {
-    // Prevent interfere
+    // Prevent interference with unrelated request contexts.
     if (
         // AJAX
         (function_exists('wp_doing_ajax') && wp_doing_ajax()) ||
