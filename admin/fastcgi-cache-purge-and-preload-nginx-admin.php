@@ -1,6 +1,6 @@
 <?php
 /*
- * Load NPP
+ * NPP admin bootstrap
  * Version:           2.1.4
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
@@ -27,7 +27,7 @@ if (!defined('NPPP_USER_AGENT_MOBILE')) {
     define('NPPP_USER_AGENT_MOBILE', 'NPP/2.1.4 (NginxCacheWarm; device=mobile; Mobile)');
 }
 
-// Define a header constant for mimic real browser request
+// Define an Accept header constant that mimics a real browser request.
 if (!defined('NPPP_HEADER_ACCEPT')) {
     define('NPPP_HEADER_ACCEPT', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,' . '*' . '/' . '*;q=0.8');
 }
@@ -36,7 +36,7 @@ if (!defined('NPPP_HEADER_ACCEPT')) {
 function nppp_prepare_request_env(bool $force = false): void {
     static $done = false;
 
-    // allow re-run when forced
+    // Allow re-run when explicitly forced.
     if ($done && !$force) {
         return;
     }
@@ -147,7 +147,7 @@ require_once dirname(__DIR__) . '/includes/compat-gutenberg.php';
 $nppp_options = get_option('nginx_cache_settings');
 $nppp_auto_purge = isset($nppp_options['nginx_cache_purge_on_update']) && $nppp_options['nginx_cache_purge_on_update'] === 'yes';
 
-// Add support on well known Cache Plugins
+// Hook into well-known cache plugin purge events.
 $nppp_page_cache_purge_actions = array(
     'after_rocket_clean_domain',                // WP Rocket
     'hyper_cache_purged',                       // Hyper Cache
