@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Compatible mode
+// Enable compatibility mode when explicitly configured.
 if (! defined('NPPP_ASSUME_NGINX')) {
     $nppp_assume_nginx_runtime = get_option('nppp_assume_nginx_runtime');
     if ($nppp_assume_nginx_runtime) {
@@ -32,16 +32,16 @@ if (!defined('NPPP_PLUGIN_FILE')) {
     define('NPPP_PLUGIN_FILE', __FILE__);
 }
 
-// Runtime Path
+// Load runtime path helpers.
 require_once plugin_dir_path(__FILE__) . 'includes/runtime-paths.php';
 
 // Autoloader
 require_once plugin_dir_path(__FILE__) . 'includes/autoload.php';
 
-// Load NPP
+// Load plugin admin/bootstrap integrations.
 require_once plugin_dir_path(__FILE__) . 'admin/fastcgi-cache-purge-and-preload-nginx-admin.php';
 
-// Boot the Setup
+// Initialize setup flow.
 if (class_exists('\NPPP\Setup')) {
     \NPPP\Setup::init();
 }
