@@ -78,8 +78,8 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     ) {
         global $wp;
         $route = $wp->query_vars['rest_route'] ?? '';
-        // Only echo for our two NPP routes
-        // to prevent interfere with core WP API responses.
+        // Only echo for our two NPP routes.
+        // Prevent interference with core WordPress REST responses.
         if (in_array($route, [
             '/nppp_nginx_cache/v2/purge',
             '/nppp_nginx_cache/v2/preload',
@@ -89,8 +89,8 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         return;
     }
 
-    // Allow admin notices only for NPP AJAX actions
-    // To prevent interfere with core WP AJAX
+    // Allow admin notices only for NPP AJAX actions.
+    // Prevent interference with core WordPress AJAX responses.
     // Verify nonce for WP Admin Notices
     if (defined('DOING_AJAX') && DOING_AJAX) {
         $allowed_actions = [
@@ -158,7 +158,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     }
 
     // Allow admin notices only for NPP CRON actions
-    // To prevent interfere with core WP CRON
+    // Prevent interference with core WordPress Cron responses.
     if (function_exists('wp_doing_cron') && wp_doing_cron()) {
         return;
     } elseif (defined('DOING_CRON') && DOING_CRON) {
