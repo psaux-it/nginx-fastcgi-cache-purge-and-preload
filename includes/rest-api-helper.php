@@ -34,9 +34,10 @@ function nppp_handle_dummy_endpoints($result, $server, $request) {
         // Return a custom response when the API feature is disabled
         $status_message = __('The NPP REST API feature is disabled.', 'fastcgi-cache-purge-and-preload-nginx');
         return new WP_REST_Response(array(
-            'success' => true,
+            'success' => false,
+            'code' => 'nppp_rest_api_disabled',
             'message' => $status_message
-        ), 200);
+        ), 403);
     }
 
     // Return the default result if no custom handling is needed
