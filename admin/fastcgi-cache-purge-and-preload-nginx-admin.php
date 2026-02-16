@@ -246,56 +246,60 @@ add_action('nppp_plugin_admin_notices', function($type, $message, $log_message, 
     </div>
     <?php
 }, 10, 4);
-add_action('wp', function() {
-    // 1) Bail on REST
-    if (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) {
-        return;
-    } elseif (function_exists('wp_doing_rest') && wp_doing_rest()) {
-        return;
-    } elseif (defined('REST_REQUEST') && REST_REQUEST) {
-        return;
-    }
 
-    // 2) Bail on AJAX
-    if (function_exists('wp_doing_ajax') && wp_doing_ajax()
-         || (defined('DOING_AJAX') && DOING_AJAX)) {
+// Render a one-time legacy frontend notice when toast assets are unavailable.
+function nppp_render_front_notice_fallback(): void {
+    static $rendered = false;
+
+    // Prevent duplicate output when multiple hooks fire.
+    if ($rendered) {
         return;
     }
 
-    // 3) Bail on WP-Cron
-    if (function_exists('wp_doing_cron') && wp_doing_cron()
-         || (defined('DOING_CRON') && DOING_CRON)) {
+    if (is_admin() || !is_user_logged_in() || !current_user_can('manage_options')) {
         return;
     }
 
-    if (is_user_logged_in() && current_user_can('administrator') && isset($_GET['nppp_front'])) {
-        $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
-        if (wp_verify_nonce($nonce, 'nppp_redirect_nonce')) {
-            $status_message_key = sanitize_text_field(wp_unslash($_GET['nppp_front']));
-            $status_message_data = get_transient($status_message_key);
-
-            if ($status_message_data) {
-                // Display the modal with the message
-                $notice_class = 'nppp_notice';
-                if ($status_message_data['type'] === 'success') {
-                    $notice_class .= ' nppp_front_success';
-                } elseif ($status_message_data['type'] === 'error') {
-                    $notice_class .= ' nppp_front_error';
-                } elseif ($status_message_data['type'] === 'info') {
-                    $notice_class .= ' nppp_front_info';
-                }
-
-                // Display the message
-                echo '<div class="' . esc_attr($notice_class) . '">';
-                echo '<p>' . esc_html($status_message_data['message']) . '</p>';
-                echo '</div>';
-
-                // Delete the transient so the message is only shown once
-                delete_transient($status_message_key);
-            }
-        }
+    if (!isset($_GET['nppp_front'])) {
+        return;
     }
-});
+
+    $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
+    if (empty($nonce) || !wp_verify_nonce($nonce, 'nppp_redirect_nonce')) {
+        return;
+    }
+
+    // When isolated toast assets are available, they should handle rendering.
+    if (wp_script_is('nppp-front-toast-js', 'enqueued')) {
+        return;
+    }
+
+    $status_message_key = sanitize_text_field(wp_unslash($_GET['nppp_front']));
+    $status_message_data = get_transient($status_message_key);
+
+    if (!is_array($status_message_data) || !isset($status_message_data['message'], $status_message_data['type'])) {
+        return;
+    }
+
+    $notice_type = sanitize_key((string) $status_message_data['type']);
+    $notice_class = 'nppp_notice nppp_front_info';
+    if ($notice_type === 'success') {
+        $notice_class = 'nppp_notice nppp_front_success';
+    } elseif ($notice_type === 'error') {
+        $notice_class = 'nppp_notice nppp_front_error';
+    }
+
+     echo '<div class="' . esc_attr($notice_class) . '"><p>' . esc_html((string) $status_message_data['message']) . '</p></div>';
+
+    // Consume transient in fallback path to preserve one-time behavior.
+    delete_transient($status_message_key);
+    $rendered = true;
+}
+
+// Try early in body, then fall back to footer for themes missing wp_body_open.
+// Naturally does not run in Admin/AJAX/REST/CRON contexts.
+add_action('wp_body_open', 'nppp_render_front_notice_fallback', 20);
+add_action('wp_footer', 'nppp_render_front_notice_fallback', 1);
 
 // Register shortcodes
 add_shortcode('nppp_svg_icon', 'nppp_svg_icon_shortcode');
