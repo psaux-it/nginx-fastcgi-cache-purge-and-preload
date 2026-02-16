@@ -1,0 +1,120 @@
+/**
+ * Frontend toast styles for Nginx Cache Purge Preload
+ * Description: Isolated styles for frontend purge/preload toast notifications.
+ * Version: 2.1.4
+ * Author: Hasan CALISIR
+ * Author Email: hasan.calisir@psauxit.com
+ * Author URI: https://www.psauxit.com
+ * License: GPL-2.0+
+ */
+
+#nppp-front-toast-container {
+    position: fixed;
+    right: 12px;
+    z-index: 2147483600;
+    display: grid;
+    gap: 8px;
+}
+
+.nppp-front-toast {
+    position: relative;
+    min-width: 260px;
+    max-width: min(92vw, 420px);
+    border-left: 4px solid #ffb900;
+    border-radius: 8px;
+    background: #fff;
+    color: #1d2327;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .18);
+    padding: 10px 40px 10px 38px;
+    animation: nppp-front-slide-in .18s ease-out;
+}
+
+.nppp-front-toast .nppp-front-ico {
+    position: absolute;
+    left: 12px;
+    top: 11px;
+}
+
+.nppp-front-toast .nppp-front-ico::before {
+    font-family: dashicons;
+    font-size: 18px;
+    line-height: 1;
+    content: "\f469";
+    color: #ffb900;
+}
+
+.nppp-front-toast .nppp-front-msg {
+    font-size: 13px;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+.nppp-front-toast .nppp-front-close {
+    position: absolute;
+    top: 7px;
+    right: 8px;
+    border: 0;
+    background: transparent;
+    color: #646970;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px;
+}
+
+.nppp-front-toast .nppp-front-close:hover {
+    color: #1d2327;
+}
+
+.nppp-front-toast.nppp-front-is-success {
+    border-left-color: #46b450;
+}
+
+.nppp-front-toast.nppp-front-is-success .nppp-front-ico::before {
+    content: "\f147";
+    color: #46b450;
+}
+
+.nppp-front-toast.nppp-front-is-error {
+    border-left-color: #dc3232;
+}
+
+.nppp-front-toast.nppp-front-is-error .nppp-front-ico::before {
+    content: "\f158";
+    color: #dc3232;
+}
+
+.nppp-front-toast.nppp-front-is-info {
+    border-left-color: #ffb900;
+}
+
+.nppp-front-toast.nppp-front-is-info .nppp-front-ico::before {
+    content: "\f469";
+    color: #ffb900;
+}
+
+.nppp-front-toast.nppp-front-toast-exit {
+    animation: nppp-front-slide-out .16s ease-in forwards;
+}
+
+@keyframes nppp-front-slide-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes nppp-front-slide-out {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-6px); }
+}
+
+@media (max-width: 782px) {
+    #nppp-front-toast-container {
+        right: 8px;
+        left: 8px;
+    }
+
+    .nppp-front-toast {
+        min-width: 0;
+        max-width: none;
+    }
+}
