@@ -2870,6 +2870,14 @@ p.description {
     color: green;
     font-size: 14px;
 }
+.nppp-broken-urls {
+    margin: 2px 0 0 0;
+    max-height: 140px;
+    overflow: auto;
+}
+.nppp-broken-urls li {
+    margin: 2px 0;
+}
 
 #wpt-bar-text {
     position: absolute;
