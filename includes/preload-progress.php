@@ -37,6 +37,9 @@ function nppp_nginx_cache_preload_progress($request) {
     $checked = 0;
     $errors = 0;
     $last_url = '';
+    $broken_urls = array();
+    $pending_error_url = '';
+    $prev_line_trimmed = '';
     $time_info = '';
     $last_preload_time = '';
     $is_running = false;
@@ -56,14 +59,35 @@ function nppp_nginx_cache_preload_progress($request) {
         $lines = @file($log_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if ($lines) {
             foreach ($lines as $line) {
-                if (trim($line) === '') continue;
+                $line_trimmed = trim($line);
+                if ($line_trimmed === '') {
+                    continue;
+                }
+
                 if (preg_match('/URL:(https?:\/\/[^\s]+).*?->/', $line, $match)) {
                     $checked++;
                     $last_url = $match[1];
+                    $pending_error_url = '';
+                }
+
+                // wget writes failed URLs on their own line
+                if (preg_match('/^(https?:\/\/\S+):\s*$/', $line_trimmed, $failed_match)) {
+                    $pending_error_url = rtrim($failed_match[1], ':');
                 }
 
                 if (stripos($line, 'ERROR 404') !== false) {
+                    if (empty($pending_error_url) && preg_match('/^(https?:\/\/\S+):\s*$/', $prev_line_trimmed, $prev_failed_match)) {
+                        $pending_error_url = rtrim($prev_failed_match[1], ':');
+                    }
+
                     $errors++;
+
+                    if (!empty($pending_error_url)) {
+                        $broken_urls[] = $pending_error_url;
+                        $pending_error_url = '';
+                    } elseif (preg_match('/URL:(https?:\/\/[^\s]+).*?->/i', $line, $match_404)) {
+                        $broken_urls[] = $match_404[1];
+                    }
                 }
 
                 if (stripos($line, 'Total wall clock time:') !== false) {
@@ -75,6 +99,8 @@ function nppp_nginx_cache_preload_progress($request) {
                 if (preg_match('/^FINISHED\s+--([\d\-]+\s+[\d:]+)--$/', $line, $match)) {
                     $last_preload_time = trim($match[1]);
                 }
+
+                $prev_line_trimmed = $line_trimmed;
             }
         }
     }
@@ -86,6 +112,7 @@ function nppp_nginx_cache_preload_progress($request) {
         'status' => $is_running ? 'running' : 'done',
         'checked' => $checked,
         'errors' => $errors,
+        'broken_urls' => array_values(array_slice(array_unique($broken_urls), -20)),
         'last_url' => $last_url,
         'total' => $est_total,
         'time' => $time_info,
