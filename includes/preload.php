@@ -281,7 +281,7 @@ function nppp_detect_premature_process(
     $testCommand =
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'wget ' .
-        '--quiet --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
+        '--quiet --recursive -l inf --no-cache --no-config --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
         '--ignore-length --timeout=5 --tries=1 --ignore-case --compression=auto ' .
         '-e robots=off ' .
@@ -559,7 +559,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             $command =
                 ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
                 'nohup wget ' .
-                '--no-verbose --recursive -l inf --no-cookies --no-directories --delete-after ' .
+                '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
                 '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
                 '--ignore-length --timeout=5 --tries=1 --ignore-case --compression=auto ' .
                 '-e robots=off ' .
@@ -773,7 +773,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         $command =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--no-verbose --recursive -l inf --no-cookies --no-directories --delete-after ' .
+            '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
             '--ignore-length --timeout=5 --tries=1 --ignore-case --compression=auto ' .
             '-e robots=off ' .
@@ -983,7 +983,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $command_desktop =
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'nohup wget ' .
-        '--quiet --no-cookies --no-directories --delete-after ' .
+        '--quiet --no-config --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
         '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
         '-e robots=off ' .
@@ -1025,7 +1025,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         $command_mobile =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--quiet --no-cookies --no-directories --delete-after ' .
+            '--quiet --no-config --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
             '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
             '-e robots=off ' .
@@ -1270,7 +1270,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $command_desktop =
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'nohup wget ' .
-        '--quiet --no-cookies --no-directories --delete-after ' .
+        '--quiet --no-config --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
         '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
         '-e robots=off ' .
@@ -1312,7 +1312,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         $command_mobile =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--quiet --no-cookies --no-directories --delete-after ' .
+            '--quiet --no-config --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
             '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
             '-e robots=off ' .
