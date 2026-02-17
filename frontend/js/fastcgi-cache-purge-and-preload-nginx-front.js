@@ -1,5 +1,5 @@
 /**
- * Frontend notice scripts for Nginx Cache Purge Preload
+ * Legacy frontend notice scripts for Nginx Cache Purge Preload
  * Description: Displays and times frontend purge/preload action result messages.
  * Version: 2.1.4
  * Author: Hasan CALISIR
@@ -24,11 +24,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 4000);
 
-    var urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('nppp_front')) {
+    var url = new URL(window.location.href);
+    if (url.searchParams.has('nppp_front') || url.searchParams.has('redirect_nonce')) {
+        url.searchParams.delete('nppp_front');
+        url.searchParams.delete('redirect_nonce');
+
         if (history.replaceState) {
-            var urlWithoutQuery = window.location.origin + window.location.pathname;
-            history.replaceState({}, document.title, urlWithoutQuery);
+            history.replaceState({}, document.title, url.pathname + (url.search || '') + url.hash);
         }
     }
 });
