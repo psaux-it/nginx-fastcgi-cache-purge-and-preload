@@ -122,10 +122,26 @@ function nppp_validate_purge_path($directory_path) {
 
     foreach ($unsafe_roots as $root) {
         $root_real = realpath($root);
-        if ($root_real && strpos(trailingslashit($real_path), trailingslashit($root_real)) === 0) {
+        if (!$root_real) {
+            continue;
+        }
+
+        $real_path_with_slash = trailingslashit($real_path);
+        $root_real_with_slash = trailingslashit($root_real);
+
+        // Block purges inside WordPress directories.
+        if (strpos($real_path_with_slash, $root_real_with_slash) === 0) {
             return new WP_Error(
                 'unsafe_cache_path',
                 __('Unsafe cache path: refusing to purge inside WordPress directories. Please set the Nginx cache path outside the WordPress installation.', 'fastcgi-cache-purge-and-preload-nginx')
+            );
+        }
+
+        // Also block parent directories that contain a WordPress path.
+        if (strpos($root_real_with_slash, $real_path_with_slash) === 0) {
+            return new WP_Error(
+                'unsafe_cache_path',
+                __('Unsafe cache path: refusing to purge a parent directory that contains WordPress files. Please set the Nginx cache path to a dedicated cache-only location.', 'fastcgi-cache-purge-and-preload-nginx')
             );
         }
     }
