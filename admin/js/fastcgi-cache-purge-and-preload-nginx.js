@@ -538,6 +538,26 @@ $(document).ready(function() {
                 </div>
             `;
 
+            if (Array.isArray(data.broken_urls) && data.broken_urls.length) {
+                const escapeHtml = (value) => String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+
+                const brokenList = data.broken_urls
+                    .map((url) => `<li><code>${escapeHtml(url)}</code></li>`)
+                    .join('');
+
+                html += `
+                    <div class="nppp-progress-row">
+                        <span class="nppp-label">${__('Recent Broken URLs:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
+                        <ul class="nppp-broken-urls">${brokenList}</ul>
+                    </div>
+                `;
+            }
+
             if (data.time) {
                 html += `
                     <div class="nppp-progress-row">
