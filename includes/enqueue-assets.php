@@ -218,36 +218,39 @@ function nppp_disable_features($unsupported, $preload) {
 
     // Determine which features to disable
     if ( $unsupported === true ) {
-        // If unsupported is true
+        // If plugin completely unsupported
         $features = array(
-            'nginx_cache_purge_on_update',
-            'nginx_cache_auto_preload',
-            'nginx_cache_auto_preload_mobile',
-            'nginx_cache_schedule',
-            'nginx_cache_send_mail',
-            'nginx_cache_api',
-            'nginx_cache_preload_enable_proxy',
-            'nppp_related_include_home',
-            'nppp_related_include_category',
-            'nppp_related_apply_manual',
-            'nppp_related_preload_after_manual',
+            'nginx_cache_purge_on_update'        => 'no',
+            'nginx_cache_auto_preload'           => 'no',
+            'nginx_cache_auto_preload_mobile'    => 'no',
+            'nginx_cache_schedule'               => 'no',
+            'nginx_cache_send_mail'              => 'no',
+            'nginx_cache_api'                    => 'no',
+            'nginx_cache_preload_enable_proxy'   => 'no',
+            'nppp_cloudflare_apo_sync'           => 'no',
+            'nppp_related_include_home'          => 'no',
+            'nppp_related_include_category'      => 'no',
+            'nppp_related_apply_manual'          => 'no',
+            'nppp_related_preload_after_manual'  => 'no',
+            'nginx_cache_pctnorm_mode'           => 'off',
         );
     } elseif ( $preload === true ) {
-        // If preload is true
+        // If preload feature not useable
         $features = array(
-            'nginx_cache_api',
-            'nginx_cache_auto_preload',
-            'nginx_cache_auto_preload_mobile',
-            'nginx_cache_schedule',
-            'nginx_cache_preload_enable_proxy',
+            'nginx_cache_auto_preload'           => 'no',
+            'nginx_cache_auto_preload_mobile'    => 'no',
+            'nginx_cache_schedule'               => 'no',
+            'nginx_cache_preload_enable_proxy'   => 'no',
+            'nginx_cache_pctnorm_mode'           => 'off',
+            'nginx_cache_send_mail'              => 'no',
         );
     } else {
         return;
     }
 
-    // Set the selected features to 'no'.
-    foreach ( $features as $feature ) {
-        $options[ $feature ] = 'no';
+    // Set selected features to their disabled values by option type.
+    foreach ( $features as $feature => $disabled_value ) {
+        $options[ $feature ] = $disabled_value;
     }
 
     // Update the option in the database.
