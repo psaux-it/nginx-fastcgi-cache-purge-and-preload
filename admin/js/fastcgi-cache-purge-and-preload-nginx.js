@@ -11,7 +11,7 @@
 // NPP plugin admin side main js code
 (function ($) {
     'use strict';
-    const { __, _x, _n, _nx } = wp.i18n;
+    const { __, _x, _n, _nx, sprintf } = wp.i18n;
 
 $(document).ready(function() {
     // Selectors
@@ -3604,7 +3604,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Update status tab metrics
 function npppupdateStatus() {
-    const { __, _x, _n, _nx } = wp.i18n;
+    const { __, _x, _n, _nx, sprintf } = wp.i18n;
 
     // Elements we need ready on DOM
     const elementsToCheck = [
