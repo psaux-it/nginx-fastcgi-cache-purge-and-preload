@@ -199,6 +199,9 @@ function nppp_is_dockerized() {
 
         // Save missing commands in a transient for 10 seconds
         set_transient($transient_key, $missing_commands, 10);
+
+        // Keep wget compatibility cache in sync with command availability refresh.
+        delete_transient('nppp_wget_compatibility_' . md5($static_key_base));
     }
 
     // Return the list of missing commands (or an empty array if none are missing)
@@ -267,11 +270,19 @@ function nppp_shell_toolset_check($global_, $preload) {
     $missing_toolset_commands = array_intersect($missing_commands, $commands);
 
     // If no commands from the selected toolset are missing
-    if (empty($missing_toolset_commands)) {
-        return true;
-    } else {
+    if (!empty($missing_toolset_commands)) {
         return false;
     }
+
+    // Preload requires GNU Wget 1.x compatibility (>=1.16).
+    if ($preload && function_exists('nppp_get_wget_compatibility')) {
+        $compat = nppp_get_wget_compatibility();
+        if (empty($compat['ok'])) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 // Check plugin requirements
