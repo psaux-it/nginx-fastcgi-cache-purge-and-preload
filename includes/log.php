@@ -76,14 +76,26 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         (function_exists('wp_doing_rest') && wp_doing_rest()) ||
         (defined('REST_REQUEST') && REST_REQUEST)
     ) {
-        global $wp;
-        $route = $wp->query_vars['rest_route'] ?? '';
+        $route = '';
+
+        // REST route can come from query args or the global WP query context.
+        // Guard all access because $wp can be null during some REST save flows.
+        if (isset($_REQUEST['rest_route'])) {
+            $route = '/' . ltrim(sanitize_text_field(wp_unslash($_REQUEST['rest_route'])), '/');
+        } elseif (isset($GLOBALS['wp']) && is_object($GLOBALS['wp']) && isset($GLOBALS['wp']->query_vars) && is_array($GLOBALS['wp']->query_vars) && isset($GLOBALS['wp']->query_vars['rest_route'])) {
+            $route = '/' . ltrim(sanitize_text_field($GLOBALS['wp']->query_vars['rest_route']), '/');
+        }
+
         // Only echo for our two NPP routes.
         // Prevent interference with core WordPress REST responses.
-        if (in_array($route, [
-            '/nppp_nginx_cache/v2/purge',
-            '/nppp_nginx_cache/v2/preload',
-        ], true)) {
+        if (
+            in_array($route, [
+                '/nppp_nginx_cache/v2/purge',
+                '/nppp_nginx_cache/v2/preload',
+            ], true) &&
+            ob_get_level() > 0
+        ) {
+            // Emit only when a caller intentionally started buffering (REST endpoint wrappers).
             echo '<p>' . esc_html(sanitize_text_field($message)) . '</p>';
         }
         return;
