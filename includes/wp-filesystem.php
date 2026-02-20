@@ -162,14 +162,9 @@ function nppp_wp_purge($directory_path) {
     }
 
     // Resolve and validate the absolute path.
-    $real_path = nppp_validate_purge_path($directory_path);
-    if (is_wp_error($real_path)) {
-        return $real_path;
-    }
-
-    // Ensure the resolved path doesn't traverse outside the intended directory structure
-    if (strpos(rtrim($real_path, DIRECTORY_SEPARATOR), rtrim($directory_path, DIRECTORY_SEPARATOR)) !== 0) {
-        return new WP_Error('directory_traversal', __('Directory traversal detected or invalid path.', 'fastcgi-cache-purge-and-preload-nginx'));
+    $validation = nppp_validate_purge_path($directory_path);
+    if (is_wp_error($validation)) {
+        return $validation;
     }
 
     // Check for read and write permissions softly and recursive
@@ -183,8 +178,8 @@ function nppp_wp_purge($directory_path) {
 
     // Protected folders to be excluded, recursively
     $protected_folders = ['client_temp', 'scgi_temp', 'uwsgi_temp', 'fastcgi_temp', 'proxy_temp'];
-    $protected_paths = array_map(function ($folder) use ($real_path) {
-        return trailingslashit($real_path) . $folder;
+    $protected_paths = array_map(function ($folder) use ($directory_path) {
+        return trailingslashit($directory_path) . $folder;
     }, $protected_folders);
 
     // Recursive function to check if a path is protected
@@ -284,9 +279,9 @@ function nppp_wp_remove_directory($directory_path, $recursive = true) {
     // Check if the directory exists before attempting to remove it
     if ($wp_filesystem->is_dir($directory_path)) {
         // Validate the purge path
-        $real_path = nppp_validate_purge_path($directory_path);
-        if (is_wp_error($real_path)) {
-            return $real_path;
+        $validation = nppp_validate_purge_path($directory_path);
+        if (is_wp_error($validation)) {
+            return $validation;
         }
 
         // Attempt to remove the directory
