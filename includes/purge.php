@@ -185,10 +185,9 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     continue;
                 }
 
-                // Test regex only once
-                // Regex operations can be computationally expensive,
-                // especially when iterating over multiple files.
-                // So here we test regex only once
+                // Validate regex behavior only once (error-path sanity check).
+                // Per-file extraction still runs for every cache file below.
+                // So here we test regex only once for early return
                 if (!$regex_tested) {
                     if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
                         // Build the URL
@@ -215,8 +214,13 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     }
                 }
 
-                // Extract the in cache URL from fastcgi_cache_key
-                preg_match($regex, $content, $matches);
+                // Extract URL components for this file
+                // The guard avoids undefined capture-group warnings on non-matching/corrupt entries
+                // while keeping extraction behavior unchanged for valid entries.
+                $matches = [];
+                if (!(preg_match($regex, $content, $matches) && isset($matches[1], $matches[2]))) {
+                    continue;
+                }
 
                 // Build the URL
                 $host = trim($matches[1]);
