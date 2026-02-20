@@ -12,6 +12,9 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Enqueue frontend assets for logged-in admins (toast notices, disable-scripts).
+add_action('wp_enqueue_scripts', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets');
+
 // Render a one-time legacy frontend notice when toast assets are unavailable.
 function nppp_render_front_notice_fallback(): void {
     static $rendered = false;
