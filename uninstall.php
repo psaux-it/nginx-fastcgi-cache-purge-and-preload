@@ -46,14 +46,25 @@ function nppp_clear_plugin_cache_on_uninstall() {
     }
 
     // Safe clean up transients directly in DB
+    $like_category = $wpdb->esc_like('_transient_nppp_category_') . '%';
+    $like_category_timeout = $wpdb->esc_like('_transient_timeout_nppp_category_') . '%';
+    $like_rate_limit = $wpdb->esc_like('_transient_nppp_rate_limit_') . '%';
+    $like_rate_limit_timeout = $wpdb->esc_like('_transient_timeout_nppp_rate_limit_') . '%';
+
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-    $wpdb->query("
-        DELETE FROM $wpdb->options
-        WHERE option_name LIKE '\\_transient_nppp_category_%'
-           OR option_name LIKE '\\_transient_timeout_nppp_category_%'
-           OR option_name LIKE '\\_transient_nppp_rate_limit_%'
-           OR option_name LIKE '\\_transient_timeout_nppp_rate_limit_%'
-    ");
+    $wpdb->query(
+        $wpdb->prepare(
+            "DELETE FROM {$wpdb->options}
+            WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s",
+            $like_category,
+            $like_category_timeout,
+            $like_rate_limit,
+            $like_rate_limit_timeout
+        )
+    );
 }
 
 // Delete plugin transients
