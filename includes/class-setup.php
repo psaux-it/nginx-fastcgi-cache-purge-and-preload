@@ -78,9 +78,6 @@ final class Setup {
             self::PAGE_SLUG,
             [__CLASS__, 'nppp_render_setup_page']
         );
-
-        // Run once-per-while OPcache refresh ONLY on this page
-        add_action('load-' . $hook, [__CLASS__, 'nppp_maybe_reset_opcache']);
     }
 
     public static function nppp_render_setup_page(): void {
@@ -647,44 +644,6 @@ services:
                 @opcache_invalidate($wp_config_path, true);
             }
         }
-    }
-
-    /**
-     * OPcache: lightly and safely refresh when the Setup page loads.
-     * - Runs at most once per minute (transient gate).
-     * - Only executes on admin.php?page=nppp-setup (via load-$hook above).
-     * - No fatal if OPcache is disabled.
-    */
-    public static function nppp_maybe_reset_opcache(): void {
-        // Optional manual trigger: ?nppp_force_opcache=1 bypasses the cooldown
-        if ( ! current_user_can('manage_options') ) {
-            return;
-        }
-
-        $force = false;
-        if ( isset( $_GET['nppp_force_opcache'] ) ) {
-            $force_request = sanitize_text_field( wp_unslash( $_GET['nppp_force_opcache'] ) );
-            if ( $force_request === '1' ) {
-                $nonce = isset( $_GET['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ) : '';
-                $force = (bool) wp_verify_nonce( $nonce, 'nppp_setup_actions' );
-            }
-        }
-
-        if ( ! $force && get_transient('nppp_opcache_reset_done') ) {
-            return;
-        }
-
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_opcache_reset
-        if (function_exists('opcache_reset')) {
-            @opcache_reset();
-        } elseif (function_exists('opcache_invalidate')) {
-            // Minimal noop if reset is unavailable; invalidating this file ensures at least the Setup class is fresh.
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_opcache_invalidate
-            @opcache_invalidate(__FILE__, true);
-        }
-
-        // Cooldown so we don’t reset on every refresh
-        set_transient('nppp_opcache_reset_done', 1, MINUTE_IN_SECONDS);
     }
 
     private static function nppp_dummy_nginx_conf(): string {
