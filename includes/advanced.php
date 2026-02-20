@@ -1120,7 +1120,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             }
 
             // Extract URLs using regex
-            if (preg_match($regex, $content, $matches)) {
+            if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
                 // Build the URL
                 $host = trim($matches[1]);
                 $request_uri = trim($matches[2]);
