@@ -41,6 +41,9 @@ require_once plugin_dir_path(__FILE__) . 'includes/autoload.php';
 // Load plugin admin/bootstrap integrations.
 require_once plugin_dir_path(__FILE__) . 'admin/fastcgi-cache-purge-and-preload-nginx-admin.php';
 
+// Load plugin frontend/bootstrap integrations.
+require_once plugin_dir_path(__FILE__) . 'frontend/fastcgi-cache-purge-and-preload-nginx-front.php';
+
 // Initialize setup flow.
 if (class_exists('\NPPP\Setup')) {
     \NPPP\Setup::init();
