@@ -127,6 +127,7 @@ function nppp_parse_wget_log_urls( $wp_filesystem ) {
 
     $plugin_root = nppp_get_plugin_root_path();
     $log_path    = nppp_get_runtime_file('nppp-wget.log');
+    $snapshot_path = nppp_get_runtime_file('nppp-wget-snapshot.log');
 
     // Detect live crawl
     $preload_running = nppp_is_preload_running( $wp_filesystem );
@@ -143,14 +144,20 @@ function nppp_parse_wget_log_urls( $wp_filesystem ) {
 
     $urls = [];
 
-    if ( ! $wp_filesystem->exists( $log_path ) ) {
+    // While preload is running: read the live log for real-time progress.
+    // Once preload finishes: read the snapshot which only exists when a
+    // run has fully completed. This prevents a partial/interrupted live log
+    // from ever replacing a previously complete snapshot.
+    $read_path = $preload_running ? $log_path : $snapshot_path;
+
+    if ( ! $wp_filesystem->exists( $read_path ) ) {
         if ( ! $preload_running ) {
             set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
         }
         return $urls;
     }
 
-    $contents = $wp_filesystem->get_contents( $log_path );
+    $contents = $wp_filesystem->get_contents( $read_path );
     if ( $contents === false || $contents === '' ) {
         if ( ! $preload_running ) {
             set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
@@ -158,8 +165,11 @@ function nppp_parse_wget_log_urls( $wp_filesystem ) {
         return $urls;
     }
 
-    // If preload is NOT running and log has NO FINISHED marker,
-    // we consider it an aborted/partial crawl → do NOT trust it.
+    // The snapshot is always complete by definition (only written on FINISHED).
+    // The live log during a running preload is partial by definition — that is
+    // expected and fine, so we do not apply the completion guard here.
+    // The guard below is kept only as a safety net in case the snapshot file
+    // somehow became corrupted (manually edited, partial write, etc.).
     if ( ! $preload_running && ! nppp_wget_log_is_complete( $contents ) ) {
         delete_transient( $transient_key );
         return $urls;
@@ -342,23 +352,43 @@ function nppp_premium_html($nginx_cache_path) {
 
     $hits = [];
 
-    // Check for errors, no need to display missing URLs at that point
+    // Check for errors
     if (isset($extractedUrls['error'])) {
-        // Sanitize and allow specific HTML tags
-        $error_message = wp_kses(
-            $extractedUrls['error'],
-            array(
-                'strong' => array(),
-            )
-        );
+        $is_empty_cache = ( $extractedUrls['error'] === 'NPPP_EMPTY_CACHE' );
 
-        // Stop execution if no cached content is found due to an empty cache or cache key regex error.
-        return '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <p style="margin: 0; display: flex; align-items: center;">
-                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                        <span style="font-size: 14px;">' . $error_message . '</span>
+        if ( $is_empty_cache ) {
+            $snapshot_path   = nppp_get_runtime_file('nppp-wget-snapshot.log');
+            $preload_running = nppp_is_preload_running( $wp_filesystem );
+
+            if ( ! $preload_running && ! $wp_filesystem->exists( $snapshot_path ) ) {
+                // Fresh install: no cache, no snapshot — return just the notice, no table.
+                $wget_msg = __(
+                    'No completed <strong>crawl</strong> snapshot found. Run <strong>Preload All</strong> once to build the full snapshot — <strong>ALL</strong> URLs will then appear here.',
+                    'fastcgi-cache-purge-and-preload-nginx'
+                );
+                return '<div style="background-color:#f9edbe;border-left:6px solid #f0c36d;padding:10px;margin-bottom:15px;max-width:max-content;">
+                    <p style="margin:0;display:flex;align-items:center;">
+                        <span class="dashicons dashicons-warning" style="font-size:22px;color:#ffba00;margin-right:8px;"></span>
+                        <span style="font-size:14px;">' .
+                            wp_kses( $wget_msg, array( 'strong' => array() ) ) .
+                        '</span>
                     </p>
                 </div>';
+            }
+
+            // Snapshot exists but cache is empty (normal post-purge state).
+            // Fall through with zero HITs so snapshot MISSes populate the table.
+            $hits = [];
+        } else {
+            // Real error (permissions, regex, path) — hard stop.
+            $error_message = wp_kses( $extractedUrls['error'], array( 'strong' => array() ) );
+            return '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                        <p style="margin: 0; display: flex; align-items: center;">
+                            <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                            <span style="font-size: 14px;">' . $error_message . '</span>
+                        </p>
+                    </div>';
+        }
     } else {
         $hits = $extractedUrls;
     }
@@ -366,45 +396,45 @@ function nppp_premium_html($nginx_cache_path) {
     // Merge HIT + MISS
     $mergedRows = nppp_merge_cached_and_wget($hits, $wp_filesystem);
 
-    // Warn about cache keys not found
-    if ($config_data === false) {
+    // Warnings - only meaningful when table has data
+    if ( ! empty( $mergedRows ) && $config_data === false) {
         echo '<div class="nppp-premium-wrap">
                   <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: No <span style="color: #f0c36d;">_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
               </div>';
-    // Warn about cache keys not found
-    } elseif (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
+    } elseif ( ! empty( $mergedRows ) && isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
         echo '<div class="nppp-premium-wrap">
                   <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: No <span style="color: #f0c36d;">_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
               </div>';
     // Warn about the unsupported cache keys
-    } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
+    } elseif ( ! empty( $mergedRows ) && isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
         echo '<div class="nppp-premium-wrap">
                   <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: <span style="color: #f0c36d;">Unsupported</span> cache key found!', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
               </div>';
     }
-    // Warn about the aborted Preload All
+
+    // Warn if no complete crawl snapshot exists yet.
+    // The snapshot file (nppp-wget-snapshot.log) is only written when a
+    // Preload All run finishes successfully. If it does not exist, the admin
+    // has never completed a full preload and MISSes cannot be shown.
     $plugin_root      = nppp_get_plugin_root_path();
-    $log_path         = nppp_get_runtime_file('nppp-wget.log');
+    $snapshot_path    = nppp_get_runtime_file('nppp-wget-snapshot.log');
     $preload_running  = nppp_is_preload_running( $wp_filesystem );
     $wget_notice_html = '';
 
-    if ( ! $preload_running && $wp_filesystem->exists( $log_path ) ) {
-        $log_contents = $wp_filesystem->get_contents( $log_path );
-        if ( $log_contents && ! nppp_wget_log_is_complete( $log_contents ) ) {
-            /* Translators: "MISS" is a cache status label. Keep the <strong> tags. */
-            $wget_msg = __(
-                '<strong>Preload All</strong> was interrupted before finishing. The <strong>full crawl snapshot is incomplete</strong>, so uncached (<strong>MISS</strong>) URLs are hidden. Run <strong>Preload All</strong> again to rebuild snapshot.',
-                'fastcgi-cache-purge-and-preload-nginx'
-            );
-            $wget_notice_html = '<div style="background-color:#f9edbe;border-left:6px solid #f0c36d;padding:10px;margin-bottom:15px;max-width:max-content;">
-                <p style="margin:0;display:flex;align-items:center;">
-                    <span class="dashicons dashicons-warning" style="font-size:22px;color:#ffba00;margin-right:8px;"></span>
-                    <span style="font-size:14px;">' .
-                        wp_kses( $wget_msg, array( 'strong' => array() ) ) .
-                    '</span>
-                </p>
-            </div>';
-        }
+    if ( ! $preload_running && ! $wp_filesystem->exists( $snapshot_path ) ) {
+        /* Translators: "MISS" is a cache status label. Keep the <strong> tags. */
+        $wget_msg = __(
+            'No completed <strong>crawl</strong> snapshot found. Run <strong>Preload All</strong> once to build the full snapshot — uncached <strong>MISS</strong> URLs will then appear here.',
+            'fastcgi-cache-purge-and-preload-nginx'
+        );
+        $wget_notice_html = '<div style="background-color:#f9edbe;border-left:6px solid #f0c36d;padding:10px;margin-bottom:15px;max-width:max-content;">
+            <p style="margin:0;display:flex;align-items:center;">
+                <span class="dashicons dashicons-warning" style="font-size:22px;color:#ffba00;margin-right:8px;"></span>
+                <span style="font-size:14px;">' .
+                    wp_kses( $wget_msg, array( 'strong' => array() ) ) .
+                '</span>
+            </p>
+        </div>';
     }
 
     // Output the premium tab content
@@ -422,12 +452,14 @@ function nppp_premium_html($nginx_cache_path) {
         )
     );
     ?>
+    <?php if ( ! empty( $mergedRows ) ) : ?>
     <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
         <p style="margin: 0; display: flex; align-items: center;">
             <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
             <?php echo wp_kses_post( __( 'If the <strong>Cached URL\'s</strong> are incorrect, <strong>Preload</strong> will not work as expected. Please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section, ensure the regex is configured correctly, and try again.', 'fastcgi-cache-purge-and-preload-nginx' ) ); ?>
         </p>
     </div>
+    <?php endif; ?>
     <h2></h2>
     <table id="nppp-premium-table" class="display">
         <thead>
@@ -1165,7 +1197,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // Check if any URLs were extracted
     if (empty($urls)) {
         return [
-            'error' => __( 'Cache is empty. Click <strong>Preload All</strong> to warm Nginx cache first and try again.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'error' => 'NPPP_EMPTY_CACHE',
         ];
     }
 
