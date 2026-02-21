@@ -782,6 +782,9 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
             // Remove the PID file
             nppp_perform_file_operation($PIDFILE, 'delete');
+
+            // Bust the URL map transient so Advanced tab re-reads from snapshot
+            delete_transient( 'nppp_wget_urls_cache_' . md5( 'nppp' ) );
         } else {
             // Call purge_helper to delete cache contents and get status
             $status = nppp_purge_helper($nginx_cache_path, $tmp_path);
@@ -827,6 +830,9 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
             // Remove the PID file
             nppp_perform_file_operation($PIDFILE, 'delete');
+
+            // Bust the URL map transient so Advanced tab re-reads from snapshot
+            delete_transient( 'nppp_wget_urls_cache_' . md5( 'nppp' ) );
         }
     } else {
         // Call purge_helper to delete cache contents and get status
