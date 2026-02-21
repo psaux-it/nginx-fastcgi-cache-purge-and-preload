@@ -283,6 +283,9 @@ $(document).ready(function() {
             const index = $nppTabsLinks.filter(`[href="${hash}"]`).parent().index();
             if (index !== -1) {
                 $nppTabs.tabs("option", "active", index);
+
+                // Hash-driven activation path: activate callback intentionally skips
+                // npppActivateTab while isTabChangeFromHash is true.
                 npppActivateTab(hash.replace('#', ''));
 
                 // Scroll to the top of the page
@@ -2980,10 +2983,19 @@ $(document).ready(function() {
                 _wpnonce: nppp_admin_data.api_key_copy_nonce
             },
             success: async function(response) {
-                var apiKey = response.data.api_key;
+                var apiKey = (response && response.data && response.data.api_key) || '';
+                if (!apiKey) {
+                    console.error('API key not found in response');
+                    return;
+                }
 
                 // Copy the API key to clipboard
-                await npppCopy(apiKey);
+                try {
+                    await npppCopy(apiKey);
+                } catch (e) {
+                    console.error('Clipboard write failed:', e);
+                    return;
+                }
 
                 // Show a small notification indicating successful copy
                 var notification = document.createElement('div');
