@@ -1416,7 +1416,7 @@ $(document).ready(function() {
     // Update send mail status when state changes
     $('#nginx_cache_send_mail').change(function() {
         // Calculate the notification position
-        var sendMailElement = jQuery(this);
+        var sendMailElement = $(this);
         var clickToCopySpanMail = sendMailElement.next('.nppp-onoffswitch-label');
         var clickToCopySpanOffsetMail = clickToCopySpanMail.offset();
         var notificationLeftMail = clickToCopySpanOffsetMail.left + clickToCopySpanMail.outerWidth() + 10;
@@ -1464,7 +1464,7 @@ $(document).ready(function() {
     // Update auto preload status when state changes
     $('#nginx_cache_auto_preload').change(function() {
         // Calculate the notification position
-        var autoPreloadElement = jQuery(this);
+        var autoPreloadElement = $(this);
         var clickToCopySpanAutoPreload = autoPreloadElement.next('.nppp-onoffswitch-label-preload');
         var clickToCopySpanOffsetAutoPreload = clickToCopySpanAutoPreload.offset();
         var notificationLeftAutoPreload = clickToCopySpanOffsetAutoPreload.left + clickToCopySpanAutoPreload.outerWidth() + 10;
@@ -1511,7 +1511,7 @@ $(document).ready(function() {
 
     // Update enable proxy status when state changes
     $('#nginx_cache_preload_enable_proxy').change(function() {
-        var proxyElement = jQuery(this);
+        var proxyElement = $(this);
         var clickToCopySpanProxy = proxyElement.next('.nppp-onoffswitch-label-proxy');
         var clickToCopySpanOffsetProxy = clickToCopySpanProxy.offset();
         var notificationLeftProxy = clickToCopySpanOffsetProxy.left + clickToCopySpanProxy.outerWidth() + 10;
@@ -1558,7 +1558,7 @@ $(document).ready(function() {
 
     // Update preload mobile status when state changes
     $('#nginx_cache_auto_preload_mobile').change(function() {
-        var mobilePreloadElement = jQuery(this);
+        var mobilePreloadElement = $(this);
         var clickToCopySpanMobilePreload = mobilePreloadElement.next('.nppp-onoffswitch-label-preload-mobile');
         var clickToCopySpanOffsetMobilePreload = clickToCopySpanMobilePreload.offset();
         var notificationLeftMobilePreload = clickToCopySpanOffsetMobilePreload.left + clickToCopySpanMobilePreload.outerWidth() + 10;
@@ -1606,7 +1606,7 @@ $(document).ready(function() {
     // Update auto purge status when state changes
     $('#nginx_cache_purge_on_update').change(function() {
         // Calculate the notification position
-        var autoPurgeElement = jQuery(this);
+        var autoPurgeElement = $(this);
         var clickToCopySpanAutoPurge = autoPurgeElement.next('.nppp-onoffswitch-label-autopurge');
         var clickToCopySpanOffsetAutoPurge = clickToCopySpanAutoPurge.offset();
         var notificationLeftAutoPurge = clickToCopySpanOffsetAutoPurge.left + clickToCopySpanAutoPurge.outerWidth() + 10;
@@ -1653,7 +1653,7 @@ $(document).ready(function() {
 
     // Update Cloudflare APO sync status when state changes
     $('#nppp_cloudflare_apo_sync').change(function() {
-        var cloudflareElement = jQuery(this);
+        var cloudflareElement = $(this);
         var clickToCopySpanCloudflare = cloudflareElement.next('.nppp-onoffswitch-label-cloudflare');
         var clickToCopySpanOffsetCloudflare = clickToCopySpanCloudflare.offset();
         var notificationLeftCloudflare = clickToCopySpanOffsetCloudflare.left + clickToCopySpanCloudflare.outerWidth() + 10;
@@ -1870,7 +1870,7 @@ $(document).ready(function() {
     // Update rest api status when state changes
     $('#nginx_cache_api').change(function() {
         // Calculate the notification position
-        var restApiElement = jQuery(this);
+        var restApiElement = $(this);
         var clickToCopySpanRestApi = restApiElement.next('.nppp-onoffswitch-label-api');
         var clickToCopySpanOffsetRestApi = clickToCopySpanRestApi.offset();
         var notificationLeftRestApi = clickToCopySpanOffsetRestApi.left + clickToCopySpanRestApi.outerWidth() + 10;
@@ -2031,7 +2031,7 @@ $(document).ready(function() {
     // Update cache schedule status when state changes
     $('#nginx_cache_schedule').change(function() {
         // Calculate the notification position
-        var cacheScheduleElement = jQuery(this);
+        var cacheScheduleElement = $(this);
         var clickToCopySpanCacheSchedule = cacheScheduleElement.next('.nppp-onoffswitch-label-schedule');
         var clickToCopySpanOffsetCacheSchedule = clickToCopySpanCacheSchedule.offset();
         var notificationLeftCacheSchedule = clickToCopySpanOffsetCacheSchedule.left + clickToCopySpanCacheSchedule.outerWidth() + 10;
@@ -2931,8 +2931,8 @@ $(document).ready(function() {
     }
 
     // Unique ID copy clipboard
-    jQuery('#nppp-unique-id').on('click', async function (event) {
-        var uniqueIdElement = jQuery(this);
+    $('#nppp-unique-id').on('click', async function (event) {
+        var uniqueIdElement = $(this);
         var clickToRevealSpan = uniqueIdElement.find('span');
         var clickToRevealSpanOffset = clickToRevealSpan.offset();
         var notificationLeft = clickToRevealSpanOffset.left + clickToRevealSpan.outerWidth() + 10;
@@ -2966,8 +2966,8 @@ $(document).ready(function() {
     });
 
     // Click event handler for copying the API key to clipboard
-    jQuery('#nppp-api-key').click(function(event) {
-        var apiKeyElement = jQuery(this);
+    $('#nppp-api-key').click(function(event) {
+        var apiKeyElement = $(this);
         var clickToCopySpan = apiKeyElement.find('span');
         var clickToCopySpanOffset = clickToCopySpan.offset();
         var notificationLeft = clickToCopySpanOffset.left + clickToCopySpan.outerWidth() + 10;
@@ -3027,8 +3027,8 @@ $(document).ready(function() {
     });
 
     // Click event handler for copying the Purge URL to clipboard
-    jQuery('#nppp-purge-url').click(function(event) {
-        var purgeUrlElement = jQuery(this);
+    $('#nppp-purge-url').click(function(event) {
+        var purgeUrlElement = $(this);
         var clickToCopySpan = purgeUrlElement.find('span');
         var clickToCopySpanOffset = clickToCopySpan.offset();
         var notificationLeft = clickToCopySpanOffset.left + clickToCopySpan.outerWidth() + 10;
@@ -3079,8 +3079,8 @@ $(document).ready(function() {
     });
 
     // Click event handler for copying the Preload URL to clipboard
-    jQuery('#nppp-preload-url').click(function(event) {
-        var preloadUrlElement = jQuery(this);
+    $('#nppp-preload-url').click(function(event) {
+        var preloadUrlElement = $(this);
         var clickToCopySpan = preloadUrlElement.find('span');
         var clickToCopySpanOffset = clickToCopySpan.offset();
         var notificationLeft = clickToCopySpanOffset.left + clickToCopySpan.outerWidth() + 10;
