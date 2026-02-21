@@ -2867,8 +2867,22 @@ p.description {
 .nppp-done {
     margin-top: 6px;
     font-weight: bold;
-    color: green;
+    color: #166534;
     font-size: 14px;
+}
+.nppp-done.nppp-interrupted {
+    color: #92400e;
+    background-color: #fffbeb;
+    border-left: 3px solid #f59e0b;
+    padding: 4px 8px;
+}
+.nppp-done.nppp-interrupted + .nppp-progress-row {
+    margin-top: 4px;
+    padding: 3px 8px;
+    background-color: #fffbeb;
+    border-left: 3px solid #f59e0b;
+    font-size: 13px;
+    color: #78350f;
 }
 .nppp-broken-urls {
     margin: 2px 0 0 0;
