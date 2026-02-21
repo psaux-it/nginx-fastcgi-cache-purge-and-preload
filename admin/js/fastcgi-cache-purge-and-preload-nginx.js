@@ -2600,7 +2600,6 @@ $(document).ready(function() {
         if ($.fn.dataTable.isDataTable($tbl)) {
             $tbl.DataTable().columns.adjust().responsive.recalc();
             applyCategoryStyles();
-            //hideEmptyCells();
             return;
         }
 
@@ -2644,7 +2643,6 @@ $(document).ready(function() {
             // Ensure callback on table draw for initial load
             initComplete: function() {
                 applyCategoryStyles();
-                //hideEmptyCells();
             }
         });
 
@@ -2657,7 +2655,6 @@ $(document).ready(function() {
         // Apply styles whenever the table is redrawn
         table.on('draw', function() {
             applyCategoryStyles();
-            //hideEmptyCells();
         });
     }
 
@@ -2737,31 +2734,6 @@ $(document).ready(function() {
                         'font-weight': 'bold'
                     });
             }
-        });
-    }
-
-    // Function to hide empty cells
-    function hideEmptyCells() {
-        // Get all the table rows
-        var rows = document.querySelectorAll('#nppp-premium-table > tbody > tr');
-
-        // Loop through each row
-        rows.forEach(function(row) {
-            // Get the cells from the second, third, and fourth columns
-            var cells = [
-                row.querySelector('td:nth-child(2)'),
-                row.querySelector('td:nth-child(3)'),
-                row.querySelector('td:nth-child(4)'),
-                row.querySelector('td:nth-child(5)')
-            ];
-
-            // Loop through each cell
-            cells.forEach(function(cell) {
-                // Check if the cell is empty
-                if (cell && cell.textContent.trim() === '') {
-                    cell.textContent = '—';
-                }
-            });
         });
     }
 
