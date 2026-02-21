@@ -3732,3 +3732,16 @@ body.has-sticky-submit .nppp-scrollfab{
     margin:2px 0 5px;
     font-style:normal;
 }
+
+/* Content category column */
+#nppp-premium-table td.nppp-category-cell {
+    color: #8b5cf6;
+    font-weight: 700;
+}
+
+/* Cache date column */
+#nppp-premium-table td.nppp-date-cell {
+    color: #6b7280;
+    font-weight: 600;
+}
+
