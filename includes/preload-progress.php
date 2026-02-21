@@ -44,19 +44,30 @@ function nppp_nginx_cache_preload_progress($request) {
     $last_preload_time = '';
     $is_running = false;
     $log_found = false;
+    $log_complete = false;
+    $snapshot_exists = false;
+    $snapshot_time = '';
+
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ( $wp_filesystem === false ) {
+        return new WP_REST_Response( [ 'status' => 'error', 'message' => 'Filesystem init failed' ], 500 );
+    }
 
     // Check if preload process is alive
-    if (file_exists($pid_path)) {
-        $pid = intval(trim(file_get_contents($pid_path)));
-        if ($pid > 0 && nppp_is_process_alive($pid)) {
+    if ( $wp_filesystem->exists( $pid_path ) ) {
+        $pid = intval( trim( $wp_filesystem->get_contents( $pid_path ) ) );
+        if ( $pid > 0 && nppp_is_process_alive( $pid ) ) {
             $is_running = true;
         }
     }
 
     // Parse log file
-    if (file_exists($log_path)) {
+    if ( $wp_filesystem->exists( $log_path ) ) {
         $log_found = true;
-        $lines = @file($log_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $raw_log = $wp_filesystem->get_contents( $log_path );
+        $lines = $raw_log !== false && $raw_log !== ''
+            ? array_filter( array_map( 'trim', explode( "\n", $raw_log ) ) )
+            : [];
         if ($lines) {
             foreach ($lines as $line) {
                 $line_trimmed = trim($line);
@@ -105,6 +116,23 @@ function nppp_nginx_cache_preload_progress($request) {
         }
     }
 
+    // Check if live log has a FINISHED marker (complete run)
+    if ( $log_found && isset( $raw_log ) && $raw_log !== false ) {
+        $log_complete = nppp_wget_log_is_complete( $raw_log );
+    }
+
+    // Check snapshot file — skip during active run, it only changes on completion
+    $snapshot_path = nppp_get_runtime_file( 'nppp-wget-snapshot.log' );
+    if ( ! $is_running && $wp_filesystem->exists( $snapshot_path ) ) {
+        $snapshot_exists = true;
+        $snap_contents = $wp_filesystem->get_contents( $snapshot_path );
+        if ( $snap_contents !== false && $snap_contents !== '' ) {
+            if ( preg_match( '/^FINISHED\s+--([\d\-]+\s+[\d:]+)--$/m', $snap_contents, $snap_match ) ) {
+                $snapshot_time = trim( $snap_match[1] );
+            }
+        }
+    }
+
     // Get URL count
     $est_total = nppp_get_estimated_url_count();
 
@@ -117,7 +145,10 @@ function nppp_nginx_cache_preload_progress($request) {
         'total' => $est_total,
         'time' => $time_info,
         'last_preload_time' => $last_preload_time,
-        'log_found' => $log_found
+        'log_found' => $log_found,
+        'log_complete'      => $log_complete,
+        'snapshot_exists'   => $snapshot_exists,
+        'snapshot_time'     => $snapshot_time,
     ]);
 }
 
