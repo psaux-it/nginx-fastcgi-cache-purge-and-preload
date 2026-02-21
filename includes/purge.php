@@ -876,6 +876,9 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while attempting to purge the Nginx cache. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' );
                 break;
         }
+
+        // Bust the URL map transient so Advanced tab re-reads from snapshot
+        delete_transient( 'nppp_wget_urls_cache_' . md5( 'nppp' ) );
     }
 
     // Display the admin notice
