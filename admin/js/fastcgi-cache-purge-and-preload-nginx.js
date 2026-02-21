@@ -526,82 +526,110 @@ $(document).ready(function() {
                 pct = 100;
             }
 
-            bar.style.width = pct + "%";
+            // Bar hidden — progress shown as table metric instead
+            const barTrack = document.querySelector(".nppp-bar-track");
+            if (barTrack) barTrack.style.display = "none";
 
-            if (data.status === "done" && data.log_found && !data.log_complete && data.checked > 0) {
-                // Interrupted
-                bar.style.backgroundColor = "#f59e0b";
-            } else if (pct >= 100 || data.status === "done") {
-                // Complete
-                bar.style.backgroundColor = "#ADD8E6";
-            } else {
-                // In progress
-                bar.style.backgroundColor = "#ADD8E6";
+            const escapeHtml = (value) => String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+
+            let rows = '';
+
+            rows += `<tr>
+                <td class="check">${__('Progress (%)', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                <td class="status"><code>${pct}%</code></td>
+            </tr>`;
+
+            rows += `<tr>
+                <td class="check">${__('Processed URLs Count', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                <td class="status"><code>${data.checked}</code></td>
+            </tr>`;
+
+            const errStyle = data.errors > 0
+                ? 'style="color:#dc2626;background-color:#fef2f2;border-color:#fecaca;"'
+                : '';
+            rows += `<tr>
+                <td class="check">${__('Broken URLs (404) Count', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                <td class="status"><code ${errStyle}>${data.errors}</code></td>
+            </tr>`;
+
+            if (data.last_url) {
+                rows += `<tr>
+                    <td class="check">${__('Last Processed Page', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status"><span class="nppp-url">${escapeHtml(data.last_url)}</span></td>
+                </tr>`;
             }
 
-            if (barText) barText.textContent = pct + "%";
-
-            let html = `
-                <div class="nppp-progress-row">
-                    <span class="nppp-label">${__('Processed URLs:', 'fastcgi-cache-purge-and-preload-nginx')}</span> <code>${data.checked}</code>
-                    &nbsp;|&nbsp;
-                    <span class="nppp-label">${__('Broken URLs (404):', 'fastcgi-cache-purge-and-preload-nginx')}</span> <code>${data.errors}</code>
-                </div>
-                <div class="nppp-progress-row">
-                    <span class="nppp-label">${__('Last Processed Page:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
-                    <span class="nppp-url">${data.last_url}</span>
-                </div>
-            `;
-
             if (Array.isArray(data.broken_urls) && data.broken_urls.length) {
-                const escapeHtml = (value) => String(value)
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#039;');
-
                 const brokenList = data.broken_urls
                     .map((url) => `<li><code>${escapeHtml(url)}</code></li>`)
                     .join('');
-
-                html += `
-                    <div class="nppp-progress-row">
-                        <span class="nppp-label">${__('Recent Broken URLs:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
-                        <ul class="nppp-broken-urls">${brokenList}</ul>
-                    </div>
-                `;
+                rows += `<tr>
+                    <td class="check">${__('Recent Broken URLs', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status"><ul class="nppp-broken-urls">${brokenList}</ul></td>
+                </tr>`;
             }
 
             if (data.time) {
-                html += `
-                    <div class="nppp-progress-row">
-                        <span class="nppp-label">${__('Time Elapsed:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
-                        <code>${data.time || '-'}</code>
-                        &nbsp;|&nbsp;
-                        <span class="nppp-label">${__('Last Preload:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
-                        <code>${data.last_preload_time || '-'}</code>
-                    </div>
-                `;
+                rows += `<tr>
+                    <td class="check">${__('Time Elapsed', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status"><code>${data.time}</code></td>
+                </tr>`;
             }
 
-            if (data.status === "done" && data.log_found && !data.log_complete && data.checked > 0) {
-                // Preload was interrupted (no FINISHED marker in live log)
-                let snapMsg = '';
-                if (data.snapshot_exists && data.snapshot_time) {
-                    snapMsg = `<span class="nppp-label">${__('Using last crawl snapshot from:', 'fastcgi-cache-purge-and-preload-nginx')}</span> <code>${data.snapshot_time}</code>`;
-                } else if (data.snapshot_exists) {
-                    snapMsg = `<span>${__('Using last available crawl snapshot.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
-                } else {
-                    snapMsg = `<span>${__('No crawl snapshot available — run Preload All to build one.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
-                }
-                html += `
-                    <div class="nppp-done nppp-interrupted">⚠️ <span>${__('Preload Interrupted', 'fastcgi-cache-purge-and-preload-nginx')}</span></div>
-                    <div class="nppp-progress-row">${snapMsg}</div>
-                `;
-            } else if (pct >= 100 || data.status === "done") {
-                html += `<div class="nppp-done">✅ <span>${__('Preload Complete', 'fastcgi-cache-purge-and-preload-nginx')}</span></div>`;
+            if (data.last_preload_time) {
+                rows += `<tr>
+                    <td class="check">${__('Last Preload Started', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status"><code>${data.last_preload_time}</code></td>
+                </tr>`;
             }
+
+            let statusCell = '';
+            const isInterrupted = data.status === "done" && data.log_found && !data.log_complete && data.checked > 0;
+
+            if (isInterrupted) {
+                statusCell = `<span class="nppp-done nppp-interrupted">⚠️ ${__('Preload Interrupted', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+            } else if (pct >= 100 || data.status === "done") {
+                statusCell = `<span class="nppp-done">✅ ${__('Preload Completed', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+            } else {
+                statusCell = `<span style="color:#337AB7;font-weight:bold;">↻ ${__('In Progress', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+            }
+
+            rows += `<tr>
+                <td class="check">${__('Last Preload Status', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                <td class="status">${statusCell}</td>
+            </tr>`;
+
+            if (isInterrupted) {
+                let snapCell = '';
+                if (data.snapshot_exists && data.snapshot_time) {
+                    snapCell = `<code>${data.snapshot_time}</code>`;
+                } else if (data.snapshot_exists) {
+                    snapCell = `<span>✅ ${__('Available', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                } else {
+                    snapCell = `<span style="color:#92400e;">${__('None — run Preload All to build one.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                }
+                rows += `<tr>
+                    <td class="check">${__('Snapshot Status', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status">${snapCell}</td>
+                </tr>`;
+            }
+
+            const html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> ${__('Metric', 'fastcgi-cache-purge-and-preload-nginx')}</th>
+                            <th class="status-header"><span class="dashicons dashicons-info"></span> ${__('Value', 'fastcgi-cache-purge-and-preload-nginx')}</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
 
             status.innerHTML = html;
 
