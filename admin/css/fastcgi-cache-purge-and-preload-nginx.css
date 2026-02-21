@@ -2830,14 +2830,54 @@ p.description {
     cursor: not-allowed;
 }
 
+/* Preload Progress Section */
+#nppp-preload-progress-section {
+    display: none; /* hidden until JS shows it */
+}
+
+.nppp-progress-wrap {
+    padding: 0;
+}
+
+.nppp-bar-track {
+    width: 100%;
+    height: 22px;
+    background-color: #e5e7eb;
+    overflow: hidden;
+    position: relative;
+}
+
+.nppp-bar-fill {
+    height: 100%;
+    width: 0%;
+    background-color: #337AB7;
+    position: relative;
+    transition: width 0.4s ease;
+}
+
+.nppp-bar-fill span {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 22px;
+    pointer-events: none;
+    user-select: none;
+}
+
 .nppp-progress-status {
-    margin-top: 0px;
+    margin-top: 0;
     font-size: 13px;
     color: #374151;
     background-color: mintcream;
     border: 1px solid #e5e7eb;
-    padding: 8px 12px;
-    border-radius: 0px;
+    border-top: none;
+    padding: 10px 14px;
     line-height: 1.6;
     word-break: break-word;
 }
@@ -2891,21 +2931,6 @@ p.description {
 }
 .nppp-broken-urls li {
     margin: 2px 0;
-}
-
-#wpt-bar-text {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    text-align: center;
-    color: white;
-    font-weight: 600;
-    font-size: 14px;
-    line-height: 20px;
-    pointer-events: none;
-    user-select: none;
 }
 
 /* Toasts  */
@@ -3758,4 +3783,3 @@ body.has-sticky-submit .nppp-scrollfab{
     color: #6b7280;
     font-weight: 600;
 }
-
