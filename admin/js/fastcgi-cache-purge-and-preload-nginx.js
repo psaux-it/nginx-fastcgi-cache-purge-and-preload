@@ -2598,13 +2598,14 @@ $(document).ready(function() {
 
         // Already initialised?
         if ($.fn.dataTable.isDataTable($tbl)) {
-            $tbl.DataTable().columns.adjust().responsive.recalc();
-            applyCategoryStyles();
+            var dtExisting = $tbl.DataTable();
+            dtExisting.columns.adjust();
+            if (dtExisting.responsive) dtExisting.responsive.recalc();
             return;
         }
 
         // Initialise
-        var table = $tbl.DataTable({
+        $tbl.DataTable({
             autoWidth: false,
             responsive: true,
             paging: true,
@@ -2629,21 +2630,16 @@ $(document).ready(function() {
 
             // Set column widths
             columnDefs: [
-                { width: "23%", targets: 0, className: 'text-left' }, // Cached URL
-                { width: "37%", targets: 1, className: 'text-left' }, // Cache Path
-                { width: "8%", targets: 2, className: 'text-left' },  // Content
-                { width: "5%", targets: 3, className: 'text-left' },  // Status
-                { width: "12%", targets: 4, className: 'text-left' }, // Cache Date
-                { width: "15%", targets: 5, className: 'text-left' }, // Actions
-                { responsivePriority: 1, targets: 0 }, // Cached URL gets priority for responsiveness
-                { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] }, // Collapse all in first row on mobile, hide actions always
-                { defaultContent: "", targets: "_all" } // Ensures all columns render even if empty
-            ],
-
-            // Ensure callback on table draw for initial load
-            initComplete: function() {
-                applyCategoryStyles();
-            }
+                { width: "23%", targets: 0, className: 'text-left' },                    // Cached URL
+                { width: "37%", targets: 1, className: 'text-left' },                    // Cache Path
+                { width: "8%", targets: 2, className: 'text-left nppp-category-cell' },  // Content
+                { width: "5%", targets: 3, className: 'text-left' },                     // Status
+                { width: "12%", targets: 4, className: 'text-left nppp-date-cell' },     // Cache Date
+                { width: "15%", targets: 5, className: 'text-left' },                    // Actions
+                { responsivePriority: 1, targets: 0 },                                   // Cached URL gets priority for responsiveness
+                { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] },                 // Collapse all in first row on mobile, hide actions always
+                { defaultContent: "", targets: "_all" }                                  // Ensures all columns render even if empty
+            ]
         });
 
         // clear one-shot highlight before any redraw
@@ -2651,90 +2647,6 @@ $(document).ready(function() {
             .on('page.dt.nppp', function () {
                 $(this).find('tr.purged-row, tr.child.purged-row').removeClass('purged-row');
             });
-
-        // Apply styles whenever the table is redrawn
-        table.on('draw', function() {
-            applyCategoryStyles();
-        });
-    }
-
-    // Function to apply custom styles based on Content Category column
-    function applyCategoryStyles() {
-        $('#nppp-premium-table tbody tr').each(function() {
-            var $cell = $(this).find('td').eq(2);
-
-            // Get the text of the Content Category column
-            var category = $cell.text().trim();
-
-            // Apply different CSS styles based on the category
-            switch (category) {
-                case 'POST':
-                    $cell.css({
-                        'color': 'fuchsia',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'AUTHOR':
-                    $cell.css({
-                        'color': 'orange',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'PAGE':
-                    $cell.css({
-                        'color': 'green',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'TAG':
-                    $cell.css({
-                        'color': 'blue',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'CATEGORY':
-                    $cell.css({
-                        'color': 'mediumslateblue',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'DAILY_ARCHIVE':
-                    $cell.css({
-                        'color': 'red',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'MONTHLY_ARCHIVE':
-                    $cell.css({
-                        'color': 'brown',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'YEARLY_ARCHIVE':
-                    $cell.css({
-                        'color': 'darkblue',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'DATE_ARCHIVE':
-                    $cell.css({
-                        'color': 'darkmagenta',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'PRODUCT':
-                    $cell.css({
-                        'color': 'coral',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                default:
-                    $cell.css({
-                        'color': 'burlywood',
-                        'font-weight': 'bold'
-                    });
-            }
-        });
     }
 
     // Toggle switch rules for send mail
