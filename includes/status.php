@@ -774,23 +774,23 @@ function nppp_my_status_html() {
                                     <span><?php echo esc_html(nppp_check_preload_status()); ?></span>
                                 </td>
                             </tr>
-                            <tr id="nppp-preload-progress-row">
-                                <td colspan="2">
-                                    <!-- Progress Bar Container -->
-                                    <div style="width: 100%; height: 20px; background-color: #e5e7eb; margin-top: 10px; overflow: hidden;">
-                                        <div id="wpt-bar-inner" style="width: 0%; height: 100%; background-color: #5A9BD5; position: relative; text-align: center; color: white; font-size: 12px; line-height: 20px;">
-                                            <span id="wpt-bar-text" style="position: absolute; width: 100%; left: 0;">0%</span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Progress Status Text -->
-                                    <div id="wpt-status" class="nppp-progress-status" style="margin-top: 0px; font-size: 13px; color: #374151;">
-                                        <?php esc_html_e( 'Initializing...', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                    </div>
-                                </td>
-                            </tr>
                         </tbody>
                     </table>
+                </section>
+
+                <!-- Preload Progress Section -->
+                <section id="nppp-preload-progress-section">
+                    <h2><?php esc_html_e( 'Preload Progress', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h2>
+                    <div class="nppp-progress-wrap">
+                        <div class="nppp-bar-track">
+                            <div id="wpt-bar-inner" class="nppp-bar-fill">
+                                <span id="wpt-bar-text">0%</span>
+                            </div>
+                        </div>
+                        <div id="wpt-status" class="nppp-progress-status">
+                            <?php esc_html_e( 'Initializing...', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- System Checks Section -->
