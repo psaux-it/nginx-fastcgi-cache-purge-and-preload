@@ -428,7 +428,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
                 // Check again for pid
                 $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
             } else {
-                exit(0);
+                return;
             }
         }
 
@@ -484,7 +484,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
                     // Check again for pid
                     $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
                 } else {
-                    exit(0);
+                    return;
                 }
             }
         }
@@ -503,6 +503,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
         // Define plugin path and log file
         $plugin_path = dirname(plugin_dir_path( __FILE__ ));
         $log_path = nppp_get_runtime_file('nppp-wget.log');
+        $snapshot_path = nppp_get_runtime_file('nppp-wget-snapshot.log');
 
         // Initialize final total
         $final_total = 0;
@@ -535,6 +536,15 @@ function nppp_create_scheduled_event_preload_status_callback() {
                     }
                 }
             }
+        }
+
+        // Persist a stable snapshot only when the crawl completed successfully.
+        // This snapshot is what the Advanced tab reads for MISS data. It survives
+        // across purges and interrupted runs, so the table stays populated.
+        if ( !empty($log_contents) && nppp_wget_log_is_complete( $log_contents ) ) {
+            $wp_filesystem->put_contents( $snapshot_path, $log_contents, FS_CHMOD_FILE );
+            // Bust the URL cache transient so Advanced tab reads fresh snapshot data
+            delete_transient( 'nppp_wget_urls_cache_' . md5( 'nppp' ) );
         }
 
         // Add buffer to total count
@@ -596,8 +606,8 @@ function nppp_create_scheduled_event_preload_status_callback() {
         }
     }
 
-    // Gracefully exit from wp cron job
-    exit(0);
+    // Return control to WP-Cron so other due events can continue in this request.
+    return;
 }
 
 // Custom cron schedule for monthly recurrence
