@@ -188,7 +188,8 @@
 
 /* Status Summary Table */
 #nppp-status-tab .status-summary table,
-#nppp-status-tab .system-checks table {
+#nppp-status-tab .system-checks table,
+#nppp-preload-progress-section table {
     width: 100%;
     border-collapse: collapse;
 }
@@ -2872,12 +2873,6 @@ p.description {
 
 .nppp-progress-status {
     margin-top: 0;
-    font-size: 13px;
-    color: #374151;
-    background-color: mintcream;
-    border: 1px solid #e5e7eb;
-    border-top: none;
-    padding: 10px 14px;
     line-height: 1.6;
     word-break: break-word;
 }
