@@ -863,7 +863,7 @@ $(document).ready(function() {
         // Responsive child sync
         var $child = $main.next('.child');
         if ($child.length){
-            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_status) ? nppp_admin_data.col_cache_status : 'Status';
+            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_status) ? nppp_admin_data.col_cache_status : __('Status', 'fastcgi-cache-purge-and-preload-nginx');
             $child.find('.dtr-details li').each(function(){
                 var $li = $(this);
                 if ($li.find('.dtr-title').text().trim() === label){
@@ -891,7 +891,7 @@ $(document).ready(function() {
         // responsive child: match by label text, update .dtr-data
         var $child = $main.next('.child');
         if ($child.length){
-            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_path) ? nppp_admin_data.col_cache_path : 'Cache Path';
+            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_path) ? nppp_admin_data.col_cache_path : __('Cache Path', 'fastcgi-cache-purge-and-preload-nginx');
             $child.find('.dtr-details li').each(function(){
                 var $li = $(this);
                 if ($li.find('.dtr-title').text().trim() === label){
@@ -1453,7 +1453,7 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_send_mail').prop('checked', !$('#nginx_cache_send_mail').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
@@ -1501,7 +1501,7 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_auto_preload').prop('checked', !$('#nginx_cache_auto_preload').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
@@ -1548,7 +1548,7 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_preload_enable_proxy').prop('checked', !$('#nginx_cache_preload_enable_proxy').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
@@ -1595,7 +1595,7 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_auto_preload_mobile').prop('checked', !$('#nginx_cache_auto_preload_mobile').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
@@ -1643,7 +1643,7 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_purge_on_update').prop('checked', !$('#nginx_cache_purge_on_update').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
@@ -1690,7 +1690,7 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nppp_cloudflare_apo_sync').prop('checked', !$('#nppp_cloudflare_apo_sync').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
@@ -1907,7 +1907,7 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_api').prop('checked', !$('#nginx_cache_api').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
@@ -1922,14 +1922,14 @@ $(document).ready(function() {
 
         // Validate npppcronEvent on client side
         if (!npppcronEvent || (npppcronEvent !== 'daily' && npppcronEvent !== 'weekly' && npppcronEvent !== 'monthly')) {
-            alert('Please select cron schedule frequency "On Every"');
+            npppToast(__('Please select cron schedule frequency "On Every"', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             return;
         }
 
         // Validate nppptime format on client side
         var timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
         if (!nppptime || !nppptime.match(timeRegex)) {
-            alert('Please select cron "Time"');
+            npppToast(__('Please select cron "Time"', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             return;
         }
 
@@ -2097,7 +2097,7 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_schedule').prop('checked', !$('#nginx_cache_schedule').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
