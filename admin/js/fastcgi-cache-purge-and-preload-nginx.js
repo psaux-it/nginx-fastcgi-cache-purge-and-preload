@@ -573,7 +573,21 @@ $(document).ready(function() {
                 `;
             }
 
-            if (pct >= 100 || data.status === "done") {
+            if (data.status === "done" && data.log_found && !data.log_complete && data.checked > 0) {
+                // Preload was interrupted (no FINISHED marker in live log)
+                let snapMsg = '';
+                if (data.snapshot_exists && data.snapshot_time) {
+                    snapMsg = `<span class="nppp-label">${__('Using last snapshot from:', 'fastcgi-cache-purge-and-preload-nginx')}</span> <code>${data.snapshot_time}</code>`;
+                } else if (data.snapshot_exists) {
+                    snapMsg = `<span>${__('Using last available crawl snapshot.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                } else {
+                    snapMsg = `<span>${__('No crawl snapshot available — run Preload All to build one.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                }
+                html += `
+                    <div class="nppp-done nppp-interrupted">⚠️ <span>${__('Preload Interrupted', 'fastcgi-cache-purge-and-preload-nginx')}</span></div>
+                    <div class="nppp-progress-row">${snapMsg}</div>
+                `;
+            } else if (pct >= 100 || data.status === "done") {
                 html += `<div class="nppp-done">✅ <span>${__('Preload Complete', 'fastcgi-cache-purge-and-preload-nginx')}</span></div>`;
             }
 
