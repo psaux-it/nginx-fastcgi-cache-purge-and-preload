@@ -510,13 +510,13 @@ $(document).ready(function() {
         })
         .then(data => {
             if (!data.log_found) {
-                const preloadRow = document.getElementById("nppp-preload-progress-row");
-                if (preloadRow) preloadRow.style.display = "none";
+                const preloadSection = document.getElementById("nppp-preload-progress-section");
+                if (preloadSection) preloadSection.style.display = "none";
                 npppStopWgetPolling();
                 return;
             } else {
-                const preloadRow = document.getElementById("nppp-preload-progress-row");
-                if (preloadRow) preloadRow.style.display = "";
+                const preloadSection = document.getElementById("nppp-preload-progress-section");
+                if (preloadSection) preloadSection.style.display = "block";
             }
 
             const estTotal = data.total || 2000;
@@ -527,6 +527,18 @@ $(document).ready(function() {
             }
 
             bar.style.width = pct + "%";
+
+            if (data.status === "done" && data.log_found && !data.log_complete && data.checked > 0) {
+                // Interrupted
+                bar.style.backgroundColor = "#f59e0b";
+            } else if (pct >= 100 || data.status === "done") {
+                // Complete
+                bar.style.backgroundColor = "#ADD8E6";
+            } else {
+                // In progress
+                bar.style.backgroundColor = "#ADD8E6";
+            }
+
             if (barText) barText.textContent = pct + "%";
 
             let html = `
@@ -577,7 +589,7 @@ $(document).ready(function() {
                 // Preload was interrupted (no FINISHED marker in live log)
                 let snapMsg = '';
                 if (data.snapshot_exists && data.snapshot_time) {
-                    snapMsg = `<span class="nppp-label">${__('Using last snapshot from:', 'fastcgi-cache-purge-and-preload-nginx')}</span> <code>${data.snapshot_time}</code>`;
+                    snapMsg = `<span class="nppp-label">${__('Using last crawl snapshot from:', 'fastcgi-cache-purge-and-preload-nginx')}</span> <code>${data.snapshot_time}</code>`;
                 } else if (data.snapshot_exists) {
                     snapMsg = `<span>${__('Using last available crawl snapshot.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
                 } else {
@@ -715,13 +727,13 @@ $(document).ready(function() {
                         await new Promise(resolve => setTimeout(resolve, 100));
 
                         const preloadStatusSpan = document.getElementById("nppppreloadStatus");
-                        const preloadProgressRow = document.getElementById("nppp-preload-progress-row");
+                        const preloadProgressRow = document.getElementById("nppp-preload-progress-section");
 
                         if (!preloadStatusSpan || !preloadProgressRow) return;
 
                         const preloadRawStatus = preloadStatusSpan.dataset.statusRaw?.toLowerCase();
                         if (preloadRawStatus === "true" || preloadRawStatus === "progress") {
-                            preloadProgressRow.style.display = "";
+                            preloadProgressRow.style.display = "block";
                             npppStartWgetPolling();
                         } else {
                             preloadProgressRow.style.display = "none";
