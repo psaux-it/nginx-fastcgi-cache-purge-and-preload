@@ -2800,20 +2800,44 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
 
 // Function to reset plugin settings on deactivation
 function nppp_reset_plugin_settings_on_deactivation() {
-    // Stop preload process status inspector event
+    // Always clear preload related cron hooks unconditionally.
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
-
-    // Check if the preload status event action exists and remove it
-    if (has_action('npp_cache_preload_status_event', 'nppp_create_scheduled_event_preload_status_callback')) {
-        remove_action('npp_cache_preload_status_event', 'nppp_create_scheduled_event_preload_status_callback');
-    }
-
-    // Clear all instances of 'npp_cache_preload_event'
     wp_clear_scheduled_hook('npp_cache_preload_event');
 
-    // Check if the action exists and remove it
-    if (has_action('npp_cache_preload_event', 'nppp_create_scheduled_event_preload_callback')) {
-        remove_action('npp_cache_preload_event', 'nppp_create_scheduled_event_preload_callback');
+    // Always clear opt-in related cron hooks unconditionally.
+    wp_clear_scheduled_hook('npp_plugin_tracking_event', array('active'));
+    wp_clear_scheduled_hook('npp_plugin_tracking_event');
+
+    // Preload runs as a detached nohup process that survives deactivation.
+    // Terminate it gracefully so it does not keep crawling after the plugin
+    // is gone, then clean up the stale PID file.
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
+
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ($wp_filesystem !== false && $wp_filesystem->exists($PIDFILE)) {
+        $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
+
+        if ($pid > 0 && nppp_is_process_alive($pid)) {
+            // Try SIGTERM first (graceful).
+            if (function_exists('posix_kill') && defined('SIGTERM')) {
+                posix_kill($pid, SIGTERM);
+                usleep(300000);
+            }
+
+            // Fall back to SIGKILL if still alive.
+            if (nppp_is_process_alive($pid)) {
+                $kill_path = trim((string) shell_exec('command -v kill'));
+                if (!empty($kill_path)) {
+                    shell_exec(escapeshellcmd($kill_path) . ' -9 ' . (int) $pid);
+                    usleep(300000);
+                }
+            }
+        }
+
+        // Remove PID file regardless of whether the process was alive,
+        // so a stale file from a previously crashed preload is also cleaned up.
+        nppp_perform_file_operation($PIDFILE, 'delete');
     }
 
     // Retrieve existing options to check opt-in status
@@ -2823,9 +2847,6 @@ function nppp_reset_plugin_settings_on_deactivation() {
     if (isset($existing_options['nginx_cache_tracking_opt_in']) && $existing_options['nginx_cache_tracking_opt_in'] === '1') {
         // Send plugin status to API
         nppp_plugin_tracking('inactive');
-
-        // Remove scheduled cron for plugin status check
-        nppp_schedule_plugin_tracking_event(true);
     }
 }
 
