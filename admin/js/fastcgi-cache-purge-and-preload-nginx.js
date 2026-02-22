@@ -543,11 +543,20 @@ $(document).ready(function() {
             let rows = '';
 
             // Progress %
-            const pctColor = (pct >= 100 || data.status === "done") ? "green" : "#337AB7";
-            const pctIcon  = (pct >= 100 || data.status === "done") ? "dashicons-yes" : "dashicons-chart-line";
+            const pctColor   = (pct >= 100 || data.status === "done") ? "#16a34a" : "#337AB7";
+            const pctIcon    = (pct >= 100 || data.status === "done") ? "dashicons-yes" : "dashicons-chart-line";
             rows += `<tr>
                 <td class="check">${__('Progress (%)', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                <td class="status" style="color:${pctColor};">${icon(pctIcon, pctColor)}${pct}%</td>
+                <td class="status">
+                    <div class="nppp-pct-bar-wrap">
+                        ${icon(pctIcon, pctColor)}
+                        <div class="nppp-pct-bar-track">
+                            <div class="nppp-pct-bar-fill" style="width:${pct}%;background-color:${pctColor};">
+                                <span>${pct}%</span>
+                            </div>
+                        </div>
+                    </div>
+                </td>
             </tr>`;
 
             // Processed URLs
@@ -608,7 +617,7 @@ $(document).ready(function() {
                     const startStr = `${startDate.getFullYear()}-${pad(startDate.getMonth()+1)}-${pad(startDate.getDate())} ${pad(startDate.getHours())}:${pad(startDate.getMinutes())}:${pad(startDate.getSeconds())}`;
                     rows += `<tr>
                         <td class="check">${__('Last Preload Started At', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                        <td class="status" style="color:#374151;">${icon('dashicons-calendar-alt', '#6b7280')}${startStr}</td>
+                        <td class="status" style="color:#374151;font-size:13px;font-weight:600;">${icon('dashicons-calendar-alt', '#6b7280')}${startStr}</td>
                     </tr>`;
                 }
             }
@@ -617,7 +626,7 @@ $(document).ready(function() {
             if (data.last_preload_time) {
                 rows += `<tr>
                     <td class="check">${__('Last Preload Completed At', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                    <td class="status" style="color:#374151;">${icon('dashicons-calendar-alt', '#6b7280')}${data.last_preload_time}</td>
+                    <td class="status" style="color:#374151;font-size:13px;font-weight:600;">${icon('dashicons-calendar-alt', '#6b7280')}${data.last_preload_time}</td>
                 </tr>`;
             }
 
