@@ -634,6 +634,11 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
     // Clear the scheduled preload status event immediately
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
 
+    // Clean up phase transient left by the non-blocking tick monitor
+    // to prevent stale state from corrupting the next preload cycle.
+    $nppp_phase_key = 'nppp_preload_phase_' . md5('nppp');
+    delete_transient($nppp_phase_key);
+
     // Initialize variables for messages
     $message_type = '';
     $message_content = '';
