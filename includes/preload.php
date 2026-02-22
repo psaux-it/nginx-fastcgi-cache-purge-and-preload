@@ -793,16 +793,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         $pid   = trim(end($parts));
         nppp_perform_file_operation($PIDFILE, 'write', $pid);
 
-        // Create a DateTime object for the current time in WordPress timezone
-        $wordpress_timezone = new DateTimeZone(wp_timezone_string());
-        $current_time = new DateTime('now', $wordpress_timezone);
-
-        // Format the current time as the start time for the scheduled event
-        $start_time = $current_time->format('H:i:s');
-
         // Call the function to schedule the status check event
         if (!$preload_mobile) {
-            nppp_create_scheduled_event_preload_status($start_time);
+            nppp_create_scheduled_event_preload_status();
         }
 
         // Start cpulimit if it is exist
