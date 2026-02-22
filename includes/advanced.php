@@ -868,9 +868,6 @@ function nppp_preload_cache_premium_callback() {
         wp_send_json_error('You do not have permission to access this page.');
     }
 
-    // Get the main path from plugin settings
-    $nginx_cache_path = get_option('nginx_cache_path');
-
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
