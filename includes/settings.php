@@ -798,8 +798,8 @@ function nppp_handle_nginx_cache_settings_submission() {
                         $merged = wp_parse_args($new_settings, $existing_options);
 
                         // Get the old and new opt-in values
-                        $old_opt_in = isset($existing_options['nginx_cache_tracking_opt_in']) ? $existing_options['nginx_cache_tracking_opt_in'] : '1';
-                        $new_opt_in = isset($merged['nginx_cache_tracking_opt_in']) ? $merged['nginx_cache_tracking_opt_in'] : '1';
+                        $old_opt_in = isset($existing_options['nginx_cache_tracking_opt_in']) ? $existing_options['nginx_cache_tracking_opt_in'] : '0';
+                        $new_opt_in = isset($merged['nginx_cache_tracking_opt_in']) ? $merged['nginx_cache_tracking_opt_in'] : '0';
 
                         // Always delete the plugin permission cache when the form is submitted
                         $static_key_base = 'nppp';
@@ -1731,8 +1731,8 @@ function nppp_nginx_cache_reject_extension_callback() {
 function nppp_nginx_cache_tracking_opt_in_callback() {
     // Retrieve all plugin settings
     $options = get_option('nginx_cache_settings');
-    // Get the value for tracking opt-in, default to '1' if not set
-    $value = isset($options['nginx_cache_tracking_opt_in']) ? $options['nginx_cache_tracking_opt_in'] : '1';
+    // Get the value for tracking opt-in, default to '0' if not set
+    $value = isset($options['nginx_cache_tracking_opt_in']) ? $options['nginx_cache_tracking_opt_in'] : '0';
     ?>
     <input type="checkbox" id="nginx_cache_tracking_opt_in" name="nginx_cache_settings[nginx_cache_tracking_opt_in]" value="1" <?php checked('1', $value); ?> />
     <label for="nginx_cache_tracking_opt_in"><?php echo esc_html__('Opt-in to help improve plugin development.', 'fastcgi-cache-purge-and-preload-nginx'); ?></label>
@@ -2864,7 +2864,7 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_key_custom_regex'      => base64_encode(nppp_fetch_default_regex_for_cache_key()),
         'nginx_cache_wait_request'          => 0,
         'nginx_cache_limit_rate'            => 5120,
-        'nginx_cache_tracking_opt_in'       => '1',
+        'nginx_cache_tracking_opt_in'       => '0',
         'nginx_cache_api_key'               => $new_api_key,
         'nginx_cache_preload_proxy_host'    => '127.0.0.1',
         'nginx_cache_preload_proxy_port'    => 3434,
