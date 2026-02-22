@@ -537,36 +537,48 @@ $(document).ready(function() {
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
 
+            const icon = (cls, color) =>
+                `<span class="dashicons ${cls}" style="color:${color};font-size:20px;vertical-align:middle;margin-right:4px;"></span>`;
+
             let rows = '';
 
+            // Progress %
+            const pctColor = (pct >= 100 || data.status === "done") ? "green" : "#337AB7";
+            const pctIcon  = (pct >= 100 || data.status === "done") ? "dashicons-yes" : "dashicons-chart-line";
             rows += `<tr>
                 <td class="check">${__('Progress (%)', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                <td class="status"><code>${pct}%</code></td>
+                <td class="status" style="color:${pctColor};">${icon(pctIcon, pctColor)}${pct}%</td>
             </tr>`;
 
+            // Processed URLs
             rows += `<tr>
                 <td class="check">${__('Processed URLs Count', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                <td class="status"><code>${data.checked}</code></td>
+                <td class="status" style="color:green;">${icon('dashicons-yes', 'green')}${data.checked}</td>
             </tr>`;
 
-            const errStyle = data.errors > 0
-                ? 'style="color:#dc2626;background-color:#fef2f2;border-color:#fecaca;"'
-                : '';
-            rows += `<tr>
-                <td class="check">${__('Broken URLs (404) Count', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                <td class="status"><code ${errStyle}>${data.errors}</code></td>
-            </tr>`;
-
+            // Last Processed Page
             if (data.last_url) {
                 rows += `<tr>
                     <td class="check">${__('Last Processed Page', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                    <td class="status"><span class="nppp-url">${escapeHtml(data.last_url)}</span></td>
+                    <td class="status">${icon('dashicons-arrow-right-alt', '#2563eb')}<a href="${escapeHtml(data.last_url)}" target="_blank" rel="noopener" style="color:#2563eb;word-break:break-all;">${escapeHtml(data.last_url)}</a></td>
                 </tr>`;
             }
 
+            // Broken URLs Count
+            if (data.errors > 0) {
+                const hasErrors  = data.errors > 0;
+                const errColor   = hasErrors ? "#d63638" : "green";
+                const errIco     = hasErrors ? "dashicons-warning" : "dashicons-yes";
+                rows += `<tr>
+                    <td class="check">${__('Broken URLs (404) Count', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status" style="color:${errColor};">${icon(errIco, errColor)}${data.errors}</td>
+                </tr>`;
+            }
+
+            // Recent Broken URLs
             if (Array.isArray(data.broken_urls) && data.broken_urls.length) {
                 const brokenList = data.broken_urls
-                    .map((url) => `<li><code>${escapeHtml(url)}</code></li>`)
+                    .map(url => `<li style="color:#d63638;">${icon('dashicons-warning','#d63638')}${escapeHtml(url)}</li>`)
                     .join('');
                 rows += `<tr>
                     <td class="check">${__('Recent Broken URLs', 'fastcgi-cache-purge-and-preload-nginx')}</td>
@@ -574,48 +586,77 @@ $(document).ready(function() {
                 </tr>`;
             }
 
-            if (data.time) {
-                rows += `<tr>
-                    <td class="check">${__('Time Elapsed', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                    <td class="status"><code>${data.time}</code></td>
-                </tr>`;
+            // Last Preload Started At — completion time minus elapsed duration
+            if (data.last_preload_time && data.time) {
+                const npppParseDuration = (str) => {
+                    let secs = 0;
+                    const h = str.match(/(\d+)\s*h/i);
+                    const m = str.match(/(\d+)\s*m/i);
+                    const s = str.match(/(\d+)\s*s/i);
+                    if (h) secs += parseInt(h[1]) * 3600;
+                    if (m) secs += parseInt(m[1]) * 60;
+                    if (s) secs += parseInt(s[1]);
+                    return secs;
+                };
+
+                const durationSecs = npppParseDuration(data.time);
+                const completedMs  = new Date(data.last_preload_time.replace(' ', 'T')).getTime();
+
+                if (durationSecs > 0 && !isNaN(completedMs)) {
+                    const startDate = new Date(completedMs - durationSecs * 1000);
+                    const pad = (n) => String(n).padStart(2, '0');
+                    const startStr = `${startDate.getFullYear()}-${pad(startDate.getMonth()+1)}-${pad(startDate.getDate())} ${pad(startDate.getHours())}:${pad(startDate.getMinutes())}:${pad(startDate.getSeconds())}`;
+                    rows += `<tr>
+                        <td class="check">${__('Last Preload Started At', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                        <td class="status" style="color:#374151;">${icon('dashicons-calendar-alt', '#6b7280')}${startStr}</td>
+                    </tr>`;
+                }
             }
 
+            // Last Preload Completed At
             if (data.last_preload_time) {
                 rows += `<tr>
-                    <td class="check">${__('Last Preload Started', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                    <td class="status"><code>${data.last_preload_time}</code></td>
+                    <td class="check">${__('Last Preload Completed At', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status" style="color:#374151;">${icon('dashicons-calendar-alt', '#6b7280')}${data.last_preload_time}</td>
                 </tr>`;
             }
 
-            let statusCell = '';
-            const isInterrupted = data.status === "done" && data.log_found && !data.log_complete && data.checked > 0;
-
-            if (isInterrupted) {
-                statusCell = `<span class="nppp-done nppp-interrupted">⚠️ ${__('Preload Interrupted', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
-            } else if (pct >= 100 || data.status === "done") {
-                statusCell = `<span class="nppp-done">✅ ${__('Preload Completed', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
-            } else {
-                statusCell = `<span style="color:#337AB7;font-weight:bold;">↻ ${__('In Progress', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+            // Last Preload Completed In
+            if (data.time) {
+                rows += `<tr>
+                    <td class="check">${__('Last Preload Completed In', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status" style="color:#374151;">${icon('dashicons-clock', '#6b7280')}${data.time}</td>
+                </tr>`;
             }
 
+            // Last Preload Status
+            const isInterrupted = data.status === "done" && data.log_found && !data.log_complete && data.checked > 0;
+            let statusValue = '';
+            if (isInterrupted) {
+                statusValue = `${icon('dashicons-warning', 'orange')}<span style="color:orange;font-weight:bold;">${__('Interrupted', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+            } else if (pct >= 100 || data.status === "done") {
+                statusValue = `${icon('dashicons-yes', 'green')}<span style="color:green;font-weight:bold;">${__('Completed', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+            } else {
+                statusValue = `${icon('dashicons-clock', '#337AB7')}<span style="color:#337AB7;font-weight:bold;">${__('In Progress', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+            }
             rows += `<tr>
                 <td class="check">${__('Last Preload Status', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                <td class="status">${statusCell}</td>
+                <td class="status">${statusValue}</td>
             </tr>`;
 
+            // Snapshot Status (only when interrupted)
             if (isInterrupted) {
-                let snapCell = '';
+                let snapValue = '';
                 if (data.snapshot_exists && data.snapshot_time) {
-                    snapCell = `<code>${data.snapshot_time}</code>`;
+                    snapValue = `${icon('dashicons-yes', 'green')}<span style="color:green;">${data.snapshot_time}</span>`;
                 } else if (data.snapshot_exists) {
-                    snapCell = `<span>✅ ${__('Available', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                    snapValue = `${icon('dashicons-yes', 'green')}<span style="color:green;">${__('Available', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
                 } else {
-                    snapCell = `<span style="color:#92400e;">${__('None — run Preload All to build one.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                    snapValue = `${icon('dashicons-no', '#d63638')}<span style="color:#d63638;">${__('None — run Preload All to build one.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
                 }
                 rows += `<tr>
                     <td class="check">${__('Snapshot Status', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                    <td class="status">${snapCell}</td>
+                    <td class="status">${snapValue}</td>
                 </tr>`;
             }
 
