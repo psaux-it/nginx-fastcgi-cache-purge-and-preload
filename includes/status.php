@@ -197,12 +197,20 @@ function nppp_check_preload_status() {
         }
     }
 
-    // Check permission status, wget command status and cache path existence
+    // Check permission status, wget command compatibility and cache path existence
     $cached_result = nppp_check_perm_in_cache();
-    $wget_status = nppp_check_command_status('wget');
     $path_status = nppp_check_path();
 
-    if ($cached_result === 'false' || $wget_status !== 'Installed' || $path_status !== 'Found') {
+    $wget_compatible = true;
+    if (function_exists('nppp_get_wget_compatibility')) {
+        $wget_compat = nppp_get_wget_compatibility();
+        $wget_compatible = !empty($wget_compat['ok']);
+    } else {
+        $wget_status = nppp_check_command_status('wget');
+        $wget_compatible = ($wget_status === 'Installed');
+    }
+
+    if ($cached_result === 'false' || !$wget_compatible || $path_status !== 'Found') {
         return 'false';
     }
 
