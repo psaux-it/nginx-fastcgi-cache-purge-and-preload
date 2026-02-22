@@ -267,7 +267,7 @@ function nppp_create_scheduled_events($cron_expression) {
 }
 
 // Create process status check event for preload action
-function nppp_create_scheduled_event_preload_status($start_time) {
+function nppp_create_scheduled_event_preload_status() {
     // Reset phase transient on every fresh preload start so stale state
     // from any previous interrupted cycle never corrupts the new one.
     $phase_transient_key = 'nppp_preload_phase_' . md5('nppp');
