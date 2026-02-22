@@ -631,14 +631,10 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
     $auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
 
-    // Clear the scheduled preload status event immediately
-    wp_clear_scheduled_hook('npp_cache_preload_status_event');
-
-    // Clean up phase transient left by the non-blocking tick monitor
-    // to prevent stale state from corrupting the next preload cycle.
+    // Phase key used in multiple branches below — declared once here.
+    // Actual hook/transient cleanup is deferred until kill success is confirmed
+    // so that if kill fails and we return early, the tick monitor keeps running.
     $nppp_phase_key = 'nppp_preload_phase_' . md5('nppp');
-    delete_transient($nppp_phase_key);
-    delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
 
     // Initialize variables for messages
     $message_type = '';
@@ -736,6 +732,14 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 }
             }
 
+            // Kill confirmed — now safe to clear the tick monitor hook and phase state.
+            // This is intentionally placed here and NOT at the top of the function,
+            // because the two early-return paths above (SIGKILL failed, kill not found)
+            // leave the process running. In those cases we must NOT destroy monitoring.
+            wp_clear_scheduled_hook('npp_cache_preload_status_event');
+            delete_transient($nppp_phase_key);
+            delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
+
             // If on-going preload action halted via purge
             // that means user restrictly wants to purge cache
             // If auto preload feature enabled this will cause recursive preload action
@@ -792,6 +796,12 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             // Bust the URL map transient so Advanced tab re-reads from snapshot
             delete_transient( 'nppp_wget_urls_cache_' . md5( 'nppp' ) );
         } else {
+            // PIDFILE exists but PID is dead/stale — no live process to protect.
+            // Safe to clear monitoring hook and phase state immediately.
+            wp_clear_scheduled_hook('npp_cache_preload_status_event');
+            delete_transient($nppp_phase_key);
+            delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
+
             // Call purge_helper to delete cache contents and get status
             $status = nppp_purge_helper($nginx_cache_path, $tmp_path);
 
@@ -841,6 +851,12 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             delete_transient( 'nppp_wget_urls_cache_' . md5( 'nppp' ) );
         }
     } else {
+        // No PIDFILE — no preload was running at all.
+        // Safe to clear monitoring hook and phase state immediately.
+        wp_clear_scheduled_hook('npp_cache_preload_status_event');
+        delete_transient($nppp_phase_key);
+        delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
+
         // Call purge_helper to delete cache contents and get status
         $status = nppp_purge_helper($nginx_cache_path, $tmp_path);
 
