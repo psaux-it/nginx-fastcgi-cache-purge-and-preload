@@ -522,7 +522,10 @@ $(document).ready(function() {
             const estTotal = data.total || 2000;
             let pct = Math.min(100, Math.round((data.checked / estTotal) * 100));
 
-            if (data.status === "done") {
+            // Detect interrupted BEFORE overriding pct so the raw estimate is preserved
+            const isInterrupted = data.status === "done" && data.log_found && !data.log_complete && data.checked > 0;
+
+            if (data.status === "done" && !isInterrupted) {
                 pct = 100;
             }
 
@@ -542,21 +545,36 @@ $(document).ready(function() {
 
             let rows = '';
 
-            // Progress %
-            const pctColor   = (pct >= 100 || data.status === "done") ? "#16a34a" : "#337AB7";
-            const pctIcon    = (pct >= 100 || data.status === "done") ? "dashicons-yes" : "dashicons-chart-line";
+            // Progress % — three distinct states
+            let pctColor, pctIcon, pctCell;
+
+            if (data.status === "running") {
+                // In progress: animated bar, blue
+                pctColor = "#337AB7";
+                pctIcon  = "dashicons-chart-line";
+                pctCell  = `<div class="nppp-pct-bar-wrap">
+                                ${icon(pctIcon, pctColor)}
+                                <div class="nppp-pct-bar-track">
+                                    <div class="nppp-pct-bar-fill" style="width:${pct}%;background-color:${pctColor};">
+                                        <span>${pct}%</span>
+                                    </div>
+                                </div>
+                            </div>`;
+            } else if (isInterrupted) {
+                // Interrupted: approximate %, amber warning, tilde prefix
+                pctColor = "#b45309";
+                pctIcon  = "dashicons-warning";
+                pctCell  = `${icon(pctIcon, pctColor)}<span style="color:${pctColor};font-weight:bold;">~${pct}%</span>`;
+            } else {
+                // Completed: 100%, green
+                pctColor = "#16a34a";
+                pctIcon  = "dashicons-yes";
+                pctCell  = `${icon(pctIcon, pctColor)}<span style="color:${pctColor};font-weight:bold;">${pct}%</span>`;
+            }
+
             rows += `<tr>
                 <td class="check">${__('Progress (%)', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                <td class="status">
-                    <div class="nppp-pct-bar-wrap">
-                        ${icon(pctIcon, pctColor)}
-                        <div class="nppp-pct-bar-track">
-                            <div class="nppp-pct-bar-fill" style="width:${pct}%;background-color:${pctColor};">
-                                <span>${pct}%</span>
-                            </div>
-                        </div>
-                    </div>
-                </td>
+                <td class="status">${pctCell}</td>
             </tr>`;
 
             // Processed URLs
@@ -639,7 +657,6 @@ $(document).ready(function() {
             }
 
             // Last Preload Status
-            const isInterrupted = data.status === "done" && data.log_found && !data.log_complete && data.checked > 0;
             let statusValue = '';
             if (isInterrupted) {
                 statusValue = `${icon('dashicons-warning', 'orange')}<span style="color:orange;font-weight:bold;">${__('Interrupted', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
