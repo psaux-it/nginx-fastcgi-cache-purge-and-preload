@@ -638,6 +638,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
     // to prevent stale state from corrupting the next preload cycle.
     $nppp_phase_key = 'nppp_preload_phase_' . md5('nppp');
     delete_transient($nppp_phase_key);
+    delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
 
     // Initialize variables for messages
     $message_type = '';
