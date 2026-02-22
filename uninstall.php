@@ -28,7 +28,7 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_cache_keys_not_found',
         'nppp_cache_path_not_found',
         'nppp_fuse_path_not_found',
-		'nppp_assume_recently_enabled',
+        'nppp_assume_recently_enabled',
         'nppp_cache_keys_' . md5($static_key_base),
         'nppp_bindfs_version_' . md5($static_key_base),
         'nppp_libfuse_version_' . md5($static_key_base),
@@ -41,7 +41,7 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_safexec_version_' . md5($static_key_base),
         'nppp_wget_urls_cache_' . md5($static_key_base),
         'nppp_wget_compatibility_' . md5($static_key_base),
-		'nppp_missing_commands_'  . md5($static_key_base),
+        'nppp_missing_commands_'  . md5($static_key_base),
     );
 
     // Delete each transient
@@ -54,7 +54,7 @@ function nppp_clear_plugin_cache_on_uninstall() {
     $like_category_timeout      = $wpdb->esc_like('_transient_timeout_nppp_category_') . '%';
     $like_rate_limit            = $wpdb->esc_like('_transient_nppp_rate_limit_') . '%';
     $like_rate_limit_timeout    = $wpdb->esc_like('_transient_timeout_nppp_rate_limit_') . '%';
-	$like_front_message         = $wpdb->esc_like('_transient_nppp_front_message_') . '%';
+    $like_front_message         = $wpdb->esc_like('_transient_nppp_front_message_') . '%';
     $like_front_message_timeout = $wpdb->esc_like('_transient_timeout_nppp_front_message_') . '%';
 
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -71,7 +71,7 @@ function nppp_clear_plugin_cache_on_uninstall() {
             $like_category_timeout,
             $like_rate_limit,
             $like_rate_limit_timeout,
-			$like_front_message,
+            $like_front_message,
             $like_front_message_timeout
         )
     );
