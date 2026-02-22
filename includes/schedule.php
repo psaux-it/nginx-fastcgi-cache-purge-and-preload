@@ -273,6 +273,10 @@ function nppp_create_scheduled_event_preload_status($start_time) {
     $phase_transient_key = 'nppp_preload_phase_' . md5('nppp');
     delete_transient($phase_transient_key);
 
+    // Save cycle start timestamp for total elapsed time calculation
+    $start_transient_key = 'nppp_preload_cycle_start_' . md5('nppp');
+    set_transient($start_transient_key, time(), 4 * HOUR_IN_SECONDS);
+
     // Clear any existing tick and schedule the first check 5 seconds out.
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
     wp_schedule_single_event(time() + 5, 'npp_cache_preload_status_event');
@@ -457,8 +461,29 @@ function nppp_create_scheduled_event_preload_status_callback() {
 
     // Elapsed time comes from wget's own wall clock line parsed above.
     // If wget did not write it (e.g. interrupted), fall back to a plain notice.
-    if (empty($elapsed_time_str)) {
-        $elapsed_time_str = __( '(unable to calculate elapsed time)', 'fastcgi-cache-purge-and-preload-nginx' );
+    $start_transient_key = 'nppp_preload_cycle_start_' . md5('nppp');
+    $cycle_start = get_transient($start_transient_key);
+    delete_transient($start_transient_key);
+
+    if ($mobile_enabled && $cycle_start && !empty($last_preload_time)) {
+        // Use wget's own FINISHED timestamp as end — immune to cron delay
+        $end_time = DateTime::createFromFormat(
+            'Y-m-d H:i:s',
+            $last_preload_time,
+            new DateTimeZone(wp_timezone_string())
+        );
+        if ($end_time) {
+            $total_seconds = $end_time->getTimestamp() - intval($cycle_start);
+            $total_seconds = max(0, $total_seconds);
+            $hours   = intdiv($total_seconds, 3600);
+            $minutes = intdiv($total_seconds % 3600, 60);
+            $seconds = $total_seconds % 60;
+            $elapsed_time_str = $hours > 0
+                ? sprintf('%sh %sm %ss', $hours, $minutes, $seconds)
+                : sprintf('%sm %ss', $minutes, $seconds);
+        }
+    } elseif (empty($elapsed_time_str)) {
+        $elapsed_time_str = __('(unable to calculate elapsed time)', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Send Mail
