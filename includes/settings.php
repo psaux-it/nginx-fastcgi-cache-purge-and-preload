@@ -2804,6 +2804,9 @@ function nppp_reset_plugin_settings_on_deactivation() {
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
     wp_clear_scheduled_hook('npp_cache_preload_event');
 
+    // Clean up phase transient from non-blocking tick monitor
+    delete_transient('nppp_preload_phase_' . md5('nppp'));
+
     // Always clear opt-in related cron hooks unconditionally.
     wp_clear_scheduled_hook('npp_plugin_tracking_event', array('active'));
     wp_clear_scheduled_hook('npp_plugin_tracking_event');
