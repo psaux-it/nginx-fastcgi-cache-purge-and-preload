@@ -474,6 +474,7 @@ $(document).ready(function() {
 
     let npppPollActive = false;
     let npppPollTimer  = null;
+    let snapshotMissingCount = 0;
 
     // Preload progress status
     function fetchWgetProgress() {
@@ -567,8 +568,8 @@ $(document).ready(function() {
                 pctCell  = `${icon(pctIcon, pctColor)}<span style="color:${pctColor};font-weight:bold;">~${pct}%</span>`;
             } else {
                 // Completed: 100%, green
-                pctColor = "#16a34a";
-                pctIcon  = "dashicons-yes";
+                pctColor = "green";
+                pctIcon  = "dashicons-chart-line";
                 pctCell  = `${icon(pctIcon, pctColor)}<span style="color:${pctColor};font-weight:bold;">${pct}%</span>`;
             }
 
@@ -577,19 +578,19 @@ $(document).ready(function() {
                 <td class="status">${pctCell}</td>
             </tr>`;
 
-            // Processed URLs
-            rows += `<tr>
-                <td class="check">${__('Processed URLs Count', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                <td class="status" style="color:green;">${icon('dashicons-yes', 'green')}${data.checked}</td>
-            </tr>`;
-
             // Last Processed Page
             if (data.last_url) {
                 rows += `<tr>
                     <td class="check">${__('Last Processed Page', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                    <td class="status">${icon('dashicons-arrow-right-alt', '#2563eb')}<a href="${escapeHtml(data.last_url)}" target="_blank" rel="noopener" style="color:#2563eb;word-break:break-all;">${escapeHtml(data.last_url)}</a></td>
+                    <td class="status">${icon('dashicons-visibility', '#2563eb')}<a href="${escapeHtml(data.last_url)}" target="_blank" rel="noopener" style="color:#2563eb;word-break:break-all;">${escapeHtml(data.last_url)}</a></td>
                 </tr>`;
             }
+
+            // Processed URLs
+            rows += `<tr>
+                <td class="check">${__('Processed URLs Count', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                <td class="status" style="color:green;">${icon('dashicons-admin-links', 'green')}${data.checked}</td>
+            </tr>`;
 
             // Broken URLs Count
             if (data.errors > 0) {
@@ -661,7 +662,7 @@ $(document).ready(function() {
             if (isInterrupted) {
                 statusValue = `${icon('dashicons-warning', 'orange')}<span style="color:orange;font-weight:bold;">${__('Interrupted', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
             } else if (pct >= 100 || data.status === "done") {
-                statusValue = `${icon('dashicons-yes', 'green')}<span style="color:green;font-weight:bold;">${__('Completed', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                statusValue = `${icon('dashicons-update', 'green')}<span style="color:green;font-weight:bold;">${__('Completed', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
             } else {
                 statusValue = `${icon('dashicons-clock', '#337AB7')}<span style="color:#337AB7;font-weight:bold;">${__('In Progress', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
             }
@@ -670,20 +671,45 @@ $(document).ready(function() {
                 <td class="status">${statusValue}</td>
             </tr>`;
 
-            // Snapshot Status (only when interrupted)
-            if (isInterrupted) {
-                let snapValue = '';
-                if (data.snapshot_exists && data.snapshot_time) {
-                    snapValue = `${icon('dashicons-yes', 'green')}<span style="color:green;">${data.snapshot_time}</span>`;
-                } else if (data.snapshot_exists) {
-                    snapValue = `${icon('dashicons-yes', 'green')}<span style="color:green;">${__('Available', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+            // Snapshot Status + Last Snapshot Time — shown when interrupted OR completed-but-missing
+            // Counter guards against false positive: snapshot write can lag up to ~5s after wget finishes.
+            // Only flag as genuinely missing after 2 consecutive "done + no snapshot" polls (~6s grace).
+            if (data.status === "running") {
+                snapshotMissingCount = 0;
+            } else if (data.status === "done" && !isInterrupted && !data.snapshot_exists) {
+                snapshotMissingCount++;
+            } else {
+                snapshotMissingCount = 0;
+            }
+
+            const snapshotGenuinelyMissing = snapshotMissingCount >= 2;
+            const showSnapshotRow = isInterrupted || snapshotGenuinelyMissing;
+            if (showSnapshotRow) {
+                let snapStatus = '';
+
+                if (data.snapshot_exists) {
+                    // Interrupted but a previous good snapshot exists
+                    snapStatus = `${icon('dashicons-yes', '#16a34a')}<span style="color:#16a34a;">${__('Available', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                } else if (isInterrupted) {
+                    // Interrupted AND no snapshot at all
+                    snapStatus = `${icon('dashicons-no', '#d63638')}<span style="color:#d63638;">${__('None — run Preload All to build one.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
                 } else {
-                    snapValue = `${icon('dashicons-no', '#d63638')}<span style="color:#d63638;">${__('None — run Preload All to build one.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                    // Completed successfully but snapshot write failed (hard failure)
+                    snapStatus = `${icon('dashicons-warning', '#b45309')}<span style="color:#b45309;font-weight:bold;">${__('Missing — preload completed but snapshot was not saved. Advanced tab data may be stale. Re-run Preload All to rebuild.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
                 }
+
                 rows += `<tr>
                     <td class="check">${__('Snapshot Status', 'fastcgi-cache-purge-and-preload-nginx')}</td>
-                    <td class="status">${snapValue}</td>
+                    <td class="status">${snapStatus}</td>
                 </tr>`;
+
+                // Second row: timestamp only when snapshot exists and date is known
+                if (data.snapshot_exists && data.snapshot_time) {
+                    rows += `<tr>
+                        <td class="check">${__('Last Snapshot Time', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                        <td class="status" style="color:#374151;font-size:13px;">${icon('dashicons-calendar-alt', '#6b7280')}${data.snapshot_time}</td>
+                    </tr>`;
+                }
             }
 
             const html = `
@@ -717,35 +743,10 @@ $(document).ready(function() {
                     preloadStatusSpan.style.color = "green";
                     iconSpan.classList.add("dashicons", "dashicons-yes");
                     preloadStatusText = ' ' + __('Ready', 'fastcgi-cache-purge-and-preload-nginx');
-
-                    if (preloadStatusCell._npppAnimation) {
-                        preloadStatusCell._npppAnimation.cancel();
-                        preloadStatusCell._npppAnimation = null;
-                    }
-
-                    // Remove any running animation background
-                    if (preloadStatusCell) {
-                        preloadStatusCell.style.backgroundColor = "inherit";
-                    }
                 } else if (data.status === "running") {
-                    preloadStatusSpan.style.color = "orange";
-                    iconSpan.classList.add("dashicons", "dashicons-clock");
-                    preloadStatusText = ' ' + __('In Progress', 'fastcgi-cache-purge-and-preload-nginx');
-
-                    if (preloadStatusCell) {
-                        preloadStatusCell.style.backgroundColor = "lightgreen";
-
-                        if (preloadStatusCell._npppAnimation) {
-                            preloadStatusCell._npppAnimation.cancel();
-                        }
-
-                        preloadStatusCell._npppAnimation = preloadStatusCell.animate([
-                            { backgroundColor: '#90ee90' }
-                        ], {
-                            duration: 1,
-                            iterations: 1
-                        });
-                    }
+                    preloadStatusSpan.style.color = "green";
+                    iconSpan.classList.add("dashicons", "dashicons-yes");
+                    preloadStatusText = ' ' + __('Ready', 'fastcgi-cache-purge-and-preload-nginx');
                 } else {
                     // Use pre-stored raw value (true/false)
                     const rawStatus = preloadStatusSpan.dataset.statusRaw;
@@ -759,12 +760,6 @@ $(document).ready(function() {
                         iconSpan.classList.add("dashicons", "dashicons-no");
                         preloadStatusText = ' ' + __('Not Ready', 'fastcgi-cache-purge-and-preload-nginx');
                     }
-
-                    if (preloadStatusCell._npppAnimation) {
-                        preloadStatusCell._npppAnimation.cancel();
-                        preloadStatusCell._npppAnimation = null;
-                    }
-                    preloadStatusCell.style.backgroundColor = "inherit";
                 }
 
                 preloadStatusSpan.appendChild(iconSpan);
