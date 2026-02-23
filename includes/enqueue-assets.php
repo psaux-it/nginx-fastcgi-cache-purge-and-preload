@@ -462,6 +462,11 @@ function nppp_plugin_requirements_met() {
 // Enqueue CSS and JavaScript files on globally admin side
 // Check plugin requirements and limit the functionality accordingly on admin side
 function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
+    // Bail for any admin user who cannot manage site settings (editors, authors, etc.).
+    if (! current_user_can('manage_options')) {
+        return;
+    }
+
     $nppp_met = nppp_plugin_requirements_met();
     $current_screen = get_current_screen();
 
