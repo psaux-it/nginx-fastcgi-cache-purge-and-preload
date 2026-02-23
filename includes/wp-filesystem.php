@@ -25,41 +25,51 @@ function nppp_custom_error_log($message, $error_type = E_USER_WARNING) {
     }
 }
 
-// Verify WP file-system credentials and initialize WP_Filesystem
+// Initialize WP_Filesystem
 function nppp_initialize_wp_filesystem() {
     global $wp_filesystem;
 
     // Return existing WP_Filesystem instance if already initialized
-    if (!empty($wp_filesystem)) {
+    if (is_object($wp_filesystem)) {
         return $wp_filesystem;
     }
 
-    // Include the necessary file if WP_Filesystem doesn't exist
     if (!function_exists('WP_Filesystem')) {
         require_once ABSPATH . 'wp-admin/includes/file.php';
     }
 
-    // Request filesystem credentials
-    $credentials = request_filesystem_credentials(admin_url(''), '', false, false, null);
+    // Direct init — works in all contexts on the vast majority of hosts
+    if (WP_Filesystem()) {
+        if (is_object($wp_filesystem)) {
+            return $wp_filesystem;
+        }
 
-    // Handle credential request failure
-    if (!$credentials || is_wp_error($credentials)) {
+        nppp_custom_error_log(__('Filesystem object is not set.', 'fastcgi-cache-purge-and-preload-nginx'));
+        return false;
+    }
+
+    // Detect every non-interactive context — credential prompt must never run here
+    // Also prevent cron output, REST output corruption
+    $doing_rest = defined('REST_REQUEST') && REST_REQUEST;
+    $doing_cli  = defined('WP_CLI') && WP_CLI;
+
+    if (is_admin() && !wp_doing_cron() && !wp_doing_ajax() && !$doing_rest && !$doing_cli) {
+        $credentials = request_filesystem_credentials(admin_url(''), '', false, false, array());
+
+        if (!empty($credentials) && !is_wp_error($credentials) && WP_Filesystem($credentials)) {
+            if (is_object($wp_filesystem)) {
+                return $wp_filesystem;
+            }
+
+            nppp_custom_error_log(__('Filesystem object is not set.', 'fastcgi-cache-purge-and-preload-nginx'));
+            return false;
+        }
+
         nppp_custom_error_log(__('Unable to obtain filesystem credentials.', 'fastcgi-cache-purge-and-preload-nginx'));
         return false;
     }
 
-    // Initialize the WP_Filesystem
-    if (WP_Filesystem($credentials)) {
-        global $wp_filesystem;
-        if (!empty($wp_filesystem)) {
-            return $wp_filesystem;
-        } else {
-            nppp_custom_error_log(__('Filesystem object is not set.', 'fastcgi-cache-purge-and-preload-nginx'));
-            return false;
-        }
-    }
-
-    nppp_custom_error_log(__('Could not initialize the filesystem.', 'fastcgi-cache-purge-and-preload-nginx'));
+    nppp_custom_error_log(__('Could not initialize the filesystem in this request context.', 'fastcgi-cache-purge-and-preload-nginx'));
     return false;
 }
 
