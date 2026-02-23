@@ -14,6 +14,15 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Defensive fallback: FS_CHMOD_FILE/DIR are defined by WP_Filesystem() internals.
+// Guard here prevents fatal errors if filesystem init is skipped or delayed (e.g. WP-CLI).
+if ( ! defined( 'FS_CHMOD_FILE' ) ) {
+    define( 'FS_CHMOD_FILE', 0644 );
+}
+if ( ! defined( 'FS_CHMOD_DIR' ) ) {
+    define( 'FS_CHMOD_DIR', 0755 );
+}
+
 // Custom logger function
 function nppp_custom_error_log($message, $error_type = E_USER_WARNING) {
     if (defined('WP_DEBUG' ) && WP_DEBUG) {
