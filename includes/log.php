@@ -178,11 +178,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     }
 
     // Perform the permission check for admin actions
-    if (is_admin() && !current_user_can('manage_options')) {
-        echo '<div class="notice notice-error"><p>' . esc_html__(
-                 'You do not have sufficient permissions to access this page.',
-                 'fastcgi-cache-purge-and-preload-nginx'
-             ) . '</p></div>';
+    if (!current_user_can('manage_options')) {
         return;
     }
 
