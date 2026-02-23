@@ -738,8 +738,13 @@ function nppp_restart_systemd_service() {
 
 // Shortcode function to display the Nginx configuration on status tab
 function nppp_nginx_config_shortcode() {
-    $wp_filesystem = nppp_initialize_wp_filesystem();
+    // This shortcode reads and outputs nginx configuration file paths from the filesystem.
+    // Never render it for non-admins — the output is sensitive server configuration data.
+    if (! current_user_can('manage_options')) {
+        return '';
+    }
 
+    $wp_filesystem = nppp_initialize_wp_filesystem();
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
