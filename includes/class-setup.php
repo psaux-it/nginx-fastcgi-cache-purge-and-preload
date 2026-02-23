@@ -478,10 +478,6 @@ services:
 
     // Insert of the define into wp-config.php
     private static function nppp_try_write_wp_config_define(): void {
-        if (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX) {
-            // still try to persist to file so future requests have it early.
-        }
-
         $wp_filesystem = nppp_initialize_wp_filesystem();
         if ($wp_filesystem === false) {
             nppp_display_admin_notice(
@@ -494,17 +490,7 @@ services:
         $wp_config_path = self::nppp_locate_wp_config_path();
         if (! $wp_config_path) return;
 
-        if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
-            if (!function_exists('WP_Filesystem')) {
-                require_once ABSPATH . 'wp-admin/includes/file.php';
-            }
-            $creds = request_filesystem_credentials(admin_url(''), '', false, dirname($wp_config_path), null);
-            if ($creds && WP_Filesystem($creds)) {
-                global $wp_filesystem;
-            }
-        }
-
-        // Re-check after the JIT re-init
+        // Bail gracefully if wp-config.php isn't directly writable
         if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
             return;
         }
@@ -615,18 +601,7 @@ services:
         $wp_config_path = self::nppp_locate_wp_config_path();
         if (! $wp_config_path) return;
 
-        // If not writable, JIT re-init with a context
-        if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
-            if (!function_exists('WP_Filesystem')) {
-                require_once ABSPATH . 'wp-admin/includes/file.php';
-            }
-            $creds = request_filesystem_credentials(admin_url(''), '', false, dirname($wp_config_path), null);
-            if ($creds && WP_Filesystem($creds)) {
-                global $wp_filesystem;
-            }
-        }
-
-        // Re-check
+        // Bail gracefully if wp-config.php isn't directly writable
         if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
             return;
         }
