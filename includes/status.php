@@ -972,5 +972,10 @@ function nppp_cache_status_callback() {
 
 // Shortcode to display the Status HTML
 function nppp_my_status_shortcode() {
+    // This shortcode exposes server internals (nginx paths, filesystem permissions,
+    // PHP process owner, web server user). Never render it for non-admins.
+    if (! current_user_can('manage_options')) {
+        return '';
+    }
     return nppp_my_status_html();
 }
