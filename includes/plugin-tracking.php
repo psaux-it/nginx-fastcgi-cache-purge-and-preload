@@ -16,14 +16,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Function to track plugin status
 function nppp_plugin_tracking($status = 'active') {
-    // Check if user has opted in
-    $options = get_option('nginx_cache_settings');
+    // Validate status against allowed values
+    $allowed_statuses = array('active', 'inactive', 'opt-out');
+    if (!in_array($status, $allowed_statuses, true)) {
+        nppp_custom_error_log(__('Invalid tracking status. API call aborted.', 'fastcgi-cache-purge-and-preload-nginx'));
+        return;
+    }
 
     // Always send 'opt-out' or 'inactive' status regardless of opt-in preference
-    if ($status === 'opt-out' || $status === 'inactive') {
-        // Proceed to send data to API
-    } else {
-        // For other statuses, check if user has opted in
+    // For other statuses, check if user has opted in
+    if ($status !== 'opt-out') {
+        $options = get_option('nginx_cache_settings');
         if (!isset($options['nginx_cache_tracking_opt_in']) || $options['nginx_cache_tracking_opt_in'] !== '1') {
             // User has not opted in, do not send tracking data
             return;
@@ -96,6 +99,7 @@ function nppp_schedule_plugin_tracking_event($status = false) {
     if ($status === true) {
         // Clear the scheduled event
         wp_clear_scheduled_hook('npp_plugin_tracking_event', array('active'));
+        wp_clear_scheduled_hook('npp_plugin_tracking_event');
         return;
     }
 
@@ -116,7 +120,7 @@ function nppp_schedule_plugin_tracking_event($status = false) {
     $args = array('active');
 
     // Check if the event is already scheduled
-    if (!wp_next_scheduled('npp_plugin_tracking_event')) {
+    if (!wp_next_scheduled('npp_plugin_tracking_event', array('active'))) {
         $scheduled = wp_schedule_event($next_execution_timestamp, $recurrence, 'npp_plugin_tracking_event', $args);
 
         if (!$scheduled) {
@@ -128,7 +132,7 @@ function nppp_schedule_plugin_tracking_event($status = false) {
 // Function to handle changes in the opt-in status
 function nppp_handle_opt_in_change($opt_in_value) {
     $opt_in_value = strval($opt_in_value);
-    if ($opt_in_value == '1') {
+    if ($opt_in_value === '1') {
         // User opted in
         nppp_plugin_tracking('active');
         nppp_schedule_plugin_tracking_event(false);
