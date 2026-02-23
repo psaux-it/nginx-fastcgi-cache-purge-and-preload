@@ -505,34 +505,38 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
 
 // Enqueue CSS and JavaScript files for admin, logged-in, front-end
 function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
-    if (is_user_logged_in() && current_user_can('administrator') && isset($_GET['nppp_front'])) {
+    // Gate entire function — nothing here is relevant to anonymous visitors.
+    if (! is_user_logged_in() || ! current_user_can('manage_options')) {
+        return;
+    }
+
+    // Toast block — logged-in admin redirected back from a purge/preload action.
+    if (isset($_GET['nppp_front']) && ! is_admin()) {
         $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
         if (wp_verify_nonce($nonce, 'nppp_redirect_nonce')) {
-            if (!is_admin()) {
-                // LEGACY: Keep legacy frontend notice assets untouched for compatibility.
-                wp_enqueue_style('nppp_admin-front-css', plugins_url('../frontend/css/fastcgi-cache-purge-and-preload-nginx-front.css', __FILE__), array(), '2.1.4');
-                wp_enqueue_script('nppp_admin-front-js', plugins_url('../frontend/js/fastcgi-cache-purge-and-preload-nginx-front.js', __FILE__), array('jquery'), '2.1.4', true);
+            // Keep legacy frontend notice assets untouched for compatibility.
+            wp_enqueue_style('nppp_admin-front-css', plugins_url('../frontend/css/fastcgi-cache-purge-and-preload-nginx-front.css', __FILE__), array(), '2.1.4');
+            wp_enqueue_script('nppp_admin-front-js', plugins_url('../frontend/js/fastcgi-cache-purge-and-preload-nginx-front.js', __FILE__), array('jquery'), '2.1.4', true);
 
-                // Enqueue isolated frontend toast assets for single-page action results.
-                wp_enqueue_style('nppp-front-toast-css', plugins_url('../frontend/css/nppp-front-toast.css', __FILE__), array(), '2.1.4');
-                wp_enqueue_script('nppp-front-toast-js', plugins_url('../frontend/js/nppp-front-toast.js', __FILE__), array(), '2.1.4', true);
+            // Enqueue isolated frontend toast assets for single-page action results.
+            wp_enqueue_style('nppp-front-toast-css', plugins_url('../frontend/css/nppp-front-toast.css', __FILE__), array(), '2.1.4');
+            wp_enqueue_script('nppp-front-toast-js', plugins_url('../frontend/js/nppp-front-toast.js', __FILE__), array(), '2.1.4', true);
 
-                $status_message_key = sanitize_text_field(wp_unslash($_GET['nppp_front']));
-                $status_message_data = get_transient($status_message_key);
+            $status_message_key = sanitize_text_field(wp_unslash($_GET['nppp_front']));
+            $status_message_data = get_transient($status_message_key);
 
-                if (is_array($status_message_data) && isset($status_message_data['message'], $status_message_data['type'])) {
-                    $type = sanitize_key((string) $status_message_data['type']);
-                    if (!in_array($type, array('success', 'error', 'info'), true)) {
-                        $type = 'info';
-                    }
-
-                    wp_localize_script('nppp-front-toast-js', 'nppp_front_data', array(
-                        'message' => sanitize_text_field((string) $status_message_data['message']),
-                        'type' => $type,
-                    ));
-
-                    // Keep transient for a short fallback window (legacy/no-JS rendering path).
+            if (is_array($status_message_data) && isset($status_message_data['message'], $status_message_data['type'])) {
+                $type = sanitize_key((string) $status_message_data['type']);
+                if (!in_array($type, array('success', 'error', 'info'), true)) {
+                    $type = 'info';
                 }
+
+                wp_localize_script('nppp-front-toast-js', 'nppp_front_data', array(
+                    'message' => sanitize_text_field((string) $status_message_data['message']),
+                    'type' => $type,
+                ));
+
+                // Keep transient for a short fallback window (legacy/no-JS rendering path).
             }
         }
     }
