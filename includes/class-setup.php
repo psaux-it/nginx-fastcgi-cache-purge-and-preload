@@ -496,7 +496,7 @@ services:
         }
 
         $contents = $wp_filesystem->get_contents($wp_config_path);
-        if (! $contents) return;
+        if ($contents === false || $contents === '') return;
 
         $has_active_define = preg_match("/^[ \t]*define\(\s*['\"]NPPP_ASSUME_NGINX['\"]\s*,\s*true\s*\)\s*;/mi", $contents);
         if ($has_active_define) return;
@@ -524,10 +524,27 @@ services:
             }
         }
 
-        $wp_filesystem->put_contents($wp_config_path, $contents, FS_CHMOD_FILE);
-        if (function_exists('opcache_invalidate')) {
-            @opcache_invalidate($wp_config_path, true);
+        self::nppp_write_atomically($wp_filesystem, $wp_config_path, $contents);
+    }
+
+    private static function nppp_write_atomically($wp_filesystem, string $target_path, string $new_contents): bool {
+        $tmp_path = $target_path . '.nppp-tmp-' . uniqid('', true);
+
+        if (! $wp_filesystem->put_contents($tmp_path, $new_contents, FS_CHMOD_FILE)) {
+            $wp_filesystem->delete($tmp_path);
+            return false;
         }
+
+        if (! $wp_filesystem->move($tmp_path, $target_path, true)) {
+            $wp_filesystem->delete($tmp_path);
+            return false;
+        }
+
+        if (function_exists('opcache_invalidate')) {
+            @opcache_invalidate($target_path, true);
+        }
+
+        return true;
     }
 
     private static function nppp_locate_wp_config_path(): ?string {
@@ -607,17 +624,14 @@ services:
         }
 
         $contents = $wp_filesystem->get_contents($wp_config_path);
-        if (! $contents) return;
+        if ($contents === false || $contents === '') return;
 
         // Match lines that define NPPP_ASSUME_NGINX as true
         $pattern = "/^[ \t]*define\(\s*['\"]NPPP_ASSUME_NGINX['\"]\s*,\s*true\s*\)\s*;[^\r\n]*\r?\n?/mi";
         $new = preg_replace($pattern, '', $contents);
 
         if ($new !== null && $new !== $contents) {
-            $wp_filesystem->put_contents($wp_config_path, $new, FS_CHMOD_FILE);
-            if (function_exists('opcache_invalidate')) {
-                @opcache_invalidate($wp_config_path, true);
-            }
+            self::nppp_write_atomically($wp_filesystem, $wp_config_path, $new);
         }
     }
 
