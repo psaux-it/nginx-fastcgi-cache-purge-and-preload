@@ -20,37 +20,78 @@ if (!defined('ABSPATH')) {
 }
 
 // Enable compatibility mode when explicitly configured.
-if (! defined('NPPP_ASSUME_NGINX')) {
-    $nppp_assume_nginx_runtime = get_option('nppp_assume_nginx_runtime');
-    if ($nppp_assume_nginx_runtime) {
+function nppp_maybe_define_assume_nginx(): void {
+    if (! defined('NPPP_ASSUME_NGINX') && get_option('nppp_assume_nginx_runtime')) {
         define('NPPP_ASSUME_NGINX', true);
     }
 }
+add_action('plugins_loaded', 'nppp_maybe_define_assume_nginx', 0);
 
 // Define the plugin main file
 if (!defined('NPPP_PLUGIN_FILE')) {
     define('NPPP_PLUGIN_FILE', __FILE__);
 }
 
-// Load runtime path helpers.
-require_once plugin_dir_path(__FILE__) . 'includes/runtime-paths.php';
-
-// Autoloader
-require_once plugin_dir_path(__FILE__) . 'includes/autoload.php';
-
-// Load plugin admin/bootstrap integrations.
-require_once plugin_dir_path(__FILE__) . 'admin/fastcgi-cache-purge-and-preload-nginx-admin.php';
-
-// Load plugin frontend/bootstrap integrations.
-require_once plugin_dir_path(__FILE__) . 'frontend/fastcgi-cache-purge-and-preload-nginx-front.php';
-
-// Initialize setup flow.
-if (class_exists('\NPPP\Setup')) {
-    \NPPP\Setup::init();
+// Bootstrap loader
+function nppp_load_bootstrap(): void {
+    // Load runtime path helpers
+    require_once plugin_dir_path(__FILE__) . 'includes/runtime-paths.php';
+    // Auto class loader
+    require_once plugin_dir_path(__FILE__) . 'includes/autoload.php';
+    // Main admin bootstrap
+    require_once plugin_dir_path(__FILE__) . 'admin/fastcgi-cache-purge-and-preload-nginx-admin.php';
 }
+
+// Entry point 1: Admin bootstrap
+add_action('init', function (): void {
+    if (!is_admin()) return;
+    if (!is_user_logged_in() || !current_user_can('manage_options')) return;
+    nppp_load_bootstrap();
+}, 1);
+
+// Entry point 2: WP-Cron — NPP events only
+foreach (['npp_cache_preload_event', 'npp_cache_preload_status_event', 'npp_plugin_tracking_event'] as $_nppp_cron_event) {
+    add_action($_nppp_cron_event, 'nppp_load_bootstrap', 0);
+}
+unset($_nppp_cron_event);
+
+// Entry point 3: REST API — NPP namespace only
+add_action('rest_api_init', function (): void {
+    $rest_route = $GLOBALS['wp']->query_vars['rest_route'] ?? '';
+    if (strpos($rest_route, 'nppp_nginx_cache') === false) {
+        return;
+    }
+    nppp_load_bootstrap();
+}, 1);
+
+// Entry point 4: Frontend bootstrap
+add_action('init', function (): void {
+    if (is_admin()) return;
+    if (!is_user_logged_in() || !current_user_can('manage_options')) return;
+    nppp_load_bootstrap();
+
+    // Main frontend bootstrap
+    require_once plugin_dir_path(__FILE__) . 'frontend/fastcgi-cache-purge-and-preload-nginx-front.php';
+}, 1);
+
+// Entry point 5: Setup flow
+add_action('init', function (): void {
+    if (!is_admin()) {
+        return;
+    }
+    if (!is_user_logged_in() || !current_user_can('manage_options')) {
+        return;
+    }
+    if (class_exists('\NPPP\Setup')) {
+        \NPPP\Setup::init();
+    }
+}, 2);
 
 // Activation handler
 function nppp_on_activation() {
+    nppp_maybe_define_assume_nginx();
+    nppp_load_bootstrap();
+
     // Set setup redirect flag
     if (class_exists('\NPPP\Setup')) {
         \NPPP\Setup::nppp_set_activation_redirect_flag();
@@ -58,12 +99,16 @@ function nppp_on_activation() {
         update_option('nppp_redirect_to_setup_once', 1, false);
     }
 
-    // Initialize default plugin options
     if (function_exists('nppp_defaults_on_plugin_activation')) {
         nppp_defaults_on_plugin_activation();
     }
 }
 
-// Register activation and deactivation hooks
+// Register activation hook
 register_activation_hook(__FILE__, 'nppp_on_activation');
-register_deactivation_hook( __FILE__, 'nppp_reset_plugin_settings_on_deactivation' );
+
+// Register deactivation hook
+register_deactivation_hook(__FILE__, function() {
+    nppp_load_bootstrap();
+    nppp_reset_plugin_settings_on_deactivation();
+});
