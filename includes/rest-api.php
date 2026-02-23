@@ -269,21 +269,38 @@ function nppp_validate_and_rate_limit_endpoint($request) {
         return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
     }
 
-    // Get the IP address for rate limiting
+    // Auth completed
+    return true;
+}
+
+// Enforce rate limiting for an already-authenticated request.
+function nppp_enforce_rate_limit( WP_REST_Request $request, string $endpoint ) {
     $ip_address = nppp_get_client_ip();
 
-    // Perform rate limit check for authenticated clients
-    $rate_limit = nppp_api_rate_limit_check($ip_address, $endpoint, $api_key);
-    if (is_wp_error($rate_limit)) {
-        return $rate_limit;
+    // Re-resolve the API key the same way the permission callback did.
+    $api_key = $request->get_header( 'Authorization' );
+    if ( ! empty( $api_key ) && strpos( $api_key, 'Bearer ' ) === 0 ) {
+        $api_key = substr( $api_key, 7 );
     }
+    if ( empty( $api_key ) ) {
+        $api_key = $request->get_header( 'X-Api-Key' );
+    }
+    if ( empty( $api_key ) ) {
+        $api_key = $request->get_param( 'api_key' );
+    }
+    $api_key = sanitize_text_field( (string) $api_key );
 
-    // Everything passed
-    return true;
+    return nppp_api_rate_limit_check( $ip_address, $endpoint, $api_key );
 }
 
 // Handle the REST API request for purge action.
 function nppp_nginx_cache_purge_endpoint($request) {
+    // Enforce rate limit (authentication already passed).
+    $rate_limit = nppp_enforce_rate_limit( $request, 'purge' );
+    if ( is_wp_error( $rate_limit ) ) {
+        return $rate_limit;
+    }
+
     // Start output buffering for purge endpoint
     ob_start();
 
@@ -321,6 +338,12 @@ function nppp_nginx_cache_purge_endpoint($request) {
 
 // Handle the REST API request for preload action.
 function nppp_nginx_cache_preload_endpoint($request) {
+    // Enforce rate limit (authentication already passed).
+    $rate_limit = nppp_enforce_rate_limit( $request, 'preload' );
+    if ( is_wp_error( $rate_limit ) ) {
+        return $rate_limit;
+    }
+
     // Start output buffering for preload endpoint
     ob_start();
 
