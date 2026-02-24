@@ -520,6 +520,12 @@ $(document).ready(function() {
                 if (preloadSection) preloadSection.style.display = "block";
             }
 
+            // Notify the aurora header with a targeted event — no global fetch/XHR patching needed.
+            // nppp-header.js listens for this and drives all visual state from it.
+            try {
+                window.dispatchEvent(new CustomEvent('nppp:preload-progress', { detail: data }));
+            } catch(_) {}
+
             const estTotal = data.total || 2000;
             let pct = Math.min(100, Math.round((data.checked / estTotal) * 100));
 
