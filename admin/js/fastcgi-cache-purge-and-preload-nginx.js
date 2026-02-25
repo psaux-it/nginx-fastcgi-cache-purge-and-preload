@@ -3628,6 +3628,7 @@ function npppupdateStatus() {
     const elementsToCheck = [
         "#npppphpFpmStatus",
         "#npppphpPagesInCache",
+        "#npppCacheHitRatio",
         "#npppphpProcessOwner",
         "#npppphpWebServer",
         "#npppcachePath",
@@ -3713,6 +3714,56 @@ function npppupdateStatus() {
     npppcacheInPageSpan.textContent = '';
     npppcacheInPageSpan.appendChild(iconSpanCache);
     npppcacheInPageSpan.append(cacheStatusText);
+
+    // Cache Hit Ratio colour-band
+    (function () {
+        var ratioCell = document.getElementById('npppCacheHitRatio');
+        if (!ratioCell) { return; }
+
+        ratioCell.style.fontSize = '14px';
+
+        var rawText     = ratioCell.textContent.trim();
+        var iconSpan    = document.createElement('span');
+        var bandClass   = 'ratio-na';
+        var displayText = ' ' + rawText;
+
+        // Extract leading percentage number if present (e.g. "87.5%  (35 HIT …)")
+        var pctMatch = rawText.match(/^(\d+(?:\.\d+)?)\s*%/);
+        if (pctMatch) {
+            var pct = parseFloat(pctMatch[1]);
+            if (pct >= 80) {
+                bandClass = 'ratio-high';
+                iconSpan.classList.add('dashicons', 'dashicons-yes');
+                iconSpan.style.color = '#008000';
+            } else if (pct >= 50) {
+                bandClass = 'ratio-medium';
+                iconSpan.classList.add('dashicons', 'dashicons-warning');
+                iconSpan.style.color = '#e69500';
+            } else {
+                bandClass = 'ratio-low';
+                iconSpan.classList.add('dashicons', 'dashicons-no');
+                iconSpan.style.color = '#ff0000';
+            }
+        } else {
+            // N/A states
+            iconSpan.classList.add('dashicons', 'dashicons-no');
+            iconSpan.style.color = '#ff0000';
+        }
+
+        iconSpan.style.fontSize = '20px';
+        iconSpan.style.width    = '20px';
+        iconSpan.style.height   = '20px';
+
+        var textSpan       = document.createElement('span');
+        textSpan.textContent = displayText;
+        textSpan.style.color  = iconSpan.style.color;
+        textSpan.style.fontWeight = '700';
+
+        ratioCell.classList.add(bandClass);
+        ratioCell.textContent = '';
+        ratioCell.appendChild(iconSpan);
+        ratioCell.appendChild(textSpan);
+    })();
 
     // Fetch and update php process owner
     // PHP-FPM (website user)
