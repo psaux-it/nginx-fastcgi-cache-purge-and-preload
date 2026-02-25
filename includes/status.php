@@ -567,8 +567,7 @@ function nppp_get_cache_ratio( $hits_count ) {
     if ( ! is_numeric( $hits_count ) ) {
         // Propagate meaningful error strings as-is so the UI can show them.
         if ( in_array( $hits_count, [ 'Not Found', 'Undetermined', 'RegexError' ], true ) ) {
-            /* Translators: %s is the error state e.g. Not Found, Undetermined, RegexError */
-            return sprintf( __( 'N/A (%s)', 'fastcgi-cache-purge-and-preload-nginx' ), $hits_count );
+            return __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
         }
         return __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
     }
