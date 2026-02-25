@@ -93,7 +93,8 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
                 '/nppp_nginx_cache/v2/purge',
                 '/nppp_nginx_cache/v2/preload',
             ], true) &&
-            ob_get_level() > 0
+            ob_get_level() > 0 &&
+            $display_notice
         ) {
             // Emit only when a caller intentionally started buffering (REST endpoint wrappers).
             echo '<p>' . esc_html(sanitize_text_field($message)) . '</p>';
