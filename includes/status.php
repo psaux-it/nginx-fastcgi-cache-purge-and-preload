@@ -544,6 +544,84 @@ function nppp_get_in_cache_page_count() {
     return $urls_count > 0 ? $urls_count : 0;
 }
 
+/**
+ * Calculate live cache hit ratio.
+ *
+ * Hit count  : pre-computed by nppp_get_in_cache_page_count() and passed in
+ *              to avoid a second expensive directory scan.
+ * Total count: derived from the wget snapshot (nppp-wget-snapshot.log) via
+ *              nppp_parse_wget_log_urls(), which is already used by the
+ *              Advanced tab and is backed by a 5-minute transient.
+ *              The snapshot is only ever written when a full Preload run
+ *              completes, so it always represents a coherent, complete baseline.
+ *
+ * Ratio = HITs ÷ Total × 100
+ * Meaning: "of every URL the crawler discovered, what % is currently in cache."
+ *
+ * Returns a formatted string like "87.5% (35 HIT / 40 MISS / 40 total)" or a
+ * descriptive string when the data is not yet available.
+ *
+ */
+function nppp_get_cache_ratio( $hits_count ) {
+    // If the hit count is not a usable integer, we cannot compute a ratio.
+    if ( ! is_numeric( $hits_count ) ) {
+        // Propagate meaningful error strings as-is so the UI can show them.
+        if ( in_array( $hits_count, [ 'Not Found', 'Undetermined', 'RegexError' ], true ) ) {
+            /* Translators: %s is the error state e.g. Not Found, Undetermined, RegexError */
+            return sprintf( __( 'N/A (%s)', 'fastcgi-cache-purge-and-preload-nginx' ), $hits_count );
+        }
+        return __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    $hits = (int) $hits_count;
+
+    // Require WP_Filesystem to call nppp_parse_wget_log_urls().
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ( $wp_filesystem === false ) {
+        return __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    // Check whether a completed snapshot exists. Without it we have no
+    // reliable denominator and should not show a misleading ratio.
+    $snapshot_path = nppp_get_runtime_file( 'nppp-wget-snapshot.log' );
+    if ( ! $wp_filesystem->exists( $snapshot_path ) ) {
+        return __( 'N/A — run Preload All', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    // It returns a keyed array of every URL from the completed snapshot,
+    // backed by a 5-min transient, so repeated calls are cheap.
+    if ( ! function_exists( 'nppp_parse_wget_log_urls' ) ) {
+        return __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    $wget_urls = nppp_parse_wget_log_urls( $wp_filesystem );
+    $total     = count( $wget_urls );
+
+    // An empty snapshot (all URLs were filtered out by reject-regex, etc.)
+    // means we cannot compute a meaningful denominator.
+    if ( $total === 0 ) {
+        return __( 'N/A — snapshot empty', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    // The cache can contain pages not included in the snapshot (e.g. manually
+    // visited pages, paginated archives created after the last crawl).
+    // We cap the ratio at 100 % to keep it intuitive.
+    $ratio = min( 100.0, ( $hits / $total ) * 100.0 );
+
+    // Build a human-friendly label with context.
+    $misses      = max( 0, $total - $hits );
+    $ratio_label = number_format( $ratio, 1 ) . '%';
+
+    return sprintf(
+        /* Translators: 1: percentage e.g. 87.5%, 2: hit count, 3: miss count, 4: total count */
+        __( '%1$s  (%2$d HIT / %3$d MISS / %4$d total)', 'fastcgi-cache-purge-and-preload-nginx' ),
+        $ratio_label,
+        $hits,
+        $misses,
+        $total
+    );
+}
+
 // Function to check for same Nginx cache path for multiple instance
 function nppp_check_duplicate_nginx_cache_paths($file, $wp_filesystem) {
     // Retrieve the cached result from the transient
@@ -892,11 +970,21 @@ function nppp_my_status_html() {
                             </tr>
                         </thead>
                         <tbody>
+                            <?php
+                            $nppp_pages_in_cache = nppp_get_in_cache_page_count();
+                            ?>
                             <tr>
                                 <td class="check"><?php esc_html_e('Pages In Cache Count', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppphpPagesInCache">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html(nppp_get_in_cache_page_count()); ?></span>
+                                    <span><?php echo esc_html($nppp_pages_in_cache); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check"><?php esc_html_e('Cache Hit Ratio', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="status" id="npppCacheHitRatio">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html( nppp_get_cache_ratio($nppp_pages_in_cache)); ?></span>
                                 </td>
                             </tr>
                         </tbody>
