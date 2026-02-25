@@ -61,6 +61,45 @@ add_action('rest_api_init', function (): void {
     if (strpos($rest_route, 'nppp_nginx_cache') === false) {
         return;
     }
+
+    // Protect preload progress endpoint
+    if (strpos($rest_route, 'preload-progress') !== false) {
+        if (!is_user_logged_in()) return;
+        nppp_load_bootstrap();
+        return;
+    }
+
+    // Full REST Auth Prescreen:
+    // Avoid full plugin bootstrap on unauthenticated or invalid REST requests.
+    $api_key = '';
+    $auth_header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+
+    // Check Authorization Header
+    if (strpos($auth_header, 'Bearer ') === 0) $api_key = substr($auth_header, 7);
+
+    // Fallback: X-Api-Key Header
+    if (empty($api_key)) $api_key = $_SERVER['HTTP_X_API_KEY'] ?? '';
+
+    // Fallback: Request Body
+    if (empty($api_key)) {
+        $content_type = $_SERVER['CONTENT_TYPE'] ?? '';
+        if (strpos($content_type, 'application/json') !== false) {
+            $body    = json_decode(file_get_contents('php://input'), true);
+            $api_key = isset($body['api_key']) && is_string($body['api_key']) ? $body['api_key'] : '';
+        } else {
+            $api_key = $_POST['api_key'] ?? '';
+        }
+    }
+
+    // Sanitize API Key
+    $api_key = sanitize_text_field($api_key);
+    if (empty($api_key) || !preg_match('/^[a-f0-9]{64}$/i', $api_key)) return;
+
+    // REST auth
+    $options    = get_option('nginx_cache_settings');
+    $stored_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : '';
+    if (!is_string($stored_key) || !hash_equals($stored_key, $api_key)) return;
+
     nppp_load_bootstrap();
 }, 1);
 
