@@ -122,25 +122,11 @@ function nppp_get_plugin_root_path() {
    ========================================== */
 
 function nppp_parse_wget_log_urls( $wp_filesystem ) {
-    $static_key_base = 'nppp';
-    $transient_key   = 'nppp_wget_urls_cache_' . md5( $static_key_base );
-
-    $plugin_root = nppp_get_plugin_root_path();
     $log_path    = nppp_get_runtime_file('nppp-wget.log');
     $snapshot_path = nppp_get_runtime_file('nppp-wget-snapshot.log');
 
     // Detect live crawl
     $preload_running = nppp_is_preload_running( $wp_filesystem );
-
-    // If preload running always get fresh crawl data
-    if ( $preload_running ) {
-        delete_transient( $transient_key );
-    } else {
-        $cached = get_transient( $transient_key );
-        if ( $cached !== false && is_array( $cached ) ) {
-            return $cached;
-        }
-    }
 
     $urls = [];
 
@@ -151,17 +137,27 @@ function nppp_parse_wget_log_urls( $wp_filesystem ) {
     $read_path = $preload_running ? $log_path : $snapshot_path;
 
     if ( ! $wp_filesystem->exists( $read_path ) ) {
-        if ( ! $preload_running ) {
-            set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
-        }
         return $urls;
+    }
+
+    // Build a transient key tied to the file's actual modification time.
+    // When the snapshot is deleted and recreated, or manually removed,
+    // the mtime changes → new key → automatic cache miss, no manual
+    // delete_transient() calls needed anywhere.
+    // During a live preload we never cache (partial data), so the key
+    // is only meaningful for the stable snapshot path.
+    if ( ! $preload_running ) {
+        $mtime         = (int) @filemtime( $read_path );
+        $transient_key = 'nppp_wget_urls_cache_' . md5( $read_path . $mtime );
+
+        $cached = get_transient( $transient_key );
+        if ( $cached !== false && is_array( $cached ) ) {
+            return $cached;
+        }
     }
 
     $contents = $wp_filesystem->get_contents( $read_path );
     if ( $contents === false || $contents === '' ) {
-        if ( ! $preload_running ) {
-            set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
-        }
         return $urls;
     }
 
@@ -171,15 +167,11 @@ function nppp_parse_wget_log_urls( $wp_filesystem ) {
     // The guard below is kept only as a safety net in case the snapshot file
     // somehow became corrupted (manually edited, partial write, etc.).
     if ( ! $preload_running && ! nppp_wget_log_is_complete( $contents ) ) {
-        delete_transient( $transient_key );
         return $urls;
     }
 
     $site_host = wp_parse_url( get_site_url(), PHP_URL_HOST );
     if ( empty( $site_host ) ) {
-        if ( ! $preload_running ) {
-            set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
-        }
         return $urls;
     }
 
