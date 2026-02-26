@@ -772,10 +772,8 @@ function nppp_purge_cache_premium_callback() {
         $settings = get_option('nginx_cache_settings');
         $related_urls = nppp_get_related_urls_for_single($final_url);
 
-        // Purge related silently (no extra notices, as this is an AJAX JSON response)
-        foreach ($related_urls as $rel) {
-            nppp_purge_url_silent($nginx_cache_path, $rel);
-        }
+        // Purge related cache (no extra notices, as this is an AJAX JSON response)
+        nppp_purge_urls_silent($nginx_cache_path, $related_urls);
 
         // Cloudflare purge cache (sync with advanced single-page purge)
         $purged_urls = array_merge($final_url ? array($final_url) : array(), $related_urls);
