@@ -121,6 +121,7 @@ function nppp_prepare_request_env(bool $force = false): void {
 // Include plugin files
 require_once dirname(__DIR__) . '/includes/enqueue-assets.php';
 require_once dirname(__DIR__) . '/includes/wp-filesystem.php';
+require_once dirname(__DIR__) . '/includes/purge-lock.php';
 require_once dirname(__DIR__) . '/includes/pre-checks.php';
 require_once dirname(__DIR__) . '/includes/admin-bar.php';
 require_once dirname(__DIR__) . '/includes/log.php';
