@@ -1,6 +1,15 @@
 <?php
 /**
  * Purge operation locking for Nginx Cache Purge Preload
+ * Description: Atomic WP_Upgrader-based lock helpers for concurrent purge serialization
+ * Version: 2.1.4
+ * Author: Hasan CALISIR
+ * Author Email: hasan.calisir@psauxit.com
+ * Author URI: https://www.psauxit.com
+ * License: GPL-2.0+
+ */
+
+/**
  *
  * Wraps WP_Upgrader::create_lock() / release_lock() with plugin-specific
  * TTLs and a clean API so no other file needs to know about WP_Upgrader
@@ -23,7 +32,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Single lock name shared by all purge operations in the plugin.
 // One name ensures purge_single, purge_all, and advanced purge
 // all block each other — not just operations of the same type.
-define( 'NPPP_PURGE_LOCK_NAME', 'nppp_cache_purge' );
+if ( ! defined( 'NPPP_PURGE_LOCK_NAME' ) ) {
+    define( 'NPPP_PURGE_LOCK_NAME', 'nppp_cache_purge' );
+}
 
 /**
  * Acquire the exclusive plugin purge lock.
