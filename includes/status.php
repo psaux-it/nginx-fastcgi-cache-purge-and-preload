@@ -584,7 +584,7 @@ function nppp_get_cache_ratio( $hits_count ) {
     // reliable denominator and should not show a misleading ratio.
     $snapshot_path = nppp_get_runtime_file( 'nppp-wget-snapshot.log' );
     if ( ! $wp_filesystem->exists( $snapshot_path ) ) {
-        return __( 'N/A — run Preload All', 'fastcgi-cache-purge-and-preload-nginx' );
+        return __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
     }
 
     // It returns a keyed array of every URL from the completed snapshot,
