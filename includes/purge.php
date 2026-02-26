@@ -270,10 +270,8 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     $is_manual = !$nppp_auto_purge;
                     $related_urls = nppp_get_related_urls_for_single($current_page_url);
 
-                    // Purge related silently
-                    foreach ($related_urls as $rel) {
-                        nppp_purge_url_silent($nginx_cache_path, $rel);
-                    }
+                    // Purge related cache
+                    nppp_purge_urls_silent($nginx_cache_path, $related_urls);
 
                     // Decide preload policy
                     $settings = get_option('nginx_cache_settings');
@@ -314,10 +312,8 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         $is_manual = !$nppp_auto_purge;
         $related_urls = nppp_get_related_urls_for_single($current_page_url);
 
-        // Purge related silently
-        foreach ($related_urls as $rel) {
-            nppp_purge_url_silent($nginx_cache_path, $rel);
-        }
+        // Purge related cache
+        nppp_purge_urls_silent($nginx_cache_path, $related_urls);
 
         // Decide preload policy
         $settings = get_option('nginx_cache_settings');
