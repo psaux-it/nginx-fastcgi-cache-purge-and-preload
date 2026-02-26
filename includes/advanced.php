@@ -759,6 +759,15 @@ function nppp_purge_cache_premium_callback() {
         nppp_log_and_send_error($error_message, $log_file_path);
     }
 
+    // Acquire exclusive purge lock — prevents concurrent Advanced-tab purge
+    // racing with Purge All or another admin's single-page purge.
+    // Must be released explicitly before every nppp_log_and_send_* call
+    // because those call wp_send_json_* → wp_die() which bypasses finally.
+    if ( ! nppp_acquire_purge_lock( 'premium' ) ) {
+        $error_message = __( 'INFO ADMIN: Single-page purge skipped — another cache purge operation is already in progress. Please try again shortly.', 'fastcgi-cache-purge-and-preload-nginx' );
+        nppp_log_and_send_error( $error_message, $log_file_path );
+    }
+
     // Perform the purge action (delete the file)
     $deleted = $wp_filesystem->delete($file_path);
 
@@ -774,6 +783,10 @@ function nppp_purge_cache_premium_callback() {
 
         // Purge related cache (no extra notices, as this is an AJAX JSON response)
         nppp_purge_urls_silent($nginx_cache_path, $related_urls);
+
+        // All cache filesystem work done — release lock before post-purge
+        // side effects (Cloudflare, preload) so other admins are unblocked.
+        nppp_release_purge_lock();
 
         // Cloudflare purge cache (sync with advanced single-page purge)
         $purged_urls = array_merge($final_url ? array($final_url) : array(), $related_urls);
@@ -841,6 +854,7 @@ function nppp_purge_cache_premium_callback() {
         ) ? true : false;
 
         // Return structured payload so JS can update other rows
+        // Lock already released above after filesystem work completed.
         nppp_log_and_send_success_data(
             $success_message,
             $log_file_path,
@@ -852,6 +866,7 @@ function nppp_purge_cache_premium_callback() {
     } else {
         // Translators: %s is the page URL
         $error_message = sprintf( __( 'ERROR ADMIN: Nginx cache can not be purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url_decoded );
+        nppp_release_purge_lock();
         nppp_log_and_send_error($error_message, $log_file_path);
     }
 }
