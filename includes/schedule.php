@@ -432,8 +432,6 @@ function nppp_create_scheduled_event_preload_status_callback() {
     // across purges and interrupted runs, so the table stays populated.
     if ( !empty($log_contents) && nppp_wget_log_is_complete( $log_contents ) ) {
         $wp_filesystem->put_contents( $snapshot_path, $log_contents, FS_CHMOD_FILE );
-        // Bust the URL cache transient so Advanced tab reads fresh snapshot data
-        delete_transient( 'nppp_wget_urls_cache_' . md5( 'nppp' ) );
     }
 
     // Add buffer to total count
