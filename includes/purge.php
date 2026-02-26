@@ -137,6 +137,24 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
     $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
 
+    // Serialize concurrent single-page purges and prevent collision with
+    // Purge All from another admin session. Released immediately after
+    // all cache filesystem work is done — post-purge side effects
+    // (Cloudflare, preload, notices) run outside the lock.
+    // TTL only matters if PHP crashes mid-operation.
+    if ( ! nppp_acquire_purge_lock( 'single' ) ) {
+        nppp_display_admin_notice( 'info', sprintf(
+            __( 'INFO: Single-page purge for %s skipped — another cache purge operation is already in progress. Please try again shortly.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $current_page_url_decoded
+        ) );
+        return;
+    }
+
+    // Tracks whether the lock has been released inside the try block on
+    // the success path. Prevents the finally block from double-releasing.
+    $nppp_lock_released = false;
+
+    try {
     try {
         // Traverse the cache directory and its subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
@@ -273,6 +291,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     // Purge related cache
                     nppp_purge_urls_silent($nginx_cache_path, $related_urls);
 
+                    // All cache filesystem work done — release lock now so other
+                    // admins are not blocked during post-purge side effects below.
+                    nppp_release_purge_lock();
+                    $nppp_lock_released = true;
+
                     // Decide preload policy
                     $settings = get_option('nginx_cache_settings');
                     $should_preload_related =
@@ -315,6 +338,10 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         // Purge related cache
         nppp_purge_urls_silent($nginx_cache_path, $related_urls);
 
+        // All cache filesystem work done — release lock now.
+        nppp_release_purge_lock();
+        $nppp_lock_released = true;
+
         // Decide preload policy
         $settings = get_option('nginx_cache_settings');
         $should_preload_related =
@@ -328,6 +355,15 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         // Cloudflare purge cache
         $post_id = (int) url_to_postid($current_page_url);
         do_action('nppp_purged_urls', array_merge(array($current_page_url), $related_urls), $current_page_url, $post_id, (bool) $nppp_auto_purge);
+    }
+
+    } finally {
+        // Safety net: releases the lock on all error/early-return exit paths
+        // where nppp_purge_urls_silent was never reached.
+        // No-op if already released on the success path above.
+        if ( ! $nppp_lock_released ) {
+            nppp_release_purge_lock();
+        }
     }
 }
 
@@ -627,6 +663,21 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
     $auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
 
+    // Prevent concurrent Purge All or single-page purge from another admin
+    // session racing against this operation. Released via finally on all exits.
+    if ( ! nppp_acquire_purge_lock( 'all' ) ) {
+        nppp_display_admin_notice( 'info',
+            __( 'INFO: Purge All skipped — another cache purge operation is already in progress. Please try again shortly.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
+    // Tracks whether the lock has been released inside the try block on
+    // the success path. Prevents the finally block from double-releasing.
+    $nppp_lock_released = false;
+
+    try {
+
     // Phase key used in multiple branches below — declared once here.
     // Actual hook/transient cleanup is deferred until kill success is confirmed
     // so that if kill fails and we return early, the tick monitor keeps running.
@@ -899,6 +950,12 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         delete_transient( 'nppp_wget_urls_cache_' . md5( 'nppp' ) );
     }
 
+    // All cache filesystem work done — release lock before post-purge
+    // side effects (do_action hooks, preload spawn) so other admins
+    // are not blocked during external or background operations.
+    nppp_release_purge_lock();
+    $nppp_lock_released = true;
+
     // Display the admin notice
     if (!empty($message_type) && !empty($message_content)) {
         if ($nppp_is_auto_purge) {
@@ -947,6 +1004,12 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         // Start the preload action with auto preload on flag
         // This is the only route that auto preload passes "true" to preload action
         nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, true, $preload_is_rest_api, false, $preload_is_admin_bar);
+    }
+
+    } finally {
+        if ( ! $nppp_lock_released ) {
+            nppp_release_purge_lock();
+        }
     }
 }
 
