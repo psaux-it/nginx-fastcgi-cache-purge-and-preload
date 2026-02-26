@@ -224,9 +224,12 @@ function nppp_parse_wget_log_urls( $wp_filesystem ) {
         }
     }
 
-    // Only persist when NOT running (stable snapshot)
+    // Only persist when NOT running (stable snapshot).
+    // TTL is orphan cleanup only — actual invalidation is guaranteed by the
+    // mtime-based key. When the snapshot changes, the old key is never
+    // queried again and expires here naturally.
     if ( ! $preload_running ) {
-        set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
+        set_transient( $transient_key, $urls, MONTH_IN_SECONDS );
     }
 
     return $urls;
