@@ -700,8 +700,11 @@ $(document).ready(function() {
                     // Interrupted AND no snapshot at all
                     snapStatus = `${icon('dashicons-no', '#d63638')}<span style="color:#d63638;">${__('None — run Preload All to build one.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
                 } else {
-                    // Completed successfully but snapshot write failed (hard failure)
-                    snapStatus = `${icon('dashicons-warning', '#b45309')}<span style="color:#b45309;font-weight:bold;">${__('Missing — preload completed but snapshot was not saved. Advanced tab data may be stale. Re-run Preload All to rebuild.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                    // Completed successfully but snapshot not yet written.
+                    // Two causes: (1) WP-Cron tick has not fired yet — normal on
+                    // low-traffic sites, resolves on next visitor request.
+                    // (2) Snapshot write actually failed (disk full, permissions) or manually deleted.
+                    snapStatus = `${icon('dashicons-warning', '#b45309')}<span style="color:#b45309;font-weight:bold;">${__('Missing — last preload completed but snapshot not yet saved. On low-traffic sites this resolves automatically on the next visitor request (WP-Cron). If it persists, re-run Preload All.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
                 }
 
                 rows += `<tr>
