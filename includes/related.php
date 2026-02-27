@@ -144,25 +144,16 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
     try {
         $it = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
+            RecursiveIteratorIterator::LEAVES_ONLY
         );
 
         $regex_tested = false;
         foreach ($it as $file) {
             if (empty($pending)) break;
-
             $pathname = $file->getPathname();
-            if (!$wp_filesystem->is_file($pathname)) {
-                continue;
-            }
 
-            if (!$wp_filesystem->is_readable($pathname) || !$wp_filesystem->is_writable($pathname)) {
-                foreach ($pending as $entry) {
-                    nppp_display_admin_notice('error', sprintf(
-                        __('ERROR PERMISSION: Nginx cache purge (related pages) failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'),
-                        $entry['decoded']
-                    ), true, false);
-                }
+            if (!$file->isReadable() || !$file->isWritable()) {
+                continue;
             }
 
             $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
@@ -214,17 +205,21 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
                     continue;
                 }
 
-                if ($wp_filesystem->is_readable($pathname) &&
-                    $wp_filesystem->is_writable($pathname)) {
-                    $deleted = (bool) $wp_filesystem->delete($pathname);
-                    $entry['deleted'] = $deleted;
-                    if ($deleted) {
-                        nppp_display_admin_notice('success', sprintf(
-                            /* translators: %s: related page URL */
-                            __('SUCCESS ADMIN: Nginx cache purged for related page %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                            $entry['decoded']
-                        ), true, false);
-                    }
+                $deleted = (bool) $wp_filesystem->delete($pathname);
+                $entry['deleted'] = $deleted;
+
+                if ($deleted) {
+                    nppp_display_admin_notice('success', sprintf(
+                        /* translators: %s: related page URL */
+                        __('SUCCESS ADMIN: Nginx cache purged for related page %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        $entry['decoded']
+                    ), true, false);
+                } else {
+                    nppp_display_admin_notice('error', sprintf(
+                        /* translators: %s: related page URL */
+                        __('ERROR PERMISSION: Nginx cache purge (related pages) failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'),
+                        $entry['decoded']
+                    ), true, false);
                 }
 
                 $results[$entry['original']] = ['found' => $entry['found'], 'deleted' => $entry['deleted']];
