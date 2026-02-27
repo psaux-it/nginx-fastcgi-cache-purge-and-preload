@@ -328,8 +328,7 @@ function nppp_premium_html($nginx_cache_path) {
                         <span style="font-size: 14px;">' . esc_html__( 'ERROR PERMISSION: Please ensure proper permissions are set for the Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
                     </p>
                 </div>';
-
-    } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
+    } elseif (!nppp_check_permissions_recursive_with_cache()) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                     <h2>&nbsp;' . esc_html__( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
@@ -999,12 +998,11 @@ function nppp_locate_cache_file_ajax() {
     try {
         $iter = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
+            RecursiveIteratorIterator::LEAVES_ONLY
         );
 
         foreach ( $iter as $file ) {
             $pathname = $file->getPathname();
-            if (! $wp_filesystem->is_file($pathname)) { continue; }
             if (($now - $file->getMTime()) > $window_secs) { continue; }
 
             $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
@@ -1088,13 +1086,12 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
         // Traverse the cache directory and its subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
+            RecursiveIteratorIterator::LEAVES_ONLY
         );
 
         $regex_tested = false;
         foreach ($cache_iterator as $file) {
             $path = $file->getPathname();
-            if (!$wp_filesystem->is_file($path)) { continue; }
 
             $content = nppp_read_head($wp_filesystem, $path, $head_bytes_primary);
             if ($content === '') { continue; }
