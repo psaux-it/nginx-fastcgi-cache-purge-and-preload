@@ -35,7 +35,7 @@ if (! function_exists('nppp_read_head')) {
     }
 }
 
-// Detect wget compatibility required by preload operations.
+// Detect wget compatibility required by NPP.
 if (! function_exists('nppp_get_wget_compatibility')) {
     function nppp_get_wget_compatibility(): array {
         $transient_key = 'nppp_wget_compatibility_' . md5('nppp');
@@ -766,15 +766,12 @@ function nppp_pre_checks() {
     try {
         $cache_iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
-                RecursiveIteratorIterator::SELF_FIRST
+                RecursiveIteratorIterator::LEAVES_ONLY
         );
 
         $has_files = '';
         foreach ($cache_iterator as $file) {
             $pathname = $file->getPathname();
-            if ( ! $wp_filesystem->is_file( $pathname ) ) {
-                continue;
-            }
 
             // Read only the head (binary-safe)
             $content = nppp_read_head( $wp_filesystem, $pathname, $head_bytes_primary );
