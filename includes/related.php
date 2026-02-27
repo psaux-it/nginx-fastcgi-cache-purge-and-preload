@@ -152,8 +152,21 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
             if (empty($pending)) break;
             $pathname = $file->getPathname();
 
+            // nppp_purge_urls_silent() is only reached after nppp_purge_single()
+            // completed its scan without any permission issues. So if we hit an
+            // unreadable/unwritable file here, it means the cache directory permission
+            // integrity broke BETWEEN the two scans — most likely a bindfs sync failure
+            // between WEBSERVER-USER and PHP-FPM-USER mid-operation.
+            // We cannot safely identify or delete remaining targets — abort all pending.
             if (!$file->isReadable() || !$file->isWritable()) {
-                continue;
+                foreach ($pending as $entry) {
+                    nppp_display_admin_notice('error', sprintf(
+                         /* translators: %s: related page URL */
+                         __('ERROR PERMISSION: Nginx cache purge for related page %s was aborted — a permission issue was detected in the cache directory. This may indicate a cache path integrity problem (e.g. broken bindfs sync). Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'),
+                         $entry['decoded']
+                    ), true, false);
+                }
+                break;
             }
 
             $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
@@ -217,7 +230,7 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
                 } else {
                     nppp_display_admin_notice('error', sprintf(
                         /* translators: %s: related page URL */
-                        __('ERROR PERMISSION: Nginx cache purge (related pages) failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'),
+                        __('ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for related page %s. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx'),
                         $entry['decoded']
                     ), true, false);
                 }
