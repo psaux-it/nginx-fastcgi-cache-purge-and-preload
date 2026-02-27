@@ -72,22 +72,32 @@ add_action('rest_api_init', function (): void {
     // Full REST Auth Prescreen:
     // Avoid full plugin bootstrap on unauthenticated or invalid REST requests.
     $api_key = '';
-    $auth_header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    $auth_header = sanitize_text_field(
+        wp_unslash( $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '' )
+    );
 
     // Check Authorization Header
     if (strpos($auth_header, 'Bearer ') === 0) $api_key = substr($auth_header, 7);
 
     // Fallback: X-Api-Key Header
-    if (empty($api_key)) $api_key = $_SERVER['HTTP_X_API_KEY'] ?? '';
+    if (empty($api_key)) {
+        $api_key = sanitize_text_field(
+            wp_unslash( $_SERVER['HTTP_X_API_KEY'] ?? '' )
+        );
+    }
 
     // Fallback: Request Body
     if (empty($api_key)) {
-        $content_type = $_SERVER['CONTENT_TYPE'] ?? '';
+        $content_type = sanitize_text_field(
+            wp_unslash( $_SERVER['CONTENT_TYPE'] ?? '' )
+        );
+
         if (strpos($content_type, 'application/json') !== false) {
             $body    = json_decode(file_get_contents('php://input'), true);
             $api_key = isset($body['api_key']) && is_string($body['api_key']) ? $body['api_key'] : '';
         } else {
-            $api_key = $_POST['api_key'] ?? '';
+            // phpcs:ignore WordPress.Security.NonceVerification.Missing -- REST API bearer token prescreen, not a form submission
+            $api_key = isset($_POST['api_key']) ? sanitize_text_field( wp_unslash( $_POST['api_key'] ) ) : '';
         }
     }
 
