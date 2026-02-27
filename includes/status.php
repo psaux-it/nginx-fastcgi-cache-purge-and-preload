@@ -460,22 +460,17 @@ function nppp_get_in_cache_page_count() {
     try {
         $cache_iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
+            RecursiveIteratorIterator::LEAVES_ONLY
         );
 
         $regex_tested = false;
         foreach ($cache_iterator as $file) {
             $pathname = $file->getPathname();
-            if (! $wp_filesystem->is_file($pathname)) {
-                continue;
-            }
 
-            // Okunabilir değilse global durum belirsiz
-            if (! $wp_filesystem->is_readable($pathname)) {
+            if (! $file->isReadable()) {
                 return 'Undetermined';
             }
 
-            // Yalnızca başı oku
             $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
             if ($content === '') { continue; }
 
