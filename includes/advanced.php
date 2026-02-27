@@ -714,7 +714,7 @@ function nppp_purge_cache_premium_callback() {
 
     // Get the purged URL
     $https_enabled = wp_is_using_https();
-    $content = $wp_filesystem->get_contents($file_path);
+    $content = nppp_read_head($wp_filesystem, $file_path, 4096);
 
     $final_url = '';
     if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
