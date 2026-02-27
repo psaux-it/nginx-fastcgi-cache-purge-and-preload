@@ -378,7 +378,12 @@ function nppp_check_permissions_recursive($path) {
         return false;
     }
 
-    // Hard: Recursively check permission for all files in nginx cache path
+    // Hard:
+    // Recursively check read+write permissions for all files AND directories
+    // in the cache path. SELF_FIRST is intentional — purge deletes top-level
+    // subdirs recursively, so intermediate directories must be writable too.
+    // SPL isReadable()/isWritable() use the cached stat from the iterator —
+    // no extra syscalls vs the WP_Filesystem wrapper.
     try {
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
@@ -392,7 +397,7 @@ function nppp_check_permissions_recursive($path) {
         }
         return true;
     } catch (Exception $e) {
-        // Handle the directory access issue
+        // Directory access issue — treat as permission failure
         return false;
     }
 }
