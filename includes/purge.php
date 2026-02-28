@@ -67,6 +67,8 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
                 return 3;
             } elseif ($error_code === 'directory_traversal') {
                 return 5;
+            } elseif ($error_code === 'unsafe_cache_path') {
+                return 6;
             } else {
                 return 4;
             }
@@ -841,6 +843,11 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                     // Translators: %s is the Nginx cache path
                     $message_content = sprintf( __( 'ERROR SECURITY: A directory traversal issue was detected with the provided path (%s). Cache purge aborted for security reasons. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
                     break;
+                case 6:
+                    $message_type = 'error';
+                    // Translators: %s is the Nginx cache path
+                    $message_content = sprintf( __('ERROR SECURITY: The Nginx cache path (%s) is inside or is a parent of the WordPress installation. Cache purge aborted. Please set the Nginx cache path to a dedicated cache-only location outside WordPress.', 'fastcgi-cache-purge-and-preload-nginx'), $nginx_cache_path);
+                    break;
             }
 
             // Remove the PID file
@@ -891,6 +898,16 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 case 4:
                     $message_type = 'error';
                     $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while attempting to purge the Nginx cache. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' );
+                    break;
+                case 5:
+                    $message_type = 'error';
+                    // Translators: %s is the Nginx cache path
+                    $message_content = sprintf( __( 'ERROR SECURITY: A directory traversal issue was detected with the provided path (%s). Cache purge aborted for security reasons. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
+                    break;
+                case 6:
+                    $message_type = 'error';
+                    // Translators: %s is the Nginx cache path
+                    $message_content = sprintf( __('ERROR SECURITY: The Nginx cache path (%s) is inside or is a parent of the WordPress installation. Cache purge aborted. Please set the Nginx cache path to a dedicated cache-only location outside WordPress.', 'fastcgi-cache-purge-and-preload-nginx'), $nginx_cache_path);
                     break;
             }
 
@@ -943,6 +960,16 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             case 4:
                 $message_type = 'error';
                 $message_content = __( 'ERROR UNKNOWN: An unexpected error occurred while attempting to purge the Nginx cache. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' );
+                break;
+            case 5:
+                $message_type = 'error';
+                // Translators: %s is the Nginx cache path
+                $message_content = sprintf( __( 'ERROR SECURITY: A directory traversal issue was detected with the provided path (%s). Cache purge aborted for security reasons. Please verify your Nginx cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path );
+                break;
+            case 6:
+                $message_type = 'error';
+                // Translators: %s is the Nginx cache path
+                $message_content = sprintf( __('ERROR SECURITY: The Nginx cache path (%s) is inside or is a parent of the WordPress installation. Cache purge aborted. Please set the Nginx cache path to a dedicated cache-only location outside WordPress.', 'fastcgi-cache-purge-and-preload-nginx'), $nginx_cache_path);
                 break;
         }
     }
