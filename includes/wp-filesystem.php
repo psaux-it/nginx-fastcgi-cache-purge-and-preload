@@ -175,112 +175,97 @@ function nppp_wp_purge($directory_path) {
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+            __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
         );
         return;
     }
 
-    // Resolve and validate the absolute path.
+    // Check directory exists first — also prevents realpath() inside
+    // nppp_validate_purge_path() returning false for a missing directory,
+    // which would incorrectly surface as 'directory_traversal' instead of
+    // 'directory_not_found' to the caller.
+    if (!$wp_filesystem->is_dir($directory_path)) {
+        return new WP_Error('directory_not_found', __('Directory not found', 'fastcgi-cache-purge-and-preload-nginx'));
+    }
+
+    // Resolve and validate the absolute path — realpath() safe now
     $validation = nppp_validate_purge_path($directory_path);
     if (is_wp_error($validation)) {
         return $validation;
     }
 
-    // Check for read and write permissions softly and recursive
-    if (!$wp_filesystem->is_readable($directory_path) || !$wp_filesystem->is_writable($directory_path)) {
-        // Translators: %s is the Nginx cache path
-        return new WP_Error('permission_error', sprintf(__('Permission denied while reading or writing to the cache directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path));
-    } elseif (!nppp_check_permissions_recursive($directory_path)) {
-        // Translators: %s is the Nginx cache path
-        return new WP_Error('permission_error', sprintf(__('Permission denied during recursive check of the cache directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path));
-    }
-
-    // Protected folders to be excluded, recursively
+    // Protected folder names — top-level only, bare name comparison
     $protected_folders = ['client_temp', 'scgi_temp', 'uwsgi_temp', 'fastcgi_temp', 'proxy_temp'];
-    $protected_paths = array_map(function ($folder) use ($directory_path) {
-        return trailingslashit($directory_path) . $folder;
-    }, $protected_folders);
 
-    // Recursive function to check if a path is protected
-    $is_protected = function ($path) use ($protected_paths) {
-        foreach ($protected_paths as $protected_path) {
-            if (strpos(rtrim($path, DIRECTORY_SEPARATOR), rtrim($protected_path, DIRECTORY_SEPARATOR)) === 0) {
-                return true;
+    // Step 1: Confirm cache exists.
+    // LEAVES_ONLY     → SPL yields only files, skips directory entries entirely.
+    // nppp_head_fast  → reads only first 4096 bytes (sufficient to reach KEY: line
+    //                   which sits after the nginx binary file header).
+    // break           → stops after the very first match, minimises I/O.
+    $has_cache = false;
+    try {
+        $scan = new RecursiveIteratorIterator(
+            new RecursiveCallbackFilterIterator(
+                new RecursiveDirectoryIterator($directory_path, RecursiveDirectoryIterator::SKIP_DOTS),
+                function ($entry) use ($protected_folders) {
+                    if ($entry->isDir() && in_array($entry->getFilename(), $protected_folders, true)) {
+                        return false;
+                    }
+                    return true;
+                }
+            ),
+            RecursiveIteratorIterator::LEAVES_ONLY
+        );
+        foreach ($scan as $file) {
+            $head = nppp_head_fast($file->getPathname(), 4096);
+            if ($head !== '' && preg_match('/^KEY:\s/m', $head)) {
+                $has_cache = true;
+                break;
             }
         }
-        return false;
-    };
-
-    // Check if the cache directory exist before trying to purge cache
-    if ($wp_filesystem->is_dir($directory_path)) {
-        // Get cache directory contents
-        $contents = $wp_filesystem->dirlist($directory_path);
-
-        // Check permission errors
-        if ($contents === false) {
-            // Translators: %s is the Nginx cache path
-            return new WP_Error('permission_error', sprintf(__('Permission denied while deleting file or directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path));
-        // Ok, try to purge cache
-        } elseif (!empty($contents)) {
-            // First check purge needed
-            try {
-                $cache_iterator = new RecursiveIteratorIterator(
-                    new RecursiveDirectoryIterator($directory_path, RecursiveDirectoryIterator::SKIP_DOTS),
-                    RecursiveIteratorIterator::SELF_FIRST
-                );
-
-                $has_files = '';
-                foreach ($cache_iterator as $file) {
-                    if ($wp_filesystem->is_file($file->getPathname())) {
-                        // Read cache content
-                        $file_content = $wp_filesystem->get_contents($file->getPathname());
-
-                        // Validate cache exists
-                        if (preg_match('/^KEY:/m', $file_content)) {
-                            $has_files = 'found';
-                            break;
-                        }
-                    }
-                }
-            } catch (Exception $e) {
-                $has_files = 'error';
-            }
-
-            // No cache found, no need to purge
-            if ($has_files !== 'found' && $has_files !== 'error') {
-                return new WP_Error('empty_directory', __('Directory is empty', 'fastcgi-cache-purge-and-preload-nginx'));
-            }
-
-            // Cache found, purge now
-            foreach ($contents as $file) {
-                $file_path = trailingslashit($directory_path) . $file['name'];
-
-                // Skip protected paths (recursively)
-                if ($is_protected($file_path)) {
-                    continue;
-                }
-
-                if ($wp_filesystem->is_file($file_path) || $wp_filesystem->is_dir($file_path)) {
-                    // Attempt to purge cache
-                    $deleted = $wp_filesystem->delete($file_path, true);
-                    // Check we throw in permisson errors
-                    if (!$deleted) {
-                        // Translators: %s is the Nginx cache path
-                        return new WP_Error('permission_error', sprintf(__('Permission denied while deleting file or directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $file_path));
-                    }
-                }
-            }
-        } else {
-            // No cache found, no need to purge
-            return new WP_Error('empty_directory', __('Directory is empty', 'fastcgi-cache-purge-and-preload-nginx'));
-        }
-
-        // Cache purged
-        return true;
-    } else {
-        // No cache directory found
-        return new WP_Error('directory_not_found', __('Directory not found', 'fastcgi-cache-purge-and-preload-nginx'));
+    } catch (UnexpectedValueException $e) {
+        // Directory or subdirectory is unreadable
+        return new WP_Error(
+            'permission_error',
+            sprintf(__('Permission denied while reading cache directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path)
+        );
     }
+
+    if (!$has_cache) {
+        return new WP_Error('empty_directory', __('Directory is empty', 'fastcgi-cache-purge-and-preload-nginx'));
+    }
+
+    // Step 2: Purge cache. wp_filesystem->delete($path, true) handles
+    // recursion internally — we only need to iterate one level here.
+    // SPL caches type info from the directory read so getPathname() costs nothing extra.
+    try {
+        $dir = new DirectoryIterator($directory_path);
+        foreach ($dir as $entry) {
+            if ($entry->isDot()) {
+                continue;
+            }
+
+            // Bare filename comparison — no path construction, no strpos prefix bug
+            if (in_array($entry->getFilename(), $protected_folders, true)) {
+                continue;
+            }
+
+            $deleted = $wp_filesystem->delete($entry->getPathname(), true);
+            if (!$deleted) {
+                return new WP_Error(
+                    'permission_error',
+                    sprintf(__('Permission denied while deleting file or directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $entry->getPathname())
+                );
+            }
+        }
+    } catch (UnexpectedValueException $e) {
+        return new WP_Error(
+            'permission_error',
+            sprintf(__('Permission denied while reading cache directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path)
+        );
+    }
+
+    return true;
 }
 
 // Remove a directory using WP_Filesystem
