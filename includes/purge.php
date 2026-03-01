@@ -369,7 +369,7 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
 
     // -0.1) Early quit if auto purge disabled
     $nginx_cache_settings = get_option('nginx_cache_settings');
-    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] !== 'yes') {
+    if (($nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no') !== 'yes') {
         return;
     }
 
