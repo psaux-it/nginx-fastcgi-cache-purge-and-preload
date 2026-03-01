@@ -581,6 +581,15 @@ function nppp_load_premium_content_callback() {
         wp_send_json_error( __( 'Permission denied.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
     }
 
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation.
+
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0);
+    }
+
     // Retrieve plugin settings
     $options = get_option('nginx_cache_settings');
     $nginx_cache_path = isset($options['nginx_cache_path']) ? $options['nginx_cache_path'] : '';
@@ -645,6 +654,19 @@ function nppp_purge_cache_premium_callback() {
         }
     } else {
         wp_send_json_error('Nonce is missing.');
+    }
+
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation.
+
+    // Note: because gate to nppp_purge_urls_silent
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0);
+    }
+    if (function_exists('ignore_user_abort')) {
+        ignore_user_abort(true);
     }
 
     // Create log file
@@ -950,6 +972,15 @@ function nppp_locate_cache_file_ajax() {
         wp_send_json_error( __( 'Invalid URL.', 'fastcgi-cache-purge-and-preload-nginx' ) );
     }
 
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation.
+
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0);
+    }
+
     $settings = get_option('nginx_cache_settings');
     $nginx_cache_path = isset($settings['nginx_cache_path']) ? $settings['nginx_cache_path'] : '';
 
@@ -1045,6 +1076,15 @@ function nppp_locate_cache_file_ajax() {
 // so for file_path we don't apply any sanitize and validate
 // we only sanitize and validate the urls parsed from files
 function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation.
+
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0);
+    }
+
     $urls = [];
 
     // Determine if HTTPS is enabled
