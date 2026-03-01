@@ -121,5 +121,89 @@
 
         // Call main
         npppCheckPreloadStatus();
+
+        // Cache Hit Ratio gauge — animate from values baked in by PHP server-side.
+        // Advanced tab; ratio is computed at widget render time via nppp_get_cache_ratio().
+        (function () {
+            var CIRCUMFERENCE = 175.93; // 2 * π * 28
+            var __ = wp.i18n.__;
+            var _n = wp.i18n._n;
+
+            function ratioColor(pct) {
+                if (pct >= 70) { return '#3CB371'; }
+                if (pct >= 40) { return '#f0a500'; }
+                return '#d9534f';
+            }
+
+            function humanizeAge(unixTs) {
+                var diff    = Math.floor(Date.now() / 1000) - unixTs;
+                var minutes = Math.floor(diff / 60);
+                var hours   = Math.floor(diff / 3600);
+                var days    = Math.floor(diff / 86400);
+                if (diff < 60)    { return __( 'just now', 'fastcgi-cache-purge-and-preload-nginx' ); }
+                if (diff < 3600)  { return minutes + ' ' + _n( 'minute ago', 'minutes ago', minutes, 'fastcgi-cache-purge-and-preload-nginx' ); }
+                if (diff < 86400) { return hours   + ' ' + _n( 'hour ago',   'hours ago',   hours,   'fastcgi-cache-purge-and-preload-nginx' ); }
+                return days + ' ' + _n( 'day ago', 'days ago', days, 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+
+            var $strip    = $('#nppp-ratio-strip');
+            if (!$strip.length) { return; }
+
+            var $progress = $strip.find('.nppp-gauge-progress');
+            var $pct      = $strip.find('.nppp-gauge-pct');
+            var $detail   = $('#nppp-ratio-detail');
+
+            var isNa      = $strip.data('na') === '1' || $strip.data('na') === 1;
+            var naReason  = $strip.data('na-reason') || '';
+
+            if (isNa) {
+                $pct.text('N/A').css('font-size', '10px');
+                var naMsg = (naReason === 'not_initialized')
+                    ? __( 'Open Status or Advanced tab once to initialize.', 'fastcgi-cache-purge-and-preload-nginx' )
+                    : __( 'Run a full Preload to generate a snapshot.',      'fastcgi-cache-purge-and-preload-nginx' );
+                $detail.html('<span class="nppp-ratio-na">' + naMsg + '</span>');
+                $progress.attr('stroke', '#ccc');
+                return;
+            }
+
+            var pct       = parseFloat($strip.data('ratio'));
+            var hits      = parseInt($strip.data('hits'),   10);
+            var misses    = parseInt($strip.data('misses'), 10);
+            var total     = parseInt($strip.data('total'),  10);
+            var scannedAt = parseInt($strip.data('scanned-at'), 10);
+            var color     = ratioColor(pct);
+            var offset    = CIRCUMFERENCE - (pct / 100) * CIRCUMFERENCE;
+
+            $progress.attr('stroke', color);
+            setTimeout(function () {
+                $progress.css({
+                    'stroke-dashoffset': offset,
+                    'transition':        'stroke-dashoffset 1.1s cubic-bezier(0.4,0,0.2,1)'
+                });
+            }, 80);
+
+            $({ val: 0 }).animate({ val: pct }, {
+                duration: 1100,
+                easing:   'swing',
+                step:     function () { $pct.text(parseFloat(this.val).toFixed(1) + '%'); },
+                complete: function () { $pct.text(pct.toFixed(1) + '%'); }
+            });
+            $pct.css('color', color);
+
+            var html =
+                '<span class="nppp-ratio-hit">&#x2714; '  + hits   + ' ' + __( 'HIT',   'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
+                '<span class="nppp-ratio-sep"> &nbsp;/&nbsp; </span>'                                                                           +
+                '<span class="nppp-ratio-miss">&#x2718; ' + misses + ' ' + __( 'MISS',  'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
+                '<span class="nppp-ratio-sep"> &nbsp;/&nbsp; </span>'                                                                           +
+                '<span class="nppp-ratio-total">'          + total  + ' ' + __( 'total', 'fastcgi-cache-purge-and-preload-nginx' ) + '</span>';
+
+            if (scannedAt) {
+                html += '<span class="nppp-ratio-age" title="' + __( 'Last scanned via Status or Advanced tab', 'fastcgi-cache-purge-and-preload-nginx' ) + '">'
+                      + '&#x23F1; ' + humanizeAge(scannedAt) + '</span>';
+            }
+
+            $detail.html(html);
+            $strip.css('border-left-color', color);
+        })();
     });
 })(jQuery);
