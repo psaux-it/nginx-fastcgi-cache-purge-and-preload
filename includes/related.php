@@ -15,27 +15,6 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Fast head readers (minimal I/O)
-if (! function_exists('nppp_head_fast')) {
-    // Uses file_get_contents() length arg (C-level).
-    function nppp_head_fast($path, $max = 16384) {
-        $data = @file_get_contents($path, false, null, 0, $max);
-        return ($data === false) ? '' : $data;
-    }
-}
-
-if (! function_exists('nppp_read_head')) {
-    // Partial read with WP_Filesystem fallback.
-    function nppp_read_head($wp_filesystem, $path, $max = 16384) {
-        $buf = nppp_head_fast($path, $max);
-        if ($buf !== '') return $buf;
-
-        // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
-        $all = $wp_filesystem->get_contents($path);
-        return ($all === false || $all === '') ? '' : substr($all, 0, $max);
-    }
-}
-
 // Return related URLs for a primary single page URL, based on plugin options.
 function nppp_get_related_urls_for_single(string $primary_url): array {
     $settings = get_option( 'nginx_cache_settings', array() );
