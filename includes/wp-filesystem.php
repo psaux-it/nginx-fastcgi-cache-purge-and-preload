@@ -34,6 +34,22 @@ function nppp_custom_error_log($message, $error_type = E_USER_WARNING) {
     }
 }
 
+// Read up to $max bytes from $path using C-level file_get_contents length arg.
+function nppp_head_fast(string $path, int $max = 16384): string {
+    $data = @file_get_contents($path, false, null, 0, $max);
+    return ($data === false) ? '' : $data;
+}
+
+// Read up to $max bytes from $path, falling back to WP_Filesystem for FTP/SSH.
+function nppp_read_head($wp_filesystem, string $path, int $max = 16384): string {
+    $buf = nppp_head_fast($path, $max);
+    if ($buf !== '') return $buf;
+
+    // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
+    $all = $wp_filesystem->get_contents($path);
+    return ($all === false || $all === '') ? '' : substr($all, 0, $max);
+}
+
 // Initialize WP_Filesystem
 function nppp_initialize_wp_filesystem() {
     global $wp_filesystem;
@@ -208,7 +224,7 @@ function nppp_wp_purge($directory_path) {
         $scan = new RecursiveIteratorIterator(
             new RecursiveCallbackFilterIterator(
                 new RecursiveDirectoryIterator($directory_path, RecursiveDirectoryIterator::SKIP_DOTS),
-                function ($entry) use (&$protected_folders) {
+                function ($entry) use ($protected_folders) {
                     if ($entry->isDir() && in_array($entry->getFilename(), $protected_folders, true)) {
                         return false;
                     }
