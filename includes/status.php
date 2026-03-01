@@ -1016,6 +1016,15 @@ function nppp_cache_status_callback() {
         wp_die(esc_html__('You do not have permission to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation.
+
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0);
+    }
+
     // Call the shortcode function to get HTML content
     $shortcode_content = nppp_my_status_shortcode();
 
