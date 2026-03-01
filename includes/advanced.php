@@ -387,6 +387,12 @@ function nppp_premium_html($nginx_cache_path) {
         $hits = $extractedUrls;
     }
 
+    // Advanced tab visit → persist fresh hit count.
+    if ( ! empty( $hits ) && is_array( $hits ) ) {
+        update_option( 'nppp_last_known_hits',      count( $hits ), false );
+        update_option( 'nppp_last_hits_scanned_at', time(),         false );
+    }
+
     // Merge HIT + MISS
     $mergedRows = nppp_merge_cached_and_wget($hits, $wp_filesystem);
 
