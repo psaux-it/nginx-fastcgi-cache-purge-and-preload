@@ -710,6 +710,15 @@ function nppp_pre_checks() {
         return;
     }
 
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation.
+
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0);
+    }
+
     // Optimize performance by caching results of recursive permission checks
     $permission_check_result = nppp_check_permissions_recursive_with_cache();
     $nppp_permissions_check_result = $permission_check_result;
