@@ -474,7 +474,8 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
     if ($current_screen->base === 'dashboard') {
         // Enqueue the NPP WP admin dashboard JS
         if (!wp_script_is('nppp-dashboard-widget-js', 'enqueued')) {
-            wp_enqueue_script('nppp-dashboard-widget-js', plugins_url('../admin/js/nppp-dashboard-widget.js', __FILE__), array('jquery'), '2.1.4', true);
+            wp_enqueue_script('nppp-dashboard-widget-js', plugins_url('../admin/js/nppp-dashboard-widget.js', __FILE__), array('jquery', 'wp-i18n'), '2.1.4', true);
+            wp_set_script_translations('nppp-dashboard-widget-js', 'fastcgi-cache-purge-and-preload-nginx');
         }
 
         // Enqueue the NPP WP admin dashboard CSS
