@@ -331,6 +331,60 @@ function nppp_dashboard_widget() {
             echo '</a>';
         echo '</div>';
 
+        // Cache Hit Ratio.
+        // Read the hit count stored by the Status or Advanced tab (zero scan cost).
+        // nppp_get_cache_ratio() derives the total from the wget snapshot log via its
+        // own 5-min transient.
+        $nppp_widget_hits     = get_option( 'nppp_last_known_hits',      false );
+        $nppp_widget_scan_at  = get_option( 'nppp_last_hits_scanned_at', false );
+        $nppp_widget_ratio    = false;
+        $nppp_ratio_pct       = null;
+        $nppp_ratio_hits      = null;
+        $nppp_ratio_misses    = null;
+        $nppp_ratio_total     = null;
+        $nppp_ratio_na        = true;
+        $nppp_ratio_na_reason = 'not_initialized';
+
+        if ( $nppp_widget_hits !== false && function_exists( 'nppp_get_cache_ratio' ) ) {
+            $nppp_ratio_string = nppp_get_cache_ratio( (int) $nppp_widget_hits );
+            if ( preg_match( '/^([\d.]+)%\s*\((\d+)\s+HIT\s*\/\s*(\d+)\s+MISS\s*\/\s*(\d+)\s+total\)/', $nppp_ratio_string, $nppp_m ) ) {
+                $nppp_ratio_pct       = (float) $nppp_m[1];
+                $nppp_ratio_hits      = (int)   $nppp_m[2];
+                $nppp_ratio_misses    = (int)   $nppp_m[3];
+                $nppp_ratio_total     = (int)   $nppp_m[4];
+                $nppp_ratio_na        = false;
+                $nppp_ratio_na_reason = '';
+            } else {
+                $nppp_ratio_na_reason = 'no_snapshot';
+            }
+        }
+
+        echo '<div id="nppp-ratio-strip" class="nppp-ratio-strip"'
+           . ' data-ratio="'     . esc_attr( $nppp_ratio_na ? '' : $nppp_ratio_pct ) . '"'
+           . ' data-hits="'      . esc_attr( $nppp_ratio_na ? '' : $nppp_ratio_hits ) . '"'
+           . ' data-misses="'    . esc_attr( $nppp_ratio_na ? '' : $nppp_ratio_misses ) . '"'
+           . ' data-total="'     . esc_attr( $nppp_ratio_na ? '' : $nppp_ratio_total ) . '"'
+           . ' data-na="'        . esc_attr( $nppp_ratio_na ? '1' : '0' ) . '"'
+           . ' data-na-reason="' . esc_attr( $nppp_ratio_na_reason ) . '"'
+           . ' data-scanned-at="'. esc_attr( $nppp_widget_scan_at ? (string) $nppp_widget_scan_at : '' ) . '"'
+           . '>';
+            // SVG circular gauge  (r = 28 → circumference = 2πr ≈ 175.93)
+            echo '<div class="nppp-ratio-gauge" aria-label="' . esc_attr__( 'Cache hit ratio gauge', 'fastcgi-cache-purge-and-preload-nginx' ) . '">';
+                echo '<svg class="nppp-gauge-svg" viewBox="0 0 72 72" width="72" height="72">';
+                    echo '<circle class="nppp-gauge-track"    cx="36" cy="36" r="28" fill="none" stroke-width="7"/>';
+                    echo '<circle class="nppp-gauge-progress" cx="36" cy="36" r="28" fill="none" stroke-width="7"'
+                       . ' stroke-dasharray="175.93" stroke-dashoffset="175.93"'
+                       . ' stroke-linecap="round" transform="rotate(-90 36 36)"/>';
+                echo '</svg>';
+                echo '<span class="nppp-gauge-pct" aria-live="polite">&ndash;</span>';
+            echo '</div>';
+            // Right-side text block
+            echo '<div class="nppp-ratio-info">';
+                echo '<span class="nppp-ratio-title">' . esc_html__( 'Cache Hit Ratio', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>';
+                echo '<span id="nppp-ratio-detail" class="nppp-ratio-detail"></span>';
+            echo '</div>';
+        echo '</div>';
+
         // Output the main NPP pluging settings statuses
         echo '<table style="width: 100%; border-collapse: collapse;">';
             foreach ($statuses as $key => $status_info) {
