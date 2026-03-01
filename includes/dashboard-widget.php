@@ -205,6 +205,20 @@ function nppp_dashboard_widget() {
         $pctnorm_enabled = $safexec_path && nppp_is_safexec_usable($safexec_path, false);
     }
 
+    // Cloudflare APO Sync — three states: Enabled / Disabled / Unavailable
+    // Unavailable means the Cloudflare APO plugin is not installed/active,
+    // so the sync option cannot function regardless of the saved setting.
+    $cf_available = function_exists('nppp_cloudflare_apo_is_available') && nppp_cloudflare_apo_is_available();
+    $cf_sync_on   = isset($settings['nppp_cloudflare_apo_sync']) && $settings['nppp_cloudflare_apo_sync'] === 'yes';
+
+    if ( ! $cf_available ) {
+        $cf_status = __('Unavailable', 'fastcgi-cache-purge-and-preload-nginx');
+    } elseif ( $cf_sync_on ) {
+        $cf_status = __('Enabled', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        $cf_status = __('Disabled', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
     // Need setup
     $needs_setup = class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup();
     $setup_url   = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
@@ -242,6 +256,12 @@ function nppp_dashboard_widget() {
             'label' => __('URL Normalization', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => $pctnorm_enabled ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon' => 'dashicons-admin-links'
+        ],
+        'cloudflare_apo' => [
+            'label'       => __('Cloudflare APO', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status'      => $cf_status,
+            'icon'        => 'dashicons-cloud',
+            'unavailable' => ! $cf_available,
         ],
         'scheduled_cache' => [
             'label' => __('Scheduled Cache', 'fastcgi-cache-purge-and-preload-nginx'),
@@ -318,8 +338,18 @@ function nppp_dashboard_widget() {
                 $icon = $status_info['icon'];
 
                 // Determine the Dashicon and color based on status
-                $status_icon = ($status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) ? 'dashicons-yes-alt' : 'dashicons-dismiss';
-                $status_color = ($status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) ? '#5cb85c' : '#d9534f';
+                // Three possible states: Enabled (green), Disabled (red), Unavailable (gray + lock)
+                $is_unavailable = ! empty($status_info['unavailable']);
+                if ($is_unavailable) {
+                    $status_icon  = 'dashicons-lock';
+                    $status_color = '#999999';
+                } elseif ($status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) {
+                    $status_icon  = 'dashicons-yes-alt';
+                    $status_color = '#5cb85c';
+                } else {
+                    $status_icon  = 'dashicons-dismiss';
+                    $status_color = '#d9534f';
+                }
 
                 echo '<tr style="border-bottom: 1px solid #f1f1f1;">';
                     echo '<td style="padding: 8px 15px; color: #555; font-weight: 500; width: 60%;">';
