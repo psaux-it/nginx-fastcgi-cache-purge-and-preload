@@ -933,26 +933,6 @@ function nppp_preload_cache_premium_callback() {
     }
 }
 
-// Uses file_get_contents() length arg (C-level).
-if (! function_exists('nppp_head_fast')) {
-    function nppp_head_fast($path, $max = 16384) {
-        $data = @file_get_contents($path, false, null, 0, $max);
-        return ($data === false) ? '' : $data;
-    }
-}
-
-// Partial read with WP_Filesystem fallback.
-if (! function_exists('nppp_read_head')) {
-    function nppp_read_head($wp_filesystem, $path, $max = 16384) {
-        $buf = nppp_head_fast($path, $max);
-        if ($buf !== '') return $buf;
-
-        // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
-        $all = $wp_filesystem->get_contents($path);
-        return ($all === false || $all === '') ? '' : substr($all, 0, $max);
-    }
-}
-
 // Update Purge button data if missing before and hit now
 function nppp_locate_cache_file_ajax() {
     if ( ! current_user_can('manage_options') ) {
