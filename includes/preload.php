@@ -872,8 +872,8 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         // Translators: %s: Current page URL
         nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
         return;
-    // Recusive check for permission issues deeply
-    } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
+    // Ask cached Recusive status for permission issues deeply
+    } elseif (nppp_check_permissions_recursive_with_cache() !== 'true') {
         // Translators: %s: Current page URL
         nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
         return;
