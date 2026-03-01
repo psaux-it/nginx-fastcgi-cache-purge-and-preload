@@ -2876,6 +2876,12 @@ function nppp_defaults_on_plugin_activation() {
         'nppp_related_apply_manual'         => 'no',
         'nppp_related_preload_after_manual' => 'no',
         'nppp_cloudflare_apo_sync'          => 'no',
+        'nginx_cache_purge_on_update'       => 'no',
+        'nginx_cache_auto_preload'          => 'no',
+        'nginx_cache_auto_preload_mobile'   => 'no',
+        'nginx_cache_send_mail'             => 'no',
+        'nginx_cache_preload_enable_proxy'  => 'no',
+        'nginx_cache_schedule'              => 'no',
         'nginx_cache_pctnorm_mode'          => 'off',
     );
 
