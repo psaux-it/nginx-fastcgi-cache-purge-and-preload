@@ -337,15 +337,28 @@ function nppp_dashboard_widget() {
         // own 5-min transient.
         $nppp_widget_hits     = get_option( 'nppp_last_known_hits',      false );
         $nppp_widget_scan_at  = get_option( 'nppp_last_hits_scanned_at', false );
-        $nppp_widget_ratio    = false;
         $nppp_ratio_pct       = null;
         $nppp_ratio_hits      = null;
         $nppp_ratio_misses    = null;
         $nppp_ratio_total     = null;
         $nppp_ratio_na        = true;
-        $nppp_ratio_na_reason = 'not_initialized';
 
-        if ( $nppp_widget_hits !== false && function_exists( 'nppp_get_cache_ratio' ) ) {
+        // Checkpoint 1: does a completed preload snapshot exist?
+        // We check this directly — no option dependency needed for this state.
+        $nppp_snapshot_path   = nppp_get_runtime_file( 'nppp-wget-snapshot.log' );
+        $nppp_snapshot_exists = file_exists( $nppp_snapshot_path );
+
+        if ( ! $nppp_snapshot_exists ) {
+            // No snapshot at all — user needs to run Preload All first.
+            $nppp_ratio_na_reason = 'no_snapshot';
+
+        } elseif ( $nppp_widget_hits === false ) {
+            // Snapshot exists but hit count option not yet written.
+            // User needs to visit Status or Advanced tab once.
+            $nppp_ratio_na_reason = 'not_initialized';
+
+        } elseif ( function_exists( 'nppp_get_cache_ratio' ) ) {
+            // Checkpoint 2: both snapshot and hit count are available — compute ratio.
             $nppp_ratio_string = nppp_get_cache_ratio( (int) $nppp_widget_hits );
             if ( preg_match( '/^([\d.]+)%\s*\((\d+)\s+HIT\s*\/\s*(\d+)\s+MISS\s*\/\s*(\d+)\s+total\)/', $nppp_ratio_string, $nppp_m ) ) {
                 $nppp_ratio_pct       = (float) $nppp_m[1];
@@ -355,8 +368,12 @@ function nppp_dashboard_widget() {
                 $nppp_ratio_na        = false;
                 $nppp_ratio_na_reason = '';
             } else {
+                // nppp_get_cache_ratio returned N/A for another reason (empty snapshot, filesystem error).
                 $nppp_ratio_na_reason = 'no_snapshot';
             }
+
+        } else {
+            $nppp_ratio_na_reason = 'no_snapshot';
         }
 
         echo '<div id="nppp-ratio-strip" class="nppp-ratio-strip"'
