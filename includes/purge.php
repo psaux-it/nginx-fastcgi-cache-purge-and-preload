@@ -52,6 +52,9 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
                 return 4;
             }
         } else {
+            // Cache successfully purged — stored hit count is now stale (cache is empty).
+            update_option( 'nppp_last_known_hits',      0,      false );
+            update_option( 'nppp_last_hits_scanned_at', time(), false );
             return 0;
         }
     } else {
@@ -66,7 +69,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     // 30-second ceiling that most PHP-FPM pools ship with, killing the process
     // mid-operation and leaving the purge lock (stored as a wp_options row via
     // WP_Upgrader::create_lock()) permanently orphaned until its TTL expires.
-    //
+
     // set_time_limit(0) resets the countdown to "unlimited" for this request
     // only — it has no effect on other processes or future requests.
     // The @ suppressor silences the E_WARNING that some hardened hosts emit
