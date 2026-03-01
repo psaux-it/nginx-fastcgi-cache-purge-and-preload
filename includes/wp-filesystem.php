@@ -194,12 +194,13 @@ function nppp_wp_purge($directory_path) {
         return $validation;
     }
 
-    // Protected folder names — top-level only, bare name comparison
+    // Protected Nginx cache runtime temp folders
+    // Deleting them on runtime will break Nginx cache completely
     $protected_folders = ['client_temp', 'scgi_temp', 'uwsgi_temp', 'fastcgi_temp', 'proxy_temp'];
 
     // Step 1: Confirm cache exists.
     // LEAVES_ONLY     → SPL yields only files, skips directory entries entirely.
-    // nppp_head_fast  → reads only first 4096 bytes (sufficient to reach KEY: line
+    // nppp_read_head  → reads only first 4096 bytes (sufficient to reach KEY: line
     //                   which sits after the nginx binary file header).
     // break           → stops after the very first match, minimises I/O.
     $has_cache = false;
@@ -207,7 +208,7 @@ function nppp_wp_purge($directory_path) {
         $scan = new RecursiveIteratorIterator(
             new RecursiveCallbackFilterIterator(
                 new RecursiveDirectoryIterator($directory_path, RecursiveDirectoryIterator::SKIP_DOTS),
-                function ($entry) use ($protected_folders) {
+                function ($entry) use (&$protected_folders) {
                     if ($entry->isDir() && in_array($entry->getFilename(), $protected_folders, true)) {
                         return false;
                     }
@@ -217,7 +218,7 @@ function nppp_wp_purge($directory_path) {
             RecursiveIteratorIterator::LEAVES_ONLY
         );
         foreach ($scan as $file) {
-            $head = nppp_head_fast($file->getPathname(), 4096);
+            $head = nppp_read_head($wp_filesystem, $file->getPathname(), 4096);
             if ($head !== '' && preg_match('/^KEY:\s/m', $head)) {
                 $has_cache = true;
                 break;
@@ -250,12 +251,19 @@ function nppp_wp_purge($directory_path) {
                 continue;
             }
 
-            $deleted = $wp_filesystem->delete($entry->getPathname(), true);
+            $entry_path = $entry->getPathname();
+            $deleted = $wp_filesystem->delete($entry_path, true);
+
             if (!$deleted) {
-                return new WP_Error(
-                    'permission_error',
-                    sprintf(__('Permission denied while deleting file or directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $entry->getPathname())
-                );
+                // Re-check after failure, the cache may have been deleted by Nginx's
+                // cache manager or an external process between our detect and delete passes.
+                // Only surface permission_error if the target genuinely still exists.
+                if ($wp_filesystem->is_file($entry_path) || $wp_filesystem->is_dir($entry_path)) {
+                    return new WP_Error(
+                        'permission_error',
+                        sprintf(__('Permission denied while deleting file or directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $entry_path)
+                    );
+                }
             }
         }
     } catch (UnexpectedValueException $e) {
