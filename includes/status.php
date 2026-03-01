@@ -14,27 +14,6 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Fast head readers (minimal I/O)
-if (! function_exists('nppp_head_fast')) {
-    // Uses file_get_contents() length arg (C-level).
-    function nppp_head_fast( $path, $max = 16384 ) {
-        $data = @file_get_contents( $path, false, null, 0, $max );
-        return ($data === false) ? '' : $data;
-    }
-}
-
-if (! function_exists('nppp_read_head')) {
-    // Partial read with WP_Filesystem fallback.
-    function nppp_read_head( $wp_filesystem, $path, $max = 16384 ) {
-        $buf = nppp_head_fast( $path, $max );
-        if ( $buf !== '' ) return $buf;
-
-        // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
-        $all = $wp_filesystem->get_contents( $path );
-        return ( $all === false || $all === '' ) ? '' : substr( $all, 0, $max );
-    }
-}
-
 // To optimize performance and prevent redundancy, we use cached recursive permission checks.
 // This technique stores the results of time-consuming (expensive) permission verifications for reuse.
 // The results are cached for to reduce performance overhead, especially useful when the Nginx cache path is extensive.
