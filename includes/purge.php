@@ -61,6 +61,29 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
 
 // Auto Purge & On page purge operations
 function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purge = false) {
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation and leaving the purge lock (stored as a wp_options row via
+    // WP_Upgrader::create_lock()) permanently orphaned until its TTL expires.
+    //
+    // set_time_limit(0) resets the countdown to "unlimited" for this request
+    // only — it has no effect on other processes or future requests.
+    // The @ suppressor silences the E_WARNING that some hardened hosts emit
+    // when the function appears in disable_functions; the call is otherwise
+    // a safe no-op in that environment.
+
+    // Note: this only disables PHP's own timer. PHP-FPM's independent
+    // request_terminate_timeout and Nginx's fastcgi_read_timeout are enforced
+    // by the FPM master process and the upstream proxy respectively and cannot
+    // be overridden from PHP at runtime.
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0);
+    }
+    if (function_exists('ignore_user_abort')) {
+        ignore_user_abort(true);
+    }
+
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -633,6 +656,29 @@ function nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment) {
 
 // Purge cache operation
 function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = false, $nppp_is_admin_bar = false, $nppp_is_auto_purge = false) {
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation and leaving the purge lock (stored as a wp_options row via
+    // WP_Upgrader::create_lock()) permanently orphaned until its TTL expires.
+
+    // set_time_limit(0) resets the countdown to "unlimited" for this request
+    // only — it has no effect on other processes or future requests.
+    // The @ suppressor silences the E_WARNING that some hardened hosts emit
+    // when the function appears in disable_functions; the call is otherwise
+    // a safe no-op in that environment.
+
+    // Note: this only disables PHP's own timer. PHP-FPM's independent
+    // request_terminate_timeout and Nginx's fastcgi_read_timeout are enforced
+    // by the FPM master process and the upstream proxy respectively and cannot
+    // be overridden from PHP at runtime.
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0);
+    }
+    if (function_exists('ignore_user_abort')) {
+        ignore_user_abort(true);
+    }
+
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
