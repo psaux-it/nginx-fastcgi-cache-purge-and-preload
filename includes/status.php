@@ -945,6 +945,10 @@ function nppp_my_status_html() {
                         <tbody>
                             <?php
                             $nppp_pages_in_cache = nppp_get_in_cache_page_count();
+                            if ( is_numeric( $nppp_pages_in_cache ) ) {
+                                update_option( 'nppp_last_known_hits',      (int) $nppp_pages_in_cache, false );
+                                update_option( 'nppp_last_hits_scanned_at', time(),                     false );
+                            }
                             ?>
                             <tr>
                                 <td class="check"><?php esc_html_e('Pages In Cache Count', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
