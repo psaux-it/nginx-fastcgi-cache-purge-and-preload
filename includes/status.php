@@ -959,6 +959,7 @@ function nppp_my_status_html() {
                                 <td class="check"><?php esc_html_e('Cache Coverage', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppCacheHitRatio">
                                     <span class="dashicons"></span>
+                                    <?php
                                     $nppp_status_ratio = nppp_get_cache_ratio( $nppp_pages_in_cache );
                                     if ( is_array( $nppp_status_ratio ) ) {
                                         $nppp_status_label = number_format( $nppp_status_ratio['ratio'], 1 ) . '%  ('
@@ -969,6 +970,7 @@ function nppp_my_status_html() {
                                     } else {
                                         echo '<span>' . esc_html( $nppp_status_ratio ) . '</span>';
                                     }
+                                    ?>
                                 </td>
                             </tr>
                         </tbody>
