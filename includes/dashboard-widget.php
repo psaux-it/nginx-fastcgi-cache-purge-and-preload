@@ -387,11 +387,11 @@ function nppp_dashboard_widget() {
            . '>';
             // SVG circular gauge  (r = 28 → circumference = 2πr ≈ 175.93)
             echo '<div class="nppp-ratio-gauge" aria-label="' . esc_attr__( 'Cache hit ratio gauge', 'fastcgi-cache-purge-and-preload-nginx' ) . '">';
-                echo '<svg class="nppp-gauge-svg" viewBox="0 0 72 72" width="72" height="72">';
-                    echo '<circle class="nppp-gauge-track"    cx="36" cy="36" r="28" fill="none" stroke-width="7"/>';
-                    echo '<circle class="nppp-gauge-progress" cx="36" cy="36" r="28" fill="none" stroke-width="7"'
-                       . ' stroke-dasharray="175.93" stroke-dashoffset="175.93"'
-                       . ' stroke-linecap="round" transform="rotate(-90 36 36)"/>';
+                echo '<svg class="nppp-gauge-svg" viewBox="0 0 96 96" width="96" height="96">';
+                    echo '<circle class="nppp-gauge-track"    cx="48" cy="48" r="37" fill="none" stroke-width="9"/>';
+                    echo '<circle class="nppp-gauge-progress" cx="48" cy="48" r="37" fill="none" stroke-width="9"'
+                       . ' stroke-dasharray="232.48" stroke-dashoffset="232.48"'
+                       . ' stroke-linecap="round" transform="rotate(-90 48 48)"/>';
                 echo '</svg>';
                 echo '<span class="nppp-gauge-pct" aria-live="polite">&ndash;</span>';
                 // Render the refresh button only when both prerequisites are met:
