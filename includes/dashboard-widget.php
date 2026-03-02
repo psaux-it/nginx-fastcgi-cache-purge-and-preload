@@ -354,24 +354,20 @@ function nppp_dashboard_widget() {
 
         } elseif ( $nppp_widget_hits === false ) {
             // Snapshot exists but hit count option not yet written.
-            // User needs to visit Status or Advanced tab once.
             $nppp_ratio_na_reason = 'not_initialized';
 
         } elseif ( function_exists( 'nppp_get_cache_ratio' ) ) {
-            // Checkpoint 2: both snapshot and hit count are available — compute ratio.
-            $nppp_ratio_string = nppp_get_cache_ratio( (int) $nppp_widget_hits );
-            if ( preg_match( '/^([\d.]+)%\s*\((\d+)\s+Cached\s*\/\s*(\d+)\s+Not Cached\s*\/\s*(\d+)\s+total\)/', $nppp_ratio_string, $nppp_m ) ) {
-                $nppp_ratio_pct       = (float) $nppp_m[1];
-                $nppp_ratio_hits      = (int)   $nppp_m[2];
-                $nppp_ratio_misses    = (int)   $nppp_m[3];
-                $nppp_ratio_total     = (int)   $nppp_m[4];
+            $nppp_ratio_data = nppp_get_cache_ratio( (int) $nppp_widget_hits );
+            if ( is_array( $nppp_ratio_data ) ) {
+                $nppp_ratio_pct       = (float) $nppp_ratio_data['ratio'];
+                $nppp_ratio_hits      = (int)   $nppp_ratio_data['hits'];
+                $nppp_ratio_misses    = (int)   $nppp_ratio_data['misses'];
+                $nppp_ratio_total     = (int)   $nppp_ratio_data['total'];
                 $nppp_ratio_na        = false;
                 $nppp_ratio_na_reason = '';
             } else {
-                // nppp_get_cache_ratio returned N/A for another reason (empty snapshot, filesystem error).
                 $nppp_ratio_na_reason = 'no_snapshot';
             }
-
         } else {
             $nppp_ratio_na_reason = 'no_snapshot';
         }
@@ -543,20 +539,15 @@ function nppp_refresh_cache_ratio_callback() {
         wp_send_json_success( [ 'na' => true, 'na_reason' => 'no_snapshot' ] );
     }
 
-    $ratio_string = nppp_get_cache_ratio( $hits );
+    $ratio_data = nppp_get_cache_ratio( $hits );
 
-    // Parse "87.5% (35 Cached / 40 Not Cached / 40 total)"
-    if ( preg_match(
-        '/^([\d.]+)%\s*\((\d+)\s+Cached\s*\/\s*(\d+)\s+Not Cached\s*\/\s*(\d+)\s+total\)/',
-        $ratio_string,
-        $m
-    ) ) {
+    if ( is_array( $ratio_data ) ) {
         wp_send_json_success( [
             'na'         => false,
-            'ratio'      => (float) $m[1],
-            'hits'       => (int)   $m[2],
-            'misses'     => (int)   $m[3],
-            'total'      => (int)   $m[4],
+            'ratio'      => (float) $ratio_data['ratio'],
+            'hits'       => (int)   $ratio_data['hits'],
+            'misses'     => (int)   $ratio_data['misses'],
+            'total'      => (int)   $ratio_data['total'],
             'scanned_at' => time(),
         ] );
     }
