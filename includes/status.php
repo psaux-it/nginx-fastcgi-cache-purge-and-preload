@@ -519,9 +519,9 @@ function nppp_get_in_cache_page_count() {
 }
 
 /**
- * Calculate live cache hit ratio.
+ * Calculate live cache coverage.
  *
- * Hit count  : pre-computed by nppp_get_in_cache_page_count() and passed in
+ * Cache count  : pre-computed by nppp_get_in_cache_page_count() and passed in
  *              to avoid a second expensive directory scan.
  * Total count: derived from the wget snapshot (nppp-wget-snapshot.log) via
  *              nppp_parse_wget_log_urls(), which is already used by the
@@ -529,10 +529,10 @@ function nppp_get_in_cache_page_count() {
  *              The snapshot is only ever written when a full Preload run
  *              completes, so it always represents a coherent, complete baseline.
  *
- * Ratio = HITs ÷ Total × 100
+ * Coverage = Caches ÷ Total × 100
  * Meaning: "of every URL the crawler discovered, what % is currently in cache."
  *
- * Returns a formatted string like "87.5% (35 HIT / 40 MISS / 40 total)" or a
+ * Returns a formatted string like "87.5% (35 Cached / 40 Not Cached / 40 total)" or a
  * descriptive string when the data is not yet available.
  *
  */
@@ -586,8 +586,8 @@ function nppp_get_cache_ratio( $hits_count ) {
     $ratio_label = number_format( $ratio, 1 ) . '%';
 
     return sprintf(
-        /* Translators: 1: percentage e.g. 87.5%, 2: hit count, 3: miss count, 4: total count */
-        __( '%1$s  (%2$d HIT / %3$d MISS / %4$d total)', 'fastcgi-cache-purge-and-preload-nginx' ),
+        /* Translators: 1: percentage e.g. 87.5%, 2: cached count, 3: not cached count, 4: total count */
+        __( '%1$s  (%2$d Cached / %3$d Not Cached / %4$d total)', 'fastcgi-cache-purge-and-preload-nginx' ),
         $ratio_label,
         $hits,
         $misses,
@@ -958,7 +958,7 @@ function nppp_my_status_html() {
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check"><?php esc_html_e('Cache Hit Ratio', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="check"><?php esc_html_e('Cache Coverage', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppCacheHitRatio">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html( nppp_get_cache_ratio($nppp_pages_in_cache)); ?></span>
