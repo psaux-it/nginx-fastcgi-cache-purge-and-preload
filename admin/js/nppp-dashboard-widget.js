@@ -125,7 +125,7 @@
         // Cache Hit Ratio gauge — animate from values baked in by PHP server-side.
         // Also handles the refresh button AJAX re-scan.
         (function () {
-            var CIRCUMFERENCE = 175.93; // 2 * π * 28
+            var CIRCUMFERENCE = 232.48; // 2 * π * 37
             var __ = wp.i18n.__;
             var _n = wp.i18n._n;
 
@@ -171,19 +171,26 @@
                 });
                 $pct.css({ color: color, 'font-size': '' });
 
-                var html =
-                    '<span class="nppp-ratio-hit">&#x2714; '  + hits   + ' ' + __( 'HIT',   'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
-                    '<span class="nppp-ratio-sep"> &nbsp;/&nbsp; </span>'                                                                           +
-                    '<span class="nppp-ratio-miss">&#x2718; ' + misses + ' ' + __( 'MISS',  'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
-                    '<span class="nppp-ratio-sep"> &nbsp;/&nbsp; </span>'                                                                           +
-                    '<span class="nppp-ratio-total">'          + total  + ' ' + __( 'total', 'fastcgi-cache-purge-and-preload-nginx' ) + '</span>';
+                var statsHtml =
+                    '<div class="nppp-ratio-stats-row">' +
+                        '<span class="nppp-ratio-hit">&#x2714; '  + hits   + ' ' + __( 'HIT',   'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
+                        '<span class="nppp-ratio-sep"> &nbsp;/&nbsp; </span>' +
+                        '<span class="nppp-ratio-miss">&#x2718; ' + misses + ' ' + __( 'MISS',  'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
+                        '<span class="nppp-ratio-sep"> &nbsp;/&nbsp; </span>' +
+                        '<span class="nppp-ratio-total">'          + total  + ' ' + __( 'total', 'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
+                    '</div>';
+
+                var ageHtml = '';
 
                 if (scannedAt) {
-                    html += '<span class="nppp-ratio-age" title="' + __( 'Last scanned via Status or Advanced tab', 'fastcgi-cache-purge-and-preload-nginx' ) + '">'
-                          + '&#x23F1; ' + humanizeAge(scannedAt) + '</span>';
+                    ageHtml = '<div class="nppp-ratio-age-row">' +
+                        '<span class="nppp-ratio-age" title="' + __( 'Last scanned via Status or Advanced tab', 'fastcgi-cache-purge-and-preload-nginx' ) + '">' +
+                        '&#x23F1; ' + humanizeAge(scannedAt) +
+                        '</span>' +
+                        '</div>';
                 }
 
-                $detail.html(html);
+                $detail.html(statsHtml + ageHtml);
                 $strip.css('border-left-color', color);
             }
 
@@ -199,7 +206,7 @@
 
             // Initial page-load render
             if (isNa) {
-                $pct.text('N/A').css('font-size', '10px');
+                $pct.text('N/A').css('font-size', '11px');
                 var naMsg = (naReason === 'not_initialized')
                     ? __( 'Open Status or Advanced tab once to initialize.', 'fastcgi-cache-purge-and-preload-nginx' )
                     : __( 'Run a full Preload to generate a snapshot.',      'fastcgi-cache-purge-and-preload-nginx' );
@@ -242,7 +249,7 @@
 
                         if (d.na) {
                             // Snapshot disappeared or became empty after the refresh
-                            $strip.find('.nppp-gauge-pct').text('N/A').css('font-size', '10px');
+                            $strip.find('.nppp-gauge-pct').text('N/A').css('font-size', '11px');
                             $strip.find('#nppp-ratio-detail').html(
                                 '<span class="nppp-ratio-na">' +
                                 __( 'Run a full Preload to generate a snapshot.', 'fastcgi-cache-purge-and-preload-nginx' ) +
