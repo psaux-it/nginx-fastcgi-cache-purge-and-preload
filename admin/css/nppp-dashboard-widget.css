@@ -212,6 +212,7 @@
     border-left: 5px solid #ddd;
     transition: border-left-color 0.5s ease;
     min-height: 90px;
+    margin-bottom: 8px;
 }
 
 .nppp-ratio-gauge {
@@ -329,9 +330,11 @@
         align-items: center;
         text-align: center;
         border-left: none;
-        border-top: 5px solid #ddd;
+        border-top: 1px solid #e0e0e0;
+        border-bottom: 5px solid #ddd;
         padding: 16px 14px 18px;
         gap: 10px;
+        margin-bottom: 15px;
     }
 
     .nppp-ratio-gauge {
