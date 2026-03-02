@@ -581,18 +581,16 @@ function nppp_get_cache_ratio( $hits_count ) {
     // We cap the ratio at 100 % to keep it intuitive.
     $ratio = min( 100.0, ( $hits / $total ) * 100.0 );
 
-    // Build a human-friendly label with context.
-    $misses      = max( 0, $total - $hits );
-    $ratio_label = number_format( $ratio, 1 ) . '%';
+    // Return raw numbers — callers format for display themselves.
+    // This prevents __() translations from silently breaking regex parsers.
+    $misses = max( 0, $total - $hits );
 
-    return sprintf(
-        /* Translators: 1: percentage e.g. 87.5%, 2: cached count, 3: not cached count, 4: total count */
-        __( '%1$s  (%2$d Cached / %3$d Not Cached / %4$d total)', 'fastcgi-cache-purge-and-preload-nginx' ),
-        $ratio_label,
-        $hits,
-        $misses,
-        $total
-    );
+    return [
+        'ratio'  => round( $ratio, 1 ),
+        'hits'   => $hits,
+        'misses' => $misses,
+        'total'  => $total,
+    ];
 }
 
 // Function to check for same Nginx cache path for multiple instance
@@ -961,7 +959,16 @@ function nppp_my_status_html() {
                                 <td class="check"><?php esc_html_e('Cache Coverage', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppCacheHitRatio">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html( nppp_get_cache_ratio($nppp_pages_in_cache)); ?></span>
+                                    $nppp_status_ratio = nppp_get_cache_ratio( $nppp_pages_in_cache );
+                                    if ( is_array( $nppp_status_ratio ) ) {
+                                        $nppp_status_label = number_format( $nppp_status_ratio['ratio'], 1 ) . '%  ('
+                                            . $nppp_status_ratio['hits']   . ' ' . __( 'Cached',     'fastcgi-cache-purge-and-preload-nginx' ) . ' / '
+                                            . $nppp_status_ratio['misses'] . ' ' . __( 'Not Cached', 'fastcgi-cache-purge-and-preload-nginx' ) . ' / '
+                                            . $nppp_status_ratio['total']  . ' ' . __( 'total',      'fastcgi-cache-purge-and-preload-nginx' ) . ')';
+                                        echo '<span>' . esc_html( $nppp_status_label ) . '</span>';
+                                    } else {
+                                        echo '<span>' . esc_html( $nppp_status_ratio ) . '</span>';
+                                    }
                                 </td>
                             </tr>
                         </tbody>
