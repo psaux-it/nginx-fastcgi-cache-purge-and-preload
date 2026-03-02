@@ -274,13 +274,13 @@
                         var d = response.data;
 
                         if (d.na) {
-                            // Snapshot disappeared or became empty after the refresh
+                            var naMsg;
+                            if      (d.na_reason === 'path_not_found') { naMsg = __( 'Cache path not found. Check Nginx cache path setting.',  'fastcgi-cache-purge-and-preload-nginx' ); }
+                            else if (d.na_reason === 'undetermined')   { naMsg = __( 'Cache unreadable. Check cache directory permissions.',   'fastcgi-cache-purge-and-preload-nginx' ); }
+                            else if (d.na_reason === 'regex_error')    { naMsg = __( 'Cache key regex error. Check Advanced Options.',         'fastcgi-cache-purge-and-preload-nginx' ); }
+                            else                                       { naMsg = __( 'Run a full Preload to generate a snapshot.',             'fastcgi-cache-purge-and-preload-nginx' ); }
                             $strip.find('.nppp-gauge-pct').text('N/A').css('font-size', '11px');
-                            $strip.find('#nppp-ratio-detail').html(
-                                '<span class="nppp-ratio-na">' +
-                                __( 'Run a full Preload to generate a snapshot.', 'fastcgi-cache-purge-and-preload-nginx' ) +
-                                '</span>'
-                            );
+                            $strip.find('#nppp-ratio-detail').html('<span class="nppp-ratio-na">' + naMsg + '</span>');
                             $strip.find('.nppp-gauge-progress').attr('stroke', '#ccc');
                             $strip.css({ 'border-left-color': '#ddd', 'border-bottom-color': '#ddd' });
                         } else {
