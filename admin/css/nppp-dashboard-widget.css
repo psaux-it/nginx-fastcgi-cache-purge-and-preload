@@ -410,3 +410,30 @@
     opacity: 0.25;
     transition: opacity 0.25s ease;
 }
+
+/* Arc dims when data is stale >30 min */
+.nppp-gauge-progress.nppp-gauge-stale {
+    opacity: 0.35;
+    transition: opacity 0.4s ease;
+}
+
+/* Refresh button pulses when data is stale >30 min */
+.nppp-ratio-refresh.nppp-btn-pulse {
+    animation: nppp-btn-pulse 2s ease-in-out infinite;
+    border-color: #f0a500;
+}
+.nppp-ratio-refresh.nppp-btn-pulse .dashicons {
+    color: #f0a500;
+}
+
+@keyframes nppp-btn-pulse {
+    0%, 100% { box-shadow: 0 0 0 0   rgba(240,165,0,0.5); }
+    50%       { box-shadow: 0 0 0 6px rgba(240,165,0,0);   }
+}
+
+/* Age badge turns amber */
+.nppp-ratio-age.nppp-age-warn {
+    background: #fff8e6;
+    border-color: #f0a500;
+    color: #b07800;
+}
