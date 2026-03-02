@@ -394,6 +394,14 @@ function nppp_dashboard_widget() {
                        . ' stroke-linecap="round" transform="rotate(-90 36 36)"/>';
                 echo '</svg>';
                 echo '<span class="nppp-gauge-pct" aria-live="polite">&ndash;</span>';
+                // Render the refresh button only when both prerequisites are met:
+                if ( $nppp_snapshot_exists && $nppp_widget_hits !== false ) {
+                    echo '<button type="button" class="nppp-ratio-refresh"'
+                       . ' title="'      . esc_attr__( 'Refresh cache hit ratio', 'fastcgi-cache-purge-and-preload-nginx' ) . '"'
+                       . ' aria-label="' . esc_attr__( 'Refresh',                 'fastcgi-cache-purge-and-preload-nginx' ) . '">'
+                       . '<span class="dashicons dashicons-update"></span>'
+                       . '</button>';
+                }
             echo '</div>';
             // Right-side text block
             echo '<div class="nppp-ratio-info">';
@@ -495,4 +503,56 @@ function nppp_add_dashboard_widget() {
         __('NPP - Nginx Cache Status', 'fastcgi-cache-purge-and-preload-nginx'),
         'nppp_dashboard_widget'
     );
+}
+
+// AJAX handler — refresh cache hit ratio on demand from the dashboard widget.
+function nppp_refresh_cache_ratio_callback() {
+    // Capability check
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( __( 'Permission denied.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
+    }
+
+    // Nonce check
+    if ( empty( $_POST['_wpnonce'] ) ||
+         ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'nppp_refresh_cache_ratio' ) ) {
+        wp_send_json_error( __( 'Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    // Allow long-running scans on large caches
+    if ( function_exists( 'set_time_limit' ) ) {
+        @set_time_limit( 0 );
+    }
+
+    // Fresh HITs scan
+    $hits = nppp_get_in_cache_page_count();
+
+    if ( is_numeric( $hits ) ) {
+        update_option( 'nppp_last_known_hits',      (int) $hits, false );
+        update_option( 'nppp_last_hits_scanned_at', time(),      false );
+    }
+
+    if ( ! function_exists( 'nppp_get_cache_ratio' ) ) {
+        wp_send_json_success( [ 'na' => true, 'na_reason' => 'no_snapshot' ] );
+    }
+
+    $ratio_string = nppp_get_cache_ratio( $hits );
+
+    // Parse "87.5% (35 HIT / 40 MISS / 40 total)"
+    if ( preg_match(
+        '/^([\d.]+)%\s*\((\d+)\s+HIT\s*\/\s*(\d+)\s+MISS\s*\/\s*(\d+)\s+total\)/',
+        $ratio_string,
+        $m
+    ) ) {
+        wp_send_json_success( [
+            'na'         => false,
+            'ratio'      => (float) $m[1],
+            'hits'       => (int)   $m[2],
+            'misses'     => (int)   $m[3],
+            'total'      => (int)   $m[4],
+            'scanned_at' => time(),
+        ] );
+    }
+
+    // nppp_get_cache_ratio returned N/A (no snapshot, empty snapshot, etc.)
+    wp_send_json_success( [ 'na' => true, 'na_reason' => 'no_snapshot' ] );
 }
