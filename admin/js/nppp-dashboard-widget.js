@@ -146,6 +146,30 @@
                 return days + ' ' + _n( 'day ago', 'days ago', days, 'fastcgi-cache-purge-and-preload-nginx' );
             }
 
+            var STALE_WARN_SEC  = 5  * 60;
+            var STALE_PULSE_SEC = 30 * 60;
+
+            function checkStaleness($strip, scannedAt) {
+                if (!scannedAt) { return; }
+                var age = Math.floor(Date.now() / 1000) - scannedAt;
+
+                var $btn = $strip.find('.nppp-ratio-refresh');
+                var $arc = $strip.find('.nppp-gauge-progress');
+                var $age = $strip.find('.nppp-ratio-age');
+
+                $btn.removeClass('nppp-btn-pulse');
+                $arc.removeClass('nppp-gauge-stale');
+                $age.removeClass('nppp-age-warn');
+
+                if (age > STALE_PULSE_SEC) {
+                    $arc.addClass('nppp-gauge-stale');
+                    $btn.addClass('nppp-btn-pulse');
+                    $age.addClass('nppp-age-warn');
+                } else if (age > STALE_WARN_SEC) {
+                    $age.addClass('nppp-age-warn');
+                }
+            }
+
             // Shared renderer — called on page load and after every AJAX refresh.
             function animateGauge($strip, pct, hits, misses, total, scannedAt) {
                 var color     = ratioColor(pct);
@@ -208,7 +232,7 @@
             if (isNa) {
                 $pct.text('N/A').css('font-size', '11px');
                 var naMsg = (naReason === 'not_initialized')
-                    ? __( 'Open Status or Advanced tab once to initialize.', 'fastcgi-cache-purge-and-preload-nginx' )
+                    ? __( 'Click \u21BB to scan and initialize..', 'fastcgi-cache-purge-and-preload-nginx' )
                     : __( 'Run a full Preload to generate a snapshot.',      'fastcgi-cache-purge-and-preload-nginx' );
                 $detail.html('<span class="nppp-ratio-na">' + naMsg + '</span>');
                 $progress.attr('stroke', '#ccc');
@@ -221,6 +245,7 @@
                     parseInt($strip.data('total'),      10),
                     parseInt($strip.data('scanned-at'), 10)
                 );
+                checkStaleness($strip, parseInt($strip.data('scanned-at'), 10));
             }
 
             // Refresh button — triggers a live re-scan via AJAX without page reload.
@@ -259,6 +284,7 @@
                             $strip.css('border-left-color', '#ddd');
                         } else {
                             animateGauge($strip, d.ratio, d.hits, d.misses, d.total, d.scanned_at);
+                            checkStaleness($strip, d.scanned_at);
                         }
                     },
                     // Silent fail — existing gauge data stays intact on network error
