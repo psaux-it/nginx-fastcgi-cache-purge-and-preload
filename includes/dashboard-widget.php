@@ -331,7 +331,7 @@ function nppp_dashboard_widget() {
             echo '</a>';
         echo '</div>';
 
-        // Cache Hit Ratio.
+        // Cache Coverage Ratio.
         // Read the hit count stored by the Status or Advanced tab (zero scan cost).
         // nppp_get_cache_ratio() derives the total from the wget snapshot log via its
         // own 5-min transient.
@@ -386,7 +386,7 @@ function nppp_dashboard_widget() {
            . ' data-scanned-at="'. esc_attr( $nppp_widget_scan_at ? (string) $nppp_widget_scan_at : '' ) . '"'
            . '>';
             // SVG circular gauge  (r = 28 → circumference = 2πr ≈ 175.93)
-            echo '<div class="nppp-ratio-gauge" aria-label="' . esc_attr__( 'Cache hit ratio gauge', 'fastcgi-cache-purge-and-preload-nginx' ) . '">';
+            echo '<div class="nppp-ratio-gauge" aria-label="' . esc_attr__( 'Cache coverage ratio gauge', 'fastcgi-cache-purge-and-preload-nginx' ) . '">';
                 echo '<svg class="nppp-gauge-svg" viewBox="0 0 96 96" width="96" height="96">';
                     echo '<circle class="nppp-gauge-track"    cx="48" cy="48" r="37" fill="none" stroke-width="9"/>';
                     echo '<circle class="nppp-gauge-progress" cx="48" cy="48" r="37" fill="none" stroke-width="9"'
@@ -398,7 +398,7 @@ function nppp_dashboard_widget() {
                 // initialize the hits option if it hasn't been written yet.
                 if ( $nppp_snapshot_exists ) {
                     echo '<button type="button" class="nppp-ratio-refresh"'
-                       . ' title="'      . esc_attr__( 'Refresh cache hit ratio', 'fastcgi-cache-purge-and-preload-nginx' ) . '"'
+                       . ' title="'      . esc_attr__( 'Refresh cache coverage ratio', 'fastcgi-cache-purge-and-preload-nginx' ) . '"'
                        . ' aria-label="' . esc_attr__( 'Refresh',                 'fastcgi-cache-purge-and-preload-nginx' ) . '">'
                        . '<span class="dashicons dashicons-update"></span>'
                        . '</button>';
@@ -406,7 +406,7 @@ function nppp_dashboard_widget() {
             echo '</div>';
             // Right-side text block
             echo '<div class="nppp-ratio-info">';
-                echo '<span class="nppp-ratio-title">' . esc_html__( 'Cache Hit Ratio', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>';
+                echo '<span class="nppp-ratio-title">' . esc_html__( 'CACHE COVERAGE', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>';
                 echo '<span id="nppp-ratio-detail" class="nppp-ratio-detail"></span>';
             echo '</div>';
         echo '</div>';
@@ -506,7 +506,7 @@ function nppp_add_dashboard_widget() {
     );
 }
 
-// AJAX handler — refresh cache hit ratio on demand from the dashboard widget.
+// AJAX handler — refresh cache coverage ratio on demand from the dashboard widget.
 function nppp_refresh_cache_ratio_callback() {
     // Capability check
     if ( ! current_user_can( 'manage_options' ) ) {
