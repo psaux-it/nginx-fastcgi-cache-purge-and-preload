@@ -165,6 +165,7 @@
                     $arc.addClass('nppp-gauge-stale');
                     $btn.addClass('nppp-btn-pulse');
                     $age.addClass('nppp-age-warn');
+                    $strip.css({ 'border-left-color': '#f0a500', 'border-bottom-color': '#f0a500' });
                 } else if (age > STALE_WARN_SEC) {
                     $age.addClass('nppp-age-warn');
                 }
@@ -215,7 +216,7 @@
                 }
 
                 $detail.html(statsHtml + ageHtml);
-                $strip.css('border-left-color', color);
+                $strip.css({ 'border-left-color': color, 'border-bottom-color': color });
             }
 
             var $strip = $('#nppp-ratio-strip');
@@ -281,7 +282,7 @@
                                 '</span>'
                             );
                             $strip.find('.nppp-gauge-progress').attr('stroke', '#ccc');
-                            $strip.css('border-left-color', '#ddd');
+                            $strip.css({ 'border-left-color': '#ddd', 'border-bottom-color': '#ddd' });
                         } else {
                             animateGauge($strip, d.ratio, d.hits, d.misses, d.total, d.scanned_at);
                             checkStaleness($strip, d.scanned_at);
