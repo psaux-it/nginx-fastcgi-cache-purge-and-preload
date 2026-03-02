@@ -360,7 +360,7 @@ function nppp_dashboard_widget() {
         } elseif ( function_exists( 'nppp_get_cache_ratio' ) ) {
             // Checkpoint 2: both snapshot and hit count are available — compute ratio.
             $nppp_ratio_string = nppp_get_cache_ratio( (int) $nppp_widget_hits );
-            if ( preg_match( '/^([\d.]+)%\s*\((\d+)\s+HIT\s*\/\s*(\d+)\s+MISS\s*\/\s*(\d+)\s+total\)/', $nppp_ratio_string, $nppp_m ) ) {
+            if ( preg_match( '/^([\d.]+)%\s*\((\d+)\s+Cached\s*\/\s*(\d+)\s+Not Cached\s*\/\s*(\d+)\s+total\)/', $nppp_ratio_string, $nppp_m ) ) {
                 $nppp_ratio_pct       = (float) $nppp_m[1];
                 $nppp_ratio_hits      = (int)   $nppp_m[2];
                 $nppp_ratio_misses    = (int)   $nppp_m[3];
@@ -545,9 +545,9 @@ function nppp_refresh_cache_ratio_callback() {
 
     $ratio_string = nppp_get_cache_ratio( $hits );
 
-    // Parse "87.5% (35 HIT / 40 MISS / 40 total)"
+    // Parse "87.5% (35 Cached / 40 Not Cached / 40 total)"
     if ( preg_match(
-        '/^([\d.]+)%\s*\((\d+)\s+HIT\s*\/\s*(\d+)\s+MISS\s*\/\s*(\d+)\s+total\)/',
+        '/^([\d.]+)%\s*\((\d+)\s+Cached\s*\/\s*(\d+)\s+Not Cached\s*\/\s*(\d+)\s+total\)/',
         $ratio_string,
         $m
     ) ) {
