@@ -184,7 +184,7 @@
 
                 if (scannedAt) {
                     ageHtml = '<div class="nppp-ratio-age-row">' +
-                        '<span class="nppp-ratio-age" title="' + __( 'Last scanned via Status or Advanced tab', 'fastcgi-cache-purge-and-preload-nginx' ) + '">' +
+                        '<span class="nppp-ratio-age" title="' + __( 'Last refreshed', 'fastcgi-cache-purge-and-preload-nginx' ) + '">' +
                         '&#x23F1; ' + humanizeAge(scannedAt) +
                         '</span>' +
                         '</div>';
