@@ -198,11 +198,9 @@
 
                 var statsHtml =
                     '<div class="nppp-ratio-stats-row">' +
-                        '<span class="nppp-ratio-hit">&#x2714; '  + hits   + ' ' + __( 'Cached',   'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
+                        '<span class="nppp-ratio-hit">&#x2714; '  + hits   + ' ' + __( 'Cached',     'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
                         '<span class="nppp-ratio-sep"> &nbsp;/&nbsp; </span>' +
                         '<span class="nppp-ratio-miss">&#x2718; ' + misses + ' ' + __( 'Not Cached',  'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
-                        '<span class="nppp-ratio-sep"> &nbsp;/&nbsp; </span>' +
-                        '<span class="nppp-ratio-total">'          + total  + ' ' + __( 'total', 'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
                     '</div>';
 
                 var ageHtml = '';
@@ -212,7 +210,9 @@
                         '<span class="nppp-ratio-age" title="' + __( 'Last refreshed', 'fastcgi-cache-purge-and-preload-nginx' ) + '">' +
                         '&#x23F1; ' + humanizeAge(scannedAt) +
                         '</span>' +
-                        '</div>';
+                        '<span class="nppp-ratio-sep"> &nbsp;&middot;&nbsp; </span>' +
+                        '<span class="nppp-ratio-total">' + total + ' ' + __( 'total', 'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
+                    '</div>';
                 }
 
                 $detail.html(statsHtml + ageHtml);
