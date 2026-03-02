@@ -301,13 +301,13 @@
 
 .nppp-ratio-hit   { color: #3CB371; font-weight: 700; }
 .nppp-ratio-miss  { color: #d9534f; font-weight: 700; }
-.nppp-ratio-total { color: #777; }
+.nppp-ratio-total { color: #555; font-weight: 700; }
 .nppp-ratio-sep   { color: #bbb; }
 
 .nppp-ratio-na {
-    color: #888;
+    color: #666;
     font-style: italic;
-    font-size: 11.5px;
+    font-size: 12.5px;
 }
 
 .nppp-ratio-age {
