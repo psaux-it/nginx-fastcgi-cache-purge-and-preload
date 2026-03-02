@@ -530,6 +530,13 @@ function nppp_refresh_cache_ratio_callback() {
     if ( is_numeric( $hits ) ) {
         update_option( 'nppp_last_known_hits',      (int) $hits, false );
         update_option( 'nppp_last_hits_scanned_at', time(),      false );
+    } elseif ( in_array( $hits, [ 'Not Found', 'Undetermined', 'RegexError' ], true ) ) {
+        $na_reason_map = [
+            'Not Found'    => 'path_not_found',
+            'Undetermined' => 'undetermined',
+            'RegexError'   => 'regex_error',
+        ];
+        wp_send_json_success( [ 'na' => true, 'na_reason' => $na_reason_map[ $hits ] ] );
     }
 
     if ( ! function_exists( 'nppp_get_cache_ratio' ) ) {
