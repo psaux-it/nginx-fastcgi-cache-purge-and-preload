@@ -394,8 +394,9 @@ function nppp_dashboard_widget() {
                        . ' stroke-linecap="round" transform="rotate(-90 48 48)"/>';
                 echo '</svg>';
                 echo '<span class="nppp-gauge-pct" aria-live="polite">&ndash;</span>';
-                // Render the refresh button only when both prerequisites are met:
-                if ( $nppp_snapshot_exists && $nppp_widget_hits !== false ) {
+                // Show refresh whenever a snapshot exists — clicking it will also
+                // initialize the hits option if it hasn't been written yet.
+                if ( $nppp_snapshot_exists ) {
                     echo '<button type="button" class="nppp-ratio-refresh"'
                        . ' title="'      . esc_attr__( 'Refresh cache hit ratio', 'fastcgi-cache-purge-and-preload-nginx' ) . '"'
                        . ' aria-label="' . esc_attr__( 'Refresh',                 'fastcgi-cache-purge-and-preload-nginx' ) . '">'
