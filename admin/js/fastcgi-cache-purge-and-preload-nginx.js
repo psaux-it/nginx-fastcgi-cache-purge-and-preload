@@ -767,6 +767,28 @@ $(document).ready(function() {
                 </tr>`;
             }
 
+            // PHP-FPM pool pressure
+            if ( data.fpm_active !== null && data.fpm_active !== undefined ) {
+                const total       = ( data.fpm_active || 0 ) + ( data.fpm_idle || 0 );
+                const queueed     = data.fpm_listen_queue || 0;
+                const maxHit      = data.fpm_max_children || 0;
+                const fpmColor    = queueed > 0 ? '#d63638'
+                                  : maxHit  > 0 ? '#b45309'
+                                  : '#16a34a';
+                const queueBadge  = queueed > 0
+                    ? `<span style="color:#d63638;font-weight:bold;margin-left:6px;">⚠ ${queueed} queued</span>`
+                    : '';
+                rows += `<tr>
+                    <td class="check">${__( 'PHP-FPM Workers', 'fastcgi-cache-purge-and-preload-nginx' )}</td>
+                    <td class="status">
+                        ${icon( 'dashicons-networking', fpmColor )}
+                        <span style="color:${fpmColor};font-weight:bold;">${data.fpm_active} active / ${data.fpm_idle} idle</span>
+                        <span style="color:#9ca3af;font-size:12px;margin-left:4px;">(${total} total)</span>
+                        ${queueBadge}
+                    </td>
+                </tr>`;
+            }
+
             const html = `
                 <table>
                     <thead>
