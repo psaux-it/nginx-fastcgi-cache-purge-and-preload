@@ -3644,7 +3644,8 @@ function npppupdateStatus() {
         "#npppBindfsVersion",
         "#nppppermIsolation",
         "#npppcpulimitStatus",
-        "#npppsafexecStatus"
+        "#npppsafexecStatus",
+        "#npppCacheDiskSize"
     ];
 
     // Verify all elements are in the DOM
@@ -3766,6 +3767,58 @@ function npppupdateStatus() {
         ratioCell.textContent = '';
         ratioCell.appendChild(iconSpan);
         ratioCell.appendChild(textSpan);
+    })();
+
+    // Cache Disk Size colour-band (low usage = good, high usage = bad)
+    (function () {
+        var diskCell = document.getElementById('npppCacheDiskSize');
+        if (!diskCell) { return; }
+
+        diskCell.style.fontSize = '14px';
+
+        var rawText  = diskCell.textContent.trim();
+        var iconSpan = document.createElement('span');
+        var diskClass = 'disk-na';
+        var displayText = ' ' + rawText;
+
+        // Extract trailing percentage
+        var pctMatch = rawText.match(/^(\d+(?:\.\d+)?)\s*%/);
+        if (pctMatch) {
+            var pct = parseFloat(pctMatch[1]);
+            if (pct < 50) {
+                diskClass = 'disk-low';
+                iconSpan.classList.add('dashicons', 'dashicons-yes');
+                iconSpan.style.color = '#008000';
+            } else if (pct < 80) {
+                diskClass = 'disk-medium';
+                iconSpan.classList.add('dashicons', 'dashicons-warning');
+                iconSpan.style.color = '#e69500';
+            } else {
+                diskClass = 'disk-high';
+                iconSpan.classList.add('dashicons', 'dashicons-no');
+                iconSpan.style.color = '#ff0000';
+            }
+        } else if (rawText === 'Unavailable') {
+            iconSpan.classList.add('dashicons', 'dashicons-clock');
+            iconSpan.style.color = '#e69500';
+        } else {
+            iconSpan.classList.add('dashicons', 'dashicons-clock');
+            iconSpan.style.color = '#72777c';
+        }
+
+        iconSpan.style.fontSize = '20px';
+        iconSpan.style.width    = '20px';
+        iconSpan.style.height   = '20px';
+
+        var textSpan          = document.createElement('span');
+        textSpan.textContent  = displayText;
+        textSpan.style.color  = iconSpan.style.color;
+        textSpan.style.fontWeight = '700';
+
+        diskCell.classList.add(diskClass);
+        diskCell.textContent = '';
+        diskCell.appendChild(iconSpan);
+        diskCell.appendChild(textSpan);
     })();
 
     // Fetch and update php process owner
