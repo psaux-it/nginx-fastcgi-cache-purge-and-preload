@@ -136,7 +136,44 @@ function nppp_nginx_cache_preload_progress($request) {
     // Get URL count
     $est_total = nppp_get_estimated_url_count();
 
+    // Server health — all reads from /proc virtual FS, near-zero cost
+    $load       = function_exists( 'sys_getloadavg' ) ? sys_getloadavg() : [ 0, 0, 0 ];
+    $load_1     = round( $load[0], 2 );
+    $load_5     = round( $load[1], 2 );
+
+    // Real server CPU count from /proc/cpuinfo
+    $cpu_count = 1;
+    if ( is_readable( '/proc/cpuinfo' ) ) {
+        $cpuinfo = @file_get_contents( '/proc/cpuinfo' );
+        if ( $cpuinfo !== false ) {
+            preg_match_all( '/^processor/m', $cpuinfo, $cpu_matches );
+            $cpu_count = max( 1, count( $cpu_matches[0] ) );
+        }
+    }
+
+    // System RAM from /proc/meminfo — MemAvailable
+    $mem_total_mb = 0;
+    $mem_avail_mb = 0;
+    $swap_total_mb = 0;
+    $swap_free_mb  = 0;
+    if ( is_readable( '/proc/meminfo' ) ) {
+        $meminfo = @file_get_contents( '/proc/meminfo' );
+        if ( $meminfo !== false ) {
+            if ( preg_match( '/MemTotal:\s+(\d+)\s+kB/i',     $meminfo, $m ) ) $mem_total_mb  = round( $m[1] / 1024, 0 );
+            if ( preg_match( '/MemAvailable:\s+(\d+)\s+kB/i', $meminfo, $m ) ) $mem_avail_mb  = round( $m[1] / 1024, 0 );
+            if ( preg_match( '/SwapTotal:\s+(\d+)\s+kB/i',    $meminfo, $m ) ) $swap_total_mb = round( $m[1] / 1024, 0 );
+            if ( preg_match( '/SwapFree:\s+(\d+)\s+kB/i',     $meminfo, $m ) ) $swap_free_mb  = round( $m[1] / 1024, 0 );
+        }
+    }
+
     return new WP_REST_Response([
+        'load_1'        => $load_1,
+        'load_5'        => $load_5,
+        'cpu_count'     => $cpu_count,
+        'mem_total_mb'  => $mem_total_mb,
+        'mem_avail_mb'  => $mem_avail_mb,
+        'swap_total_mb' => $swap_total_mb,
+        'swap_used_mb'  => $swap_total_mb - $swap_free_mb,
         'status' => $is_running ? 'running' : 'done',
         'checked' => $checked,
         'errors' => $errors,
