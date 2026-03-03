@@ -166,23 +166,46 @@ function nppp_nginx_cache_preload_progress($request) {
         }
     }
 
+    // PHP-FPM pool status
+    // Runs from inside the FPM process itself, no HTTP request, no socket, zero overhead
+    $fpm_active          = null;
+    $fpm_idle            = null;
+    $fpm_listen_queue    = null;
+    $fpm_max_children    = null;
+    $fpm_slow_requests   = null;
+    if ( function_exists( 'fpm_get_status' ) ) {
+        $fpm = fpm_get_status();
+        if ( is_array( $fpm ) ) {
+            $fpm_active        = $fpm['active-processes']       ?? null;
+            $fpm_idle          = $fpm['idle-processes']         ?? null;
+            $fpm_listen_queue  = $fpm['listen-queue']           ?? null;
+            $fpm_max_children  = $fpm['max-children-reached']   ?? null;
+            $fpm_slow_requests = $fpm['slow-requests']          ?? null;
+        }
+    }
+
     return new WP_REST_Response([
-        'load_1'        => $load_1,
-        'load_5'        => $load_5,
-        'cpu_count'     => $cpu_count,
-        'mem_total_mb'  => $mem_total_mb,
-        'mem_avail_mb'  => $mem_avail_mb,
-        'swap_total_mb' => $swap_total_mb,
-        'swap_used_mb'  => $swap_total_mb - $swap_free_mb,
-        'status' => $is_running ? 'running' : 'done',
-        'checked' => $checked,
-        'errors' => $errors,
-        'broken_urls' => array_values(array_slice(array_unique($broken_urls), -20)),
-        'last_url' => $last_url,
-        'total' => $est_total,
-        'time' => $time_info,
+        'load_1'            => $load_1,
+        'load_5'            => $load_5,
+        'cpu_count'         => $cpu_count,
+        'mem_total_mb'      => $mem_total_mb,
+        'mem_avail_mb'      => $mem_avail_mb,
+        'swap_total_mb'     => $swap_total_mb,
+        'swap_used_mb'      => $swap_total_mb - $swap_free_mb,
+        'fpm_active'        => $fpm_active,
+        'fpm_idle'          => $fpm_idle,
+        'fpm_listen_queue'  => $fpm_listen_queue,
+        'fpm_max_children'  => $fpm_max_children,
+        'fpm_slow_requests' => $fpm_slow_requests,
+        'status'            => $is_running ? 'running' : 'done',
+        'checked'           => $checked,
+        'errors'            => $errors,
+        'broken_urls'       => array_values(array_slice(array_unique($broken_urls), -20)),
+        'last_url'          => $last_url,
+        'total'             => $est_total,
+        'time'              => $time_info,
         'last_preload_time' => $last_preload_time,
-        'log_found' => $log_found,
+        'log_found'         => $log_found,
         'log_complete'      => $log_complete,
         'snapshot_exists'   => $snapshot_exists,
         'snapshot_time'     => $snapshot_time,
