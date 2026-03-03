@@ -721,6 +721,52 @@ $(document).ready(function() {
                 }
             }
 
+            // Server Load
+            if ( data.load_1 !== undefined && data.cpu_count ) {
+                const loadPct   = ( data.load_1 / data.cpu_count ) * 100;
+                const loadColor = loadPct > 80 ? '#d63638'
+                                : loadPct > 50 ? '#b45309'
+                                : '#16a34a';
+                rows += `<tr>
+                    <td class="check">${__( 'Server Load (1m / 5m)', 'fastcgi-cache-purge-and-preload-nginx' )}</td>
+                    <td class="status">
+                        ${icon( 'dashicons-performance', loadColor )}
+                        <span style="color:${loadColor};font-weight:bold;">${data.load_1} / ${data.load_5}</span>
+                        <span style="color:#9ca3af;font-size:12px;margin-left:4px;">(${data.cpu_count} CPU)</span>
+                    </td>
+                </tr>`;
+            }
+
+            // System RAM
+            if ( data.mem_total_mb && data.mem_avail_mb !== undefined ) {
+                const memUsedMb  = data.mem_total_mb - data.mem_avail_mb;
+                const memPct     = Math.round( ( memUsedMb / data.mem_total_mb ) * 100 );
+                const memColor   = memPct > 85 ? '#d63638'
+                                 : memPct > 65 ? '#b45309'
+                                 : '#16a34a';
+                rows += `<tr>
+                    <td class="check">${__( 'System RAM', 'fastcgi-cache-purge-and-preload-nginx' )}</td>
+                    <td class="status">
+                        ${icon( 'dashicons-database', memColor )}
+                        <span style="color:${memColor};font-weight:bold;">${memPct}%</span>
+                        <span style="color:#6b7280;font-size:12px;margin-left:4px;">${memUsedMb} / ${data.mem_total_mb} MB used</span>
+                    </td>
+                </tr>`;
+            }
+
+            // Swap — only show if swap is configured; red immediately if any swap used during preload
+            if ( data.swap_total_mb > 0 ) {
+                const swapPct   = Math.round( ( data.swap_used_mb / data.swap_total_mb ) * 100 );
+                const swapColor = data.swap_used_mb > 0 ? '#d63638' : '#16a34a';
+                rows += `<tr>
+                    <td class="check">${__( 'Swap Usage', 'fastcgi-cache-purge-and-preload-nginx' )}</td>
+                    <td class="status">
+                        ${icon( 'dashicons-warning', swapColor )}
+                        <span style="color:${swapColor};font-weight:bold;">${data.swap_used_mb} MB (${swapPct}%)</span>
+                    </td>
+                </tr>`;
+            }
+
             const html = `
                 <table>
                     <thead>
