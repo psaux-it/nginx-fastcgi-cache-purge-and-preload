@@ -243,6 +243,74 @@ function nppp_shell_exec() {
     return 'Not Ok';
 }
 
+// Returns cache filesystem stats as array [used, free, total, dedicated], null on failure.
+// dedicated=true  → path is its own mount (tmpfs, bindfs, etc.) — disk stats are exact for cache.
+// dedicated=false → path is a directory on a shared partition — du gives actual cache bytes only.
+function nppp_get_cache_disk_size( string $path ): ?array {
+    if ( empty( $path ) || ! is_dir( $path ) ) {
+        return null;
+    }
+
+    $total = @disk_total_space( $path );
+    $free  = @disk_free_space( $path );
+
+    if ( $total === false || $free === false ) {
+        return null;
+    }
+
+    // Detect dedicated filesystem by comparing device IDs of path vs its parent.
+    // Different device ID means path is a separate mount point (tmpfs, bindfs, NFS, etc.)
+    $path_stat   = @stat( $path );
+    $parent_stat = @stat( dirname( rtrim( $path, '/' ) ) );
+
+    $is_dedicated = (
+        $path_stat !== false &&
+        $parent_stat !== false &&
+        $path_stat['dev'] !== $parent_stat['dev']
+    );
+
+    if ( $is_dedicated ) {
+        // Dedicated filesystem — disk_total_space/free are exactly for this cache.
+        return [
+            'used'      => (int) ( $total - $free ),
+            'free'      => (int) $free,
+            'total'     => (int) $total,
+            'dedicated' => true,
+        ];
+    }
+
+    // Shared partition — use du to get actual cache directory bytes only.
+    // This prevents showing entire partition usage as "cache size".
+    $raw = shell_exec( 'du -sb ' . escapeshellarg( $path ) . ' 2>/dev/null' );
+    if ( $raw ) {
+        $parts = explode( "\t", trim( $raw ) );
+        if ( isset( $parts[0] ) && ctype_digit( $parts[0] ) ) {
+            return [
+                'used'      => (int) $parts[0],
+                'free'      => (int) $free,
+                'total'     => (int) $total,
+                'dedicated' => false,
+            ];
+        }
+    }
+
+    // du failed — fall back to filesystem stats, flag as non-dedicated.
+    return [
+        'used'      => (int) ( $total - $free ),
+        'free'      => (int) $free,
+        'total'     => (int) $total,
+        'dedicated' => false,
+    ];
+}
+
+// Format bytes into human-readable string.
+function nppp_format_cache_size( int $bytes ): string {
+    if ( $bytes >= 1073741824 ) { return number_format( $bytes / 1073741824, 2 ) . ' GB'; }
+    if ( $bytes >= 1048576 )    { return number_format( $bytes / 1048576,    2 ) . ' MB'; }
+    if ( $bytes >= 1024 )       { return number_format( $bytes / 1024,       2 ) . ' KB'; }
+    return $bytes . ' B';
+}
+
 // Function to get the PHP process owner (website-user)
 function nppp_get_website_user() {
     // Set env
@@ -681,6 +749,11 @@ function nppp_my_status_html() {
                 </div>';
     }
 
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path'])
+        ? $nginx_cache_settings['nginx_cache_path']
+        : '/dev/shm/change-me-now';
+
     $perm_in_cache_status_purge = nppp_check_perm_in_cache(true, false, false);
     $perm_in_cache_status_fpm = nppp_check_perm_in_cache(false, false, true);
     $perm_in_cache_status_perm = nppp_check_perm_in_cache(false, true, false);
@@ -971,6 +1044,33 @@ function nppp_my_status_html() {
                                         echo '<span>' . esc_html( $nppp_status_ratio ) . '</span>';
                                     }
                                     ?>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check"><?php esc_html_e('Cache RAM/Disk Size', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="status" id="npppCacheDiskSize">
+                                    <span class="dashicons"></span>
+                                    <?php
+                                    $nppp_disk = nppp_get_cache_disk_size( $nginx_cache_path );
+                                    if ( $nppp_disk === null ): ?>
+                                        <span style="color: orange;"><?php esc_html_e('Unavailable', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                    <?php elseif ( $nppp_disk['dedicated'] ): ?>
+                                        <span><?php echo esc_html(
+                                            ( $nppp_disk['total'] > 0 ? number_format( ( $nppp_disk['used'] / $nppp_disk['total'] ) * 100, 1 ) : 0 )
+                                            . '% ('
+                                            . nppp_format_cache_size( $nppp_disk['used'] )
+                                            . ' used / '
+                                            . nppp_format_cache_size( $nppp_disk['total'] )
+                                            . ' total)'
+                                        ); ?></span>
+                                    <?php else: ?>
+                                        <span><?php echo esc_html(
+                                            nppp_format_cache_size( $nppp_disk['used'] )
+                                            . ' cache dir ('
+                                            . nppp_format_cache_size( $nppp_disk['free'] )
+                                            . ' free on partition)'
+                                        ); ?></span>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         </tbody>
