@@ -941,6 +941,9 @@ function nppp_preload_cache_premium_callback() {
 
     // Validate the sanitized URL
     if (filter_var($cache_url, FILTER_VALIDATE_URL) !== false) {
+        // Reset tracker before buffering
+        $GLOBALS['_nppp_last_notice_type'] = 'success';
+
         // Start output buffering
         ob_start();
 
@@ -950,11 +953,12 @@ function nppp_preload_cache_premium_callback() {
         // Capture and clean the buffer
         $output = wp_strip_all_tags(ob_get_clean());
 
-        // Determine if the message is a success or an error
-        if (strpos($output, 'SUCCESS ADMIN') !== false) {
-            wp_send_json_success($output);
-        } else {
+        // Read the type that nppp_display_admin_notice() recorded directly.
+        // Language-independent
+        if (($GLOBALS['_nppp_last_notice_type'] ?? 'success') === 'error') {
             wp_send_json_error($output);
+        } else {
+            wp_send_json_success($output);
         }
     } else {
         wp_send_json_error('Preload Cache URL validation failed.');
