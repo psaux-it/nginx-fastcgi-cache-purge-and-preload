@@ -397,6 +397,13 @@ function nppp_create_scheduled_event_preload_status_callback() {
     // Initialize final total
     $final_total = 0;
 
+    // Initialize log-parsed values to safe defaults so they are always defined
+    // even when the wget log is absent, incomplete, or contains unparseable data.
+    // $elapsed_time_str feeds nppp_send_mail_now() and sprintf() unconditionally.
+    $elapsed_time_str  = '';
+    $last_preload_time = '';
+    $log_contents      = '';
+
     // Parse log file using to get total processed URL
     if ($wp_filesystem->exists($log_path) && $wp_filesystem->is_readable($log_path)) {
         $log_contents = $wp_filesystem->get_contents($log_path);
