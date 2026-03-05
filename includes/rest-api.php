@@ -105,12 +105,12 @@ function nppp_add_cors_and_no_cache_headers($served, $result, $request) {
 }
 
 // Log NPP REST API calls
-function nppp_log_api_request($endpoint, $status) {
+function nppp_log_api_request($endpoint, $status, $is_error = false) {
     // Get the IP address
     $ip_address = nppp_get_client_ip(true);
 
-    // Determine log prefix based on the status
-    $log_prefix = (strpos($status, 'ERROR') !== false) ? 'ERROR API' : 'API REQUEST';
+    // Determine log prefix based on the explicit flag
+    $log_prefix = $is_error ? 'ERROR API' : 'API REQUEST';
 
     // Create a log entry with timestamp, IP, endpoint, and status
     $log_entry = sprintf(
@@ -179,7 +179,7 @@ function nppp_api_rate_limit_check($ip_address, $endpoint, $api_key) {
 
         // Limit requests to 1 per minute
         if ($request_count > $rate_limit) {
-            nppp_log_api_request($endpoint, __('ERROR 429 TOO MANY REQUEST', 'fastcgi-cache-purge-and-preload-nginx'));
+            nppp_log_api_request($endpoint, __('ERROR 429 TOO MANY REQUEST', 'fastcgi-cache-purge-and-preload-nginx'), true);
             return new WP_Error('rate_limit_error', __('NPP REST API rate limit exceeded. Try again in 1 minute.', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 429));
         }
 
@@ -231,7 +231,7 @@ function nppp_validate_and_rate_limit_endpoint($request) {
     // 4. If no API key is provided, return an error
     // or Sanitize API Key
     if (empty($api_key)) {
-        nppp_log_api_request('global', __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
+        nppp_log_api_request('global', __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'), true);
         return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
     } else {
         $api_key = sanitize_text_field($api_key);
@@ -243,13 +243,13 @@ function nppp_validate_and_rate_limit_endpoint($request) {
 
     // Fail closed for unexpected route/action mapping.
     if ('' === $endpoint) {
-        nppp_log_api_request('global', __('ERROR 404 INVALID ENDPOINT', 'fastcgi-cache-purge-and-preload-nginx'));
+        nppp_log_api_request('global', __('ERROR 404 INVALID ENDPOINT', 'fastcgi-cache-purge-and-preload-nginx'), true);
         return new WP_Error('invalid_endpoint', __('NPP REST API endpoint is invalid.', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 404));
     }
 
     // Validate API key format
     if (!preg_match('/^[a-f0-9]{64}$/i', $api_key)) {
-        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
+        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'), true);
         return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
     }
 
@@ -259,13 +259,13 @@ function nppp_validate_and_rate_limit_endpoint($request) {
 
     // Fail closed on invalid option type. hash_equals() requires strings.
     if (!is_string($stored_key)) {
-        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
+        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'), true);
         return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
     }
 
     // Authentication check
     if (!hash_equals($stored_key, $api_key)) {
-        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
+        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'), true);
         return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
     }
 
@@ -306,7 +306,7 @@ function nppp_nginx_cache_purge_endpoint($request) {
 
     // Log the successful purge API call
     // Not hit the rate limit, authentication errors
-    nppp_log_api_request('purge', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'));
+    nppp_log_api_request('purge', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'), false);
 
     // Necessary data for purge action
     $nginx_cache_settings = get_option('nginx_cache_settings');
@@ -349,7 +349,7 @@ function nppp_nginx_cache_preload_endpoint($request) {
 
     // Log the successful preload API call
     // Not hit the rate limit, authentication errors
-    nppp_log_api_request('preload', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'));
+    nppp_log_api_request('preload', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'), false);
 
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
