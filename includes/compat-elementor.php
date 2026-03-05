@@ -18,17 +18,16 @@ function nppp__el_mark_purged( $set = null ) {
     return $did;
 }
 
-// Elementor-specific purge triggers
-add_action('plugins_loaded', function () {
-    if ( ! defined('ELEMENTOR_VERSION') ) return;
-
+// Elementor-specific purge triggers.
+// Register directly so lazy bootstrap loading on init does not miss plugins_loaded timing.
+if ( defined('ELEMENTOR_VERSION') && $nppp_auto_purge ) {
     // When an Elementor document is saved
     add_action('elementor/editor/after_save', 'nppp__el_after_save', 10, 2);
     add_action('elementor/document/after_save', 'nppp__el_document_after_save', 10, 2);
 
     // When Elementor clears its own files/CSS
     add_action('elementor/core/files/clear_cache', 'nppp__el_clear_files');
-});
+}
 
 function nppp__el_after_save( $post_id, $editor_data ) {
     $opts = get_option('nginx_cache_settings') ?: [];
