@@ -12,12 +12,17 @@
 if ( ! defined('ABSPATH') ) exit;
 
 // Hook rest_after_insert_* for all public post types that expose REST.
-add_action('init', function () {
-    foreach ( get_post_types(['public' => true], 'objects') as $obj ) {
-        if ( empty($obj->show_in_rest) ) continue;
-        add_action("rest_after_insert_{$obj->name}", 'nppp__rest_after_insert', 10, 3);
-    }
-}, 20);
+// Only registered when auto-purge is enabled — consistent with the main
+// file's conditional pattern. get_post_types() is called at init priority 20
+// so all CPTs are registered by then.
+if ( $nppp_auto_purge ) {
+    add_action('init', function () {
+        foreach ( get_post_types(['public' => true], 'objects') as $obj ) {
+            if ( empty($obj->show_in_rest) ) continue;
+            add_action("rest_after_insert_{$obj->name}", 'nppp__rest_after_insert', 10, 3);
+        }
+    }, 20);
+}
 
 // Purge the single URL after a REST save if the post is published.
 function nppp__rest_after_insert( $post, $request, $creating ) {
