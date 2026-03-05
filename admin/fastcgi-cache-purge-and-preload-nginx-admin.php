@@ -140,13 +140,15 @@ require_once dirname(__DIR__) . '/includes/rest-api-helper.php';
 require_once dirname(__DIR__) . '/includes/plugin-tracking.php';
 require_once dirname(__DIR__) . '/includes/update.php';
 require_once dirname(__DIR__) . '/includes/dashboard-widget.php';
+
+// Get the status of Auto Purge
+$nppp_options = get_option('nginx_cache_settings');
+$nppp_auto_purge = isset($nppp_options['nginx_cache_purge_on_update'])
+                   && $nppp_options['nginx_cache_purge_on_update'] === 'yes';
+
 require_once dirname(__DIR__) . '/includes/compat-cloudflare.php';
 require_once dirname(__DIR__) . '/includes/compat-elementor.php';
 require_once dirname(__DIR__) . '/includes/compat-gutenberg.php';
-
-// Get the status of Auto Purge option
-$nppp_options = get_option('nginx_cache_settings');
-$nppp_auto_purge = isset($nppp_options['nginx_cache_purge_on_update']) && $nppp_options['nginx_cache_purge_on_update'] === 'yes';
 
 // Hook into well-known cache plugin purge events.
 $nppp_page_cache_purge_actions = array(
@@ -198,15 +200,17 @@ add_action('npp_cache_preload_status_event', 'nppp_create_scheduled_event_preloa
 add_action('wp_ajax_nppp_get_active_cron_events_ajax', 'nppp_get_active_cron_events_ajax');
 add_action('wp_ajax_nppp_clear_plugin_cache', 'nppp_clear_plugin_cache_callback');
 add_action('wp_ajax_nppp_restart_systemd_service', 'nppp_restart_systemd_service');
-add_action('transition_post_status', 'nppp_purge_cache_on_update', 10, 3);
-add_action('wp_insert_comment', 'nppp_purge_cache_on_comment', 200, 2);
-add_action('transition_comment_status', 'nppp_purge_cache_on_comment_change', 200, 3);
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
-add_action('upgrader_process_complete', 'nppp_purge_cache_on_theme_plugin_update', 10, 2);
 add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_default_cache_key_regex_option');
-add_action('switch_theme', 'nppp_purge_cache_on_theme_switch', 10, 3);
-add_action('activated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
-add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
+if ($nppp_auto_purge) {
+    add_action('transition_post_status', 'nppp_purge_cache_on_update', 10, 3);
+    add_action('wp_insert_comment', 'nppp_purge_cache_on_comment', 200, 2);
+    add_action('transition_comment_status', 'nppp_purge_cache_on_comment_change', 200, 3);
+    add_action('upgrader_process_complete', 'nppp_purge_cache_on_theme_plugin_update', 10, 2);
+    add_action('switch_theme', 'nppp_purge_cache_on_theme_switch', 10, 3);
+    add_action('activated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
+    add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
+}
 add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_preload_mobile_option');
 add_action('npp_plugin_tracking_event', 'nppp_plugin_tracking', 10, 1);
 add_action('wp_dashboard_setup', 'nppp_add_dashboard_widget');
