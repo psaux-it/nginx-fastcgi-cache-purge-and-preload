@@ -376,6 +376,10 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         $current_page_url = $candidate_ascii;
     }
 
+    // Reset tracker before buffering so a stale value from a previous
+    // request never bleeds into this one.
+    $GLOBALS['_nppp_last_notice_type'] = 'success';
+
     // Start output buffering to capture the output of the actions
     ob_start();
 
@@ -401,13 +405,8 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     // Get the status message from the output buffer
     $status_message = wp_strip_all_tags(ob_get_clean());
 
-    // Determine the type of admin notice based on the status message
-    $message_type = 'success';
-    if (strpos($status_message, 'ERROR') !== false) {
-        $message_type = 'error';
-    } elseif (strpos($status_message, 'INFO') !== false) {
-        $message_type = 'info';
-    }
+    // Read the type that nppp_display_admin_notice() recorded directly.
+    $message_type = $GLOBALS['_nppp_last_notice_type'] ?? 'success';
 
     // Generate redirect nonce
     $nonce_redirect = wp_create_nonce('nppp_redirect_nonce');
