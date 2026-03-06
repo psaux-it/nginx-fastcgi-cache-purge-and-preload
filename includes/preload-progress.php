@@ -134,7 +134,7 @@ function nppp_nginx_cache_preload_progress($request) {
     }
 
     // Get URL count
-    $est_total = nppp_get_estimated_url_count();
+    $est_total = nppp_get_estimated_url_count( $wp_filesystem, $snapshot_path );
 
     // Server health — all reads from /proc virtual FS, near-zero cost
     $load       = function_exists( 'sys_getloadavg' ) ? sys_getloadavg() : [ 0, 0, 0 ];
@@ -212,51 +212,82 @@ function nppp_nginx_cache_preload_progress($request) {
     ]);
 }
 
-// Estimates the total number of URLs by parsing the site's XML sitemaps.
-function nppp_get_estimated_url_count() {
+// Estimates the total number of cachable URLs for preload progress
+function nppp_get_estimated_url_count( $wp_filesystem = null, $snapshot_path = '' ) {
     $static_key_base = 'nppp';
     $transient_key = 'nppp_est_url_counts_' . md5($static_key_base);
 
-    // Check if cached
+    // Return cached value if available
     $cached = get_transient($transient_key);
     if ($cached !== false) {
         return $cached;
     }
 
-    // Check if SimpleXML is available
-    if (!extension_loaded('SimpleXML')) {
-        set_transient($transient_key, 2000, DAY_IN_SECONDS);
-        return 2000;
+    // -------------------------------------------------------------------
+    // Tier 1: Snapshot exists — use the real count from the last completed
+    // preload run.
+    // -------------------------------------------------------------------
+    if (
+        $wp_filesystem instanceof WP_Filesystem_Base &&
+        ! empty( $snapshot_path ) &&
+        $wp_filesystem->exists( $snapshot_path )
+    ) {
+        $contents = $wp_filesystem->get_contents( $snapshot_path );
+        if ( ! empty( $contents ) ) {
+            if ( preg_match( '/^Downloaded:\s+(\d+)\s+files/m', $contents, $m ) ) {
+                $real_count = (int) $m[1];
+                if ( $real_count > 0 ) {
+                    set_transient( $transient_key, $real_count, DAY_IN_SECONDS );
+                    return $real_count;
+                }
+            }
+        }
     }
 
-    $total = 0;
-    $sitemap_url = home_url('/sitemap.xml');
-    libxml_use_internal_errors(true);
+    // -------------------------------------------------------------------
+    // Tier 2: No snapshot yet (first ever run). Count published content
+    // directly from the WordPress DB.
+    // -------------------------------------------------------------------
+    $total          = 0;
+    $posts_per_page = max( 1, (int) get_option( 'posts_per_page', 10 ) );
 
-    $xml = @simplexml_load_file($sitemap_url);
-    if (!$xml) {
-        set_transient($transient_key, 2000, DAY_IN_SECONDS);
-        return 2000;
-    }
+    // Exclude specific post types via filter
+    $exclude_types = apply_filters( 'nppp_exclude_post_types', [ 'attachment' ] );
 
-    foreach ($xml->sitemap as $sitemap) {
-        $submap_url = (string) $sitemap->loc;
-        $submap_xml = @simplexml_load_file($submap_url);
-        if (!$submap_xml) continue;
-
-        // Register namespaces if available
-        $namespaces = $submap_xml->getNamespaces(true);
-        if (isset($namespaces[''])) {
-            $submap_xml->registerXPathNamespace('ns', $namespaces['']);
-            $urls = $submap_xml->xpath('//ns:url');
-        } else {
-            $urls = $submap_xml->xpath('//url');
+    $post_types = get_post_types( [ 'public' => true ], 'objects' );
+    foreach ( $post_types as $type => $pt_object ) {
+        if ( in_array( $type, $exclude_types, true ) ) {
+            continue;
         }
 
-        $total += count($urls);
+        $counts    = wp_count_posts( $type );
+        $published = intval( $counts->publish ?? 0 );
+        $total    += $published;
+
+        // Count archive page + its paginated pages if this post type has one
+        if ( ! empty( $pt_object->has_archive ) && $published > 0 ) {
+            $total += 1 + (int) floor( $published / $posts_per_page );
+        }
     }
 
-    $final_total = $total > 0 ? $total + 1000 : 2000;
-    set_transient($transient_key, $final_total, DAY_IN_SECONDS);
-    return $final_total;
+    // Taxonomy archive pages
+    foreach ( get_taxonomies( [ 'public' => true ] ) as $tax ) {
+        $term_count = wp_count_terms( [ 'taxonomy' => $tax, 'hide_empty' => true ] );
+        if ( is_wp_error( $term_count ) ) continue;
+        $total += max( 0, (int) $term_count );
+    }
+
+    // Homepage + static front page + author archives + misc buffer
+    $total += 5;
+
+    if ( $total > 0 ) {
+        set_transient( $transient_key, $total, DAY_IN_SECONDS );
+        return $total;
+    }
+
+    // -------------------------------------------------------------------
+    // Tier 3: Final fallback
+    // -------------------------------------------------------------------
+    set_transient( $transient_key, 2000, DAY_IN_SECONDS );
+    return 2000;
 }
