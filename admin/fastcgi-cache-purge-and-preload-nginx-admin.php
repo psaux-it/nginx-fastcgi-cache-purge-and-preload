@@ -199,7 +199,6 @@ add_action('npp_cache_preload_event', 'nppp_create_scheduled_event_preload_callb
 add_action('npp_cache_preload_status_event', 'nppp_create_scheduled_event_preload_status_callback');
 add_action('wp_ajax_nppp_get_active_cron_events_ajax', 'nppp_get_active_cron_events_ajax');
 add_action('wp_ajax_nppp_clear_plugin_cache', 'nppp_clear_plugin_cache_callback');
-add_action('wp_ajax_nppp_restart_systemd_service', 'nppp_restart_systemd_service');
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
 add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_default_cache_key_regex_option');
 if ($nppp_auto_purge) {
