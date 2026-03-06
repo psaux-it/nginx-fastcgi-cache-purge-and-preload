@@ -2323,15 +2323,6 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
         // Check the validation result
         if ($validation_result === true) {
-            // Check one-liner automatiion bash script used in initial setup
-            $service_name = 'npp-wordpress.service';
-            $service_path = '/etc/systemd/system/' . $service_name;
-            if (file_exists($service_path)) {
-                if (substr($input['nginx_cache_path'], -strlen('-npp')) !== '-npp') {
-                    // Change original Nginx cache path with FUSE mounted automatically
-                    $input['nginx_cache_path'] .= '-npp';
-                }
-            }
             $sanitized_input['nginx_cache_path'] = sanitize_text_field($input['nginx_cache_path']);
         } else {
             // Handle different validation outcomes
@@ -2740,58 +2731,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     } else {
         // Now check if the directory exists
         if (!$wp_filesystem->is_dir($path)) {
-            // Set env
-            nppp_prepare_request_env(true);
-
-            // Assign necessary variables
-            $service_name = 'npp-wordpress.service';
-            $service_path = '/etc/systemd/system/' . $service_name;
-            $nginx_path = trim(shell_exec('command -v nginx'));
-            $sudo_path = trim(shell_exec('command -v sudo'));
-            $systemctl_path = trim(shell_exec('command -v systemctl'));
-
-            // Force to create the nginx cache path that if defined in conf already
-            // This code block will only run if the plugin's initial setup
-            // was done using the following one-liner script:
-            // [ bash <(curl -Ss https://psaux-it.github.io/install.sh) ]
-            if (function_exists('exec') && function_exists('shell_exec')) {
-                if ($wp_filesystem->exists($service_path)) {
-                    if (!empty($nginx_path) && !empty($sudo_path)) {
-                        if (substr($path, -strlen('-npp')) !== '-npp') {
-                            // Construct and execute the 'nginx -T' command using 'echo "" | sudo -S' to prevent hang during password prompt
-                            $nginx_command = "echo '' | sudo -S " . escapeshellcmd($nginx_path) . " -T > /dev/null 2>&1";
-                            exec($nginx_command, $output, $return_var);
-                            usleep(300000);
-                        }
-                    }
-                }
-            }
-
-            // Re-check if directory exists
-            if (!$wp_filesystem->is_dir($path)) {
-                if (substr($path, -strlen('-npp')) === '-npp') {
-                    if (!empty($systemctl_path) && !empty($sudo_path)) {
-                        if ($wp_filesystem->exists($service_path)) {
-                            // Construct and execute the restart command
-                            $restart_command = "echo '' | sudo -S " . escapeshellcmd($systemctl_path) . " restart " . escapeshellcmd($service_name);
-                            exec($restart_command . ' 2>&1', $output, $return_var);
-
-                            if ($return_var === 0) {
-                                $static_key_base = 'nppp';
-                                $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
-                                delete_transient($transient_key_permissions_check);
-                                sleep(1);
-                                return true;
-                            } else {
-                                return 'directory_not_exist_or_readable';
-                            }
-                        }
-                    }
-                }
-
-                // Display error message for non-existent directory
-                return 'directory_not_exist_or_readable';
-            }
+            return 'directory_not_exist_or_readable';
         }
     }
 
