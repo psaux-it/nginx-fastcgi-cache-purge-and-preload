@@ -137,14 +137,6 @@ $(document).ready(function() {
                     window.NPPPAurora.setProgressGate(true);
                 }
                 npppFabSet(true);
-                // Warn the user if a systemd service restart
-                // is required due to missing fuse cache path mounts
-                const statusTabContent = document.querySelector('#status');
-                if (statusTabContent) {
-                    if (!npppCurrentObserver) {
-                        nppobserveFuseStatusChange(statusTabContent);
-                    }
-                }
                 break;
             case 'premium':
                 showPreloader();
@@ -157,61 +149,6 @@ $(document).ready(function() {
                 $helpPlaceholder.show();
                 npppFabSet(true);
                 break;
-        }
-    }
-
-    // Function to observe changes in the "Status" tab
-    function nppobserveFuseStatusChange(tabContent) {
-        // Create a MutationObserver to observe the status content
-        const observer = new MutationObserver((mutationsList, observer) => {
-            const fuseStatusSpan = document.querySelector('#npppFuseMountStatus span:last-of-type');
-            if (fuseStatusSpan) {
-                // Compare the trimmed text
-                if (fuseStatusSpan.textContent.trim() === 'Not Mounted') {
-                    nppinsertWarningIcon(tabContent);
-                }
-                // Disconnect the observer after finding the status
-                observer.disconnect();
-            }
-        });
-
-        // Store the observer to be cleaned up later
-        npppCurrentObserver = observer;
-
-        // Start observing the tab content for changes in the DOM
-        observer.observe(tabContent, { childList: true, subtree: true });
-    }
-
-    // Function to insert the warning icon into the "Status" tab
-    function nppinsertWarningIcon(tabContent) {
-        try {
-            // Create the warning icon
-            const attentionIcon = document.createElement('span');
-            attentionIcon.className = 'dashicons dashicons-warning';
-            attentionIcon.style.cssText = 'color: orange; margin-left: 8px; font-size: 28px;';
-
-            // Ensure the restart button exists before inserting the icon
-            const restartButton = document.querySelector('#nppp-restart-systemd-service-btn');
-            if (restartButton) {
-                restartButton.parentNode.insertBefore(attentionIcon, restartButton.nextSibling);
-
-                // Apply blink effect
-                const blinkEffect = attentionIcon.animate([
-                    { opacity: 1 },
-                    { opacity: 0 }
-                 ], {
-                    duration: 500,
-                    iterations: Infinity,
-                    direction: 'alternate'
-                });
-
-                // Stop blinking after 2 seconds
-                setTimeout(() => {
-                    blinkEffect.cancel();
-                }, 2000);
-            }
-        } catch (error) {
-            console.error('Error in warning icon insertion:', error);
         }
     }
 
@@ -2661,119 +2598,6 @@ $(document).ready(function() {
                 notification.style.borderRadius = '4px';
 
                 // Show notification
-                document.body.appendChild(notification);
-
-                // Set the notification duration
-                setTimeout(function() {
-                    notification.style.opacity = '0';
-                    setTimeout(function() {
-                        document.body.removeChild(notification);
-                    }, 300);
-                }, 2000);
-            }
-        });
-    });
-
-    // Event listener for the restart systemd service button
-    $(document).off('click', '#nppp-restart-systemd-service-btn').on('click', '#nppp-restart-systemd-service-btn', function(e) {
-        e.preventDefault();
-
-        // Get the button element and its position
-        var buttonElement = $('#nppp-restart-systemd-service-btn');
-        var buttonOffset = buttonElement.offset();
-        var buttonWidth = buttonElement.outerWidth();
-
-        // Set the loading spinner
-        var spinner = document.createElement('div');
-        spinner.className = 'nppp-loading-spinner';
-        spinner.style.position = 'absolute';
-        spinner.style.left = buttonOffset.left + buttonWidth + 10 + 'px';
-        spinner.style.top = (buttonOffset.top - 12) + 'px';
-        spinner.style.zIndex = '9999';
-
-        // Show loading spinner
-        document.body.appendChild(spinner);
-
-        // Make AJAX request to restart systemd service
-        $.ajax({
-            url: nppp_admin_data.ajaxurl,
-            type: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'nppp_restart_systemd_service',
-                _wpnonce: nppp_admin_data.systemd_service_nonce
-            },
-            success: function(response) {
-                // Remove the spinner
-                document.body.removeChild(spinner);
-
-                // Calculate the notification position
-                var notificationLeft = buttonOffset.left + buttonWidth + 10;
-                var notificationTop = buttonOffset.top - 3;
-
-                // Show a small notification indicating status
-                var notification = document.createElement('div');
-                notification.style.position = 'absolute';
-                notification.style.left = notificationLeft + 'px';
-                notification.style.top = notificationTop + 'px';
-                notification.style.color = '#fff';
-                notification.style.padding = '8px 12px';
-                notification.style.transition = 'opacity 0.3s ease-in-out';
-                notification.style.opacity = '1';
-                notification.style.zIndex = '9999';
-                notification.style.fontSize = '13px';
-                notification.style.fontWeight = '700';
-                notification.style.borderRadius = '4px';
-
-                if (response.success) {
-                    // Handle success case
-                    notification.textContent = 'Service Restarted';
-                    notification.style.backgroundColor = '#50C878';
-                } else {
-                    // Handle error case
-                    notification.textContent = 'Service cannot be restarted';
-                    notification.style.backgroundColor = '#D32F2F';
-                }
-
-                // Show status notification
-                document.body.appendChild(notification);
-
-                // Set the notification duration
-                setTimeout(function() {
-                    notification.style.opacity = '0';
-                    setTimeout(function() {
-                        document.body.removeChild(notification);
-
-                        // Reload settings page to see updated fuse mount status
-                        if (response.success) {
-                            location.reload();
-                        }
-                    }, 300);
-                }, 1700);
-            },
-            error: function() {
-                // Remove the loading spinner
-                document.body.removeChild(spinner);
-
-                // Calculate the notification position
-                var notificationLeft = buttonOffset.left + buttonWidth + 10;
-                var notificationTop = buttonOffset.top - 3;
-
-                // Show a small notification indicating failure
-                var notification = document.createElement('div');
-                notification.textContent = 'An ajax error occured';
-                notification.style.position = 'absolute';
-                notification.style.left = notificationLeft + 'px';
-                notification.style.top = notificationTop + 'px';
-                notification.style.backgroundColor = '#D32F2F';
-                notification.style.color = '#fff';
-                notification.style.padding = '8px 12px';
-                notification.style.transition = 'opacity 0.3s ease-in-out';
-                notification.style.opacity = '1';
-                notification.style.zIndex = '9999';
-                notification.style.fontSize = '13px';
-                notification.style.fontWeight = '700';
-                notification.style.borderRadius = '4px';
                 document.body.appendChild(notification);
 
                 // Set the notification duration
