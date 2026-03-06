@@ -138,7 +138,6 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_cancel_scheduled_event'                 => 'nppp-cancel-scheduled-event',
             'nppp_get_active_cron_events_ajax'            => 'nppp-get-save-cron-expression',
             'nppp_clear_plugin_cache'                     => 'nppp-clear-plugin-cache-action',
-            'nppp_restart_systemd_service'                => 'nppp-restart-systemd-service',
             'nppp_update_default_cache_key_regex_option'  => 'nppp-update-default-cache-key-regex-option',
             'nppp_update_auto_preload_mobile_option'      => 'nppp-update-auto-preload-mobile-option',
             'nppp_update_enable_proxy_option'             => 'nppp-update-enable-proxy-option',
