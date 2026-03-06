@@ -517,6 +517,24 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
         return;
     }
 
+    // Enqueue mobile FAB assets for front-end.
+    // The CSS itself uses @media (max-width:600px) so it is a no-op on desktop.
+    if (! is_admin()) {
+        wp_enqueue_style(
+            'nppp-mobile-fab-css',
+            plugins_url('../frontend/css/nppp-mobile-fab.css', __FILE__),
+            array(),
+            '2.1.4'
+        );
+        wp_enqueue_script(
+            'nppp-mobile-fab-js',
+            plugins_url('../frontend/js/nppp-mobile-fab.js', __FILE__),
+            array(),
+            '2.1.4',
+            true
+        );
+    }
+
     // Toast block — logged-in admin redirected back from a purge/preload action.
     if (isset($_GET['nppp_front']) && ! is_admin()) {
         $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
