@@ -394,12 +394,10 @@ function nppp_create_scheduled_event_preload_status_callback() {
     $log_path = nppp_get_runtime_file('nppp-wget.log');
     $snapshot_path = nppp_get_runtime_file('nppp-wget-snapshot.log');
 
-    // Initialize final total
-    $final_total = 0;
-
     // Initialize log-parsed values to safe defaults so they are always defined
     // even when the wget log is absent, incomplete, or contains unparseable data.
     // $elapsed_time_str feeds nppp_send_mail_now() and sprintf() unconditionally.
+    $final_total = 0;
     $elapsed_time_str  = '';
     $last_preload_time = '';
     $log_contents      = '';
@@ -409,27 +407,19 @@ function nppp_create_scheduled_event_preload_status_callback() {
         $log_contents = $wp_filesystem->get_contents($log_path);
 
         if ($log_contents) {
-            $lines = explode( "\n", $log_contents );
+            // Get processed URLs
+            if (preg_match('/^Downloaded:\s+(\d+)\s+files/m', $log_contents, $m)) {
+                $final_total = (int) $m[1];
+            }
 
-            foreach ($lines as $line) {
-                if (trim($line) === '') continue;
+            // Get wall clock time
+            if (preg_match('/^Total wall clock time:\s*((?:[0-9]+m\s*)?[0-9]+s)/im', $log_contents, $match)) {
+                $elapsed_time_str = trim($match[1]);
+            }
 
-                // Count processed URLs
-                if (preg_match('/URL:(https?:\/\/[^\s]+).*?->/', $line)) {
-                    $final_total++;
-                }
-
-                // Extract wall clock time
-                if (stripos($line, 'Total wall clock time:') !== false) {
-                    if (preg_match('/Total wall clock time:\s*((?:[0-9]+m\s*)?[0-9]+s)/i', $line, $match)) {
-                        $elapsed_time_str = trim($match[1]);
-                    }
-                }
-
-                // Extract preload finish timestamp
-                if (preg_match('/^FINISHED\s+--([\d\-]+\s+[\d:]+)--$/', $line, $match)) {
-                    $last_preload_time = trim($match[1]);
-                }
+            // Get preload finish timestamp
+            if (preg_match('/^FINISHED\s+--([\d\-]+\s+[\d:]+)--$/m', $log_contents, $match)) {
+                $last_preload_time = trim($match[1]);
             }
         }
     }
@@ -441,17 +431,10 @@ function nppp_create_scheduled_event_preload_status_callback() {
         $wp_filesystem->put_contents( $snapshot_path, $log_contents, FS_CHMOD_FILE );
     }
 
-    // Add buffer to total count
-    if ($final_total > 0) {
-        $final_total += 20;
-    } else {
-        $final_total = 2000;
-    }
-
     // Save to transient for frontend preload progress
     $static_key_base = 'nppp';
     $count_transient_key = 'nppp_est_url_counts_' . md5($static_key_base);
-    set_transient($count_transient_key, $final_total, DAY_IN_SECONDS);
+    set_transient($count_transient_key, $final_total > 0 ? $final_total : 2000, DAY_IN_SECONDS);
 
     if (!empty($last_preload_time)) {
         $timestamp_transient_key = 'nppp_last_preload_time_' . md5($static_key_base);
