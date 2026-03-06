@@ -386,29 +386,8 @@ function nppp_get_nginx_info() {
     ];
 }
 
-// Check if the systemd service file exists
-function nppp_is_service_file_exists() {
-    // Initialize the WP Filesystem
-    $wp_filesystem = nppp_initialize_wp_filesystem();
-
-    // Check if WP Filesystem initialization failed
-    if ($wp_filesystem === false) {
-        nppp_display_admin_notice(
-            'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
-        );
-        return;
-    }
-
-    $systemd_file = '/etc/systemd/system/npp-wordpress.service';
-    return $wp_filesystem->exists($systemd_file);
-}
-
 // Function to generate HTML output
 function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths) {
-    // Check if the systemd service file exists
-    $service_file_exists = nppp_is_service_file_exists();
-
     ob_start();
     //img url's
     $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
@@ -416,13 +395,13 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
     <header></header>
     <main>
         <section class="nginx-status" style="background-color: mistyrose;">
-            <h2><?php esc_html_e('Systemd Service Management', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
+            <h2><?php esc_html_e('Nginx Detection', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
             <p style="padding-left: 10px; font-weight: 500;">
-                <?php esc_html_e('In case you used the one-liner automation bash script for the initial setup, you can restart the systemd service here. Restarting the service may help to fix permission issues and keep cache consistency stable. The automation script assigns passwordless sudo permissions to the PHP process owner specifically for managing the npp-wordpress service directly from the frontend.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                <?php esc_html_e('Nginx detection may fail in proxy, CDN, Docker, or container environments even when Nginx is actively serving your site. The Setup page lets you resolve this by binding your real nginx.conf directly into the WordPress environment, or by enabling Assume-Nginx mode to bypass detection and unlock all plugin features immediately.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
             </p>
-            <button id="nppp-restart-systemd-service-btn" class="button button-primary <?php echo !$service_file_exists ? 'disabled' : ''; ?>" style="margin-left: 10px; margin-bottom: 15px; background-color: #2271b1 !important; color: white !important;">
-                <?php esc_html_e('Restart Service', 'fastcgi-cache-purge-and-preload-nginx'); ?>
-            </button>
+            <a href="<?php echo esc_url( admin_url( 'admin.php?page=nppp-setup' ) ); ?>" class="button button-primary" style="margin-left: 10px; margin-bottom: 15px; background-color: #2271b1 !important; color: white !important;">
+                <?php esc_html_e('Go to Setup', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+            </a>
         </section>
         <section class="nginx-status">
             <h2><?php esc_html_e('NGINX & FUSE STATUS', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
@@ -665,75 +644,6 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
     </div>
     <?php
     return ob_get_clean();
-}
-
-// Handles the AJAX request to restart the systemd service
-function nppp_restart_systemd_service() {
-    // Set env
-    nppp_prepare_request_env(true);
-
-    // Define the systemd service name
-    $service_name = 'npp-wordpress.service';
-
-    // Check nonce
-    if (isset($_POST['_wpnonce'])) {
-        $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
-        if (!wp_verify_nonce($nonce, 'nppp-restart-systemd-service')) {
-            wp_send_json_error('Nonce verification failed.');
-        }
-    } else {
-        wp_send_json_error('Nonce is missing.');
-    }
-
-    // Check user capability
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error('You do not have permission to access this action.');
-    }
-
-    // Get full paths for sudo and systemctl
-    $sudo_path = trim(shell_exec('command -v sudo'));
-    $systemctl_path = trim(shell_exec('command -v systemctl'));
-
-    if (empty($sudo_path) || empty($systemctl_path)) {
-        wp_send_json_error('Required commands sudo or systemctl not found.');
-    }
-
-    $output = [];
-    $return_var = 0;
-
-    // Construct and execute the restart command
-    $restart_command = "echo '' | sudo -S " . escapeshellcmd($systemctl_path) . " restart " . escapeshellcmd($service_name);
-    exec($restart_command . ' 2>&1', $output, $return_var);
-
-    // Check if sudo prompted for a password
-    if ($return_var === 1 && strpos(implode("\n", $output), 'password') !== false) {
-        wp_send_json_error('Sudo password prompt detected. Failed to restart the systemd service.');
-    }
-
-    // Check command output and return status
-    if ($return_var !== 0) {
-        wp_send_json_error('Failed to restart the systemd service. Output: ' . implode("\n", $output));
-    }
-
-    // Execute the status command
-    $status_command = 'sudo ' . escapeshellcmd($systemctl_path) . ' is-active ' . escapeshellcmd($service_name);
-    $status = trim(shell_exec($status_command));
-
-    if ($status === 'active') {
-        // Clear plugin cache
-        nppp_clear_plugin_cache();
-
-        wp_send_json_success(
-            __('Systemd service restarted and is active. Plugin cache cleared.', 'fastcgi-cache-purge-and-preload-nginx')
-        );
-    } else {
-        $msg = sprintf(
-            /* Translators: %s is the systemd service status string (e.g. "failed") */
-            __('Restart completed but the service is not active. Status: %s', 'fastcgi-cache-purge-and-preload-nginx'),
-            $status
-        );
-        wp_send_json_error($msg);
-    }
 }
 
 // Shortcode function to display the Nginx configuration on status tab
