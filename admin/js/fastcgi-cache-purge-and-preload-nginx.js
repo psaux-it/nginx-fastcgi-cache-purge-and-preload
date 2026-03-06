@@ -2949,47 +2949,13 @@ $(document).ready(function() {
 
     // Unique ID copy clipboard
     $('#nppp-unique-id').on('click', async function (event) {
-        var uniqueIdElement = $(this);
-        var clickToRevealSpan = uniqueIdElement.find('span');
-        var clickToRevealSpanOffset = clickToRevealSpan.offset();
-        var notificationLeft = clickToRevealSpanOffset.left + clickToRevealSpan.outerWidth() + 10;
-        var notificationTop = clickToRevealSpanOffset.top;
-
-        var uniqueId = uniqueIdElement.data('unique-id');
+        var uniqueId = $(this).data('unique-id');
         await npppCopy(uniqueId);
-
-        // Show a small notification just after the 'Unique ID' text
-        var notification = document.createElement('div');
-        notification.textContent = 'Copied to clipboard';
-        notification.style.position = 'absolute';
-        notification.style.left = notificationLeft + 'px';
-        notification.style.top = notificationTop + 'px';
-        notification.style.backgroundColor = '#50C878';
-        notification.style.color = '#fff';
-        notification.style.padding = '2px 5px';
-        notification.style.transition = 'opacity 0.3s ease-in-out';
-        notification.style.opacity = '1';
-        notification.style.zIndex = '9999';
-        notification.style.fontSize = '12px';
-        notification.style.fontWeight = '700';
-        document.body.appendChild(notification);
-
-        setTimeout(function() {
-            notification.style.opacity = '0';
-            setTimeout(function() {
-                document.body.removeChild(notification);
-            }, 300);
-        }, 2000);
+        npppToast(__('Copied to clipboard', 'fastcgi-cache-purge-and-preload-nginx'), 'success', 2000);
     });
 
     // Click event handler for copying the API key to clipboard
     $('#nppp-api-key').click(function(event) {
-        var apiKeyElement = $(this);
-        var clickToCopySpan = apiKeyElement.find('span');
-        var clickToCopySpanOffset = clickToCopySpan.offset();
-        var notificationLeft = clickToCopySpanOffset.left + clickToCopySpan.outerWidth() + 10;
-        var notificationTop = clickToCopySpanOffset.top;
-
         // Perform AJAX request to fetch the API key
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
@@ -3013,29 +2979,7 @@ $(document).ready(function() {
                     console.error('Clipboard write failed:', e);
                     return;
                 }
-
-                // Show a small notification indicating successful copy
-                var notification = document.createElement('div');
-                notification.textContent = 'Copied to clipboard';
-                notification.style.position = 'absolute';
-                notification.style.left = notificationLeft + 'px';
-                notification.style.top = notificationTop + 'px';
-                notification.style.backgroundColor = '#50C878';
-                notification.style.color = '#fff';
-                notification.style.padding = '2px 5px';
-                notification.style.transition = 'opacity 0.3s ease-in-out';
-                notification.style.opacity = '1';
-                notification.style.zIndex = '9999';
-                notification.style.fontSize = '12px';
-                notification.style.fontWeight = '700';
-                document.body.appendChild(notification);
-
-                setTimeout(function() {
-                    notification.style.opacity = '0';
-                    setTimeout(function() {
-                        document.body.removeChild(notification);
-                    }, 300);
-                }, 2000);
+                npppToast(__('Copied to clipboard', 'fastcgi-cache-purge-and-preload-nginx'), 'success', 2000);
             },
             error: function(xhr, status, error) {
                 console.error('Error fetching API key:', error);
@@ -3045,12 +2989,6 @@ $(document).ready(function() {
 
     // Click event handler for copying the Purge URL to clipboard
     $('#nppp-purge-url').click(function(event) {
-        var purgeUrlElement = $(this);
-        var clickToCopySpan = purgeUrlElement.find('span');
-        var clickToCopySpanOffset = clickToCopySpan.offset();
-        var notificationLeft = clickToCopySpanOffset.left + clickToCopySpan.outerWidth() + 10;
-        var notificationTop = clickToCopySpanOffset.top;
-
         // Perform AJAX request to fetch the Purge URL
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
@@ -3065,29 +3003,7 @@ $(document).ready(function() {
 
                 // Copy the Purge URL to clipboard
                 await npppCopy(purgeUrl);
-
-                // Show a small notification indicating successful copy
-                var notification = document.createElement('div');
-                notification.textContent = 'Copied to clipboard';
-                notification.style.position = 'absolute';
-                notification.style.left = notificationLeft + 'px';
-                notification.style.top = notificationTop + 'px';
-                notification.style.backgroundColor = '#50C878';
-                notification.style.color = '#fff';
-                notification.style.padding = '2px 5px';
-                notification.style.transition = 'opacity 0.3s ease-in-out';
-                notification.style.opacity = '1';
-                notification.style.zIndex = '9999';
-                notification.style.fontSize = '12px';
-                notification.style.fontWeight = '700';
-                document.body.appendChild(notification);
-
-                setTimeout(function() {
-                    notification.style.opacity = '0';
-                    setTimeout(function() {
-                        document.body.removeChild(notification);
-                    }, 300);
-                }, 2000);
+                npppToast(__('Copied to clipboard', 'fastcgi-cache-purge-and-preload-nginx'), 'success', 2000);
             },
             error: function(xhr, status, error) {
                 console.error('Error fetching Purge URL:', error);
@@ -3097,12 +3013,6 @@ $(document).ready(function() {
 
     // Click event handler for copying the Preload URL to clipboard
     $('#nppp-preload-url').click(function(event) {
-        var preloadUrlElement = $(this);
-        var clickToCopySpan = preloadUrlElement.find('span');
-        var clickToCopySpanOffset = clickToCopySpan.offset();
-        var notificationLeft = clickToCopySpanOffset.left + clickToCopySpan.outerWidth() + 10;
-        var notificationTop = clickToCopySpanOffset.top;
-
         // Perform AJAX request to fetch the Preload URL
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
@@ -3117,29 +3027,7 @@ $(document).ready(function() {
 
                 // Copy the Preload URL to clipboard
                 await npppCopy(preloadUrl);
-
-                // Show a small notification indicating successful copy
-                var notification = document.createElement('div');
-                notification.textContent = 'Copied to clipboard';
-                notification.style.position = 'absolute';
-                notification.style.left = notificationLeft + 'px';
-                notification.style.top = notificationTop + 'px';
-                notification.style.backgroundColor = '#50C878';
-                notification.style.color = '#fff';
-                notification.style.padding = '2px 5px';
-                notification.style.transition = 'opacity 0.3s ease-in-out';
-                notification.style.opacity = '1';
-                notification.style.zIndex = '9999';
-                notification.style.fontSize = '12px';
-                notification.style.fontWeight = '700';
-                document.body.appendChild(notification);
-
-                setTimeout(function() {
-                    notification.style.opacity = '0';
-                    setTimeout(function() {
-                        document.body.removeChild(notification);
-                    }, 300);
-                }, 2000);
+                npppToast(__('Copied to clipboard', 'fastcgi-cache-purge-and-preload-nginx'), 'success', 2000);
             },
             error: function(xhr, status, error) {
                 console.error('Error fetching Preload URL:', error);
