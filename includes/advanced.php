@@ -478,6 +478,14 @@ function nppp_premium_html($nginx_cache_path) {
                 <th><?php esc_html_e( 'Cache Date', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Action', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
             </tr>
+            <tr class="nppp-filter-row">
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th class="nppp-filter-no-col"></th>
+            </tr>
         </thead>
         <tbody>
         <?php if ( empty($mergedRows) ) : ?>
