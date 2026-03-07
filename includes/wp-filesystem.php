@@ -25,12 +25,21 @@ if ( ! defined( 'FS_CHMOD_DIR' ) ) {
 
 // Custom logger function
 function nppp_custom_error_log($message, $error_type = E_USER_WARNING) {
-    if (defined('WP_DEBUG' ) && WP_DEBUG) {
-        if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
-            // Log to WordPress debug.log
-            $sanitized_message = wp_strip_all_tags(wp_unslash($message));
-            wp_trigger_error($sanitized_message, $error_type);
-        }
+    $sanitized_message = wp_strip_all_tags($message);
+
+    $caller = '';
+    $trace  = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
+    if (!empty($trace[1]['function'])) {
+        $caller = $trace[1]['function'];
+    }
+
+    if ($error_type === E_USER_ERROR) {
+        error_log('[NPPP] ' . ($caller ? $caller . '(): ' : '') . $sanitized_message);
+        return;
+    }
+
+    if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+        wp_trigger_error($caller, $sanitized_message, $error_type);
     }
 }
 
