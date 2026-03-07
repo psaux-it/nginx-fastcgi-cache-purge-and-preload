@@ -3893,3 +3893,248 @@ body.has-sticky-submit .nppp-scrollfab{
         animation: none;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Excel-like column filter dropdowns  —  #nppp-premium-table
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Filter row cells */
+#nppp-premium-table thead tr.nppp-filter-row th {
+    background-color: #2a6399 !important;
+    padding: 3px 6px !important;
+    vertical-align: middle;
+    border-top: 1px solid #1e4f7a;
+    text-align: center;
+    line-height: 1;
+}
+
+#nppp-premium-table thead tr.nppp-filter-row th.nppp-filter-no-col {
+    background-color: #2a6399 !important;
+}
+
+/* Wrapper inside each filter cell */
+.nppp-filter-wrapper {
+    position: relative;
+    display: inline-flex;
+    justify-content: flex-start;
+    width: 100%;
+}
+
+/* The small trigger button */
+.nppp-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    width: 28px;
+    height: 22px;
+    padding: 0;
+    background: rgba(255,255,255,0.13);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.nppp-filter-btn:hover,
+.nppp-filter-btn:focus {
+    background: rgba(255,255,255,0.25);
+    border-color: rgba(255,255,255,0.6);
+    outline: none;
+}
+
+/* Active (filtered) state */
+.nppp-filter-btn--active {
+    background: #e8a800 !important;
+    border-color: #c98f00 !important;
+    color: #1a1a1a !important;
+}
+
+.nppp-filter-btn--active .nppp-filter-arrow {
+    color: #1a1a1a;
+}
+
+/* Arrow icon */
+.nppp-filter-arrow {
+    font-size: 9px;
+    color: rgba(255,255,255,0.85);
+    pointer-events: none;
+    line-height: 1;
+}
+
+/* Active badge dot */
+.nppp-filter-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    background: #d9534f;
+    color: #fff;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: bold;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* ── Dropdown panel ── */
+.nppp-filter-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 99999;
+    min-width: 200px;
+    max-width: 320px;
+    background: #fff;
+    border: 1px solid #b0c4de;
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    padding: 0;
+    overflow: hidden;
+}
+
+/* Search input inside dropdown */
+.nppp-filter-search {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    border: none;
+    border-bottom: 1px solid #dde4ec;
+    font-size: 12px;
+    color: #333;
+    background: #f5f8fc;
+    outline: none;
+    font-family: inherit;
+}
+
+.nppp-filter-search:focus {
+    background: #eef4ff;
+    border-bottom-color: #337ab7;
+}
+
+/* Scrollable list area */
+.nppp-filter-list-wrap {
+    max-height: 220px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* The UL list */
+.nppp-filter-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.nppp-filter-list li {
+    margin: 0;
+    padding: 0;
+}
+
+.nppp-filter-list li label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #222;
+    transition: background 0.1s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+}
+
+.nppp-filter-list li label:hover {
+    background: #eef4ff;
+}
+
+/* "Select All" row styling */
+.nppp-filter-all-row label {
+    font-weight: 600 !important;
+    border-bottom: 1px solid #dde4ec;
+    background: #f5f8fc;
+    color: #2a6399 !important;
+}
+
+.nppp-filter-all-row label:hover {
+    background: #dce9f7 !important;
+}
+
+/* Checkboxes inside filter list */
+.nppp-filter-list input[type="checkbox"] {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #337ab7;
+}
+
+/* Footer with Apply / Reset */
+.nppp-filter-footer {
+    display: flex;
+    gap: 6px;
+    padding: 7px 10px;
+    border-top: 1px solid #dde4ec;
+    background: #f5f8fc;
+}
+
+.nppp-filter-ok,
+.nppp-filter-clear {
+    flex: 1;
+    padding: 5px 8px;
+    border: none;
+    border-radius: 3px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    transition: background 0.15s;
+}
+
+.nppp-filter-ok {
+    background: #337ab7;
+    color: #fff;
+}
+
+.nppp-filter-ok:hover {
+    background: #2563a0;
+}
+
+.nppp-filter-clear {
+    background: #e8e8e8;
+    color: #444;
+}
+
+.nppp-filter-clear:hover {
+    background: #d0d0d0;
+}
+
+/* Scrollbar styling inside list */
+.nppp-filter-list-wrap::-webkit-scrollbar {
+    width: 6px;
+}
+.nppp-filter-list-wrap::-webkit-scrollbar-track {
+    background: #f0f0f0;
+}
+.nppp-filter-list-wrap::-webkit-scrollbar-thumb {
+    background: #b0c4de;
+    border-radius: 3px;
+}
+.nppp-filter-list-wrap::-webkit-scrollbar-thumb:hover {
+    background: #337ab7;
+}
+
+@media screen and (max-width: 768px) {
+    #nppp-premium-table thead tr.nppp-filter-row {
+        display: none;
+    }
+}
