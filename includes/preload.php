@@ -445,10 +445,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
-    $default_wait_time = 1;
+    $default_wait_time = 0;
     $default_reject_extension = nppp_fetch_default_reject_extension();
     $nginx_cache_reject_extension = isset($nginx_cache_settings['nginx_cache_reject_extension']) ? $nginx_cache_settings['nginx_cache_reject_extension'] : $default_reject_extension;
     $nginx_cache_wait = isset($nginx_cache_settings['nginx_cache_wait_request']) ? $nginx_cache_settings['nginx_cache_wait_request'] : $default_wait_time;
+    $nginx_cache_read_timeout = isset($nginx_cache_settings['nginx_cache_read_timeout']) ? (int)$nginx_cache_settings['nginx_cache_read_timeout'] : 60;
     $log_path = nppp_get_runtime_file('nppp-wget.log');
 
     // Determine which USER_AGENT to use
@@ -625,7 +626,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 'nohup wget ' .
                 '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
                 '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-                '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --ignore-case --compression=auto ' .
+                '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case --compression=auto ' .
                 '-e robots=off ' .
                 '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
                 '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -832,7 +833,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             'nohup wget ' .
             '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-            '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --ignore-case --compression=auto ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case --compression=auto ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -945,6 +946,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_read_timeout = isset($nginx_cache_settings['nginx_cache_read_timeout']) ? (int)$nginx_cache_settings['nginx_cache_read_timeout'] : 60;
 
     // Set env
     nppp_prepare_request_env(true);
@@ -1035,7 +1037,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         'nohup wget ' .
         '--quiet --no-config --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-        '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --compression=auto ' .
+        '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --compression=auto ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -1077,7 +1079,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
             'nohup wget ' .
             '--quiet --no-config --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-            '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --compression=auto ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --compression=auto ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -1215,6 +1217,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // Get the necessary data for preload action from plugin options
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
     $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
+    $nginx_cache_read_timeout = isset($nginx_cache_settings['nginx_cache_read_timeout']) ? (int)$nginx_cache_settings['nginx_cache_read_timeout'] : 60;
 
     // Extra data for preload action
     $this_script_path = dirname(plugin_dir_path(__FILE__));
@@ -1322,7 +1325,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         'nohup wget ' .
         '--quiet --no-config --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-        '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --compression=auto ' .
+        '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --compression=auto ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -1364,7 +1367,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             'nohup wget ' .
             '--quiet --no-config --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-            '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --compression=auto ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --compression=auto ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
