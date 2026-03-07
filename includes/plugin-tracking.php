@@ -19,7 +19,7 @@ function nppp_plugin_tracking($status = 'active') {
     // Validate status against allowed values
     $allowed_statuses = array('active', 'inactive', 'opt-out');
     if (!in_array($status, $allowed_statuses, true)) {
-        nppp_custom_error_log(__('Invalid tracking status. API call aborted.', 'fastcgi-cache-purge-and-preload-nginx'));
+        nppp_custom_error_log(__('Invalid tracking status. API call aborted.', 'fastcgi-cache-purge-and-preload-nginx'), E_USER_NOTICE);
         return;
     }
 
@@ -46,7 +46,7 @@ function nppp_plugin_tracking($status = 'active') {
     $plugin_version = $plugin_data['Version'];
 
     if (empty($plugin_name) || empty($plugin_version)) {
-        nppp_custom_error_log(__('Plugin data not available. API call aborted.', 'fastcgi-cache-purge-and-preload-nginx'));
+        nppp_custom_error_log(__('Plugin data not available. API call aborted.', 'fastcgi-cache-purge-and-preload-nginx'), E_USER_NOTICE);
         return;
     }
 
@@ -84,12 +84,12 @@ function nppp_plugin_tracking($status = 'active') {
             // Log tracking failure
             if (is_wp_error($tracking_response)) {
                 // Translators: This message appears when the plugin tracking request fails.
-                nppp_custom_error_log(sprintf(__('Plugin tracking request failed: %s', 'fastcgi-cache-purge-and-preload-nginx'), $tracking_response->get_error_message()));
+                nppp_custom_error_log(sprintf(__('Plugin tracking request failed: %s', 'fastcgi-cache-purge-and-preload-nginx'), $tracking_response->get_error_message()), E_USER_NOTICE);
             }
         }
     } else {
         // Translators: This message appears when JWT token retrieval fails.
-        nppp_custom_error_log(sprintf(__('Failed to retrieve JWT token: %s', 'fastcgi-cache-purge-and-preload-nginx'), $response->get_error_message()));
+        nppp_custom_error_log(sprintf(__('Failed to retrieve JWT token: %s', 'fastcgi-cache-purge-and-preload-nginx'), $response->get_error_message()), E_USER_NOTICE);
     }
 }
 
@@ -124,7 +124,7 @@ function nppp_schedule_plugin_tracking_event($status = false) {
         $scheduled = wp_schedule_event($next_execution_timestamp, $recurrence, 'npp_plugin_tracking_event', $args);
 
         if (!$scheduled) {
-            nppp_custom_error_log(__('Failed to schedule plugin tracking event.', 'fastcgi-cache-purge-and-preload-nginx'));
+            nppp_custom_error_log(__('Failed to schedule plugin tracking event.', 'fastcgi-cache-purge-and-preload-nginx'), E_USER_NOTICE);
         }
     }
 }
