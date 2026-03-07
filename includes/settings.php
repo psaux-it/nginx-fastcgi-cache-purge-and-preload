@@ -37,6 +37,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nppp_cloudflare_apo_sync', 'Cloudflare APO Sync', 'nppp_nginx_cache_cloudflare_apo_sync_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nppp_related_pages', 'Related Pages (single-URL purge only)', 'nppp_nginx_cache_related_pages_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_wait_request', 'Per Request Wait Time', 'nppp_nginx_cache_wait_request_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_read_timeout', 'PHP Response Timeout', 'nppp_nginx_cache_read_timeout_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_tracking_opt_in', 'Enable Tracking', 'nppp_nginx_cache_tracking_opt_in_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_key_custom_regex', 'Enable Custom regex', 'nppp_nginx_cache_key_custom_regex_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_auto_preload_mobile', 'Auto Preload Mobile', 'nppp_nginx_cache_auto_preload_mobile_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
@@ -490,6 +491,20 @@ function nppp_nginx_cache_settings_page() {
                                  <p class="description"><?php echo esc_html__( 'Adjust the values to find the optimal balance based on your desired server resource allocation.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                  <p class="description"><?php echo esc_html__( 'If you encounter unexpected permission issues or risk overwhelming your server, try setting it to 1 first and take small steps with each adjustment.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                  <p class="description"><?php echo esc_html__( 'Default: 0 second, Disabled', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row">
+                                <span class="dashicons dashicons-clock"></span>
+                                <?php echo esc_html__( 'PHP Response Timeout', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                 <?php nppp_nginx_cache_read_timeout_callback(); ?>
+                                 <p class="description"><?php echo esc_html__( 'Maximum seconds preload process will wait for PHP-FPM to start sending a response before abandoning a URL.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                 <p class="description"><?php echo esc_html__( 'This is not a total page download limit — it measures idle time with no data received (Time To First Byte).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                 <p class="description"><?php echo esc_html__( 'Simple sites or blogs can use lower values (15–30s). Complex setups such as WooCommerce stores, membership sites, or pages with heavy plugins may need higher values (60–120s).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                 <p class="description"><?php echo esc_html__( 'If pages are being skipped during preload and staying uncached, increase this value first before investigating other causes.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                 <p class="description"><?php echo esc_html__( 'Default: 60 seconds', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
                         <!-- Start Schedule Options Section -->
@@ -1583,6 +1598,13 @@ function nppp_nginx_cache_wait_request_callback() {
     echo "<input type='number' id='nginx_cache_wait_request' name='nginx_cache_settings[nginx_cache_wait_request]' min='0' max='60' value='" . esc_attr($options['nginx_cache_wait_request'] ?? $default_wait_time) . "' class='small-text' />";
 }
 
+// Callback function to display the input field for PHP Response Timeout setting
+function nppp_nginx_cache_read_timeout_callback() {
+    $options = get_option('nginx_cache_settings');
+    $default_read_timeout = 60;
+    echo "<input type='number' id='nginx_cache_read_timeout' name='nginx_cache_settings[nginx_cache_read_timeout]' min='10' max='300' value='" . esc_attr($options['nginx_cache_read_timeout'] ?? $default_read_timeout) . "' class='small-text' />";
+}
+
 // Callback function to display the checkbox for Send Email Notification setting
 function nppp_nginx_cache_send_mail_callback() {
     $options = get_option('nginx_cache_settings');
@@ -2438,6 +2460,32 @@ function nppp_nginx_cache_settings_sanitize($input) {
         }
     }
 
+    // Sanitize and validate PHP Response Timeout
+    if (isset($input['nginx_cache_read_timeout'])) {
+        if (is_numeric($input['nginx_cache_read_timeout'])) {
+            $read_timeout = intval($input['nginx_cache_read_timeout']);
+            if ($read_timeout >= 10 && $read_timeout <= 300) {
+                $sanitized_input['nginx_cache_read_timeout'] = $read_timeout;
+            } else {
+                add_settings_error(
+                    'nppp_nginx_cache_settings_group',
+                    'invalid-read-timeout',
+                    __('Please enter a PHP Response Timeout between 10 and 300 seconds.', 'fastcgi-cache-purge-and-preload-nginx'),
+                    'error'
+                );
+                nppp_log_error_message(__('ERROR OPTION: Please enter a PHP response timeout between 10 and 300 seconds.', 'fastcgi-cache-purge-and-preload-nginx'));
+            }
+        } else {
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'invalid-read-timeout-format',
+                __('PHP Response Timeout must be a numeric value in seconds.', 'fastcgi-cache-purge-and-preload-nginx'),
+                'error'
+            );
+            nppp_log_error_message(__('ERROR OPTION: PHP response timeout must be a numeric value in seconds.', 'fastcgi-cache-purge-and-preload-nginx'));
+        }
+    }
+
     // Sanitize Reject Regex field
     if (!empty($input['nginx_cache_reject_regex'])) {
         $raw = $input['nginx_cache_reject_regex'];
@@ -2806,6 +2854,7 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_reject_regex'          => nppp_fetch_default_reject_regex(),
         'nginx_cache_key_custom_regex'      => base64_encode(nppp_fetch_default_regex_for_cache_key()),
         'nginx_cache_wait_request'          => 0,
+        'nginx_cache_read_timeout'          => 60,
         'nginx_cache_limit_rate'            => 5120,
         'nginx_cache_tracking_opt_in'       => '0',
         'nginx_cache_api_key'               => $new_api_key,
