@@ -323,8 +323,8 @@ function nppp_detect_premature_process(
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'wget ' .
         '--quiet --recursive -l inf --no-cache --no-config --no-cookies --no-directories --delete-after ' .
-        '--no-dns-cache --no-check-certificate ' .
-        '--timeout=10 --tries=2 --ignore-case --compression=auto ' .
+        '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+        '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --ignore-case --compression=auto ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -624,8 +624,8 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
                 'nohup wget ' .
                 '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
-                '--no-dns-cache --no-check-certificate ' .
-                '--timeout=15 --tries=2 --ignore-case --compression=auto ' .
+                '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+                '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --ignore-case --compression=auto ' .
                 '-e robots=off ' .
                 '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
                 '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -831,8 +831,8 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
             '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
-            '--no-dns-cache --no-check-certificate ' .
-            '--timeout=15 --tries=2 --ignore-case --compression=auto ' .
+            '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --ignore-case --compression=auto ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -1034,8 +1034,8 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'nohup wget ' .
         '--quiet --no-config --no-cookies --no-directories --delete-after ' .
-        '--no-dns-cache --no-check-certificate ' .
-        '--timeout=15 --tries=2 --compression=auto ' .
+        '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+        '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --compression=auto ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -1076,8 +1076,8 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
             '--quiet --no-config --no-cookies --no-directories --delete-after ' .
-            '--no-dns-cache --no-check-certificate ' .
-            '--timeout=15 --tries=2 --compression=auto ' .
+            '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --compression=auto ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -1321,8 +1321,8 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'nohup wget ' .
         '--quiet --no-config --no-cookies --no-directories --delete-after ' .
-        '--no-dns-cache --no-check-certificate ' .
-        '--timeout=15 --tries=2 --compression=auto ' .
+        '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+        '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --compression=auto ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -1363,8 +1363,8 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
             '--quiet --no-config --no-cookies --no-directories --delete-after ' .
-            '--no-dns-cache --no-check-certificate ' .
-            '--timeout=15 --tries=2 --compression=auto ' .
+            '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --compression=auto ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
