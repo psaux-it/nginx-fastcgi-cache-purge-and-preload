@@ -156,7 +156,7 @@ function nppp_render_mobile_fab(): void {
                 aria-expanded="false"
                 aria-controls="nppp-mobile-fab-menu"
                 aria-label="<?php esc_attr_e('Nginx Cache actions', 'fastcgi-cache-purge-and-preload-nginx'); ?>">
-            <img src="<?php echo $icon_url; ?>" alt="" width="22" height="22" aria-hidden="true">
+            <img src="<?php echo esc_url( $icon_url ); ?>" alt="" width="22" height="22" aria-hidden="true">
         </button>
 
     </div>
