@@ -149,6 +149,7 @@ $nppp_auto_purge = isset($nppp_options['nginx_cache_purge_on_update'])
 require_once dirname(__DIR__) . '/includes/compat-cloudflare.php';
 require_once dirname(__DIR__) . '/includes/compat-elementor.php';
 require_once dirname(__DIR__) . '/includes/compat-gutenberg.php';
+require_once dirname(__DIR__) . '/includes/compat-redis-cache.php';
 
 // Hook into well-known cache plugin purge events.
 $nppp_page_cache_purge_actions = array(
@@ -179,6 +180,7 @@ add_action('wp_ajax_nppp_update_send_mail_option', 'nppp_update_send_mail_option
 add_action('wp_ajax_nppp_update_auto_preload_option', 'nppp_update_auto_preload_option');
 add_action('wp_ajax_nppp_update_auto_purge_option', 'nppp_update_auto_purge_option');
 add_action('wp_ajax_nppp_update_cloudflare_apo_sync_option', 'nppp_update_cloudflare_apo_sync_option');
+add_action('wp_ajax_nppp_update_redis_cache_sync_option', 'nppp_update_redis_cache_sync_option');
 add_action('wp_ajax_nppp_cache_status', 'nppp_cache_status_callback');
 add_action('wp_ajax_nppp_load_premium_content', 'nppp_load_premium_content_callback');
 add_action('wp_ajax_nppp_purge_cache_premium', 'nppp_purge_cache_premium_callback');
