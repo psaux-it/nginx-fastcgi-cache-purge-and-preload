@@ -1838,6 +1838,50 @@ $(document).ready(function() {
         }, 'json');
     });
 
+    // Redis Object Cache sync toggle
+    $('#nppp_redis_cache_sync').change(function() {
+        var redisElement     = $(this);
+        var labelSpan        = redisElement.next('.nppp-onoffswitch-label-redis');
+        var labelOffset      = labelSpan.offset();
+        var notifLeft        = labelOffset.left + labelSpan.outerWidth() + 10;
+        var notifTop         = labelOffset.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action:           'nppp_update_redis_cache_sync_option',
+            redis_cache_sync: isChecked,
+            _wpnonce:         nppp_admin_data.redis_cache_sync_nonce
+        }, function(response) {
+            if (response.success) {
+                var notification       = document.createElement('div');
+                notification.textContent = '\u2714';
+                notification.style.cssText = [
+                    'position:absolute',
+                    'left:'  + notifLeft + 'px',
+                    'top:'   + notifTop  + 'px',
+                    'background-color:#50C878',
+                    'color:#fff',
+                    'padding:8px 12px',
+                    'transition:opacity 0.3s ease-in-out',
+                    'opacity:1',
+                    'z-index:9999',
+                    'font-size:13px',
+                    'font-weight:700'
+                ].join(';');
+                document.body.appendChild(notification);
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() { document.body.removeChild(notification); }, 300);
+                }, 1000);
+            } else {
+                $('#nppp_redis_cache_sync').prop('checked', !$('#nppp_redis_cache_sync').prop('checked'));
+                if (typeof npppToast === 'function') {
+                    npppToast('Error updating option!', 'error');
+                }
+            }
+        }, 'json');
+    });
+
     // Related Pages
     (function npppSetupRelatedAutoSave() {
         const $npppRelWrappers = $('.nppp-related-pages').not('[data-nppp-rel-init]');
@@ -2912,7 +2956,6 @@ $(document).ready(function() {
 
     // Toggle switch rules for Cloudflare APO sync
     var isCloudflareChecked = $('#nppp_cloudflare_apo_sync').prop('checked');
-    // Update the toggle switch based on the checkbox state
     if (isCloudflareChecked) {
         // Checkbox is checked, toggle switch to On
         $('.nppp-onoffswitch-switch-cloudflare').css('background', '#66b317');
@@ -2927,9 +2970,7 @@ $(document).ready(function() {
 
     // Add event listener to the original checkbox
     $('#nppp_cloudflare_apo_sync').change(function() {
-        // Check if the checkbox is checked
         var isCloudflareChecked = $(this).prop('checked');
-        // Update the toggle switch based on the checkbox state
         if (isCloudflareChecked) {
             // Checkbox is checked, toggle switch to On
             $('.nppp-onoffswitch-switch-cloudflare').css('background', '#66b317');
@@ -2940,6 +2981,31 @@ $(document).ready(function() {
             $('.nppp-onoffswitch-switch-cloudflare').css('background', '#ea1919');
             $('.nppp-on-cloudflare').css('color', '#000000');
             $('.nppp-off-cloudflare').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for Redis Object Cache sync
+    var isRedisChecked = $('#nppp_redis_cache_sync').prop('checked');
+    if (isRedisChecked) {
+        $('.nppp-onoffswitch-switch-redis').css('background', '#66b317');
+        $('.nppp-on-redis').css('color', '#ffffff');
+        $('.nppp-off-redis').css('color', '#000000');
+    } else {
+        $('.nppp-onoffswitch-switch-redis').css('background', '#ea1919');
+        $('.nppp-on-redis').css('color', '#000000');
+        $('.nppp-off-redis').css('color', '#ffffff');
+    }
+
+    $('#nppp_redis_cache_sync').change(function() {
+        var isRedisChecked = $(this).prop('checked');
+        if (isRedisChecked) {
+            $('.nppp-onoffswitch-switch-redis').css('background', '#66b317');
+            $('.nppp-on-redis').css('color', '#ffffff');
+            $('.nppp-off-redis').css('color', '#000000');
+        } else {
+            $('.nppp-onoffswitch-switch-redis').css('background', '#ea1919');
+            $('.nppp-on-redis').css('color', '#000000');
+            $('.nppp-off-redis').css('color', '#ffffff');
         }
     });
 
