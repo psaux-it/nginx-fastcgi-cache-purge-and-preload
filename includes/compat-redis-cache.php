@@ -77,6 +77,10 @@ if ( ! function_exists( 'nppp_redis_cache_sync_is_on' ) ) {
 
 if ( ! function_exists( 'nppp_redis_cache_on_nppp_purge_all' ) ) {
     function nppp_redis_cache_on_nppp_purge_all(): void {
+        // Loop prevention: bail if this purge was triggered by Direction 2.
+        if ( ! empty( $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] ) && $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] === 'nppp' ) {
+            return;
+        }
 
         // Gate: toggle must be on.
         if ( ! nppp_redis_cache_sync_is_on() ) {
@@ -175,12 +179,18 @@ if ( ! function_exists( 'nppp_redis_cache_on_redis_flush' ) ) {
             return;
         }
 
+        // Set the origin flag BEFORE calling nppp_purge_callback() so that
+        // Direction 1 (nppp_purged_all) sees it and bails, preventing a
+        // redundant second Redis flush during this same operation.
+        $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] = 'nppp';
+
         nppp_redis_cache_log(
             __( 'Redis Object Cache was flushed — triggering Nginx cache purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
             'info'
         );
 
         nppp_purge_callback();
+        unset( $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] );
     }
 }
 
