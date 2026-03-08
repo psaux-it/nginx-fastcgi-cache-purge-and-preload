@@ -378,7 +378,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
 
     // Reset tracker before buffering so a stale value from a previous
     // request never bleeds into this one.
-    $GLOBALS['_nppp_last_notice_type'] = 'success';
+    $GLOBALS['nppp_last_notice_type'] = 'success';
 
     // Start output buffering to capture the output of the actions
     ob_start();
@@ -406,7 +406,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     $status_message = wp_strip_all_tags(ob_get_clean());
 
     // Read the type that nppp_display_admin_notice() recorded directly.
-    $message_type = $GLOBALS['_nppp_last_notice_type'] ?? 'success';
+    $message_type = $GLOBALS['nppp_last_notice_type'] ?? 'success';
 
     // Generate redirect nonce
     $nonce_redirect = wp_create_nonce('nppp_redirect_nonce');
