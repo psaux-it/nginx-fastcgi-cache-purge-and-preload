@@ -35,6 +35,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_schedule', 'Scheduled Cache', 'nppp_nginx_cache_schedule_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_purge_on_update', 'Purge Cache on Post/Page Update', 'nppp_nginx_cache_purge_on_update_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nppp_cloudflare_apo_sync', 'Cloudflare APO Sync', 'nppp_nginx_cache_cloudflare_apo_sync_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nppp_redis_cache_sync', 'Redis Object Cache Sync', 'nppp_nginx_cache_redis_cache_sync_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nppp_related_pages', 'Related Pages (single-URL purge only)', 'nppp_nginx_cache_related_pages_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_wait_request', 'Per Request Wait Time', 'nppp_nginx_cache_wait_request_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_read_timeout', 'PHP Response Timeout', 'nppp_nginx_cache_read_timeout_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
@@ -308,6 +309,29 @@ function nppp_nginx_cache_settings_page() {
                                 </p>
                                 <p class="description">
                                     <?php echo esc_html__( 'Requires the official Cloudflare WordPress plugin with APO or PSC enabled and authentication completed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                            </td>
+                        </tr>
+                        <!-- Redis Object Cache Sync Section -->
+                        <tr valign="top">
+                            <th scope="row">
+                                <span class="dashicons dashicons-database"></span>
+                                <?php echo esc_html__( 'Redis Object Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-redis">
+                                        <?php nppp_nginx_cache_redis_cache_sync_callback(); ?>
+                                    </div>
+                                </div>
+                                <p class="description">
+                                    <?php echo esc_html__( 'Sync Redis Object Cache with Nginx cache to keep both caches aligned.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'When ON: Nginx purge-all also flushes Redis object cache. Redis flush also purges Nginx cache (requires Auto Purge enabled).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'Requires the Redis Object Cache plugin installed, configured, and connected.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                             </td>
                         </tr>
@@ -1218,6 +1242,37 @@ function nppp_update_cloudflare_apo_sync_option() {
     }
 }
 
+// AJAX handler — Redis Object Cache sync toggle
+function nppp_update_redis_cache_sync_option() {
+    if ( isset( $_POST['_wpnonce'] ) ) {
+        $nonce = sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) );
+        if ( ! wp_verify_nonce( $nonce, 'nppp-update-redis-cache-sync-option' ) ) {
+            wp_send_json_error( 'Nonce verification failed.' );
+        }
+    } else {
+        wp_send_json_error( 'Nonce is missing.' );
+    }
+
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( 'You do not have permission to update this option.' );
+    }
+
+    $redis_sync = isset( $_POST['redis_cache_sync'] )
+        ? sanitize_text_field( wp_unslash( $_POST['redis_cache_sync'] ) )
+        : 'no';
+
+    $current_options = get_option( 'nginx_cache_settings', [] );
+    $current_options['nppp_redis_cache_sync'] = $redis_sync;
+
+    $updated = update_option( 'nginx_cache_settings', $current_options );
+
+    if ( $updated ) {
+        wp_send_json_success( 'Option updated successfully.' );
+    } else {
+        wp_send_json_error( 'Error updating option.' );
+    }
+}
+
 // AJAX callback function to update cache schedule option
 function nppp_update_cache_schedule_option() {
     // Verify nonce
@@ -1699,6 +1754,41 @@ function nppp_nginx_cache_cloudflare_apo_sync_callback() {
             <em class="nppp-hint" role="note" style="max-width:max-content; opacity: 0.5;">
                 <span class="dashicons dashicons-lock" aria-hidden="true"></span>
                 <?php echo esc_html__( 'Cloudflare APO plugin not detected. Install and configure it to enable sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            </em>
+        </div>
+    <?php endif; ?>
+    <?php
+}
+
+// Callback function for the Redis Cache field.
+function nppp_nginx_cache_redis_cache_sync_callback() {
+    $options     = get_option( 'nginx_cache_settings' );
+    $is_checked  = isset( $options['nppp_redis_cache_sync'] ) && $options['nppp_redis_cache_sync'] === 'yes';
+    $checked_attr = $is_checked ? 'checked="checked"' : '';
+    $is_available = function_exists( 'nppp_redis_cache_is_available' ) && nppp_redis_cache_is_available();
+
+    // If the toggle is on but Redis disappeared, clear the stored value.
+    if ( ! $is_available && isset( $options['nppp_redis_cache_sync'] ) && $options['nppp_redis_cache_sync'] !== 'no' ) {
+        $options['nppp_redis_cache_sync'] = 'no';
+        update_option( 'nginx_cache_settings', $options );
+        $checked_attr = '';
+    }
+
+    $disabled = $is_available ? '' : 'disabled="disabled"';
+    ?>
+    <input type="checkbox" name="nginx_cache_settings[nppp_redis_cache_sync]" class="nppp-onoffswitch-checkbox-redis" value="yes" id="nppp_redis_cache_sync" <?php echo esc_attr( $checked_attr ); ?> <?php echo esc_attr( $disabled ); ?>>
+    <label class="nppp-onoffswitch-label-redis" for="nppp_redis_cache_sync">
+        <span class="nppp-onoffswitch-inner-redis">
+            <span class="nppp-off-redis"><?php echo esc_html__( 'OFF', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+            <span class="nppp-on-redis"><?php echo esc_html__( 'ON', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+        </span>
+        <span class="nppp-onoffswitch-switch-redis"></span>
+    </label>
+    <?php if ( ! $is_available ) : ?>
+        <div class="nppp-related-pages" aria-live="polite">
+            <em class="nppp-hint" role="note" style="max-width:max-content; opacity: 0.5;">
+                <span class="dashicons dashicons-lock" aria-hidden="true"></span>
+                <?php echo esc_html__( 'Redis Object Cache plugin not detected or not connected. Install and configure it to enable sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
             </em>
         </div>
     <?php endif; ?>
@@ -2599,6 +2689,7 @@ function nppp_nginx_cache_settings_sanitize($input) {
     $sanitized_input['nginx_cache_auto_preload_mobile']    = isset($input['nginx_cache_auto_preload_mobile'])     && $input['nginx_cache_auto_preload_mobile'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nginx_cache_purge_on_update']        = isset($input['nginx_cache_purge_on_update'])         && $input['nginx_cache_purge_on_update'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nppp_cloudflare_apo_sync']           = isset($input['nppp_cloudflare_apo_sync'])            && $input['nppp_cloudflare_apo_sync'] === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nppp_redis_cache_sync']              = isset($input['nppp_redis_cache_sync'])               && $input['nppp_redis_cache_sync'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nginx_cache_schedule']               = isset($input['nginx_cache_schedule'])                && $input['nginx_cache_schedule'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nginx_cache_api']                    = isset($input['nginx_cache_api'])                     && $input['nginx_cache_api'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nginx_cache_tracking_opt_in']        = isset($input['nginx_cache_tracking_opt_in'])         && $input['nginx_cache_tracking_opt_in'] == '1' ? '1' : '0';
@@ -2865,6 +2956,7 @@ function nppp_defaults_on_plugin_activation() {
         'nppp_related_apply_manual'         => 'no',
         'nppp_related_preload_after_manual' => 'no',
         'nppp_cloudflare_apo_sync'          => 'no',
+        'nppp_redis_cache_sync'             => 'no',
         'nginx_cache_purge_on_update'       => 'no',
         'nginx_cache_auto_preload'          => 'no',
         'nginx_cache_auto_preload_mobile'   => 'no',
