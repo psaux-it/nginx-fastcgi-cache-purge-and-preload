@@ -81,7 +81,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     // by the FPM master process and the upstream proxy respectively and cannot
     // be overridden from PHP at runtime.
     if (function_exists('set_time_limit')) {
-        @set_time_limit(0);
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
     if (function_exists('ignore_user_abort')) {
         ignore_user_abort(true);
@@ -676,7 +676,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
     // by the FPM master process and the upstream proxy respectively and cannot
     // be overridden from PHP at runtime.
     if (function_exists('set_time_limit')) {
-        @set_time_limit(0);
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
     if (function_exists('ignore_user_abort')) {
         ignore_user_abort(true);
