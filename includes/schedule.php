@@ -429,6 +429,19 @@ function nppp_create_scheduled_event_preload_status_callback() {
     // across purges and interrupted runs, so the table stays populated.
     if ( !empty($log_contents) && nppp_wget_log_is_complete( $log_contents ) ) {
         $wp_filesystem->put_contents( $snapshot_path, $log_contents, FS_CHMOD_FILE );
+
+        // Rebuild URL→filepath index now: the cache is fully populated and we
+        // are already inside the post-preload cleanup tick, so the extra
+        // directory walk is the least costly moment it will ever happen.
+        $nppp_index_data = nppp_extract_cached_urls( $wp_filesystem, $nginx_cache_path );
+        if ( is_array( $nppp_index_data ) && ! isset( $nppp_index_data['error'] ) ) {
+            $nppp_index = [];
+            foreach ( $nppp_index_data as $nppp_entry ) {
+                $nppp_index[ preg_replace( '#^https?://#', '', $nppp_entry['url_encoded'] ) ] = $nppp_entry['file_path'];
+            }
+            set_transient( 'nppp_url_filepath_index', $nppp_index, 12 * HOUR_IN_SECONDS );
+            unset( $nppp_index_data, $nppp_index, $nppp_entry );
+        }
     }
 
     // Save to transient for frontend preload progress
