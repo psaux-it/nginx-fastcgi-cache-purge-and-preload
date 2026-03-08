@@ -388,9 +388,21 @@ function nppp_premium_html($nginx_cache_path) {
     }
 
     // Advanced tab visit → persist fresh hit count.
+    // These metrics used for live cache coverage calculations
     if ( ! empty( $hits ) && is_array( $hits ) ) {
         update_option( 'nppp_last_known_hits',      count( $hits ), false );
         update_option( 'nppp_last_hits_scanned_at', time(),         false );
+    }
+
+    // Advanced tab visit → also refresh the URL→filepath index.
+    // Rebuilding the index here costs zero extra filesystem I/O.
+    if ( ! empty( $hits ) && is_array( $hits ) && ! $preload_running ) {
+        $nppp_index = [];
+        foreach ( $hits as $nppp_entry ) {
+            $nppp_index[ preg_replace( '#^https?://#', '', $nppp_entry['url_encoded'] ) ] = $nppp_entry['file_path'];
+        }
+        set_transient( 'nppp_url_filepath_index', $nppp_index, 12 * HOUR_IN_SECONDS );
+        unset( $nppp_index, $nppp_entry );
     }
 
     // Merge HIT + MISS
