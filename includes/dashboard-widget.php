@@ -537,7 +537,7 @@ function nppp_refresh_cache_ratio_callback() {
 
     // Allow long-running scans on large caches
     if ( function_exists( 'set_time_limit' ) ) {
-        @set_time_limit( 0 );
+        @set_time_limit( 0 ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
     // Fresh HITs scan
