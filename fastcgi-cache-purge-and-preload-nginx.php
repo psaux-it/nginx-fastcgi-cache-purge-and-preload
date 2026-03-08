@@ -50,10 +50,10 @@ add_action('init', function (): void {
 }, 1);
 
 // Entry point 2: WP-Cron — NPP events only
-foreach (['npp_cache_preload_event', 'npp_cache_preload_status_event', 'npp_plugin_tracking_event'] as $_nppp_cron_event) {
-    add_action($_nppp_cron_event, 'nppp_load_bootstrap', 0);
+foreach (['npp_cache_preload_event', 'npp_cache_preload_status_event', 'npp_plugin_tracking_event'] as $nppp_cron_event) {
+    add_action($nppp_cron_event, 'nppp_load_bootstrap', 0);
 }
-unset($_nppp_cron_event);
+unset($nppp_cron_event);
 
 // Entry point 3: REST API — NPP namespace only
 add_action('rest_api_init', function (): void {
