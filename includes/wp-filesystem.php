@@ -256,6 +256,7 @@ function nppp_wp_purge($directory_path) {
         // Directory or subdirectory is unreadable
         return new WP_Error(
             'permission_error',
+            /* translators: %s: cache directory path */
             sprintf(__('Permission denied while reading cache directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path)
         );
     }
@@ -289,6 +290,7 @@ function nppp_wp_purge($directory_path) {
                 if ($wp_filesystem->is_file($entry_path) || $wp_filesystem->is_dir($entry_path)) {
                     return new WP_Error(
                         'permission_error',
+                        /* translators: %s: file or directory path */
                         sprintf(__('Permission denied while deleting file or directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $entry_path)
                     );
                 }
@@ -297,6 +299,7 @@ function nppp_wp_purge($directory_path) {
     } catch (UnexpectedValueException $e) {
         return new WP_Error(
             'permission_error',
+            /* translators: %s: cache directory path */
             sprintf(__('Permission denied while reading cache directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $directory_path)
         );
     }
