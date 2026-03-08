@@ -601,7 +601,7 @@ function nppp_load_premium_content_callback() {
     // mid-operation.
 
     if (function_exists('set_time_limit')) {
-        @set_time_limit(0);
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
     // Retrieve plugin settings
@@ -677,7 +677,7 @@ function nppp_purge_cache_premium_callback() {
 
     // Note: because gate to nppp_purge_urls_silent
     if (function_exists('set_time_limit')) {
-        @set_time_limit(0);
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
     if (function_exists('ignore_user_abort')) {
         ignore_user_abort(true);
@@ -996,7 +996,7 @@ function nppp_locate_cache_file_ajax() {
     // mid-operation.
 
     if (function_exists('set_time_limit')) {
-        @set_time_limit(0);
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
     $settings = get_option('nginx_cache_settings');
@@ -1100,7 +1100,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // mid-operation.
 
     if (function_exists('set_time_limit')) {
-        @set_time_limit(0);
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
     $urls = [];
