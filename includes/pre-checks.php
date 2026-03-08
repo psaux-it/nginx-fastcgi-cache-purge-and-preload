@@ -716,7 +716,7 @@ function nppp_pre_checks() {
     // mid-operation.
 
     if (function_exists('set_time_limit')) {
-        @set_time_limit(0);
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
     // Optimize performance by caching results of recursive permission checks
