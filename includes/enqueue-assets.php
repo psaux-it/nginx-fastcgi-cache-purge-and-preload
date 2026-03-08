@@ -228,6 +228,7 @@ function nppp_disable_features($unsupported, $preload) {
             'nginx_cache_api'                    => 'no',
             'nginx_cache_preload_enable_proxy'   => 'no',
             'nppp_cloudflare_apo_sync'           => 'no',
+            'nppp_redis_cache_sync'              => 'no',
             'nppp_related_include_home'          => 'no',
             'nppp_related_include_category'      => 'no',
             'nppp_related_apply_manual'          => 'no',
