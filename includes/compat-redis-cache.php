@@ -143,7 +143,7 @@ if ( ! function_exists( 'nppp_redis_cache_on_redis_flush' ) ) {
         $results,
         int $deprecated,
         $selective,
-        string $salt,
+        ?string $salt,
         float $execute_time
     ): void {
 
