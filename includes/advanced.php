@@ -950,7 +950,7 @@ function nppp_preload_cache_premium_callback() {
     // Validate the sanitized URL
     if (filter_var($cache_url, FILTER_VALIDATE_URL) !== false) {
         // Reset tracker before buffering
-        $GLOBALS['_nppp_last_notice_type'] = 'success';
+        $GLOBALS['nppp_last_notice_type'] = 'success';
 
         // Start output buffering
         ob_start();
@@ -963,7 +963,7 @@ function nppp_preload_cache_premium_callback() {
 
         // Read the type that nppp_display_admin_notice() recorded directly.
         // Language-independent
-        if (($GLOBALS['_nppp_last_notice_type'] ?? 'success') === 'error') {
+        if (($GLOBALS['nppp_last_notice_type'] ?? 'success') === 'error') {
             wp_send_json_error($output);
         } else {
             wp_send_json_success($output);
