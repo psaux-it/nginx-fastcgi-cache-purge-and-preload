@@ -219,6 +219,20 @@ function nppp_dashboard_widget() {
         $cf_status = __('Disabled', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
+    // Redis Object Cache Sync — three states: Enabled / Disabled / Unavailable
+    // Unavailable means the Redis Object Cache plugin is not installed/active/connected,
+    // so the sync option cannot function regardless of the saved setting.
+    $redis_available = function_exists( 'nppp_redis_cache_is_available' ) && nppp_redis_cache_is_available();
+    $redis_sync_on   = isset( $settings['nppp_redis_cache_sync'] ) && $settings['nppp_redis_cache_sync'] === 'yes';
+
+    if ( ! $redis_available ) {
+        $redis_status = __( 'Unavailable', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $redis_sync_on ) {
+        $redis_status = __( 'Enabled', 'fastcgi-cache-purge-and-preload-nginx' );
+    } else {
+        $redis_status = __( 'Disabled', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
     // Need setup
     $needs_setup = class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup();
     $setup_url   = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
@@ -262,6 +276,12 @@ function nppp_dashboard_widget() {
             'status'      => $cf_status,
             'icon'        => 'dashicons-cloud',
             'unavailable' => ! $cf_available,
+        ],
+        'redis_object_cache' => [
+            'label'       => __( 'Redis Object Cache', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'status'      => $redis_status,
+            'icon'        => 'dashicons-database',
+            'unavailable' => ! $redis_available,
         ],
         'scheduled_cache' => [
             'label' => __('Scheduled Cache', 'fastcgi-cache-purge-and-preload-nginx'),
