@@ -28,12 +28,15 @@ function nppp_custom_error_log($message, $error_type = E_USER_WARNING) {
     $sanitized_message = wp_strip_all_tags($message);
 
     $caller = '';
+
+    // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_debug_backtrace
     $trace  = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
     if (!empty($trace[1]['function'])) {
         $caller = $trace[1]['function'];
     }
 
     if ($error_type === E_USER_ERROR) {
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('[NPPP] ' . ($caller ? $caller . '(): ' : '') . $sanitized_message);
         return;
     }
