@@ -1135,7 +1135,7 @@ function nppp_cache_status_callback() {
     // mid-operation.
 
     if (function_exists('set_time_limit')) {
-        @set_time_limit(0);
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
     // Call the shortcode function to get HTML content
