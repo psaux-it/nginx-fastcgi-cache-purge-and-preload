@@ -156,6 +156,19 @@ if ( ! function_exists( 'nppp_redis_cache_on_redis_flush' ) ) {
             return;
         }
 
+        // Gate: only act if Redis actually completed the flush.
+        // The hook fires before the drop-in validates its own results, so we
+        // check here to avoid purging Nginx after a partial or failed Redis flush.
+        if ( empty( $results ) ) {
+            return;
+        }
+
+        foreach ( (array) $results as $result ) {
+            if ( $result === false ) {
+                return;
+            }
+        }
+
         // Gate: toggle must be on.
         if ( ! nppp_redis_cache_sync_is_on() ) {
             return;
