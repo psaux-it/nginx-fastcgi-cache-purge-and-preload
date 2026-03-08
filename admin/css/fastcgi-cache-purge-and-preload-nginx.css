@@ -4138,3 +4138,94 @@ body.has-sticky-submit .nppp-scrollfab{
         display: none;
     }
 }
+
+/* ============================================================
+   Redis Object Cache sync toggle
+   ============================================================ */
+
+/* Container */
+.nppp-onoffswitch-redis {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default checkbox */
+.nppp-onoffswitch-checkbox-redis {
+    display: none;
+}
+
+/* Label / track */
+.nppp-onoffswitch-label-redis {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* ON / OFF text labels */
+.nppp-onoffswitch-inner-redis .nppp-on-redis,
+.nppp-onoffswitch-inner-redis .nppp-off-redis {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-redis .nppp-on-redis {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-redis .nppp-off-redis {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Handle (the sliding knob) */
+.nppp-onoffswitch-switch-redis {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #ea1919;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Checked state — slide knob right, turn green */
+#nppp_redis_cache_sync:checked + .nppp-onoffswitch-label-redis .nppp-onoffswitch-inner-redis .nppp-on-redis {
+    color: #23282d;
+}
+
+#nppp_redis_cache_sync:checked + .nppp-onoffswitch-label-redis .nppp-onoffswitch-switch-redis {
+    width: 55px;
+    transform: translateX(60px);
+    background: #66b317;
+}
+
+/* Show OFF label */
+.nppp-onoffswitch-checkbox-redis + .nppp-onoffswitch-label-redis .nppp-off-redis {
+    display: block;
+}
+
+/* Hide the real checkbox off-screen */
+#nppp_redis_cache_sync {
+    position: absolute;
+    left: -99em;
+}
+
+/* Disabled state */
+.nppp-onoffswitch-checkbox-redis[disabled] + .nppp-onoffswitch-label-redis {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
