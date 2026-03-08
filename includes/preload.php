@@ -417,7 +417,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     // by the FPM master process and the upstream proxy respectively and cannot
     // be overridden from PHP at runtime.
     if (function_exists('set_time_limit')) {
-        @set_time_limit(0);
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
     if (function_exists('ignore_user_abort')) {
         ignore_user_abort(true);
