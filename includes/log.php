@@ -26,9 +26,9 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     // Priority: error > warning > info > success
     // So once 'error' is set, a later 'success' notice won't overwrite it.
     $priority = ['success' => 0, 'info' => 1, 'warning' => 2, 'error' => 3];
-    $current  = $GLOBALS['_nppp_last_notice_type'] ?? 'success';
+    $current  = $GLOBALS['nppp_last_notice_type'] ?? 'success';
     if (($priority[$type] ?? 0) >= ($priority[$current] ?? 0)) {
-        $GLOBALS['_nppp_last_notice_type'] = $type;
+        $GLOBALS['nppp_last_notice_type'] = $type;
     }
 
     // Sanitize the message
