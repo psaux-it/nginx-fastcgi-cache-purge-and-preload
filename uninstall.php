@@ -171,6 +171,7 @@ function nppp_delete_runtime_artifacts_on_uninstall() {
 
     $remaining = glob($runtime_real . DIRECTORY_SEPARATOR . '*');
     if (is_array($remaining) && empty($remaining)) {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- WP_Filesystem unavailable in uninstall context; directory is confirmed empty above.
         rmdir($runtime_real);
     }
 }
