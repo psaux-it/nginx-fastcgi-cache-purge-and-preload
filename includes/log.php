@@ -122,6 +122,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_update_auto_preload_option'             => 'nppp-update-auto-preload-option',
             'nppp_update_auto_purge_option'               => 'nppp-update-auto-purge-option',
             'nppp_update_cloudflare_apo_sync_option'      => 'nppp-update-cloudflare-apo-sync-option',
+            'nppp_update_redis_cache_sync_option'         => 'nppp-update-redis-cache-sync-option',
             'nppp_cache_status'                           => 'cache-status',
             'nppp_load_premium_content'                   => 'load_premium_content_nonce',
             'nppp_purge_cache_premium'                    => 'purge_cache_premium_nonce',
