@@ -394,14 +394,24 @@ function nppp_premium_html($nginx_cache_path) {
         update_option( 'nppp_last_hits_scanned_at', time(),         false );
     }
 
-    // Advanced tab visit → also refresh the URL→filepath index.
-    // Rebuilding the index here costs zero extra filesystem I/O.
+    // Build the URL→filepath index used by single-page and related purges
+    // to skip expensive recursive cache directory scans.
+    // Zero extra filesystem I/O — $hits is already the full directory scan
+    // that just ran to build the table above, so we reuse it directly.
+    // Merge strategy: existing entries are preserved, incoming entries
+    // add or update. Never truncate — Preload All only crawls URLs allowed
+    // by Exclude Endpoints, so pages outside that ruleset never appear in
+    // $hits. Those pages accumulate in the index over time as real visitors
+    // or bots hit them and purge operations add them via write-back. They
+    // must survive across Purge All + Preload All cycles because nginx will
+    // always re-cache them to the same deterministic path on next visit.
     if ( ! empty( $hits ) && is_array( $hits ) && ! $preload_running ) {
-        $nppp_index = [];
+        $nppp_index = get_option( 'nppp_url_filepath_index' );
+        $nppp_index = is_array( $nppp_index ) ? $nppp_index : [];
         foreach ( $hits as $nppp_entry ) {
             $nppp_index[ preg_replace( '#^https?://#', '', $nppp_entry['url_encoded'] ) ] = $nppp_entry['file_path'];
         }
-        set_transient( 'nppp_url_filepath_index', $nppp_index, 12 * HOUR_IN_SECONDS );
+        update_option( 'nppp_url_filepath_index', $nppp_index, false );
         unset( $nppp_index, $nppp_entry );
     }
 
