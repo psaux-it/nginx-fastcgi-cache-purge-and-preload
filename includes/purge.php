@@ -371,17 +371,23 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 // Perform the purge action
                 $deleted = $wp_filesystem->delete($cache_path);
 
-                // Write-back: store url→path in the persistent index so future
-                // purges of this URL skip the scan entirely.
-                // Safe even after delete — nginx always re-caches this URL to
-                // the exact same deterministic path (MD5 + levels slicing).
-                $nppp_wb_index = get_option( 'nppp_url_filepath_index' );
-                $nppp_wb_index = is_array( $nppp_wb_index ) ? $nppp_wb_index : [];
-                $nppp_wb_index[ $url_to_search_exact ] = $cache_path;
-                update_option( 'nppp_url_filepath_index', $nppp_wb_index, false );
-                unset( $nppp_wb_index );
-
                 if ($deleted) {
+                    // Write-back: store url→path in the persistent index so future
+                    // purges of this URL skip the scan entirely.
+                    // Safe even after delete — nginx always re-caches this URL to
+                    // the exact same deterministic path (MD5 + levels slicing).
+                    $nppp_wb_index = get_option( 'nppp_url_filepath_index' );
+                    $nppp_wb_index = is_array( $nppp_wb_index ) ? $nppp_wb_index : [];
+                    $nppp_wb_index[ $url_to_search_exact ] = $cache_path;
+                    update_option( 'nppp_url_filepath_index', $nppp_wb_index, false );
+                    unset( $nppp_wb_index );
+
+                    nppp_display_admin_notice( 'info', sprintf(
+                        /* translators: %s: full page URL */
+                        __( 'INFO INDEX WRITE-BACK: Index updated after scan for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $current_page_url_decoded
+                    ), true, false );
+
                     if ($chain_autopreload) {
                         nppp_preload_cache_on_update($current_page_url, true);
                     } else {
