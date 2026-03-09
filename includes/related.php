@@ -112,6 +112,67 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
         return $results;
     }
 
+    // URL→filepath index fast-path for related URLs.
+    // Iterate $pending and look each up in the index.
+    // Stale entries (file gone / bad perms / failed validation) are left
+    // in $pending so the iterator below handles them as a fallback.
+    // If all pending targets resolve via index, the iterator never opens.
+    $nppp_rel_index = get_transient('nppp_url_filepath_index');
+    if ( is_array( $nppp_rel_index ) ) {
+        foreach ( array_keys( $pending ) as $nppp_rel_key ) {
+            if ( ! isset( $nppp_rel_index[ $nppp_rel_key ] ) ) {
+                continue;
+            }
+
+            $nppp_rel_path  = $nppp_rel_index[ $nppp_rel_key ];
+            $nppp_rel_entry = $pending[ $nppp_rel_key ];
+
+            if ( ! $wp_filesystem->exists( $nppp_rel_path )
+                || ! $wp_filesystem->is_readable( $nppp_rel_path )
+                || ! $wp_filesystem->is_writable( $nppp_rel_path )
+                || nppp_validate_path( $nppp_rel_path, true ) !== true
+            ) {
+                continue; // stale — leave in $pending for iterator fallback
+            }
+
+            $nppp_rel_deleted = (bool) $wp_filesystem->delete( $nppp_rel_path );
+
+            if ( $nppp_rel_deleted ) {
+                nppp_display_admin_notice( 'success', sprintf(
+                    /* translators: %s: related page URL */
+                    __( 'SUCCESS ADMIN: Nginx cache purged for related page %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $nppp_rel_entry['decoded']
+                ), true, false );
+            } else {
+                nppp_display_admin_notice( 'error', sprintf(
+                    /* translators: %s: related page URL */
+                    __( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for related page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $nppp_rel_entry['decoded']
+                ), true, false );
+            }
+
+            $results[ $nppp_rel_entry['original'] ] = [
+                'found'   => true,
+                'deleted' => $nppp_rel_deleted,
+            ];
+
+            unset( $pending[ $nppp_rel_key ] );
+        }
+        unset( $nppp_rel_index, $nppp_rel_key, $nppp_rel_path, $nppp_rel_entry, $nppp_rel_deleted );
+    }
+
+    nppp_display_admin_notice( 'info', sprintf(
+        /* translators: %1$d: number of URLs resolved via index, %2$d: number falling back to scan */
+        __( 'INDEX: Related purge — %1$d resolved via index, %2$d falling back to scan', 'fastcgi-cache-purge-and-preload-nginx' ),
+        count( $urls ) - count( $pending ),
+        count( $pending )
+    ), true, false );
+
+    // All related URLs resolved via index — iterator not needed.
+    if ( empty( $pending ) ) {
+        return $results;
+    }
+
     $settings = get_option('nginx_cache_settings');
     $regex = isset($settings['nginx_cache_key_custom_regex'])
              ? base64_decode($settings['nginx_cache_key_custom_regex'])
@@ -137,6 +198,7 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
             // integrity broke BETWEEN the two scans — most likely a bindfs sync failure
             // between WEBSERVER-USER and PHP-FPM-USER mid-operation.
             // We cannot safely identify or delete remaining targets — abort all pending.
+
             if (!$file->isReadable() || !$file->isWritable()) {
                 foreach ($pending as $entry) {
                     nppp_display_admin_notice('error', sprintf(
