@@ -92,6 +92,7 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_assume_nginx_auto_disabled_notice', // Auto-disable UI notice flag
         'nppp_last_known_hits',                   // Dashboard cache hit ratio — hit count
         'nppp_last_hits_scanned_at',              // Dashboard cache hit ratio — scan timestamp
+        'nppp_url_filepath_index',                // URL→filepath index for single/related purge fast-path
     );
 
     foreach ($option_keys as $option_key) {
