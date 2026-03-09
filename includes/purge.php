@@ -55,8 +55,6 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
             // Cache successfully purged — stored hit count is now stale (cache is empty).
             update_option( 'nppp_last_known_hits',      0,      false );
             update_option( 'nppp_last_hits_scanned_at', time(), false );
-            // Index is now meaningless
-            delete_transient('nppp_url_filepath_index');
             return 0;
         }
     } else {
@@ -169,9 +167,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     // Any miss, stale pointer (file gone / bad permissions / failed validation)
     // falls through silently to the full recursive scan below.
     // The index is advisory only; it never blocks a Purge.
-    // This index always rebuild after Preload All & Advanced tab visit.
+    // Stored as a wp_option (autoload=false) — never expires, survives restarts.
+    // Recursive scan write-back keeps it self-healing for cached URLs not in index.
+    // This index option always updated after Preload All & Advanced tab visit.
 
-    $nppp_index = get_transient('nppp_url_filepath_index');
+    $nppp_index = get_option('nppp_url_filepath_index');
     if (is_array($nppp_index) && isset($nppp_index[$url_to_search_exact])) {
         $nppp_index_path = $nppp_index[$url_to_search_exact];
         unset($nppp_index);
@@ -370,6 +370,17 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
                 // Perform the purge action
                 $deleted = $wp_filesystem->delete($cache_path);
+
+                // Write-back: store url→path in the persistent index so future
+                // purges of this URL skip the scan entirely.
+                // Safe even after delete — nginx always re-caches this URL to
+                // the exact same deterministic path (MD5 + levels slicing).
+                $nppp_wb_index = get_option( 'nppp_url_filepath_index' );
+                $nppp_wb_index = is_array( $nppp_wb_index ) ? $nppp_wb_index : [];
+                $nppp_wb_index[ $url_to_search_exact ] = $cache_path;
+                update_option( 'nppp_url_filepath_index', $nppp_wb_index, false );
+                unset( $nppp_wb_index );
+
                 if ($deleted) {
                     if ($chain_autopreload) {
                         nppp_preload_cache_on_update($current_page_url, true);
