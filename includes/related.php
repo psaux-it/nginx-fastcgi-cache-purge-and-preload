@@ -117,7 +117,7 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
     // Stale entries (file gone / bad perms / failed validation) are left
     // in $pending so the iterator below handles them as a fallback.
     // If all pending targets resolve via index, the iterator never opens.
-    $nppp_rel_index = get_transient('nppp_url_filepath_index');
+    $nppp_rel_index = get_option('nppp_url_filepath_index');
     if ( is_array( $nppp_rel_index ) ) {
         foreach ( array_keys( $pending ) as $nppp_rel_key ) {
             if ( ! isset( $nppp_rel_index[ $nppp_rel_key ] ) ) {
@@ -277,6 +277,15 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
                 }
 
                 $results[$entry['original']] = ['found' => $entry['found'], 'deleted' => $entry['deleted']];
+
+                // Write-back: persist url→path in the permanent index.
+                // Same rationale as nppp_purge_single — deterministic nginx paths.
+                $nppp_wb_index = get_option( 'nppp_url_filepath_index' );
+                $nppp_wb_index = is_array( $nppp_wb_index ) ? $nppp_wb_index : [];
+                $nppp_wb_index[ $constructed ] = $pathname;
+                update_option( 'nppp_url_filepath_index', $nppp_wb_index, false );
+                unset( $nppp_wb_index );
+
                 unset($pending[$constructed]);
             }
         }
