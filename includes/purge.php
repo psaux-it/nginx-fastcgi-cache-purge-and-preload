@@ -185,7 +185,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
             nppp_display_admin_notice( 'info', sprintf(
                 /* translators: %s: full page URL */
-                __( 'INDEX HIT: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'INFO INDEX HIT: Purge via index (no scan): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $current_page_url_decoded
             ), true, false );
 
@@ -232,7 +232,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
         nppp_display_admin_notice( 'info', sprintf(
             /* translators: %s: full page URL */
-            __( 'INDEX MISS: Falling back to full recursive scan for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'INFO INDEX MISS: Running full recursive scan for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
             $current_page_url_decoded
         ), true, false );
 
@@ -241,7 +241,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
         nppp_display_admin_notice( 'info', sprintf(
             /* translators: %s: full page URL */
-            __( 'INDEX ABSENT: Running full recursive scan for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'INFO INDEX ABSENT: Running full recursive scan for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
             $current_page_url_decoded
         ), true, false );
     }
