@@ -163,7 +163,7 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
 
     nppp_display_admin_notice( 'info', sprintf(
         /* translators: %1$d: number of URLs resolved via index, %2$d: number falling back to scan */
-        __( 'INDEX: Related purge — %1$d resolved via index, %2$d falling back to scan', 'fastcgi-cache-purge-and-preload-nginx' ),
+        __( 'INFO INDEX: Related purge — %1$d resolved via index, %2$d falling back to scan', 'fastcgi-cache-purge-and-preload-nginx' ),
         count( $urls ) - count( $pending ),
         count( $pending )
     ), true, false );
