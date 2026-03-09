@@ -263,6 +263,21 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
                 $entry['deleted'] = $deleted;
 
                 if ($deleted) {
+                    // Write-back: persist url→path in the permanent index only on
+                    // successful delete — confirms path was validly operated on.
+                    // nginx re-caches to same deterministic path on next visit.
+                    $nppp_wb_index = get_option( 'nppp_url_filepath_index' );
+                    $nppp_wb_index = is_array( $nppp_wb_index ) ? $nppp_wb_index : [];
+                    $nppp_wb_index[ $constructed ] = $pathname;
+                    update_option( 'nppp_url_filepath_index', $nppp_wb_index, false );
+                    unset( $nppp_wb_index );
+
+                    nppp_display_admin_notice( 'info', sprintf(
+                        /* translators: %s: related page URL */
+                        __( 'INFO INDEX WRITE-BACK: Index updated after scan for related: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $entry['decoded']
+                    ), true, false );
+
                     nppp_display_admin_notice('success', sprintf(
                         /* translators: %s: related page URL */
                         __('SUCCESS ADMIN: Nginx cache purged for related page %s', 'fastcgi-cache-purge-and-preload-nginx'),
@@ -277,15 +292,6 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
                 }
 
                 $results[$entry['original']] = ['found' => $entry['found'], 'deleted' => $entry['deleted']];
-
-                // Write-back: persist url→path in the permanent index.
-                // Same rationale as nppp_purge_single — deterministic nginx paths.
-                $nppp_wb_index = get_option( 'nppp_url_filepath_index' );
-                $nppp_wb_index = is_array( $nppp_wb_index ) ? $nppp_wb_index : [];
-                $nppp_wb_index[ $constructed ] = $pathname;
-                update_option( 'nppp_url_filepath_index', $nppp_wb_index, false );
-                unset( $nppp_wb_index );
-
                 unset($pending[$constructed]);
             }
         }
