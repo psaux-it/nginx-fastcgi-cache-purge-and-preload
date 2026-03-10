@@ -501,35 +501,67 @@ function nppp__get_published_permalink( WP_Post $post ) {
 }
 
 // Auto Purge (Single)
-// Purge cache automatically for update (post/page)
-// Purge cache automatically for status changes (post/page)
-// This function hooks into the 'transition_post_status' action
-// Also check compat-{elementor,gutenberg}.php
+// Purges the Nginx FastCGI cache for a single post/page URL when its content
+// or status changes in WordPress.
+//
+// This function hooks into 'transition_post_status' which fires for EVERY post
+// type on EVERY status change — including private WooCommerce orders, cron jobs,
+// autosaves, and REST API requests. The guard chain below filters out all
+// non-cacheable events before any filesystem work is done.
+//
+// Execution flow:
+//   1. Bail early for invalid objects, disabled auto-purge, and private post types.
+//   2. Skip REST requests already handled by compat-gutenberg.php
+//      (only when show_in_rest=true + wp/v2 namespace + default controller).
+//   3. Skip AJAX requests unless they are known page-builder save actions.
+//   4. Skip WP-Cron runs unless a scheduled post is going live (future→publish).
+//   5. Skip revisions, autosaves, and per-request duplicates.
+//   6. Resolve the public-facing URL, then purge the matching cache file.
+//
+// Purge triggers (after all guards pass):
+//   - publish → draft/trash/pending/private  (post taken offline)
+//   - future/draft/pending/trash → publish   (post going live)
+//   - publish → publish                      (content updated)
+//
+// Related compat files that handle their own purge paths independently:
+//   - compat-gutenberg.php   REST saves via Gutenberg block editor (rest_after_insert_{type})
+//   - compat-elementor.php   Elementor editor saves (elementor/document/after_save)
+//   - compat-woocommerce.php WooCommerce stock changes (woocommerce_product_set_stock etc.)
 function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     static $did_purge = [];
 
-    // -1) Bail on invalid post objects.
+    // Bail on invalid post objects.
     if (! ($post instanceof WP_Post)) {
         return;
     }
 
-    // -0.1) Early quit if auto purge disabled
+    // Early quit if auto purge disabled
     $nginx_cache_settings = get_option('nginx_cache_settings');
     if (($nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no') !== 'yes') {
         return;
     }
 
-    // 0) Avoid duplicate purge with Gutenberg + metabox second request.
-    //    When block editor saves legacy metaboxes it posts to post.php with this flag.
+    // Skip non-publicly-viewable post types entirely.
+    // is_post_type_viewable() checks publicly_queryable (custom types) or
+    // public (built-in types). Returns false automatically for ALL private CPTs:
+    // shop_order, shop_order_refund, shop_order_placehold, wc_order,
+    // shop_coupon, shop_webhook, shop_subscription, scheduled-action,
+    // edd_*, gravity forms entries, and any future private CPT
+    if ( ! is_post_type_viewable( $post->post_type ) ) {
+        return;
+    }
+
+    // Avoid duplicate purge with Gutenberg + metabox second request.
+    // When block editor saves legacy metaboxes it posts to post.php with this flag.
     // phpcs:ignore WordPress.Security.NonceVerification.Recommended
     if (isset($_REQUEST['meta-box-loader'])) {
         return;
     }
 
-    // 0.1) Skip REST only when compat-gutenberg actually covers this post type.
-    //      Requires show_in_rest=true AND the default wp/v2 namespace (which fires
-    //      rest_after_insert_{type}). WooCommerce wc/v3 and custom controllers
-    //      do NOT fire that hook — fall through and purge here instead.
+    // Skip REST only when compat-gutenberg actually covers this post type.
+    // Requires show_in_rest=true AND the default wp/v2 namespace (which fires
+    // rest_after_insert_{type}). WooCommerce wc/v3 and custom controllers
+    // do NOT fire that hook — fall through and purge here instead.
     if (
         ( function_exists( 'wp_is_serving_rest_request' ) && wp_is_serving_rest_request() ) ||
         ( defined( 'REST_REQUEST' ) && REST_REQUEST )
@@ -557,7 +589,7 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         }
     }
 
-    // 0.2) Allow only specific AJAX save routes (Quick/Bulk Edit).
+    // Allow only specific AJAX save routes (Quick/Bulk Edit).
     $allowed_ajax_actions = [
         'inline-save',             // Quick Edit
         'vc_save',                 // WPBakery
@@ -576,12 +608,24 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         return;
     }
 
-    // 1) Per-request guard
+    // Skip WP-Cron runs — except when a scheduled post is going live.
+    // future→publish during cron is legitimate and must purge.
+    // All other cron transitions (e.g. wp_scheduled_delete) are skipped.
+    if (
+        ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) ||
+        ( defined( 'DOING_CRON' ) && DOING_CRON )
+    ) {
+        if ( 'publish' !== $new_status ) {
+            return;
+        }
+    }
+
+    // Per-request guard
     if (isset($did_purge[$post->ID])) {
         return;
     }
 
-    // 2) Sanity checks: no revisions, autosaves, or auto-drafts
+    // Sanity checks: no revisions, autosaves, or auto-drafts
     if (wp_is_post_revision($post)
       || wp_is_post_autosave($post)
       || $new_status === 'auto-draft'
@@ -590,31 +634,25 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         return;
     }
 
-    // 3) Drop some reported CPTs
+    // Build permalink
     $post_url = nppp__get_published_permalink( $post );
-    $excluded_patterns = [
-        'wp-global-styles-',
-        'post_type=edd_license_log',
-    ];
 
-    foreach ($excluded_patterns as $pattern) {
-        if (strpos($post_url, $pattern) !== false) {
-            return;
-        }
+    // Guard: bail if URL cannot be resolved.
+    if ( ! $post_url ) {
+        return;
     }
 
-    // 4) Prep cache path
+    // Prep cache path
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : '/dev/shm/change-me-now';
 
-    // 5) Purge logic
-    // Priority 0: Published post taken offline (trash / draft / pending / private).
+    // Published post taken offline (trash / draft / pending / private).
     if ( 'publish' === $old_status && 'publish' !== $new_status ) {
         nppp_purge_single( $nginx_cache_path, $post_url, true );
         $did_purge[ $post->ID ] = true;
         return;
     }
 
-    // Priority A: Handle Status Changes (post going live — from trash, draft, or pending).
+    // Handle Status Changes (post going live — from trash, draft, or pending).
     if ('publish' === $new_status) {
         // If the post was moved from trash to publish, purge the cache
         if ('trash' === $old_status) {
@@ -631,14 +669,14 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         }
     }
 
-    // Priority B: Handle Content Updates (publish to publish).
+    // Handle Content Updates (publish to publish).
     // Quick Edit (inline-save AJAX) always purges — slug/category changes don't bump modified time.
     // Standard editor saves: post_modified_gmt > post_date_gmt for any post saved after initial
     // publish, which is effectively always true. Every publish→publish save purges — correct
     if ('publish' === $new_status && 'publish' === $old_status) {
         $is_quick_edit = ( $current_ajax_action === 'inline-save' );
 
-        // Quick/Bulk Edit often adjust slug/taxonomies only; always purge.
+        // Quick Edit often adjust slug/taxonomies only; always purge.
         if ($is_quick_edit) {
             nppp_purge_single( $nginx_cache_path, $post_url, true );
             $did_purge[ $post->ID ] = true;
