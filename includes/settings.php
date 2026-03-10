@@ -2050,7 +2050,7 @@ function nppp_nginx_cache_related_pages_callback() {
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
                     <span class="title"><?php esc_html_e( 'Always Purge the Homepage', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                    <span class="desc"><?php esc_html_e( 'When a single post/page is purged, also purge the homepage.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
+                    <span class="desc"><?php esc_html_e( 'When any single URL is purged (manual or auto), also purge the homepage.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
                 </span>
             </label>
         </div>
@@ -2063,7 +2063,7 @@ function nppp_nginx_cache_related_pages_callback() {
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
                     <span class="title"><?php esc_html_e( 'Always Purge the Shop Page (WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                    <span class="desc"><?php esc_html_e( 'When a product page is purged, also purge the WooCommerce shop page.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
+                    <span class="desc"><?php esc_html_e( 'When a product page is purged (manual or auto), also purge the WooCommerce shop page.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
                 </span>
             </label>
         </div>
@@ -2075,8 +2075,8 @@ function nppp_nginx_cache_related_pages_callback() {
             <label for="nppp_rel_cat">
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
-                    <span class="title"><?php esc_html_e( 'Always Purge category pages (posts & products)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                    <span class="desc"><?php esc_html_e( 'When you purge a post or product, also purge its category (WordPress + WooCommerce).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
+                    <span class="title"><?php esc_html_e( 'Always Purge Category & Tag (WordPress + WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="desc"><?php esc_html_e( 'When a post or product is purged (manual or auto), also purge its category and tag archives.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
                 </span>
             </label>
         </div>
@@ -2094,7 +2094,7 @@ function nppp_nginx_cache_related_pages_callback() {
                 <span class="nppp-text">
                     <span class="title"><?php esc_html_e( 'Also preload all included pages above', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     <span class="desc">
-                        <?php esc_html_e( 'After a manual purge (On-Page, Advanced Tab), also preload the related pages you enabled above. When Auto Purge is ON, this happens only if Auto Preload is ON.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        <?php esc_html_e( 'Manual Single Purge (On-Page or Advanced Tab): turn this ON to also preload related pages above. Auto Purge ON: related pages are preloaded automatically only when Auto Preload is ON — this switch does not apply.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     </span>
                 </span>
             </label>
