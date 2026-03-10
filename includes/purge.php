@@ -553,11 +553,6 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         return;
     }
 
-    // 0.3) Skip WP-Cron runs.
-    if ( ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) || ( defined( 'DOING_CRON' ) && DOING_CRON ) ) {
-        return;
-    }
-
     // 1) Per-request guard
     if (isset($did_purge[$post->ID])) {
         return;
