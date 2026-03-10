@@ -123,37 +123,13 @@ function nppp__wc_purge_order_products( $order_id ) {
 /**
  * Core purge helper: deletes cache for a product page and all its taxonomy archive pages.
  *
- * Called by every purge path above. Purges three layers:
- *   1. The product page itself  (e.g. /product/blue-shirt/)
- *   2. Its product_cat archives (e.g. /product-category/shirts/) — WooCommerce can
- *      hide out-of-stock products from listings, so the category page must refresh.
- *   3. Its product_tag archives (e.g. /product-tag/summer/) — same reason.
+ * Called by every purge path above. nppp_purge_single() internally calls
+ * nppp_get_related_urls_for_single() which handles home, shop, product_cat,
+ * and product_tag archives per the user's Purge Scope settings.
  */
 function nppp__wc_purge_product_and_terms( $post_id, $cache_path ) {
-    // 1. Product page.
     $url = get_permalink( $post_id );
     if ( $url ) {
         nppp_purge_single( $cache_path, $url, true );
-    }
-
-    // 2. Category archive pages.
-    if ( function_exists( 'wc_get_product_cat_ids' ) ) {
-        foreach ( wc_get_product_cat_ids( $post_id ) as $cat_id ) {
-            $cat_url = get_term_link( (int) $cat_id, 'product_cat' );
-            if ( $cat_url && ! is_wp_error( $cat_url ) ) {
-                nppp_purge_single( $cache_path, $cat_url, true );
-            }
-        }
-    }
-
-    // 3. Product tag archive pages.
-    if ( function_exists( 'wc_get_product_terms' ) ) {
-        $tags = wc_get_product_terms( $post_id, 'product_tag', [ 'fields' => 'ids' ] );
-        foreach ( $tags as $tag_id ) {
-            $tag_url = get_term_link( (int) $tag_id, 'product_tag' );
-            if ( $tag_url && ! is_wp_error( $tag_url ) ) {
-                nppp_purge_single( $cache_path, $tag_url, true );
-            }
-        }
     }
 }
