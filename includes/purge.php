@@ -481,6 +481,25 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     }
 }
 
+// Returns the pretty permalink for a post regardless of its current post_status.
+// get_permalink() calls wp_force_plain_post_permalink() internally. For any status
+// that is not publicly viewable (draft, pending, trash), that function returns true
+// and get_permalink() falls back to home_url('?p='.$post->ID)
+function nppp__get_published_permalink( WP_Post $post ) {
+    if ( $post->post_status === 'publish' ) {
+        return get_permalink( $post->ID );
+    }
+    $clone              = clone $post;
+    $clone->post_status = 'publish';
+
+    // WP renames post_name to slug__trashed via wp_add_trashed_suffix_to_post_name()
+    if ( $post->post_status === 'trash' ) {
+        $clone->post_name = preg_replace( '/__trashed$/', '', $post->post_name );
+    }
+
+    return get_permalink( $clone );
+}
+
 // Auto Purge (Single)
 // Purge cache automatically for update (post/page)
 // Purge cache automatically for status changes (post/page)
@@ -510,7 +529,6 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     // 0.1) Skip REST entirely — compat-gutenberg (rest_after_insert_*) already purges.
     if (
         ( function_exists( 'wp_is_serving_rest_request' ) && wp_is_serving_rest_request() ) ||
-        ( function_exists( 'wp_is_rest_request' ) && wp_is_rest_request() ) ||
         ( defined( 'REST_REQUEST' ) && REST_REQUEST )
     ) {
         return;
@@ -520,7 +538,6 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     $allowed_ajax_actions = [
         'inline-save', // Quick Edit
         'vc_save',     // WPBakery
-        'bulk_edit',   // Bulk Edit
     ];
 
     // phpcs:ignore WordPress.Security.NonceVerification.Missing
@@ -553,7 +570,7 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     }
 
     // 3) Drop some reported CPTs
-    $post_url = get_permalink($post->ID);
+    $post_url = nppp__get_published_permalink( $post );
     $excluded_patterns = [
         'wp-global-styles-',
         'post_type=edd_license_log',
@@ -569,7 +586,14 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : '/dev/shm/change-me-now';
 
     // 5) Purge logic
-    // Priority A: Handle Status Changes (publish from trash, draft, or pending)
+    // Priority 0: Published post taken offline (trash / draft / pending / private).
+    if ( 'publish' === $old_status && 'publish' !== $new_status ) {
+        nppp_purge_single( $nginx_cache_path, $post_url, true );
+        $did_purge[ $post->ID ] = true;
+        return;
+    }
+
+    // Priority A: Handle Status Changes (post going live — from trash, draft, or pending).
     if ('publish' === $new_status) {
         // If the post was moved from trash to publish, purge the cache
         if ('trash' === $old_status) {
@@ -586,13 +610,15 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         }
     }
 
-    // Priority B: Handle Content Updates (publish to publish with content change)
+    // Priority B: Handle Content Updates (publish to publish).
+    // Quick Edit (inline-save AJAX) always purges — slug/category changes don't bump modified time.
+    // Standard editor saves: post_modified_gmt > post_date_gmt for any post saved after initial
+    // publish, which is effectively always true. Every publish→publish save purges — correct
     if ('publish' === $new_status && 'publish' === $old_status) {
         $is_quick_edit = ( $current_ajax_action === 'inline-save' );
-        $is_bulk_edit  = ( $current_ajax_action === 'bulk_edit' );
 
         // Quick/Bulk Edit often adjust slug/taxonomies only; always purge.
-        if ($is_quick_edit || $is_bulk_edit) {
+        if ($is_quick_edit) {
             nppp_purge_single( $nginx_cache_path, $post_url, true );
             $did_purge[ $post->ID ] = true;
             return;
@@ -624,24 +650,24 @@ function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
         $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
         // Check for the theme update
-        if (isset($hook_extra['type']) && $hook_extra['type'] === 'theme' &&
-            isset($hook_extra['themes']) && is_array($hook_extra['themes']) && !empty($hook_extra['themes'])) {
-            // Get the active theme
-            $active_theme = wp_get_theme()->get_stylesheet();
+        if ( isset( $hook_extra['type'] ) && $hook_extra['type'] === 'theme' ) {
+            $active_theme   = wp_get_theme()->get_stylesheet();
+            $updated_themes = $hook_extra['themes']                                        // bulk
+                ?? ( isset( $hook_extra['theme'] ) ? [ $hook_extra['theme'] ] : [] );      // single
 
-            // Check if the active theme is being updated
-            if (in_array($active_theme, $hook_extra['themes'], true)) {
-                // Purge cache for only active theme update
+            if ( ! empty( $updated_themes ) && in_array( $active_theme, $updated_themes, true ) ) {
                 nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
             }
         }
 
         // Check for the plugin update
-        if (isset($hook_extra['type']) && $hook_extra['type'] === 'plugin' &&
-            isset($hook_extra['plugins']) && is_array($hook_extra['plugins']) && !empty($hook_extra['plugins'])) {
+        if ( isset( $hook_extra['type'] ) && $hook_extra['type'] === 'plugin' ) {
+            $updated_plugins = $hook_extra['plugins']                                      // bulk
+                ?? ( isset( $hook_extra['plugin'] ) ? [ $hook_extra['plugin'] ] : [] );    // single
 
-            // Purge cache for plugin updates
-            nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
+            if ( ! empty( $updated_plugins ) ) {
+                nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
+            }
         }
     }
 }
@@ -727,11 +753,6 @@ function nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment) {
     if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
         // Get the post ID associated with the comment
         $post_id = $comment->comment_post_ID;
-
-        // Verify if the current user can edit the post
-        if (!current_user_can('edit_post', $post_id)) {
-            return;
-        }
 
         // Get the URL of the post/page from $post_id
         $post_url = get_permalink($post_id);
