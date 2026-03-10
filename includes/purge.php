@@ -787,36 +787,6 @@ function nppp_purge_cache_on_theme_switch($new_name, $new_theme, $old_theme) {
 }
 
 // Auto Purge (Single)
-// Purge cache automatically when a new comment exists (post/page)
-// This function hooks into the 'wp_insert_comment' action
-function nppp_purge_cache_on_comment($comment_id, $comment) {
-    // Get the plugin options
-    $nginx_cache_settings = get_option('nginx_cache_settings');
-
-    // Check if auto-purge is enabled
-    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
-        $oldstatus = '';
-        $approved  = $comment->comment_approved;
-
-        if ( null === $approved ) {
-            $newstatus = false;
-        } elseif ( '1' === $approved ) {
-            $newstatus = 'approved';
-        } elseif ( '0' === $approved ) {
-            $newstatus = 'unapproved';
-        } elseif ( 'spam' === $approved ) {
-            $newstatus = 'spam';
-        } elseif ( 'trash' === $approved ) {
-            $newstatus = 'trash';
-        } else {
-            $newstatus = false;
-        }
-
-        nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment);
-    }
-}
-
-// Auto Purge (Single)
 // Purge cache when a post is permanently deleted from the classic admin.
 // This function hooks into the 'delete_post' action.
 function nppp_purge_cache_on_delete_post( $post_id, $post ) {
@@ -826,6 +796,13 @@ function nppp_purge_cache_on_delete_post( $post_id, $post ) {
 
     // Skip revisions and auto-drafts — they are never cached.
     if ( wp_is_post_revision( $post ) || $post->post_status === 'auto-draft' ) {
+        return;
+    }
+
+    // Skip private/internal post types — shop_order, wc_order, shop_coupon,
+    // scheduled-action, etc. are never publicly cached. Without this guard,
+    // permanently deleting a WooCommerce order triggers a full recursive scan.
+    if ( ! is_post_type_viewable( $post->post_type ) ) {
         return;
     }
 
@@ -861,40 +838,38 @@ function nppp_purge_cache_on_delete_post( $post_id, $post ) {
 }
 
 // Auto Purge (Single)
-// Purge cache automatically when a comment status changes (post/page)
-// This function hooks into the 'transition_comment_status' action
-function nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment) {
-    // Get the plugin options
-    $nginx_cache_settings = get_option('nginx_cache_settings');
-
-    // Check if auto-purge is enabled
-    if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
-        // Get the post ID associated with the comment
-        $post_id = $comment->comment_post_ID;
-
-        // Get the URL of the post/page from $post_id
-        $post_url = get_permalink($post_id);
-
-        // Set default cache path to prevent any errors if the option is not set
-        $default_cache_path = '/dev/shm/change-me-now';
-
-        // Get the nginx cache path from the plugin options, or use the default path if not set
-        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
-
-        switch ( $newstatus ) {
-            case 'approved':
-                // Purge the cache when comment status change for the post/page
-                nppp_purge_single($nginx_cache_path, $post_url, true);
-                break;
-
-            case 'spam':
-            case 'unapproved':
-            case 'trash':
-                // Purge the cache when comment status change for the post/page
-                nppp_purge_single($nginx_cache_path, $post_url, true);
-                break;
-        }
+// Purges the post page when its approved comment count changes.
+//
+// Hooked to: wp_update_comment_count (passes post_id, new_count, old_count)
+//
+// This hook only fires when the APPROVED comment count on a post actually
+// increments or decrements. It never fires for spam / unapproved / trash
+// transitions alone — those do not change the public comment count.
+function nppp_purge_cache_on_comment_count( $post_id, $new_count, $old_count ) {
+    // No actual count change — nothing visible changed for visitors.
+    if ( (int) $new_count === (int) $old_count ) {
+        return;
     }
+
+    $nginx_cache_settings = get_option( 'nginx_cache_settings' );
+    if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
+
+    // Skip private/internal post types.
+    // Covers shop_order, wc_order, shop_coupon, scheduled-action, and any
+    // future private CPT
+    if ( ! is_post_type_viewable( get_post_type( $post_id ) ) ) {
+        return;
+    }
+
+    $post_url = get_permalink( $post_id );
+    if ( ! $post_url ) {
+        return;
+    }
+
+    $nginx_cache_path = $nginx_cache_settings['nginx_cache_path'] ?? '/dev/shm/change-me-now';
+    nppp_purge_single( $nginx_cache_path, $post_url, true );
 }
 
 // Purge cache operation
