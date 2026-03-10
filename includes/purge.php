@@ -673,6 +673,21 @@ function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
 }
 
 // Auto Purge (Entire)
+// Purge entire cache when WordPress finishes a background automatic update.
+// This function hooks into the 'automatic_updates_complete' action.
+function nppp_purge_cache_on_auto_update( $results = [] ) {
+    $nginx_cache_settings = get_option( 'nginx_cache_settings' );
+    if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
+
+    $nginx_cache_path = $nginx_cache_settings['nginx_cache_path'] ?? '/dev/shm/change-me-now';
+    $PIDFILE          = nppp_get_runtime_file( 'cache_preload.pid' );
+    $tmp_path         = rtrim( $nginx_cache_path, '/' ) . '/tmp';
+    nppp_purge( $nginx_cache_path, $PIDFILE, $tmp_path, false, true, true );
+}
+
+// Auto Purge (Entire)
 // Purge entire cache automatically for plugin activation & deactivation.
 // This function hooks into the 'activated_plugin-deactivated_plugin' action
 function nppp_purge_cache_plugin_activation_deactivation() {
@@ -740,6 +755,50 @@ function nppp_purge_cache_on_comment($comment_id, $comment) {
 
         nppp_purge_cache_on_comment_change($newstatus, $oldstatus, $comment);
     }
+}
+
+// Auto Purge (Single)
+// Purge cache when a post is permanently deleted from the classic admin.
+// This function hooks into the 'delete_post' action.
+function nppp_purge_cache_on_delete_post( $post_id, $post ) {
+    if ( ! ( $post instanceof WP_Post ) ) {
+        return;
+    }
+
+    // Skip revisions and auto-drafts — they are never cached.
+    if ( wp_is_post_revision( $post ) || $post->post_status === 'auto-draft' ) {
+        return;
+    }
+
+    // Only care about previously-public posts (publish) or trashed posts whose
+    // pre-trash status was publish (cache was purged on trash but may still be
+    // warm if auto-purge was toggled). For draft/pending there is nothing cached.
+    $relevant_statuses = [ 'publish', 'trash' ];
+    if ( ! in_array( $post->post_status, $relevant_statuses, true ) ) {
+        return;
+    }
+
+    $nginx_cache_settings = get_option( 'nginx_cache_settings' );
+    if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
+
+    // For trashed posts, restore the clean slug (WordPress appends __trashed).
+    $clone = clone $post;
+    if ( $post->post_status === 'trash' ) {
+        $clone->post_status = 'publish';
+        $clone->post_name   = preg_replace( '/__trashed$/', '', $post->post_name );
+        $post_url = get_permalink( $clone );
+    } else {
+        $post_url = get_permalink( $post->ID );
+    }
+
+    if ( ! $post_url ) {
+        return;
+    }
+
+    $nginx_cache_path = $nginx_cache_settings['nginx_cache_path'] ?? '/dev/shm/change-me-now';
+    nppp_purge_single( $nginx_cache_path, $post_url, true );
 }
 
 // Auto Purge (Single)
