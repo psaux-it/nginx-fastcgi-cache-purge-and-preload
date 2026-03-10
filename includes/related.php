@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Return related URLs for a primary single page URL, based on plugin options.
+// Return related URLs for a primary URL, based on plugin options.
 function nppp_get_related_urls_for_single(string $primary_url): array {
     $settings = get_option( 'nginx_cache_settings', array() );
     $urls     = array();
@@ -46,11 +46,11 @@ function nppp_get_related_urls_for_single(string $primary_url): array {
             }
         }
 
-        // 3) Category archives (posts => 'category', products => 'product_cat')
+        // 3) Category and tag archives (posts => category + post_tag, products => product_cat + product_tag)
         if ( $include_cat ) {
             $taxonomy = ( 'product' === $post_type ) ? 'product_cat' : 'category';
 
-            // Only act on public taxonomies with archives
+            // Categories
             $tax_obj = get_taxonomy( $taxonomy );
             if ( $tax_obj && ! empty( $tax_obj->public ) && false !== $tax_obj->rewrite ) {
                 $terms = get_the_terms( $post_id, $taxonomy );
@@ -59,6 +59,38 @@ function nppp_get_related_urls_for_single(string $primary_url): array {
                         $link = get_term_link( $term, $taxonomy );
                         if ( ! is_wp_error( $link ) && ! empty( $link ) ) {
                             $urls[] = $link;
+                        }
+                    }
+                }
+            }
+
+            // Product tag archives — WooCommerce products only.
+            if ( 'product' === $post_type ) {
+                $tag_obj = get_taxonomy( 'product_tag' );
+                if ( $tag_obj && ! empty( $tag_obj->public ) && false !== $tag_obj->rewrite ) {
+                    $tags = get_the_terms( $post_id, 'product_tag' );
+                    if ( ! is_wp_error( $tags ) && ! empty( $tags ) ) {
+                        foreach ( $tags as $tag ) {
+                            $link = get_term_link( $tag, 'product_tag' );
+                            if ( ! is_wp_error( $link ) && ! empty( $link ) ) {
+                                $urls[] = $link;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Post tag archives — standard WordPress posts only.
+            if ( 'post' === $post_type ) {
+                $tag_obj = get_taxonomy( 'post_tag' );
+                if ( $tag_obj && ! empty( $tag_obj->public ) && false !== $tag_obj->rewrite ) {
+                    $tags = get_the_terms( $post_id, 'post_tag' );
+                    if ( ! is_wp_error( $tags ) && ! empty( $tags ) ) {
+                        foreach ( $tags as $tag ) {
+                            $link = get_term_link( $tag, 'post_tag' );
+                            if ( ! is_wp_error( $link ) && ! empty( $link ) ) {
+                                $urls[] = $link;
+                            }
                         }
                     }
                 }
