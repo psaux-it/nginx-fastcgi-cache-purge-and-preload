@@ -526,12 +526,35 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         return;
     }
 
-    // 0.1) Skip REST entirely — compat-gutenberg (rest_after_insert_*) already purges.
+    // 0.1) Skip REST only when compat-gutenberg actually covers this post type.
+    //      Requires show_in_rest=true AND the default wp/v2 namespace (which fires
+    //      rest_after_insert_{type}). WooCommerce wc/v3 and custom controllers
+    //      do NOT fire that hook — fall through and purge here instead.
     if (
         ( function_exists( 'wp_is_serving_rest_request' ) && wp_is_serving_rest_request() ) ||
         ( defined( 'REST_REQUEST' ) && REST_REQUEST )
     ) {
-        return;
+        $post_type_obj      = get_post_type_object( $post->post_type );
+        $rest_namespace     = $post_type_obj->rest_namespace ?? false;
+        $rest_controller    = $post_type_obj->rest_controller_class ?? false;
+
+        // Only bail if compat-gutenberg actually covers this:
+        // 1. show_in_rest=true
+        // 2. namespace is wp/v2
+        // 3. using the DEFAULT controller (or none set) — custom controllers
+        //    do NOT fire rest_after_insert_{type}
+        $using_default_controller = (
+            ! $rest_controller ||
+            $rest_controller === 'WP_REST_Posts_Controller'
+        );
+
+        if (
+            ! empty( $post_type_obj->show_in_rest ) &&
+            $rest_namespace === 'wp/v2' &&
+            $using_default_controller
+        ) {
+            return;
+        }
     }
 
     // 0.2) Allow only specific AJAX save routes (Quick/Bulk Edit).
