@@ -53,6 +53,15 @@ function nppp__wc_get_cache_path() {
  */
 function nppp__wc_purge_product( $product ) {
     if ( ! ( $product instanceof WC_Product ) ) { return; }
+
+    // During a manual product save, transition_post_status already fired
+    // and purged this product URL. Skip to avoid a redundant second purge.
+    // We check doing_action('save_post') because WC fires stock hooks from
+    // inside the save_post callback chain during a full wp_update_post() save.
+    // Order placement, cancellation, and direct stock edits do NOT go through
+    // save_post, so those paths are unaffected by this guard.
+    if ( doing_action( 'save_post' ) || doing_action( 'save_post_product' ) ) { return; }
+
     $cache_path = nppp__wc_get_cache_path();
     if ( ! $cache_path ) { return; }
 
