@@ -150,6 +150,7 @@ require_once dirname(__DIR__) . '/includes/compat-cloudflare.php';
 require_once dirname(__DIR__) . '/includes/compat-elementor.php';
 require_once dirname(__DIR__) . '/includes/compat-gutenberg.php';
 require_once dirname(__DIR__) . '/includes/compat-redis-cache.php';
+require_once dirname(__DIR__) . '/includes/compat-woocommerce.php';
 
 // Hook into well-known cache plugin purge events.
 $nppp_page_cache_purge_actions = array(
