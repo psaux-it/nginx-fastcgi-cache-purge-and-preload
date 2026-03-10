@@ -205,9 +205,11 @@ add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_sett
 add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_default_cache_key_regex_option');
 if ($nppp_auto_purge) {
     add_action('transition_post_status', 'nppp_purge_cache_on_update', 10, 3);
+    add_action('delete_post', 'nppp_purge_cache_on_delete_post', 10, 2);
     add_action('wp_insert_comment', 'nppp_purge_cache_on_comment', 200, 2);
     add_action('transition_comment_status', 'nppp_purge_cache_on_comment_change', 200, 3);
     add_action('upgrader_process_complete', 'nppp_purge_cache_on_theme_plugin_update', 10, 2);
+    add_action('automatic_updates_complete', 'nppp_purge_cache_on_auto_update');
     add_action('switch_theme', 'nppp_purge_cache_on_theme_switch', 10, 3);
     add_action('activated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
     add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
