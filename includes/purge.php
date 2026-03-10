@@ -534,10 +534,13 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         return;
     }
 
-    // 0.2) Allow only specific AJAX save routes (Quick/Bulk Edit, WPBakery).
+    // 0.2) Allow only specific AJAX save routes (Quick/Bulk Edit).
     $allowed_ajax_actions = [
-        'inline-save', // Quick Edit
-        'vc_save',     // WPBakery
+        'inline-save',             // Quick Edit
+        'vc_save',                 // WPBakery
+        'et_fb_ajax_save',         // Divi Builder
+        'bricks_save_post',        // Bricks Builder
+        'ct_save_components_tree', // Oxygen Builder
     ];
 
     // phpcs:ignore WordPress.Security.NonceVerification.Missing
