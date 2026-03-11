@@ -15,9 +15,9 @@ One of NPP’s key differentiators is its **advanced cache preloading system**. 
 
 NPP includes **[safexec](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec)** - a hardened command execution wrapper written in C for NPP. It safely executes system utilities used by NPP while enforcing strict security controls. An optional library can also normalize percent-encoded HTTP request lines during cache preloading, preventing cache key inconsistencies in Nginx.
 
-### Check out! :whale: NPP Dockerized Full Stack Deploy
+### :whale: Dockerized Full Stack Deploy
 
-Check out **[Dockerized](https://github.com/psaux-it/wordpress-nginx-cache-docker)** repository that provides a complete full-stack deployment for **NPP**. It includes pre-configured Dockerfiles, a Docker Compose setup, and detailed instructions to get your site running in minutes. Maintained alongside the main **NPP** plugin. It’s ideal for production, development, and testing environments, offering a streamlined way to simplify your deployment workflow with containerized solutions.
+**[Dockerized](https://github.com/psaux-it/wordpress-nginx-cache-docker)** repository that provides a complete full-stack deployment for **NPP**. It includes pre-configured Dockerfiles, a Docker Compose setup, and detailed instructions to get your site running in minutes. Maintained alongside the main **NPP** plugin. It’s ideal for production, development, and testing environments, offering a streamlined way to simplify your deployment workflow with containerized solutions.
 
 ⚡ Spin up a full environment and try NPP in minutes with the ready-to-run **[Docker](https://github.com/psaux-it/wordpress-nginx-cache-docker)** setup.
 
