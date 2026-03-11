@@ -2,10 +2,14 @@
 
 ![Image](https://github.com/user-attachments/assets/93b5d539-1f9e-479b-b8b0-988f0010cf47)
 
+<div align="center">
+<a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54"><img src="https://img.shields.io/badge/security-CVE--2025--6213-green" alt="Security: CVE-2025-6213"></a> <a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases"><img src="https://img.shields.io/github/v/release/psaux-it/nginx-fastcgi-cache-purge-and-preload?logo=github" alt="GitHub Release"></a> <a href="https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/"><img src="https://img.shields.io/badge/Wordpress_SVN-v2.1.4-blue?style=flat&logo=wordpress" alt="Donate"></a> <a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/actions/workflows/build-and-commit-safexec.yml"><img src="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/actions/workflows/build-and-commit-safexec.yml/badge.svg" alt="safexec CI"></a> <a href="https://github.com/sponsors/psaux-it"><img src="https://img.shields.io/badge/Sponsor-%E2%9D%A4-red?logo=github" alt="Sponsor"></a>
+</div>
+
+---
+
 🚀 **Support this project!** If NPP has improved your workflow, consider giving it a ⭐ to help us grow:  
 🚀 **Enjoying NPP?**  Buy me a coffee to support continued development.
-
-[![Security: CVE-2025-6213](https://img.shields.io/badge/security-CVE--2025--6213-green)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54) [![GitHub Release](https://img.shields.io/github/v/release/psaux-it/nginx-fastcgi-cache-purge-and-preload?logo=github)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases) [![Donate](https://img.shields.io/badge/Wordpress_SVN-v2.1.4-blue?style=flat&logo=wordpress)](https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/) [![safexec CI](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/actions/workflows/build-and-commit-safexec.yml/badge.svg)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/actions/workflows/build-and-commit-safexec.yml) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-red?logo=github)](https://github.com/sponsors/psaux-it)
 
 **NPP** allows WordPress users to manage Nginx Cache operations (Purge & Preload) directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.  NPP supports Nginx **FastCGI**, **Proxy**, **SCGI**, and **UWSGI** cache purge and preload operations, making it one of the most comprehensive solutions for managing Nginx cache directly from WordPress.
 
