@@ -43,6 +43,59 @@ Instead of relying on special Nginx purge modules, NPP interacts with the **Ngin
 
 This approach provides a flexible and architecture-agnostic way to control Nginx cache behavior, making it suitable for traditional servers as well as modern containerized environments.
 
+### Features
+---
+
+🧹 **Purge All Nginx Cache**: Completely clear all cached data stored by Nginx.
+
+🔄 **Preload All Nginx Cache**: Warm the Nginx cache with the most recent data for the entire website.
+
+🚀 **Auto Preload Nginx Cache**: Automatically preloads the cache when Auto Purge is enabled for a POST/PAGE or after the Purge All action.
+
+🧼 **Auto Purge Nginx Cache**: Purge cache on Post/Page content changes, comment status updates, theme/plugin updates, or when compatible Cache Plugins trigger a purge. Nginx cache is preloaded automatically if Auto Preload is enabled (for the entire site or individual page).
+
+🔗 **Purge Scope (Related Pages)**: Automatically purge related pages such as the Homepage, WooCommerce Shop page, and Category/Tag archives when a single URL is purged. Optionally preload those pages to keep the cache warm.
+
+⏰ **Schedule Nginx Cache Purge & Preload via WP Cron**: Automate the purge and preload process using WordPress Cron jobs.
+
+🧭 **Proxy Support for Preload**: Route preload requests through a proxy server for edge-case environments and containerized deployments.
+
+⏱️ **Live Preload Progress Monitoring**: Watch the Nginx cache preload process in real time — complete with a dynamic progress bar, currently processed URL, 404 tracking, server load, and total completion time.
+
+🌐 **Remote Nginx Cache Purge & Preload via REST API**: Remotely trigger cache purging and preloading through REST API endpoints.
+
+⚙️ **Manual Nginx Cache Purge & Preload**: Allow manual purging and preloading of cache through the table view in the Advanced Tab.
+
+📚 **Nginx Cache Analyzer**: Full HIT/MISS cache analyzer dashboard, from the last preload crawl with what is currently stored in the Nginx cache. Instantly spot uncached pages and Purge or Preload them directly in the Advanced Tab.
+
+🔍 **On-Page Nginx Cache Purge & Preload**: Manually purge and preload Nginx cache for the currently visited page directly from the frontend.
+
+🗝️ **Custom Cache Key Support**: Define a regex pattern to parse URLs based on your custom `_cache_key` format.
+
+⚡ **Optimized Nginx Cache Preload**: Enhance Nginx cache preload performance with options to limit CPU usage, exclude endpoints, wait retrievals, and apply rate limiting.
+
+📊 **Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, and Nginx status from the Status tab.
+
+📈 **Cache Coverage Ratio**: Live gauge in the WordPress dashboard widget showing the cache coverage ratio, based on the last preload snapshot. Refreshable on demand without a page reload.
+
+☁️ **Cloudflare APO Sync**: Automatically mirrors NPP purge actions to Cloudflare APO to keep edge cache synchronized with your Nginx cache.
+
+🔴 **Redis Object Cache Sync**: Bidirectional sync between NPP and Redis Object Cache. NPP Purge All flushes the Redis object cache, and a Redis flush triggers a full Nginx cache purge via NPP (when auto-purge is enabled).
+
+🛒 **WooCommerce Auto-Purge**: Automatically purges Nginx cache when WooCommerce product stock quantity changes, stock status changes (in stock / out of stock / on backorder), or when an order is cancelled and stock is restored.
+
+🔒 **Concurrent Purge Serialization**: Atomic lock mechanism prevents simultaneous purge operations from colliding, ensuring cache integrity during concurrent admin actions or background events.
+
+🧩 **Modular by Design**: Easily integrate with external scripts and automation tools.
+
+🖥️ **User-Friendly Interface**: Easy-to-use AJAX-powered settings, integrated into the WordPress admin bar and dashboard for quick access.
+
+📋 **Admin Notices and Logs**: Receive notifications and view logs for plugin status and all cache-related actions within the WordPress admin area.
+
+📧 **Email Notifications**: Receive email alerts upon completion of preload actions, with customizable templates to suit your needs.
+
+---
+
 ### Permission Handling in Isolated User Environments
 
 Some server architectures run the **web server (WEBSERVER-USER)** and **PHP-FPM (PHP-FPM-USER)** under different system users. In such environments, the PHP process may not have permission to modify the Nginx cache directory.
