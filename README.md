@@ -17,7 +17,9 @@ Check out **[Dockerized](https://github.com/psaux-it/wordpress-nginx-cache-docke
 
 ### Requirements
 
-**NPP** is compatible exclusively with **Nginx web servers** running on **Linux-powered** systems. Additionally, the **shell_exec** function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native Linux commands are blocked from running via PHP.
+**NPP** is compatible exclusively with **Nginx web servers** running on **Linux-powered** systems.
+
+The PHP `shell_exec()` function must be enabled and unrestricted, as NPP relies on system utilities for certain operations. Because of this, the plugin may not operate fully on shared hosting environments where native Linux commands are blocked.
 
 📌 If you see warnings or if any plugin settings or tabs are disabled, this could indicate permission issues, an unsupported environment, or missing dependencies that the plugin requires to function properly. **NPP is completely free OpenSource project!**
 
