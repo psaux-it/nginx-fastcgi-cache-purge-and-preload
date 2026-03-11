@@ -2816,61 +2816,104 @@ function nppp_nginx_cache_settings_sanitize($input) {
     return $sanitized_input;
 }
 
-// Validate the fastcgi cache path to prevent bad inputs as much as possible
+// Validate the cache path to prevent bad inputs
 function nppp_validate_path($path, $nppp_is_premium_purge = false) {
-    // Initialize WP filesystem
-    $wp_filesystem = nppp_initialize_wp_filesystem();
-
-    if ($wp_filesystem === false) {
-        nppp_display_admin_notice(
-            'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
-        );
-        return;
-    }
-
-    // Define the default path for whitelist
-    $default_path = '/dev/shm/change-me-now';
-
-    // Check if the path is the default path and whitelist it
-    if ($path === $default_path) {
+    // Whitelist the default placeholder — directory mode only.
+    if (!$nppp_is_premium_purge && $path === '/dev/shm/change-me-now') {
         return true;
     }
 
-    // Validate the path
+    // 1. Format check — rejects malformed input before any string ops.
     $pattern = '/^\/(?:[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*)\/?$/';
-
-    // Define critical system directories
-    $critical_directories = array('/bin','/boot','/etc','/lib','/lib64','/media','/proc','/root','/sbin','/srv','/sys','/usr','/home','/mnt','/var/log','/var/spool','/libexec','/run','/var/run');
-
-    // Check if the path starts with any critical directory
-    foreach ($critical_directories as $dir) {
-        if (strpos($path, $dir) === 0) {
-            return 'critical_path';
-        }
-    }
-
-    // Check if the path matches correct format
     if (!preg_match($pattern, $path)) {
         return 'critical_path';
     }
 
-    // Also supported paths (/dev /var /opt /tmp) can not be first level directory
-    $path_parts = explode('/', trim($path, '/'));
-    if (in_array($path_parts[0], ['dev', 'var', 'opt', 'tmp']) && count($path_parts) < 2) {
+    // 2. Dotdot check — the regex character class permits dots so '..'
+    //    passes the format check. Block traversal sequences explicitly.
+    if (strpos($path, '..') !== false) {
         return 'critical_path';
     }
 
-    // Now check if the path points to a file
-    // For premium purge validation
+    // 3. Normalise — strip trailing slash before prefix comparisons.
+    $normalised = rtrim($path, '/');
+
+    // 4. Allowlist of safe cache roots.
+    $allowed_roots = ['/dev/shm/', '/tmp/', '/var/'];
+
+    $allowed = false;
+    foreach ($allowed_roots as $root) {
+        if (str_starts_with($normalised, $root)) {
+            $allowed = true;
+            break;
+        }
+    }
+
+    if (!$allowed) {
+        return 'critical_path';
+    }
+
+    // 5. Blocklist of dangerous subtrees within the allowed roots.
+    //    Exact match + trailing slash prevents false positives:
+    $blocked_subdirs = [
+        '/var/log',
+        '/var/spool',
+        '/var/run',
+        '/var/lib',
+        '/var/www',
+        '/var/mail',
+        '/var/lock',
+        '/var/backups',
+        '/var/snap',
+    ];
+
+    foreach ($blocked_subdirs as $blocked) {
+        if ($normalised === $blocked ||
+            str_starts_with($normalised, $blocked . '/')) {
+            return 'critical_path';
+        }
+    }
+
+    // 6. Existence check — also required before realpath() is safe to call,
+    //    since realpath() returns false for non-existent paths.
     if ($nppp_is_premium_purge) {
-        if (!$wp_filesystem->is_file($path)) {
+        if (!is_file($path)) {
             return 'file_not_found_or_not_readable';
         }
     } else {
-        // Now check if the directory exists
-        if (!$wp_filesystem->is_dir($path)) {
+        if (!is_dir($path)) {
             return 'directory_not_exist_or_readable';
+        }
+    }
+
+    // 7. Symlink resolution — resolve the real path and re-run allowlist +
+    //    blocklist on the destination.
+    //    all checks above, since is_dir() follows symlinks silently.
+    $resolved = realpath($path);
+    if ($resolved === false) {
+        return $nppp_is_premium_purge
+            ? 'file_not_found_or_not_readable'
+            : 'directory_not_exist_or_readable';
+    }
+
+    $resolved_normalised = rtrim($resolved, '/');
+
+    $resolved_allowed = false;
+    foreach ($allowed_roots as $root) {
+        if (str_starts_with($resolved_normalised, $root)) {
+            $resolved_allowed = true;
+            break;
+        }
+    }
+
+    if (!$resolved_allowed) {
+        return 'critical_path';
+    }
+
+    foreach ($blocked_subdirs as $blocked) {
+        if ($resolved_normalised === $blocked ||
+            str_starts_with($resolved_normalised, $blocked . '/')) {
+            return 'critical_path';
         }
     }
 
