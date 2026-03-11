@@ -11,6 +11,8 @@
 🚀 **Support this project!** If NPP has improved your workflow, consider giving it a ⭐ to help us grow:  
 🚀 **Enjoying NPP?**  Buy me a coffee to support continued development.
 
+---
+
 **NPP** allows WordPress users to manage Nginx Cache operations (Purge & Preload) directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.  NPP supports Nginx **FastCGI**, **Proxy**, **SCGI**, and **UWSGI** cache purge and preload operations, making it one of the most comprehensive solutions for managing Nginx cache directly from WordPress.
 
 ### 🔥 Advanced Cache Preloading
