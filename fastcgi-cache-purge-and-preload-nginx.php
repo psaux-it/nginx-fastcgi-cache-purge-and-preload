@@ -19,7 +19,20 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Enable compatibility mode when explicitly configured.
+// ---------------------------------------------------------------------------
+// NPP is designed for administrators only — direct UI interaction and limited
+// remote access. Bootstrap loads 26+ files including shell_exec/proc_open
+// (preload), WP_Filesystem recursive ops (purge), and binary detection
+// (pre-checks). Loading this stack unconditionally is a performance and
+// security liability — so the plugin stays dormant on 99% of requests.
+//
+// Each entry point below is a narrow gate. Only authenticated admin requests
+// that can trigger a cache operation pass through. Everything else bails
+// before a single plugin file loads.
+// ---------------------------------------------------------------------------
+
+// Compatibility mode for environments where Nginx cannot be auto-detected
+// during setup. Activated via setup wizard or manually via wp-config.php.
 function nppp_maybe_define_assume_nginx(): void {
     if (! defined('NPPP_ASSUME_NGINX') && get_option('nppp_assume_nginx_runtime')) {
         define('NPPP_ASSUME_NGINX', true);
@@ -27,12 +40,14 @@ function nppp_maybe_define_assume_nginx(): void {
 }
 add_action('plugins_loaded', 'nppp_maybe_define_assume_nginx', 0);
 
-// Define the plugin main file
+// Provides the main plugin file path to included files — used by
+// get_plugin_data() (update, tracking, settings) and runtime-paths.php.
 if (!defined('NPPP_PLUGIN_FILE')) {
     define('NPPP_PLUGIN_FILE', __FILE__);
 }
 
-// Bootstrap loader
+// Loads runtime paths → SPL class autoloader → full admin bootstrap.
+// require_once deduplicates — safe to call from multiple entry points.
 function nppp_load_bootstrap(): void {
     // Load runtime path helpers
     require_once plugin_dir_path(__FILE__) . 'includes/runtime-paths.php';
@@ -42,14 +57,22 @@ function nppp_load_bootstrap(): void {
     require_once plugin_dir_path(__FILE__) . 'admin/fastcgi-cache-purge-and-preload-nginx-admin.php';
 }
 
-// Entry point 1: Admin bootstrap
+// ---------------------------------------------------------------------------
+// EP1 — Direct UI admin interaction
+// Covers all admin UI operations: post saves, plugin/theme installs,
+// settings changes, admin bar cache actions.
+// ---------------------------------------------------------------------------
 add_action('init', function (): void {
     if (!is_admin()) return;
     if (!is_user_logged_in() || !current_user_can('manage_options')) return;
     nppp_load_bootstrap();
 }, 1);
 
-// Entry point 2: WP-Cron — NPP events & WP Scheduled Post
+// ---------------------------------------------------------------------------
+// EP2 — WP-Cron: NPP scheduler events + scheduled post publishing
+// Handles cache operations with no admin session — cron runs headless,
+// EP1 and EP4 never fire. Auth by trusted hook name only.
+// ---------------------------------------------------------------------------
 foreach ([
     'npp_cache_preload_event',
     'npp_cache_preload_status_event',
@@ -60,38 +83,33 @@ foreach ([
 }
 unset($nppp_cron_event);
 
-// Entry point 3: REST API — NPP namespace only
+// ---------------------------------------------------------------------------
+// EP3 — NPP REST namespace (/nppp_nginx_cache/v2/)
+// Pre-screens all /nppp_nginx_cache/ traffic before bootstrap loads.
+// Invalid or missing keys bail immediately — zero plugin files load.
+// Valid keys proceed to bootstrap, which registers real endpoints (when the
+// REST API feature is enabled) backed by a second validation + rate-limit layer.
+// ---------------------------------------------------------------------------
 add_action('rest_api_init', function (): void {
     $rest_route = $GLOBALS['wp']->query_vars['rest_route'] ?? '';
     if (strpos($rest_route, 'nppp_nginx_cache') === false) {
         return;
     }
 
-    // Protect preload progress endpoint
-    if (strpos($rest_route, 'preload-progress') !== false) {
-        if (!is_user_logged_in()) return;
-        nppp_load_bootstrap();
-        return;
-    }
-
-    // Full REST Auth Prescreen:
-    // Avoid full plugin bootstrap on unauthenticated or invalid REST requests.
+    // Extract API key — Bearer header → X-Api-Key header → request body.
     $api_key = '';
     $auth_header = sanitize_text_field(
         wp_unslash( $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '' )
     );
 
-    // Check Authorization Header
     if (strpos($auth_header, 'Bearer ') === 0) $api_key = substr($auth_header, 7);
 
-    // Fallback: X-Api-Key Header
     if (empty($api_key)) {
         $api_key = sanitize_text_field(
             wp_unslash( $_SERVER['HTTP_X_API_KEY'] ?? '' )
         );
     }
 
-    // Fallback: Request Body
     if (empty($api_key)) {
         $content_type = sanitize_text_field(
             wp_unslash( $_SERVER['CONTENT_TYPE'] ?? '' )
@@ -106,11 +124,11 @@ add_action('rest_api_init', function (): void {
         }
     }
 
-    // Sanitize API Key
+    // Reject invalid format before touching the database.
     $api_key = sanitize_text_field($api_key);
     if (empty($api_key) || !preg_match('/^[a-f0-9]{64}$/i', $api_key)) return;
 
-    // REST auth
+    // Validate against stored key.
     $options    = get_option('nginx_cache_settings');
     $stored_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : '';
     if (!is_string($stored_key) || !hash_equals($stored_key, $api_key)) return;
@@ -118,7 +136,11 @@ add_action('rest_api_init', function (): void {
     nppp_load_bootstrap();
 }, 1);
 
-// Entry point 4: Frontend bootstrap
+// ---------------------------------------------------------------------------
+// EP4 — Frontend, direct UI admin interaction
+// Covers admin bar cache actions and mobile FAB toolbar on frontend pages.
+// Separate from EP1 — is_admin()=false on frontend even for logged-in admins.
+// ---------------------------------------------------------------------------
 add_action('init', function (): void {
     if (is_admin()) return;
     if (!is_user_logged_in() || !current_user_can('manage_options')) return;
@@ -128,7 +150,12 @@ add_action('init', function (): void {
     require_once plugin_dir_path(__FILE__) . 'frontend/fastcgi-cache-purge-and-preload-nginx-front.php';
 }, 1);
 
-// Entry point 5: Setup flow
+// ---------------------------------------------------------------------------
+// EP5 — Setup
+// Not a cache operation entry point — drives first-run configuration and
+// Nginx compatibility detection only. Priority 2 runs after EP1 so the
+// NPPP\Setup class is already autoloaded before Setup::init() is called.
+// ---------------------------------------------------------------------------
 add_action('init', function (): void {
     if (!is_admin()) {
         return;
@@ -141,8 +168,13 @@ add_action('init', function (): void {
     }
 }, 2);
 
-// Entry Point 6: WC REST + WP REST — only remote authenticated requests
-// Covers: WC consumer key/OAuth on /wc/v3/, Application Passwords on /wp/v2/
+// ---------------------------------------------------------------------------
+// EP6 — Remote WP REST (/wp/v2/) and WC REST (/wc/)
+// Ensures remote content changes trigger the same auto-purge hooks as
+// wp-admin saves. rest_pre_dispatch required — WP and WC authentication
+// resolves after rest_api_init. Return $result unchanged or route handler
+// is bypassed.
+// ---------------------------------------------------------------------------
 add_filter('rest_pre_dispatch', function($result, $server, $request) {
     if (!is_null($result)) return $result;
 
@@ -151,7 +183,6 @@ add_filter('rest_pre_dispatch', function($result, $server, $request) {
         strpos($route, '/wp/v2/') !== 0) return $result;
 
     // Only load bootstrap for content-modifying requests
-    // GET requests never trigger purge hooks so no need to bootstrap
     $method = $request->get_method();
     if (!in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) return $result;
 
@@ -164,7 +195,12 @@ add_filter('rest_pre_dispatch', function($result, $server, $request) {
     return $result;
 }, 10, 3);
 
-// Entry Point 7: WP background auto-updates
+// ---------------------------------------------------------------------------
+// EP7 — WP background auto-updates, no user session
+// Ensures core, plugin, and theme background updates trigger auto-purge.
+// Priority 1 — bootstrap must load before admin bootstrap registers its
+// automatic_updates_complete callback at priority 10.
+// ---------------------------------------------------------------------------
 add_action('automatic_updates_complete', function ( $results ): void {
     $opts = get_option('nginx_cache_settings');
     if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
@@ -172,7 +208,10 @@ add_action('automatic_updates_complete', function ( $results ): void {
     nppp_load_bootstrap();
 }, 1);
 
-// Activation handler
+// ---------------------------------------------------------------------------
+// ACTIVATION — generates API key, writes default settings, triggers setup wizard.
+// DEACTIVATION — clears scheduled cron events, terminates active preload process.
+// ---------------------------------------------------------------------------
 function nppp_on_activation() {
     nppp_maybe_define_assume_nginx();
     nppp_load_bootstrap();
@@ -189,10 +228,7 @@ function nppp_on_activation() {
     }
 }
 
-// Register activation hook
 register_activation_hook(__FILE__, 'nppp_on_activation');
-
-// Register deactivation hook
 register_deactivation_hook(__FILE__, function() {
     nppp_load_bootstrap();
     nppp_reset_plugin_settings_on_deactivation();
