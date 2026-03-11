@@ -49,8 +49,13 @@ add_action('init', function (): void {
     nppp_load_bootstrap();
 }, 1);
 
-// Entry point 2: WP-Cron — NPP events only
-foreach (['npp_cache_preload_event', 'npp_cache_preload_status_event', 'npp_plugin_tracking_event'] as $nppp_cron_event) {
+// Entry point 2: WP-Cron — NPP events & WP Scheduled Post
+foreach ([
+    'npp_cache_preload_event',
+    'npp_cache_preload_status_event',
+    'npp_plugin_tracking_event',
+    'publish_future_post',
+] as $nppp_cron_event) {
     add_action($nppp_cron_event, 'nppp_load_bootstrap', 0);
 }
 unset($nppp_cron_event);
@@ -135,6 +140,32 @@ add_action('init', function (): void {
         \NPPP\Setup::init();
     }
 }, 2);
+
+// Entry Point 6: WC REST + WP REST — only remote authenticated requests
+// Covers: WC consumer key/OAuth on /wc/v3/, Application Passwords on /wp/v2/
+add_filter('rest_pre_dispatch', function($result, $server, $request) {
+    if (!is_null($result)) return $result;
+
+    $route = $request->get_route();
+    if (strpos($route, '/wc/') !== 0 &&
+        strpos($route, '/wp/v2/') !== 0) return $result;
+
+    $opts = get_option('nginx_cache_settings');
+    if (($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes') return $result;
+    if (!is_user_logged_in() || !current_user_can('manage_options')) return $result;
+
+    nppp_load_bootstrap();
+
+    return $result;
+}, 10, 3);
+
+// Entry Point 7: WP background auto-updates
+add_action('automatic_updates_complete', function ( $results ): void {
+    $opts = get_option('nginx_cache_settings');
+    if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
+
+    nppp_load_bootstrap();
+}, 1);
 
 // Activation handler
 function nppp_on_activation() {
