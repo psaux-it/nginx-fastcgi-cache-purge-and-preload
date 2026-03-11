@@ -1,5 +1,7 @@
 # Nginx Cache Purge Preload for Wordpress (NPP)
 
+![Image](https://github.com/user-attachments/assets/6f8b8f00-1700-4ff4-8fd8-e3ab0df3df12)
+
 🚀 **Support this project!** If NPP has improved your workflow, consider giving it a ⭐ to help us grow:  
 🚀 **Enjoying NPP?**  Buy me a coffee to support continued development.
 
