@@ -5,7 +5,15 @@
 
 [![Security: CVE-2025-6213](https://img.shields.io/badge/security-CVE--2025--6213-green)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54) [![GitHub Release](https://img.shields.io/github/v/release/psaux-it/nginx-fastcgi-cache-purge-and-preload?logo=github)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases) [![Donate](https://img.shields.io/badge/Wordpress_SVN-v2.1.4-blue?style=flat&logo=wordpress)](https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/) [![safexec CI](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/actions/workflows/build-and-commit-safexec.yml/badge.svg)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/actions/workflows/build-and-commit-safexec.yml) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-red?logo=github)](https://github.com/sponsors/psaux-it)
 
-**NPP** allows WordPress users to manage Nginx Cache operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.  NPP supports Nginx **FastCGI**, **Proxy**, **SCGI**, and **UWSGI** cache purge and preload operations, making it the most comprehensive solution for managing Nginx Cache from your WordPress dashboard.
+**NPP** allows WordPress users to manage Nginx Cache operations (Purge & Preload) directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.  NPP supports Nginx **FastCGI**, **Proxy**, **SCGI**, and **UWSGI** cache purge and preload operations, making it one of the most comprehensive solutions for managing Nginx cache directly from WordPress.
+
+### 🔥 Advanced Cache Preloading
+
+One of NPP’s key differentiators is its **advanced cache preloading system**. Unlike many Nginx cache plugins that only purge cache, NPP can **actively warm the cache** by crawling your site and rebuilding cache entries automatically.
+
+### 🛡️ Secure Command Execution (safexec)
+
+NPP includes **[safexec](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec)** - a hardened command execution wrapper written in C for NPP. It safely executes system utilities used by NPP while enforcing strict security controls. An optional library can also normalize percent-encoded HTTP request lines during cache preloading, preventing cache key inconsistencies in Nginx.
 
 ### Check out! :whale: NPP Dockerized Full Stack Deploy
 
