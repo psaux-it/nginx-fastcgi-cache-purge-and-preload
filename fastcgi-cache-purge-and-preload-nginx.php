@@ -150,6 +150,11 @@ add_filter('rest_pre_dispatch', function($result, $server, $request) {
     if (strpos($route, '/wc/') !== 0 &&
         strpos($route, '/wp/v2/') !== 0) return $result;
 
+    // Only load bootstrap for content-modifying requests
+    // GET requests never trigger purge hooks so no need to bootstrap
+    $method = $request->get_method();
+    if (!in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) return $result;
+
     $opts = get_option('nginx_cache_settings');
     if (($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes') return $result;
     if (!is_user_logged_in() || !current_user_can('manage_options')) return $result;
