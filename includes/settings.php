@@ -227,15 +227,15 @@ function nppp_nginx_cache_settings_page() {
                                     <h4><?php echo esc_html__( 'Allowed Cache Paths', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
                                     <p>
                                         <strong><?php echo esc_html__( 'For RAM-based:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Use directories under', 'fastcgi-cache-purge-and-preload-nginx' ); ?> <code>/dev/</code> | <code>/tmp/</code> | <code>/var/</code>
+                                        <?php echo esc_html__( 'Use directories under', 'fastcgi-cache-purge-and-preload-nginx' ); ?> <code>/dev/shm/</code> | <code>/tmp/</code>
                                     </p>
                                     <p>
                                         <strong><?php echo esc_html__( 'For persistent disk:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Use directories under', 'fastcgi-cache-purge-and-preload-nginx' ); ?> <code>/opt/</code>
+                                        <?php echo esc_html__( 'Use directories under', 'fastcgi-cache-purge-and-preload-nginx' ); ?> <code>/var/</code>
                                     </p>
                                     <p>
                                         <strong><?php echo esc_html__( 'Important:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Paths must be at least one level deeper (e.g. /var/cache).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <?php echo esc_html__( 'Paths must be at least one level deeper (e.g. /tmp/cache | /dev/shm/nginx-cache | /var/cache/nginx | /var/nginx-cache).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                         <br class="line-break">
                                         <?php echo esc_html__( 'Critical system paths are prohibited in default to ensure accuracy to avoid unintended deletions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
@@ -2865,6 +2865,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
         '/var/lock',
         '/var/backups',
         '/var/snap',
+        '/var/cache',
     ];
 
     foreach ($blocked_subdirs as $blocked) {
