@@ -19,21 +19,27 @@ Check out **[Dockerized](https://github.com/psaux-it/wordpress-nginx-cache-docke
 
 **NPP** is compatible exclusively with **Nginx web servers** running on **Linux-powered** systems. Additionally, the **shell_exec** function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native Linux commands are blocked from running via PHP.
 
-Moreover, granting the correct permissions to the PHP process owner (PHP-FPM-USER) is essential for the proper functioning of the purge and preload operations. This is necessary in isolated user environments that have two distinct user roles: the WEBSERVER-USER and the PHP-FPM-USER.
-
 📌 If you see warnings or if any plugin settings or tabs are disabled, this could indicate permission issues, an unsupported environment, or missing dependencies that the plugin requires to function properly. **NPP is completely free OpenSource project!**
 
-📌 You do not need any external Nginx module. If you're deploying on an **All-in-One Monolithic Server** simply execute the following one liner after installing plugin and follow instructions.<br/>
-
-➡️```bash <(curl -Ss https://psaux-it.github.io/install.sh)``` <br/>
+📌 You do not need any external Nginx module.
 
 ## How NPP Manages Nginx Cache?
 
 ### Overview
 
-NPP automates Nginx cache purging and preloading in WordPress environments where WEBSERVER-USER and PHP-FPM-USER operate separately. Unlike external Nginx modules, NPP directly removes cache files from the cache directory, provided PHP-FPM-USER has the necessary permissions. This method eliminates the need for direct Nginx interaction, offering greater flexibility for managing cache operations, particularly in modern containerized environments.
+NPP allows WordPress administrators to manage **Nginx cache purge and preload operations directly from the WordPress dashboard**.
 
-To ensure PHP-FPM-USER has the required permissions, NPP includes a pre-configured bash script that can be manually executed on the host, making it easy to get started and benefit from the plugin.
+Instead of relying on special Nginx purge modules, NPP interacts with the **Nginx cache directory itself**, removing or warming cache files when needed. As long as the PHP process owner (**PHP-FPM-USER**) has the required permissions to the cache directory, NPP can manage cache operations without requiring direct Nginx integration.
+
+This approach provides a flexible and architecture-agnostic way to control Nginx cache behavior, making it suitable for traditional servers as well as modern containerized environments.
+
+### Permission Handling in Isolated User Environments
+
+Some server architectures run the **web server (WEBSERVER-USER)** and **PHP-FPM (PHP-FPM-USER)** under different system users. In such environments, the PHP process may not have permission to modify the Nginx cache directory.
+
+To simplify setup in these cases, NPP provides a **pre-configured automation script** that helps resolve permission boundaries by creating a FUSE-based bindfs mount for the cache directory.
+
+This script is **only required in environments where user isolation prevents PHP from accessing the cache path**. In many setups—such as when Nginx and PHP-FPM run under the same user—it is **not required at all**.
 
 ## Installation Instructions (All-in-One Monolithic Server)
 
@@ -58,7 +64,7 @@ The script first attempts to automatically identify the PHP-FPM-USER along with 
 In environments with two distinct user roles—the WEBSERVER-USER and the PHP-FPM-USER —this script automates the management of Nginx Cache Paths. **Utilizes `bindfs` to create a `FUSE` mount of the original Nginx Cache Paths, enabling the PHP-FPM-USER to write to these directories with the necessary permissions.** This approach resolves permission conflicts by granting the PHP-FPM-USER access to a new mount point, while keeping the original Nginx Cache Paths intact and synchronized.
 
 > [!NOTE]
-> If your environment runs both the web server and PHP-FPM under the same user (for example nginx, www-data, or similar), this script or any server side action is not required, since no permission boundary exists between the web server and PHP processes.
+> As mentioned before, If your environment runs both the WEB-SERVER and PHP-FPM under the same user (for example nginx, www-data, or similar), this script or any server side action is not required, since no permission boundary exists between the web server and PHP processes.
 
 After the setup (whether automatic or manual) completed, the script creates an `npp-wordpress` systemd service. Thats All!
 
