@@ -2,7 +2,7 @@
 Contributors: psauxit
 Donate link: https://github.com/sponsors/psaux-it
 Tags: nginx, cache, purge, preload, performance
-Requires at least: 6.3
+Requires at least: 6.5
 Requires PHP: 7.4
 Tested up to: 6.8
 Stable tag: 2.1.4
@@ -13,24 +13,19 @@ The most comprehensive solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI)
 
 == Description ==
 
-👇 Test NPP Instantly in a Live Sandbox
-Experience real-time cache purging, preloading with proxy support, and REST API features — all in a fully interactive WordPress environment.
-
-👉 **[Launch Live Test](https://npp.psauxit.com/npp-login/)**
-
-This plugin, **NPP**, allows WordPress users to manage **Nginx Cache Purge and Preload** (FastCGI, Proxy, SCGI, UWSGI) operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.
+**NPP**, allows WordPress users to manage **Nginx Cache Purge and Preload** (FastCGI, Proxy, SCGI, UWSGI) operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.
 
 Unlike other solutions that depend on Nginx modules, **NPP** directly manages cache files without needing to interact with Nginx.
 
 ➡️ **This approach provides the following benefits:**
 
 ⚡ **Faster** – No waiting for Nginx to process cache purges; works without interacting with Nginx.
-🌐 **Greater flexibility** – Works seamlessly across different architectures, including containerized environments where Nginx may run on a host, in a separate container, or distributed across systems.
+🌐 **Greater flexibility** – Works seamlessly across different architectures, including containerized environments.
 🤖 **Automations** - NPP is flexible for server-side automations, making it easy to integrate into your workflow.
 
 ⚠️ **IMPORTANT:**
 
-**NPP** is feature rich, completely free & functional and great for users who manage their own servers and have technical know-how. For those with less technical experience, pre-made Bash scripts are available, making it easy to get started and benefit from the plugin.
+**NPP** is feature rich, completely free & functional and great for users who manage their own servers and have technical know-how.
 
 ➡️ **For detailed integration steps and guidance:**
 
@@ -49,15 +44,19 @@ Unlike other solutions that depend on Nginx modules, **NPP** directly manages ca
 
 🧼 **Auto Purge Nginx Cache**: Purge cache on Post/Page content changes, comment status updates, theme/plugin updates, or when compatible Cache Plugins trigger a purge. Nginx cache is preloaded automatically if Auto Preload is enabled (for the entire site or individual page).
 
+🔗 Purge Scope (Related Pages): Automatically purge related pages such as the Homepage, WooCommerce Shop page, and Category/Tag archives when a single URL is purged. Optionally preload those pages to keep the cache warm.
+
 ⏰ **Schedule Nginx Cache Purge & Preload via WP Cron**: Automate the purge and preload process using WordPress Cron jobs.
 
 🧭 **Proxy Support for Preload**: Route preload requests through a proxy server for edge-case environments and containerized deployments.
 
-⏱️ **Live Preload Progress Monitoring**: Watch the Nginx cache preload process in real time — complete with a dynamic progress bar, currently processed URL, 404 tracking, and total completion time.
+⏱️ **Live Preload Progress Monitoring**: Watch the Nginx cache preload process in real time — complete with a dynamic progress bar, currently processed URL, 404 tracking, server load, and total completion time.
 
 🌐 **Remote Nginx Cache Purge & Preload via REST API**: Remotely trigger cache purging and preloading through REST API endpoints.
 
 ⚙️ **Manual Nginx Cache Purge & Preload**: Allow manual purging and preloading of cache through the table view in the Advanced Tab.
+
+📚 Nginx Cache Analyzer: Full HIT/MISS cache analyzer dashboard, from the last preload crawl with what is currently stored in the Nginx cache. Instantly spot uncached pages and Purge or Preload them directly in the Advanced Tab.
 
 🔍 **On-Page Nginx Cache Purge & Preload**: Manually purge and preload Nginx cache for the currently visited page directly from the frontend.
 
@@ -66,6 +65,16 @@ Unlike other solutions that depend on Nginx modules, **NPP** directly manages ca
 ⚡ **Optimized Nginx Cache Preload**: Enhance Nginx cache preload performance with options to limit CPU usage, exclude endpoints, wait retrievals, and apply rate limiting.
 
 📊 **Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, and Nginx status from the Status tab.
+
+📈 **Cache Coverage Ratio**: Live gauge in the WordPress dashboard widget showing the cache coverage ratio, based on the last preload snapshot. Refreshable on demand without a page reload.
+
+☁️ **Cloudflare APO Sync**: Automatically mirrors NPP purge actions to Cloudflare APO to keep edge cache synchronized with your Nginx cache.
+
+🔴 **Redis Object Cache Sync**: Bidirectional sync between NPP and Redis Object Cache. NPP Purge All flushes the Redis object cache, and a Redis flush triggers a full Nginx cache purge via NPP (when auto-purge is enabled).
+
+🛒 **WooCommerce Auto-Purge**: Automatically purges Nginx cache when WooCommerce product stock quantity changes, stock status changes (in stock / out of stock / on backorder), or when an order is cancelled and stock is restored.
+
+🔒 **Concurrent Purge Serialization**: Atomic lock mechanism prevents simultaneous purge operations from colliding, ensuring cache integrity during concurrent admin actions or background events.
 
 🧩 **Modular by Design**: Easily integrate with external scripts and automation tools.
 
