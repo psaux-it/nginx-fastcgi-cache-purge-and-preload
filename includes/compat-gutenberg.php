@@ -19,13 +19,24 @@ if ( ! defined('ABSPATH') ) exit;
 //   - Move to Trash / Force Delete                          →  DELETE →  delete_item()  →  rest_delete_{type}
 
 if ( $nppp_auto_purge ) {
-    add_action('init', function () {
+    $nppp_register_rest_hooks = function () {
         foreach ( get_post_types(['public' => true], 'objects') as $obj ) {
             if ( empty($obj->show_in_rest) ) continue;
             add_action("rest_after_insert_{$obj->name}", 'nppp__rest_after_insert', 10, 3);
             add_action("rest_delete_{$obj->name}",       'nppp__rest_delete',       10, 3);
         }
-    }, 20);
+    };
+
+    if ( did_action('init') ) {
+        // Bootstrap was loaded after init (e.g. via rest_pre_dispatch for
+        // Application Password or WC consumer key requests). init has already
+        // fired so add_action('init') would never run — register hooks directly.
+        $nppp_register_rest_hooks();
+    } else {
+        // Normal execution path — init has not fired yet.
+        // Wait for init so get_post_types() returns all registered post types.
+        add_action('init', $nppp_register_rest_hooks, 20);
+    }
 }
 
 /**
