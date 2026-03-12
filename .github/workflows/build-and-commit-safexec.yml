@@ -693,6 +693,15 @@ jobs:
           printf 'safexec/bin/\n' >> .git/info/exclude
 
           git fetch --prune origin
+
+          # Guard: skip if binaries unchanged (timestamps in .deb make git diff unreliable)
+          NEW_SHA256SUMS="$(cat safexec/bin/SHA256SUMS 2>/dev/null || echo '')"
+          OLD_SHA256SUMS="$(git show ${GITHUB_SHA}:safexec/bin/SHA256SUMS 2>/dev/null || echo 'none')"
+          if [[ -n "$NEW_SHA256SUMS" && "$NEW_SHA256SUMS" == "$OLD_SHA256SUMS" ]]; then
+            echo "Binaries unchanged (SHA256SUMS identical), skipping .deb commit."
+            exit 0
+          fi
+
           git stash push -u -m "ci-artifacts" || true
           git checkout -B "${BRANCH}" "origin/${BRANCH}"
           git stash pop || true
@@ -836,6 +845,15 @@ jobs:
           } >> .git/info/exclude
 
           git fetch --prune origin
+
+          # Guard: skip if binaries unchanged (timestamps in .rpm make git diff unreliable)
+          NEW_SHA256SUMS="$(cat safexec/bin/SHA256SUMS 2>/dev/null || echo '')"
+          OLD_SHA256SUMS="$(git show ${GITHUB_SHA}:safexec/bin/SHA256SUMS 2>/dev/null || echo 'none')"
+          if [[ -n "$NEW_SHA256SUMS" && "$NEW_SHA256SUMS" == "$OLD_SHA256SUMS" ]]; then
+            echo "Binaries unchanged (SHA256SUMS identical), skipping .rpm commit."
+            exit 0
+          fi
+
           git stash push -u -m "ci-artifacts" || true
           git checkout -B "${BRANCH}" "origin/${BRANCH}"
           git stash pop || true
