@@ -41,7 +41,7 @@ jobs:
           else
             echo "No tag provided on manual run; trying latest release…"
             echo "${{ github.token }}" | gh auth login --with-token
-            TAG="$(gh release view --json tagName -q .tagName)"
+            TAG="$(gh release view --repo "${GITHUB_REPOSITORY}" --json tagName -q .tagName)"
           fi
           [[ -n "$TAG" ]] || { echo "Could not resolve a tag."; exit 1; }
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
