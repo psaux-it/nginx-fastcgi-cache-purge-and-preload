@@ -507,7 +507,7 @@ jobs:
           git stash pop || true
 
           # Stage artifacts
-          git add safexec/bin/safexec-*-linux-musl safexec/bin/libnpp_norm-*.so safexec/bin/*.sha256 safexec/bin/SHA256SUMS || true
+          git add -f safexec/bin/safexec-*-linux-musl safexec/bin/libnpp_norm-*.so safexec/bin/*.sha256 safexec/bin/SHA256SUMS || true
 
           # Nothing to do?
           if git diff --cached --quiet; then
