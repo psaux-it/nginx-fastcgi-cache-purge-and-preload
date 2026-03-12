@@ -555,14 +555,14 @@ jobs:
           set -euo pipefail
           git fetch --prune origin
           BRANCH="${GITHUB_REF#refs/heads/}"
-          NEW="$(git show origin/${BRANCH}:safexec/bin/SHA256SUMS 2>/dev/null || echo 'new')"
-          OLD="$(git show ${GITHUB_SHA}:safexec/bin/SHA256SUMS 2>/dev/null || echo 'none')"
-          if [[ "$NEW" == "$OLD" ]]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "Binaries unchanged, skipping entire deb job."
-          else
+          CHANGED="$(git diff --name-only ${GITHUB_SHA}^ ${GITHUB_SHA})"
+          echo "Changed files: $CHANGED"
+          if echo "$CHANGED" | grep -qE 'safexec\.(c|h)|libnpp_norm\.c|helpers/deb\.sh|build-and-commit-safexec\.yml'; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "Binaries changed, proceeding with deb build."
+            echo "Relevant change detected, proceeding with deb build."
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No deb-relevant changes, skipping."
           fi
 
       - name: Download safexec build artifacts
@@ -727,15 +727,6 @@ jobs:
           printf 'safexec/bin/\n' >> .git/info/exclude
 
           git fetch --prune origin
-
-          # Guard: skip if binaries unchanged (timestamps in .deb make git diff unreliable)
-          NEW_SHA256SUMS="$(cat safexec/bin/SHA256SUMS 2>/dev/null || echo '')"
-          OLD_SHA256SUMS="$(git show ${GITHUB_SHA}:safexec/bin/SHA256SUMS 2>/dev/null || echo 'none')"
-          if [[ -n "$NEW_SHA256SUMS" && "$NEW_SHA256SUMS" == "$OLD_SHA256SUMS" ]]; then
-            echo "Binaries unchanged (SHA256SUMS identical), skipping .deb commit."
-            exit 0
-          fi
-
           git stash push -u -m "ci-artifacts" || true
           git checkout -B "${BRANCH}" "origin/${BRANCH}"
           git stash pop || true
@@ -787,14 +778,14 @@ jobs:
           set -euo pipefail
           git fetch --prune origin
           BRANCH="${GITHUB_REF#refs/heads/}"
-          NEW="$(git show origin/${BRANCH}:safexec/bin/SHA256SUMS 2>/dev/null || echo 'new')"
-          OLD="$(git show ${GITHUB_SHA}:safexec/bin/SHA256SUMS 2>/dev/null || echo 'none')"
-          if [[ "$NEW" == "$OLD" ]]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "Binaries unchanged, skipping entire rpm job."
-          else
+          CHANGED="$(git diff --name-only ${GITHUB_SHA}^ ${GITHUB_SHA})"
+          echo "Changed files: $CHANGED"
+          if echo "$CHANGED" | grep -qE 'safexec\.(c|h)|libnpp_norm\.c|helpers/rpm\.sh|build-and-commit-safexec\.yml'; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "Binaries changed, proceeding with rpms build."
+            echo "Relevant change detected, proceeding with rpm build."
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No rpm-relevant changes, skipping."
           fi
 
       - name: Download safexec build artifacts
@@ -908,15 +899,6 @@ jobs:
           } >> .git/info/exclude
 
           git fetch --prune origin
-
-          # Guard: skip if binaries unchanged (timestamps in .rpm make git diff unreliable)
-          NEW_SHA256SUMS="$(cat safexec/bin/SHA256SUMS 2>/dev/null || echo '')"
-          OLD_SHA256SUMS="$(git show ${GITHUB_SHA}:safexec/bin/SHA256SUMS 2>/dev/null || echo 'none')"
-          if [[ -n "$NEW_SHA256SUMS" && "$NEW_SHA256SUMS" == "$OLD_SHA256SUMS" ]]; then
-            echo "Binaries unchanged (SHA256SUMS identical), skipping .rpm commit."
-            exit 0
-          fi
-
           git stash push -u -m "ci-artifacts" || true
           git checkout -B "${BRANCH}" "origin/${BRANCH}"
           git stash pop || true
