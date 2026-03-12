@@ -9,7 +9,7 @@
  * for shell_exec() in NPP (Nginx Cache Purge Preload).
  *
  * Security model
- * --------------
+ * ---------------
  *  - Strict allowlist: only known-safe binaries run (see ALLOWED_BINS).
  *  - Absolute-path pinning: the chosen tool is resolved to a real, non-symlink
  *    file under trusted system dirs before exec (e.g. /usr/bin, /bin, /usr/local/{bin,sbin},
