@@ -1,6 +1,9 @@
 name: Attach .rpm assets to release
 
 on:
+  workflow_run:
+    workflows: ["safexec CI"]
+    types: [completed]
   release:
     types: [published, edited, prereleased]
   workflow_dispatch:
@@ -14,11 +17,14 @@ permissions:
   contents: write
 
 concurrency:
-  group: attach-rpms-${{ github.event.release.tag_name || inputs.tag || 'manual' }}
+  group: attach-rpms-${{ github.event.release.tag_name || github.event.workflow_run.head_branch || inputs.tag || 'manual' }}
   cancel-in-progress: false
 
 jobs:
   attach-rpms:
+    if: >
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Determine target tag
