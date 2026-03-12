@@ -12,7 +12,7 @@ on:
 
 concurrency:
   group: build-safexec-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   safexec-build-test-attest:
