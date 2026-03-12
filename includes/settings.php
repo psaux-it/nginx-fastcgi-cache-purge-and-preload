@@ -2865,7 +2865,6 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
         '/var/lock',
         '/var/backups',
         '/var/snap',
-        '/var/cache',
     ];
 
     foreach ($blocked_subdirs as $blocked) {
@@ -2873,6 +2872,12 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
             str_starts_with($normalised, $blocked . '/')) {
             return 'critical_path';
         }
+    }
+
+    // 5b. Block /var/cache root only — subdirectories are allowed.
+    //     Using /var/cache directly would wipe all system cache data.
+    if ($normalised === '/var/cache') {
+        return 'critical_path';
     }
 
     // 6. Existence check — also required before realpath() is safe to call,
@@ -2916,6 +2921,11 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
             str_starts_with($resolved_normalised, $blocked . '/')) {
             return 'critical_path';
         }
+    }
+
+    // 5b repeated on resolved path — catches symlinks pointing at /var/cache root
+    if ($resolved_normalised === '/var/cache') {
+        return 'critical_path';
     }
 
     return true;
