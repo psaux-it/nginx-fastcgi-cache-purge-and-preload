@@ -102,7 +102,7 @@
  *  - Only allowlisted tools may run; arbitrary commands/pipelines are rejected.
  *
  * Copyright
- * ----------
+ * ---------
  * (C) 2025 Hasan Calisir <hasan.calisir@psauxit.com>
  * Version: 1.9.2 (2025)
  */
