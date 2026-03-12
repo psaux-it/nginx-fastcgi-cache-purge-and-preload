@@ -25,7 +25,7 @@ jobs:
       actions: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -453,7 +453,7 @@ jobs:
             safexec/bin/SHA256SUMS
 
       - name: Upload safexec build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: safexec-binaries
           path: |
@@ -542,20 +542,42 @@ jobs:
       DEB_REV: "1"
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
+      - name: Guard — skip if binaries unchanged
+        id: guard
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          git fetch --prune origin
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          NEW="$(git show origin/${BRANCH}:safexec/bin/SHA256SUMS 2>/dev/null || echo 'new')"
+          OLD="$(git show ${GITHUB_SHA}:safexec/bin/SHA256SUMS 2>/dev/null || echo 'none')"
+          if [[ "$NEW" == "$OLD" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Binaries unchanged, skipping entire deb job."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Binaries changed, proceeding with deb build."
+          fi
+
       - name: Download safexec build artifacts
-        uses: actions/download-artifact@v4
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/download-artifact@v7
         with:
           name: safexec-binaries
           path: safexec/bin
 
       - name: Ensure exec bit on safexec
+        if: steps.guard.outputs.skip != 'true'
         run: chmod 755 safexec/bin/safexec-*-linux-musl || true
 
       - name: Ensure Debian tooling
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -563,6 +585,7 @@ jobs:
             devscripts debhelper dpkg-dev lintian build-essential fakeroot sudo debhelper-compat
 
       - name: Resolve version from safexec -v
+        if: steps.guard.outputs.skip != 'true'
         id: ver
         env:
           DEB_REV: ${{ env.DEB_REV }}
@@ -592,9 +615,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Make deb.sh executable
+        if: steps.guard.outputs.skip != 'true'
         run: chmod +x safexec/helpers/deb.sh
 
       - name: Build .deb (amd64)
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           docker run --rm -v "$PWD":/src -w /src debian:bullseye-slim bash -euxo pipefail -c '
@@ -605,11 +630,13 @@ jobs:
           '
 
       - name: Enable binfmt for arm64
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           docker run --privileged --rm tonistiigi/binfmt --install arm64
 
       - name: Build .deb (arm64)
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src debian:bullseye-slim bash -euxo pipefail -c '
@@ -620,11 +647,13 @@ jobs:
           '
 
       - name: Fix ownership of deb build outputs
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           sudo chown -R "$(id -u)":"$(id -g)" .
 
       - name: Collect .debs into safexec/deb/
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           mkdir -p safexec/deb
@@ -635,11 +664,13 @@ jobs:
           sha256sum *.deb | sort > SHA256SUMS
 
       - name: Clean packaging worktrees
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           sudo rm -rf pkg-safexec-*-single || true
 
       - name: Generate SLSA provenance (deb packages)
+        if: steps.guard.outputs.skip != 'true'
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
@@ -647,7 +678,8 @@ jobs:
             safexec/deb/SHA256SUMS
 
       - name: Upload debs as artifacts
-        uses: actions/upload-artifact@v4
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/upload-artifact@v6
         with:
           name: safexec-debs-${{ steps.ver.outputs.deb }}
           path: |
@@ -656,6 +688,7 @@ jobs:
           if-no-files-found: error
 
       - name: Fix workspace perms & exclude build dirs
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           # Hand all files back to the runner (some were created by root in containers)
@@ -671,6 +704,7 @@ jobs:
           done
 
       - name: Final clean of packaging worktrees (authoritative)
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           # Ensure no root-owned worktrees remain before git checkout
@@ -744,19 +778,41 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Guard — skip if binaries unchanged
+        id: guard
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          git fetch --prune origin
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          NEW="$(git show origin/${BRANCH}:safexec/bin/SHA256SUMS 2>/dev/null || echo 'new')"
+          OLD="$(git show ${GITHUB_SHA}:safexec/bin/SHA256SUMS 2>/dev/null || echo 'none')"
+          if [[ "$NEW" == "$OLD" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Binaries unchanged, skipping entire rpm job."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Binaries changed, proceeding with deb build."
+          fi
+
       - name: Download safexec build artifacts
-        uses: actions/download-artifact@v4
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/download-artifact@v7
         with:
           name: safexec-binaries
           path: safexec/bin
 
       - name: Ensure exec bits
+        if: steps.guard.outputs.skip != 'true'
         run: |
           chmod 755 safexec/bin/safexec-*-linux-musl || true
           chmod +x safexec/helpers/rpm.sh
 
       # Resolve version from safexec -v
       - name: Resolve version from safexec -v
+        if: steps.guard.outputs.skip != 'true'
         id: ver
         shell: bash
         run: |
@@ -773,6 +829,7 @@ jobs:
 
       # Build x86_64 RPM on Rocky 10
       - name: Build RPM (x86_64 / Rocky 10)
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           docker run --rm -v "$PWD":/src -w /src quay.io/rockylinux/rockylinux:10 bash -euxo pipefail -c '
@@ -784,10 +841,12 @@ jobs:
 
       # Enable arm64 binfmt
       - name: Enable binfmt for arm64
+        if: steps.guard.outputs.skip != 'true'
         run: docker run --privileged --rm tonistiigi/binfmt --install arm64
 
       # Build aarch64 RPM on Rocky 10 (arm64 container)
       - name: Build RPM (aarch64 / Rocky 10)
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src quay.io/rockylinux/rockylinux:10 bash -euxo pipefail -c '
@@ -797,6 +856,7 @@ jobs:
           '
 
       - name: Collect RPMs -> safexec/rpm
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           mkdir -p safexec/rpm
@@ -806,6 +866,7 @@ jobs:
           sha256sum *.rpm | sort > SHA256SUMS
 
       - name: Generate SLSA provenance (RPM packages)
+        if: steps.guard.outputs.skip != 'true'
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
@@ -813,7 +874,8 @@ jobs:
             safexec/rpm/SHA256SUMS
 
       - name: Upload RPMs as artifacts
-        uses: actions/upload-artifact@v4
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/upload-artifact@v6
         with:
           name: safexec-rpms-${{ steps.ver.outputs.rpm }}
           path: |
@@ -822,6 +884,7 @@ jobs:
           if-no-files-found: error
 
       - name: Clean packaging worktrees
+        if: steps.guard.outputs.skip != 'true'
         run: |
           sudo chown -R "$(id -u)":"$(id -g)" pkg-safexec-*-rpm 2>/dev/null || true
           sudo rm -rf pkg-safexec-*-rpm || true
