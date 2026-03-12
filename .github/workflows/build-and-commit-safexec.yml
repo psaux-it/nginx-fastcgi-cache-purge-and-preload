@@ -712,7 +712,7 @@ jobs:
           sudo rm -rf pkg-safexec-*-single || true
 
       - name: Commit .deb packages back to repo
-        if: github.ref_type == 'branch'
+        if: github.ref_type == 'branch' && steps.guard.outputs.skip != 'true'
         env:
           GITHUB_REF: ${{ github.ref }}
         run: |
@@ -774,7 +774,7 @@ jobs:
       actions: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -794,7 +794,7 @@ jobs:
             echo "Binaries unchanged, skipping entire rpm job."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "Binaries changed, proceeding with deb build."
+            echo "Binaries changed, proceeding with rpms build."
           fi
 
       - name: Download safexec build artifacts
@@ -890,7 +890,7 @@ jobs:
           sudo rm -rf pkg-safexec-*-rpm || true
 
       - name: Commit RPMs back to repo
-        if: github.ref_type == 'branch'
+        if: github.ref_type == 'branch' && steps.guard.outputs.skip != 'true'
         env:
           GITHUB_REF: ${{ github.ref }}
         run: |
