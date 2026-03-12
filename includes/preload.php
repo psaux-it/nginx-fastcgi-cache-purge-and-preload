@@ -177,9 +177,9 @@ function nppp_is_safexec_usable($path, $notify = true) {
     // SECURITY: Verify the safexec binary content matches a known-good SHA256 hash.
     // A root-owned SUID binary could still be tampered with after installation.
     $known_hashes = array(
-        'x86_64'  => 'a4930cbcef4048cb4289873203d6df8f3d0bb2968d53a2c9b6ea645fdcaf2b88',
-        'aarch64' => '66110372871da333562e770e804e52df12a5d3efcd1ff97585205d4fa9f6639a',
-        'arm64'   => '66110372871da333562e770e804e52df12a5d3efcd1ff97585205d4fa9f6639a',
+        'x86_64'  => 'ab1d6b7f70b6172e0f6e391c7ec98b317e50ef7638bec223c9833dcc455b60e6',
+        'aarch64' => '82d60f69292f47df2a1011255908b91ce082cc878fc640f512a316371b7a99ae',
+        'arm64'   => '82d60f69292f47df2a1011255908b91ce082cc878fc640f512a316371b7a99ae',
     );
 
     $arch = php_uname('m');
