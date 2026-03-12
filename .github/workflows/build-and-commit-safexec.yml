@@ -502,9 +502,16 @@ jobs:
 
           # Make sure we're up-to-date with the remote branch
           git fetch --prune origin
+
+          # Save newly built binaries before checkout overwrites them
+          cp -r safexec/bin /tmp/safexec-bin-new
+
           git stash push -u -m "ci-artifacts" || true
           git checkout -B "${BRANCH}" "origin/${BRANCH}"
           git stash pop || true
+
+          # Restore new binaries (checkout replaced them with old versions)
+          cp -r /tmp/safexec-bin-new/. safexec/bin/
 
           # Stage artifacts
           git add -f safexec/bin/safexec-*-linux-musl safexec/bin/libnpp_norm-*.so safexec/bin/*.sha256 safexec/bin/SHA256SUMS || true
