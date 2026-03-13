@@ -76,7 +76,6 @@ add_action('init', function (): void {
 foreach ([
     'npp_cache_preload_event',
     'npp_cache_preload_status_event',
-    'npp_plugin_tracking_event',
     'publish_future_post',
 ] as $nppp_cron_event) {
     add_action($nppp_cron_event, 'nppp_load_bootstrap', 0);
