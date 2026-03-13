@@ -106,10 +106,6 @@ function nppp_delete_plugin_options_on_uninstall() {
 function nppp_clear_scheduled_events_on_uninstall() {
     wp_clear_scheduled_hook('npp_cache_preload_event');
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
-
-    // This hook is scheduled with custom args in tracking flow.
-    wp_clear_scheduled_hook('npp_plugin_tracking_event', array('active'));
-    wp_clear_scheduled_hook('npp_plugin_tracking_event');
 }
 
 /**
