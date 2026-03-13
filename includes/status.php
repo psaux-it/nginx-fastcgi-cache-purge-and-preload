@@ -80,6 +80,7 @@ function nppp_clear_plugin_cache() {
         'nppp_wget_compatibility_' . md5($static_key_base),
         'nppp_preload_phase_' . md5($static_key_base),
         'nppp_preload_cycle_start_' . md5($static_key_base),
+        'nppp_safexec_ok',
     );
 
     // Delete each known transient
