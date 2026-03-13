@@ -2983,8 +2983,8 @@ function nppp_defaults_on_plugin_activation() {
     update_option('nginx_cache_settings', $updated_options);
 
     // Get the current plugin version dynamically
-    $plugin_data = get_plugin_data(NPPP_PLUGIN_FILE);
-    $current_version = $plugin_data['Version'];
+    $plugin_headers  = get_file_data(NPPP_PLUGIN_FILE, array('Version' => 'Version'));
+    $current_version = $plugin_headers['Version'];
 
     // Save the current version
     update_option('nppp_plugin_version', $current_version);
