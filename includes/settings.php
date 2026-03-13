@@ -829,6 +829,7 @@ function nppp_handle_nginx_cache_settings_submission() {
                         $static_key_base = 'nppp';
                         $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
                         delete_transient($transient_key_permissions_check);
+                        delete_transient('nppp_safexec_ok');
 
                         // Update the settings
                         // Note: This will re-encode 'nginx_cache_key_custom_regex' via sanitization
@@ -2076,8 +2077,15 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     $opts    = get_option('nginx_cache_settings', array());
     $current = isset($opts['nginx_cache_pctnorm_mode']) ? $opts['nginx_cache_pctnorm_mode'] : 'off';
 
-    $safexec_path = nppp_find_safexec_path();
-    $safexec_ok   = $safexec_path && nppp_is_safexec_usable($safexec_path, false);
+    $cached = get_transient('nppp_safexec_ok');
+    if ($cached === false) {
+        $safexec_path = nppp_find_safexec_path();
+        $safexec_ok = $safexec_path && nppp_is_safexec_usable($safexec_path, false);
+        set_transient('nppp_safexec_ok', array('path' => $safexec_path, 'ok' => $safexec_ok), HOUR_IN_SECONDS);
+    } else {
+        $safexec_path = $cached['path'];
+        $safexec_ok   = $cached['ok'];
+    }
     $is_disabled = ! $safexec_ok;
 
     if ($is_disabled && $current !== 'off') {
@@ -2090,7 +2098,18 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     if (!$safexec_path) {
         $status_note = esc_html__( 'Unavailable: safexec not found. Install it to enable URL Normalization (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
     } elseif (!$safexec_ok) {
-        $status_note = esc_html__( 'Unavailable: safexec is present but not SUID/root-owned. Fix permissions to enable URL Normalization (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
+        // Distinguish: SUID failure vs SHA256 integrity failure
+        $p         = @realpath($safexec_path) ?: $safexec_path;
+        $stat_info = function_exists('stat') ? @stat($p) : false;
+        $suid_ok   = $stat_info
+                     && ($stat_info['uid'] === 0)
+                     && (($stat_info['mode'] & 04000) === 04000);
+
+        if ($suid_ok) {
+            $status_note = esc_html__( 'Unavailable: safexec integrity check failed. Reinstall the correct version (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
+        } else {
+            $status_note = esc_html__( 'Unavailable: safexec is not SUID/root-owned. Fix permissions (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
+        }
     } else {
         $status_note = '';
     }
