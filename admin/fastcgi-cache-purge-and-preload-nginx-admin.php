@@ -137,7 +137,6 @@ require_once dirname(__DIR__) . '/includes/advanced.php';
 require_once dirname(__DIR__) . '/includes/send-mail.php';
 require_once dirname(__DIR__) . '/includes/schedule.php';
 require_once dirname(__DIR__) . '/includes/rest-api-helper.php';
-require_once dirname(__DIR__) . '/includes/plugin-tracking.php';
 require_once dirname(__DIR__) . '/includes/update.php';
 require_once dirname(__DIR__) . '/includes/dashboard-widget.php';
 
@@ -215,7 +214,6 @@ if ($nppp_auto_purge) {
     add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
 }
 add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_preload_mobile_option');
-add_action('npp_plugin_tracking_event', 'nppp_plugin_tracking', 10, 1);
 add_action('wp_dashboard_setup', 'nppp_add_dashboard_widget');
 add_action('wp_ajax_nppp_update_enable_proxy_option', 'nppp_update_enable_proxy_option');
 add_action('wp_ajax_nppp_update_related_fields', 'nppp_update_related_fields');
