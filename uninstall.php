@@ -88,6 +88,7 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nginx_cache_schedule_value',             // Saved cron expression
         'nppp_assume_nginx_runtime',              // Assume-Nginx toggle (Setup::RUNTIME_OPTION)
         'nppp_plugin_version',                    // Version tracking
+        'nppp_db_version',                        // DB migration version stamp
         'nppp_redirect_to_setup_once',            // One-time activation redirect flag
         'nppp_assume_nginx_auto_disabled_notice', // Auto-disable UI notice flag
         'nppp_last_known_hits',                   // Dashboard cache hit ratio — hit count
@@ -106,6 +107,10 @@ function nppp_delete_plugin_options_on_uninstall() {
 function nppp_clear_scheduled_events_on_uninstall() {
     wp_clear_scheduled_hook('npp_cache_preload_event');
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
+
+    // Remove tracking cron hooks left by 2.0.1–2.1.4 in case migration never ran
+    wp_clear_scheduled_hook('npp_plugin_tracking_event', array('active'));
+    wp_clear_scheduled_hook('npp_plugin_tracking_event');
 }
 
 /**
