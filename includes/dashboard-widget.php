@@ -298,11 +298,6 @@ function nppp_dashboard_widget() {
             'status' => isset($settings['nginx_cache_send_mail']) && $settings['nginx_cache_send_mail'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon' => 'dashicons-email-alt'
         ],
-        'opt_in' => [
-            'label' => __('Opt-In', 'fastcgi-cache-purge-and-preload-nginx'),
-            'status' => isset($settings['nginx_cache_tracking_opt_in']) && $settings['nginx_cache_tracking_opt_in'] === '1' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
-            'icon' => 'dashicons-flag'
-        ],
     ];
 
     // Output the widget content with buttons
