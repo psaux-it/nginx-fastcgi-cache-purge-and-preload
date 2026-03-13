@@ -547,61 +547,6 @@ listen.mode = 0660
 listen = /var/run/php-fcgi-websiteuser.sock</code></pre>
                     </div>
                 </div>
-
-                <!-- Start of GDPR Compliance Section -->
-                <h3 class="nppp-question">GDPR Compliance and Data Collection</h3>
-                <div class="nppp-answer">
-                    <div class="nppp-answer-content">
-                        <h1>GDPR Compliance and Data Collection</h1>
-                        <p>The <strong>Nginx Cache Purge Preload</strong> plugin collects essential technical data to improve plugin functionality and performance, while fully adhering to <strong>GDPR</strong> (General Data Protection Regulation) guidelines. Below, we outline the data we collect and explain how it complies with GDPR principles.</p>
-
-                        <h2>What Data Does the Plugin Collect?</h2>
-                        <p>NPP only collects technical data related to its functionality. Specifically, we collect the following metrics:</p>
-                        <ul>
-                            <li><strong>Site URL:</strong> The URL of the website where the plugin is installed.</li>
-                            <li><strong>Plugin Name:</strong> The name of the plugin being used.</li>
-                            <li><strong>Plugin Version:</strong> The version of the plugin currently active.</li>
-                            <li><strong>Plugin Status:</strong> The current status of the plugin (active/inactive/opt-out).</li>
-                        </ul>
-                        <div class="highlight">
-                            <p><strong>Important Note:</strong> We do <strong>not</strong> collect any personal or sensitive data. The collected data is strictly related to the operation of the plugin and is used solely for improving the plugin’s functionality and tracking its activation/deactivation status.</p>
-                        </div>
-
-                        <h2>Why Do We Collect This Data?</h2>
-                        <p>We collect this data for the following reasons:</p>
-                        <ul>
-                            <li><strong>Plugin Usage Statistics:</strong> Understanding how many users are actively using the plugin helps us improve its performance, update features, and ensure compatibility with newer versions of WordPress and Nginx.</li>
-                            <li><strong>Version Tracking:</strong> By tracking the version of the plugin in use, we can provide better support and recommendations for updates, ensuring that users benefit from the latest features and security improvements.</li>
-                            <li><strong>Status Monitoring:</strong> Tracking the plugin’s activation and deactivation helps us improve stability, quickly detect issues, and better understand user behavior to enhance the plugin’s reliability.</li>
-                        </ul>
-
-                        <h2>GDPR Compliance</h2>
-                        <p>We take GDPR compliance seriously. Here’s why the data we collect is fully compliant with GDPR regulations:</p>
-
-                        <h3>1. No Personal Data Collected</h3>
-                        <p>We do not collect any personally identifiable information (PII) such as names, email addresses, or IP addresses. The data we collect is strictly technical (e.g., site URL, plugin version) and is necessary for plugin functionality and performance improvements.</p>
-
-                        <h3>2. Legitimate Interest</h3>
-                        <p>The data we collect falls under the legitimate interest clause of GDPR, as it is necessary for us to maintain, improve, and support the plugin. By collecting only the data that is essential for improving user experience, we ensure that no unnecessary data is collected.</p>
-
-                        <h3>3. Data Security</h3>
-                        <p>All data is transmitted securely over HTTPS, ensuring that it is protected from interception during transmission. We use JWT (JSON Web Token) for secure authentication of data requests, further safeguarding the data.</p>
-
-                        <h3>4. Transparency</h3>
-                        <p>We are fully transparent about the data we collect. Users are informed about what data is being collected and why, through our privacy policy and plugin documentation.</p>
-
-                        <h3>5. User Control and Opt-Out</h3>
-                        <p>Users have full control over the data collection process. Our plugin provides an opt-out option, allowing users to disable data tracking at any time if they choose not to participate in usage statistics collection. This ensures that users have full autonomy over their data.</p>
-
-                        <h2>Conclusion</h2>
-                        <p>NPP collects only technical data essential for improving its performance and functionality. No personal data is collected, and all data is transmitted securely, ensuring full compliance with GDPR. Users have full control over the process and can opt-out at any time.</p>
-
-                        <div class="highlight">
-                            <p>If you have any questions or concerns regarding the data we collect or our GDPR compliance, please feel free to contact us at <a href="mailto:support@psauxit.com">support@psauxit.com</a>.</p>
-                        </div>
-                    </div>
-                </div>
-                <!-- End of GDPR Compliance Section -->
             </div>
         </div>
         <div class="nppp-premium-widget">
