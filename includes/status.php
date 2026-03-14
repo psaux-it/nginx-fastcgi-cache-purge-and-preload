@@ -808,16 +808,30 @@ function nppp_my_status_html() {
     $config_file = $conf_paths[0];
     $duplicates = nppp_check_duplicate_nginx_cache_paths($config_file, $wp_filesystem);
 
+    // Pre-compute pages in cache count here — needed by warning logic below
+    // and reused in the Cache Status table. Single filesystem scan for both.
+    $nppp_pages_in_cache = nppp_get_in_cache_page_count();
+    if ( is_numeric( $nppp_pages_in_cache ) ) {
+        update_option( 'nppp_last_known_hits',      (int) $nppp_pages_in_cache, false );
+        update_option( 'nppp_last_hits_scanned_at', time(),                     false );
+    }
+
     // Warn about not found cache key
     if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
         echo '<div class="nppp-status-wrap">
                   <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: No <span style="color: #FFDEAD;">_cache_key</span> directive was found.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
               </div>';
-    // Warn about the unsupported cache key
+    // Warn about non-default cache key — severity depends on whether it affects this site
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
-        echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Unsupported</span> cache key found!', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
-              </div>';
+        if ( $nppp_pages_in_cache === 'RegexError' ) {
+            echo '<div class="nppp-status-wrap">
+                      <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Non-default</span> cache key detected — Cache Key Regex update required.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
+                  </div>';
+        } else {
+            echo '<div class="nppp-status-wrap">
+                      <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Non-default</span> cache key found on server — not affecting this site.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
+                  </div>';
+        }
     }
 
     // Warn about same Nginx cache path for multiple instance
@@ -834,20 +848,28 @@ function nppp_my_status_html() {
                      <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>' . wp_kses(__('Please check your <strong>Nginx cache setup</strong> to ensure that the <strong>cache key</strong> directive is defined. If you continue to encounter this error, this may indicate a <strong>parsing error</strong> and can be safely ignored.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]) . '
                  </p>
              </div>';
-    // Details about the unsupported cache key
+    // Details about the non-default cache key
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
-        echo '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                 <p style="margin: 0; align-items: center;">
-                     <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>' . sprintf(
-                         /* Translators: %1$s, %2$s, %3$s, %4$s are dynamic strings */
-                         wp_kses(__('If <strong>%1$s</strong> indicates <strong>%2$s</strong>, please check the <strong>%3$s</strong> option in the plugin <strong>%4$s</strong> section and try again.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]),
-                         wp_kses(__('Pages In Cache Count', 'fastcgi-cache-purge-and-preload-nginx'), []),
-                         wp_kses(__('Regex Error', 'fastcgi-cache-purge-and-preload-nginx'), []),
-                         wp_kses(__('Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'), []),
-                         wp_kses(__('Advanced Options', 'fastcgi-cache-purge-and-preload-nginx'), [])
-                     ) . '
-                 </p>
-             </div>';
+        if ( $nppp_pages_in_cache === 'RegexError' ) {
+            // Situation B — regex is failing on this site's actual cache files
+            echo '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                     <p style="margin: 0; align-items: center;">
+                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>' . sprintf(
+                             /* Translators: %1$s, %2$s are dynamic strings */
+                             wp_kses(__('Non-default <strong>_cache_key</strong> is active on this site. Update <strong>%1$s</strong> in <strong>%2$s</strong> to match your key format.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]),
+                             wp_kses(__('Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'), []),
+                             wp_kses(__('Advanced Options', 'fastcgi-cache-purge-and-preload-nginx'), [])
+                         ) . '
+                     </p>
+                 </div>';
+        } else {
+            // Situation A — non-default key exists on another vhost, not on this site
+            echo '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                     <p style="margin: 0; align-items: center;">
+                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>' . wp_kses(__('Non-default <strong>_cache_key</strong> found on another vhost — no action needed for this site.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]) . '
+                     </p>
+                 </div>';
+        }
     }
 
     // Details about same Nginx cache path for multiple instance
@@ -1041,13 +1063,6 @@ function nppp_my_status_html() {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php
-                            $nppp_pages_in_cache = nppp_get_in_cache_page_count();
-                            if ( is_numeric( $nppp_pages_in_cache ) ) {
-                                update_option( 'nppp_last_known_hits',      (int) $nppp_pages_in_cache, false );
-                                update_option( 'nppp_last_hits_scanned_at', time(),                     false );
-                            }
-                            ?>
                             <tr>
                                 <td class="check"><?php esc_html_e('Pages In Cache Count', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppphpPagesInCache">
