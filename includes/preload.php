@@ -35,25 +35,29 @@ function nppp_get_proxy_settings() {
     );
 }
 
-// Test DNS resolution on WP server
+// Simple outbound HTTP check using WP HTTP API.
+// Tests whether this PHP process can make outbound HTTP requests,
+// which is the only prerequisite preload needs on this server.
+// Using our own site avoids third-party domain blocks (CN, corporate, etc.)
 function nppp_check_network_env(): array {
-    $test_domain = 'google.com';
+    $response = wp_remote_head(
+        home_url( '/' ),
+        [
+            'timeout'     => 3,
+            'redirection' => 0,
+            'blocking'    => true,
+            'sslverify'   => false,
+            'headers'     => [
+                'Cache-Control' => 'no-cache, no-store, max-age=0',
+            ],
+        ]
+    );
 
-    // Check DNS
-    $dns_ok = checkdnsrr($test_domain, 'A') || checkdnsrr($test_domain, 'AAAA');
-
-    // Check outbound connectivity
-    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen
-    $fp = @fsockopen($test_domain, 80, $errno, $errstr, 2);
-    $outbound_ok = ($fp !== false);
-    if ($fp) {
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closing probe socket
-        @fclose($fp);
-    }
+    $ok = ! is_wp_error( $response );
 
     return [
-        'dns_ok'      => $dns_ok,
-        'outbound_ok' => $outbound_ok,
+        'dns_ok'      => $ok,
+        'outbound_ok' => $ok,
     ];
 }
 
