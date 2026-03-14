@@ -35,26 +35,14 @@ function nppp_get_proxy_settings() {
     );
 }
 
-// Simple outbound HTTP check using WP HTTP API.
-// Tests whether this PHP process can make outbound HTTP requests,
-// which is the only prerequisite preload needs on this server.
-// Using our own site avoids third-party domain blocks (CN, corporate, etc.)
+// Simple outbound HTTP check
 function nppp_check_network_env(): array {
-    $response = wp_remote_head(
-        home_url( '/' ),
-        [
-            'timeout'     => 3,
-            'redirection' => 0,
-            'blocking'    => true,
-            'sslverify'   => false,
-            'headers'     => [
-                'Cache-Control' => 'no-cache, no-store, max-age=0',
-            ],
-        ]
-    );
+    nppp_prepare_request_env(true);
 
-    $ok = ! is_wp_error( $response );
-
+    $url = add_query_arg('nppp_probe', wp_generate_password(8, false), home_url('/'));
+    $output = shell_exec('wget -q --no-check-certificate --server-response --spider ' . escapeshellarg($url) . ' 2>&1; echo $?');
+    $lines = explode("\n", trim($output));
+    $ok = trim(end($lines)) === '0';
     return [
         'dns_ok'      => $ok,
         'outbound_ok' => $ok,
