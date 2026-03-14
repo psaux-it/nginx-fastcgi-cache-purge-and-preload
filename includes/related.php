@@ -334,41 +334,72 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
     return $results;
 }
 
-// Fire-and-forget tiny warmups for a few URLs without touching PID/Status flow.
-// We use WP HTTP API here to avoid PID collisions with wget-based preloader.
+// Fire-and-forget
 function nppp_preload_urls_fire_and_forget(array $urls): void {
     if (empty($urls)) return;
 
-    $settings = get_option('nginx_cache_settings');
-    $preload_mobile = !empty($settings['nginx_cache_auto_preload_mobile']) && $settings['nginx_cache_auto_preload_mobile'] === 'yes';
+    $settings                 = get_option('nginx_cache_settings');
+    $preload_mobile           = !empty($settings['nginx_cache_auto_preload_mobile']) && $settings['nginx_cache_auto_preload_mobile'] === 'yes';
+    $nginx_cache_path         = isset($settings['nginx_cache_path']) ? $settings['nginx_cache_path'] : '/dev/shm/change-me-now';
+    $nginx_cache_limit_rate   = isset($settings['nginx_cache_limit_rate']) ? (int)$settings['nginx_cache_limit_rate'] : 5120;
+    $nginx_cache_read_timeout = isset($settings['nginx_cache_read_timeout']) ? (int)$settings['nginx_cache_read_timeout'] : 60;
+    $tmp_path                 = rtrim($nginx_cache_path, '/') . '/tmp';
 
-    // Desktop UA always
-    $headers_desktop = array('User-Agent' => NPPP_USER_AGENT);
-    // Optional mobile UA
-    $headers_mobile  = array('User-Agent' => NPPP_USER_AGENT_MOBILE);
+    // Proxy settings
+    $proxy_settings = nppp_get_proxy_settings();
+    $use_proxy      = $proxy_settings['use_proxy'];
+    $http_proxy     = $proxy_settings['http_proxy'];
+    $https_proxy    = $http_proxy;
+
+    // safexec
+    $safexec_path = nppp_find_safexec_path();
+    $use_safexec  = nppp_is_safexec_usable($safexec_path ?: '', false);
+
+    // Wrap with literal double quotes (same convention as other preload functions)
+    $dq = static function ($s) { return '"' . $s . '"'; };
 
     foreach ($urls as $u) {
         if (false === wp_http_validate_url($u)) {
             continue;
         }
 
-        // Use the canonical value produced upstream.
-        wp_remote_get($u, array(
-            'timeout'     => 3,
-            'redirection' => 1,
-            'blocking'    => false,
-            'sslverify'   => false,
-            'headers'     => $headers_desktop,
-        ));
+        // Build per-URL domain allowlist
+        $parsed    = wp_parse_url($u);
+        $host      = strtolower($parsed['host'] ?? '');
+        if ($host === '') continue;
+        $base_host   = preg_replace('/^www\./i', '', $host);
+        $domain_list = escapeshellarg(implode(',', array_unique([$base_host, 'www.' . $base_host])));
 
+        $common =
+            '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+            '--no-dns-cache --no-check-certificate --prefer-family=IPv4 ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=1 --compression=auto ' .
+            '-e robots=off ' .
+            '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+            '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
+            '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+            '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+            '--limit-rate=' . $nginx_cache_limit_rate . 'k ' .
+            '--domains='    . $domain_list . ' ' .
+            '--header='     . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ';
+
+        $safexec_prefix = $use_safexec ? escapeshellarg($safexec_path) . ' ' : '';
+        $url_arg        = escapeshellarg($u);
+
+        // Desktop
+        $cmd_desktop = $safexec_prefix .
+            'nohup wget ' . $common .
+            '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
+            '-- ' . $url_arg . ' >/dev/null 2>&1 &';
+        shell_exec($cmd_desktop);
+
+        // Mobile (if enabled)
         if ($preload_mobile) {
-            wp_remote_get($u, array(
-                'timeout'     => 3,
-                'redirection' => 1,
-                'blocking'    => false,
-                'sslverify'   => false,
-                'headers'     => $headers_mobile,
-            ));
+            $cmd_mobile = $safexec_prefix .
+                'nohup wget ' . $common .
+                '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
+                '-- ' . $url_arg . ' >/dev/null 2>&1 &';
+            shell_exec($cmd_mobile);
         }
     }
 }
