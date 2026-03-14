@@ -357,6 +357,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
             'timeout'     => 3,
             'redirection' => 1,
             'blocking'    => false,
+            'sslverify'   => false,
             'headers'     => $headers_desktop,
         ));
 
@@ -365,6 +366,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
                 'timeout'     => 3,
                 'redirection' => 1,
                 'blocking'    => false,
+                'sslverify'   => false,
                 'headers'     => $headers_mobile,
             ));
         }
