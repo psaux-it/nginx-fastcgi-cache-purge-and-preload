@@ -348,10 +348,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
     $headers_mobile  = array('User-Agent' => NPPP_USER_AGENT_MOBILE);
 
     foreach ($urls as $u) {
-        $host = strtolower(wp_parse_url($u, PHP_URL_HOST));
-        $site_host = strtolower(wp_parse_url(home_url(), PHP_URL_HOST));
-
-        if ($host !== $site_host && false === wp_http_validate_url($u)) {
+        if (false === wp_http_validate_url($u)) {
             continue;
         }
 
