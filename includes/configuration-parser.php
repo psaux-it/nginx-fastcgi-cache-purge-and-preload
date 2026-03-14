@@ -515,29 +515,19 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     <tr>
                         <td class="action">
                             <?php esc_html_e('Nginx Cache Paths', 'fastcgi-cache-purge-and-preload-nginx'); ?>
-                            <?php
-                            if (!empty($cache_paths) && get_transient('nppp_cache_path_not_found') === false):
-                                $all_supported = true;
-                                foreach ($cache_paths as $directive => $values) {
-                                    foreach ($values as $value) {
-                                        if (!nppp_is_cache_path_display_supported($directive, $value)) {
-                                            $all_supported = false;
-                                            break 2;
-                                        }
-                                    }
-                                }
-                                if ($all_supported): ?>
-                                    <br><span style="font-size: 13px; color: green;"><?php esc_html_e('All Supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-                                <?php else: ?>
-                                    <br><span style="font-size: 13px; color: #f0c36d;"><?php esc_html_e('Found Unsupported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-                                <?php endif;
-                            endif; ?>
                         </td>
                         <td class="status">
                             <?php if (empty($cache_paths) || get_transient('nppp_cache_path_not_found') !== false): ?>
                                 <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span style="color: red; font-size: 13px; font-weight: bold;"><?php esc_html_e('Not Found', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                             <?php else: ?>
+                                <?php
+                                $nppp_active_path = '';
+                                $nppp_settings = get_option('nginx_cache_settings', []);
+                                if (!empty($nppp_settings['nginx_cache_path'])) {
+                                    $nppp_active_path = rtrim($nppp_settings['nginx_cache_path'], '/');
+                                }
+                                ?>
                                 <table class="nginx-config-table">
                                     <tbody>
                                         <?php foreach ($cache_paths as $directive => $values): ?>
@@ -545,14 +535,24 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                                 <tr>
                                                     <?php
                                                     $is_supported = nppp_is_cache_path_display_supported($directive, $value);
+                                                    $is_active    = ($nppp_active_path !== '' && rtrim($value, '/') === $nppp_active_path);
                                                     ?>
                                                     <td>
-                                                        <?php if ($is_supported): ?>
+                                                        <?php if ($is_active): ?>
+                                                            <span class="dashicons dashicons-yes" style="color: green; font-size: 20px !important;"></span>
+                                                        <?php elseif ($is_supported): ?>
                                                             <span class="dashicons dashicons-yes" style="color: green; font-size: 20px !important;"></span>
                                                         <?php else: ?>
                                                             <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
                                                         <?php endif; ?>
                                                         <span style="color: <?php echo $is_supported ? 'teal' : 'orange'; ?>; font-size: 13px; font-weight: bold;"><?php echo esc_html($value); ?></span>
+                                                        <?php if ($is_active): ?>
+                                                            <span style="font-size: 11px; color: #2271b1; font-weight: bold; margin-left: 5px;"><?php esc_html_e('(Active)', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                        <?php elseif (!$is_supported): ?>
+                                                            <span style="font-size: 11px; color: orange; font-weight: bold; margin-left: 5px;"><?php esc_html_e('(Not Supported)', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                        <?php else: ?>
+                                                            <span style="font-size: 11px; color: #888; font-weight: normal; margin-left: 5px;"><?php esc_html_e('(Other vhost)', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                        <?php endif; ?>
                                                     </td>
                                                 </tr>
                                             <?php endforeach; ?>
@@ -566,20 +566,6 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     <tr>
                         <td class="action">
                             <?php esc_html_e('Nginx Cache Keys', 'fastcgi-cache-purge-and-preload-nginx'); ?>
-                            <?php
-                            if (
-                                $cache_keys !== 'Not Found' &&
-                                $cache_keys !== 'Filesystem Error' &&
-                                $cache_keys !== 'Conf Not Found' &&
-                                $cache_keys !== 'Key Not Found'
-                            ):
-                                if ($cache_keys === '$scheme$request_method$host$request_uri'):
-                            ?>
-                                    <br><span style="font-size: 13px; color: green;"><?php esc_html_e('All Supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-                                <?php else: ?>
-                                    <br><span style="font-size: 13px; color: #f0c36d;"><?php esc_html_e('Found Unsupported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-                                <?php endif; ?>
-                            <?php endif; ?>
                         </td>
                         <td class="status">
                             <?php if ($cache_keys === 'Not Found'): ?>
