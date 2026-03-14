@@ -190,9 +190,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
             ), true, false );
 
             if ($deleted) {
-                if ($chain_autopreload) {
-                    nppp_preload_cache_on_update($current_page_url, true);
-                } else {
+                if (!$chain_autopreload) {
                     // Translators: %s: full page URL that had its cache purged.
                     nppp_display_admin_notice('success', sprintf(__( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
                 }
@@ -212,6 +210,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
             // admins are not blocked during post-purge side effects below.
             nppp_release_purge_lock();
             $nppp_lock_released = true;
+
+            // Auto preload AFTER lock released — avoids holding lock during blocking network I/O
+            if ($deleted && $chain_autopreload) {
+                nppp_preload_cache_on_update($current_page_url, true);
+            }
 
             // Decide preload policy
             $settings = get_option('nginx_cache_settings');
@@ -388,9 +391,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                         $current_page_url_decoded
                     ), true, false );
 
-                    if ($chain_autopreload) {
-                        nppp_preload_cache_on_update($current_page_url, true);
-                    } else {
+                    if (!$chain_autopreload) {
                         // Translators: %s: full page URL that had its cache purged.
                         nppp_display_admin_notice('success', sprintf(__( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
                     }
@@ -410,6 +411,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 // admins are not blocked during post-purge side effects below.
                 nppp_release_purge_lock();
                 $nppp_lock_released = true;
+
+                // Auto preload AFTER lock released — avoids holding lock during blocking network I/O
+                if ($deleted && $chain_autopreload) {
+                    nppp_preload_cache_on_update($current_page_url, true);
+                }
 
                 // Decide preload policy
                 $settings = get_option('nginx_cache_settings');
@@ -437,10 +443,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     // If not found in the cache
     if (!$found) {
         // Check preload chain
-        if ($chain_autopreload) {
-            // Trigger the preload
-            nppp_preload_cache_on_update($current_page_url, false);
-        } else {
+        if (!$chain_autopreload) {
             // Translators: %s is the page URL
             nppp_display_admin_notice('info', sprintf( __( 'INFO ADMIN: Nginx cache purge attempted, but the page %s is not currently found in the cache.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
         }
@@ -455,6 +458,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         // All cache filesystem work done — release lock now.
         nppp_release_purge_lock();
         $nppp_lock_released = true;
+
+        // Auto preload AFTER lock released — avoids holding lock during blocking network I/O
+        if ($chain_autopreload) {
+            nppp_preload_cache_on_update($current_page_url, false);
+        }
 
         // Decide preload policy
         $settings = get_option('nginx_cache_settings');
