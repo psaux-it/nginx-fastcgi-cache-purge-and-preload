@@ -356,7 +356,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
         wp_remote_get($u, array(
             'timeout'     => 3,
             'redirection' => 1,
-            'blocking'    => false,
+            'blocking'    => true,
             'sslverify'   => false,
             'headers'     => $headers_desktop,
         ));
@@ -365,7 +365,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
             wp_remote_get($u, array(
                 'timeout'     => 3,
                 'redirection' => 1,
-                'blocking'    => false,
+                'blocking'    => true,
                 'sslverify'   => false,
                 'headers'     => $headers_mobile,
             ));
