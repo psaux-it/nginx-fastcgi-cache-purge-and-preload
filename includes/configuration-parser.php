@@ -248,7 +248,14 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = t
     }
 
     // Track already parsed files to avoid re-processing duplicates
+    // Reset on every fresh top-level call — stale entries from a previous
+    // call in the same request would otherwise cause all files to be skipped.
     static $parsed_files = [];
+
+    if ($is_top_level) {
+        $parsed_files = [];
+    }
+
     $canonical = realpath($file) ?: $file;
     if (in_array($canonical, $parsed_files)) {
         return ['cache_paths' => []];
