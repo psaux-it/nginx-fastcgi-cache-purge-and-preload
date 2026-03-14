@@ -353,7 +353,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
 
     // safexec
     $safexec_path = nppp_find_safexec_path();
-    $use_safexec  = nppp_is_safexec_usable($safexec_path ?: '', false);
+    $use_safexec  = nppp_is_safexec_usable($safexec_path ?: '', true);
 
     // Wrap with literal double quotes (same convention as other preload functions)
     $dq = static function ($s) { return '"' . $s . '"'; };
