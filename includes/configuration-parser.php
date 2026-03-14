@@ -393,6 +393,51 @@ function nppp_get_nginx_info() {
     ];
 }
 
+// Mirror nppp_validate_path() allowed/blocked rules for display purposes.
+// Does NOT check filesystem existence — paths come from nginx.conf, not settings input.
+// Must be kept in sync with nppp_validate_path() in settings.php.
+function nppp_is_cache_path_display_supported(string $directive, string $value): bool {
+    $normalised = rtrim($value, '/');
+
+    // Allowed roots — must match nppp_validate_path() $allowed_roots exactly
+    $allowed_roots = ['/dev/shm/', '/tmp/', '/var/'];
+    $allowed = false;
+    foreach ($allowed_roots as $root) {
+        if (strpos($normalised, $root) === 0) {
+            $allowed = true;
+            break;
+        }
+    }
+    if (!$allowed) {
+        return false;
+    }
+
+    // Blocked subtrees — must match nppp_validate_path() $blocked_subdirs exactly
+    $blocked_subdirs = [
+        '/var/log',
+        '/var/spool',
+        '/var/run',
+        '/var/lib',
+        '/var/www',
+        '/var/mail',
+        '/var/lock',
+        '/var/backups',
+        '/var/snap',
+    ];
+    foreach ($blocked_subdirs as $blocked) {
+        if ($normalised === $blocked || strpos($normalised, $blocked . '/') === 0) {
+            return false;
+        }
+    }
+
+    // /var/cache root itself is blocked — subdirectories are allowed
+    if ($normalised === '/var/cache') {
+        return false;
+    }
+
+    return true;
+}
+
 // Function to generate HTML output
 function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths) {
     ob_start();
@@ -473,17 +518,11 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                             <?php
                             if (!empty($cache_paths) && get_transient('nppp_cache_path_not_found') === false):
                                 $all_supported = true;
-                                foreach ($cache_paths as $values) {
+                                foreach ($cache_paths as $directive => $values) {
                                     foreach ($values as $value) {
-                                        $path_parts = explode('/', trim($value, '/'));
-                                        if (!(
-                                            (isset($path_parts[0]) && $path_parts[0] === 'dev' && isset($path_parts[1])) ||
-                                            (isset($path_parts[0]) && $path_parts[0] === 'var' && isset($path_parts[1])) ||
-                                            (isset($path_parts[0]) && $path_parts[0] === 'opt' && isset($path_parts[1])) ||
-                                            (isset($path_parts[0]) && $path_parts[0] === 'tmp' && isset($path_parts[1]))
-                                        )) {
-                                           $all_supported = false;
-                                           break 2;
+                                        if (!nppp_is_cache_path_display_supported($directive, $value)) {
+                                            $all_supported = false;
+                                            break 2;
                                         }
                                     }
                                 }
@@ -501,17 +540,11 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                             <?php else: ?>
                                 <table class="nginx-config-table">
                                     <tbody>
-                                        <?php foreach ($cache_paths as $values): ?>
+                                        <?php foreach ($cache_paths as $directive => $values): ?>
                                             <?php foreach ($values as $value): ?>
                                                 <tr>
                                                     <?php
-                                                    $path_parts = explode('/', trim($value, '/'));
-                                                    $is_supported = (
-                                                        (isset($path_parts[0]) && $path_parts[0] === 'dev' && isset($path_parts[1])) ||
-                                                        (isset($path_parts[0]) && $path_parts[0] === 'var' && isset($path_parts[1])) ||
-                                                        (isset($path_parts[0]) && $path_parts[0] === 'opt' && isset($path_parts[1])) ||
-                                                        (isset($path_parts[0]) && $path_parts[0] === 'tmp' && isset($path_parts[1]))
-                                                    );
+                                                    $is_supported = nppp_is_cache_path_display_supported($directive, $value);
                                                     ?>
                                                     <td>
                                                         <?php if ($is_supported): ?>
