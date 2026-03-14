@@ -179,6 +179,7 @@ function nppp_check_fuse_cache_paths($cache_paths) {
     nppp_prepare_request_env(true);
 
     $fuse_paths = [];
+    $fuse_map   = [];
 
     // Loop through the cache paths to check their mount points
     foreach ($cache_paths as $directive => $paths) {
@@ -193,6 +194,7 @@ function nppp_check_fuse_cache_paths($cache_paths) {
                     // Extract the FUSE mount point
                     if (preg_match('/on\s+([^\s]+)\s+type\s+fuse/', $output, $matches)) {
                         $fuse_paths[] = $matches[1];
+                        $fuse_map[rtrim($path, '/')] = rtrim($matches[1], '/');
                     }
                 }
             }
@@ -202,17 +204,17 @@ function nppp_check_fuse_cache_paths($cache_paths) {
     // If no fuse mount point found return empty array before setting transient
     if (empty($fuse_paths)) {
         set_transient('nppp_fuse_path_not_found', true, MONTH_IN_SECONDS);
-        return ['fuse_paths' => []];
+        return ['fuse_paths' => [], 'fuse_map' => []];
     }
 
     // Store the result in the cache before returning
-    set_transient($transient_key, ['fuse_paths' => $fuse_paths], MONTH_IN_SECONDS);
+    set_transient($transient_key, ['fuse_paths' => $fuse_paths, 'fuse_map' => $fuse_map], MONTH_IN_SECONDS);
 
     // Reset the error transients
     delete_transient('nppp_fuse_path_not_found');
 
     // Return the array of mount points
-    return ['fuse_paths' => $fuse_paths];
+    return ['fuse_paths' => $fuse_paths, 'fuse_map' => $fuse_map];
 }
 
 // Function to parse Nginx cache paths from the configuration file
@@ -535,7 +537,12 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                                 <tr>
                                                     <?php
                                                     $is_supported = nppp_is_cache_path_display_supported($directive, $value);
-                                                    $is_active    = ($nppp_active_path !== '' && rtrim($value, '/') === $nppp_active_path);
+                                                    $fuse_map     = isset($fuse_paths['fuse_map']) ? $fuse_paths['fuse_map'] : [];
+                                                    $fuse_dest    = isset($fuse_map[rtrim($value, '/')]) ? $fuse_map[rtrim($value, '/')] : '';
+                                                    $is_active    = ($nppp_active_path !== '') && (
+                                                        rtrim($value, '/') === $nppp_active_path ||
+                                                        $fuse_dest === $nppp_active_path
+                                                    );
                                                     ?>
                                                     <td>
                                                         <?php if ($is_active): ?>
@@ -547,11 +554,11 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                                         <?php endif; ?>
                                                         <span style="color: <?php echo $is_supported ? 'teal' : 'orange'; ?>; font-size: 13px; font-weight: bold;"><?php echo esc_html($value); ?></span>
                                                         <?php if ($is_active): ?>
-                                                            <span style="font-size: 11px; color: #2271b1; font-weight: bold; margin-left: 5px;"><?php esc_html_e('(Active)', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #e6f1fb; color: #0c447c;"><?php esc_html_e('Active', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                                         <?php elseif (!$is_supported): ?>
-                                                            <span style="font-size: 11px; color: orange; font-weight: bold; margin-left: 5px;"><?php esc_html_e('(Not Supported)', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #faeeda; color: #633806;"><?php esc_html_e('Not Supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                                         <?php else: ?>
-                                                            <span style="font-size: 11px; color: #888; font-weight: normal; margin-left: 5px;"><?php esc_html_e('(Other vhost)', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #f1efe8; color: #5f5e5a;"><?php esc_html_e('Other vhost', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                                         <?php endif; ?>
                                                     </td>
                                                 </tr>
