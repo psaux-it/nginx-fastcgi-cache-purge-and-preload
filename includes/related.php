@@ -348,7 +348,10 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
     $headers_mobile  = array('User-Agent' => NPPP_USER_AGENT_MOBILE);
 
     foreach ($urls as $u) {
-        if (false === wp_http_validate_url($u)) {
+        $host = strtolower(wp_parse_url($u, PHP_URL_HOST));
+        $site_host = strtolower(wp_parse_url(home_url(), PHP_URL_HOST));
+
+        if ($host !== $site_host && false === wp_http_validate_url($u)) {
             continue;
         }
 
@@ -356,7 +359,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
         wp_remote_get($u, array(
             'timeout'     => 3,
             'redirection' => 1,
-            'blocking'    => true,
+            'blocking'    => false,
             'sslverify'   => false,
             'headers'     => $headers_desktop,
         ));
@@ -365,7 +368,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
             wp_remote_get($u, array(
                 'timeout'     => 3,
                 'redirection' => 1,
-                'blocking'    => true,
+                'blocking'    => false,
                 'sslverify'   => false,
                 'headers'     => $headers_mobile,
             ));
