@@ -286,6 +286,7 @@ function nppp_get_nginx_conf_paths($wp_filesystem, bool $honor_assume = true) {
             '/opt/nginx/conf/nginx.conf',
             '/www/server/nginx/conf/nginx.conf',
             '/etc/nginx/conf.d/ea-nginx.conf',
+            '/usr/local/openresty/nginx/conf/nginx.conf',
         ];
 
         foreach ($possible_paths as $path) {
