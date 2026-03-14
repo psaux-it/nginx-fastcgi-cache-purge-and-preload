@@ -334,6 +334,7 @@ function nppp_get_nginx_conf_paths($wp_filesystem, bool $honor_assume = true) {
 // Parses the Nginx configuration files and extracts fastcgi_cache_key directives.
 function nppp_parse_nginx_cache_key() {
     static $parsed_files = [];
+    $parsed_files = [];
     $cache_keys = [];
     $found_keys = 0;
 
