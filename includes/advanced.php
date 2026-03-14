@@ -229,7 +229,20 @@ function nppp_parse_wget_log_urls( $wp_filesystem ) {
     // mtime-based key. When the snapshot changes, the old key is never
     // queried again and expires here naturally.
     if ( ! $preload_running ) {
+        // Delete the previous mtime-based key before writing the new one.
+        // Each preload completion generates a new key (mtime changes), leaving
+        // the old key as an orphan for up to MONTH_IN_SECONDS. On active sites
+        // running daily preloads this accumulates 30+ stale rows in wp_options.
+        $prev_key_pointer = 'nppp_wget_urls_cache_prev_key';
+        $prev_key = get_transient( $prev_key_pointer );
+        if ( $prev_key && $prev_key !== $transient_key ) {
+            delete_transient( $prev_key );
+        }
+
         set_transient( $transient_key, $urls, MONTH_IN_SECONDS );
+
+        // Store current key so the next run can clean it up.
+        set_transient( $prev_key_pointer, $transient_key, MONTH_IN_SECONDS );
     }
 
     return $urls;
