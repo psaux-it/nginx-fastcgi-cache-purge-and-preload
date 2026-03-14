@@ -78,6 +78,7 @@ function nppp_clear_plugin_cache() {
         'nppp_safexec_version_' . md5($static_key_base),
         'nppp_wget_urls_cache_' . md5($static_key_base),
         'nppp_wget_compatibility_' . md5($static_key_base),
+        'nppp_missing_commands_' . md5($static_key_base),
         'nppp_preload_phase_' . md5($static_key_base),
         'nppp_preload_cycle_start_' . md5($static_key_base),
         'nppp_safexec_ok',
@@ -88,15 +89,40 @@ function nppp_clear_plugin_cache() {
         delete_transient($transient);
     }
 
+    // Safe clean up of dynamic transients directly in DB.
+    // Uses esc_like() + prepare() — same pattern as uninstall.php.
+    $like_category              = $wpdb->esc_like('_transient_nppp_category_') . '%';
+    $like_category_timeout      = $wpdb->esc_like('_transient_timeout_nppp_category_') . '%';
+    $like_rate_limit            = $wpdb->esc_like('_transient_nppp_rate_limit_') . '%';
+    $like_rate_limit_timeout    = $wpdb->esc_like('_transient_timeout_nppp_rate_limit_') . '%';
+    $like_front_message         = $wpdb->esc_like('_transient_nppp_front_message_') . '%';
+    $like_front_message_timeout = $wpdb->esc_like('_transient_timeout_nppp_front_message_') . '%';
+    $like_wget_cache            = $wpdb->esc_like('_transient_nppp_wget_urls_cache_') . '%';
+    $like_wget_cache_timeout    = $wpdb->esc_like('_transient_timeout_nppp_wget_urls_cache_') . '%';
+
     // Safe clean up transients directly in DB
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-    $wpdb->query("
-        DELETE FROM $wpdb->options
-        WHERE option_name LIKE '\\_transient_nppp_category_%'
-           OR option_name LIKE '\\_transient_timeout_nppp_category_%'
-           OR option_name LIKE '\\_transient_nppp_rate_limit_%'
-           OR option_name LIKE '\\_transient_timeout_nppp_rate_limit_%'
-    ");
+    $wpdb->query(
+        $wpdb->prepare(
+            "DELETE FROM {$wpdb->options}
+            WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s",
+            $like_category,
+            $like_category_timeout,
+            $like_rate_limit,
+            $like_rate_limit_timeout,
+            $like_front_message,
+            $like_front_message_timeout,
+            $like_wget_cache,
+            $like_wget_cache_timeout
+        )
+    );
 
     // Log all transients were cleared successfully
     nppp_display_admin_notice('success', __('SUCCESS: Plugin cache cleared successfully.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
