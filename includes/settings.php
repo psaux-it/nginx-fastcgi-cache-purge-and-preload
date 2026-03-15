@@ -2446,6 +2446,10 @@ function nppp_nginx_cache_settings_sanitize($input) {
             // Log the error message
             nppp_log_error_message($error_message);
         }
+    } else {
+        $error_message = __('ERROR PATH: Nginx Cache Directory cannot be empty. Please provide a valid directory path.', 'fastcgi-cache-purge-and-preload-nginx');
+        add_settings_error('nppp_nginx_cache_settings_group', 'empty_path', $error_message, 'error');
+        nppp_log_error_message($error_message);
     }
 
     // Sanitize and validate email
