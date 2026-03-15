@@ -2925,8 +2925,10 @@ function nppp_reset_plugin_settings_on_deactivation() {
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
     wp_clear_scheduled_hook('npp_cache_preload_event');
 
-    // Clean up phase transient from non-blocking tick monitor
-    delete_transient('nppp_preload_phase_' . md5('nppp'));
+    // Clear all plugin transients silently — server state may change
+    if (function_exists('nppp_clear_plugin_cache')) {
+        nppp_clear_plugin_cache(true);
+    }
 
     // Preload runs as a detached nohup process that survives deactivation.
     // Terminate it gracefully so it does not keep crawling after the plugin
@@ -2963,6 +2965,12 @@ function nppp_reset_plugin_settings_on_deactivation() {
 
 // Automatically update the default options when the plugin is activated or reactivated
 function nppp_defaults_on_plugin_activation() {
+    // Clear all plugin transients on activation/reactivation.
+    // Ensures no stale cached state from a previous activation
+    if (function_exists('nppp_clear_plugin_cache')) {
+        nppp_clear_plugin_cache(true);
+    }
+
     $new_api_key = bin2hex(random_bytes(32));
 
     // Define default options
