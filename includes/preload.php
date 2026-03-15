@@ -304,9 +304,6 @@ function nppp_detect_premature_process(
     $www_host  = 'www.' . $base_host;
     $domain_list = implode(',', array_unique([$base_host, $www_host]));
 
-    // Wrap with literal double quotes
-    $dq = function ($s) { return '"' . $s . '"'; };
-
     // Check safexec availability
     $safexec_path = nppp_find_safexec_path();
     $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', false);
@@ -324,11 +321,11 @@ function nppp_detect_premature_process(
         '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
         '--wait=' . ((int)$nginx_cache_wait) . ' ' .
-        '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
-        '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
+        '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
+        '--reject='       . escapeshellarg($nginx_cache_reject_extension) . ' ' .
         '--domains='      . escapeshellarg($domain_list) . ' ' .
-        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-        '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
+        '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+        '--user-agent='   . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
         '-- ' .
         escapeshellarg($fdomain);
 
@@ -475,9 +472,6 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     $base_host = preg_replace('/^www\./i', '', $host);
     $www_host  = 'www.' . $base_host;
     $domain_list = implode(',', array_unique([$base_host, $www_host]));
-
-    // Wrap with literal double quotes
-    $dq = function ($s) { return '"' . $s . '"'; };
 
     // Here, we check the source of the preload request. There are several possible routes.
     // If nppp_is_auto_preload is false, it means we arrived here through one of the following routes:
@@ -626,11 +620,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
                 '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
                 '--wait=' . ((int)$nginx_cache_wait) . ' ' .
-                '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
-                '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
+                '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
+                '--reject='       . escapeshellarg($nginx_cache_reject_extension) . ' ' .
                 '--domains='      . escapeshellarg($domain_list) . ' ' .
-                '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-                '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
+                '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+                '--user-agent='   . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
                 '-- ' .
                 escapeshellarg($fdomain) . ' ' .
                 '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
@@ -833,11 +827,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--wait=' . ((int)$nginx_cache_wait) . ' ' .
-            '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
-            '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
+            '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
+            '--reject='       . escapeshellarg($nginx_cache_reject_extension) . ' ' .
             '--domains='      . escapeshellarg($domain_list) . ' ' .
-            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-            '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
+            '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+            '--user-agent='   . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
             '-- ' .
             escapeshellarg($fdomain) . ' ' .
             '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
@@ -958,9 +952,6 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
 
-    // Wrap with literal double quotes
-    $dq = function ($s) { return '"' . $s . '"'; };
-
     // Create domain allowlist
     $parsed = wp_parse_url($current_page_url);
     $host = strtolower($parsed['host'] ?? '');
@@ -1037,8 +1028,8 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
         '--domains='      . escapeshellarg($domain_list) . ' ' .
-        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-        '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
+        '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+        '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
         '-- ' .
         escapeshellarg($current_page_url) . ' ' .
         '>/dev/null 2>&1 & echo $!';
@@ -1079,8 +1070,8 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--domains='      . escapeshellarg($domain_list) . ' ' .
-            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-            '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
+            '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+            '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
             '-- ' .
             escapeshellarg($current_page_url) . ' ' .
             '>/dev/null 2>&1 & echo $!';
@@ -1246,9 +1237,6 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
 
-    // Wrap with literal double quotes
-    $dq = function ($s) { return '"' . $s . '"'; };
-
     // Create domain allowlist
     $parsed = wp_parse_url($current_page_url);
     $host = strtolower($parsed['host'] ?? '');
@@ -1325,8 +1313,8 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
         '--domains='      . escapeshellarg($domain_list) . ' ' .
-        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-        '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
+        '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+        '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
         '-- ' .
         escapeshellarg($current_page_url) . ' ' .
         '>/dev/null 2>&1 & echo $!';
@@ -1367,8 +1355,8 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--domains='      . escapeshellarg($domain_list) . ' ' .
-            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-            '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
+            '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+            '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
             '-- ' .
             escapeshellarg($current_page_url) . ' ' .
             '>/dev/null 2>&1 & echo $!';
