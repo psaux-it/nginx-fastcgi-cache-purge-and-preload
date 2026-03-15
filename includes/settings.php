@@ -226,17 +226,17 @@ function nppp_nginx_cache_settings_page() {
                                     <h4><?php echo esc_html__( 'Allowed Cache Paths', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
                                     <p>
                                         <strong><?php echo esc_html__( 'For RAM-based:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Use directories under', 'fastcgi-cache-purge-and-preload-nginx' ); ?> <code>/dev/shm/</code> | <code>/tmp/</code>
+                                        <?php echo esc_html__( 'Use directories under', 'fastcgi-cache-purge-and-preload-nginx' ); ?> <code>/dev/shm/</code> | <code>/tmp/</code> | <code>/var/run/</code>
                                     </p>
                                     <p>
                                         <strong><?php echo esc_html__( 'For persistent disk:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Use directories under', 'fastcgi-cache-purge-and-preload-nginx' ); ?> <code>/var/</code>
+                                        <?php echo esc_html__( 'Use directories under', 'fastcgi-cache-purge-and-preload-nginx' ); ?> <code>/cache/</code> | <code>/var/</code>
                                     </p>
                                     <p>
                                         <strong><?php echo esc_html__( 'Important:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Paths must be at least one level deeper (e.g. /tmp/cache | /dev/shm/nginx-cache | /var/cache/nginx | /var/nginx-cache).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <?php echo esc_html__( 'Paths must be at least one level deeper (e.g. /tmp/cache | /dev/shm/nginx-cache | /var/cache/nginx | /var/nginx-cache | /var/run/nginx-cache | /cache/mysite).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                         <br class="line-break">
-                                        <?php echo esc_html__( 'Critical system paths are prohibited in default to ensure accuracy to avoid unintended deletions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <?php echo esc_html__( 'Critical system paths are prohibited by default to ensure accuracy to avoid unintended deletions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
                                 </div>
                             </td>
@@ -2824,7 +2824,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     $normalised = rtrim($path, '/');
 
     // 4. Allowlist of safe cache roots.
-    $allowed_roots = ['/dev/shm/', '/tmp/', '/var/'];
+    $allowed_roots = ['/dev/shm/', '/tmp/', '/var/', '/cache/'];
 
     $allowed = false;
     foreach ($allowed_roots as $root) {
@@ -2843,7 +2843,6 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     $blocked_subdirs = [
         '/var/log',
         '/var/spool',
-        '/var/run',
         '/var/lib',
         '/var/www',
         '/var/mail',
@@ -2861,7 +2860,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
 
     // 5b. Block /var/cache root only — subdirectories are allowed.
     //     Using /var/cache directly would wipe all system cache data.
-    if ($normalised === '/var/cache') {
+    if ($normalised === '/var/cache' || $normalised === '/var/run' || $normalised === '/cache') {
         return 'critical_path';
     }
 
@@ -2909,7 +2908,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     }
 
     // 5b repeated on resolved path — catches symlinks pointing at /var/cache root
-    if ($resolved_normalised === '/var/cache') {
+    if ($resolved_normalised === '/var/cache' || $resolved_normalised === '/var/run' || $resolved_normalised === '/cache') {
         return 'critical_path';
     }
 
