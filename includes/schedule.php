@@ -275,7 +275,7 @@ function nppp_create_scheduled_event_preload_status() {
 
     // Save cycle start timestamp for total elapsed time calculation
     $start_transient_key = 'nppp_preload_cycle_start_' . md5('nppp');
-    set_transient($start_transient_key, time(), 4 * HOUR_IN_SECONDS);
+    set_transient($start_transient_key, time(), 12 * HOUR_IN_SECONDS);
 
     // Clear any existing tick and schedule the first check 5 seconds out.
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
@@ -324,13 +324,13 @@ function nppp_create_scheduled_event_preload_status_callback() {
     // Clean up our phase transient and exit — nothing more to do.
     if (!$wp_filesystem->exists($PIDFILE)) {
         delete_transient($phase_transient_key);
+        delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
         return;
     }
 
     $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
-    // Process still alive — reschedule next tick 5 seconds out and return immediately.
-    // Total PHP execution time for this tick: ~0.1 seconds.
+    // Process still alive — reschedule next tick 5 seconds out
     if ($pid > 0 && nppp_is_process_alive($pid)) {
         wp_schedule_single_event(time() + 5, 'npp_cache_preload_status_event');
         return;
@@ -344,6 +344,11 @@ function nppp_create_scheduled_event_preload_status_callback() {
 
         // Safely delete the desktop PID file since desktop preload completed
         nppp_perform_file_operation($PIDFILE, 'delete');
+
+        // Lock phase to 'mobile' IMMEDIATELY after deleting desktop PIDFILE.
+        // Any REST poll firing from this point on sees phase='mobile' and
+        // cannot re-enter this branch
+        set_transient($phase_transient_key, 'mobile', 12 * HOUR_IN_SECONDS);
 
         // Set default options to prevent any error
         $default_cache_path = '/dev/shm/change-me-now';
@@ -363,13 +368,10 @@ function nppp_create_scheduled_event_preload_status_callback() {
         $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
         $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
-        // Start the preload action with $user_agent set to true
-        // The cache preloading will now begin again using the mobile USER_AGENT.
+        // Start the preload action for Mobile
         nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, false, false, true, false, true);
-        sleep(1);
 
-        // Advance to mobile phase and schedule next tick to monitor mobile PID
-        set_transient($phase_transient_key, 'mobile', 2 * HOUR_IN_SECONDS);
+        // Schedule next tick to monitor mobile PID
         wp_schedule_single_event(time() + 5, 'npp_cache_preload_status_event');
         return;
     }
@@ -377,7 +379,6 @@ function nppp_create_scheduled_event_preload_status_callback() {
     // All phases done — clean up phase transient
     $mobile_enabled = ($phase === 'mobile');
     delete_transient($phase_transient_key);
-
 
     /** ALL PRELOAD ACTIONS ENDED  */
 
