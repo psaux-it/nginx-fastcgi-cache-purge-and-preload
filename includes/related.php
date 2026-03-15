@@ -355,9 +355,6 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
     $safexec_path = nppp_find_safexec_path();
     $use_safexec  = nppp_is_safexec_usable($safexec_path ?: '', false);
 
-    // Wrap with literal double quotes (same convention as other preload functions)
-    $dq = static function ($s) { return '"' . $s . '"'; };
-
     foreach ($urls as $u) {
         if (false === wp_http_validate_url($u)) {
             continue;
@@ -381,7 +378,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . $nginx_cache_limit_rate . 'k ' .
             '--domains='    . $domain_list . ' ' .
-            '--header='     . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ';
+            '--header='     . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ';
 
         $safexec_prefix = $use_safexec ? escapeshellarg($safexec_path) . ' ' : '';
         $url_arg        = escapeshellarg($u);
@@ -389,7 +386,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
         // Desktop
         $cmd_desktop = $safexec_prefix .
             'nohup wget ' . $common .
-            '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
+            '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
             '-- ' . $url_arg . ' >/dev/null 2>&1 &';
         shell_exec($cmd_desktop);
 
@@ -397,7 +394,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
         if ($preload_mobile) {
             $cmd_mobile = $safexec_prefix .
                 'nohup wget ' . $common .
-                '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
+                '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
                 '-- ' . $url_arg . ' >/dev/null 2>&1 &';
             shell_exec($cmd_mobile);
         }
