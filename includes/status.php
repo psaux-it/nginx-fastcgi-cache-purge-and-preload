@@ -53,7 +53,7 @@ function nppp_check_permissions_recursive_with_cache() {
 }
 
 // Function to clear all transients related to the plugin
-function nppp_clear_plugin_cache() {
+function nppp_clear_plugin_cache($silent = false) {
     global $wpdb;
 
     // Static key base
@@ -125,7 +125,9 @@ function nppp_clear_plugin_cache() {
     );
 
     // Log all transients were cleared successfully
-    nppp_display_admin_notice('success', __('SUCCESS: Plugin cache cleared successfully.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
+    if (!$silent) {
+        nppp_display_admin_notice('success', __('SUCCESS: Plugin cache cleared successfully.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
+    }
 }
 
 // Check server side action need for cache path permissions.
