@@ -378,7 +378,7 @@ services:
 
             // Clear plugin caches after switching mode
             if (function_exists('\\nppp_clear_plugin_cache')) {
-                \nppp_clear_plugin_cache();
+                \nppp_clear_plugin_cache(true);
             }
 
             wp_safe_redirect(admin_url('admin.php?page=' . self::SETTINGS_SLUG));
@@ -572,7 +572,7 @@ services:
 
             // Clear plugin caches after switching back to detected mode
             if (function_exists('\\nppp_clear_plugin_cache')) {
-                \nppp_clear_plugin_cache();
+                \nppp_clear_plugin_cache(true);
             }
         }
 
