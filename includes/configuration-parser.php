@@ -402,7 +402,7 @@ function nppp_is_cache_path_display_supported(string $directive, string $value):
     $normalised = rtrim($value, '/');
 
     // Allowed roots — must match nppp_validate_path() $allowed_roots exactly
-    $allowed_roots = ['/dev/shm/', '/tmp/', '/var/'];
+    $allowed_roots = ['/dev/shm/', '/tmp/', '/var/', '/cache/'];
     $allowed = false;
     foreach ($allowed_roots as $root) {
         if (strpos($normalised, $root) === 0) {
@@ -418,7 +418,6 @@ function nppp_is_cache_path_display_supported(string $directive, string $value):
     $blocked_subdirs = [
         '/var/log',
         '/var/spool',
-        '/var/run',
         '/var/lib',
         '/var/www',
         '/var/mail',
@@ -433,7 +432,7 @@ function nppp_is_cache_path_display_supported(string $directive, string $value):
     }
 
     // /var/cache root itself is blocked — subdirectories are allowed
-    if ($normalised === '/var/cache') {
+    if ($normalised === '/var/cache' || $normalised === '/var/run' || $normalised === '/cache') {
         return false;
     }
 
@@ -530,6 +529,31 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                     $nppp_active_path = rtrim($nppp_settings['nginx_cache_path'], '/');
                                 }
                                 ?>
+                                <?php
+                                if ($nppp_active_path !== '') {
+                                    $fastcgi_paths = array_map(fn($p) => rtrim($p, '/'), $cache_paths['fastcgi_cache_path'] ?? []);
+                                    $proxy_paths   = array_map(fn($p) => rtrim($p, '/'), $cache_paths['proxy_cache_path'] ?? []);
+                                    if (in_array($nppp_active_path, $proxy_paths) && !in_array($nppp_active_path, $fastcgi_paths)):
+                                ?>
+                                <div style="margin-bottom:10px; padding:8px 12px; background:#fff8e1; border-left:4px solid #f0ad4e; border-radius:0;">
+                                    <span class="dashicons dashicons-warning" style="color:#e6a817; vertical-align:middle;"></span>
+                                    <strong style="color:#7a4f00;"><?php esc_html_e('Reverse-Proxy Cache Detected', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong><br>
+                                    <span style="font-size:13px; color:#5a3800;">
+                                        <?php esc_html_e('This is common on control panels such as cPanel and Plesk. The plugin can work in this setup but may require extra configuration steps', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                                    </span>
+                                </div>
+                                <?php
+                                    endif;
+                                }
+                                ?>
+                                <?php
+                                $nppp_directive_badges = [
+                                    'fastcgi_cache_path' => ['FastCGI', '#edf7ed', '#1a6e1a'],
+                                    'proxy_cache_path'   => ['Proxy',   '#fdf0ff', '#6a0dad'],
+                                    'scgi_cache_path'    => ['SCGI',    '#fff0f0', '#8b0000'],
+                                    'uwsgi_cache_path'   => ['uWSGI',   '#f0f4ff', '#1a3a8b'],
+                                ];
+                                ?>
                                 <table class="nginx-config-table">
                                     <tbody>
                                         <?php foreach ($cache_paths as $directive => $values): ?>
@@ -545,9 +569,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                                     );
                                                     ?>
                                                     <td>
-                                                        <?php if ($is_active): ?>
-                                                            <span class="dashicons dashicons-yes" style="color: green; font-size: 20px !important;"></span>
-                                                        <?php elseif ($is_supported): ?>
+                                                        <?php if ($is_active || $is_supported): ?>
                                                             <span class="dashicons dashicons-yes" style="color: green; font-size: 20px !important;"></span>
                                                         <?php else: ?>
                                                             <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
@@ -555,10 +577,17 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                                         <span style="color: <?php echo $is_supported ? 'teal' : 'orange'; ?>; font-size: 13px; font-weight: bold;"><?php echo esc_html($value); ?></span>
                                                         <?php if ($is_active): ?>
                                                             <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #e6f1fb; color: #0c447c;"><?php esc_html_e('Active', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-                                                        <?php elseif (!$is_supported): ?>
-                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #faeeda; color: #633806;"><?php esc_html_e('Not Supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                                         <?php else: ?>
                                                             <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #f1efe8; color: #5f5e5a;"><?php esc_html_e('Other vhost', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                        <?php endif; ?>
+                                                        <?php if (!$is_supported): ?>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #faeeda; color: #633806;"><?php esc_html_e('Path Blocked', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                        <?php endif; ?>
+                                                        <?php
+                                                        if (isset($nppp_directive_badges[$directive])):
+                                                            [$nppp_badge_label, $nppp_badge_bg, $nppp_badge_color] = $nppp_directive_badges[$directive];
+                                                        ?>
+                                                            <span style="font-size: 12px; font-weight: 600; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: <?php echo esc_attr($nppp_badge_bg); ?>; color: <?php echo esc_attr($nppp_badge_color); ?>; letter-spacing: 0.3px;"><?php echo esc_html($nppp_badge_label); ?></span>
                                                         <?php endif; ?>
                                                     </td>
                                                 </tr>
