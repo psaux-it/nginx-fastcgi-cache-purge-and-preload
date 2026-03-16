@@ -143,6 +143,22 @@ function nppp_spawn_preload_watcher( int $wget_pid, string $token ): bool {
     // Build the post data string
     $post_data = 'action=' . NPPP_WATCHER_AJAX_ACTION . '&token=' . rawurlencode( $token );
 
+    // Detect available shell — bash preferred, fall back to sh
+    $shell_path = trim( (string) shell_exec( 'command -v bash 2>/dev/null' ) );
+    if ( empty( $shell_path ) ) {
+        $shell_path = trim( (string) shell_exec( 'command -v sh 2>/dev/null' ) );
+    }
+
+    if ( empty( $shell_path ) ) {
+        nppp_display_admin_notice(
+            'error',
+            __( 'ERROR WATCHDOG: No shell (bash/sh) found — not spawned.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            true,
+            false
+        );
+        return false;
+    }
+
     // Build the watchdog
     $watchdog = sprintf(
         'echo $$ > %s; while kill -0 %d 2>/dev/null; do sleep 5; done; '
@@ -157,7 +173,7 @@ function nppp_spawn_preload_watcher( int $wget_pid, string $token ): bool {
         escapeshellarg( $ajax_url )
     );
 
-    $command = 'nohup bash -c ' . escapeshellarg( $watchdog ) . ' > /dev/null 2>&1 &';
+    $command = 'nohup ' . escapeshellarg( $shell_path ) . ' -c ' . escapeshellarg( $watchdog ) . ' > /dev/null 2>&1 &';
     shell_exec( $command );
 
     nppp_display_admin_notice(
