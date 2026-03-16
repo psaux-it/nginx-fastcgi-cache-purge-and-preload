@@ -4229,3 +4229,90 @@ body.has-sticky-submit .nppp-scrollfab{
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Style for the watchdog toggle switch container */
+.nppp-onoffswitch-watchdog {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default watchdog checkbox */
+.nppp-onoffswitch-checkbox-watchdog {
+    display: none;
+}
+
+/* Style for the watchdog toggle switch label */
+.nppp-onoffswitch-label-watchdog {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* Style for watchdog text labels (On and Off) */
+.nppp-onoffswitch-inner-watchdog .nppp-on-watchdog,
+.nppp-onoffswitch-inner-watchdog .nppp-off-watchdog {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-watchdog .nppp-on-watchdog {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-watchdog .nppp-off-watchdog {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Style for the watchdog toggle switch handle */
+.nppp-onoffswitch-switch-watchdog {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #66b317;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Adjust styles based on watchdog checkbox state */
+#nginx_cache_watchdog:checked + .nppp-onoffswitch-label-watchdog .nppp-onoffswitch-inner-watchdog .nppp-on-watchdog {
+    color: #23282d;
+}
+
+#nginx_cache_watchdog:checked + .nppp-onoffswitch-label-watchdog .nppp-onoffswitch-switch-watchdog {
+    width: 55px;
+    transform: translateX(60px);
+    background: #ea1919;
+}
+
+/* Show the Off label watchdog */
+.nppp-onoffswitch-checkbox-watchdog + .nppp-onoffswitch-label-watchdog .nppp-off-watchdog {
+    display: block;
+}
+
+/* Hide the original watchdog checkbox */
+#nginx_cache_watchdog {
+    position: absolute;
+    left: -99em;
+}
+
+/* Style disabled watchdog toggle accordingly */
+.nppp-onoffswitch-checkbox-watchdog[disabled] + .nppp-onoffswitch-label-watchdog {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
