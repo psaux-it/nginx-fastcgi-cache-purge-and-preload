@@ -167,6 +167,7 @@ function nppp_delete_runtime_artifacts_on_uninstall() {
     $runtime_files = array(
         'fastcgi_ops.log',
         'cache_preload.pid',
+        'preload_watcher.pid',
         'nppp-wget.log',
         'nppp-wget-snapshot.log',
     );
