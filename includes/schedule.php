@@ -354,6 +354,10 @@ function nppp_create_scheduled_event_preload_status_callback() {
         // cannot re-enter this branch
         set_transient($phase_transient_key, 'mobile', 12 * HOUR_IN_SECONDS);
 
+        // Generate a fresh watchdog token for this preload cycle.
+        // The watchdog spawned in preload will carry this token.
+        nppp_watcher_generate_token();
+
         // Set default options to prevent any error
         $default_cache_path = '/dev/shm/change-me-now';
         $default_limit_rate = 5120;
