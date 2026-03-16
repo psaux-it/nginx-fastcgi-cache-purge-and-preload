@@ -1743,6 +1743,49 @@ $(document).ready(function() {
         }, 'json');
     });
 
+    // Update watchdog status when state changes
+    $('#nginx_cache_watchdog').change(function() {
+        var watchdogElement = $(this);
+        var clickToCopySpanWatchdog = watchdogElement.next('.nppp-onoffswitch-label-watchdog');
+        var clickToCopySpanOffsetWatchdog = clickToCopySpanWatchdog.offset();
+        var notificationLeftWatchdog = clickToCopySpanOffsetWatchdog.left + clickToCopySpanWatchdog.outerWidth() + 10;
+        var notificationTopWatchdog = clickToCopySpanOffsetWatchdog.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action: 'nppp_update_watchdog_option',
+            watchdog: isChecked,
+            _wpnonce: nppp_admin_data.watchdog_nonce
+        }, function(response) {
+            if (response.success) {
+                var notification = document.createElement('div');
+                notification.textContent = '✔';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftWatchdog + 'px';
+                notification.style.top = notificationTopWatchdog + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
+            } else {
+                $('#nginx_cache_watchdog').prop('checked', !$('#nginx_cache_watchdog').prop('checked'));
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+            }
+        }, 'json');
+    });
+
     // Update auto purge status when state changes
     $('#nginx_cache_purge_on_update').change(function() {
         // Calculate the notification position
@@ -3072,6 +3115,31 @@ $(document).ready(function() {
             $('.nppp-onoffswitch-switch-preload-mobile').css('background', '#ea1919');
             $('.nppp-on-preload-mobile').css('color', '#000000');
             $('.nppp-off-preload-mobile').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for watchdog
+    var isCheckedWatchdog = $('#nginx_cache_watchdog').prop('checked');
+    if (isCheckedWatchdog) {
+        $('.nppp-onoffswitch-switch-watchdog').css('background', '#66b317');
+        $('.nppp-on-watchdog').css('color', '#ffffff');
+        $('.nppp-off-watchdog').css('color', '#000000');
+    } else {
+        $('.nppp-onoffswitch-switch-watchdog').css('background', '#ea1919');
+        $('.nppp-on-watchdog').css('color', '#000000');
+        $('.nppp-off-watchdog').css('color', '#ffffff');
+    }
+
+    $('#nginx_cache_watchdog').change(function() {
+        var isChecked = $(this).prop('checked');
+        if (isChecked) {
+            $('.nppp-onoffswitch-switch-watchdog').css('background', '#66b317');
+            $('.nppp-on-watchdog').css('color', '#ffffff');
+            $('.nppp-off-watchdog').css('color', '#000000');
+        } else {
+            $('.nppp-onoffswitch-switch-watchdog').css('background', '#ea1919');
+            $('.nppp-on-watchdog').css('color', '#000000');
+            $('.nppp-off-watchdog').css('color', '#ffffff');
         }
     });
 
