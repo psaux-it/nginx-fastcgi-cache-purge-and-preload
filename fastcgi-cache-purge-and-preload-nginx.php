@@ -226,6 +226,12 @@ add_action('init', function(): void {
         : '';
     if ($action !== 'nppp_cron_wake') return;
 
+    // Watchdog feature disabled — endpoint intentionally unreachable.
+    $opts = get_option('nginx_cache_settings', []);
+    if (($opts['nginx_cache_watchdog'] ?? 'no') !== 'yes') {
+        wp_die('', '', ['response' => 403]);
+    }
+
     // Layer 1a
     // phpcs:ignore WordPress.Security.NonceVerification.Missing
     $submitted = isset($_POST['token'])
