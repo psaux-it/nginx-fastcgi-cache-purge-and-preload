@@ -208,6 +208,44 @@ add_action('automatic_updates_complete', function ( $results ): void {
 }, 1);
 
 // ---------------------------------------------------------------------------
+// EP8 — Watchdog AJAX (nopriv — token-gated)
+// The watchdog process POSTs after preload finishes.
+// EP1 never fires for nopriv requests so bootstrap must be loaded explicitly
+// for this one action.
+//
+// Two-layer gate — bootstrap only loads when the token is genuinely valid:
+//   Layer 1 (here)   : format check + transient existence + hash_equals
+//   Layer 2 (handler): rate limit + same checks again as defense-in-depth
+// ---------------------------------------------------------------------------
+add_action('init', function(): void {
+    if (!wp_doing_ajax()) return;
+
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    $action = isset($_POST['action'])
+        ? sanitize_key(wp_unslash($_POST['action']))
+        : '';
+    if ($action !== 'nppp_cron_wake') return;
+
+    // Layer 1a
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    $submitted = isset($_POST['token'])
+        ? sanitize_text_field(wp_unslash($_POST['token']))
+        : '';
+    if (empty($submitted) || !preg_match('/^[a-f0-9]{32}$/i', $submitted)) {
+        wp_die('', '', ['response' => 403]);
+    }
+
+    // Layer 1b
+    $stored = get_transient('nppp_ping_token_' . md5('nppp'));
+    if (empty($stored) || !hash_equals((string) $stored, $submitted)) {
+        wp_die('', '', ['response' => 403]);
+    }
+
+    // Token verified
+    nppp_load_bootstrap();
+}, 1);
+
+// ---------------------------------------------------------------------------
 // ACTIVATION — generates API key, writes default settings, triggers setup wizard.
 // DEACTIVATION — clears scheduled cron events, terminates active preload process.
 // ---------------------------------------------------------------------------
