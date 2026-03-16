@@ -186,6 +186,54 @@
                 ensureHiddenMirror($form, name, currentVal);
             })();
 
+            // Disable Redis Object Cache sync toggle and preserve current value
+            (function disableRedisCacheSync(){
+                const $redisToggle = $('#nppp_redis_cache_sync');
+                if (!$redisToggle.length) return;
+
+                const $form = $redisToggle.closest('form');
+                const name = $redisToggle.attr('name');
+                const currentVal = $redisToggle.is(':checked') ? 'yes' : 'no';
+
+                $redisToggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                $redisToggle
+                    .closest('.nppp-onoffswitch-redis')
+                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .find('.nppp-onoffswitch-label-redis')
+                    .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+
+                ensureHiddenMirror($form, name, currentVal);
+            })();
+
+            // Disable watchdog toggle and preserve current value
+            (function disableWatchdog(){
+                const $watchdogToggle = $('#nginx_cache_watchdog');
+                if (!$watchdogToggle.length) return;
+
+                const $form = $watchdogToggle.closest('form');
+                const name = $watchdogToggle.attr('name');
+                const currentVal = $watchdogToggle.is(':checked') ? 'yes' : 'no';
+
+                $watchdogToggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                $watchdogToggle
+                    .closest('.nppp-onoffswitch-watchdog')
+                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .find('.nppp-onoffswitch-label-watchdog')
+                    .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+
+                ensureHiddenMirror($form, name, currentVal);
+            })();
+
             // Make REST API helper elements non-clickable.
             $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({
                 'opacity': '0.5',
