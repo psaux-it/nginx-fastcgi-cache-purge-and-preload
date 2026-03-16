@@ -357,7 +357,7 @@ function nppp_nginx_cache_preload_endpoint($request) {
     // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';
     $default_limit_rate = 1280;
-    $default_cpu_limit = 50;
+    $default_cpu_limit = 100;
     $default_reject_regex = nppp_fetch_default_reject_regex();
 
     // Get the necessary data for preload action from plugin options
