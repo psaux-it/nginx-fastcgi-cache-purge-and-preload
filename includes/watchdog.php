@@ -47,7 +47,7 @@ function nppp_watchdog_rate_limit_check(): bool {
     }
 
     $count++;
-    if ( $count > 3 ) {
+    if ( $count > 10 ) {
         return false;
     }
 
@@ -264,7 +264,7 @@ add_action( 'wp_ajax_'        . NPPP_WATCHER_AJAX_ACTION, 'nppp_cron_wake_handle
  * Handle the watchdog's HTTP POST.
  */
 function nppp_cron_wake_handler(): void {
-	// Rate limit — max 3 requests per minute per IP.
+	// Rate limit — max 10 requests per minute per IP.
     // Fires before token validation to stop brute-force probing cheaply.
     if ( ! nppp_watchdog_rate_limit_check() ) {
         nppp_display_admin_notice(
