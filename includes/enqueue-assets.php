@@ -226,6 +226,7 @@ function nppp_disable_features($unsupported, $preload) {
             'nginx_cache_purge_on_update'        => 'no',
             'nginx_cache_auto_preload'           => 'no',
             'nginx_cache_auto_preload_mobile'    => 'no',
+            'nginx_cache_watchdog'               => 'no',
             'nginx_cache_schedule'               => 'no',
             'nginx_cache_send_mail'              => 'no',
             'nginx_cache_api'                    => 'no',
@@ -243,6 +244,7 @@ function nppp_disable_features($unsupported, $preload) {
         $features = array(
             'nginx_cache_auto_preload'           => 'no',
             'nginx_cache_auto_preload_mobile'    => 'no',
+            'nginx_cache_watchdog'               => 'no',
             'nginx_cache_schedule'               => 'no',
             'nginx_cache_preload_enable_proxy'   => 'no',
             'nginx_cache_pctnorm_mode'           => 'off',
