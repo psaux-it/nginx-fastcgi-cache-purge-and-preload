@@ -215,6 +215,7 @@ if ($nppp_auto_purge) {
     add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
 }
 add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_preload_mobile_option');
+add_action('wp_ajax_nppp_update_watchdog_option', 'nppp_update_watchdog_option');
 add_action('wp_dashboard_setup', 'nppp_add_dashboard_widget');
 add_action('wp_ajax_nppp_update_enable_proxy_option', 'nppp_update_enable_proxy_option');
 add_action('wp_ajax_nppp_update_related_fields', 'nppp_update_related_fields');
