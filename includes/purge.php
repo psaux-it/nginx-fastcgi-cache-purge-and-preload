@@ -1046,6 +1046,10 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             delete_transient($nppp_phase_key);
             delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
 
+            // Kill the watchdog after purge has already killed the preload
+            nppp_kill_preload_watcher();
+            nppp_watcher_delete_token();
+
             // If on-going preload action halted via purge
             // that means user restrictly wants to purge cache
             // If auto preload feature enabled this will cause recursive preload action
@@ -1110,6 +1114,10 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             delete_transient($nppp_phase_key);
             delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
 
+            // Kill the watchdog after purge has already killed the preload
+            nppp_kill_preload_watcher();
+            nppp_watcher_delete_token();
+
             // Call purge_helper to delete cache contents and get status
             $status = nppp_purge_helper($nginx_cache_path, $tmp_path);
 
@@ -1171,6 +1179,10 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         wp_clear_scheduled_hook('npp_cache_preload_status_event');
         delete_transient($nppp_phase_key);
         delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
+
+        // Kill the watchdog after purge has already killed the preload
+        nppp_kill_preload_watcher();
+        nppp_watcher_delete_token();
 
         // Call purge_helper to delete cache contents and get status
         $status = nppp_purge_helper($nginx_cache_path, $tmp_path);
