@@ -642,6 +642,14 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 nppp_create_scheduled_event_preload_status();
             }
 
+            // Spawn the preload watchdog — monitors preload process,
+            // when preload finishes, guaranteeing post-preload tasks runs even on zero-traffic
+            // or fully-cached sites without relying on WP-Cron.
+            $nppp_watcher_token = nppp_watcher_get_token();
+            if ( ! empty( $nppp_watcher_token ) && function_exists( 'nppp_spawn_preload_watcher' ) ) {
+                nppp_spawn_preload_watcher( (int) $pid, $nppp_watcher_token );
+            }
+
             // Start cpulimit if it is exist
             if ($cpulimit === 1) {
                 $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
@@ -847,6 +855,14 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         // Call the function to schedule the status check event
         if (!$preload_mobile) {
             nppp_create_scheduled_event_preload_status();
+        }
+
+        // Spawn the preload watchdog — monitors preload process,
+        // when preload finishes, guaranteeing post-preload tasks runs even on zero-traffic
+        // or fully-cached sites without relying on WP-Cron.
+        $nppp_watcher_token = nppp_watcher_get_token();
+        if ( ! empty( $nppp_watcher_token ) && function_exists( 'nppp_spawn_preload_watcher' ) ) {
+            nppp_spawn_preload_watcher( (int) $pid, $nppp_watcher_token );
         }
 
         // Start cpulimit if it is exist
