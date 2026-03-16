@@ -41,6 +41,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_read_timeout', 'PHP Response Timeout', 'nppp_nginx_cache_read_timeout_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_key_custom_regex', 'Enable Custom regex', 'nppp_nginx_cache_key_custom_regex_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_auto_preload_mobile', 'Auto Preload Mobile', 'nppp_nginx_cache_auto_preload_mobile_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nginx_cache_watchdog', 'Preload Watchdog', 'nppp_nginx_cache_watchdog_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_preload_enable_proxy', 'Enable Proxy', 'nppp_nginx_cache_enable_proxy_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_preload_proxy_host', 'Proxy Host', 'nppp_nginx_cache_proxy_host_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_preload_proxy_port', 'Proxy Port', 'nppp_nginx_cache_proxy_port_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
@@ -395,6 +396,22 @@ function nppp_nginx_cache_settings_page() {
                                     <h4><strong><?php echo esc_html__( 'Note:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong></h4>
                                     <p><?php echo esc_html__( 'The Mobile Preload action will begin after the main Preload process completes via the WordPress Cron job. As a result, the Mobile Preload action may start with a delay. To track the status of this process, please refer to the log section of the plugin.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 </div>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row">
+                                <span class="dashicons dashicons-backup"></span>
+                                <?php echo esc_html__( 'Preload Watchdog', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-watchdog">
+                                        <?php nppp_nginx_cache_watchdog_callback(); ?>
+                                    </div>
+                                </div>
+                                <p class="description"><?php echo esc_html__( 'Enable the preload watchdog. When active, watchdog monitors the preload and fires post-preload tasks immediately when preload finishes.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Especially useful on zero-traffic or fully-cached sites where WP-Cron may be delayed. If disabled, post-preload tasks are handled entirely by WP-Cron.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Recommended for users have cron delay issues. The watchdog is lightweight and exits automatically once preload completes.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -1148,6 +1165,43 @@ function nppp_update_auto_preload_mobile_option() {
     }
 }
 
+// AJAX callback function to update watchdog option
+function nppp_update_watchdog_option() {
+    // Verify nonce
+    if (isset($_POST['_wpnonce'])) {
+        $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
+        if (!wp_verify_nonce($nonce, 'nppp-update-watchdog-option')) {
+            wp_send_json_error('Nonce verification failed.');
+        }
+    } else {
+        wp_send_json_error('Nonce is missing.');
+    }
+
+    // Check user capability
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('You do not have permission to update this option.');
+    }
+
+    // Get the posted option value and sanitize it
+    $watchdog = isset($_POST['watchdog']) ? sanitize_text_field(wp_unslash($_POST['watchdog'])) : '';
+
+    // Get the current options
+    $current_options = get_option('nginx_cache_settings', array());
+
+    // Update the specific option within the array
+    $current_options['nginx_cache_watchdog'] = $watchdog;
+
+    // Save the updated options
+    $updated = update_option('nginx_cache_settings', $current_options);
+
+    // Check if option is updated successfully
+    if ($updated) {
+        wp_send_json_success('Option updated successfully.');
+    } else {
+        wp_send_json_error('Error updating option.');
+    }
+}
+
 // AJAX callback function to update auto purge option
 function nppp_update_auto_purge_option() {
     // Verify nonce
@@ -1788,6 +1842,22 @@ function nppp_nginx_cache_auto_preload_mobile_callback() {
             <span class="nppp-on-preload-mobile"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
         </span>
         <span class="nppp-onoffswitch-switch-preload-mobile"></span>
+    </label>
+    <?php
+}
+
+// Callback function for the nginx_cache_watchdog field
+function nppp_nginx_cache_watchdog_callback() {
+    $options = get_option('nginx_cache_settings');
+    $watchdog_checked = isset($options['nginx_cache_watchdog']) && $options['nginx_cache_watchdog'] === 'yes' ? 'checked="checked"' : '';
+    ?>
+    <input type="checkbox" name="nginx_cache_settings[nginx_cache_watchdog]" class="nppp-onoffswitch-checkbox-watchdog" value="yes" id="nginx_cache_watchdog" <?php echo esc_attr($watchdog_checked); ?>>
+    <label class="nppp-onoffswitch-label-watchdog" for="nginx_cache_watchdog">
+        <span class="nppp-onoffswitch-inner-watchdog">
+            <span class="nppp-off-watchdog"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-on-watchdog"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+        </span>
+        <span class="nppp-onoffswitch-switch-watchdog"></span>
     </label>
     <?php
 }
@@ -2677,6 +2747,7 @@ function nppp_nginx_cache_settings_sanitize($input) {
     $sanitized_input['nginx_cache_send_mail']              = isset($input['nginx_cache_send_mail'])               && $input['nginx_cache_send_mail'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nginx_cache_auto_preload']           = isset($input['nginx_cache_auto_preload'])            && $input['nginx_cache_auto_preload'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nginx_cache_auto_preload_mobile']    = isset($input['nginx_cache_auto_preload_mobile'])     && $input['nginx_cache_auto_preload_mobile'] === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_watchdog']               = isset($input['nginx_cache_watchdog'])                && $input['nginx_cache_watchdog'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nginx_cache_purge_on_update']        = isset($input['nginx_cache_purge_on_update'])         && $input['nginx_cache_purge_on_update'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nppp_cloudflare_apo_sync']           = isset($input['nppp_cloudflare_apo_sync'])            && $input['nppp_cloudflare_apo_sync'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nppp_redis_cache_sync']              = isset($input['nppp_redis_cache_sync'])               && $input['nppp_redis_cache_sync'] === 'yes' ? 'yes' : 'no';
@@ -3001,6 +3072,7 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_purge_on_update'       => 'no',
         'nginx_cache_auto_preload'          => 'no',
         'nginx_cache_auto_preload_mobile'   => 'no',
+        'nginx_cache_watchdog'              => 'no',
         'nginx_cache_send_mail'             => 'no',
         'nginx_cache_preload_enable_proxy'  => 'no',
         'nginx_cache_schedule'              => 'no',
