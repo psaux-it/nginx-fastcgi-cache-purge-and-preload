@@ -277,6 +277,10 @@ function nppp_create_scheduled_event_preload_status() {
     $start_transient_key = 'nppp_preload_cycle_start_' . md5('nppp');
     set_transient($start_transient_key, time(), 12 * HOUR_IN_SECONDS);
 
+    // Generate a fresh watchdog token for this preload cycle.
+    // The watchdog spawned in preload will carry this token.
+    nppp_watcher_generate_token();
+
     // Clear any existing tick and schedule the first check 5 seconds out.
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
     wp_schedule_single_event(time() + 5, 'npp_cache_preload_status_event');
