@@ -82,6 +82,9 @@
             // Disable preload mobile
             $('#nginx_cache_auto_preload_mobile').prop('disabled', true);
 
+            // Disable watchdog
+            $('#nginx_cache_watchdog').prop('disabled', true);
+
             // Disable the preload wp schedule
             $('#nginx_cache_schedule').prop('disabled', true);
 
