@@ -136,6 +136,7 @@ require_once dirname(__DIR__) . '/includes/status.php';
 require_once dirname(__DIR__) . '/includes/advanced.php';
 require_once dirname(__DIR__) . '/includes/send-mail.php';
 require_once dirname(__DIR__) . '/includes/schedule.php';
+require_once dirname(__DIR__) . '/includes/watchdog.php';
 require_once dirname(__DIR__) . '/includes/rest-api-helper.php';
 require_once dirname(__DIR__) . '/includes/update.php';
 require_once dirname(__DIR__) . '/includes/dashboard-widget.php';
