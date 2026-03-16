@@ -293,7 +293,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     // Set default data for purge & preload actions
     $default_cache_path = '/dev/shm/change-me-now';
     $default_limit_rate = 1280;
-    $default_cpu_limit = 50;
+    $default_cpu_limit = 100;
     $default_reject_regex = nppp_fetch_default_reject_regex();
 
     // Get the necessary data for purge & preload actions
