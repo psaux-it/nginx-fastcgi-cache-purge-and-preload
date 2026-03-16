@@ -650,9 +650,14 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 nppp_spawn_preload_watcher( (int) $pid, $nppp_watcher_token );
             }
 
-            // Start cpulimit if it is exist
-            if ($cpulimit === 1) {
-                $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
+            // Start cpulimit conditionally
+            if ($cpulimit === 1 && (int) $nginx_cache_cpu_limit < 100) {
+                $command = sprintf(
+                    'cpulimit -p %d -l %d -zb >/dev/null 2>&1',
+                    (int) $pid,
+                    (int) $nginx_cache_cpu_limit
+                );
+
                 shell_exec($command);
             }
 
@@ -865,9 +870,14 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             nppp_spawn_preload_watcher( (int) $pid, $nppp_watcher_token );
         }
 
-        // Start cpulimit if it is exist
-        if ($cpulimit === 1) {
-            $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
+        // Start cpulimit conditionally
+        if ($cpulimit === 1 && (int) $nginx_cache_cpu_limit < 100) {
+            $command = sprintf(
+                'cpulimit -p %d -l %d -zb >/dev/null 2>&1',
+                (int) $pid,
+                (int) $nginx_cache_cpu_limit
+            );
+
             shell_exec($command);
         }
 
