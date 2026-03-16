@@ -645,8 +645,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             // Spawn the preload watchdog — monitors preload process,
             // when preload finishes, guaranteeing post-preload tasks runs even on zero-traffic
             // or fully-cached sites without relying on WP-Cron.
+            $nppp_watchdog_on   = isset( $nginx_cache_settings['nginx_cache_watchdog'] ) && $nginx_cache_settings['nginx_cache_watchdog'] === 'yes';
             $nppp_watcher_token = nppp_watcher_get_token();
-            if ( ! empty( $nppp_watcher_token ) && function_exists( 'nppp_spawn_preload_watcher' ) ) {
+            if ( $nppp_watchdog_on && ! empty( $nppp_watcher_token ) && function_exists( 'nppp_spawn_preload_watcher' ) ) {
                 nppp_spawn_preload_watcher( (int) $pid, $nppp_watcher_token );
             }
 
@@ -865,8 +866,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         // Spawn the preload watchdog — monitors preload process,
         // when preload finishes, guaranteeing post-preload tasks runs even on zero-traffic
         // or fully-cached sites without relying on WP-Cron.
+        $nppp_watchdog_on   = isset( $nginx_cache_settings['nginx_cache_watchdog'] ) && $nginx_cache_settings['nginx_cache_watchdog'] === 'yes';
         $nppp_watcher_token = nppp_watcher_get_token();
-        if ( ! empty( $nppp_watcher_token ) && function_exists( 'nppp_spawn_preload_watcher' ) ) {
+        if ( $nppp_watchdog_on && ! empty( $nppp_watcher_token ) && function_exists( 'nppp_spawn_preload_watcher' ) ) {
             nppp_spawn_preload_watcher( (int) $pid, $nppp_watcher_token );
         }
 
