@@ -237,7 +237,7 @@ function nppp_kill_preload_watcher(): bool {
     if ( nppp_is_process_alive( $watcher_pid ) ) {
         $kill_path = trim( (string) shell_exec( 'command -v kill' ) );
         if ( ! empty( $kill_path ) ) {
-            shell_exec( escapeshellcmd( $kill_path ) . ' -9 ' . (int) $watcher_pid );
+			shell_exec( escapeshellarg( $kill_path ) . ' -9 ' . (int) $watcher_pid );
             usleep( 200000 );
         }
     }
