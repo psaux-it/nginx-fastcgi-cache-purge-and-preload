@@ -252,10 +252,11 @@ add_action('automatic_updates_complete', function ( $results ): void {
 add_action('init', function(): void {
     if (!wp_doing_ajax()) return;
 
-    // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    // phpcs:disable WordPress.Security.NonceVerification.Missing -- EP8 watchdog
     $action = isset($_POST['action'])
         ? sanitize_key(wp_unslash($_POST['action']))
         : '';
+    // phpcs:enable WordPress.Security.NonceVerification.Missing
     if ($action !== 'nppp_cron_wake') return;
 
     // Watchdog feature disabled — endpoint intentionally unreachable.
@@ -265,10 +266,11 @@ add_action('init', function(): void {
     }
 
     // Layer 1a
-    // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    // phpcs:disable WordPress.Security.NonceVerification.Missing -- EP8 watchdog
     $submitted = isset($_POST['token'])
         ? sanitize_text_field(wp_unslash($_POST['token']))
         : '';
+    // phpcs:enable WordPress.Security.NonceVerification.Missing
     if (empty($submitted) || !preg_match('/^[a-f0-9]{32}$/i', $submitted)) {
         wp_die('', '', ['response' => 403]);
     }
