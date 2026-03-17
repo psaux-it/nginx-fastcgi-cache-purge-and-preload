@@ -375,7 +375,7 @@ function nppp_detect_premature_process(
             // Fallback to hard SIGKILL
             if (!@posix_kill($test_pid, SIGTERM)) {
                 $kill_path = trim(shell_exec('command -v kill'));
-                shell_exec(escapeshellcmd("$kill_path -9 " . (int)$test_pid));
+                shell_exec(escapeshellcmd($kill_path) . ' -9 ' . (int) $test_pid);
             }
             $test_process = true;
         }
