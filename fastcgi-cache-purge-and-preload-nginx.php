@@ -20,15 +20,22 @@ if (!defined('ABSPATH')) {
 }
 
 // ---------------------------------------------------------------------------
-// NPP is designed for administrators only — direct UI interaction and limited
-// remote access. Bootstrap loads 26+ files including shell_exec/proc_open
-// (preload), WP_Filesystem recursive ops (purge), and binary detection
-// (pre-checks). Loading this stack unconditionally is a performance and
-// security liability — so the plugin stays dormant on 99% of requests.
+// NPP is designed for administrators — direct UI interaction and limited
+// remote access — but also supports non-admin users (e.g. Editors) who
+// hold the nppp_purge_cache capability for auto-purge on content saves.
+// Bootstrap loads 26+ files including shell_exec/proc_open (preload),
+// WP_Filesystem recursive ops (purge), and binary detection (pre-checks).
+// Loading this stack unconditionally is a performance and security
+// liability — so the plugin stays dormant on 99% of requests.
 //
-// Each entry point below is a narrow gate. Only authenticated admin requests
-// that can trigger a cache operation pass through. Everything else bails
-// before a single plugin file loads.
+// Each entry point below is a narrow gate. Only authenticated requests
+// from users who can trigger a cache operation pass through. Everything
+// else bails before a single plugin file loads.
+//
+// Admin users (manage_options): full UI access via EP1, EP4, EP6.
+// Capability holders (nppp_purge_cache): bootstrap loaded only when
+// auto-purge is enabled — solely to register the cache-purge hook on
+// content saves. All settings and AJAX handlers remain admin-only.
 // ---------------------------------------------------------------------------
 
 // Compatibility mode for environments where Nginx cannot be auto-detected
@@ -192,6 +199,8 @@ add_action('init', function (): void {
 // wp-admin saves. rest_pre_dispatch required — WP and WC authentication
 // resolves after rest_api_init. Return $result unchanged or route handler
 // is bypassed.
+// Also covers non-admin users (e.g. Editors saving via Gutenberg) who hold
+// the nppp_purge_cache capability.
 // ---------------------------------------------------------------------------
 add_filter('rest_pre_dispatch', function($result, $server, $request) {
     if (!is_null($result)) return $result;
