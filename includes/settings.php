@@ -3027,7 +3027,7 @@ function nppp_reset_plugin_settings_on_deactivation() {
             if (nppp_is_process_alive($pid)) {
                 $kill_path = trim((string) shell_exec('command -v kill'));
                 if (!empty($kill_path)) {
-                    shell_exec(escapeshellcmd($kill_path) . ' -9 ' . (int) $pid);
+                    shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $pid);
                     usleep(300000);
                 }
             }
