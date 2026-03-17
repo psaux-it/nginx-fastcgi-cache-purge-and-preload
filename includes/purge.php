@@ -161,15 +161,57 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     // the success path. Prevents the finally block from double-releasing.
     $nppp_lock_released = false;
 
-    // URL→filepath index fast-path.
-    // If the index has a valid, live entry for this URL we can delete the
-    // cache file directly without opening the iterator at all.
-    // Any miss, stale pointer (file gone / bad permissions / failed validation)
-    // falls through silently to the full recursive scan below.
-    // The index is advisory only; it never blocks a Purge.
-    // Stored as a wp_option (autoload=false) — never expires, survives restarts.
-    // Recursive scan write-back keeps it self-healing for cached URLs not in index.
-    // This index option always updated after Preload All & Advanced tab visit.
+    // FAST-PATH 1 — HTTP (Nginx module)
+    // Asks the ngx_cache_purge module to delete the entry via HTTP.
+    // HTTP 200 → entry gone from shared memory + disk atomically → skip filesystem.
+    // Anything else → fall through to Fast-Path 2 (index) or recursive scan.
+
+    if ( nppp_http_purge_try_first( $current_page_url, (bool) $chain_autopreload ) ) {
+        $is_manual    = ! $nppp_auto_purge;
+        $related_urls = nppp_get_related_urls_for_single( $current_page_url );
+ 
+        // Purge related URLs (homepage, category archives, etc.)
+        // will try HTTP first for each related URL,
+        // then falls back to filesystem for any misses.
+        nppp_purge_urls_silent( $nginx_cache_path, $related_urls );
+ 
+        // All cache work done — release lock before blocking I/O below.
+        nppp_release_purge_lock();
+        $nppp_lock_released = true;
+ 
+        // Auto preload AFTER lock released — avoids holding lock during blocking network I/O
+        if ( $chain_autopreload ) {
+            nppp_preload_cache_on_update( $current_page_url, true );
+        }
+
+        // Decide preload policy
+        $settings = get_option( 'nginx_cache_settings' );
+        $should_preload_related =
+            ( $is_manual && ! empty( $settings['nppp_related_preload_after_manual'] ) && $settings['nppp_related_preload_after_manual'] === 'yes' )
+            || ( ! $is_manual && ! empty( $settings['nginx_cache_auto_preload'] ) && $settings['nginx_cache_auto_preload'] === 'yes' );
+ 
+        if ( $should_preload_related ) {
+            nppp_preload_urls_fire_and_forget( $related_urls );
+        }
+ 
+        // Cloudflare purge cache
+        $post_id = (int) url_to_postid( $current_page_url );
+        do_action(
+            'nppp_purged_urls',
+            array_merge( [ $current_page_url ], $related_urls ),
+            $current_page_url,
+            $post_id,
+            (bool) $nppp_auto_purge
+        );
+ 
+        return;
+    }
+
+    // FAST-PATH 2 — Index (wp_option filepath lookup)
+    // Looks up the known disk path for this URL from nppp_url_filepath_index.
+    // Hit + valid file → delete directly, no directory walk needed.
+    // Miss or stale pointer → fall through to recursive scan below.
+    // Index is advisory only — it never blocks a purge.
 
     $nppp_index = get_option('nppp_url_filepath_index');
     if (is_array($nppp_index) && isset($nppp_index[$url_to_search_exact])) {
@@ -228,7 +270,13 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
             // Cloudflare purge cache
             $post_id = (int) url_to_postid($current_page_url);
-            do_action('nppp_purged_urls', array_merge(array($current_page_url), $related_urls), $current_page_url, $post_id, (bool) $nppp_auto_purge);
+            do_action(
+                'nppp_purged_urls',
+                array_merge( [ $current_page_url ], $related_urls ),
+                $current_page_url,
+                $post_id,
+                (bool) $nppp_auto_purge
+            );
 
             return;
         }
@@ -429,7 +477,13 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
                 // Cloudflare purge cache
                 $post_id = (int) url_to_postid($current_page_url);
-                do_action('nppp_purged_urls', array_merge(array($current_page_url), $related_urls), $current_page_url, $post_id, (bool) $nppp_auto_purge);
+                do_action(
+                    'nppp_purged_urls',
+                    array_merge( [ $current_page_url ], $related_urls ),
+                    $current_page_url,
+                    $post_id,
+                    (bool) $nppp_auto_purge
+                );
 
                 return;
             }
@@ -476,7 +530,13 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
         // Cloudflare purge cache
         $post_id = (int) url_to_postid($current_page_url);
-        do_action('nppp_purged_urls', array_merge(array($current_page_url), $related_urls), $current_page_url, $post_id, (bool) $nppp_auto_purge);
+        do_action(
+            'nppp_purged_urls',
+            array_merge( [ $current_page_url ], $related_urls ),
+            $current_page_url,
+            $post_id,
+            (bool) $nppp_auto_purge
+        );
     }
 
     } finally {
