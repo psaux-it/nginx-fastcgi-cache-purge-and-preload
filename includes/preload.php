@@ -313,7 +313,7 @@ function nppp_detect_premature_process(
         'wget ' .
         '--quiet --recursive -l inf --no-cache --no-config --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-        '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --ignore-case --compression=auto ' .
+        '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --ignore-case ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -322,10 +322,11 @@ function nppp_detect_premature_process(
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
         '--wait=' . ((int)$nginx_cache_wait) . ' ' .
         '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
-        '--reject='       . escapeshellarg($nginx_cache_reject_extension) . ' ' .
-        '--domains='      . escapeshellarg($domain_list) . ' ' .
-        '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-        '--user-agent='   . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
+        '--reject=' . escapeshellarg($nginx_cache_reject_extension) . ' ' .
+        '--domains=' . escapeshellarg($domain_list) . ' ' .
+        '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
+        '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+        '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
         '-- ' .
         escapeshellarg($fdomain);
 
@@ -612,7 +613,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 'nohup wget ' .
                 '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
                 '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-                '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case --compression=auto ' .
+                '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case ' .
                 '-e robots=off ' .
                 '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
                 '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -621,10 +622,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
                 '--wait=' . ((int)$nginx_cache_wait) . ' ' .
                 '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
-                '--reject='       . escapeshellarg($nginx_cache_reject_extension) . ' ' .
-                '--domains='      . escapeshellarg($domain_list) . ' ' .
-                '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-                '--user-agent='   . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
+                '--reject=' . escapeshellarg($nginx_cache_reject_extension) . ' ' .
+                '--domains=' . escapeshellarg($domain_list) . ' ' .
+                '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
+                '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+                '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
                 '-- ' .
                 escapeshellarg($fdomain) . ' ' .
                 '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
@@ -833,7 +835,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             'nohup wget ' .
             '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case --compression=auto ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -842,10 +844,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--wait=' . ((int)$nginx_cache_wait) . ' ' .
             '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
-            '--reject='       . escapeshellarg($nginx_cache_reject_extension) . ' ' .
-            '--domains='      . escapeshellarg($domain_list) . ' ' .
-            '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-            '--user-agent='   . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
+            '--reject=' . escapeshellarg($nginx_cache_reject_extension) . ' ' .
+            '--domains=' . escapeshellarg($domain_list) . ' ' .
+            '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
+            '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+            '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
             '-- ' .
             escapeshellarg($fdomain) . ' ' .
             '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
@@ -1048,15 +1051,16 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         'nohup wget ' .
         '--quiet --no-config --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-        '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --compression=auto ' .
+        '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
         '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
         '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-        '--domains='      . escapeshellarg($domain_list) . ' ' .
-        '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+        '--domains=' . escapeshellarg($domain_list) . ' ' .
+        '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
+        '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
         '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
         '-- ' .
         escapeshellarg($current_page_url) . ' ' .
@@ -1090,15 +1094,16 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
             'nohup wget ' .
             '--quiet --no-config --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --compression=auto ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
             '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-            '--domains='      . escapeshellarg($domain_list) . ' ' .
-            '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+            '--domains=' . escapeshellarg($domain_list) . ' ' .
+            '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
+            '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
             '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
             '-- ' .
             escapeshellarg($current_page_url) . ' ' .
@@ -1333,15 +1338,16 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         'nohup wget ' .
         '--quiet --no-config --no-cookies --no-directories --delete-after ' .
         '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-        '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --compression=auto ' .
+        '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
         '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
         '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-        '--domains='      . escapeshellarg($domain_list) . ' ' .
-        '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+        '--domains=' . escapeshellarg($domain_list) . ' ' .
+        '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
+        '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
         '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
         '-- ' .
         escapeshellarg($current_page_url) . ' ' .
@@ -1375,15 +1381,16 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             'nohup wget ' .
             '--quiet --no-config --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --compression=auto ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
             '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-            '--domains='      . escapeshellarg($domain_list) . ' ' .
-            '--header='       . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+            '--domains=' . escapeshellarg($domain_list) . ' ' .
+            '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
+            '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
             '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
             '-- ' .
             escapeshellarg($current_page_url) . ' ' .
