@@ -61,10 +61,29 @@ function nppp_load_bootstrap(): void {
 // EP1 — Direct UI admin interaction
 // Covers all admin UI operations: post saves, plugin/theme installs,
 // settings changes, admin bar cache actions.
+// Also covers non-admin users who hold the nppp_purge_cache
+// capability — they get bootstrap only when auto-purge is active, solely to
+// register the transition_post_status hook. All UI/settings handlers inside
+// the bootstrap check manage_options individually, so no admin surface is
+// exposed to non-admin users.
 // ---------------------------------------------------------------------------
 add_action('init', function (): void {
     if (!is_admin()) return;
-    if (!is_user_logged_in() || !current_user_can('manage_options')) return;
+    if (!is_user_logged_in()) return;
+ 
+    // Admin — full UI access, load bootstrap unconditionally.
+    if (current_user_can('manage_options')) {
+        nppp_load_bootstrap();
+        return;
+    }
+ 
+    // Non-admin with the custom purge capability.
+    // Load bootstrap only when auto-purge is enabled.
+    if (!current_user_can('nppp_purge_cache')) return;
+
+    $opts = get_option('nginx_cache_settings', []);
+    if (($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes') return;
+
     nppp_load_bootstrap();
 }, 1);
 
@@ -185,9 +204,13 @@ add_filter('rest_pre_dispatch', function($result, $server, $request) {
     $method = $request->get_method();
     if (!in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) return $result;
 
+    if (!is_user_logged_in()) return $result;
+
     $opts = get_option('nginx_cache_settings');
     if (($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes') return $result;
-    if (!is_user_logged_in() || !current_user_can('manage_options')) return $result;
+
+    // Admin or any user granted the custom purge capability (e.g. Editor).
+    if (!current_user_can('manage_options') && !current_user_can('nppp_purge_cache')) return $result;
 
     nppp_load_bootstrap();
 
@@ -259,6 +282,12 @@ function nppp_on_activation() {
     nppp_maybe_define_assume_nginx();
     nppp_load_bootstrap();
 
+    // Grant the custom purge capability to Administrators on activation.
+    $admin_role = get_role( 'administrator' );
+    if ( $admin_role && ! isset( $admin_role->capabilities['nppp_purge_cache'] ) ) {
+        $admin_role->add_cap( 'nppp_purge_cache' );
+    }
+
     // Set setup redirect flag
     if (class_exists('\NPPP\Setup')) {
         \NPPP\Setup::nppp_set_activation_redirect_flag();
@@ -275,4 +304,11 @@ register_activation_hook(__FILE__, 'nppp_on_activation');
 register_deactivation_hook(__FILE__, function() {
     nppp_load_bootstrap();
     nppp_reset_plugin_settings_on_deactivation();
+
+    // Remove the custom purge capability from every role that holds it.
+    foreach ( wp_roles()->role_objects as $role ) {
+        if ( isset( $role->capabilities['nppp_purge_cache'] ) ) {
+            $role->remove_cap( 'nppp_purge_cache' );
+        }
+    }
 });
