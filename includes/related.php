@@ -144,11 +144,44 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
         return $results;
     }
 
-    // URL→filepath index fast-path for related URLs.
-    // Iterate $pending and look each up in the index.
-    // Stale entries (file gone / bad perms / failed validation) are left
-    // in $pending so the iterator below handles them as a fallback.
-    // If all pending targets resolve via index, the iterator never opens.
+    // FAST-PATH 1 — HTTP (Nginx module)
+    // Asks the ngx_cache_purge module to delete the entry via HTTP.
+    // HTTP 200 → entry gone from shared memory + disk atomically → skip filesystem.
+    // Anything else → fall through to Fast-Path 2 (index) or recursive scan.
+
+    $nppp_http_resolved = 0;
+    if ( nppp_http_purge_enabled() && nppp_http_purge_detect() ) {
+        foreach ( array_keys( $pending ) as $nppp_rel_key ) {
+            $nppp_rel_entry  = $pending[ $nppp_rel_key ];
+            $nppp_http_hit   = nppp_http_purge_try_first( $nppp_rel_entry['original'], true );
+            if ( $nppp_http_hit ) {
+                nppp_display_admin_notice( 'success', sprintf(
+                    /* translators: %s: related page URL */
+                    __( 'SUCCESS HTTP PURGE: Nginx module purged related page %s — filesystem scan skipped.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $nppp_rel_entry['decoded']
+                ), true, false );
+
+                // HTTP 200
+                $results[ $nppp_rel_entry['original'] ] = [
+                    'found'   => true,
+                    'deleted' => true,
+                ];
+                $nppp_http_resolved++;
+                unset( $pending[ $nppp_rel_key ] );
+            }
+        }
+        // If all related URLs were handled by HTTP, skip the iterator entirely.
+        if ( empty( $pending ) ) {
+            return $results;
+        }
+    }
+
+    // FAST-PATH 2 — Index (wp_option filepath lookup)
+    // Looks up the known disk path for each pending URL from nppp_url_filepath_index.
+    // Hit + valid file → delete directly, no directory walk needed.
+    // Miss or stale pointer → left in $pending, iterator handles as fallback.
+    // If all pending URLs resolve via index, the iterator never opens.
+
     $nppp_rel_index = get_option('nppp_url_filepath_index');
     if ( is_array( $nppp_rel_index ) ) {
         foreach ( array_keys( $pending ) as $nppp_rel_key ) {
@@ -172,7 +205,7 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
             if ( $nppp_rel_deleted ) {
                 nppp_display_admin_notice( 'success', sprintf(
                     /* translators: %s: related page URL */
-                    __( 'SUCCESS ADMIN: Nginx cache purged for related page %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    __( 'SUCCESS ADMIN: Nginx cache purged for related page %s (index hit — no scan)', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $nppp_rel_entry['decoded']
                 ), true, false );
             } else {
@@ -194,9 +227,10 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
     }
 
     nppp_display_admin_notice( 'info', sprintf(
-        /* translators: %1$d: number of URLs resolved via index, %2$d: number falling back to scan */
-        __( 'INFO INDEX: Related purge — %1$d resolved via index, %2$d falling back to scan', 'fastcgi-cache-purge-and-preload-nginx' ),
-        count( $urls ) - count( $pending ),
+        /* translators: %1$d: HTTP-resolved count, %2$d: index-resolved count, %3$d: scan fallback count */
+        __( 'INFO INDEX: Related purge — %1$d via HTTP, %2$d via index, %3$d falling back to scan', 'fastcgi-cache-purge-and-preload-nginx' ),
+        $nppp_http_resolved,
+        count( $urls ) - count( $pending ) - $nppp_http_resolved,
         count( $pending )
     ), true, false );
 
@@ -312,7 +346,7 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
 
                     nppp_display_admin_notice('success', sprintf(
                         /* translators: %s: related page URL */
-                        __('SUCCESS ADMIN: Nginx cache purged for related page %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        __('SUCCESS ADMIN: Nginx cache purged for related page %s (scan)', 'fastcgi-cache-purge-and-preload-nginx'),
                         $entry['decoded']
                     ), true, false);
                 } else {
@@ -370,15 +404,16 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
         $common =
             '--quiet --no-config --no-cookies --no-directories --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 ' .
-            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=1 --compression=auto ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=1 ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
             '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . $nginx_cache_limit_rate . 'k ' .
-            '--domains='    . $domain_list . ' ' .
-            '--header='     . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ';
+            '--domains=' . $domain_list . ' ' .
+            '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
+            '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ';
 
         $safexec_prefix = $use_safexec ? escapeshellarg($safexec_path) . ' ' : '';
         $url_arg        = escapeshellarg($u);
