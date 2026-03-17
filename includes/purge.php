@@ -980,7 +980,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                     }
 
                     if ($is_root_owner && $has_suid) {
-                        $output = shell_exec(escapeshellcmd($safexec_path) . " --kill=" . escapeshellarg($pid) . " 2>&1");
+                        $output = shell_exec(escapeshellarg($safexec_path) . ' --kill=' . (int) $pid . ' 2>&1');
 
                         if (strpos($output, 'Killed PID') !== false) {
                             usleep(250000);
@@ -1017,7 +1017,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                     // Process still alive, try kill -9
                     $kill_path = trim(shell_exec('command -v kill'));
                     if (!empty($kill_path)) {
-                        shell_exec(escapeshellcmd($kill_path) . ' -9 ' . (int) $pid);
+                        shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $pid);
                         usleep(300000);
 
                         if (!nppp_is_process_alive($pid)) {
