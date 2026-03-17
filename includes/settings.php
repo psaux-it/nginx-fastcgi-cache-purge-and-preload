@@ -1971,79 +1971,30 @@ function nppp_nginx_cache_enable_proxy_callback() {
     <?php
 }
 
-// Fetch default reject regex
-function nppp_fetch_default_reject_regex() {
-    $wp_filesystem = nppp_initialize_wp_filesystem();
-
-    if ($wp_filesystem === false) {
-        nppp_display_admin_notice(
-            'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
-        );
-        return;
+// Include preload defaults
+function nppp_get_preload_defaults(): array {
+    static $defaults = null;
+    if ( $defaults === null ) {
+        $file     = dirname( __FILE__ ) . '/preload-defaults.php';
+        $loaded   = is_readable( $file ) ? ( include $file ) : [];
+        $defaults = is_array( $loaded ) ? $loaded : [];
     }
-
-    $rr_txt_file = dirname(__FILE__) . '/reject_regex.txt';
-    if ($wp_filesystem->exists($rr_txt_file)) {
-        $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
-        $regex_match = preg_match('/\$reject_regex\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
-        if ($regex_match && isset($matches[1])) {
-            return $matches[1];
-        }
-    } else {
-        wp_die(esc_html__( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
-    }
-    return '';
+    return $defaults;
 }
 
-// Fetch default regex for fastcgi cache key
-function nppp_fetch_default_regex_for_cache_key() {
-    $wp_filesystem = nppp_initialize_wp_filesystem();
-
-    if ($wp_filesystem === false) {
-        nppp_display_admin_notice(
-            'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
-        );
-        return;
-    }
-
-    $rr_txt_file = dirname(__FILE__) . '/reject_regex.txt';
-    if ($wp_filesystem->exists($rr_txt_file)) {
-        $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
-        $regex_match = preg_match('/\$regex_for_cache_key\s*=\s*[\'"](.+?)[\'"];/i', $file_content, $matches);
-        if ($regex_match && isset($matches[1])) {
-            return $matches[1];
-        }
-    } else {
-        wp_die(esc_html__( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
-    }
-    return '';
+// Get default url reject rules for preload
+function nppp_fetch_default_reject_regex(): string {
+    return nppp_get_preload_defaults()['reject_regex'] ?? '';
 }
 
-// Fetch default reject file extensions
-function nppp_fetch_default_reject_extension() {
-    $wp_filesystem = nppp_initialize_wp_filesystem();
+// Get default regex for nginx cache key
+function nppp_fetch_default_regex_for_cache_key(): string {
+    return nppp_get_preload_defaults()['cache_key_regex'] ?? '';
+}
 
-    if ($wp_filesystem === false) {
-        nppp_display_admin_notice(
-            'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
-        );
-        return;
-    }
-
-    $rr_txt_file = dirname(__FILE__) . '/reject_regex.txt';
-    if ($wp_filesystem->exists($rr_txt_file)) {
-        $file_content = nppp_perform_file_operation($rr_txt_file, 'read');
-        $regex_match = preg_match('/\$reject_extension\s*=\s*"([^"]+)"/', $file_content, $matches);
-        if ($regex_match && isset($matches[1])) {
-            return $matches[1];
-        }
-    } else {
-        wp_die(esc_html__( 'File does not exist:', 'fastcgi-cache-purge-and-preload-nginx' ) . ' ' . esc_html($rr_txt_file) );
-    }
-    return '';
+// Get default reject file extension rules for preload
+function nppp_fetch_default_reject_extension(): string {
+    return nppp_get_preload_defaults()['reject_extension'] ?? '';
 }
 
 // Callback function for REST API Key
