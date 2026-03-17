@@ -1,12 +1,19 @@
+<?php
 /**
- * Default reject rules for Nginx Cache Purge Preload
- * Description: Provides default URL regex, file-extension exclusions, and cache-key parsing patterns for preload requests.
+ * Default preload rules for Nginx Cache Purge Preload
+ * Description: Provides default URL regex, file-extension exclusions,
+ *              and cache-key parsing patterns for preload requests.
  * Version: 2.1.4
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
  */
+
+// Exit if accessed directly.
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 $reject_regex = "/wp-admin/|/wp-content/|/wp-includes/|/wp-json/|/xmlrpc.php|/wp-.*\.php|/cart/|/checkout/|/order-received/|/order-pay/|/wc-ajax/|/wc-auth/|/my-account/|/wc-api/|/addons/|/robots\.txt|/sitemap(_index)?\.xml|[a-z0-9_-]+-sitemap([0-9]+)?\.xml|/wp-sitemap.*\.xml|comment-page-|/feed/|/embed/|/cgi-bin/|/login/|/logout/|/register/|/lost-password/|/password-reset/|/activate/|\.well-known/|\?|\=|\&|\#";
 $reject_extension = "*.css,*.min.css,*.js,*.min.js,*.png,*.jpg,*.jpeg,*.gif,*.ico,*.mp4,*.webm,*.mov,*.avi,*.mkv,*.flv,*.wmv,*.mpeg,*.mpg,*.m4v,*.3gp,*.woff,*.woff2,*.ttf,*.eot,*.svg,*.bmp,*.pdf,*.doc,*.docx,*.xls,*.xlsx,*.ppt,*.pptx,*.zip,*.rar,*.tar,*.gz,*.bz2,*.7z,*.xml,*.txt,*.sql,*.log,*.ini,*.conf,*.json,*.bak,*.old,*.tmp,*.swp,*.md,*.rst,*.py,*.sh,*.iso,*.crt,*.key,*.pem,*.out,*.xsl";
