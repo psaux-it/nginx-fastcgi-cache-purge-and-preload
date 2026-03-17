@@ -234,7 +234,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
             if ($deleted) {
                 if (!$chain_autopreload) {
                     // Translators: %s: full page URL that had its cache purged.
-                    nppp_display_admin_notice('success', sprintf(__( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
+                    nppp_display_admin_notice('success', sprintf(__( 'SUCCESS ADMIN: Nginx cache purged for page %s (index hit — no scan)', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
                 }
             } else {
                 // Translators: %s: full page URL that failed to purge.
@@ -441,7 +441,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
                     if (!$chain_autopreload) {
                         // Translators: %s: full page URL that had its cache purged.
-                        nppp_display_admin_notice('success', sprintf(__( 'SUCCESS ADMIN: Nginx cache purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
+                        nppp_display_admin_notice('success', sprintf(__( 'SUCCESS ADMIN: Nginx cache purged for page %s (scan)', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
                     }
                 } else {
                     // Translators: %s: full page URL that failed to purge.
