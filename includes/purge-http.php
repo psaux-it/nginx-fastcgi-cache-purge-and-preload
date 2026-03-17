@@ -213,11 +213,11 @@ function nppp_ajax_test_http_purge(): void {
 
     if ( $ok ) {
         wp_send_json_success( [
-            'message' => __( 'Module detected. The Nginx ngx_cache_purge endpoint responded correctly — HTTP purge fast-path is active.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'message' => __( 'Module detected. Nginx ngx_cache_purge endpoint is active — HTTP fast-path enabled.', 'fastcgi-cache-purge-and-preload-nginx' ),
         ] );
     } else {
         wp_send_json_error( [
-            'message' => __( 'Module NOT detected. The purge endpoint did not respond as expected. Verify: (1) ngx_cache_purge is compiled into Nginx, (2) you have a location ~ /purge(/.*)  block in nginx.conf, (3) allow 127.0.0.1 is set. NPP will continue using filesystem purge only.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'message' => __( 'Module not detected. Check ngx_cache_purge is compiled, purge location block exists. Filesystem purge only.', 'fastcgi-cache-purge-and-preload-nginx' ),
         ] );
     }
 }
