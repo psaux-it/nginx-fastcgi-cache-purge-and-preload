@@ -195,6 +195,13 @@ function nppp_run_uninstall_cleanup_for_current_site() {
     nppp_clear_scheduled_events_on_uninstall();
     nppp_delete_runtime_artifacts_on_uninstall();
     nppp_delete_plugin_options_on_uninstall();
+
+    // Remove the custom purge capability from every role that holds it.
+    foreach ( wp_roles()->role_objects as $role ) {
+        if ( isset( $role->capabilities['nppp_purge_cache'] ) ) {
+            $role->remove_cap( 'nppp_purge_cache' );
+        }
+    }
 }
 
 if (is_multisite()) {
