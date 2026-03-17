@@ -363,7 +363,7 @@ function nppp_detect_premature_process(
         } else {
             // If safexec is available, kill nobody process
             if ($use_safexec) {
-                $kill_cmd = escapeshellcmd($safexec_path) . " --kill=" . (int)($test_pid) . " 2>&1";
+                $kill_cmd = escapeshellarg($safexec_path) . ' --kill=' . (int) $test_pid . ' 2>&1';
                 $output = shell_exec($kill_cmd);
             }
 
@@ -375,7 +375,7 @@ function nppp_detect_premature_process(
             // Fallback to hard SIGKILL
             if (!@posix_kill($test_pid, SIGTERM)) {
                 $kill_path = trim(shell_exec('command -v kill'));
-                shell_exec(escapeshellcmd($kill_path) . ' -9 ' . (int) $test_pid);
+                shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $test_pid);
             }
             $test_process = true;
         }
