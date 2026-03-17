@@ -295,11 +295,11 @@ function nppp_cron_wake_handler(): void {
         wp_die( '', '', [ 'response' => 429 ] );
     }
 
-    // phpcs:ignore WordPress.Security.NonceVerification.Missing -- token IS the auth
+    // phpcs:disable WordPress.Security.NonceVerification.Missing -- token IS the auth
     $submitted = isset( $_POST['token'] )
         ? sanitize_text_field( wp_unslash( $_POST['token'] ) )
         : '';
-
+    // phpcs:enable WordPress.Security.NonceVerification.Missing
     // Reject if token is missing or wrong format
     if ( empty( $submitted ) || ! preg_match( '/^[a-f0-9]{32}$/i', $submitted ) ) {
         nppp_display_admin_notice(
@@ -344,6 +344,7 @@ function nppp_cron_wake_handler(): void {
     );
 
     // Complete post-preload tasks
+    // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- legacy hook name stored in wp_options
     do_action( 'npp_cache_preload_status_event' );
 
     // Respond and exit cleanly.
