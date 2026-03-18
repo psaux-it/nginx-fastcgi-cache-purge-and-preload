@@ -23,7 +23,6 @@ function nppp_send_mail_now(
     $download_size  = '',
     $transfer_speed = '',
     $error_count    = 0,
-    $warn_count     = 0
 ) {
     $options           = get_option( 'nginx_cache_settings' );
     $nginx_cache_email = isset( $options['nginx_cache_email'] ) ? $options['nginx_cache_email'] : '';
@@ -128,7 +127,6 @@ function nppp_send_mail_now(
             $html_content = str_replace( '{{cache_hits}}',     $cache_hits,        $html_content );
             $html_content = str_replace( '{{cache_misses}}',   $cache_misses,      $html_content );
             $html_content = str_replace( '{{errors}}',         $errors_str,        $html_content );
-            $html_content = str_replace( '{{warnings}}',       $warnings_str,      $html_content );
             $html_content = str_replace( '{{limit_rate}}',     $limit_rate_str,    $html_content );
             $html_content = str_replace( '{{mobile_pass}}',    $mobile_pass,       $html_content );
             $html_content = str_replace( '{{trigger}}',        $trigger,           $html_content );
