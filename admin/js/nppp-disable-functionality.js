@@ -210,6 +210,39 @@
                 ensureHiddenMirror($form, name, currentVal);
             })();
 
+            // Disable HTTP purge fast-path toggle and sub-fields
+            (function disableHttpPurge(){
+                const $toggle = $('#nppp_http_purge_enabled');
+                if (!$toggle.length) return;
+
+                const $form     = $toggle.closest('form');
+                const name      = $toggle.attr('name');
+                const currentVal = $toggle.is(':checked') ? 'yes' : 'no';
+
+                $toggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                $toggle
+                    .closest('.nppp-onoffswitch-httppurge')
+                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .find('.nppp-onoffswitch-label-httppurge')
+                    .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+
+                ensureHiddenMirror($form, name, currentVal);
+
+                // Disable Test Connection button
+                $('#nppp-test-http-purge').prop('disabled', true).css({ opacity:.5, cursor:'not-allowed' });
+
+                // Disable sub-fields
+                $('#nppp_http_purge_suffix, #nppp_http_purge_custom_url')
+                    .prop('disabled', true)
+                    .attr('readonly', 'readonly')
+                    .css({ opacity:.5, cursor:'not-allowed' });
+            })();
+
             // Disable watchdog toggle and preserve current value
             (function disableWatchdog(){
                 const $watchdogToggle = $('#nginx_cache_watchdog');
