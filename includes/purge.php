@@ -168,6 +168,15 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
     if ( nppp_http_purge_try_first( $current_page_url, (bool) $chain_autopreload ) ) {
         $is_manual    = ! $nppp_auto_purge;
+
+        if ( ! $chain_autopreload ) {
+            nppp_display_admin_notice( 'success', sprintf(
+                /* translators: %s: full page URL that had its cache purged via HTTP */
+                __( 'SUCCESS HTTP PURGE: Nginx module purged %s — filesystem scan skipped.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $current_page_url_decoded
+            ) );
+        }
+
         $related_urls = nppp_get_related_urls_for_single( $current_page_url );
  
         // Purge related URLs (homepage, category archives, etc.)
