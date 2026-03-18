@@ -69,7 +69,7 @@ function nppp_http_purge_detect( bool $force_fresh = false ): bool {
 
     // Random suffix ensures this path is never in cache and is not guessable.
     $probe_url = nppp_http_purge_base_url()
-                 . '/nppp-probe-' . substr( md5( uniqid( '', true ) ), 0, 12 );
+                 . '/nppp-probe-' . substr( bin2hex( random_bytes( 8 ) ), 0, 12 );
 
     $response = wp_remote_get( $probe_url, [
         'timeout'     => 3,
