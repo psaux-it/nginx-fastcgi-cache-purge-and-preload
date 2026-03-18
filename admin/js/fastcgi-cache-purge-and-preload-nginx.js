@@ -3123,9 +3123,9 @@ $(document).ready(function() {
     function npppHttpPurgeSubOptions(isChecked) {
         $('#nppp-http-purge-suffix-row, #nppp-http-purge-custom-url-row').toggle(isChecked);
     }
-    npppHttpPurgeSubOptions($('#nppp_http_purge_enabled').prop('checked'));
-
     var isHttpPurgeChecked = $('#nppp_http_purge_enabled').prop('checked');
+    npppHttpPurgeSubOptions(isHttpPurgeChecked);
+
     if (isHttpPurgeChecked) {
         $('.nppp-onoffswitch-switch-httppurge').css('background', '#66b317');
         $('.nppp-on-httppurge').css('color', '#ffffff');
@@ -3138,6 +3138,7 @@ $(document).ready(function() {
  
     $('#nppp_http_purge_enabled').change(function() {
         var isHttpPurgeChecked = $(this).prop('checked');
+        npppHttpPurgeSubOptions(isHttpPurgeChecked);
         if (isHttpPurgeChecked) {
             $('.nppp-onoffswitch-switch-httppurge').css('background', '#66b317');
             $('.nppp-on-httppurge').css('color', '#ffffff');
