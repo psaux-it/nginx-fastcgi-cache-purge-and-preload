@@ -726,8 +726,9 @@ function nppp_nginx_cache_settings_page() {
                                         <?php nppp_http_purge_enabled_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'Delegates purging to Nginx itself via the ngx_cache_purge module instead of NPP touching the filesystem.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Delegates single-URL purging to Nginx itself via the ngx_cache_purge module instead of NPP touching the filesystem — applies to both manual and auto purge triggers.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Broadly compatible with managed hosting and control panels where ngx_cache_purge is pre-compiled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Purge All always uses filesystem operations — HTTP Purge applies only to single-URL and related URL purges.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Falls back to filesystem purge automatically if the module is unavailable — existing workflow is fully preserved.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <button type="button"
                                         id="nppp-test-http-purge"
