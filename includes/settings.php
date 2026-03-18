@@ -46,6 +46,9 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_preload_proxy_host', 'Proxy Host', 'nppp_nginx_cache_proxy_host_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_preload_proxy_port', 'Proxy Port', 'nppp_nginx_cache_proxy_port_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_pctnorm_mode', 'Percent-encoding Case', 'nppp_nginx_cache_pctnorm_mode_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nppp_http_purge_enabled', 'HTTP Purge Fast-Path', 'nppp_http_purge_enabled_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nppp_http_purge_suffix', 'HTTP Purge URL Suffix', 'nppp_http_purge_suffix_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nppp_http_purge_custom_url', 'HTTP Purge Custom Base URL', 'nppp_http_purge_custom_url_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -711,6 +714,50 @@ function nppp_nginx_cache_settings_page() {
                                 </div>
                             </td>
                         </tr>
+                        <!-- HTTP Purge Fast-Path Section -->
+                        <tr valign="top">
+                            <th scope="row">
+                                <span class="dashicons dashicons-rest-api"></span>
+                                <?php echo esc_html__( 'HTTP Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-httppurge">
+                                        <?php nppp_http_purge_enabled_callback(); ?>
+                                    </div>
+                                </div>
+                                <p class="description"><?php echo esc_html__( 'Delegates purging to Nginx itself via the ngx_cache_purge module instead of NPP touching the filesystem.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Broadly compatible with managed hosting and control panels where ngx_cache_purge is pre-compiled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Falls back to filesystem purge automatically if the module is unavailable — existing workflow is fully preserved.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <button type="button"
+                                        id="nppp-test-http-purge"
+                                        class="button button-secondary nginx-reset-regex-button">
+                                    <span class="dashicons dashicons-search" style="margin-top:3px;margin-right:4px;font-size:16px;"></span>
+                                    <?php esc_html_e( 'Test Connection', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr valign="top" id="nppp-http-purge-suffix-row">
+                            <th scope="row">
+                                <span class="dashicons dashicons-admin-links"></span>
+                                <?php echo esc_html__( 'Purge URL Suffix', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <?php nppp_http_purge_suffix_callback(); ?>
+                                <p class="description"><?php echo esc_html__( 'URL prefix for the purge endpoint. Matches the location block in nginx.conf. Default: purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr valign="top" id="nppp-http-purge-custom-url-row">
+                            <th scope="row">
+                                <span class="dashicons dashicons-admin-site-alt3"></span>
+                                <?php echo esc_html__( 'Purge Custom Base URL', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <?php nppp_http_purge_custom_url_callback(); ?>
+                                <p class="description"><?php echo esc_html__( 'Leave blank to auto-build the HTTP purge URL from your site URL and the suffix above.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Set this when the purge endpoint differs from your public site URL — Docker networks, separate Nginx server, non-standard port, or cPanel/Plesk environments with a custom Nginx layer.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                            </td>
+                        </tr>
                         <!-- Start Mail Options Section -->
                         <tr valign="top">
                             <th scope="row" style="padding: 0; padding-top: 15px;">
@@ -1273,6 +1320,42 @@ function nppp_update_cloudflare_apo_sync_option() {
         wp_send_json_success('Option updated successfully.');
     } else {
         wp_send_json_error('Error updating option.');
+    }
+}
+
+// AJAX handler HTTP Purge
+function nppp_update_http_purge_option(): void {
+    if ( isset( $_POST['_wpnonce'] ) ) {
+        $nonce = sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) );
+        if ( ! wp_verify_nonce( $nonce, 'nppp-update-http-purge-option' ) ) {
+            wp_send_json_error( 'Nonce verification failed.' );
+        }
+    } else {
+        wp_send_json_error( 'Nonce is missing.' );
+    }
+ 
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( 'You do not have permission to update this option.' );
+    }
+ 
+    // Whitelist to exactly 'yes' or 'no'
+    $raw        = sanitize_text_field( wp_unslash( $_POST['http_purge'] ?? '' ) );
+    $http_purge = ( $raw === 'yes' ) ? 'yes' : 'no';
+ 
+    $current_options = get_option( 'nginx_cache_settings', [] );
+    $current_options['nppp_http_purge_enabled'] = $http_purge;
+ 
+    // Invalidate detection transient so the next purge re-probes with new state.
+    if ( defined( 'NPPP_HTTP_PURGE_DETECT_KEY' ) ) {
+        delete_transient( NPPP_HTTP_PURGE_DETECT_KEY );
+    }
+ 
+    $updated = update_option( 'nginx_cache_settings', $current_options );
+ 
+    if ( $updated ) {
+        wp_send_json_success( 'Option updated successfully.' );
+    } else {
+        wp_send_json_error( 'Error updating option.' );
     }
 }
 
@@ -2230,6 +2313,42 @@ function nppp_nginx_cache_api_callback() {
     </label>
     <?php
 }
+ 
+// Callback function for HTTP Purge
+function nppp_http_purge_enabled_callback(): void {
+    $options = get_option( 'nginx_cache_settings', [] );
+    $checked = ( isset( $options['nppp_http_purge_enabled'] ) && $options['nppp_http_purge_enabled'] === 'yes' )
+               ? 'checked="checked"' : '';
+    ?>
+    <input type="checkbox"
+           name="nginx_cache_settings[nppp_http_purge_enabled]"
+           class="nppp-onoffswitch-checkbox-httppurge"
+           value="yes"
+           id="nppp_http_purge_enabled"
+           <?php echo esc_attr( $checked ); ?>>
+    <label class="nppp-onoffswitch-label-httppurge" for="nppp_http_purge_enabled">
+        <span class="nppp-onoffswitch-inner-httppurge">
+            <span class="nppp-off-httppurge"><?php esc_html_e( 'OFF', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+            <span class="nppp-on-httppurge"><?php esc_html_e( 'ON', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+        </span>
+        <span class="nppp-onoffswitch-switch-httppurge"></span>
+    </label>
+    <?php
+}
+ 
+// Callback function for HTTP Purge Suffix
+function nppp_http_purge_suffix_callback(): void {
+    $options = get_option( 'nginx_cache_settings', [] );
+    $value   = esc_attr( $options['nppp_http_purge_suffix'] ?? 'purge' );
+    echo "<input type='text' id='nppp_http_purge_suffix' name='nginx_cache_settings[nppp_http_purge_suffix]' value='" . $value . "' class='regular-text' placeholder='purge' />";
+}
+ 
+// Callback function for HTTP Purge Custom URL
+function nppp_http_purge_custom_url_callback(): void {
+    $options = get_option( 'nginx_cache_settings', [] );
+    $value   = esc_attr( $options['nppp_http_purge_custom_url'] ?? '' );
+    echo "<input type='text' id='nppp_http_purge_custom_url' name='nginx_cache_settings[nppp_http_purge_custom_url]' value='" . $value . "' class='regular-text' placeholder='https://docker/purge' />";
+}
 
 // Log error messages
 function nppp_log_error_message($message) {
@@ -2709,6 +2828,70 @@ function nppp_nginx_cache_settings_sanitize($input) {
     $sanitized_input['nppp_related_apply_manual']          = (isset($input['nppp_related_apply_manual'])          && $input['nppp_related_apply_manual'] === 'yes') ? 'yes' : 'no';
     $sanitized_input['nppp_related_preload_after_manual']  = (isset($input['nppp_related_preload_after_manual'])  && $input['nppp_related_preload_after_manual'] === 'yes') ? 'yes' : 'no';
 
+    // HTTP Purge
+    // Toggle
+    $sanitized_input['nppp_http_purge_enabled'] =
+        ( isset( $input['nppp_http_purge_enabled'] ) && $input['nppp_http_purge_enabled'] === 'yes' )
+        ? 'yes' : 'no';
+
+    // URL suffix
+    $raw_suffix = isset( $input['nppp_http_purge_suffix'] )
+                  ? trim( sanitize_text_field( $input['nppp_http_purge_suffix'] ), '/' )
+                  : '';
+    if ( $raw_suffix === '' ) {
+        // Empty = user cleared the field. Reset to default and tell them.
+        $sanitized_input['nppp_http_purge_suffix'] = 'purge';
+        add_settings_error(
+            'nppp_nginx_cache_settings_group',
+            'nppp-http-purge-suffix',
+            __( 'ERROR OPTION: HTTP Purge Suffix cannot be empty. Reset to "purge".', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'error'
+        );
+    } elseif ( preg_match( '/^[a-zA-Z0-9_\-]+$/', $raw_suffix ) ) {
+        $sanitized_input['nppp_http_purge_suffix'] = $raw_suffix;
+    } else {
+        $sanitized_input['nppp_http_purge_suffix'] = 'purge';
+        add_settings_error(
+            'nppp_nginx_cache_settings_group',
+            'nppp-http-purge-suffix',
+            __( 'ERROR OPTION: HTTP Purge Suffix must contain only letters, numbers, hyphens, or underscores. Reset to "purge".', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'error'
+        );
+    }
+
+    // Custom base URL
+    $raw_custom = isset( $input['nppp_http_purge_custom_url'] )
+                  ? untrailingslashit( esc_url_raw( trim( $input['nppp_http_purge_custom_url'] ) ) )
+                  : '';
+    if ( $raw_custom !== '' ) {
+        $scheme = strtolower( (string) wp_parse_url( $raw_custom, PHP_URL_SCHEME ) );
+        if ( in_array( $scheme, [ 'http', 'https' ], true ) && filter_var( $raw_custom, FILTER_VALIDATE_URL ) ) {
+            $sanitized_input['nppp_http_purge_custom_url'] = $raw_custom;
+        } else {
+            $sanitized_input['nppp_http_purge_custom_url'] = '';
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'nppp-http-purge-custom-url',
+                __( 'ERROR OPTION: HTTP Purge Custom Base URL must be a valid http:// or https:// URL. It has been cleared.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'error'
+            );
+        }
+    } else {
+        $sanitized_input['nppp_http_purge_custom_url'] = '';
+    }
+
+    // Invalidate detection transient whenever any HTTP purge setting changes.
+    $existing_for_http = get_option( 'nginx_cache_settings', [] );
+    if (
+        ( $existing_for_http['nppp_http_purge_enabled']    ?? 'no'    ) !== $sanitized_input['nppp_http_purge_enabled']    ||
+        ( $existing_for_http['nppp_http_purge_suffix']      ?? 'purge' ) !== $sanitized_input['nppp_http_purge_suffix']     ||
+        ( $existing_for_http['nppp_http_purge_custom_url']  ?? ''      ) !== $sanitized_input['nppp_http_purge_custom_url']
+    ) {
+        if ( defined( 'NPPP_HTTP_PURGE_DETECT_KEY' ) ) {
+            delete_transient( NPPP_HTTP_PURGE_DETECT_KEY );
+        }
+    }
+
     // Sanitize pctnorm
     if (!empty($input['nginx_cache_pctnorm_mode']) ) {
         $mode = sanitize_text_field($input['nginx_cache_pctnorm_mode']);
@@ -3028,6 +3211,9 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_preload_enable_proxy'  => 'no',
         'nginx_cache_schedule'              => 'no',
         'nginx_cache_pctnorm_mode'          => 'off',
+        'nppp_http_purge_enabled'           => 'no',
+        'nppp_http_purge_suffix'            => 'purge',
+        'nppp_http_purge_custom_url'        => '',
     );
 
     // Retrieve existing options (if any)
