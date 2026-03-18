@@ -1925,6 +1925,79 @@ $(document).ready(function() {
         }, 'json');
     });
 
+    // Update HTTP purge fast-path toggle when state changes
+    $('#nppp_http_purge_enabled').change(function() {
+        var httpPurgeElement = $(this);
+        var labelSpan        = httpPurgeElement.next('.nppp-onoffswitch-label-httppurge');
+        var labelOffset      = labelSpan.offset();
+        var notifLeft        = labelOffset.left + labelSpan.outerWidth() + 10;
+        var notifTop         = labelOffset.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action:     'nppp_update_http_purge_option',
+            http_purge: isChecked,
+            _wpnonce:   nppp_admin_data.http_purge_nonce
+        }, function(response) {
+            if (response.success) {
+                var notification       = document.createElement('div');
+                notification.textContent = '\u2714';
+                notification.style.cssText = [
+                    'position:absolute',
+                    'left:'  + notifLeft + 'px',
+                    'top:'   + notifTop  + 'px',
+                    'background-color:#50C878',
+                    'color:#fff',
+                    'padding:8px 12px',
+                    'transition:opacity 0.3s ease-in-out',
+                    'opacity:1',
+                    'z-index:9999',
+                    'font-size:13px',
+                    'font-weight:700'
+                ].join(';');
+                document.body.appendChild(notification);
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() { document.body.removeChild(notification); }, 300);
+                }, 1000);
+            } else {
+                $('#nppp_http_purge_enabled').prop('checked', !$('#nppp_http_purge_enabled').prop('checked'));
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+            }
+        }, 'json');
+    });
+ 
+    // Test Connection button — probes the ngx_cache_purge module endpoint
+    $('#nppp-test-http-purge').on('click', function() {
+        var $btn    = $(this);
+        var $result = $('#nppp-http-purge-test-result');
+ 
+        $result.css('color', '').text('Testing\u2026');
+        $btn.prop('disabled', true);
+ 
+        $.ajax({
+            url:  nppp_admin_data.ajaxurl,
+            type: 'POST',
+            data: {
+                action:   'nppp_test_http_purge',
+                _wpnonce: nppp_admin_data.test_http_purge_nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    $result.css('color', '#3CB371').text(response.data.message);
+                } else {
+                    $result.css('color', '#d9534f').text(response.data.message);
+                }
+            },
+            error: function() {
+                $result.css('color', '#d9534f').text('Request failed. Check your browser console.');
+            },
+            complete: function() {
+                $btn.prop('disabled', false);
+            }
+        });
+    });
+
     // Related Pages
     (function npppSetupRelatedAutoSave() {
         const $npppRelWrappers = $('.nppp-related-pages').not('[data-nppp-rel-init]');
@@ -3052,6 +3125,31 @@ $(document).ready(function() {
         }
     });
 
+    // Toggle switch rules for HTTP purge fast-path
+    var isHttpPurgeChecked = $('#nppp_http_purge_enabled').prop('checked');
+    if (isHttpPurgeChecked) {
+        $('.nppp-onoffswitch-switch-httppurge').css('background', '#66b317');
+        $('.nppp-on-httppurge').css('color', '#ffffff');
+        $('.nppp-off-httppurge').css('color', '#000000');
+    } else {
+        $('.nppp-onoffswitch-switch-httppurge').css('background', '#ea1919');
+        $('.nppp-on-httppurge').css('color', '#000000');
+        $('.nppp-off-httppurge').css('color', '#ffffff');
+    }
+ 
+    $('#nppp_http_purge_enabled').change(function() {
+        var isHttpPurgeChecked = $(this).prop('checked');
+        if (isHttpPurgeChecked) {
+            $('.nppp-onoffswitch-switch-httppurge').css('background', '#66b317');
+            $('.nppp-on-httppurge').css('color', '#ffffff');
+            $('.nppp-off-httppurge').css('color', '#000000');
+        } else {
+            $('.nppp-onoffswitch-switch-httppurge').css('background', '#ea1919');
+            $('.nppp-on-httppurge').css('color', '#000000');
+            $('.nppp-off-httppurge').css('color', '#ffffff');
+        }
+    });
+
     // Toggle switch rules for auto preload
     var isChecked = $('#nginx_cache_auto_preload').prop('checked');
     // Update the toggle switch based on the checkbox state
@@ -3522,7 +3620,9 @@ $(document).ready(function() {
         '#nginx_cache_api_key',
         '#nginx_cache_key_custom_regex',
         '#nginx_cache_preload_proxy_port',
-        '#nginx_cache_preload_proxy_host'
+        '#nginx_cache_preload_proxy_host',
+        '#nppp_http_purge_suffix',
+        '#nppp_http_purge_custom_url'
     ];
 
     // Initialize originalValues with current field values
