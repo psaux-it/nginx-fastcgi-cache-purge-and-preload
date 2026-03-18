@@ -507,9 +507,24 @@ function nppp_create_scheduled_event_preload_status_callback() {
         $elapsed_time_str = __('(unable to calculate elapsed time)', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
+    // Parse extra metrics — zero extra I/O
+    $download_size  = '';
+    $transfer_speed = '';
+    $error_count    = 0;
+    if ( ! empty( $log_contents ) ) {
+        if ( preg_match( '/Downloaded:.*?,\s+([\d.]+\s*\w+)\s+in\s+[\d.]+s/i', $log_contents, $ds ) ) {
+            $download_size = trim( $ds[1] );
+        }
+        if ( preg_match( '/Downloaded:.*?\(([\d.]+\s+\w+\/s)\)/i', $log_contents, $sp ) ) {
+            $transfer_speed = trim( $sp[1] );
+        }
+        // Same pattern preload-progress.php uses for broken URL detection
+        $error_count = preg_match_all( '/ERROR\s+404/i', $log_contents );
+    }
+
     // Send Mail
     $mail_message = __('The Nginx cache preload operation has been completed', 'fastcgi-cache-purge-and-preload-nginx');
-    nppp_send_mail_now($mail_message, $elapsed_time_str);
+    nppp_send_mail_now($mail_message, $elapsed_time_str, $final_total, $mobile_enabled, $last_preload_time, $download_size, $transfer_speed, $error_count);
 
     // Log the preload process status
     if ($mobile_enabled) {
