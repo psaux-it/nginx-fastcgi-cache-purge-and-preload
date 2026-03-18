@@ -251,6 +251,11 @@ function nppp_dashboard_widget() {
             'status' => isset($settings['nginx_cache_purge_on_update']) && $settings['nginx_cache_purge_on_update'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon' => 'dashicons-trash'
         ],
+        'http_purge' => [
+            'label' => __('HTTP Purge', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status' => isset($settings['nppp_http_purge_enabled']) && $settings['nppp_http_purge_enabled'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
+            'icon' => 'dashicons-migrate'
+        ],
         'auto_preload' => [
             'label' => __('Auto Preload', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nginx_cache_auto_preload']) && $settings['nginx_cache_auto_preload'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
@@ -260,6 +265,11 @@ function nppp_dashboard_widget() {
             'label' => __('Preload Mobile', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nginx_cache_auto_preload_mobile']) && $settings['nginx_cache_auto_preload_mobile'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon' => 'dashicons-smartphone'
+        ],
+        'preload_watchdog' => [
+            'label' => __('Preload Watchdog', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status' => isset($settings['nginx_cache_watchdog']) && $settings['nginx_cache_watchdog'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
+            'icon' => 'dashicons-visibility'
         ],
         'enable_proxy' => [
             'label' => __('Proxy', 'fastcgi-cache-purge-and-preload-nginx'),
