@@ -103,8 +103,11 @@ function nppp_send_mail_now(
     $mobile_pass = $mobile_enabled ? '&#10003; Yes' : '&#10007; No';
 
     // METRIC: Trigger
-    $trigger = ( isset( $options['nginx_cache_schedule'] ) && $options['nginx_cache_schedule'] === 'yes' )
-        ? 'Scheduled' : 'Manual';
+    $trigger = get_transient( 'nppp_preload_trigger_' . md5('nppp') );
+    if ( empty( $trigger ) ) {
+        $trigger = '–';
+    }
+    delete_transient( 'nppp_preload_trigger_' . md5('nppp') );
 
     // Template
     $template_file = __DIR__ . '/mail.html';
