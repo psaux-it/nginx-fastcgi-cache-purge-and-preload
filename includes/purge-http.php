@@ -181,17 +181,6 @@ function nppp_http_purge_try_first( string $url, bool $silent = false ): bool {
     }
 
     if ( $code === 200 ) {
-        if ( ! $silent ) {
-            nppp_display_admin_notice( 'success',
-                sprintf(
-                    /* translators: %s: page URL */
-                    __( 'SUCCESS HTTP PURGE: Nginx module purged %s — filesystem scan skipped.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                    esc_url( $url )
-                ),
-                true,
-                false
-            );
-        }
         return true;
     }
 
