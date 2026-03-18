@@ -959,25 +959,21 @@ listen = /var/run/php-fcgi-websiteuser.sock</code></pre>
         </div>
         <div class="nppp-premium-widget">
             <div id="nppp-ad">
-                <div class="textcenter">
-                    <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="open-nppp-upsell-top" data-pro-ad="sidebar-logo">
-                        <img
-                            src="<?php echo esc_url($image_url_space); ?>"
-                            alt="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
-                            title="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
-                            width="100"
-                            height="100">
-                    </a>
-                </div>
-                <h3 class="textcenter">Hope you are enjoying NPP! Do you still need assistance with the server side integration? Get our server integration service now and optimize your website's caching performance!</h3>
+                <h3 class="textcenter"><?php echo esc_html__('Hope you are enjoying NPP! If it saves you time, consider giving it a star or sponsoring its development.', 'fastcgi-cache-purge-and-preload-nginx'); ?></h3>
                 <p class="textcenter">
-                    <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="open-nppp-upsell" data-pro-ad="sidebar-logo">
                         <img
-                            src="<?php echo esc_url($image_url_ad); ?>"
-                            alt="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
-                            title="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
-                            width="100%"
-                            height="auto">
+                        src="<?php echo esc_url($image_url_ad); ?>"
+                        alt="<?php echo esc_attr__('Give a Star', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
+                        title="<?php echo esc_attr__('Give a Star or Sponsor NPP', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
+                        width="100%"
+                        height="auto">
+                </p>
+                <p class="textcenter">
+                    <a href="https://wordpress.org/support/plugin/fastcgi-cache-purge-and-preload-nginx/reviews/#new-post" target="_blank" rel="noopener" class="button button-secondary" style="margin-right: 8px;">
+                        ⭐ <?php echo esc_html__('Give a Star', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                    </a>
+                    <a href="https://github.com/sponsors/psaux-it" target="_blank" rel="noopener" class="button button-secondary">
+                        ❤️ <?php echo esc_html__('Sponsor', 'fastcgi-cache-purge-and-preload-nginx'); ?>
                     </a>
                 </p>
             </div>
