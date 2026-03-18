@@ -1969,12 +1969,9 @@ $(document).ready(function() {
  
     // Test Connection button — probes the ngx_cache_purge module endpoint
     $('#nppp-test-http-purge').on('click', function() {
-        var $btn    = $(this);
-        var $result = $('#nppp-http-purge-test-result');
- 
-        $result.css('color', '').text('Testing\u2026');
+        var $btn = $(this);
         $btn.prop('disabled', true);
- 
+
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
             type: 'POST',
@@ -1983,14 +1980,11 @@ $(document).ready(function() {
                 _wpnonce: nppp_admin_data.test_http_purge_nonce
             },
             success: function(response) {
-                if (response.success) {
-                    $result.css('color', '#3CB371').text(response.data.message);
-                } else {
-                    $result.css('color', '#d9534f').text(response.data.message);
-                }
+                var type = response.success ? 'success' : 'error';
+                npppToast(response.data.message, type, 8000);
             },
             error: function() {
-                $result.css('color', '#d9534f').text('Request failed. Check your browser console.');
+                npppToast(__('Request failed. Check your browser console.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             },
             complete: function() {
                 $btn.prop('disabled', false);
@@ -3126,6 +3120,11 @@ $(document).ready(function() {
     });
 
     // Toggle switch rules for HTTP purge fast-path
+    function npppHttpPurgeSubOptions(isChecked) {
+        $('#nppp-http-purge-suffix-row, #nppp-http-purge-custom-url-row').toggle(isChecked);
+    }
+    npppHttpPurgeSubOptions($('#nppp_http_purge_enabled').prop('checked'));
+
     var isHttpPurgeChecked = $('#nppp_http_purge_enabled').prop('checked');
     if (isHttpPurgeChecked) {
         $('.nppp-onoffswitch-switch-httppurge').css('background', '#66b317');
