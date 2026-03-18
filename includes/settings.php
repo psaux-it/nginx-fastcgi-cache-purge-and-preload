@@ -730,9 +730,11 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description"><?php echo esc_html__( 'Broadly compatible with managed hosting and control panels where ngx_cache_purge is pre-compiled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Purge All always uses filesystem operations — HTTP Purge applies only to single-URL and related URL purges.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Falls back to filesystem purge automatically if the module is unavailable — existing workflow is fully preserved.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <?php $is_available = nppp_detect_cache_purge_module(); ?>
                                 <button type="button"
                                         id="nppp-test-http-purge"
-                                        class="button button-secondary nginx-reset-regex-button">
+                                        class="button button-secondary nginx-reset-regex-button"
+                                        <?php echo $is_available ? '' : 'disabled="disabled"'; ?>>
                                     <span class="dashicons dashicons-search" style="margin-top:3px;margin-right:4px;font-size:16px;"></span>
                                     <?php esc_html_e( 'Test Connection', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </button>
@@ -2317,16 +2319,27 @@ function nppp_nginx_cache_api_callback() {
  
 // Callback function for HTTP Purge
 function nppp_http_purge_enabled_callback(): void {
-    $options = get_option( 'nginx_cache_settings', [] );
-    $checked = ( isset( $options['nppp_http_purge_enabled'] ) && $options['nppp_http_purge_enabled'] === 'yes' )
-               ? 'checked="checked"' : '';
+    $options      = get_option( 'nginx_cache_settings', [] );
+    $is_checked   = isset( $options['nppp_http_purge_enabled'] ) && $options['nppp_http_purge_enabled'] === 'yes';
+    $checked      = $is_checked ? 'checked="checked"' : '';
+    $is_available = nppp_detect_cache_purge_module();
+
+    // If the toggle is on but module disappeared, clear the stored value.
+    if ( ! $is_available && isset( $options['nppp_http_purge_enabled'] ) && $options['nppp_http_purge_enabled'] !== 'no' ) {
+        $options['nppp_http_purge_enabled'] = 'no';
+        update_option( 'nginx_cache_settings', $options );
+        $checked = '';
+    }
+
+    $disabled = $is_available ? '' : 'disabled="disabled"';
     ?>
     <input type="checkbox"
            name="nginx_cache_settings[nppp_http_purge_enabled]"
            class="nppp-onoffswitch-checkbox-httppurge"
            value="yes"
            id="nppp_http_purge_enabled"
-           <?php echo esc_attr( $checked ); ?>>
+           <?php echo esc_attr( $checked ); ?>
+           <?php echo esc_attr( $disabled ); ?>>
     <label class="nppp-onoffswitch-label-httppurge" for="nppp_http_purge_enabled">
         <span class="nppp-onoffswitch-inner-httppurge">
             <span class="nppp-off-httppurge"><?php esc_html_e( 'OFF', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
@@ -2334,6 +2347,14 @@ function nppp_http_purge_enabled_callback(): void {
         </span>
         <span class="nppp-onoffswitch-switch-httppurge"></span>
     </label>
+    <?php if ( ! $is_available ) : ?>
+        <div class="nppp-related-pages" aria-live="polite">
+            <em class="nppp-hint" role="note" style="max-width:max-content; opacity: 0.5;">
+                <span class="dashicons dashicons-lock" aria-hidden="true"></span>
+                <?php echo esc_html__( 'ngx_cache_purge module not detected. Install the module and reload Nginx to enable HTTP Purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            </em>
+        </div>
+    <?php endif; ?>
     <?php
 }
  
