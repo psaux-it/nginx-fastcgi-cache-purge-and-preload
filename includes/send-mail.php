@@ -22,7 +22,7 @@ function nppp_send_mail_now(
     $last_preload_time = '',
     $download_size  = '',
     $transfer_speed = '',
-    $error_count    = 0,
+    $error_count    = 0
 ) {
     $options           = get_option( 'nginx_cache_settings' );
     $nginx_cache_email = isset( $options['nginx_cache_email'] ) ? $options['nginx_cache_email'] : '';
@@ -54,9 +54,8 @@ function nppp_send_mail_now(
     $download_size_str  = ! empty( $download_size )  ? $download_size  : '–';
     $transfer_speed_str = ! empty( $transfer_speed ) ? $transfer_speed : '–';
 
-    // METRIC: Connection errors & SSL warnings
+    // METRIC: 404 Broken URLs
     $errors_str   = number_format( max( 0, (int) $error_count ) );
-    $warnings_str = number_format( max( 0, (int) $warn_count  ) );
 
     // METRIC: Finish timestamp
     $finish_time = ! empty( $last_preload_time ) ? $last_preload_time : '–';
