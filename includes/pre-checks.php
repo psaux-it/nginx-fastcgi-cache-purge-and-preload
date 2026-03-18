@@ -117,23 +117,6 @@ function nppp_detect_cache_purge_module(): bool {
     // Set env
     nppp_prepare_request_env( true );
 
-    // Method 1
-    $so_paths = [
-        '/usr/lib64/nginx/modules/ngx_http_cache_purge_module.so',
-        '/usr/lib/nginx/modules/ngx_http_cache_purge_module.so',
-        '/usr/local/libexec/nginx/ngx_http_cache_purge_module.so',
-        '/usr/local/openresty/nginx/modules/ngx_http_cache_purge_module.so',
-        '/etc/nginx/modules/ngx_http_cache_purge_module.so',
-    ];
-
-    foreach ( $so_paths as $so_path ) {
-        if ( $wp_filesystem->exists( $so_path ) ) {
-            set_transient( $transient_key, 1, HOUR_IN_SECONDS );
-            return true;
-        }
-    }
-
-    // Method 2
     if ( function_exists( 'shell_exec' ) ) {
         $output = (string) shell_exec( 'nginx -T 2>&1 | grep -i "cache_purge\|ngx_http_cache_purge"' );
         $found  = trim( $output ) !== '';
