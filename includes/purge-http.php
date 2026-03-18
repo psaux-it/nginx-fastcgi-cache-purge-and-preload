@@ -75,6 +75,9 @@ function nppp_http_purge_detect( bool $force_fresh = false ): bool {
         'timeout'     => 3,
         'sslverify'   => false,
         'redirection' => 0,
+        'headers'     => [
+            'Host' => (string) wp_parse_url( home_url(), PHP_URL_HOST ),
+        ],
     ] );
 
     // Connection-level failure
@@ -144,6 +147,9 @@ function nppp_http_purge_try_first( string $url, bool $silent = false ): bool {
         'timeout'   => 3,
         'sslverify' => false,
         'redirection' => 0,
+        'headers'     => [
+            'Host' => (string) wp_parse_url( home_url(), PHP_URL_HOST ),
+        ],
     ] );
 
     // Connection failure — invalidate detection so next purge re-probes
@@ -213,11 +219,11 @@ function nppp_ajax_test_http_purge(): void {
 
     if ( $ok ) {
         wp_send_json_success( [
-            'message' => __( 'Module detected. Nginx ngx_cache_purge endpoint is active — HTTP fast-path enabled.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'message' => __( 'Module detected. Nginx ngx_cache_purge module is active — HTTP Purge fast-path enabled.', 'fastcgi-cache-purge-and-preload-nginx' ),
         ] );
     } else {
         wp_send_json_error( [
-            'message' => __( 'Module not detected. Check ngx_cache_purge is compiled, purge location block exists. Filesystem purge only.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'message' => __( 'Module not detected. Check ngx_cache_purge is compiled, purge location block exists.', 'fastcgi-cache-purge-and-preload-nginx' ),
         ] );
     }
 }
