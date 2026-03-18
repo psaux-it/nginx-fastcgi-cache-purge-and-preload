@@ -166,7 +166,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     // HTTP 200 → entry gone from shared memory + disk atomically → skip filesystem.
     // Anything else → fall through to Fast-Path 2 (index) or recursive scan.
 
-    if ( nppp_http_purge_try_first( $current_page_url, (bool) $chain_autopreload ) ) {
+    if ( nppp_http_purge_try_first( $current_page_url, true ) ) {
         $is_manual    = ! $nppp_auto_purge;
 
         if ( ! $chain_autopreload ) {
@@ -178,16 +178,16 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         }
 
         $related_urls = nppp_get_related_urls_for_single( $current_page_url );
- 
+
         // Purge related URLs (homepage, category archives, etc.)
         // will try HTTP first for each related URL,
         // then falls back to filesystem for any misses.
         nppp_purge_urls_silent( $nginx_cache_path, $related_urls );
- 
+
         // All cache work done — release lock before blocking I/O below.
         nppp_release_purge_lock();
         $nppp_lock_released = true;
- 
+
         // Auto preload AFTER lock released — avoids holding lock during blocking network I/O
         if ( $chain_autopreload ) {
             nppp_preload_cache_on_update( $current_page_url, true );
@@ -202,7 +202,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         if ( $should_preload_related ) {
             nppp_preload_urls_fire_and_forget( $related_urls );
         }
- 
+
         // Cloudflare purge cache
         $post_id = (int) url_to_postid( $current_page_url );
         do_action(
@@ -212,7 +212,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
             $post_id,
             (bool) $nppp_auto_purge
         );
- 
+
         return;
     }
 
