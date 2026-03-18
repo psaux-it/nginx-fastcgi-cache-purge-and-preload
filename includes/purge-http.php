@@ -221,4 +221,3 @@ function nppp_ajax_test_http_purge(): void {
         ] );
     }
 }
-add_action( 'wp_ajax_nppp_test_http_purge', 'nppp_ajax_test_http_purge' );
