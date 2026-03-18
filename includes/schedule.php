@@ -512,8 +512,9 @@ function nppp_create_scheduled_event_preload_status_callback() {
     $transfer_speed = '';
     $error_count    = 0;
     if ( ! empty( $log_contents ) ) {
-        if ( preg_match( '/Downloaded:.*?,\s+([\d.]+\s*\w+)\s+in\s+[\d.]+s/i', $log_contents, $ds ) ) {
-            $download_size = trim( $ds[1] );
+        if ( preg_match( '/Downloaded:.*?,\s+([\d.]+\s*)([KMG])\s+in\s+[\d.]+s/i', $log_contents, $ds ) ) {
+            $unit_map = [ 'K' => 'KB', 'M' => 'MB', 'G' => 'GB' ];
+            $download_size = trim( $ds[1] ) . ( $unit_map[ strtoupper( $ds[2] ) ] ?? $ds[2] );
         }
         if ( preg_match( '/Downloaded:.*?\(([\d.]+\s+\w+\/s)\)/i', $log_contents, $sp ) ) {
             $transfer_speed = trim( $sp[1] );
