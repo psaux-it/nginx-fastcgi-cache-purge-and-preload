@@ -2316,7 +2316,7 @@ function nppp_nginx_cache_api_callback() {
     </label>
     <?php
 }
- 
+
 // Callback function for HTTP Purge
 function nppp_http_purge_enabled_callback(): void {
     $options      = get_option( 'nginx_cache_settings', [] );
@@ -2357,14 +2357,14 @@ function nppp_http_purge_enabled_callback(): void {
     <?php endif; ?>
     <?php
 }
- 
+
 // Callback function for HTTP Purge Suffix
 function nppp_http_purge_suffix_callback(): void {
     $options = get_option( 'nginx_cache_settings', [] );
     $value   = esc_attr( $options['nppp_http_purge_suffix'] ?? 'purge' );
     echo "<input type='text' id='nppp_http_purge_suffix' name='nginx_cache_settings[nppp_http_purge_suffix]' value='" . $value . "' class='regular-text' placeholder='purge' />";
 }
- 
+
 // Callback function for HTTP Purge Custom URL
 function nppp_http_purge_custom_url_callback(): void {
     $options = get_option( 'nginx_cache_settings', [] );
