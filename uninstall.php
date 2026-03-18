@@ -46,6 +46,7 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_preload_cycle_start_' . md5($static_key_base),
         'nppp_ping_token_' . md5($static_key_base),
         'nppp_safexec_ok',
+        'nppp_http_purge_module_ok',
     );
 
     // Delete each transient
