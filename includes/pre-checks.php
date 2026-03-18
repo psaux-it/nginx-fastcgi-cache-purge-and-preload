@@ -97,6 +97,54 @@ if (! function_exists('nppp_get_wget_compatibility')) {
     }
 }
 
+// Detect nginx cache purge module
+function nppp_detect_cache_purge_module(): bool {
+    $transient_key = 'nppp_cache_purge_module_' . md5( 'nppp' );
+    $cached        = get_transient( $transient_key );
+
+    if ( $cached !== false ) {
+        return (bool) $cached;
+    }
+
+    // Initialize WP filesystem
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ( $wp_filesystem === false ) {
+        // Don't cache — let next request retry
+        return false;
+    }
+
+    // Set env
+    nppp_prepare_request_env( true );
+
+    // Method 1
+    $so_paths = [
+        '/usr/lib64/nginx/modules/ngx_http_cache_purge_module.so',
+        '/usr/lib/nginx/modules/ngx_http_cache_purge_module.so',
+        '/usr/local/libexec/nginx/ngx_http_cache_purge_module.so',
+        '/usr/local/openresty/nginx/modules/ngx_http_cache_purge_module.so',
+        '/etc/nginx/modules/ngx_http_cache_purge_module.so',
+    ];
+
+    foreach ( $so_paths as $so_path ) {
+        if ( $wp_filesystem->exists( $so_path ) ) {
+            set_transient( $transient_key, 1, HOUR_IN_SECONDS );
+            return true;
+        }
+    }
+
+    // Method 2
+    if ( function_exists( 'shell_exec' ) ) {
+        $output = (string) shell_exec( 'nginx -T 2>&1 | grep -i "cache_purge\|ngx_http_cache_purge"' );
+        $found  = trim( $output ) !== '';
+        set_transient( $transient_key, (int) $found, HOUR_IN_SECONDS );
+        return $found;
+    }
+
+    set_transient( $transient_key, 0, HOUR_IN_SECONDS );
+    return false;
+}
+
 // Nginx detector used by Setup.
 if (! function_exists('nppp_precheck_nginx_detected')) {
     function nppp_precheck_nginx_detected(bool $honor_assume = true): bool {
