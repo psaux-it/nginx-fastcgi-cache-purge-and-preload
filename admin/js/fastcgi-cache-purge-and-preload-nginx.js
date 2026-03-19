@@ -1966,31 +1966,6 @@ $(document).ready(function() {
             }
         }, 'json');
     });
- 
-    // Test Connection button — probes the ngx_cache_purge module endpoint
-    $('#nppp-test-http-purge').on('click', function() {
-        var $btn = $(this);
-        $btn.prop('disabled', true);
-
-        $.ajax({
-            url:  nppp_admin_data.ajaxurl,
-            type: 'POST',
-            data: {
-                action:   'nppp_test_http_purge',
-                _wpnonce: nppp_admin_data.test_http_purge_nonce
-            },
-            success: function(response) {
-                var type = response.success ? 'success' : 'error';
-                npppToast(response.data.message, type, 8000);
-            },
-            error: function() {
-                npppToast(__('Request failed. Check your browser console.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
-            },
-            complete: function() {
-                $btn.prop('disabled', false);
-            }
-        });
-    });
 
     // Related Pages
     (function npppSetupRelatedAutoSave() {
