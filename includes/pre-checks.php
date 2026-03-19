@@ -101,14 +101,12 @@ if (! function_exists('nppp_get_wget_compatibility')) {
 function nppp_detect_cache_purge_module(): bool {
     $transient_key = 'nppp_cache_purge_module_' . md5( 'nppp' );
     $cached        = get_transient( $transient_key );
-
     if ( $cached !== false ) {
         return (bool) $cached;
     }
 
     // Initialize WP filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
-
     if ( $wp_filesystem === false ) {
         // Don't cache — let next request retry
         return false;
@@ -117,15 +115,38 @@ function nppp_detect_cache_purge_module(): bool {
     // Set env
     nppp_prepare_request_env( true );
 
+    $found = false;
+
     if ( function_exists( 'shell_exec' ) ) {
-        $output = (string) shell_exec( 'nginx -T 2>&1 | grep -i "cache_purge\|ngx_http_cache_purge"' );
-        $found  = trim( $output ) !== '';
-        set_transient( $transient_key, (int) $found, HOUR_IN_SECONDS );
-        return $found;
+
+        // Check 1: active load_module directive in nginx config
+        $config_output = (string) shell_exec( 'nginx -T 2>&1 | grep -iE "ngx_http_cache_purge"' );
+
+        foreach ( explode( "\n", $config_output ) as $line ) {
+            $line = trim( $line );
+
+            // Skip empty lines and commented-out directives
+            if ( $line === '' || $line[0] === '#' ) {
+                continue;
+            }
+
+            if ( preg_match( '/^\s*load_module\s+[^\s]*ngx_http_cache_purge/i', $line ) ) {
+                $found = true;
+                break;
+            }
+        }
+
+        // Check 2: statically compiled into the binary
+        if ( ! $found ) {
+            $build_output = (string) shell_exec( 'nginx -V 2>&1' );
+            if ( preg_match( '/--add-module=[^\s]*ngx_cache_purge/i', $build_output ) ) {
+                $found = true;
+            }
+        }
     }
 
-    set_transient( $transient_key, 0, HOUR_IN_SECONDS );
-    return false;
+    set_transient( $transient_key, (int) $found, HOUR_IN_SECONDS );
+    return $found;
 }
 
 // Nginx detector used by Setup.
