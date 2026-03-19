@@ -94,7 +94,127 @@ function nppp_my_faq_html() {
                         <p>HTTP Purge is entirely optional. If the module is not present, not compiled, or the purge location block is not configured in Nginx, NPP falls back to the index and filesystem paths automatically. The existing workflow is fully preserved — nothing breaks.</p>
 
                         <h4><strong>How to enable HTTP Purge</strong></h4>
-                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and turn on <strong>HTTP Purge</strong>. Use the <strong>Test Connection</strong> button to verify the module is reachable. Works out of the box on stacks that ship with <code>ngx_cache_purge</code> pre-compiled: GridPane, WordOps, EasyEngine, CentminMod, RunCloud, SlickStack, and servers using the Ubuntu <code>nginx-extras</code> package.</p>
+                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and enable <strong>HTTP Purge</strong>. This works out of the box on stacks that include <code>ngx_cache_purge</code> precompiled, such as popular managed hosting platforms, control panels, and servers using the Ubuntu <code>nginx-extras</code> package.</p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">Why does NPP's cache warm get bypassed by real visitors? (Accept-Encoding / Double Cache File)</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>The Problem: NPP Warms Cache, Visitors Create Another, Cache MISS</strong></h3>
+
+                        <p style="font-size: 14px;">
+                            NPP's preloader always sends requests with an <strong>empty <code>Accept-Encoding</code> header</strong> (<code>--header='Accept-Encoding: '</code>).
+                            This is intentional — it tells Nginx to cache plain, uncompressed HTML.
+                        </p>
+
+                        <p style="font-size: 14px;">
+                            However, if <strong>PHP compresses output itself</strong> (via <code>zlib.output_compression = On</code> in <code>php.ini</code>),
+                            it adds a <code>Vary: Accept-Encoding</code> response header. Nginx's cache engine
+                            then computes an MD5 <em>variant hash</em> from the request's <code>Accept-Encoding</code> value.
+                        </p>
+
+                        <p style="font-size: 14px;">
+                            When a real browser arrives with <code>Accept-Encoding: gzip, deflate, br</code>, its variant hash <strong>does not match</strong>
+                            the one stored by NPP. Nginx writes a <strong>second cache file</strong> — effectively bypassing the warm cache entry entirely.
+                        </p>
+
+                        <p style="font-size: 14px;">
+                            This affects <strong>fastcgi_cache, proxy_cache, uwsgi_cache, and scgi_cache</strong> equally.
+                        </p>
+
+                        <h3><strong>The Fix: Two Required Changes</strong></h3>
+
+                        <h4><strong>Step 1 — Disable PHP-level compression (php.ini)</strong></h4>
+                        <p style="font-size: 14px;">PHP must not compress output or add <code>Vary: Accept-Encoding</code>. Let Nginx handle all compression.</p>
+                        <pre>; /etc/php/fpm-phpX.Y/php.ini
+zlib.output_compression = Off</pre>
+                        <p style="font-size: 14px;">Reload PHP-FPM after saving: <code>systemctl reload php-fpm</code></p>
+
+                        <h4><strong>Step 2 — Add fastcgi_ignore_headers Vary to your Nginx PHP block</strong></h4>
+                        <p style="font-size: 14px;">Even with PHP compression off, other upstream components may still emit a <code>Vary</code> header. This directive tells Nginx to ignore it completely during cache operations:</p>
+
+<pre>location ~ \.php$ {
+    fastcgi_cache_key "$scheme$request_method$host$request_uri";
+    fastcgi_pass unix:/var/run/php-fcgi-yoursite.sock;
+    include /etc/nginx/fastcgi_params;
+
+    fastcgi_param  HTTP_ACCEPT_ENCODING  "";  # ← strip Accept-Encoding before it reaches PHP
+    fastcgi_ignore_headers Vary;              # ← prevents secondary cache file creation
+
+    fastcgi_cache YOUR_ZONE;
+    fastcgi_cache_valid 30d;
+    fastcgi_cache_bypass $skip_cache;
+    fastcgi_no_cache $skip_cache;
+    fastcgi_cache_use_stale error timeout updating invalid_header http_500 http_503;
+    fastcgi_cache_lock on;
+}</pre>
+
+                        <p style="font-size: 14px;">
+                            <strong>Why both?</strong> <code>fastcgi_param HTTP_ACCEPT_ENCODING ""</code> prevents PHP from ever seeing the client's
+                            <code>Accept-Encoding</code> value — so PHP cannot produce compressed output or emit <code>Vary: Accept-Encoding</code>
+                            in the first place. <code>fastcgi_ignore_headers Vary</code> is the second line of defence: even if a <code>Vary</code>
+                            header arrives from any upstream source, Nginx will not act on it during cache operations.
+                            Together they guarantee a single cache file per URL regardless of what the client sends.
+                        </p>
+                        <p style="font-size: 14px;">
+                            📌 If you already set <code>fastcgi_param HTTP_ACCEPT_ENCODING ""</code> in your shared
+                            <code>fastcgi_params</code> file, you do not need to repeat it here — it applies automatically
+                            via <code>include /etc/nginx/fastcgi_params</code>.
+                        </p>
+                        <p style="font-size: 14px;">
+                            Reload Nginx after saving: <code>nginx -t &amp;&amp; systemctl reload nginx</code>
+                        </p>
+
+                        <h4><strong>Step 3 — Let Nginx handle gzip (nginx.conf http block)</strong></h4>
+                        <p style="font-size: 14px;">With PHP compression disabled, Nginx becomes the sole compression layer — which is the correct architecture. Confirm these are present in your <code>http {}</code> block:</p>
+<pre>gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_types text/plain text/css application/javascript application/json text/xml application/xml text/javascript;</pre>
+
+                        <p style="font-size: 14px;">
+                            <code>gzip_vary on</code> adds <code>Vary: Accept-Encoding</code> to responses served from Nginx — but this does <strong>not</strong> affect cache file creation
+                            because it fires <em>after</em> the cache lookup, not before. The cache key is already resolved by then.
+                        </p>
+
+                        <h3><strong>Why fastcgi_ignore_headers Vary is Safe Here</strong></h3>
+                        <p style="font-size: 14px;">
+                            Normally suppressing <code>Vary</code> would risk serving gzip-compressed content to clients that cannot decompress it.
+                            But with <code>zlib.output_compression = Off</code>, PHP never produces compressed output — so there is only one content variant.
+                            Nginx then compresses on the fly per-client using its own <code>gzip</code> module. One cache file, served correctly to all clients.
+                        </p>
+
+                        <h3><strong>Before / After</strong></h3>
+                        <table class="responsive-table">
+                            <thead>
+                                <tr>
+                                    <th>Scenario</th>
+                                    <th>Cache files per URL</th>
+                                    <th>NPP warm hit for real visitors</th>
+                                    <th>Risk</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>zlib.output_compression = On</code>, no fix</td>
+                                    <td>2 (primary + secondary)</td>
+                                    <td>❌ Miss — visitor gets secondary file</td>
+                                    <td>Wasted RAM/disk, NPP preload ineffective</td>
+                                </tr>
+                                <tr>
+                                    <td><code>zlib.output_compression = Off</code> + <code>fastcgi_ignore_headers Vary</code></td>
+                                    <td>1 ✅</td>
+                                    <td>✅ HIT — NPP warmed entry is served</td>
+                                    <td>None</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <p style="font-size: 14px;">
+                            📌 <strong>Note:</strong> This issue exists on all Nginx cache types — <code>fastcgi_cache</code>, <code>proxy_cache</code>, <code>uwsgi_cache</code>, <code>scgi_cache</code>.
+                            Apply <code>fastcgi_ignore_headers Vary</code> / <code>proxy_ignore_headers Vary</code> / <code>uwsgi_ignore_headers Vary</code> accordingly for your setup.
+                        </p>
                     </div>
                 </div>
 
@@ -107,7 +227,7 @@ function nppp_my_faq_html() {
                         <h4><strong>Required Nginx config</strong></h4>
                         <p>You need two things in your Nginx server block: a <code>fastcgi_cache_path</code> with a named zone, and a location block that handles purge requests using that zone. A minimal working example:</p>
 
-<pre><code>## In the http {} block:
+<pre>## In the http {} block:
 fastcgi_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m inactive=60m;
 fastcgi_cache_key "$scheme$request_method$host$request_uri";
 
@@ -120,12 +240,12 @@ location ~ /purge(/.*) {
     allow 127.0.0.1;
     deny all;
     fastcgi_cache_purge my_cache "$scheme$request_method$host$1";
-}</code></pre>
+}</pre>
 
                         <p>The location prefix (<code>/purge</code>) must match what NPP is configured to send purge requests to. The cache key in the purge block (<code>$scheme$request_method$host$1</code>) must match your <code>fastcgi_cache_key</code> exactly — with <code>$1</code> capturing the path after <code>/purge</code>.</p>
 
                         <h4><strong>How NPP builds the purge URL</strong></h4>
-                        <p>When NPP purges <code>https://example.com/my-page/</code> it sends a GET request to <code>https://example.com/purge/my-page/</code>. Nginx matches the purge location, strips <code>/purge</code>, and deletes the cache entry for the remaining path. HTTP 200 = purge confirmed. HTTP 412 = path not in cache (already gone). Any other response = NPP falls through to filesystem.</p>
+                        <p>When NPP purges <code>https://example.com/my-page/</code> it sends a GET request to <code>https://example.com/purge/my-page/</code>. Nginx matches the purge location, strips <code>/purge</code>, and deletes the cache entry for the remaining path. HTTP 200 = purge confirmed. Any other response = NPP falls through to filesystem.</p>
 
                         <h4><strong>NPP settings for HTTP Purge</strong></h4>
                         <p>Go to <strong>Settings → NPP Settings → Advanced</strong>. Three options control how NPP builds the purge URL:</p>
@@ -141,17 +261,6 @@ location ~ /purge(/.*) {
                             <li><code>http://localhost/purge</code> — explicit localhost</li>
                         </ul>
                         <p>When a Custom Base URL is set the suffix field is ignored entirely.</p>
-
-                        <h4><strong>Detection probe</strong></h4>
-                        <p>The <strong>Test Connection</strong> button (and automatic background detection) works by sending a GET request to a random path under the purge endpoint — e.g. <code>https://example.com/purge/nppp-probe-abc123</code>. Since this path can never be in cache, the <code>ngx_cache_purge</code> module always responds with HTTP 412. NPP treats HTTP 412 with a small response body as proof the module is active. Any other response means the module is unavailable and NPP stays on the filesystem path. Detection result is cached for 12 hours and re-checked whenever a purge returns an unexpected response code.</p>
-
-                        <h4><strong>Common issues</strong></h4>
-                        <ul>
-                            <li><strong>Test Connection returns "not detected"</strong> — The purge location block is missing, the module is not compiled, or the allow/deny rules are blocking PHP's request. Check that <code>allow 127.0.0.1</code> covers the IP PHP is making requests from (in Docker this is the container IP, not <code>127.0.0.1</code>).</li>
-                            <li><strong>Cache key mismatch</strong> — If the purge location cache key does not exactly match <code>fastcgi_cache_key</code>, Nginx will look in the wrong shared memory slot and always return 412 even for cached pages. Double-check both keys are identical.</li>
-                            <li><strong>Docker / reverse proxy</strong> — PHP inside a container cannot reach <code>https://example.com/purge</code> via the public hostname. Use the <strong>Custom Base URL</strong> option with the internal Docker service name or container IP instead.</li>
-                            <li><strong>HTTPS with self-signed cert</strong> — NPP disables SSL verification for purge requests so self-signed certificates are not a problem.</li>
-                        </ul>
                     </div>
                 </div>
 
@@ -381,7 +490,7 @@ safexec --kill=&lt;pid&gt;
                         <p>NPP and Redis Object Cache are two separate caching layers. NPP manages the Nginx full-page cache (FastCGI cache on disk or in RAM). Redis Object Cache stores WordPress database query results and object data in memory. This sync feature keeps both layers consistent with each other through a bidirectional relationship.</p>
 
                         <h4><strong>Requirements</strong></h4>
-                        <p>The <strong>Redis Object Cache</strong> plugin by Till Krüss must be installed, active, and connected to a live Redis server. NPP checks for both the drop-in (<code>WP_REDIS_VERSION</code> constant) and a live connection (<code>redis_status() === true</code>) at runtime. If Redis is unreachable the toggle auto-disables itself.</p>
+                        <p>The <strong>Redis Object Cache</strong> plugin must be installed, active, and connected to a live Redis server. NPP checks for both the drop-in (<code>WP_REDIS_VERSION</code> constant) and a live connection (<code>redis_status() === true</code>) at runtime. If Redis is unreachable the toggle auto-disables itself.</p>
 
                         <h4><strong>How to enable</strong></h4>
                         <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and turn on <strong>Redis Object Cache Sync</strong>. The toggle shows as <em>Unavailable</em> in the dashboard widget when the Redis plugin is not installed or Redis is disconnected.</p>
@@ -946,13 +1055,13 @@ WantedBy=multi-user.target</pre>
                         <p>Adjust PHP-FPM pool settings in the configuration file to specify the user, group, ownership, and permissions for the PHP-FPM process.</p>
 
                         <pre>
-<code>[websiteuser.com]
+[websiteuser.com]
 user = websiteuser
 group = websiteuser
 listen.owner = nginx
 listen.group = nginx
 listen.mode = 0660
-listen = /var/run/php-fcgi-websiteuser.sock</code></pre>
+listen = /var/run/php-fcgi-websiteuser.sock</pre>
                     </div>
                 </div>
             </div>
