@@ -730,14 +730,6 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description"><?php echo esc_html__( 'Broadly compatible with managed hosting and control panels where ngx_cache_purge is pre-compiled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Purge All always uses filesystem operations — HTTP Purge applies only to single-URL and related URL purges.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Falls back to filesystem purge automatically if the module is unavailable — existing workflow is fully preserved.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <?php $is_available = nppp_detect_cache_purge_module(); ?>
-                                <button type="button"
-                                        id="nppp-test-http-purge"
-                                        class="button button-secondary nginx-reset-regex-button"
-                                        <?php echo $is_available ? '' : 'disabled="disabled"'; ?>>
-                                    <span class="dashicons dashicons-search" style="margin-top:3px;margin-right:4px;font-size:16px;"></span>
-                                    <?php esc_html_e( 'Test Connection', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                </button>
                             </td>
                         </tr>
                         <tr valign="top" id="nppp-http-purge-suffix-row">
@@ -1336,25 +1328,20 @@ function nppp_update_http_purge_option(): void {
     } else {
         wp_send_json_error( 'Nonce is missing.' );
     }
- 
+
     if ( ! current_user_can( 'manage_options' ) ) {
         wp_send_json_error( 'You do not have permission to update this option.' );
     }
- 
+
     // Whitelist to exactly 'yes' or 'no'
     $raw        = sanitize_text_field( wp_unslash( $_POST['http_purge'] ?? '' ) );
     $http_purge = ( $raw === 'yes' ) ? 'yes' : 'no';
- 
+
     $current_options = get_option( 'nginx_cache_settings', [] );
     $current_options['nppp_http_purge_enabled'] = $http_purge;
- 
-    // Invalidate detection transient so the next purge re-probes with new state.
-    if ( defined( 'NPPP_HTTP_PURGE_DETECT_KEY' ) ) {
-        delete_transient( NPPP_HTTP_PURGE_DETECT_KEY );
-    }
- 
+
     $updated = update_option( 'nginx_cache_settings', $current_options );
- 
+
     if ( $updated ) {
         wp_send_json_success( 'Option updated successfully.' );
     } else {
@@ -2900,18 +2887,6 @@ function nppp_nginx_cache_settings_sanitize($input) {
         }
     } else {
         $sanitized_input['nppp_http_purge_custom_url'] = '';
-    }
-
-    // Invalidate detection transient whenever any HTTP purge setting changes.
-    $existing_for_http = get_option( 'nginx_cache_settings', [] );
-    if (
-        ( $existing_for_http['nppp_http_purge_enabled']    ?? 'no'    ) !== $sanitized_input['nppp_http_purge_enabled']    ||
-        ( $existing_for_http['nppp_http_purge_suffix']      ?? 'purge' ) !== $sanitized_input['nppp_http_purge_suffix']     ||
-        ( $existing_for_http['nppp_http_purge_custom_url']  ?? ''      ) !== $sanitized_input['nppp_http_purge_custom_url']
-    ) {
-        if ( defined( 'NPPP_HTTP_PURGE_DETECT_KEY' ) ) {
-            delete_transient( NPPP_HTTP_PURGE_DETECT_KEY );
-        }
     }
 
     // Sanitize pctnorm
