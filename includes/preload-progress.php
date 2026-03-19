@@ -107,7 +107,7 @@ function nppp_nginx_cache_preload_progress($request) {
                 }
 
                 if (stripos($line, 'Total wall clock time:') !== false) {
-                    if (preg_match('/Total wall clock time:\s*((?:[0-9]+m\s*)?[0-9]+s)/i', $line, $match)) {
+                    if (preg_match('/Total wall clock time:\s*((?:[0-9]+h\s*)?(?:[0-9]+m\s*)?[0-9]+(?:\.[0-9]+)?s)/i', $line, $match)) {
                         $time_info = trim($match[1]);
                     }
                 }
