@@ -166,7 +166,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     // HTTP 200 → entry gone from shared memory + disk atomically → skip filesystem.
     // Anything else → fall through to Fast-Path 2 (index) or recursive scan.
 
-    if ( nppp_http_purge_try_first( $current_page_url, true ) ) {
+    if ( nppp_http_purge_try_first( $current_page_url ) ) {
         $is_manual    = ! $nppp_auto_purge;
 
         if ( ! $chain_autopreload ) {
