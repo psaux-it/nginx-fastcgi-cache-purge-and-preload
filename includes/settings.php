@@ -2309,24 +2309,14 @@ function nppp_http_purge_enabled_callback(): void {
     $options      = get_option( 'nginx_cache_settings', [] );
     $is_checked   = isset( $options['nppp_http_purge_enabled'] ) && $options['nppp_http_purge_enabled'] === 'yes';
     $checked      = $is_checked ? 'checked="checked"' : '';
-    $is_available = nppp_detect_cache_purge_module();
 
-    // If the toggle is on but module disappeared, clear the stored value.
-    if ( ! $is_available && isset( $options['nppp_http_purge_enabled'] ) && $options['nppp_http_purge_enabled'] !== 'no' ) {
-        $options['nppp_http_purge_enabled'] = 'no';
-        update_option( 'nginx_cache_settings', $options );
-        $checked = '';
-    }
-
-    $disabled = $is_available ? '' : 'disabled="disabled"';
     ?>
     <input type="checkbox"
            name="nginx_cache_settings[nppp_http_purge_enabled]"
            class="nppp-onoffswitch-checkbox-httppurge"
            value="yes"
            id="nppp_http_purge_enabled"
-           <?php echo esc_attr( $checked ); ?>
-           <?php echo esc_attr( $disabled ); ?>>
+           <?php echo esc_attr( $checked ); ?>>
     <label class="nppp-onoffswitch-label-httppurge" for="nppp_http_purge_enabled">
         <span class="nppp-onoffswitch-inner-httppurge">
             <span class="nppp-off-httppurge"><?php esc_html_e( 'OFF', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
@@ -2334,14 +2324,6 @@ function nppp_http_purge_enabled_callback(): void {
         </span>
         <span class="nppp-onoffswitch-switch-httppurge"></span>
     </label>
-    <?php if ( ! $is_available ) : ?>
-        <div class="nppp-related-pages" aria-live="polite">
-            <em class="nppp-hint" role="note" style="max-width:max-content; opacity: 0.5;">
-                <span class="dashicons dashicons-lock" aria-hidden="true"></span>
-                <?php echo esc_html__( 'Cache purge module not detected. Install the purge module and reload Nginx to enable HTTP Purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-            </em>
-        </div>
-    <?php endif; ?>
     <?php
 }
 
