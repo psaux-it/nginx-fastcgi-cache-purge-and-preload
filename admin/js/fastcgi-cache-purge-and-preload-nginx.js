@@ -563,10 +563,10 @@ $(document).ready(function() {
                     let secs = 0;
                     const h = str.match(/(\d+)\s*h/i);
                     const m = str.match(/(\d+)\s*m/i);
-                    const s = str.match(/(\d+)\s*s/i);
+                    const s = str.match(/([\d.]+)\s*s/i);
                     if (h) secs += parseInt(h[1]) * 3600;
                     if (m) secs += parseInt(m[1]) * 60;
-                    if (s) secs += parseInt(s[1]);
+                    if (s) secs += parseFloat(s[1]);
                     return secs;
                 };
 
