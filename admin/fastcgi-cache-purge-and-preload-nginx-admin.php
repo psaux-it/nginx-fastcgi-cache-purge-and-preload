@@ -206,7 +206,6 @@ add_action('wp_ajax_nppp_clear_plugin_cache', 'nppp_clear_plugin_cache_callback'
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
 add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_default_cache_key_regex_option');
 add_action('wp_ajax_nppp_update_http_purge_option', 'nppp_update_http_purge_option');
-add_action('wp_ajax_nppp_test_http_purge', 'nppp_ajax_test_http_purge');
 if ($nppp_auto_purge) {
     add_action('transition_post_status', 'nppp_purge_cache_on_update', 10, 3);
     add_action('delete_post', 'nppp_purge_cache_on_delete_post', 10, 2);
