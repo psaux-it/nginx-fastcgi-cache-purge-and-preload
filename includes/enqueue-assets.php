@@ -110,8 +110,6 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     $update_enable_proxy_option_nonce = wp_create_nonce('nppp-update-enable-proxy-option');
     // Create a nonce for HTTP purge fast-path toggle
     $update_http_purge_option_nonce = wp_create_nonce('nppp-update-http-purge-option');
-    // Create a nonce for HTTP purge test connection button
-    $test_http_purge_nonce = wp_create_nonce('nppp_test_http_purge_nonce');
 
     // Localize nonce values for plugin main js
     wp_localize_script('nppp_admin-js', 'nppp_admin_data', array(
@@ -149,7 +147,6 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'col_cache_status' => __( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ),
         'pctnorm_nonce' => wp_create_nonce('nppp-update-pctnorm-mode'),
         'http_purge_nonce' => $update_http_purge_option_nonce,
-        'test_http_purge_nonce' => $test_http_purge_nonce,
     ));
 }
 
