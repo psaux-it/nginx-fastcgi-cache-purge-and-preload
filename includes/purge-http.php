@@ -87,7 +87,6 @@ function nppp_http_purge_try_first( string $url ): bool {
     }
 
     if ( (int) wp_remote_retrieve_response_code( $response ) === 200 ) {
-        set_transient( 'nppp_cache_purge_module_' . md5( 'nppp' ), 1, HOUR_IN_SECONDS );
         return true;
     }
 
