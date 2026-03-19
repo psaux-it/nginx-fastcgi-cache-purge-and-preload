@@ -150,10 +150,10 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
     // Anything else → fall through to Fast-Path 2 (index) or recursive scan.
 
     $nppp_http_resolved = 0;
-    if ( nppp_http_purge_enabled() && nppp_http_purge_detect() ) {
+    if ( nppp_http_purge_enabled() ) {
         foreach ( array_keys( $pending ) as $nppp_rel_key ) {
             $nppp_rel_entry  = $pending[ $nppp_rel_key ];
-            $nppp_http_hit   = nppp_http_purge_try_first( $nppp_rel_entry['original'], true );
+            $nppp_http_hit   = nppp_http_purge_try_first( $nppp_rel_entry['original'] );
             if ( $nppp_http_hit ) {
                 nppp_display_admin_notice( 'success', sprintf(
                     /* translators: %s: related page URL */
