@@ -422,7 +422,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
             }
 
             // Get wall clock time
-            if (preg_match('/^Total wall clock time:\s*((?:[0-9]+m\s*)?[0-9]+s)/im', $log_contents, $match)) {
+            if (preg_match('/^Total wall clock time:\s*((?:[0-9]+h\s*)?(?:[0-9]+m\s*)?[0-9]+(?:\.[0-9]+)?s)/im', $log_contents, $match)) {
                 $elapsed_time_str = trim($match[1]);
             }
 
