@@ -2351,7 +2351,7 @@ function nppp_http_purge_enabled_callback(): void {
         <div class="nppp-related-pages" aria-live="polite">
             <em class="nppp-hint" role="note" style="max-width:max-content; opacity: 0.5;">
                 <span class="dashicons dashicons-lock" aria-hidden="true"></span>
-                <?php echo esc_html__( 'ngx_cache_purge module not detected. Install the module and reload Nginx to enable HTTP Purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                <?php echo esc_html__( 'Cache purge module not detected. Install the purge module and reload Nginx to enable HTTP Purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
             </em>
         </div>
     <?php endif; ?>
