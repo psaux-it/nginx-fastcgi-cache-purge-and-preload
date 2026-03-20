@@ -4,7 +4,7 @@ Donate link: https://github.com/sponsors/psaux-it
 Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.5
 Requires PHP: 7.4
-Tested up to: 6.8
+Tested up to: 6.9.4
 Stable tag: 2.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -18,7 +18,7 @@ The most comprehensive solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI)
 ➡️ **Resources:**
 
 • Visit the [NPP Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload) - Docs, issues & contributions and more.
-• Visit the [safexec Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec) - NPP's privilege-dropping wrapper.
+• Visit the [safexec Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec) - NPP's privilege-dropping C wrapper.
 • Explore [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) - Ready to run full stack Nginx Docker setup.
 • Refer to the plugin’s **Help tab** for additional guidance.
 
@@ -140,6 +140,71 @@ NPP restricts cache paths to prevent accidental deletion of system files. Allowe
 8. Front-end Admin Bar
 
 == Changelog ==
+
+= 2.1.5 =
+
+Release date: 2026-03-22
+
+* Added: MILESTONE: HTTP Purge via ngx_cache_purge module — fastest purge path when the Nginx module is present. Falls back to filesystem automatically when not available.
+* Added: Purge Index — single-page purges now use a persistent URL index to skip full directory scans. Index is updated automatically after each purge.
+* Added: Preload Watchdog — ensures post-preload tasks run immediately when preloading finishes, without depending on visitor traffic to trigger WP-Cron.
+* Added: Mobile Floating Action Button (FAB) — logged-in admins on mobile devices get a floating action button with Purge and Preload actions on the frontend.
+* Added: Frontend toast notifications — purge and preload result messages on the frontend now display as clean toast notifications.
+* Added: Cache Coverage ratio in the dashboard widget and Status tab — shows live Cached / Not Cached / Total counts based on the last preload snapshot. Refreshable on demand from the dashboard widget without a page reload.
+* Added: Cloudflare APO Sync — automatically mirrors NPP purge actions to Cloudflare edge cache. Requires the official Cloudflare WordPress plugin with APO or Plugin-Specific Cache enabled.(Credit: @doctorproctor)
+* Added: Redis Object Cache Sync — bidirectional sync with the Redis Object Cache plugin. NPP Purge All flushes Redis; a Redis flush triggers a full Nginx cache purge.
+* Added: WooCommerce Auto-Purge — automatically purges cache on stock quantity changes, stock status changes, and order cancellations.
+* Added: Broken URLs list in the Status tab — tracks and displays URLs that returned 404 during the last preload crawl.
+* Added: Column filter dropdowns in the Advanced tab for faster URL browsing on large sites.
+* Added: Server load and PHP-FPM pool metrics in the Preload Progress section.
+* Added: Cache disk/RAM size indicator in the Status tab with colour-coded thresholds.
+* Added: URL Normalization status in the dashboard widget.
+* Added: Persistent crawl snapshot — NPP now saves a completed preload crawl as a persistent snapshot. The Cache Analyzer (Advanced Tab) read from this snapshot, ensuring accurate data is always available between preload runs.
+* Added: Expanded allowed cache paths — improved support for control panels and non-standard setups.
+* Added: Non-admin users with the new nppp_purge_cache capability can trigger auto-purge on content saves without access to any NPP settings or UI.
+* Added: Purge now fires on permanent post deletion and on WordPress background auto-updates.
+* Added: Preload progress now shows three distinct completion states.
+* Added: Smart cache key warnings based on live regex validation against the actual cache files.
+* Added: Product tag and post tag archives are now included in Purge Scope related pages.
+* Added: PHP Response Timeout — configurable read timeout for preload. Recommended to increase for WooCommerce stores or sites with heavy plugins.
+* Added: Dashboard widget now shows HTTP Purge, Cloudflare APO, and Redis Object Cache status alongside existing indicators.
+* Added: Help tab expanded with new sections covering HTTP Purge setup, Accept-Encoding double-cache issue fix, Cloudflare APO Sync, Redis Object Cache Sync, Preload Watchdog, Cache Coverage Ratio, and a feature dependency map.
+* Added: Help tab now documents the Accept-Encoding / Vary header double-cache issue and how to fix it in Nginx to prevent preload-warmed cache being bypassed by real visitor requests.
+* Security: MILESTONE: Plugin bootstrap is now lazy-loaded — NPP stays completely dormant on requests where no cache operation is needed.
+* Security: REST API now returns 403 when disabled instead of 200. Client IP resolution now validates forwarded headers against a trusted proxy list.
+* Security: Cache purge is now aborted if the configured Nginx cache path is inside or overlaps the WordPress installation directory, preventing accidental deletion of WordPress files. (Credit: @doctorproctor)
+* Security: CORS wildcard headers removed from REST API endpoints — cross-origin browser requests to NPP endpoints are no longer permitted.
+* Fixed: Comment purge now fires only when the approved comment count actually changes, not on every comment event.
+* Fixed: Published post taken offline (to draft, trash, or private) now correctly purges cache.
+* Fixed: Auto-purge no longer triggers on WooCommerce orders, coupons, and other private post types that are never publicly cached.
+* Fixed: Trashed post purge now uses the correct pre-trash URL instead of the WordPress-modified trashed slug.
+* Fixed: Scheduled posts going live during WP-Cron now correctly purge cache.
+* Fixed: Single plugin and theme updates now correctly trigger cache purge, not only bulk updates.
+* Fixed: Gutenberg purge now also fires on trash and permanent delete via the block editor REST API.
+* Fixed: Purge operations are now serialized with an atomic lock — concurrent purges from multiple sessions no longer collide.
+* Fixed: PHP timeout is now disabled before large purge and preload operations to prevent mid-operation kills on large caches.
+* Fixed: Preload flags overhauled — improved retry logic, IPv4 preference, and configurable read timeout.
+* Fixed: WP_Filesystem no longer prompts for credentials in non-interactive contexts such as WP-Cron or REST API calls.
+* Fixed: Advanced tab correctly retains the full MISS list immediately after a Purge All.
+* Fixed: Auto-purge no longer fires on fresh install before settings have been saved.
+* Fixed: GNU Wget2 (aliased as wget on some distributions) is now detected and rejected. GNU Wget 1.x is required.
+* Fixed: cpulimit is now skipped entirely when the CPU limit is set to 100%
+* Fixed: Preload flags overhauled — improved retry logic, IPv4 preference, and configurable read timeout.
+* Fixed: Long preloads no longer silently break plugin state after completion.
+* Fixed: wp-config.php writes during Setup now use atomic temp-file replacement to prevent corruption on interrupted writes.
+* Fixed: Existing tracking cron jobs and options left over from versions 2.0.1–2.1.4 are automatically cleaned up on upgrade.
+* Fixed: All runtime files (PID files, logs, crawl snapshot) are now stored in wp-content/uploads instead of the plugin directory. This prevents data loss during plugin updates and avoids writing to directories that should be read-only on hardened servers.
+* Fixed: safexec no longer crashes with "pathconf: Permission denied" on multi-site setups or environments where the current working directory is not traversable. safexec now switches to a safe working directory before executing.
+* Fixed: REST API rate limiting now runs after authentication instead of before — unauthenticated requests can no longer exhaust rate limit slots and lock out legitimate API clients.
+* Fixed: Filesystem performance significantly improved across purge, status, and cache analysis operations — related URL purges now complete in a single cache directory walk instead of one walk per URL (up to 5x less I/O on sites with Purge Scope enabled), directory iterators now use LEAVES_ONLY mode eliminating redundant directory visits, and SPL native file checks replace slower WP_Filesystem equivalents throughout.
+* Fixed: Preload requests no longer fail with invalid header errors (proxy) — header and user-agent values were incorrectly wrapped in literal double-quote characters which produced malformed HTTP headers.
+* Fixed: Uninstall now performs complete cleanup — all plugin options, all transient groups, runtime files (logs, PID files, crawl snapshot), the runtime directory itself, and scheduled cron hooks are all removed. Multisite installations are fully supported — cleanup runs on every site in the network.
+* Fixed: Status tab Nginx Cache Paths display completely redesigned — each detected path now shows inline contextual badges (Active, Other vhost, Path Blocked) and a cache type badge (FastCGI, Proxy, SCGI, uWSGI). Active path detection now works correctly for FUSE mount setups. A reverse-proxy cache notice is shown when the active path is a proxy_cache_path (common on cPanel and Plesk). Symlinked cache paths no longer incorrectly fail the traversal check.
+* Changed: Preload completion email template completely redesigned — now shows a stats dashboard with Crawl Time, URLs Crawled, Transfer Size, Average Speed, Cache Coverage, Cache Size, Broken URLs, Mobile Pass status, Trigger source, and Finish Time. Includes dark mode support and responsive mobile layout.
+* Changed: Allowed Nginx cache path roots updated — /opt/ removed (too broad, risk of data loss), /cache/ added (used by GridPane, RunCloud, SpinupWP and other control panels). If your cache was stored under /opt/, move it to a supported location and re-save settings.
+* Removed: All data collection and opt-in tracking completely removed. NPP collects no data whatsoever.
+* Removed: Systemd service management removed — the ability to restart the npp-wordpress FUSE mount service directly from the WordPress admin has been dropped. Use standard system tools to manage the service instead.
+* Compatibility: Tested with WordPress 6.9.4, PHP 8.4, Nginx 1.29.6, FUSE 3.18.2, and bindfs 1.18.4.
 
 = 2.1.4 =
 
@@ -446,6 +511,9 @@ Release date: 2024-03-14
 * Initial release.
 
 == Upgrade Notice ==
+
+= 2.1.5 =
+Security and data-safety fixes included. Upgrade immediately.
 
 = 2.1.4 =
 Introduces Nginx Cache Analyzer, safexec hardened execution, Purge Scope for related pages, and a Setup Wizard. Recommended upgrade for all users.
