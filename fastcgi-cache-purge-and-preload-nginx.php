@@ -10,7 +10,7 @@
  * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
  * Text Domain:       fastcgi-cache-purge-and-preload-nginx
  * Domain Path:       /languages
- * Requires at least: 6.3
+ * Requires at least: 6.5
  * Requires PHP:      7.4
  */
 
