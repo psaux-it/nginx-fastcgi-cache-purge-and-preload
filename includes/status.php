@@ -79,14 +79,32 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_wget_urls_cache_' . md5($static_key_base),
         'nppp_wget_compatibility_' . md5($static_key_base),
         'nppp_missing_commands_' . md5($static_key_base),
-        'nppp_preload_phase_' . md5($static_key_base),
-        'nppp_preload_cycle_start_' . md5($static_key_base),
+        'nppp_preload_trigger_' . md5($static_key_base),
+        'nppp_http_purge_endpoint_broken',
+        'nppp_wget_urls_cache_prev_key',
         'nppp_safexec_ok',
     );
 
     // Delete each known transient
     foreach ($transients as $transient) {
         delete_transient($transient);
+    }
+
+    // Transients that must not be cleared while a preload is running:
+    //   nppp_preload_phase_        — tick monitor reads this every 5s to track desktop/mobile phase
+    //   nppp_preload_cycle_start_  — needed at completion to calculate total elapsed time
+    //   nppp_ping_token_           — watchdog validates this token when preload finishes;
+    //                                deleting it causes watchdog to 403 and post-preload tasks never fire
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ( ! nppp_is_preload_running( $wp_filesystem ) ) {
+        $job_transients = array(
+            'nppp_preload_phase_'       . md5($static_key_base),
+            'nppp_preload_cycle_start_' . md5($static_key_base),
+            'nppp_ping_token_'          . md5($static_key_base),
+        );
+        foreach ($job_transients as $transient) {
+            delete_transient($transient);
+        }
     }
 
     // Safe clean up of dynamic transients directly in DB.
