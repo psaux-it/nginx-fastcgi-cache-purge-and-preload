@@ -22,9 +22,9 @@
     max-width: min(92vw, 420px);
     border-left: 4px solid #ffb900;
     border-radius: 8px;
-    background: #fff;
-    color: #1d2327;
-    box-shadow: 0 8px 22px rgba(0, 0, 0, .18);
+    background: #1e2430;
+    color: #e8eaed;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .45);
     padding: 10px 40px 10px 38px;
     animation: nppp-front-slide-in .18s ease-out;
 }
@@ -47,6 +47,8 @@
     font-size: 13px;
     line-height: 1.45;
     word-break: break-word;
+    font-weight: 500;
+    letter-spacing: 0.01em;
 }
 
 .nppp-front-toast .nppp-front-close {
@@ -55,7 +57,7 @@
     right: 8px;
     border: 0;
     background: transparent;
-    color: #646970;
+    color: #9aa0a6;
     font-size: 18px;
     line-height: 1;
     cursor: pointer;
@@ -63,7 +65,7 @@
 }
 
 .nppp-front-toast .nppp-front-close:hover {
-    color: #1d2327;
+    color: #e8eaed;
 }
 
 .nppp-front-toast.nppp-front-is-success {
