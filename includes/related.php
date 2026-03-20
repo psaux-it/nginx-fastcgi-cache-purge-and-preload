@@ -181,7 +181,7 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
                     __( 'INFO HTTP PURGE: Nginx cache purge attempted, but the related page %s is not currently found in the cache. (Index + filesystem scan skipped.)', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $nppp_rel_entry['decoded']
                 ), true, false );
- 
+
                 $results[ $nppp_rel_entry['original'] ] = [
                     'found'   => false,
                     'deleted' => false,
