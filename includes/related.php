@@ -145,28 +145,48 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
     }
 
     // FAST-PATH 1 — HTTP (Nginx module)
-    // Asks the ngx_cache_purge module to delete the entry via HTTP.
-    // HTTP 200 → entry gone from shared memory + disk atomically → skip filesystem.
-    // Anything else → fall through to Fast-Path 2 (index) or recursive scan.
+    // Asks the module to purge cache via HTTP.
+    //
+    //   true   — HTTP 200: cache purged atomically → remove from pending.
+    //   'miss' — HTTP 412: nginx confirmed not in cache (v2.5.6+) → remove from
+    //            pending, skip filesystem scan for this URL.
+    //   false  — Any other outcome → leave in pending, fall through to index/scan.
 
     $nppp_http_resolved = 0;
+    $nppp_http_miss     = 0;
+
     if ( nppp_http_purge_enabled() ) {
         foreach ( array_keys( $pending ) as $nppp_rel_key ) {
             $nppp_rel_entry  = $pending[ $nppp_rel_key ];
-            $nppp_http_hit   = nppp_http_purge_try_first( $nppp_rel_entry['original'] );
-            if ( $nppp_http_hit ) {
+            $nppp_http_result = nppp_http_purge_try_first( $nppp_rel_entry['original'] );
+
+            // HTTP 200
+            if ( $nppp_http_result === true ) {
                 nppp_display_admin_notice( 'success', sprintf(
                     /* translators: %s: related page URL */
-                    __( 'SUCCESS HTTP PURGE: Nginx module purged related page %s — filesystem scan skipped.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    __( 'SUCCESS HTTP PURGE: Nginx cache purged for related page %s (Index + filesystem scan skipped.)', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $nppp_rel_entry['decoded']
                 ), true, false );
 
-                // HTTP 200
                 $results[ $nppp_rel_entry['original'] ] = [
                     'found'   => true,
                     'deleted' => true,
                 ];
                 $nppp_http_resolved++;
+                unset( $pending[ $nppp_rel_key ] );
+            // HTTP 412
+            } elseif ( $nppp_http_result === 'miss' ) {
+                nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: %s: related page URL */
+                    __( 'INFO HTTP PURGE: Nginx cache purge attempted, but the related page %s is not currently found in the cache. (Index + filesystem scan skipped.)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $nppp_rel_entry['decoded']
+                ), true, false );
+ 
+                $results[ $nppp_rel_entry['original'] ] = [
+                    'found'   => false,
+                    'deleted' => false,
+                ];
+                $nppp_http_miss++;
                 unset( $pending[ $nppp_rel_key ] );
             }
         }
@@ -227,10 +247,11 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
     }
 
     nppp_display_admin_notice( 'info', sprintf(
-        /* translators: %1$d: HTTP-resolved count, %2$d: index-resolved count, %3$d: scan fallback count */
-        __( 'INFO INDEX: Related purge — %1$d via HTTP, %2$d via index, %3$d falling back to scan', 'fastcgi-cache-purge-and-preload-nginx' ),
+        /* translators: %1$d: HTTP 200 resolved, %2$d: HTTP 412 miss, %3$d: index resolved, %4$d: scan fallback */
+        __( 'INFO INDEX: Related purge — %1$d via HTTP (200), %2$d HTTP miss (412), %3$d via index, %4$d falling back to scan', 'fastcgi-cache-purge-and-preload-nginx' ),
         $nppp_http_resolved,
-        count( $urls ) - count( $pending ) - $nppp_http_resolved,
+        $nppp_http_miss,
+        count( $urls ) - count( $pending ) - $nppp_http_resolved - $nppp_http_miss,
         count( $pending )
     ), true, false );
 
