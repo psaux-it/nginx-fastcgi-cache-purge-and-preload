@@ -3110,7 +3110,7 @@ $(document).ready(function() {
         $('.nppp-on-httppurge').css('color', '#000000');
         $('.nppp-off-httppurge').css('color', '#ffffff');
     }
- 
+
     $('#nppp_http_purge_enabled').change(function() {
         var isHttpPurgeChecked = $(this).prop('checked');
         npppHttpPurgeSubOptions(isHttpPurgeChecked);
