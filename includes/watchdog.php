@@ -163,9 +163,9 @@ function nppp_spawn_preload_watcher( int $wget_pid, string $token ): bool {
     $watchdog = sprintf(
         'echo $$ > %s; while kill -0 %d 2>/dev/null; do sleep 5; done; '
         . 'wget -q -O /dev/null --no-check-certificate '
-		. '--no-config --no-cookies --prefer-family=IPv4 '
-		. '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 '
-		. '--tries=2 --max-redirect=2 '
+        . '--no-config --no-cookies --prefer-family=IPv4 '
+        . '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 '
+        . '--tries=2 --max-redirect=2 '
         . '--post-data %s %s',
         escapeshellarg( $watcher_pid_file ),
         $wget_pid,
@@ -237,7 +237,7 @@ function nppp_kill_preload_watcher(): bool {
     if ( nppp_is_process_alive( $watcher_pid ) ) {
         $kill_path = trim( (string) shell_exec( 'command -v kill' ) );
         if ( ! empty( $kill_path ) ) {
-			shell_exec( escapeshellarg( $kill_path ) . ' -9 ' . (int) $watcher_pid );
+            shell_exec( escapeshellarg( $kill_path ) . ' -9 ' . (int) $watcher_pid );
             usleep( 200000 );
         }
     }
@@ -283,7 +283,7 @@ add_action( 'wp_ajax_'        . NPPP_WATCHER_AJAX_ACTION, 'nppp_cron_wake_handle
  * Handle the watchdog's HTTP POST.
  */
 function nppp_cron_wake_handler(): void {
-	// Rate limit — max 10 requests per minute per IP.
+    // Rate limit — max 10 requests per minute per IP.
     // Fires before token validation to stop brute-force probing cheaply.
     if ( ! nppp_watchdog_rate_limit_check() ) {
         nppp_display_admin_notice(
