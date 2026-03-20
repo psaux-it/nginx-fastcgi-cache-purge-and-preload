@@ -168,8 +168,7 @@ Release date: 2026-03-22
 * Added: Product tag and post tag archives are now included in Purge Scope related pages.
 * Added: PHP Response Timeout — configurable read timeout for preload. Recommended to increase for WooCommerce stores or sites with heavy plugins.
 * Added: Dashboard widget now shows HTTP Purge, Cloudflare APO, and Redis Object Cache status alongside existing indicators.
-* Added: Help tab expanded with new sections covering HTTP Purge setup, Accept-Encoding double-cache issue fix, Cloudflare APO Sync, Redis Object Cache Sync, Preload Watchdog, Cache Coverage Ratio, and a feature dependency map.
-* Added: Help tab now documents the Accept-Encoding / Vary header double-cache issue and how to fix it in Nginx to prevent preload-warmed cache being bypassed by real visitor requests.
+* Added: Help tab expanded with new sections covering HTTP Purge setup, Accept-Encoding, vary double-cache issue fix, Cloudflare APO Sync, Redis Object Cache Sync, Preload Watchdog, Cache Coverage Ratio, and a feature dependency map.
 * Security: MILESTONE: Plugin bootstrap is now lazy-loaded — NPP stays completely dormant on requests where no cache operation is needed.
 * Security: REST API now returns 403 when disabled instead of 200. Client IP resolution now validates forwarded headers against a trusted proxy list.
 * Security: Cache purge is now aborted if the configured Nginx cache path is inside or overlaps the WordPress installation directory, preventing accidental deletion of WordPress files. (Credit: @doctorproctor)
@@ -183,15 +182,14 @@ Release date: 2026-03-22
 * Fixed: Gutenberg purge now also fires on trash and permanent delete via the block editor REST API.
 * Fixed: Purge operations are now serialized with an atomic lock — concurrent purges from multiple sessions no longer collide.
 * Fixed: PHP timeout is now disabled before large purge and preload operations to prevent mid-operation kills on large caches.
-* Fixed: Preload flags overhauled — improved retry logic, IPv4 preference, and configurable read timeout.
+* Fixed: Preload flags overhauled — improved retry logic, IPv4 preference, and timeouts.
 * Fixed: WP_Filesystem no longer prompts for credentials in non-interactive contexts such as WP-Cron or REST API calls.
-* Fixed: Advanced tab correctly retains the full MISS list immediately after a Purge All.
+* Fixed: MILESTONE: Advanced tab correctly retains the full MISS list immediately after a Purge All.
 * Fixed: Auto-purge no longer fires on fresh install before settings have been saved.
 * Fixed: GNU Wget2 (aliased as wget on some distributions) is now detected and rejected. GNU Wget 1.x is required.
 * Fixed: cpulimit is now skipped entirely when the CPU limit is set to 100%
-* Fixed: Preload flags overhauled — improved retry logic, IPv4 preference, and configurable read timeout.
-* Fixed: Long preloads no longer silently break plugin state after completion.
 * Fixed: wp-config.php writes during Setup now use atomic temp-file replacement to prevent corruption on interrupted writes.
+* Fixed: Post-preload completion tasks (email, mobile preload, cache snapshot) no longer silently fail on long preloads — replaced blocking while/sleep loop with a non-blocking tick system that never approaches PHP or Nginx execution time limits.
 * Fixed: Existing tracking cron jobs and options left over from versions 2.0.1–2.1.4 are automatically cleaned up on upgrade.
 * Fixed: All runtime files (PID files, logs, crawl snapshot) are now stored in wp-content/uploads instead of the plugin directory. This prevents data loss during plugin updates and avoids writing to directories that should be read-only on hardened servers.
 * Fixed: safexec no longer crashes with "pathconf: Permission denied" on multi-site setups or environments where the current working directory is not traversable. safexec now switches to a safe working directory before executing.
@@ -204,7 +202,7 @@ Release date: 2026-03-22
 * Changed: Allowed Nginx cache path roots updated — /opt/ removed (too broad, risk of data loss), /cache/ added (used by GridPane, RunCloud, SpinupWP and other control panels). If your cache was stored under /opt/, move it to a supported location and re-save settings.
 * Removed: All data collection and opt-in tracking completely removed. NPP collects no data whatsoever.
 * Removed: Systemd service management removed — the ability to restart the npp-wordpress FUSE mount service directly from the WordPress admin has been dropped. Use standard system tools to manage the service instead.
-* Compatibility: Tested with WordPress 6.9.4, PHP 8.4, Nginx 1.29.6, FUSE 3.18.2, and bindfs 1.18.4.
+* Compatibility: Tested with WordPress 6.9.4, PHP 8.4, Nginx 1.29.6, FUSE 3.18.2, safexec 1.9.3 and bindfs 1.18.4
 
 = 2.1.4 =
 
