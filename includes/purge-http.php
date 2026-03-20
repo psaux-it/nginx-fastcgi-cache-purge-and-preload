@@ -166,7 +166,7 @@ function nppp_http_purge_try_first( string $url ) {
             true,
             false
         );
- 
+
         return false;
     }
 
