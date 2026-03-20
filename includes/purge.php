@@ -163,42 +163,100 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
     // FAST-PATH 1 — HTTP (Nginx module)
     // Asks the ngx_cache_purge module to delete the entry via HTTP.
-    // HTTP 200 → entry gone from shared memory + disk atomically → skip filesystem.
-    // Anything else → fall through to Fast-Path 2 (index) or recursive scan.
+    // Advisory only — it never blocks a main purge logic.
+    //
+    //   true   — HTTP 200: entry deleted from shmem + disk atomically.
+    //   'miss' — HTTP 412: nginx confirmed URL not in cache (v2.5.x).
+    //            Shmem is the authority — if it has no entry, filesystem scan is pointless.
+    //   false  — Any other outcome (404 ambiguous, 403, connection error, etc.):
+    //            fall through to Fast-Path 2 (index) or recursive scan.
 
-    if ( nppp_http_purge_try_first( $current_page_url ) ) {
-        $is_manual    = ! $nppp_auto_purge;
+    $nppp_http_result = nppp_http_purge_try_first( $current_page_url );
 
+    // HTTP 200: Cache purged
+    if ( $nppp_http_result === true ) {
         if ( ! $chain_autopreload ) {
             nppp_display_admin_notice( 'success', sprintf(
                 /* translators: %s: full page URL that had its cache purged via HTTP */
-                __( 'SUCCESS HTTP PURGE: Nginx module purged %s — filesystem scan skipped.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'SUCCESS HTTP PURGE: Nginx cache purged for page %s (Index + filesystem scan skipped.)', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $current_page_url_decoded
             ) );
         }
 
+        // Get related URLs
+        $is_manual    = ! $nppp_auto_purge;
         $related_urls = nppp_get_related_urls_for_single( $current_page_url );
 
-        // Purge related URLs (homepage, category archives, etc.)
-        // will try HTTP first for each related URL,
-        // then falls back to filesystem for any misses.
+        // Purge related cache
         nppp_purge_urls_silent( $nginx_cache_path, $related_urls );
 
-        // All cache work done — release lock before blocking I/O below.
+        // All cache work done — release lock
         nppp_release_purge_lock();
         $nppp_lock_released = true;
 
-        // Auto preload AFTER lock released — avoids holding lock during blocking network I/O
+        // Auto preload cache with found=true — primary purged
         if ( $chain_autopreload ) {
             nppp_preload_cache_on_update( $current_page_url, true );
         }
 
-        // Decide preload policy
+        // Check preload policy
         $settings = get_option( 'nginx_cache_settings' );
         $should_preload_related =
             ( $is_manual && ! empty( $settings['nppp_related_preload_after_manual'] ) && $settings['nppp_related_preload_after_manual'] === 'yes' )
             || ( ! $is_manual && ! empty( $settings['nginx_cache_auto_preload'] ) && $settings['nginx_cache_auto_preload'] === 'yes' );
- 
+
+        // Preload related cache
+        if ( $should_preload_related ) {
+            nppp_preload_urls_fire_and_forget( $related_urls );
+        }
+
+        // Cloudflare purge cache
+        $post_id = (int) url_to_postid( $current_page_url );
+        do_action(
+            'nppp_purged_urls',
+            array_merge( [ $current_page_url ], $related_urls ),
+            $current_page_url,
+            $post_id,
+            (bool) $nppp_auto_purge
+        );
+
+        return;
+    }
+
+    // HTTP 412: not in cache (v2.5.x)
+    // Skip directly to the post-purge path.
+    if ( $nppp_http_result === 'miss' ) {
+        if ( ! $chain_autopreload ) {
+            nppp_display_admin_notice( 'info', sprintf(
+                /* translators: %s: full page URL */
+                __( 'INFO HTTP PURGE: Nginx cache purge attempted, but the page %s is not currently found in the cache. (Index + filesystem scan skipped.)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $current_page_url_decoded
+            ) );
+        }
+
+        // Get related URLs
+        $is_manual    = ! $nppp_auto_purge;
+        $related_urls = nppp_get_related_urls_for_single( $current_page_url );
+
+        // Purge related cache
+        nppp_purge_urls_silent( $nginx_cache_path, $related_urls );
+
+        // All cache work done — release lock
+        nppp_release_purge_lock();
+        $nppp_lock_released = true;
+
+        // Auto preload cache with found=false — primary was not in cache
+        if ( $chain_autopreload ) {
+            nppp_preload_cache_on_update( $current_page_url, false );
+        }
+
+        // Check preload policy
+        $settings = get_option( 'nginx_cache_settings' );
+        $should_preload_related =
+            ( $is_manual && ! empty( $settings['nppp_related_preload_after_manual'] ) && $settings['nppp_related_preload_after_manual'] === 'yes' )
+            || ( ! $is_manual && ! empty( $settings['nginx_cache_auto_preload'] ) && $settings['nginx_cache_auto_preload'] === 'yes' );
+
+        // Preload related cache
         if ( $should_preload_related ) {
             nppp_preload_urls_fire_and_forget( $related_urls );
         }
@@ -250,29 +308,29 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 nppp_display_admin_notice('error', sprintf(__( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
             }
 
-            // Handle related homepage/category purge + optional preload
+            // Get related URLs
             $is_manual    = !$nppp_auto_purge;
             $related_urls = nppp_get_related_urls_for_single($current_page_url);
 
             // Purge related cache
             nppp_purge_urls_silent($nginx_cache_path, $related_urls);
 
-            // All cache filesystem work done — release lock now so other
-            // admins are not blocked during post-purge side effects below.
+            // All cache work done — release lock
             nppp_release_purge_lock();
             $nppp_lock_released = true;
 
-            // Auto preload AFTER lock released — avoids holding lock during blocking network I/O
+            // Auto preload with found=true — primary purged
             if ($deleted && $chain_autopreload) {
                 nppp_preload_cache_on_update($current_page_url, true);
             }
 
-            // Decide preload policy
+            // Check preload policy
             $settings = get_option('nginx_cache_settings');
             $should_preload_related =
                 ($is_manual && !empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes')
                 || (!$is_manual && !empty($settings['nginx_cache_auto_preload']) && $settings['nginx_cache_auto_preload'] === 'yes');
 
+            // Preload related cache
             if ($should_preload_related) {
                 nppp_preload_urls_fire_and_forget($related_urls);
             }
@@ -457,29 +515,29 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     nppp_display_admin_notice('error', sprintf(__( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
                 }
 
-                // Handle related homepage/category purge + optional preload
+                // Get related URLs
                 $is_manual = !$nppp_auto_purge;
                 $related_urls = nppp_get_related_urls_for_single($current_page_url);
 
                 // Purge related cache
                 nppp_purge_urls_silent($nginx_cache_path, $related_urls);
 
-                // All cache filesystem work done — release lock now so other
-                // admins are not blocked during post-purge side effects below.
+                // All cache work done — release lock
                 nppp_release_purge_lock();
                 $nppp_lock_released = true;
 
-                // Auto preload AFTER lock released — avoids holding lock during blocking network I/O
+                // Auto preload with found=true — primary purged
                 if ($deleted && $chain_autopreload) {
                     nppp_preload_cache_on_update($current_page_url, true);
                 }
 
-                // Decide preload policy
+                // Check preload policy
                 $settings = get_option('nginx_cache_settings');
                 $should_preload_related =
                     ($is_manual && !empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes')
                     || (!$is_manual && !empty($settings['nginx_cache_auto_preload']) && $settings['nginx_cache_auto_preload'] === 'yes');
 
+                // Preload related cache
                 if ($should_preload_related) {
                     nppp_preload_urls_fire_and_forget($related_urls);
                 }
@@ -511,28 +569,29 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
             nppp_display_admin_notice('info', sprintf( __( 'INFO ADMIN: Nginx cache purge attempted, but the page %s is not currently found in the cache.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
         }
 
-        // Even if the single wasn’t found in cache, keep related in sync
+        // Get related URLs
         $is_manual = !$nppp_auto_purge;
         $related_urls = nppp_get_related_urls_for_single($current_page_url);
 
         // Purge related cache
         nppp_purge_urls_silent($nginx_cache_path, $related_urls);
 
-        // All cache filesystem work done — release lock now.
+        // All cache work done — release lock
         nppp_release_purge_lock();
         $nppp_lock_released = true;
 
-        // Auto preload AFTER lock released — avoids holding lock during blocking network I/O
+        // Auto preload cache with found=false — primary was not in cache
         if ($chain_autopreload) {
             nppp_preload_cache_on_update($current_page_url, false);
         }
 
-        // Decide preload policy
+        // Check preload policy
         $settings = get_option('nginx_cache_settings');
         $should_preload_related =
             ($is_manual && !empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes')
             || (!$is_manual && !empty($settings['nginx_cache_auto_preload']) && $settings['nginx_cache_auto_preload'] === 'yes');
 
+        // Preload related cache
         if ($should_preload_related) {
             nppp_preload_urls_fire_and_forget($related_urls);
         }
