@@ -41,10 +41,13 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_safexec_version_' . md5($static_key_base),
         'nppp_wget_urls_cache_' . md5($static_key_base),
         'nppp_wget_compatibility_' . md5($static_key_base),
-        'nppp_missing_commands_'  . md5($static_key_base),
+        'nppp_missing_commands_' . md5($static_key_base),
         'nppp_preload_phase_' . md5($static_key_base),
         'nppp_preload_cycle_start_' . md5($static_key_base),
         'nppp_ping_token_' . md5($static_key_base),
+        'nppp_preload_trigger_' . md5($static_key_base),
+        'nppp_http_purge_endpoint_broken',
+        'nppp_wget_urls_cache_prev_key',
         'nppp_safexec_ok',
     );
 
