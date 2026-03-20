@@ -617,8 +617,8 @@ static void report_summary(const char *abs_tool, const char *cgroup_hint) {
       (long)euid, (long)egid, (long)ruid, (long)rgid, cwdp, abs_tool);
 
 #ifdef __linux__
-    int nnpr = prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
-    s_fprintf(stderr, "Summary: no_new_privs=%s\n", (nnpr == 0) ? "on" : "off");
+    int nnpr = prctl(PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0);
+    s_fprintf(stderr, "Summary: no_new_privs=%s\n", (nnpr == 1) ? "on" : "off");
 #endif
 
     if (cgroup_hint && *cgroup_hint)
