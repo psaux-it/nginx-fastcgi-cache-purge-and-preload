@@ -105,11 +105,11 @@ Mostly basic, built-in shell tools are required. **wget** is required for cache 
 The most common reasons are: `shell_exec` is disabled, the PHP-FPM user lacks write permission to the Nginx cache directory, or `nginx.conf` is not detected. See the **Help tab** for a full environment checklist and solutions.
 
 = I am getting permission errors. What should I do? =
- 
+
 This is the most common issue in environments where the WEBSERVER-USER (nginx/www-data) and PHP-FPM-USER are different. NPP provides a one-liner bash script to automate the fix using bindfs on monolithic servers. For containerized environments, users can review the full configuration setup via [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) See the **Help tab → Permission Issues** section or the [GitHub repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload) for details.
 
 = Does it work with Cloudflare? =
- 
+
 Yes. NPP has built-in Cloudflare APO Sync that mirrors every purge to Cloudflare’s edge cache automatically. Requires the official Cloudflare WordPress plugin. Enable it under **Settings**.
 
 = Does it work with Redis Object Cache? =
