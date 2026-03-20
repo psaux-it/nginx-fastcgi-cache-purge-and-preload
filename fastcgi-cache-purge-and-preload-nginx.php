@@ -77,13 +77,13 @@ function nppp_load_bootstrap(): void {
 add_action('init', function (): void {
     if (!is_admin()) return;
     if (!is_user_logged_in()) return;
- 
+
     // Admin — full UI access, load bootstrap unconditionally.
     if (current_user_can('manage_options')) {
         nppp_load_bootstrap();
         return;
     }
- 
+
     // Non-admin with the custom purge capability.
     // Load bootstrap only when auto-purge is enabled.
     if (!current_user_can('nppp_purge_cache')) return;
