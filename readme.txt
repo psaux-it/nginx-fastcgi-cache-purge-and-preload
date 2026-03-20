@@ -13,32 +13,22 @@ The most comprehensive solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI)
 
 == Description ==
 
-**NPP**, allows WordPress users to manage **Nginx Cache Purge and Preload** (FastCGI, Proxy, SCGI, UWSGI) operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.
+**NPP** lets WordPress users manage **Nginx Cache Purge and Preload** (FastCGI, Proxy, SCGI, UWSGI) operations directly from the WordPress admin dashboard — actively warming the cache via site crawl, so your Nginx cache is always preloaded and ready.
 
-Unlike other solutions that depend on Nginx modules, **NPP** directly manages cache files without needing to interact with Nginx.
+➡️ **Resources:**
 
-➡️ **This approach provides the following benefits:**
-
-⚡ **Faster** – No waiting for Nginx to process cache purges; works without interacting with Nginx.
-🌐 **Greater flexibility** – Works seamlessly across different architectures, including containerized environments.
-🤖 **Automations** - NPP is flexible for server-side automations, making it easy to integrate into your workflow.
-
-⚠️ **IMPORTANT:**
-
-**NPP** is feature rich, completely free & functional and great for users who manage their own servers and have technical know-how.
-
-➡️ **For detailed integration steps and guidance:**
-
-• Visit the [NPP Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
-• Visit the [safexec Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec)
-• Explore [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) for easy deployments and developing NPP locally.
-• Refer to the **FAQ** or the plugin’s **Help tab** for further instructions.
+• Visit the [NPP Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload) - Docs, issues & contributions and more.
+• Visit the [safexec Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec) - NPP's privilege-dropping wrapper.
+• Explore [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) - Ready to run full stack Nginx Docker setup.
+• Refer to the plugin’s **Help tab** for additional guidance.
 
 == Features ==
 
 🧹 **Purge All Nginx Cache**: Completely clear all cached data stored by Nginx.
 
 🔄 **Preload All Nginx Cache**: Warm the Nginx cache with the most recent data for the entire website.
+
+🎯 **HTTP Purge (ngx_cache_purge)**: When the Nginx cache module is available, NPP uses it as the fastest purge path. Falls back gracefully to index and filesystem purge when the module is not present.
 
 🚀 **Auto Preload Nginx Cache**: Automatically preloads the cache when Auto Purge is enabled for a POST/PAGE or after the Purge All action.
 
@@ -61,8 +51,6 @@ Unlike other solutions that depend on Nginx modules, **NPP** directly manages ca
 🔍 **On-Page Nginx Cache Purge & Preload**: Manually purge and preload Nginx cache for the currently visited page directly from the frontend.
 
 🗝️ **Custom Cache Key Support**: Define a regex pattern to parse URLs based on your custom `_cache_key` format.
-
-⚡ **Optimized Nginx Cache Preload**: Enhance Nginx cache preload performance with options to limit CPU usage, exclude endpoints, wait retrievals, and apply rate limiting.
 
 📊 **Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, and Nginx status from the Status tab.
 
@@ -100,79 +88,45 @@ Automatic Installation
 
 == Frequently Asked Questions ==
 
-= Is the plugin completely free? =
+= Does this plugin require Nginx? =
 
-Yes, the plugin is completely free to use.
+Yes. NPP is designed exclusively for Nginx web servers running on Linux. It does not work on Apache, shared hosting, or environments where `shell_exec` is disabled.
 
-= Who is this plugin intended for? =
-	
-For users looking to efficiently manage Nginx cache Purge and Preload actions, this plugin provides a seamless solution for managing these processes directly from the WordPress admin dashboard.
+= Does it require the ngx_cache_purge Nginx module? =
 
-= Will this plugin slow my site down? =
-	
-No, this plugin does not introduce any performance overhead to your website. It operates exclusively within the WordPress admin environment and does not affect the frontend or public-facing aspects of your site.
+No. The `ngx_cache_purge` module is optional. When available, NPP uses it as the fastest purge path (HTTP Purge). If it is not present, NPP automatically falls back to a URL index lookup and then a full filesystem scan. Nothing breaks either way.
 
-= Will it work on my theme? =
-	
-Sure! Works 100% with all themes.
-	
-= Will it work with my plugins? =
-	
-Sure! It works 100% with all plugins.
+= What server dependencies are required? =
 
-= What changes will it make to my site? =
+Mostly basic, built-in shell tools are required. **wget** is required for cache preloading. For hardened shell execution, **safexec** is highly recommended — see the Help tab for installation instructions.
 
-None.
+= Why is the plugin not working on my environment? =
 
-= Is this plugin compatible with other Wordpress cache plugins? =
+The most common reasons are: `shell_exec` is disabled, the PHP-FPM user lacks write permission to the Nginx cache directory, or `nginx.conf` is not detected. See the **Help tab** for a full environment checklist and solutions.
 
-When using NPP with other WordPress caching plugins, consider disabing their page caching features to avoid conflicts and redundancy. These plugins can still handle frontend optimizations.
+= I am getting permission errors. What should I do? =
+ 
+This is the most common issue in environments where the WEBSERVER-USER (nginx/www-data) and PHP-FPM-USER are different. NPP provides a one-liner bash script to automate the fix using bindfs on monolithic servers. For containerized environments, users can review the full configuration setup via [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) See the **Help tab → Permission Issues** section or the [GitHub repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload) for details.
 
-**Keep frontend optimization features active, such as**:
-* Minify and combine CSS/JS files
-* Lazy load images and videos
-* Optimize the database
-* Integrate a CDN
+= Does it work with Cloudflare? =
+ 
+Yes. NPP has built-in Cloudflare APO Sync that mirrors every purge to Cloudflare’s edge cache automatically. Requires the official Cloudflare WordPress plugin. Enable it under **Settings**.
 
-This combined setup ensures NPP manages server-side caching while other plugins handle frontend tasks, avoiding conflicts and improving performance.
+= Does it work with Redis Object Cache? =
 
-= How do I configure the plugin settings? =
+Yes. NPP supports bidirectional sync with the Redis Object Cache plugin. A Purge All in NPP flushes Redis, and a Redis flush triggers a full Nginx cache purge. Enable it under **Settings**.
 
-Navigate to Settings -> **Nginx Cache Purge Preload** in the WordPress admin dashboard or navigate to Admin Bar -> **Nginx Cache** to configure the options and use the actions.
+= Is it compatible with WooCommerce? =
 
-= Why plugin not functional on my environment? =
+Yes. NPP includes built-in WooCommerce Auto-Purge for stock changes and order events, and supports purging the Shop page as a related URL when a product is updated.
 
-This wordpress plugin is compatible exclusively with Nginx web servers running on Linux-powered systems. Additionally, the shell_exec function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native Linux commands are blocked from running via PHP.
+= Can I use it alongside other caching plugins? =
 
-Moreover, granting the correct permissions to the PHP process owner (PHP-FPM-USER) is essential for the proper functioning of the purge and preload operations. This is necessary in isolated user environments that have two distinct user roles: the WEBSERVER-USER (nginx or www-data) and the PHP-FPM-USER.
+Yes, but disable page caching in other plugins to avoid conflicts. You can keep their frontend optimization features (minification, lazy loading, CDN) active. See the **Help tab** for details.
 
-If you see warnings or if any plugin settings or tabs are disabled, this could indicate permission issues, an unsupported environment, or missing dependencies that the plugin requires to function properly.
+= Where can I find the allowed Nginx cache paths? =
 
-= What Linux commands are required for the preload action? =
-
-For the preload action to work properly, the server must have the **wget** command installed, as the plugin uses it to preload the cache by fetching pages. Additionally, it is recommended to have the **cpulimit** command installed to effectively manage **wget** process server load during the preload action.
-
-= Why am I encountering a permission error? =
-
-Permission errors when purging cache in Nginx environments are common, especially when the **WEBSERVER-USER** and **PHP-FPM-USER** have different permissions. This can restrict PHP-FPM-USER access to cache files. For detailed guidance on resolving this issue and automating tasks with a pre-made bash script, refer to the plugin settings Help tab or visit the plugin's [main development repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload).
-
-= Why can not I use my preferred path for the Nginx Cache Directory? =
-
-The Nginx Cache Directory option has restrictions on the paths you can use to prevent accidental deletions or harm to critical system files. By default, certain paths, like '/home' and other vital system directories, are blocked to safeguard your system's stability and prevent data loss. While this might limit your options, it ensures your system's security.
-
-**Allowed Cache Paths**
-
-* For RAM-based: Use directories under /dev/ | /tmp/ | /var/
-* For persistent disk: Use directories under /opt/
-* Important: Paths must be one level deeper (e.g. /var/cache).
-
-= What is different about this plugin compared to other Nginx Cache Plugins? =
-
-Because NPP does not depend on external Nginx modules, It provides a simpler and more flexible solution. This plugin directly traverses the cache directory and deletes cache files If the PHP-FPM-USER (website-user or PHP process owner) has read and write permissions granted to the Nginx cache path. Note that, NPP also supports Nginx cache preloading with a simple direct approach, with the help of **wget**.
-
-= I am still encountering difficulties. Do you provide server-side integration services? =
-
-Yes, please refer to the plugin settings **Help** tab.
+NPP restricts cache paths to prevent accidental deletion of system files. Allowed roots are `/dev/shm/`, `/tmp/`, `/var/`, and `/cache/`. The path must be at least one level deep (e.g. `/var/cache/nginx`). Full details in the **Help tab**.
 
 == Screenshots ==
 
@@ -493,15 +447,22 @@ Release date: 2024-03-14
 
 == Upgrade Notice ==
 
-= 2.0.1 =
+= 2.1.4 =
+Introduces Nginx Cache Analyzer, safexec hardened execution, Purge Scope for related pages, and a Setup Wizard. Recommended upgrade for all users.
 
-* Important fixes for function/class/define/namespace/option names.
-* Properly enqueued inline JavaScript.
-* Internationalization and security improvements.
+= 2.1.3 =
+Security patch for CVE-2025-6213. Upgrade immediately.
+
+= 2.0.1 =
+Important fixes for function/class/define/namespace/option names. Internationalization and security improvements.
 
 == Credits ==
 
-This plugin is developed and maintained by Hasan CALISIR. 
+This plugin is developed and maintained by Hasan CALISIR.
+
+== Privacy Policy ==
+
+Prior to version 2.1.5, NPP optionally collected basic anonymous usage data when users explicitly opted in. As of version 2.1.5, all data collection and the opt-in mechanism have been completely removed. NPP collects no data whatsoever.
 
 == Support ==
 
