@@ -456,16 +456,20 @@ jobs:
           git checkout -B "${BRANCH}" "origin/${BRANCH}"
           git stash pop || true
 
+          # Remove any old version packages — keep only what was just built
+          find safexec/deb -name '*.deb' \
+            ! -name "safexec_${{ steps.ver.outputs.deb }}_amd64.deb" \
+            ! -name "safexec_${{ steps.ver.outputs.deb }}_arm64.deb" \
+            -delete || true
+
+          # Regenerate SHA256SUMS so it only covers the current version
+          cd safexec/deb && sha256sum *.deb | sort > SHA256SUMS && cd -
+
           # Defuse any local ignore for safexec/deb and force-add the .deb files (in case repo .gitignore blocks them)
           sed -i -E '/^safexec\/deb\/[[:space:]]*$/d' .git/info/exclude 2>/dev/null || true
-          git add -f safexec/deb/*.deb safexec/deb/SHA256SUMS || true
+          git add -A safexec/deb/ || true
 
-          if git diff --cached --quiet; then
-            echo "No .deb changes to commit."
-            exit 0
-          fi
-
-          git commit -m "ci: add Debian packages for ${{ steps.ver.outputs.deb }}"
+          git commit --allow-empty -m "ci: add Debian packages for ${{ steps.ver.outputs.deb }}"
 
           # Integrate remote updates, then push. Retry once to beat races.
           for attempt in 1 2; do
@@ -628,13 +632,18 @@ jobs:
           git checkout -B "${BRANCH}" "origin/${BRANCH}"
           git stash pop || true
 
-          git add -f safexec/rpm/*.rpm safexec/rpm/SHA256SUMS || true
-          if git diff --cached --quiet; then
-            echo "No RPM changes to commit."
-            exit 0
-          fi
+          # Remove any old version packages — keep only what was just built
+          find safexec/rpm -name '*.rpm' \
+            ! -name "safexec-${{ steps.ver.outputs.rpm }}.el*.x86_64.rpm" \
+            ! -name "safexec-${{ steps.ver.outputs.rpm }}.el*.aarch64.rpm" \
+            -delete || true
 
-          git commit -m "ci: add RPM packages for ${{ steps.ver.outputs.rpm }}"
+          # Regenerate SHA256SUMS so it only covers the current version
+          cd safexec/rpm && sha256sum *.rpm | sort > SHA256SUMS && cd -
+
+          git add -A safexec/rpm/ || true
+
+          git commit --allow-empty -m "ci: add RPM packages for ${{ steps.ver.outputs.rpm }}"
 
           for attempt in 1 2; do
             git pull --rebase --autostash origin "${BRANCH}" && \
@@ -844,16 +853,23 @@ jobs:
           git checkout -B "${BRANCH}" "origin/${BRANCH}"
           git stash pop || true
 
+          # Remove any old version packages — keep only what was just built
+          find safexec/apk/x86_64 -name '*.apk' \
+            ! -name "safexec-${{ steps.ver.outputs.apk }}.apk" \
+            -delete || true
+          find safexec/apk/aarch64 -name '*.apk' \
+            ! -name "safexec-${{ steps.ver.outputs.apk }}.apk" \
+            -delete || true
+
+          # Regenerate SHA256SUMS so it only covers the current version
+          cd safexec/apk && sha256sum x86_64/*.apk aarch64/*.apk | sort > SHA256SUMS && cd -
+
           # Force-add .apk files (in case .gitignore or local exclude blocks them)
           sed -i -E '/^safexec\/apk\/[[:space:]]*$/d' .git/info/exclude 2>/dev/null || true
-          git add -f safexec/apk/x86_64/*.apk safexec/apk/aarch64/*.apk safexec/apk/SHA256SUMS || true
 
-          if git diff --cached --quiet; then
-            echo "No .apk changes to commit."
-            exit 0
-          fi
+          git add -A safexec/apk/ || true
 
-          git commit -m "ci: add Alpine APK packages for ${{ steps.ver.outputs.apk }}"
+          git commit --allow-empty -m "ci: add Alpine APK packages for ${{ steps.ver.outputs.apk }}"
 
           # Retry once to beat push races
           for attempt in 1 2; do
