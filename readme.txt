@@ -186,7 +186,7 @@ Release date: 2026-03-22
 * Fixed: WP_Filesystem no longer prompts for credentials in non-interactive contexts such as WP-Cron or REST API calls.
 * Fixed: MILESTONE: Advanced tab correctly retains the full MISS list immediately after a Purge All.
 * Fixed: Auto-purge no longer fires on fresh install before settings have been saved.
-* Fixed: GNU Wget2 (aliased as wget on some distributions) is now detected and rejected. GNU Wget 1.x is required.
+* Fixed: GNU Wget2 (aliased as wget on some distributions-Fedora) is now detected and rejected. GNU Wget 1.x is required.
 * Fixed: cpulimit is now skipped entirely when the CPU limit is set to 100%
 * Fixed: wp-config.php writes during Setup now use atomic temp-file replacement to prevent corruption on interrupted writes.
 * Fixed: Post-preload completion tasks (email, mobile preload, cache snapshot) no longer silently fail on long preloads — replaced blocking while/sleep loop with a non-blocking tick system that never approaches PHP or Nginx execution time limits.
