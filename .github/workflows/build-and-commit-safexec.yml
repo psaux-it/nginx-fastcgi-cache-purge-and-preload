@@ -214,7 +214,7 @@ jobs:
           sudo chown -R "$(id -u)":"$(id -g)" .
           sudo rm -rf pkg-safexec-*-single || true
           mkdir -p .git/info
-          for p in safexec/bin/ pkg-safexec-*/; do
+          for p in safexec/bin/ pkg-safexec-*/ .zig-cache/; do
             grep -qxF "$p" .git/info/exclude 2>/dev/null || echo "$p" >> .git/info/exclude
           done
 
@@ -824,7 +824,7 @@ jobs:
           sudo chown -R "$(id -u)":"$(id -g)" .
           sudo rm -rf pkg-safexec-*-apk || true
           mkdir -p .git/info
-          for p in safexec/bin/ pkg-safexec-*/; do
+          for p in safexec/bin/ pkg-safexec-*/ .zig-cache/; do
             grep -qxF "$p" .git/info/exclude 2>/dev/null || echo "$p" >> .git/info/exclude
           done
 
