@@ -729,7 +729,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm -v "$PWD":/src -w /src alpine:3.21 sh -euxc '
-            apk add --no-cache alpine-sdk sudo >/dev/null 2>&1
+            apk add --no-cache alpine-sdk sudo bash >/dev/null 2>&1
             chmod +x safexec/helpers/apk.sh
             bash safexec/helpers/apk.sh --arch x86_64 --version '"${{ steps.ver.outputs.apk }}"'
           '
@@ -745,7 +745,7 @@ jobs:
           set -euo pipefail
           docker run --rm --platform=linux/arm64 \
             -v "$PWD":/src -w /src alpine:3.21 sh -euxc '
-            apk add --no-cache alpine-sdk sudo >/dev/null 2>&1
+            apk add --no-cache alpine-sdk sudo bash >/dev/null 2>&1
             chmod +x safexec/helpers/apk.sh
             bash safexec/helpers/apk.sh --arch aarch64 --version '"${{ steps.ver.outputs.apk }}"'
           '
