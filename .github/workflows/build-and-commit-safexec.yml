@@ -52,11 +52,9 @@ jobs:
             -fstack-protector-strong \
             -D_FORTIFY_SOURCE=2 \
             -Wl,-z,relro,-z,now \
+            -s \
             safexec/safexec.c \
             -o safexec/safexec-x86_64-linux-musl
-          zig objcopy --strip-all \
-            safexec/safexec-x86_64-linux-musl \
-            safexec/safexec-x86_64-linux-musl
 
       - name: Build safexec (aarch64, musl)
         run: |
@@ -68,11 +66,9 @@ jobs:
             -fstack-protector-strong \
             -D_FORTIFY_SOURCE=2 \
             -Wl,-z,relro,-z,now \
+            -s \
             safexec/safexec.c \
             -o safexec/safexec-aarch64-linux-musl
-          zig objcopy --strip-all \
-            safexec/safexec-aarch64-linux-musl \
-            safexec/safexec-aarch64-linux-musl
 
       ############################################################
       # libnpp_norm.so — glibc variants
@@ -87,6 +83,7 @@ jobs:
             -Wall -Wextra -Wformat=2 \
             -DWGET_FASTPATH \
             -shared \
+            -s \
             safexec/libnpp_norm.c \
             -o safexec/libnpp_norm-x86_64-glibc.so \
             -Wl,-z,relro,-z,now \
@@ -94,9 +91,6 @@ jobs:
             -Wl,-soname,libnpp_norm.so \
             -Wl,--as-needed \
             -ldl -lpthread
-          zig objcopy --strip-unneeded \
-            safexec/libnpp_norm-x86_64-glibc.so \
-            safexec/libnpp_norm-x86_64-glibc.so
 
       - name: Build libnpp_norm shim (aarch64, glibc)
         run: |
@@ -107,6 +101,7 @@ jobs:
             -Wall -Wextra -Wformat=2 \
             -DWGET_FASTPATH \
             -shared \
+            -s \
             safexec/libnpp_norm.c \
             -o safexec/libnpp_norm-aarch64-glibc.so \
             -Wl,-z,relro,-z,now \
@@ -114,9 +109,6 @@ jobs:
             -Wl,-soname,libnpp_norm.so \
             -Wl,--as-needed \
             -ldl -lpthread
-          zig objcopy --strip-unneeded \
-            safexec/libnpp_norm-aarch64-glibc.so \
-            safexec/libnpp_norm-aarch64-glibc.so
 
       ############################################################
       # libnpp_norm.so — musl variants
