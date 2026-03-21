@@ -103,7 +103,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null
+
+          # Delete old versions
+          stale=$(gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" --json assets \
+            --jq '.assets[].name | select(endswith(".rpm"))')
+          if [[ -n "$stale" ]]; then
+            echo "Deleting stale rpm assets:"
+            printf '  %s\n' $stale
+            printf '%s\n' $stale | xargs -r -I{} gh release delete-asset "${TAG_NAME}" {} --repo "${GITHUB_REPOSITORY}" --yes
+          fi
+
           mapfile -t FILES < <(printf '%s\n' "${{ steps.files.outputs.files }}")
 
           echo "Uploading to ${TAG_NAME} on ${GITHUB_REPOSITORY}:"
