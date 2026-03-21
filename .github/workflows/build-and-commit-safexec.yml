@@ -645,3 +645,223 @@ jobs:
 
           echo "Giving up after 2 attempts."
           exit 1
+
+  build-and-attest-apks:
+    name: Build & attest Alpine APK packages
+    needs: safexec-build-test-attest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Guard — skip if binaries unchanged
+        id: guard
+        shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          git fetch --prune origin
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          CHANGED="$(git diff --name-only ${GITHUB_SHA}^ ${GITHUB_SHA})"
+          echo "Changed files: $CHANGED"
+          if echo "$CHANGED" | grep -qE 'safexec\.(c|h)|libnpp_norm\.c|helpers/apk\.sh|build-and-commit-safexec\.yml'; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Relevant change detected, proceeding with apk build."
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No apk-relevant changes, skipping."
+          fi
+
+      - name: Download safexec build artifacts
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: safexec-binaries
+          path: safexec/bin
+
+      - name: Ensure exec bit on safexec
+        if: steps.guard.outputs.skip != 'true'
+        run: chmod 755 safexec/bin/safexec-*-linux-musl || true
+
+      - name: Make apk.sh executable
+        if: steps.guard.outputs.skip != 'true'
+        run: chmod +x safexec/helpers/apk.sh
+
+      # Resolve version from the safexec binary itself (same pattern as deb/rpm jobs)
+      - name: Resolve version from safexec -v
+        if: steps.guard.outputs.skip != 'true'
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BIN="safexec/bin/safexec-x86_64-linux-musl"
+          [[ -x "$BIN" ]] || BIN="safexec/bin/safexec-aarch64-linux-musl"
+          [[ -x "$BIN" ]] || { echo "safexec binary not found in safexec/bin"; exit 1; }
+
+          FIRST_LINE="$("$BIN" -v | head -n1)"
+          BASE_VER="$(printf '%s\n' "$FIRST_LINE" | awk '{print $2}')"
+
+          if ! printf '%s' "$BASE_VER" | grep -Eq '^[0-9]+(\.[0-9]+){1,2}$'; then
+            echo "Could not parse version from: $FIRST_LINE"
+            exit 1
+          fi
+
+          echo "Detected safexec version: $BASE_VER"
+
+          {
+            printf 'base=%s\n' "$BASE_VER"
+            # Alpine APK release format: pkgver-r<pkgrel>  (e.g. 1.9.3-r1)
+            printf 'apk=%s-r1\n' "$BASE_VER"
+          } >> "$GITHUB_OUTPUT"
+
+      # x86_64 APK
+      - name: Build APK (x86_64)
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD":/src -w /src alpine:3.21 sh -euxc '
+            apk add --no-cache alpine-sdk sudo >/dev/null 2>&1
+            chmod +x safexec/helpers/apk.sh
+            bash safexec/helpers/apk.sh --arch x86_64 --version '"${{ steps.ver.outputs.apk }}"'
+          '
+
+      # aarch64 APK
+      - name: Enable binfmt for arm64
+        if: steps.guard.outputs.skip != 'true'
+        run: docker run --privileged --rm tonistiigi/binfmt --install arm64
+ 
+      - name: Build APK (aarch64)
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          docker run --rm --platform=linux/arm64 \
+            -v "$PWD":/src -w /src alpine:3.21 sh -euxc '
+            apk add --no-cache alpine-sdk sudo >/dev/null 2>&1
+            chmod +x safexec/helpers/apk.sh
+            bash safexec/helpers/apk.sh --arch aarch64 --version '"${{ steps.ver.outputs.apk }}"'
+          '
+
+      - name: Fix ownership of apk build outputs
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          sudo chown -R "$(id -u)":"$(id -g)" .
+
+      # collect & checksum
+      - name: Collect .apks into safexec/apk/
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p safexec/apk/x86_64 safexec/apk/aarch64
+
+          find pkg-safexec-x86_64-apk/repo/x86_64 -maxdepth 1 -type f \
+               -name 'safexec-*.apk' ! -name '*-doc-*' ! -name '*-dev-*' \
+               -exec cp -v {} safexec/apk/x86_64/ \; 2>/dev/null || true
+
+          find pkg-safexec-aarch64-apk/repo/aarch64 -maxdepth 1 -type f \
+               -name 'safexec-*.apk' ! -name '*-doc-*' ! -name '*-dev-*' \
+               -exec cp -v {} safexec/apk/aarch64/ \; 2>/dev/null || true
+
+          # Verify both arches were collected
+          ls -1 safexec/apk/x86_64/*.apk  || { echo "No x86_64 .apk collected!";  exit 1; }
+          ls -1 safexec/apk/aarch64/*.apk || { echo "No aarch64 .apk collected!"; exit 1; }
+
+          # One SHA256SUMS at the top of safexec/apk/ covering both arches.
+          # Paths are relative so bare filenames are prefixed with arch/ dir.
+          cd safexec/apk
+          sha256sum x86_64/*.apk aarch64/*.apk | sort > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Clean packaging worktrees
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          sudo chown -R "$(id -u)":"$(id -g)" pkg-safexec-*-apk 2>/dev/null || true
+          sudo rm -rf pkg-safexec-*-apk || true
+
+      - name: Generate SLSA provenance (APK packages)
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            safexec/apk/x86_64/*.apk
+            safexec/apk/aarch64/*.apk
+            safexec/apk/SHA256SUMS
+
+      - name: Upload APKs as artifacts
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: safexec-apks-${{ steps.ver.outputs.apk }}
+          path: |
+            safexec/apk/x86_64/*.apk
+            safexec/apk/aarch64/*.apk
+            safexec/apk/SHA256SUMS
+          if-no-files-found: error
+
+      - name: Fix workspace perms & exclude build dirs
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          sudo chown -R "$(id -u)":"$(id -g)" .
+          sudo rm -rf pkg-safexec-*-apk || true
+          mkdir -p .git/info
+          for p in safexec/bin/ pkg-safexec-*/; do
+            grep -qxF "$p" .git/info/exclude 2>/dev/null || echo "$p" >> .git/info/exclude
+          done
+
+      - name: Final clean of packaging worktrees
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          sudo chown -R "$(id -u)":"$(id -g)" pkg-safexec-*-apk 2>/dev/null || true
+          sudo rm -rf pkg-safexec-*-apk || true
+
+      - name: Commit .apk packages back to repo
+        if: github.ref_type == 'branch' && steps.guard.outputs.skip != 'true'
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          BRANCH="${GITHUB_REF#refs/heads/}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          mkdir -p .git/info
+          printf 'safexec/bin/\n' >> .git/info/exclude
+
+          git fetch --prune origin
+          git stash push -u -m "ci-artifacts" || true
+          git checkout -B "${BRANCH}" "origin/${BRANCH}"
+          git stash pop || true
+
+          # Force-add .apk files (in case .gitignore or local exclude blocks them)
+          sed -i -E '/^safexec\/apk\/[[:space:]]*$/d' .git/info/exclude 2>/dev/null || true
+          git add -f safexec/apk/x86_64/*.apk safexec/apk/aarch64/*.apk safexec/apk/SHA256SUMS || true
+
+          if git diff --cached --quiet; then
+            echo "No .apk changes to commit."
+            exit 0
+          fi
+
+          git commit -m "ci: add Alpine APK packages for ${{ steps.ver.outputs.apk }}"
+
+          # Retry once to beat push races
+          for attempt in 1 2; do
+            git pull --rebase --autostash origin "${BRANCH}" && \
+            git push origin "HEAD:${BRANCH}" && exit 0
+            echo "Push attempt ${attempt} failed; refetching and retrying..."
+            sleep 2
+            git fetch --prune origin
+          done
+
+          echo "Giving up after 2 attempts."
+          exit 1
