@@ -1,11 +1,12 @@
 name: Merge release SHA256SUMS
 
 on:
-  # Fire whenever either of the two upload workflows completes
+  # Fire whenever any of the three upload workflows completes
   workflow_run:
     workflows:
       - Attach .deb assets to release
       - Attach .rpm assets to release
+      - Attach .apk assets to release
     types: [completed]
 
   # Allow manual re-run for a specific tag if needed
@@ -25,8 +26,6 @@ concurrency:
 
 jobs:
   merge-and-upload:
-    # Only proceed automatically if the upstream workflow concluded successfully,
-    # or always proceed when run manually.
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
@@ -47,7 +46,6 @@ jobs:
           if [[ -n "${INPUT_TAG}" ]]; then
             TAG="${INPUT_TAG}"
           else
-            # Use the most recent release (the attach workflows are release-driven)
             TAG="$(gh release view --repo "$REPO" --json tagName -q .tagName)"
           fi
 
@@ -55,7 +53,7 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Using release: $TAG"
 
-      - name: Guard ensure BOTH .deb and .rpm assets exist on the release
+      - name: Guard — ensure .deb, .rpm AND .apk assets all exist on the release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -66,11 +64,12 @@ jobs:
           json="$(gh release view "$TAG_NAME" --repo "$REPO" --json assets)"
           debs=$(jq '[.assets[].name | select(endswith(".deb"))] | length' <<<"$json")
           rpms=$(jq '[.assets[].name | select(endswith(".rpm"))] | length' <<<"$json")
+          apks=$(jq '[.assets[].name | select(endswith(".apk"))] | length' <<<"$json")
 
-          echo "Found $debs .deb and $rpms .rpm assets on $TAG_NAME"
+          echo "Found $debs .deb, $rpms .rpm, $apks .apk assets on $TAG_NAME"
 
-          if (( debs < 1 || rpms < 1 )); then
-            echo "Both asset types not present yet; exiting neutral so this job re-triggers after the other workflow finishes."
+          if (( debs < 1 || rpms < 1 || apks < 1 )); then
+            echo "Not all asset types present yet; exiting neutral so this job re-triggers after the remaining workflow finishes."
             # Exit code 78 marks the job neutral (not failed) in GitHub Actions
             exit 78
           fi
@@ -81,7 +80,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.repository.default_branch }}
 
-      - name: Merge safexec/deb/SHA256SUMS + safexec/rpm/SHA256SUMS -> SHA256SUMS
+      - name: Merge deb + rpm + apk SHA256SUMS -> unified SHA256SUMS
         id: merge
         shell: bash
         run: |
@@ -89,10 +88,11 @@ jobs:
 
           [[ -f safexec/deb/SHA256SUMS ]] || { echo "Missing safexec/deb/SHA256SUMS"; exit 1; }
           [[ -f safexec/rpm/SHA256SUMS ]] || { echo "Missing safexec/rpm/SHA256SUMS"; exit 1; }
+          [[ -f safexec/apk/SHA256SUMS ]] || { echo "Missing safexec/apk/SHA256SUMS"; exit 1; }
 
-          # Normalize to "hash␠␠filename" with bare filenames (no dirs), dedupe, and sort.
+          # Normalize to "hash  filename" with bare filenames (no dirs), dedupe, and sort.
           awk '{h=$1; $1=""; sub(/^[ \t]+/,""); f=$0; gsub(/^.*\//,"",f); printf "%s  %s\n",h,f }' \
-            safexec/deb/SHA256SUMS safexec/rpm/SHA256SUMS \
+            safexec/deb/SHA256SUMS safexec/rpm/SHA256SUMS safexec/apk/SHA256SUMS \
             | sort -u > SHA256SUMS
 
           echo "Merged SHA256SUMS:"
