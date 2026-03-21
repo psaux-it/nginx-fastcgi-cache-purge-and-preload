@@ -50,8 +50,13 @@ jobs:
             -target x86_64-linux-musl \
             -D_GNU_SOURCE \
             -static -O2 -pipe -fPIE \
+            -Wall -Wextra -Wformat=2 -Werror=format-security \
             -fstack-protector-strong \
-            -D_FORTIFY_SOURCE=2 \
+            -fstack-clash-protection \
+            -fcf-protection=full \
+            -fno-strict-overflow \
+            -fno-delete-null-pointer-checks \
+            -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 \
             -Wl,-z,relro,-z,now \
             -s \
             safexec/safexec.c \
@@ -64,8 +69,13 @@ jobs:
             -target aarch64-linux-musl \
             -D_GNU_SOURCE \
             -static -O2 -pipe -fPIE \
+            -Wall -Wextra -Wformat=2 -Werror=format-security \
             -fstack-protector-strong \
-            -D_FORTIFY_SOURCE=2 \
+            -fstack-clash-protection \
+            -mbranch-protection=standard \
+            -fno-strict-overflow \
+            -fno-delete-null-pointer-checks \
+            -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 \
             -Wl,-z,relro,-z,now \
             -s \
             safexec/safexec.c \
@@ -81,7 +91,11 @@ jobs:
           zig cc \
             -target x86_64-linux-gnu.2.31 \
             -O2 -pipe -fPIC \
-            -Wall -Wextra -Wformat=2 \
+            -Wall -Wextra -Wformat=2 -Werror=format-security \
+            -fstack-protector-strong \
+            -fstack-clash-protection \
+            -fcf-protection=full \
+            -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 \
             -DWGET_FASTPATH \
             -shared \
             -s \
@@ -99,7 +113,11 @@ jobs:
           zig cc \
             -target aarch64-linux-gnu.2.31 \
             -O2 -pipe -fPIC \
-            -Wall -Wextra -Wformat=2 \
+            -Wall -Wextra -Wformat=2 -Werror=format-security \
+            -fstack-protector-strong \
+            -fstack-clash-protection \
+            -mbranch-protection=standard \
+            -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 \
             -DWGET_FASTPATH \
             -shared \
             -s \
@@ -120,7 +138,13 @@ jobs:
           set -euo pipefail
           docker run --rm -v "$PWD":/src -w /src/safexec alpine:3.21 sh -euxc '
             apk add --no-cache build-base musl-dev
-            gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
+            gcc -O2 -pipe -fPIC \
+                -Wall -Wextra -Wformat=2 -Werror=format-security \
+                -fstack-protector-strong \
+                -fstack-clash-protection \
+                -fcf-protection=full \
+                -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 \
+                -DWGET_FASTPATH \
                 -shared libnpp_norm.c -o libnpp_norm-x86_64-musl.so \
                 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -Wl,-soname,libnpp_norm.so \
                 -Wl,--as-needed -ldl -pthread
@@ -137,7 +161,13 @@ jobs:
           docker run --rm --platform=linux/arm64 \
             -v "$PWD":/src -w /src/safexec alpine:3.21 sh -euxc '
             apk add --no-cache build-base musl-dev
-            gcc -O2 -pipe -fPIC -Wall -Wextra -Wformat=2 -DWGET_FASTPATH \
+            gcc -O2 -pipe -fPIC \
+                -Wall -Wextra -Wformat=2 -Werror=format-security \
+                -fstack-protector-strong \
+                -fstack-clash-protection \
+                -mbranch-protection=standard \
+                -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 \
+                -DWGET_FASTPATH \
                 -shared libnpp_norm.c -o libnpp_norm-aarch64-musl.so \
                 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -Wl,-soname,libnpp_norm.so \
                 -Wl,--as-needed -ldl -pthread
