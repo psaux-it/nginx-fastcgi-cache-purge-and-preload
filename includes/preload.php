@@ -166,47 +166,6 @@ function nppp_is_safexec_usable($path, $notify = true) {
         return false;
     }
 
-    // SECURITY: Verify the safexec binary content matches a known-good SHA256 hash.
-    // A root-owned SUID binary could still be tampered with after installation.
-    $known_hashes = array(
-        'x86_64'  => 'ab1d6b7f70b6172e0f6e391c7ec98b317e50ef7638bec223c9833dcc455b60e6',
-        'aarch64' => '82d60f69292f47df2a1011255908b91ce082cc878fc640f512a316371b7a99ae',
-        'arm64'   => '82d60f69292f47df2a1011255908b91ce082cc878fc640f512a316371b7a99ae',
-    );
-
-    $arch = php_uname('m');
-    $expected_hash = isset($known_hashes[$arch]) ? $known_hashes[$arch] : null;
-
-    if ($expected_hash !== null) {
-        $actual_hash = function_exists('hash_file') ? hash_file('sha256', $p) : false;
-
-        if ($actual_hash === false) {
-            if ($notify) {
-                nppp_display_admin_notice('error',
-                    __('SECURITY ERROR SAFEXEC: Could not read safexec binary for integrity check. Refusing to execute.', 'fastcgi-cache-purge-and-preload-nginx'),
-                    true, false
-                );
-            }
-            return false;
-        }
-
-        if (!hash_equals($expected_hash, $actual_hash)) {
-            if ($notify) {
-                nppp_display_admin_notice('error',
-                    __('SECURITY ERROR SAFEXEC: Binary integrity check FAILED. The safexec binary does not match the expected hash and may have been tampered with. Refusing to execute.', 'fastcgi-cache-purge-and-preload-nginx'),
-                    true, false
-                );
-            }
-            // Log it always regardless of $notify
-            // Translators: 1: absolute path to the safexec binary, 2: CPU architecture string (e.g. x86_64), 3: expected SHA256 hex digest, 4: actual SHA256 hex digest found on disk
-            nppp_custom_error_log(sprintf(
-                'SECURITY: safexec integrity check FAILED at %1$s (arch=%2$s expected=%3$s actual=%4$s)',
-                $p, $arch, $expected_hash, $actual_hash
-            ));
-            return false;
-        }
-    }
-
     return true;
 }
 
