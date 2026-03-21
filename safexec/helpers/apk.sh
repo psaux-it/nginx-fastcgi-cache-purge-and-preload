@@ -185,7 +185,7 @@ _write_install_script "$BUILD_DIR/safexec.post-upgrade"
 say "Writing APKBUILD…"
 cat > "$BUILD_DIR/APKBUILD" <<APKBUILD
 # Contributor: $MAINT
-# Maintainer:  $MAINT
+# Maintainer: $MAINT
 pkgname=safexec
 pkgver=${PKG_VER}
 pkgrel=${PKG_REL}
