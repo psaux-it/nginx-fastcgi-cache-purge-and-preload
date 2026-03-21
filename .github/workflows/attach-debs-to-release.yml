@@ -110,6 +110,15 @@ jobs:
           # sanity: release exists
           gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null
 
+          # Delete old versions
+          stale=$(gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" --json assets \
+            --jq '.assets[].name | select(endswith(".deb"))')
+          if [[ -n "$stale" ]]; then
+            echo "Deleting stale deb assets:"
+            printf '  %s\n' $stale
+            printf '%s\n' $stale | xargs -r -I{} gh release delete-asset "${TAG_NAME}" {} --repo "${GITHUB_REPOSITORY}" --yes
+          fi
+
           # read multiline output variable into an array
           mapfile -t FILES < <(printf '%s\n' "${{ steps.files.outputs.files }}")
 
