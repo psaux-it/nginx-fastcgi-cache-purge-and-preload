@@ -1,0 +1,127 @@
+name: Attach .apk assets to release
+
+on:
+  workflow_run:
+    workflows: ["safexec CI"]
+    types: [completed]
+  release:
+    types: [published, edited, prereleased]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach assets to (e.g. v2.1.3)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: attach-apks-${{ github.event.release.tag_name || github.event.workflow_run.head_branch || inputs.tag || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  attach-apks:
+    if: >
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine target tag
+        id: tag
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            TAG="${{ github.event.release.tag_name }}"
+          elif [[ -n "${INPUT_TAG}" ]]; then
+            TAG="${INPUT_TAG}"
+          else
+            echo "No tag provided on manual run; trying latest release…"
+            echo "${{ github.token }}" | gh auth login --with-token
+            TAG="$(gh release view --repo "${GITHUB_REPOSITORY}" --json tagName -q .tagName)"
+          fi
+          [[ -n "$TAG" ]] || { echo "Could not resolve a tag."; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "ver=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Will attach to release: $TAG"
+
+      # Checkout the DEFAULT BRANCH so we can see safexec/apk/ committed there
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Collect .apk files to upload
+        id: files
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER='${{ steps.tag.outputs.ver }}'
+
+          gather_latest() {
+            local pattern="$1"
+            local matches=()
+            shopt -s nullglob
+            matches=( $pattern )
+            shopt -u nullglob
+            ((${#matches[@]})) || { echo ""; return; }
+            printf '%s\n' "${matches[@]}" | sort -V | tail -n1
+          }
+
+          mkdir -p /tmp/apk-release
+
+          # x86_64 — find the right version, fall back to newest
+          X86="$(gather_latest "safexec/apk/x86_64/safexec-${VER}-r*.apk")"
+          [[ -n "$X86" ]] || X86="$(gather_latest "safexec/apk/x86_64/safexec-*.apk")"
+
+          # aarch64
+          ARM="$(gather_latest "safexec/apk/aarch64/safexec-${VER}-r*.apk")"
+          [[ -n "$ARM" ]] || ARM="$(gather_latest "safexec/apk/aarch64/safexec-*.apk")"
+
+          FILES=()
+
+          if [[ -n "${X86:-}" && -f "$X86" ]]; then
+            BASE="${X86##*/}"          # safexec-1.9.3-r1.apk
+            NAME="${BASE%.apk}"        # safexec-1.9.3-r1
+            DEST="/tmp/apk-release/${NAME}.x86_64.apk"
+            cp "$X86" "$DEST"
+            FILES+=("$DEST")
+          fi
+
+          if [[ -n "${ARM:-}" && -f "$ARM" ]]; then
+            BASE="${ARM##*/}"
+            NAME="${BASE%.apk}"
+            DEST="/tmp/apk-release/${NAME}.aarch64.apk"
+            cp "$ARM" "$DEST"
+            FILES+=("$DEST")
+          fi
+
+          if ((${#FILES[@]}==0)); then
+            echo "No matching .apk files under safexec/apk/"; exit 1
+          fi
+
+          printf 'files<<__EOL__\n' >> "$GITHUB_OUTPUT"
+          printf '%s\n' "${FILES[@]}" >> "$GITHUB_OUTPUT"
+          printf '__EOL__\n' >> "$GITHUB_OUTPUT"
+
+          echo "Resolved files (with arch-suffixed names for release):"
+          printf '  %s\n' "${FILES[@]}"
+
+      - name: Upload assets (overwrite if already present)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.tag.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null
+          mapfile -t FILES < <(printf '%s\n' "${{ steps.files.outputs.files }}")
+
+          echo "Uploading to ${TAG_NAME} on ${GITHUB_REPOSITORY}:"
+          printf '  %s\n' "${FILES[@]}"
+
+          gh release upload "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber "${FILES[@]}"
