@@ -11,10 +11,16 @@
  * Security model
  * ---------------
  *  - Strict allowlist: only known-safe binaries run (see ALLOWED_BINS).
- *  - Absolute-path pinning: the chosen tool is resolved to a real, non-symlink
- *    file under trusted system dirs before exec (e.g. /usr/bin, /bin, /usr/local/{bin,sbin},
- *    /usr/sbin, /sbin, /run/current-system/sw/bin, plus platform-specific prefixes).
- *    If not found, execution is refused.
+ *  - Absolute-path pinning: the chosen tool is resolved to an absolute path
+ *    under trusted system dirs before exec (e.g. /usr/bin, /bin, /usr/local/bin,
+ *    /usr/sbin, /sbin, /usr/local/sbin, /run/current-system/sw/bin,
+ *    /usr/pkg/{bin,sbin} for NetBSD pkgsrc, /opt/homebrew/{bin,sbin} for
+ *    macOS Apple Silicon, /opt/local/{bin,sbin} for MacPorts).
+ *    Regular files are accepted directly. Symlinks are followed only when the
+ *    resolved target still resides under a trusted dir (Alpine/BusyBox multi-call
+ *    binaries such as nohup -> coreutils). The symlink path is exec'd so the
+ *    kernel sets argv[0] correctly for multi-call binaries.
+ *    If not found or resolved target is outside trusted dirs, execution is refused.
  *  - Never exec as root: drop to 'nobody' first; if that fails, drop to the
  *    original caller (e.g., PHP-FPM worker). If we still have euid==0, abort.
  *  - Environment is sanitized early (clearenv); minimal PATH/LANG/LC_CTYPE/CHARSET
@@ -104,7 +110,7 @@
  * Copyright
  * ---------
  * (C) 2025 Hasan Calisir <hasan.calisir@psauxit.com>
- * Version: 1.9.3 (2025)
+ * Version: 1.9.5 (2025)
  */
 
 
@@ -161,7 +167,7 @@
 
 // Metadata
 #define SAFEXEC_NAME     "safexec"
-#define SAFEXEC_VERSION  "1.9.4"
+#define SAFEXEC_VERSION  "1.9.5"
 #define SAFEXEC_AUTHOR   "Hasan Calisir"
 
 // Safe DIR
@@ -948,7 +954,7 @@ static enum detach_mode parse_detach_mode(void) {
 
 // Safe DIR
 static void chdir_safe_if_cwd_inaccessible(void) {
-if (access(".", X_OK) == 0) return;
+    if (access(".", X_OK) == 0) return;
     s_fprintf(stderr, "Info: CWD not accessible; switching to /tmp\n");
     if (chdir("/tmp") != 0) {
         int rc = chdir("/");
@@ -993,13 +999,13 @@ static const char *const TRUSTED_BIN_DIRS[] = {
     "/run/current-system/sw/bin",
 
     /* BSDs */
-    "/usr/local/sbin",
     "/usr/pkg/bin",
     "/usr/pkg/sbin",
 
 #ifdef __APPLE__
     /* macOS package managers */
     "/opt/homebrew/bin",
+    "/opt/homebrew/sbin",
     "/opt/local/bin",
     "/opt/local/sbin",
 #endif
@@ -1027,8 +1033,9 @@ static int find_in_trusted_path(const char *base, char *out, size_t outsz) {
              * Symlink — common on Alpine/BusyBox/coreutils multi-call binaries
              * (e.g. /usr/bin/nohup -> ../../bin/coreutils). Resolve with
              * realpath() and verify the final target still lives under a
-             * trusted directory before accepting. We exec the resolved real
-             * path, not the symlink, so the kernel always runs the actual binary.
+             * trusted directory before accepting. Security validation uses the
+             * resolved real path; the symlink path (cand) is returned for exec
+             * so the kernel sets argv[0] correctly for multi-call binaries.
              */
             char real[PATH_MAX];
             if (!realpath(cand, real)) continue;
@@ -1185,11 +1192,40 @@ static int find_target_prog_index(int argc, char **argv) {
                         tok);
                     return argc;
                 }
-                /* Symlink check — same guarantee bare names get via find_in_trusted_path */
-                struct stat st1, st2;
-                if (lstat(tok, &st1) != 0 || stat(tok, &st2) != 0 ||
-                    st1.st_ino != st2.st_ino || st1.st_dev != st2.st_dev ||
-                    !S_ISREG(st1.st_mode) || access(tok, X_OK) != 0) {
+                /* Validate explicit path — same logic as find_in_trusted_path.
+                 * Regular files are accepted directly. Symlinks are followed
+                 * via realpath() and the target must also be under a trusted dir
+                 * (handles Alpine/BusyBox multi-call binaries). */
+                struct stat st1;
+                if (lstat(tok, &st1) != 0 || access(tok, X_OK) != 0) {
+                    s_fprintf(stderr,
+                        "Error: wrapper path '%s' failed trust validation\n", tok);
+                    return argc;
+                }
+                if (S_ISLNK(st1.st_mode)) {
+                    char real[PATH_MAX];
+                    struct stat rst;
+                    if (!realpath(tok, real) || stat(real, &rst) != 0 ||
+                        !S_ISREG(rst.st_mode) || access(real, X_OK) != 0) {
+                        s_fprintf(stderr,
+                            "Error: wrapper path '%s' failed trust validation\n", tok);
+                        return argc;
+                    }
+                    int tgt_trusted = 0;
+                    for (const char *const *td = TRUSTED_BIN_DIRS; *td; ++td) {
+                        size_t tn = strlen(*td);
+                        if (strncmp(real, *td, tn) == 0 &&
+                            (real[tn] == '/' || real[tn] == '\0')) {
+                            tgt_trusted = 1; break;
+                        }
+                    }
+                    if (!tgt_trusted) {
+                        s_fprintf(stderr,
+                            "Error: wrapper path '%s' -> '%s' resolves outside trusted dirs\n",
+                            tok, real);
+                        return argc;
+                    }
+                } else if (!S_ISREG(st1.st_mode)) {
                     s_fprintf(stderr,
                         "Error: wrapper path '%s' failed trust validation\n", tok);
                     return argc;
