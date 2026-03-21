@@ -516,18 +516,23 @@ static int cgv2_enable_one(const char *tok) {
     if (safe_snprintf(path, sizeof path, "%s/cgroup.subtree_control", root) != 0) return -1;
     int fd = open(path, O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
     if (fd < 0) {
-        s_fprintf(stderr, "Info: cannot open %s: %s\n", path, strerror(errno));
+        if (errno != EROFS && errno != EPERM && errno != EACCES)
+            s_fprintf(stderr, "Info: cannot open %s: %s\n", path, strerror(errno));
         return -1;
     }
     char buf[32]; int len = snprintf(buf, sizeof buf, "%s\n", tok);
     ssize_t w = write(fd, buf, len);
     int e = errno; close(fd);
     if (w != (ssize_t)len) {
+        if (e == EROFS || e == EPERM || e == EACCES) {
+            return -1;
+        }
         if (strcmp(tok, "+cpu") == 0 && e == EINVAL) {
             s_fprintf(stderr, "Info: enabling +cpu failed (EINVAL). "
                                "Hint: v2 cpu controller needs all RT threads in root.\n");
         } else {
-            s_fprintf(stderr, "Info: cannot enable %s on subtree_control: %s\n", tok, strerror(e));
+            s_fprintf(stderr, "Info: cannot enable %s on subtree_control: %s\n",
+                      tok, strerror(e));
         }
         return -1;
     }
@@ -736,7 +741,7 @@ static int cgv2_root_base(char *out, size_t outsz) {
     const char *root = cgv2_root();
     if (!root) return -1;
     if (safe_snprintf(out, outsz, "%s/%s", root, "nppp") != 0) return -1;
-    (void)mkdir(out, 0755);
+    if (mkdir(out, 0755) != 0 && errno != EEXIST) return -1;
     return 0;
 }
 
