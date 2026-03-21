@@ -1057,7 +1057,6 @@ static int is_wrapper_name(const char *b) {
            strcmp(b, "nice")    == 0 ||
            strcmp(b, "timeout") == 0 ||
            strcmp(b, "stdbuf")  == 0 ||
-           strcmp(b, "env")     == 0 ||
            strcmp(b, "ionice")  == 0 ||
            strcmp(b, "taskset") == 0 ||
            strcmp(b, "setsid")  == 0 ||
@@ -1125,7 +1124,34 @@ static int find_target_prog_index(int argc, char **argv) {
         }
 
         // Otherwise allow it as part of the prelude if it looks benign:
-        if (is_wrapper_name(b))        continue;
+        if (is_wrapper_name(b)) {
+            if (strchr(tok, '/') != NULL) {
+                /* Explicit path supplied — validate it is inside a trusted dir */
+                int trusted = 0;
+                for (const char *const *d = TRUSTED_BIN_DIRS; *d; ++d) {
+                    size_t n = strlen(*d);
+                    if (strncmp(tok, *d, n) == 0 && tok[n] == '/') {
+                        trusted = 1; break;
+                    }
+                }
+                if (!trusted) {
+                    s_fprintf(stderr,
+                        "Error: wrapper path '%s' is outside trusted directories\n",
+                        tok);
+                    return argc;
+                }
+                /* Symlink check — same guarantee bare names get via find_in_trusted_path */
+                struct stat st1, st2;
+                if (lstat(tok, &st1) != 0 || stat(tok, &st2) != 0 ||
+                    st1.st_ino != st2.st_ino || st1.st_dev != st2.st_dev ||
+                    !S_ISREG(st1.st_mode) || access(tok, X_OK) != 0) {
+                    s_fprintf(stderr,
+                        "Error: wrapper path '%s' failed trust validation\n", tok);
+                    return argc;
+                }
+            }
+            continue;
+        }
         if (looks_like_option(tok))    continue;
         if (is_name_eq_value(tok)) {
             if (!is_assignment_allowed(tok)) {
@@ -1301,11 +1327,14 @@ static int try_kill_mode(const char *arg) {
     if (strncmp(arg, "--kill=", 7) != 0)
         return 0;
 
-    pid_t pid = atoi(arg + 7);
-    if (pid <= 0) {
-        s_fprintf(stderr, "Error: Invalid PID\n");
+    char *endp = NULL;
+    errno = 0;
+    long tmp = strtol(arg + 7, &endp, 10);
+    if (errno || !endp || *endp || tmp <= 0 || tmp > (long)INT_MAX) {
+        s_fprintf(stderr, "Error: Invalid PID '%s'\n", arg + 7);
         return 1;
     }
+    pid_t pid = (pid_t)tmp;
 
 #ifndef __linux__
     s_fprintf(stderr, "Error: --kill is only supported on Linux.\n");
@@ -1325,7 +1354,11 @@ static int try_kill_mode(const char *arg) {
     int uid = -1;
     while (fgets(line, sizeof(line), fp)) {
         if (strncmp(line, "Uid:", 4) == 0) {
-            sscanf(line, "Uid:\t%d", &uid);
+            if (sscanf(line, "Uid:\t%d", &uid) != 1) {
+                s_fprintf(stderr, "Error: failed to parse UID from /proc/%d/status\n", (int)pid);
+                fclose(fp);
+                return 1;
+            }
             break;
         }
     }
@@ -1438,6 +1471,29 @@ int main(int argc, char *argv[]) {
     }
 
     s_fprintf(stderr, "Info: pinned tool '%s' -> '%s'\n", prog_base, abs_tool);
+
+    /* Pin all wrapper positions (argv[1]..argv[prog_i-1]) to trusted paths.
+     * Layer 1 already rejected untrusted slashed wrappers; this ensures bare-name
+     * wrappers resolve to known-good binaries regardless of inherited PATH.
+     * Handles chains: safexec nohup nice wget → pins both nohup AND nice. */
+    for (int wi = 1; wi < prog_i; ++wi) {
+        const char *wb = base_of(argv[wi]);
+        if (!is_wrapper_name(wb)) continue;   /* skip options/assignments */
+        /* If already an absolute trusted path (passed as explicit path), keep it */
+        if (strchr(argv[wi], '/') != NULL) continue;
+        char abs_wrapper[PATH_MAX];
+        if (find_in_trusted_path(wb, abs_wrapper, sizeof abs_wrapper) != 0) {
+            s_fprintf(stderr,
+                "Error: cannot resolve trusted path for wrapper '%s'\n", wb);
+            return 1;
+        }
+        argv[wi] = strdup(abs_wrapper);
+        if (!argv[wi]) {
+            s_fprintf(stderr, "Error: OOM while pinning wrapper path\n");
+            return 1;
+        }
+        s_fprintf(stderr, "Info: pinned wrapper '%s' -> '%s'\n", wb, abs_wrapper);
+    }
 
     // PASS-THROUGH MODE
     if (geteuid() != 0) {
