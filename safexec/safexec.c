@@ -161,7 +161,7 @@
 
 // Metadata
 #define SAFEXEC_NAME     "safexec"
-#define SAFEXEC_VERSION  "1.9.3"
+#define SAFEXEC_VERSION  "1.9.4"
 #define SAFEXEC_AUTHOR   "Hasan Calisir"
 
 // Safe DIR
@@ -1013,13 +1013,49 @@ static int find_in_trusted_path(const char *base, char *out, size_t outsz) {
         if (safe_snprintf(cand, sizeof cand, "%s/%s", *d, base) != 0) continue;
 
         struct stat st;
-        if (lstat(cand, &st) == 0 && S_ISREG(st.st_mode) && access(cand, X_OK) == 0) {
-            // Refuse symlink hops: lstat != stat means link/indirect
-            struct stat st2;
-            if (stat(cand, &st2) != 0) continue;
-            if (st.st_ino != st2.st_ino || st.st_dev != st2.st_dev) continue;
+        if (lstat(cand, &st) != 0) continue;
+        if (access(cand, X_OK) != 0) continue;
 
+        if (S_ISREG(st.st_mode)) {
+            /* Direct regular file — no symlink, fastest path. */
             if (safe_snprintf(out, outsz, "%s", cand) == 0) return 0;
+            continue;
+        }
+
+        if (S_ISLNK(st.st_mode)) {
+            /*
+             * Symlink — common on Alpine/BusyBox/coreutils multi-call binaries
+             * (e.g. /usr/bin/nohup -> ../../bin/coreutils). Resolve with
+             * realpath() and verify the final target still lives under a
+             * trusted directory before accepting. We exec the resolved real
+             * path, not the symlink, so the kernel always runs the actual binary.
+             */
+            char real[PATH_MAX];
+            if (!realpath(cand, real)) continue;
+
+            struct stat rst;
+            if (stat(real, &rst) != 0) continue;
+            if (!S_ISREG(rst.st_mode)) continue;
+            if (access(real, X_OK) != 0) continue;
+
+            /* Final target must still be under a trusted bin dir. */
+            int trusted = 0;
+            for (const char *const *td = TRUSTED_BIN_DIRS; *td; ++td) {
+                size_t n = strlen(*td);
+                if (strncmp(real, *td, n) == 0 &&
+                    (real[n] == '/' || real[n] == '\0')) {
+                    trusted = 1;
+                    break;
+                }
+            }
+            if (!trusted) {
+                s_fprintf(stderr,
+                    "Info: symlink '%s' -> '%s' resolves outside trusted dirs, skipping\n",
+                    cand, real);
+                continue;
+            }
+
+            if (safe_snprintf(out, outsz, "%s", real) == 0) return 0;
         }
     }
     return -1;
