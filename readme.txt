@@ -146,7 +146,7 @@ NPP restricts cache paths to prevent accidental deletion of system files. Allowe
 Release date: 2026-03-22
 
 * Added: MILESTONE: HTTP Purge via ngx_cache_purge module — fastest purge path when the Nginx module is present. Falls back to filesystem automatically when not available.
-* Added: Purge Index — single-page purges now use a persistent URL index to skip full directory scans. Index is updated automatically after each purge.
+* Added: MILESTONE: Index Purge — single-page purges now use a persistent URL index to skip full directory scans. The base index replicates the snapshot, and the index is automatically updated after each purge if the page is not already indexed.
 * Added: Preload Watchdog — ensures post-preload tasks run immediately when preloading finishes, without depending on visitor traffic to trigger WP-Cron.
 * Added: Mobile Floating Action Button (FAB) — logged-in admins on mobile devices get a floating action button with Purge and Preload actions on the frontend.
 * Added: Frontend toast notifications — purge and preload result messages on the frontend now display as clean toast notifications.
