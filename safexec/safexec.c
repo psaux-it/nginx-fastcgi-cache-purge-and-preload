@@ -1055,7 +1055,11 @@ static int find_in_trusted_path(const char *base, char *out, size_t outsz) {
                 continue;
             }
 
-            if (safe_snprintf(out, outsz, "%s", real) == 0) return 0;
+            /* Return the symlink path (cand), not the resolved real path.
+             * Multi-call binaries (coreutils, busybox) use argv[0] to
+             * determine their mode — execing /usr/bin/nohup lets the kernel
+             * follow the symlink while preserving the correct argv[0]. */
+            if (safe_snprintf(out, outsz, "%s", cand) == 0) return 0;
         }
     }
     return -1;
