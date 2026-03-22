@@ -99,3 +99,34 @@ function nppp_release_purge_lock(): void {
 
     WP_Upgrader::release_lock( NPPP_PURGE_LOCK_NAME );
 }
+
+/**
+ * Non-destructive probe: returns true if a purge lock is currently held.
+ *
+ * WP_Upgrader::create_lock() stores the lock as a wp_options row named
+ * 'lock_<name>'. It is set when a purge starts and deleted when the purge
+ * finishes (or when the TTL expires after a crash). Preload callers use this
+ * to abort early instead of spawning wget into a cache directory that is
+ * actively being deleted.
+ *
+ * Implementation: attempt to acquire with a 0-second TTL. If it fails someone
+ * else already holds the lock; if it succeeds release immediately — we only
+ * needed the boolean result.
+ *
+ * @return bool  true = a purge operation is in progress, false = cache is idle
+ */
+function nppp_is_purge_lock_held(): bool {
+    if ( ! class_exists( 'WP_Upgrader' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    }
+ 
+    // Try to acquire with the shortest meaningful TTL.
+    $acquired = WP_Upgrader::create_lock( NPPP_PURGE_LOCK_NAME, 1 );
+    if ( $acquired ) {
+        // We won the race — immediately give it back.
+        WP_Upgrader::release_lock( NPPP_PURGE_LOCK_NAME );
+        return false;
+    }
+ 
+    return true;
+}
