@@ -1174,6 +1174,21 @@ function nppp_clear_plugin_cache_callback() {
     );
 }
 
+// AJAX handler to clear the URL→path index
+function nppp_clear_url_index_callback() {
+    if ( ! current_user_can('manage_options') ) {
+        wp_send_json_error( __( 'Insufficient permissions.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    $nonce = isset( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
+    if ( ! wp_verify_nonce( $nonce, 'nppp-clear-url-index' ) ) {
+        wp_send_json_error( __( 'Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    delete_option( 'nppp_url_filepath_index' );
+    wp_send_json_success( __( 'URL index cleared successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+}
+
 // AJAX handler to fetch shortcode content
 function nppp_cache_status_callback() {
     // Check nonce
