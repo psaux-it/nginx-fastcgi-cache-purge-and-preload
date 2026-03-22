@@ -2635,6 +2635,70 @@ $(document).ready(function() {
         });
     });
 
+    // Event handler for the clear url index button
+    $(document).off('click', '#nppp-clear-url-index-btn').on('click', '#nppp-clear-url-index-btn', function(e) {
+        e.preventDefault();
+
+        var buttonElement = $('#nppp-clear-url-index-btn');
+        var buttonOffset = buttonElement.offset();
+        var buttonWidth = buttonElement.outerWidth();
+
+        var spinner = document.createElement('div');
+        spinner.className = 'nppp-loading-spinner';
+        spinner.style.position = 'absolute';
+        spinner.style.left = buttonOffset.left + buttonWidth + 10 + 'px';
+        spinner.style.top = (buttonOffset.top - 12) + 'px';
+        spinner.style.zIndex = '9999';
+        document.body.appendChild(spinner);
+
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'nppp_clear_url_index',
+                _wpnonce: nppp_admin_data.clear_url_index_nonce
+            },
+            success: function(response) {
+                document.body.removeChild(spinner);
+
+                var notification = document.createElement('div');
+                notification.style.position = 'absolute';
+                notification.style.left = (buttonOffset.left + buttonWidth + 10) + 'px';
+                notification.style.top = (buttonOffset.top - 3) + 'px';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                notification.style.borderRadius = '4px';
+
+                if (response.success) {
+                    notification.style.backgroundColor = '#00a32a';
+                    notification.textContent = response.data;
+                } else {
+                    notification.style.backgroundColor = '#d63638';
+                    notification.textContent = response.data;
+                }
+
+                document.body.appendChild(notification);
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        if (document.body.contains(notification)) {
+                            document.body.removeChild(notification);
+                        }
+                    }, 300);
+                }, 3000);
+            },
+            error: function() {
+                document.body.removeChild(spinner);
+            }
+        });
+    });
+
     // Event handler for the clear plugin cache button
     $(document).off('click', '#nppp-clear-plugin-cache-btn').on('click', '#nppp-clear-plugin-cache-btn', function(e) {
         e.preventDefault();
