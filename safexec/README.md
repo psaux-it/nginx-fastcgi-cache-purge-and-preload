@@ -11,45 +11,68 @@ It is written as the backend for **NPP (Nginx Cache Purge Preload for Wordpress)
 
 ## 📦 Installation
 
-You can install **safexec** using the `.deb` or `.rpm` packages from the [Releases](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases) page.
+You can install **safexec** using the `.deb`, `.rpm` or `.apk` packages from the [Releases](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases) page,
+
+**-> or directly with one liner**
+
+```sh
+curl -fsSL https://psaux-it.github.io/install-safexec.sh | sudo sh
+```
+
+---
 
 ### 🔹Debian / Ubuntu (DEB)
-
-Download the package and install with `apt`:
 
 ```bash
 # Download checksums
 wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
 
 # For x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.2-1_amd64.deb
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.5-1_amd64.deb
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apt install ./safexec_1.9.2-1_amd64.deb
+sudo apt install ./safexec_1.9.5-1_amd64.deb
 
 # For AArch64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.2-1_arm64.deb
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.5-1_arm64.deb
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apt install ./safexec_1.9.2-1_arm64.deb
+sudo apt install ./safexec_1.9.5-1_arm64.deb
 ```
 
 ### 🔹RHEL / CentOS / Fedora (RPM)
 
-Download the package and install with `dnf`:
+```bash
+# Download checksums
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
+
+# For x86_64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.5-1.el10.x86_64.rpm
+sha256sum -c SHA256SUMS --ignore-missing
+sudo dnf install ./safexec-1.9.5-1.el10.x86_64.rpm
+
+# For AArch64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.5-1.el10.aarch64.rpm
+sha256sum -c SHA256SUMS --ignore-missing
+sudo dnf install ./safexec-1.9.5-1.el10.aarch64.rpm
+```
+
+### 🔹 Alpine Linux (APK)
 
 ```bash
 # Download checksums
 wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
 
 # For x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.2-1.el10.x86_64.rpm
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.5-r1.x86_64.apk
 sha256sum -c SHA256SUMS --ignore-missing
-sudo dnf install ./safexec-1.9.2-1.el10.x86_64.rpm
+sudo apk add --allow-untrusted ./safexec-1.9.5-r1.x86_64.apk
 
 # For AArch64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.2-1.el10.aarch64.rpm
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.5-r1.aarch64.apk
 sha256sum -c SHA256SUMS --ignore-missing
-sudo dnf install ./safexec-1.9.2-1.el10.aarch64.rpm
+sudo apk add --allow-untrusted ./safexec-1.9.5-r1.aarch64.apk
 ```
+
+> **Note:** `--allow-untrusted` is required because the package is not signed with an Alpine trusted key. The SHA256 checksum above provides integrity verification.
 
 ---
 
@@ -147,4 +170,4 @@ GPL-2.0-only — see [LICENSE](./LICENSE).
 ---
 
 **Author:** Hasan Calisir  
-**Version:** 1.9.2 (2025)
+**Version:** 1.9.5 (2025)
