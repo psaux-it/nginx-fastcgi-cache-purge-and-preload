@@ -34,7 +34,7 @@ if (!function_exists('nppp_get_runtime_dir')) {
             $uploads_base = WP_CONTENT_DIR . '/uploads';
         }
 
-        $runtime_dir = rtrim($uploads_base !== '' ? $uploads_base : plugin_dir_path(NPPP_PLUGIN_FILE), '/\\') . '/nginx-cache-purge-preload-runtime';
+        $runtime_dir = rtrim($uploads_base !== '' ? $uploads_base : plugin_dir_path(NPPP_PLUGIN_FILE), '/\\') . '/' . NPPP_RUNTIME_SUBDIR;
 
         if (function_exists('wp_mkdir_p') && !is_dir($runtime_dir)) {
             wp_mkdir_p($runtime_dir);
