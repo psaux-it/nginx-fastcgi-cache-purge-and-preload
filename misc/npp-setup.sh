@@ -21,7 +21,7 @@
 
 # SCRIPT DESCRIPTION:
 # -------------------
-# This script is written for "FastCGI Cache Purge and Preload for Nginx"
+# This script is written for "Nginx Cache Purge Preload"
 #
 # NPP - Wordpress Plugin.
 # URL: https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/
@@ -34,7 +34,7 @@
 # associated Nginx Cache Path, script offers an easy manual setup option
 # with the 'manual-configs.nginx' file.
 #
-# Also, this script automates the management of Nginx Cache Paths in an environment
+# This script automates the management of Nginx Cache Paths in an environment
 # with two distinct user roles: the web server user (nginx or www-data)
 # and the PHP-FPM user. It utilizes `bindfs` to create a FUSE mount of the
 # original Nginx Cache Paths, which allows the PHP-FPM user to write to these
@@ -43,20 +43,8 @@
 # while maintaining the integrity of the ORIGINAL NGINX Cache Paths.
 
 # This script creates an 'npp-wordpress' systemd service.
-# After completing the setup (whether automatic or manual), you can manage
-# the automatically created 'npp-wordpress' systemd service on the WP admin
-# dashboard NPP plugin STATUS tab.
-
-# By the way:
-# NPP users have the flexibility to manage FUSE mount and unmount operations
-# for the original Nginx Cache Path directly from the WP admin dashboard.
-# This flexibility ensures that the PHP-FPM process owner has the necessary
-# permissions, effectively preventing unexpected permission issues and
-# maintaining consistent cache stability.
-#
-# **Issue Resolution: Quickly resolve unexpected permission issues by remounting.
-# **Improved Cache Stability: Regular management maintains cache consistency and accessibility.
-# **Ease of Use: User-friendly integration in the WP admin dashboard for effective management.
+# After completing the setup (whether automatic or manual), the
+# 'npp-wordpress' systemd service will be created and started automatically.
 
 # NOTE-1
 # ---------
@@ -68,12 +56,6 @@
 # throughout your server environment.
 
 # NOTE-2
-# ---------
-# Please read carefully the comments between at line 342-362 that about granting
-# specific sudo permissions to the PHP-FPM process owners to manage 'npp-wordpress'
-# systemd service directly on WP admin dashboard NPP plugin STATUS tab.
-
-# NOTE-3
 # ---------
 # If Auto detection not works for you, for proper matching, please ensure that your
 # Nginx Cache Path includes the associated PHP-FPM-USER username.
@@ -176,23 +158,9 @@ this_script_path="${this_script_path%%+(/)}"
 service_file_new="/etc/systemd/system/npp-wordpress.service"
 service_file_old="/etc/systemd/system/wp-fcgi-notify.service"
 
-# Define the main sudoers file and tmp/backup paths
-SUDOERS_FILE="/etc/sudoers"
-TEMP_FILE="/etc/sudoers.tmp"
-BACKUP_FILE="/etc/sudoers.bak"
-
-# Define NPP Wordpress sudoers config file
-NPP_SUDOERS="npp_wordpress"
-
 # Repo URL's for version checking
 libfuse_repo_url="https://api.github.com/repos/libfuse/libfuse/releases/latest"
 bindfs_repo_url="https://api.github.com/repos/mpartel/bindfs/git/refs/tags"
-
-# Define the @includedir path if it does not already exist.
-# We use a path other than "/etc/sudoers.d" to avoid overriding the user's current setup.
-# Users may avoid using "/etc/sudoers.d" specifically because it is a catch-all directory
-# where system package managers can place sudoers file rules during package installation.
-CUSTOM_INCLUDEDIR_PATH="/etc/sudoers.npp"
 
 # Function to check bindfs version
 check_bindfs_version() {
@@ -249,177 +217,6 @@ check_libfuse_version() {
   fi
 }
 
-# Check for sudo and visudo
-check_sudo_and_visudo() {
-  for cmd in sudo visudo; do
-    command -v "${cmd}" > /dev/null 2>&1 || return 1
-  done
-
-  # Check if /etc/sudoers exists and not empty
-  if [[ ! -s "${SUDOERS_FILE}" ]]; then
-    return 1
-  fi
-  return 0
-}
-
-# Function to check/add for @includedir or #includedir (sudo v1.9.1 and older)
-# to main sudoers file if not exists.
-# We don't want to add entry to main sudoers file directly for safety.
-find_create_includedir() {
-  if check_sudo_and_visudo; then
-    includedir_path=""
-
-    # Check for @includedir or #includedir in the sudoers file
-    while IFS= read -r line; do
-      if [[ "${line}" =~ ^[@#]includedir[[:space:]]+([^#]*) ]]; then
-        includedir_path="${BASH_REMATCH[1]}"
-        break
-      fi
-    done < "${SUDOERS_FILE}"
-
-    # Did we find any @includedir or #includedir?
-    if [[ -n "${includedir_path}" ]]; then
-      # Trim leading and trailing whitespace
-      includedir_path="${includedir_path#"${includedir_path%%[![:space:]]*}"}"
-      includedir_path="${includedir_path%"${includedir_path##*[![:space:]]}"}"
-
-      # Remove trailing slash if it exists
-      includedir_path="${includedir_path%/}"
-
-      # Check if the includedir is a directory if not create it
-      if ! [[ -d "${includedir_path}" ]]; then
-        mkdir -p "${includedir_path}" || { echo -e "\e[91mFailed to create includedir path\e[0m"; return 1; }
-      fi
-    else
-      # We need to add @includedir or #includedir to main sudoers file
-
-      # --> Workflow <--
-      # 1. Create sudoers backup/tmp files
-      # 2. Modify sudoers tmp file according to sudo version
-      # 3. Create includedir path before testing tmp file via visudo
-      # 4. Test tmp file before replacing the original sudoers file
-      # 5. Replace the original sudoers file with the tmp file
-      # 6. Test the updated sudoers file and restore from backup if there is an error
-      # 7. Clean up tmp and backup files
-      # 8. Assign custom_includedir to includedir
-
-      # 1. Create sudoers backup/tmp files
-      cp "${SUDOERS_FILE}" "${TEMP_FILE}" || { echo -e "\e[91mFailed to create sudoers tmp file\e[0m"; return 1; }
-      cp "${SUDOERS_FILE}" "${BACKUP_FILE}" || { echo -e "\e[91mFailed to create sudoers backup file\e[0m"; return 1; }
-
-      # 2. Modify sudoers tmp file according to sudo version
-      # Get the version of sudo to determine the correct includedir syntax (@ or #)
-      SUDO_VERSION="$(sudo -V | grep 'Sudo version' | awk '{print $3}')"
-      VERSION_MAJOR="$(echo "${SUDO_VERSION}" | cut -d. -f1)"
-      VERSION_MINOR="$(echo "${SUDO_VERSION}" | cut -d. -f2)"
-
-      # Check if SUDO_VERSION, VERSION_MAJOR, and VERSION_MINOR were successfully retrieved
-      if [[ -z "${SUDO_VERSION}" || -z "${VERSION_MAJOR}" || -z "${VERSION_MINOR}" ]]; then
-        echo -e "\e[91mCannot find sudo major & minor versions\e[0m"
-        return 1
-      fi
-
-      # Compare the version with reference 1.9.1 (https://www.sudo.ws/docs/man/sudoers.man/#Including_other_files_from_within_sudoers)
-      if [[ "${VERSION_MAJOR}" -gt 1 || ( "${VERSION_MAJOR}" -eq 1 && "${VERSION_MINOR}" -ge 9 ) ]]; then
-        echo "@includedir ${CUSTOM_INCLUDEDIR_PATH}" | sudo EDITOR='tee -a' visudo -f "${TEMP_FILE}" > /dev/null 2>&1 || { echo -e "\e[91mFailed to add includedir to sudoers file\e[0m"; return 1; }
-      else
-        echo "#includedir ${CUSTOM_INCLUDEDIR_PATH}" | sudo EDITOR='tee -a' visudo -f "${TEMP_FILE}" > /dev/null 2>&1 || { echo -e "\e[91mFailed to add includedir to sudoers file\e[0m"; return 1; }
-      fi
-
-      # 3. Create includedir path before testing tmp file via visudo
-      mkdir -p "${CUSTOM_INCLUDEDIR_PATH}" || { echo -e "\e[91mFailed to create /etc/sudoers.npp\e[0m"; return 1; }
-
-      # 4. Test tmp file before replacing the original sudoers file
-      if visudo -c -f "${TEMP_FILE}" > /dev/null 2>&1; then
-        # 5. Replace the original sudoers file with the tmp file
-        cp "${TEMP_FILE}" "${SUDOERS_FILE}" || { echo -e "\e[91mFailed to update sudoers file\e[0m"; return 1; }
-      fi
-
-      # 6. Test the updated sudoers file and restore from backup if there is an error
-      if ! visudo -c -f "${SUDOERS_FILE}" > /dev/null 2>&1; then
-        cp "${BACKUP_FILE}" "${SUDOERS_FILE}" || { echo -e "\e[91mFailed to return from sudoers backup file\e[0m"; return 1; }
-        return 1
-      fi
-
-      # 7. Clean up tmp and backup files
-      rm -f "${TEMP_FILE:?}"
-      rm -f "${BACKUP_FILE:?}"
-
-      # 8. Assign custom_includedir_path to includedir_path
-      includedir_path="${CUSTOM_INCLUDEDIR_PATH}"
-    fi
-  else
-    echo -e "\033[1;33mWarning:\033[1;36m '\033[1;35msudo\033[1;36m', '\033[1;35mvisudo\033[1;36m' need to be installed, and '\033[1;35m${SUDOERS_FILE}\033[1;36m' must exist to manage systemd service from WordPress admin dashboard directly. Skipped integration..\033[0m"
-    return 1
-  fi
-  return 0
-}
-
-# Automate the process of granting specific sudo permissions to the PHP-FPM
-# process owners on a system. These permissions specifically authorize
-# PHP process owners to execute systemctl commands (restart)
-# for NPP plugin systemd service 'npp-wordpress'.
-# By granting these permissions, the goal is to allow the 'npp-wordpress'
-# systemd service to be controlled directly from the WordPress admin
-# dashboard, enhancing operational flexibility and automation.
-# After successful integration, NPP users will be able to manage (restart)
-# the 'npp-wordpress' systemd service on WP admin dashboard NPP plugin STATUS tab.
-# This implementation is not strictly necessary for functional cache
-# purge & preload actions and does not break the default setup process,
-# but it is important to have this ability to control the NPP plugin systemd
-# service 'npp-wordpress' on WP admin dashboard to deal with premission issues
-# directly from front-end.
-# By the way NPP users can fully control FUSE FS mount/umount operations
-# for the original Nginx Cache Path with altered permissions for the
-# PHP-FPM process owner to address unexpected permission issues
-# and maintain stable cache consistency.
-# By granting (nginx -T) command sudo permission to PHP-FPM-USER also we are able to
-# automatically force create NGINX CACHE PATH by PHP process owner to prevent
-# the NGINX Cache Path not found errors.
-grant_sudo_perm_systemctl_for_php_process_owner() {
-  SYSTEMCTL_PATH=$(type -P systemctl)
-  NGINX_PATH=$(type -P nginx)
-
-  # Try to get/create the includedir first
-  if find_create_includedir; then
-    # Check if we have already implemented sudo privileges
-    if ! [[ -f "${includedir_path}/${NPP_SUDOERS}" ]]; then
-      # Check if the fcgi array is not empty
-      if (( ${#fcgi[@]} != 0 )); then
-        for user in "${!fcgi[@]}"; do
-          PERMISSIONS="${user} ALL=(ALL) NOPASSWD: ${SYSTEMCTL_PATH} restart ${service_file_new##*/}, ${SYSTEMCTL_PATH} is-active ${service_file_new##*/}, ${NGINX_PATH} -T"
-          echo "${PERMISSIONS}" | sudo EDITOR='tee -a' visudo -f "${includedir_path}/${NPP_SUDOERS}" > /dev/null 2>&1 || return 1
-        done
-        chmod 0440 "${includedir_path}/${NPP_SUDOERS}"
-      else
-        return 1
-      fi
-    else
-      # Check sudo perm already granted
-      if (( ${#fcgi[@]} != 0 )); then
-        for user in "${!fcgi[@]}"; do
-          PERMISSIONS="${user} ALL=(ALL) NOPASSWD: ${SYSTEMCTL_PATH} restart ${service_file_new##*/}, ${SYSTEMCTL_PATH} is-active ${service_file_new##*/}, ${NGINX_PATH} -T"
-          if grep -Fxq "${PERMISSIONS}" "${includedir_path}/${NPP_SUDOERS}"; then
-            return 2
-          fi
-        done
-      else
-        return 1
-      fi
-    fi
-  else
-    return 1
-  fi
-
-  # Check the integrity, checking main sudoers file is enough it also checks the includedir paths
-  if ! visudo -c -f "${SUDOERS_FILE}" > /dev/null 2>&1; then
-    # Revert back changes
-    rm -f "${includedir_path:?}/${NPP_SUDOERS:?}"
-    return 1
-  fi
-  return 0
-}
-
 # Restart setup
 restart_auto_setup() {
   if [[ $1 == "manual" ]]; then
@@ -432,60 +229,6 @@ restart_auto_setup() {
   # Remove the completed setup lock files
   [[ -n "${setup_flag}" ]] && rm -f "${setup_flag}" > /dev/null 2>&1
   [[ -n "${setup_flag_nginx}" ]] && rm -f "${setup_flag_nginx}" > /dev/null 2>&1
-
-  # Revert NPP sudoers configs
-  if check_sudo_and_visudo; then
-    # Check for @includedir or #includedir in the sudoers file
-    while IFS= read -r line; do
-      if [[ "${line}" =~ ^[@#]includedir[[:space:]]+([^#]*) ]]; then
-        includedir_path="${BASH_REMATCH[1]}"
-        break
-      fi
-    done < "${SUDOERS_FILE}"
-
-    # Did we find any @includedir or #includedir ?
-    if [[ -n "${includedir_path}" ]]; then
-      # Trim leading and trailing whitespace
-      includedir_path="${includedir_path#"${includedir_path%%[![:space:]]*}"}"
-      includedir_path="${includedir_path%"${includedir_path##*[![:space:]]}"}"
-
-      # Remove trailing slash if it exists
-      includedir_path="${includedir_path%/}"
-    fi
-
-    if [[ -f "${includedir_path}/${NPP_SUDOERS}" ]]; then
-      rm -f "${includedir_path:?}/${NPP_SUDOERS:?}"
-    fi
-
-    # Remove custom includedir in main sudoers file if we put before
-    # Check if includedir_path matches CUSTOM_INCLUDEDIR_PATH
-    if [[ "${includedir_path}" == "${CUSTOM_INCLUDEDIR_PATH}" ]]; then
-      # Create sudoers backup/tmp files
-      cp "${SUDOERS_FILE}" "${TEMP_FILE}"
-      cp "${SUDOERS_FILE}" "${BACKUP_FILE}"
-
-      # Use sed to remove the exact @includedir and #includedir lines from the sudoers file
-      sed -i "\|^@includedir ${CUSTOM_INCLUDEDIR_PATH}$|d" "${TEMP_FILE}" > /dev/null 2>&1
-      sed -i "\|^#includedir ${CUSTOM_INCLUDEDIR_PATH}$|d" "${TEMP_FILE}" > /dev/null 2>&1
-
-      # Test tmp before replacement with original
-      if visudo -c -f "${TEMP_FILE}" > /dev/null 2>&1; then
-        # Replace original with tmp
-        cp "${TEMP_FILE}" "${SUDOERS_FILE}"
-      fi
-
-      # Test original before remove backup, if we get error return from backup
-      if ! visudo -c -f "${SUDOERS_FILE}" > /dev/null 2>&1; then
-        cp "${BACKUP_FILE}" "${SUDOERS_FILE}"
-      else
-        # Clean up tmp/backup
-        rm -f "${TEMP_FILE:?}"
-        rm -f "${BACKUP_FILE:?}"
-        # Remove custom includedir
-        rmdir "${CUSTOM_INCLUDEDIR_PATH:?}" > /dev/null 2>&1
-      fi
-    fi
-  fi
 
   # Stop and remove systemd service
   if [[ -f "${service_file_new}" ]]; then
@@ -575,9 +318,18 @@ fi
 
 # Function to dynamically detect the location of nginx.conf
 detect_nginx_conf() {
+  NGINX_CONF=""
   local DEFAULT_NGINX_CONF_PATHS=(
     "/etc/nginx/nginx.conf"
+    "/usr/local/etc/nginx/nginx.conf"
+    "/etc/nginx/conf/nginx.conf"
     "/usr/local/nginx/conf/nginx.conf"
+    "/usr/local/etc/nginx/conf/nginx.conf"
+    "/usr/local/etc/nginx.conf"
+    "/opt/nginx/conf/nginx.conf"
+    "/www/server/nginx/conf/nginx.conf"
+    "/etc/nginx/conf.d/ea-nginx.conf"
+	"/usr/local/openresty/nginx/conf/nginx.conf"
   )
 
   for path in "${DEFAULT_NGINX_CONF_PATHS[@]}"; do
@@ -605,63 +357,28 @@ detect_nginx_conf() {
   fi
 }
 
-# Function to get the Nginx config path and try to apply chmod o+r
-# NPP Wordpress plugin needs read permission on 'nginx.conf' and vhosts
-# to parse necessarry data.
-apply_read_permission_to_nginx_files() {
-  # Get the Nginx config path
-  detect_nginx_conf
-
-  # Extract the directory path from the config file location
-  nginx_conf_dir=$(dirname "${NGINX_CONF}")
-
-  # Define directories to target, dynamically based on the nginx.conf location
-  local TARGET_DIRS=(
-    "${nginx_conf_dir}/conf.d"
-    "${nginx_conf_dir}/sites-available"
-  )
-
-  # Loop through each target directory
-  for dir in "${TARGET_DIRS[@]}"; do
-    if [[ -d "${dir}" ]]; then
-      # Loop through all files in the directory
-      find "${dir}" -type f -print0 | while IFS= read -r -d '' file; do
-        # Get the file's permission in octal format
-        file_permissions=$(stat -c "%a" "${file}")
-
-        # Extract the "others" permission
-        others_permission=${file_permissions: -1}
-
-        # Check if the "others" permission does not include read permission (4)
-        if (( others_permission & 4 == 0 )); then
-          # Apply the chmod to the file if others don't have read permission
-          chmod o+r "${file}"
-        fi
-      done
-    fi
-  done
-}
-
-# Function to extract FastCGI cache paths from NGINX configuration files
+# Function to extract Nginx cache paths from configuration files
 extract_fastcgi_cache_paths() {
   {
     # Extract paths from directly nginx.conf
-    grep -E "^\s*fastcgi_cache_path\s+" "${NGINX_CONF}" | awk '{print $2}'
+	grep -E "^\s*(fastcgi_cache_path|proxy_cache_path|scgi_cache_path|uwsgi_cache_path)\s+" "${NGINX_CONF}" | awk '{print $2}'
 
     # Also get included paths to nginx.conf and extract fastcgi cache paths
     while IFS= read -r include_line; do
       include_path=$(echo "${include_line}" | awk '{print $2}')
+	  target_dir=""
+
       # Check wildcard for multiple files
       if [[ "${include_path}" == *"*"* ]]; then
         # Remove wildcard, slash, get the exact path
         target_dir=$(echo "${include_path}" | sed 's/\*.*//' | sed 's/\/$//')
       else
         # This is a directly included single file
-        grep -E "^\s*fastcgi_cache_path\s+" "${include_path}" | awk '{print $2}'
+		grep -E "^\s*(fastcgi_cache_path|proxy_cache_path|scgi_cache_path|uwsgi_cache_path)\s+" "${include_path}" | awk '{print $2}'
       fi
-      # Search for fastcgi_cache_path in the target directory recursively
-      if [ -d "${target_dir}" ]; then
-        find -L "${target_dir}" -type f -exec grep -H "fastcgi_cache_path" {} + | awk -F: '{print $2":"$3}' | sed '/^\s*#/d' | awk '{print $2}'
+      # Search for cache paths in the target directory recursively
+	  if [[ -n "${target_dir}" && -d "${target_dir}" ]]; then
+        find -L "${target_dir}" -type f -exec grep -E "^\s*(fastcgi_cache_path|proxy_cache_path|scgi_cache_path|uwsgi_cache_path)\s+" {} + | awk -F: '{print $2":"$3}' | sed '/^\s*#/d' | awk '{print $2}'
       fi
     done < <(grep -E "^\s*include\s+" "${NGINX_CONF}" | grep -v "^\s*#" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/;//')
   } | sort | uniq
@@ -767,9 +484,10 @@ if ! [[ -f "${this_script_path}/manual-configs.nginx" ]]; then
   # Get nginx.conf
   detect_nginx_conf
 
-  # Extract FastCGI Cache Paths from nginx.conf
+  # Extract Cache Paths from nginx.conf
   FASTCGI_CACHE_PATHS=()
   while IFS= read -r path; do
+    path="${path%/}"
     FASTCGI_CACHE_PATHS+=("${path}")
   done < <(extract_fastcgi_cache_paths)
 
@@ -783,7 +501,7 @@ if ! [[ -f "${this_script_path}/manual-configs.nginx" ]]; then
   PHP_FPM_USERS=()
   while read -r user; do
     PHP_FPM_USERS+=("${user}")
-  done < <(grep -ri -h -E "^\s*user\s*=" /etc/php*/ | awk -F '=' '{print $2}' | sort | uniq | sed 's/^\s*//;s/\s*$//' | grep -v "nobody")
+  done < <(grep -rh -E "^\s*user\s*=" /etc/php*/ --include="*.conf" | awk -F '=' '{print $2}' | sort | uniq | sed 's/^\s*//;s/\s*$//' | grep -v "nobody")
 
   ACTIVE_PHP_FPM_USERS=()
   # Loop through active vhosts to find active php fpm users
@@ -975,7 +693,10 @@ if [[ -f "${this_script_path}/manual-configs.nginx" ]]; then
     user=$(echo "${line}" | awk '{print $1}')
     cache_path=$(echo "${line}" | awk '{print $2}')
 
-    # Validate the Nginx FastCGI cache path
+	# Normalize: remove trailing slash, e.g. /var/cache/nginx/ → /var/cache/nginx
+    cache_path="${cache_path%/}"
+
+    # Validate the Nginx cache path
     if ! validate_cache_paths "${cache_path}"; then
       echo -e "\033[33mFor safety, paths such as '/home' and other critical system paths are prohibited in default. Please use directories '/dev' | '/var' | '/tmp' | '/opt' must have at least one level deeper.\033[0m"
       echo -e "\e[91mError: \e[0m\e[96mExcluded: \033[0;31mForbidden Nginx Cache Path: \033[1;33m${cache_path}\033[0m"
@@ -1010,12 +731,14 @@ if [[ -f "${this_script_path}/manual-configs.nginx" ]]; then
   mv "${temp_file}" "${this_script_path}/manual-configs.nginx"
 
   # Remove duplicate lines from config file
-  awk -i inplace '!seen[$0]++' "${this_script_path}/manual-configs.nginx"
+  awk '!seen[$0]++' "${this_script_path}/manual-configs.nginx" > "${this_script_path}/manual-configs.nginx.dedup" \
+    && mv "${this_script_path}/manual-configs.nginx.dedup" "${this_script_path}/manual-configs.nginx"
 
   # After validate manual-configs.nginx fully, ready to populate the array
   # Check if manual-configs.nginx before populating the array, otherwise all excluded?
   if [[ -s "${this_script_path}/manual-configs.nginx" ]]; then
     while read -r user path; do
+	  path="${path%/}"
       if [[ -z "${fcgi[$user]}" ]]; then
         fcgi["${user}"]="${path}"
       else
@@ -1030,31 +753,9 @@ if [[ -f "${this_script_path}/manual-configs.nginx" ]]; then
   # Check manual setup already completed or not
   if ! [[ -f "${this_script_path}/manual_setup_on" ]]; then
     check_and_start_systemd_service && touch "${this_script_path}/manual_setup_on"
-    apply_read_permission_to_nginx_files
     check_bindfs_version
     check_libfuse_version
     print_nginx_cache_paths
-
-    grant_sudo_perm_systemctl_for_php_process_owner
-    ret=$?
-
-    # Handle the return codes
-    if [ "${ret}" -eq 0 ]; then
-      # Success: Sudo privileges granted
-      echo -e "\e[92mSuccess:\e[0m sudo privileges granted for systemd service \e[93mnpp-wordpress\e[0m to PHP-FPM users."
-      for user in "${!fcgi[@]}"; do
-        echo -e "Website User: \e[93m${user}\e[0m is a passwordless sudoer to manage the systemd service \e[93mnpp-wordpress\e[0m."
-      done
-    elif [ "${ret}" -eq 2 ]; then
-      # Already Granted
-      echo -e "\e[94mInfo:\e[0m sudo privileges for systemd service \e[93mnpp-wordpress\e[0m are already granted to PHP-FPM users."
-      for user in "${!fcgi[@]}"; do
-        echo -e "Website User: \e[93m${user}\e[0m already has passwordless sudo access to manage the systemd service \e[93mnpp-wordpress\e[0m."
-      done
-    else
-      # Error: Handle unexpected return codes
-      echo -e "\e[91mError:\e[0m Failed to grant sudo privileges for systemd service \e[93mnpp-wordpress\e[0m to PHP-FPM users."
-    fi
     echo ""
   fi
 else
@@ -1093,31 +794,9 @@ else
     read -rp $'\e[96mDo you want to continue with the auto configuration? This may takes a while.. \e[92m[Y/n]: \e[0m' confirm
     if [[ ${confirm} =~ ^[Yy]$ ]]; then
       check_and_start_systemd_service && touch "${this_script_path}/auto_setup_on"
-      apply_read_permission_to_nginx_files
       check_bindfs_version
       check_libfuse_version
       print_nginx_cache_paths
-
-      grant_sudo_perm_systemctl_for_php_process_owner
-      ret=$?
-
-      # Handle the return codes
-      if [ "${ret}" -eq 0 ]; then
-        # Success: Sudo privileges granted
-        echo -e "\e[92mSuccess:\e[0m sudo privileges granted for systemd service \e[93mnpp-wordpress\e[0m to PHP-FPM users."
-        for user in "${!fcgi[@]}"; do
-          echo -e "Website User: \e[93m${user}\e[0m is a passwordless sudoer to manage the systemd service \e[93mnpp-wordpress\e[0m."
-        done
-      elif [ "${ret}" -eq 2 ]; then
-        # Already Granted
-        echo -e "\e[94mInfo:\e[0m sudo privileges for systemd service \e[93mnpp-wordpress\e[0m are already granted to PHP-FPM users."
-        for user in "${!fcgi[@]}"; do
-          echo -e "Website User: \e[93m${user}\e[0m already has passwordless sudo access to manage the systemd service \e[93mnpp-wordpress\e[0m."
-        done
-      else
-        # Error: Handle unexpected return codes
-        echo -e "\e[91mError:\e[0m Failed to grant sudo privileges for systemd service \e[93mnpp-wordpress\e[0m to PHP-FPM users."
-      fi
       echo ""
     else
       manual_setup
@@ -1125,20 +804,19 @@ else
   fi
 fi
 
+count_instances() {
+  local count=0
+  for user in "${!fcgi[@]}"; do
+    IFS=':' read -r -a paths <<< "${fcgi[$user]}"
+    count=$((count + ${#paths[@]}))
+  done
+  echo $count
+}
+
 # FUSE mount operations for the original Nginx Cache Path
 fuse-mount() {
   check_bindfs_version
   check_libfuse_version
-
-  # Count total instances (PHP-FPM-USER | Nginx Cache Path)
-  count_instances() {
-    local count=0
-    for user in "${!fcgi[@]}"; do
-      IFS=':' read -r -a paths <<< "${fcgi[$user]}"
-      count=$((count + ${#paths[@]}))
-    done
-    echo $count
-  }
 
   # Check if any "PHP-FPM-USER | Nginx Cache Path" instances are found; if not, exit
   instance_count=$(count_instances)
@@ -1154,12 +832,14 @@ fuse-mount() {
     IFS=':' read -r -a paths <<< "${fcgi[$user]}"
 
     for path in "${paths[@]}"; do
-      if ! mount | grep "${path}" >/dev/null 2>&1; then
+      if ! mount | grep -q " on ${path}-npp "; then
         # Attempt to mount using bindfs
         [ ! -d "${path}-npp" ] && mkdir "${path}-npp"
-        bindfs -u "${user}" -g "${user}" --perms=u=rwx:g=rx:o= "${path}" "${path}"-npp
+		if ! bindfs -u "${user}" -g "${user}" --perms=u=rwx:g=rx:o= "${path}" "${path}-npp"; then
+          echo -e "\e[91mError:\e[0m bindfs failed to mount \e[93m${path}\e[0m to \e[93m${path}-npp\e[0m for PHP-FPM-USER: \e[93m${user}\e[0m"
+        fi
       else
-        mount_point=$(mount | grep "${path}" | awk -F ' on | type ' '{print $2}')
+        mount_point=$(mount | grep " on ${path}-npp " | awk -F ' on | type ' '{print $2}')
         echo -e "\e[93mWarning: \e[96mThe original Nginx FastCGI Cache Directory (\e[93m${path}\e[96m) is already mounted on FUSE at: (\e[93m${mount_point}\e[96m). It is EXCLUDED for PHP-FPM-USER: (\e[93m${user}\e[96m)\e[0m"
       fi
     done
@@ -1173,12 +853,12 @@ fuse-mount() {
     IFS=':' read -r -a paths <<< "${fcgi[$user]}"
 
     for path in "${paths[@]}"; do
-      if mount | grep -q "${path}" >/dev/null 2>&1; then
-        mount_point=$(mount | grep "${path}" | awk -F ' on | type ' '{print $2}')
-        messages+=("All done! Nginx FastCGI Cache Path: (${path}) mounted on FUSE at: (${mount_point}) for PHP-FPM-USER: (${user}), with altered permissions.")
+      if mount | grep -q " on ${path}-npp "; then
+        mount_point=$(mount | grep " on ${path}-npp " | awk -F ' on | type ' '{print $2}')
+        messages+=("All done! Nginx Cache Path: (${path}) mounted on FUSE at: (${mount_point}) for PHP-FPM-USER: (${user}), with altered permissions.")
         (( instance_count++ ))
       else
-        messages+=("CANNOT mount the Nginx FastCGI Cache Path: (${path}) on FUSE at: (${path}-npp) for PHP-FPM-USER: (${user}), with altered permissions.")
+        messages+=("CANNOT mount the Nginx Cache Path: (${path}) on FUSE at: (${path}-npp) for PHP-FPM-USER: (${user}), with altered permissions.")
       fi
     done
   done
@@ -1202,17 +882,22 @@ fuse-mount() {
 fuse-umount() {
   # Kill on-going preload process for all websites first
   for load in "${!fcgi[@]}"; do
-    # Update according to NPP v2.0.4
-    read -r -a PIDS <<< "$(pgrep -a -f "wget .*--recursive .*--no-cache .*--delete-after .*-P ${fcgi[$load]}" | grep -v "cpulimit" | awk '{print $1}')"
-    if (( "${#PIDS[@]}" )); then
-      for pid in "${PIDS[@]}"; do
-        if ps -p "${pid}" >/dev/null 2>&1; then
-          kill -9 "${pid}" && echo "Cache preload process ${pid} for website ${load} is killed!"
-        else
-          echo "No cache preload process found for website ${load} - last running process was ${pid}"
-        fi
-      done
-    else
+    IFS=':' read -r -a load_paths <<< "${fcgi[$load]}"
+    found_any=0
+    for load_path in "${load_paths[@]}"; do
+      read -r -a PIDS <<< "$(pgrep -a -f "wget .*--recursive .*--no-cache .*--delete-after .*-P ${load_path}" | grep -v "cpulimit" | awk '{print $1}')"
+      if (( "${#PIDS[@]}" )); then
+        found_any=1
+        for pid in "${PIDS[@]}"; do
+          if ps -p "${pid}" >/dev/null 2>&1; then
+            kill -9 "${pid}" && echo "Cache preload process ${pid} for website ${load} is killed!"
+          else
+            echo "No cache preload process found for website ${load} - last running process was ${pid}"
+          fi
+        done
+      fi
+    done
+    if (( found_any == 0 )); then
       echo "No cache preload process found for website ${load}"
     fi
   done
@@ -1221,12 +906,12 @@ fuse-umount() {
   for user in "${!fcgi[@]}"; do
     IFS=':' read -r -a paths <<< "${fcgi[$user]}"
     for path in "${paths[@]}"; do
-      if mount | grep "${path}" >/dev/null 2>&1; then
-        mount_point=$(mount | grep "${path}" | awk -F ' on | type ' '{print $2}')
+      if mount | grep -q " on ${path}-npp "; then
+        mount_point=$(mount | grep " on ${path}-npp " | awk -F ' on | type ' '{print $2}')
         umount "${mount_point}" >/dev/null 2>&1
         rm -r "${mount_point:?}" >/dev/null 2>&1
         # Check umount completed
-        if ! mount | grep -q "${path}" >/dev/null 2>&1; then
+        if ! mount | grep -q " on ${path}-npp "; then
           echo "Nginx FastCGI Cache Path: (${path}) umounted on FUSE at: (${mount_point}) for PHP-FPM-USER: (${user})"
         else
           echo "Nginx FastCGI Cache Path: (${path}) CANNOT umounted on FUSE at: (${mount_point}) for PHP-FPM-USER: (${user})"
@@ -1241,7 +926,7 @@ case "$1" in
   --wp-fuse-mount ) fuse-mount ;;
   --wp-fuse-umount  ) fuse-umount  ;;
   *                  )
-  if [ $# -gt 1 ]; then
+  if [ $# -ge 1 ]; then
     help
   fi ;;
 esac
