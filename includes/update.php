@@ -16,14 +16,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Check for plugin updates and run update routines if necessary.
 function nppp_check_for_plugin_update() {
-    // Get the current plugin version directly from the plugin file header.
-    $plugin_headers  = get_file_data( NPPP_PLUGIN_FILE, array( 'Version' => 'Version' ) );
-    $current_version = $plugin_headers['Version'];
-
-    // Bail if the version string could not be read from disk.
-    if ( empty( $current_version ) ) {
+    // NPPP_PLUGIN_VERSION is defined in the main plugin file
+    // alongside NPPP_PLUGIN_FILE and must be kept in sync with the file header.
+    if ( ! defined( 'NPPP_PLUGIN_VERSION' ) ) {
         return;
     }
+    $current_version = NPPP_PLUGIN_VERSION;
 
     // Get the saved version from the database.
     $saved_version = get_option( 'nppp_plugin_version' );
@@ -87,8 +85,8 @@ function nppp_run_pending_migrations( $old_version, $new_version ) {
         }
     }
 
-    // Set a short-lived transient so the admin_notices hook (which fires after
-    // load-settings_page_nginx_cache_settings on the same page load)
+    // Set a short-lived transient so the admin_notices hook can display the
+    // migration result on the next page load.
     if ( ! empty( $ran_migrations ) ) {
         $versions_str = implode( ', ', array_unique( $ran_migrations ) );
         set_transient(
