@@ -8,8 +8,7 @@
 
 ---
 
-🚀 **Support this project!** If NPP has improved your workflow, consider giving it a ⭐ to help us grow:  
-🚀 **Enjoying NPP?**  Buy me a coffee to support continued development.
+🚀 **Support this project!** If NPP has improved your workflow, consider giving it a ⭐ to help us grow:
 
 ---
 
@@ -58,6 +57,8 @@ This approach provides a flexible and architecture-agnostic way to control Nginx
 
 🔄 **Preload All Nginx Cache**: Warm the Nginx cache with the most recent data for the entire website.
 
+🎯 **HTTP Purge (ngx_cache_purge)**: When the Nginx cache module is available, NPP uses it as the fastest purge path. Falls back gracefully to index and filesystem purge when the module is not present.
+
 🚀 **Auto Preload Nginx Cache**: Automatically preloads the cache when Auto Purge is enabled for a POST/PAGE or after the Purge All action.
 
 🧼 **Auto Purge Nginx Cache**: Purge cache on Post/Page content changes, comment status updates, theme/plugin updates, or when compatible Cache Plugins trigger a purge. Nginx cache is preloaded automatically if Auto Preload is enabled (for the entire site or individual page).
@@ -79,8 +80,6 @@ This approach provides a flexible and architecture-agnostic way to control Nginx
 🔍 **On-Page Nginx Cache Purge & Preload**: Manually purge and preload Nginx cache for the currently visited page directly from the frontend.
 
 🗝️ **Custom Cache Key Support**: Define a regex pattern to parse URLs based on your custom `_cache_key` format.
-
-⚡ **Optimized Nginx Cache Preload**: Enhance Nginx cache preload performance with options to limit CPU usage, exclude endpoints, wait retrievals, and apply rate limiting.
 
 📊 **Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, and Nginx status from the Status tab.
 
