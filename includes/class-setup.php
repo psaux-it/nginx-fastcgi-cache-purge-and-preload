@@ -363,7 +363,7 @@ services:
         $action = isset($_POST['nppp_action']) ? sanitize_key($_POST['nppp_action']) : '';
 
         if ($action === 'assume_on') {
-            update_option(self::RUNTIME_OPTION, 1, false);
+            update_option(self::RUNTIME_OPTION, 1, true);
 
             // Define constant for current request lifecycle so subsequent code sees it.
             if (! defined('NPPP_ASSUME_NGINX')) {
