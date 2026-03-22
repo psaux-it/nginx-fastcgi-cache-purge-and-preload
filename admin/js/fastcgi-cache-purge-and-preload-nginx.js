@@ -2676,11 +2676,11 @@ $(document).ready(function() {
                 notification.style.borderRadius = '4px';
 
                 if (response.success) {
-                    notification.style.backgroundColor = '#00a32a';
-                    notification.textContent = response.data;
+                    notification.style.backgroundColor = '#50C878';
+                    notification.textContent = 'Index Cleared';
                 } else {
-                    notification.style.backgroundColor = '#d63638';
-                    notification.textContent = response.data;
+                    notification.style.backgroundColor = '#D32F2F';
+                    notification.textContent = 'Index cannot be cleared';
                 }
 
                 document.body.appendChild(notification);
@@ -2691,7 +2691,7 @@ $(document).ready(function() {
                             document.body.removeChild(notification);
                         }
                     }, 300);
-                }, 3000);
+                }, 1700);
             },
             error: function() {
                 document.body.removeChild(spinner);
