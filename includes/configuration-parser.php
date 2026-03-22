@@ -447,14 +447,14 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
     ?>
     <header></header>
     <main>
-        <section class="nginx-status" style="background-color: mistyrose;">
-            <h2><?php esc_html_e('Nginx Detection', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
+        <section class="clear-plugin-cache" style="background-color: mistyrose;">
+            <h2><?php esc_html_e('Clear URL Index', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
             <p style="padding-left: 10px; font-weight: 500;">
-                <?php esc_html_e('Nginx detection may fail in proxy, CDN, Docker, or container environments even when Nginx is actively serving your site. The Setup page lets you resolve this by binding your real nginx.conf directly into the WordPress environment, or by enabling Assume-Nginx mode to bypass detection and unlock all plugin features immediately.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                <?php esc_html_e('The URL index maps cached URLs to their filesystem paths, enabling fast single-page purges without a full directory scan. Clear it if you suspect stale entries — for example after moving the cache directory, changing the cache key, or if single-page purges are not working correctly. The index rebuilds automatically on the next purge or preload operation.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
             </p>
-            <a href="<?php echo esc_url( admin_url( 'admin.php?page=nppp-setup' ) ); ?>" class="button button-primary" style="margin-left: 10px; margin-bottom: 15px; background-color: #2271b1 !important; color: white !important;">
-                <?php esc_html_e('Go to Setup', 'fastcgi-cache-purge-and-preload-nginx'); ?>
-            </a>
+            <button id="nppp-clear-url-index-btn" class="button button-primary" style="margin-left: 10px; margin-bottom: 15px;">
+                <?php esc_html_e('Clear URL Index', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+            </button>
         </section>
         <section class="nginx-status">
             <h2><?php esc_html_e('NGINX & FUSE STATUS', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
