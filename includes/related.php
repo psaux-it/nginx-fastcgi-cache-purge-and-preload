@@ -209,18 +209,29 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
                 continue;
             }
 
-            $nppp_rel_path  = $nppp_rel_index[ $nppp_rel_key ];
+            $nppp_rel_paths = $nppp_rel_index[ $nppp_rel_key ];
             $nppp_rel_entry = $pending[ $nppp_rel_key ];
 
-            if ( ! $wp_filesystem->exists( $nppp_rel_path )
-                || ! $wp_filesystem->is_readable( $nppp_rel_path )
-                || ! $wp_filesystem->is_writable( $nppp_rel_path )
-                || nppp_validate_path( $nppp_rel_path, true ) !== true
-            ) {
-                continue; // stale — leave in $pending for iterator fallback
+            $nppp_rel_deleted   = false;
+            $nppp_rel_any_valid = false;
+
+            foreach ( $nppp_rel_paths as $nppp_rel_path ) {
+                if ( ! $wp_filesystem->exists( $nppp_rel_path )
+                    || ! $wp_filesystem->is_readable( $nppp_rel_path )
+                    || ! $wp_filesystem->is_writable( $nppp_rel_path )
+                    || nppp_validate_path( $nppp_rel_path, true ) !== true
+                ) {
+                    continue;
+                }
+                $nppp_rel_any_valid = true;
+                if ( $wp_filesystem->delete( $nppp_rel_path ) ) {
+                    $nppp_rel_deleted = true;
+                }
             }
 
-            $nppp_rel_deleted = (bool) $wp_filesystem->delete( $nppp_rel_path );
+            if ( ! $nppp_rel_any_valid ) {
+                continue;
+            }
 
             if ( $nppp_rel_deleted ) {
                 nppp_display_admin_notice( 'success', sprintf(
@@ -243,7 +254,7 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
 
             unset( $pending[ $nppp_rel_key ] );
         }
-        unset( $nppp_rel_index, $nppp_rel_key, $nppp_rel_path, $nppp_rel_entry, $nppp_rel_deleted );
+        unset( $nppp_rel_index, $nppp_rel_key, $nppp_rel_paths, $nppp_rel_path, $nppp_rel_entry, $nppp_rel_deleted, $nppp_rel_any_valid );
     }
 
     nppp_display_admin_notice( 'info', sprintf(
@@ -355,9 +366,13 @@ function nppp_purge_urls_silent(string $nginx_cache_path, array $urls): array {
                     // nginx re-caches to same deterministic path on next visit.
                     $nppp_wb_index = get_option( 'nppp_url_filepath_index' );
                     $nppp_wb_index = is_array( $nppp_wb_index ) ? $nppp_wb_index : [];
-                    $nppp_wb_index[ $constructed ] = $pathname;
+                    $nppp_existing = $nppp_wb_index[ $constructed ] ?? [];
+                    if ( ! in_array( $pathname, $nppp_existing, true ) ) {
+                        $nppp_existing[] = $pathname;
+                    }
+                    $nppp_wb_index[ $constructed ] = $nppp_existing;
                     update_option( 'nppp_url_filepath_index', $nppp_wb_index, false );
-                    unset( $nppp_wb_index );
+                    unset( $nppp_wb_index, $nppp_existing );
 
                     nppp_display_admin_notice( 'info', sprintf(
                         /* translators: %s: related page URL */
