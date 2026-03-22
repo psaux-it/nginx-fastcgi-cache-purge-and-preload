@@ -145,7 +145,7 @@ NPP restricts cache paths to prevent accidental deletion of system files. Allowe
 
 Release date: 2026-03-22
 
-* Added: MILESTONE: HTTP Purge via ngx_cache_purge module — fastest purge path when the Nginx module is present. Falls back to filesystem automatically when not available.
+* Added: HTTP Purge via ngx_cache_purge module — fastest purge path when the Nginx module is present. Falls back to filesystem automatically when not available.
 * Added: MILESTONE: Index Purge — single-page purges now use a persistent URL index to skip full directory scans. The base index replicates the snapshot, and the index is automatically updated after each purge if the URL is not already indexed.
 * Added: Preload Watchdog — ensures post-preload tasks run immediately when preloading finishes, without depending on visitor traffic to trigger WP-Cron.
 * Added: Mobile Floating Action Button (FAB) — logged-in admins on mobile devices get a floating action button with Purge and Preload actions on the frontend.
@@ -184,6 +184,7 @@ Release date: 2026-03-22
 * Fixed: PHP timeout is now disabled before large purge and preload operations to prevent mid-operation kills on large caches.
 * Fixed: Preload flags overhauled — improved retry logic, IPv4 preference, and timeouts.
 * Fixed: WP_Filesystem no longer prompts for credentials in non-interactive contexts such as WP-Cron or REST API calls.
+* Fixed: Preload now checks the purge lock before spawning — concurrent Purge All and Preload operations no longer race against each other on the cache directory.
 * Fixed: MILESTONE: Advanced tab correctly retains the full MISS list immediately after a Purge All.
 * Fixed: Auto-purge no longer fires on fresh install before settings have been saved.
 * Fixed: GNU Wget2 (aliased as wget on some distributions-Fedora) is now detected and rejected. GNU Wget 1.x is required.
