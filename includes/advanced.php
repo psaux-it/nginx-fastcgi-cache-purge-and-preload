@@ -418,14 +418,20 @@ function nppp_premium_html($nginx_cache_path) {
     // or bots hit them and purge operations add them via write-back. They
     // must survive across Purge All + Preload All cycles because nginx will
     // always re-cache them to the same deterministic path on next visit.
+    // Single URL can hold multiple PTAH.
     if ( ! empty( $hits ) && is_array( $hits ) && ! $preload_running ) {
         $nppp_index = get_option( 'nppp_url_filepath_index' );
         $nppp_index = is_array( $nppp_index ) ? $nppp_index : [];
         foreach ( $hits as $nppp_entry ) {
-            $nppp_index[ preg_replace( '#^https?://#', '', $nppp_entry['url_encoded'] ) ] = $nppp_entry['file_path'];
+            $nppp_key      = preg_replace( '#^https?://#', '', $nppp_entry['url_encoded'] );
+            $nppp_existing = $nppp_index[ $nppp_key ] ?? [];
+            if ( ! in_array( $nppp_entry['file_path'], $nppp_existing, true ) ) {
+                $nppp_existing[] = $nppp_entry['file_path'];
+            }
+            $nppp_index[ $nppp_key ] = $nppp_existing;
         }
         update_option( 'nppp_url_filepath_index', $nppp_index, false );
-        unset( $nppp_index, $nppp_entry );
+        unset( $nppp_index, $nppp_entry, $nppp_key, $nppp_existing );
     }
 
     // Merge HIT + MISS
