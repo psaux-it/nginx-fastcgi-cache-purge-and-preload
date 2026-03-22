@@ -53,6 +53,16 @@ if (!defined('NPPP_PLUGIN_FILE')) {
     define('NPPP_PLUGIN_FILE', __FILE__);
 }
 
+// Single source of truth for the runtime directory
+if (!defined('NPPP_RUNTIME_SUBDIR')) {
+    define('NPPP_RUNTIME_SUBDIR', 'nginx-cache-purge-preload-runtime');
+}
+
+// Single source of truth for the plugin version
+if (!defined('NPPP_PLUGIN_VERSION')) {
+    define('NPPP_PLUGIN_VERSION', '2.1.4');
+}
+
 // Loads runtime paths → SPL class autoloader → full admin bootstrap.
 // require_once deduplicates — safe to call from multiple entry points.
 function nppp_load_bootstrap(): void {
