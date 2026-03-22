@@ -98,6 +98,8 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     $cancel_scheduled_event_nonce = wp_create_nonce('nppp-cancel-scheduled-event');
     // Create a nonce for plugin cache clear
     $clear_plugin_cache_nonce = wp_create_nonce('nppp-clear-plugin-cache-action');
+    // Create a nonce for URL index clear
+    $clear_url_index_nonce = wp_create_nonce('nppp-clear-url-index');
     // Create a nonce for default reject extension
     $update_default_reject_extension_option_nonce = wp_create_nonce('nppp-update-default-reject-extension-option');
     // Create a nonce for default cache key regex
@@ -137,6 +139,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'cache_schedule_nonce' => $update_cache_schedule_option_nonce,
         'cancel_scheduled_event_nonce' => $cancel_scheduled_event_nonce,
         'plugin_cache_nonce' => $clear_plugin_cache_nonce,
+        'clear_url_index_nonce' => $clear_url_index_nonce,
         'cache_key_regex_nonce' => $update_default_cache_key_regex_option_nonce,
         'enable_proxy_nonce' => $update_enable_proxy_option_nonce,
         'wget_progress_api' => esc_url(rest_url('nppp_nginx_cache/v2/preload-progress')),
