@@ -531,15 +531,35 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                 ?>
                                 <?php
                                 if ($nppp_active_path !== '') {
-                                    $fastcgi_paths = array_map(fn($p) => rtrim($p, '/'), $cache_paths['fastcgi_cache_path'] ?? []);
-                                    $proxy_paths   = array_map(fn($p) => rtrim($p, '/'), $cache_paths['proxy_cache_path'] ?? []);
-                                    if (in_array($nppp_active_path, $proxy_paths) && !in_array($nppp_active_path, $fastcgi_paths)):
+                                    $nppp_banner_fuse_map = isset($fuse_paths['fuse_map']) ? $fuse_paths['fuse_map'] : [];
+
+                                    $nppp_is_active_proxy = false;
+                                    foreach ($cache_paths['proxy_cache_path'] ?? [] as $nppp_p) {
+                                        $nppp_pn        = rtrim($nppp_p, '/');
+                                        $nppp_fuse_dest = $nppp_banner_fuse_map[$nppp_pn] ?? '';
+                                        if ($nppp_pn === $nppp_active_path || $nppp_fuse_dest === $nppp_active_path) {
+                                            $nppp_is_active_proxy = true;
+                                            break;
+                                        }
+                                    }
+
+                                    $nppp_is_active_fastcgi = false;
+                                    foreach ($cache_paths['fastcgi_cache_path'] ?? [] as $nppp_p) {
+                                        $nppp_pn        = rtrim($nppp_p, '/');
+                                        $nppp_fuse_dest = $nppp_banner_fuse_map[$nppp_pn] ?? '';
+                                        if ($nppp_pn === $nppp_active_path || $nppp_fuse_dest === $nppp_active_path) {
+                                            $nppp_is_active_fastcgi = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if ($nppp_is_active_proxy && !$nppp_is_active_fastcgi):
                                 ?>
                                 <div style="margin-bottom:10px; padding:8px 12px; background:#fff8e1; border-left:4px solid #f0ad4e; border-radius:0;">
                                     <span class="dashicons dashicons-warning" style="color:#e6a817; vertical-align:middle;"></span>
-                                    <strong style="color:#7a4f00;"><?php esc_html_e('Reverse-Proxy Cache Detected', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong><br>
+                                    <strong style="color:#7a4f00;"><?php esc_html_e('Reverse-Proxy Cache Detected!', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong><br>
                                     <span style="font-size:13px; color:#5a3800;">
-                                        <?php esc_html_e('This is common on control panels such as cPanel and Plesk. The plugin can work in this setup but may require extra configuration steps', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                                        <?php esc_html_e('The plugin supports this setup, but you must verify that your Cache Key Regex option. Incorrect regex will cause purge operations to fail silently.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
                                     </span>
                                 </div>
                                 <?php
