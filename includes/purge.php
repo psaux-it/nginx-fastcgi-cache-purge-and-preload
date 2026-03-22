@@ -163,7 +163,6 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
     // FAST-PATH 1 — HTTP (Nginx module)
     // Asks the ngx_cache_purge module to delete the entry via HTTP.
-    // Advisory only — it never blocks a main purge logic.
     //
     //   true   — HTTP 200: entry deleted from shmem + disk atomically.
     //   'miss' — HTTP 412: nginx confirmed URL not in cache (v2.5.x).
@@ -275,36 +274,55 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
     }
 
     // FAST-PATH 2 — Index (wp_option filepath lookup)
-    // Looks up the known disk path for this URL from nppp_url_filepath_index.
-    // Hit + valid file → delete directly, no directory walk needed.
+    // Looks up the known disk paths for this URL from nppp_url_filepath_index.
+    // Hit + valid files → delete directly, no directory walk needed.
     // Miss or stale pointer → fall through to recursive scan below.
-    // Index is advisory only — it never blocks a purge.
 
     $nppp_index = get_option('nppp_url_filepath_index');
     if (is_array($nppp_index) && isset($nppp_index[$url_to_search_exact])) {
-        $nppp_index_path = $nppp_index[$url_to_search_exact];
+        // Index stores an array of paths — one per Nginx cache variant
+        $nppp_index_paths = $nppp_index[$url_to_search_exact];
         unset($nppp_index);
 
-        if ($wp_filesystem->exists($nppp_index_path)
-            && $wp_filesystem->is_readable($nppp_index_path)
-            && $wp_filesystem->is_writable($nppp_index_path)
-            && nppp_validate_path($nppp_index_path, true) === true
-        ) {
-            $deleted = $wp_filesystem->delete($nppp_index_path);
+        $deleted      = false;
+        $delete_error = false;
+        $any_valid    = false;
 
+        foreach ( $nppp_index_paths as $nppp_index_path ) {
+            if ( ! $wp_filesystem->exists($nppp_index_path)
+                || ! $wp_filesystem->is_readable($nppp_index_path)
+                || ! $wp_filesystem->is_writable($nppp_index_path)
+                || nppp_validate_path($nppp_index_path, true) !== true
+            ) {
+                continue;
+            }
+            $any_valid = true;
+            if ( $wp_filesystem->delete($nppp_index_path) ) {
+                $deleted = true;
+            } else {
+                $delete_error = true;
+            }
+        }
+
+        if ( ! $any_valid ) {
+            // All pointers stale — fall through to recursive scan.
+            nppp_display_admin_notice( 'info', sprintf(
+                /* translators: %s: full page URL */
+                __( 'INFO INDEX MISS: Running full recursive scan for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $current_page_url_decoded
+            ), true, false );
+        } else {
             nppp_display_admin_notice( 'info', sprintf(
                 /* translators: %s: full page URL */
                 __( 'INFO INDEX HIT: Purge via index (no scan): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $current_page_url_decoded
             ), true, false );
 
-            if ($deleted) {
+            if ( $deleted && ! $delete_error ) {
                 if (!$chain_autopreload) {
-                    // Translators: %s: full page URL that had its cache purged.
                     nppp_display_admin_notice('success', sprintf(__( 'SUCCESS ADMIN: Nginx cache purged for page %s (index hit — no scan)', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
                 }
             } else {
-                // Translators: %s: full page URL that failed to purge.
                 nppp_display_admin_notice('error', sprintf(__( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
             }
 
@@ -347,13 +365,6 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
             return;
         }
-
-        nppp_display_admin_notice( 'info', sprintf(
-            /* translators: %s: full page URL */
-            __( 'INFO INDEX MISS: Running full recursive scan for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-            $current_page_url_decoded
-        ), true, false );
-
     } else {
         unset($nppp_index);
 
@@ -494,11 +505,15 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     // purges of this URL skip the scan entirely.
                     // Safe even after delete — nginx always re-caches this URL to
                     // the exact same deterministic path (MD5 + levels slicing).
-                    $nppp_wb_index = get_option( 'nppp_url_filepath_index' );
-                    $nppp_wb_index = is_array( $nppp_wb_index ) ? $nppp_wb_index : [];
-                    $nppp_wb_index[ $url_to_search_exact ] = $cache_path;
+                    $nppp_wb_index  = get_option( 'nppp_url_filepath_index' );
+                    $nppp_wb_index  = is_array( $nppp_wb_index ) ? $nppp_wb_index : [];
+                    $nppp_existing  = $nppp_wb_index[ $url_to_search_exact ] ?? [];
+                    if ( ! in_array( $cache_path, $nppp_existing, true ) ) {
+                        $nppp_existing[] = $cache_path;
+                    }
+                    $nppp_wb_index[ $url_to_search_exact ] = $nppp_existing;
                     update_option( 'nppp_url_filepath_index', $nppp_wb_index, false );
-                    unset( $nppp_wb_index );
+                    unset( $nppp_wb_index, $nppp_existing );
 
                     nppp_display_admin_notice( 'info', sprintf(
                         /* translators: %s: full page URL */
