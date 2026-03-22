@@ -128,6 +128,9 @@ function nppp_clear_scheduled_events_on_uninstall() {
  * Resolve runtime directory used by plugin artifacts.
  */
 function nppp_get_runtime_dir_on_uninstall() {
+    // Fallback in case uninstall.php is somehow invoked without the main file.
+    $runtime_subdir = defined('NPPP_RUNTIME_SUBDIR') ? NPPP_RUNTIME_SUBDIR : 'nginx-cache-purge-preload-runtime';
+
     $uploads_base = '';
     if (function_exists('wp_upload_dir')) {
         $uploads = wp_upload_dir();
@@ -140,7 +143,7 @@ function nppp_get_runtime_dir_on_uninstall() {
         $uploads_base = WP_CONTENT_DIR . '/uploads';
     }
 
-    return rtrim($uploads_base, '/\\') . '/nginx-cache-purge-preload-runtime';
+    return rtrim($uploads_base, '/\\') . '/' . $runtime_subdir;
 }
 
 /**
