@@ -392,6 +392,15 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         }
     }
 
+    // Abort if a purge operation is actively holding the lock. Spawning wget
+    // into a cache directory being concurrently deleted can produce partial
+    // cache entries, stall on blocked I/O, or write files that are immediately
+    // removed. The admin can retry once the purge finishes.
+    if ( function_exists('nppp_is_purge_lock_held') && nppp_is_purge_lock_held() ) {
+        nppp_display_admin_notice('info', __( 'INFO: Nginx cache preload skipped — a cache purge operation is currently in progress. Please try again after the purge completes.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        return;
+    }
+
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $default_wait_time = 0;
@@ -900,6 +909,12 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         }
     } elseif (!nppp_perform_file_operation($PIDFILE, 'create')) {
         nppp_display_admin_notice('error', __( 'FATAL ERROR: Failed to create PID file.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        return;
+    }
+
+    // Abort if a purge is in progress — same race-condition guard as nppp_preload().
+    if ( function_exists('nppp_is_purge_lock_held') && nppp_is_purge_lock_held() ) {
+        nppp_display_admin_notice('info', __( 'INFO: Nginx cache preload skipped — a cache purge operation is currently in progress. Please try again after the purge completes.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
 
