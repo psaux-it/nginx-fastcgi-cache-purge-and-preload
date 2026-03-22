@@ -3203,12 +3203,8 @@ function nppp_defaults_on_plugin_activation() {
     // Update options in the database
     update_option('nginx_cache_settings', $updated_options);
 
-    // Get the current plugin version dynamically
-    $plugin_headers  = get_file_data(NPPP_PLUGIN_FILE, array('Version' => 'Version'));
-    $current_version = $plugin_headers['Version'];
-
-    // Save the current version
-    update_option('nppp_plugin_version', $current_version);
+    // Save the current version using the compile-time constant
+    update_option('nppp_plugin_version', defined('NPPP_PLUGIN_VERSION') ? NPPP_PLUGIN_VERSION : '');
 
     // Create the log file if it doesn't exist
     $log_file_path = NGINX_CACHE_LOG_FILE;
