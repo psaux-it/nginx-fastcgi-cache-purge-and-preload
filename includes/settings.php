@@ -744,9 +744,12 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <p class="description"><?php echo esc_html__( 'Delegates single-URL purging to Nginx itself via the ngx_cache_purge module instead of NPP touching the filesystem — applies to both manual and auto purge triggers.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Recommended module: community-maintained fork v2.5.x+ (not the abandoned v2.3)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Broadly compatible with managed hosting and control panels where ngx_cache_purge is pre-compiled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Purge All always uses filesystem operations — HTTP Purge applies only to single-URL and related URL purges.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Falls back to filesystem purge automatically if the module is unavailable — existing workflow is fully preserved.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'When NPP\'s URL index already holds more than one cache path for a URL (e.g. Vary or mobile variants), HTTP Purge is bypassed and the index is used directly.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'HTTP purge can only remove one entry at a time.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
                         <tr valign="top" id="nppp-http-purge-suffix-row">
