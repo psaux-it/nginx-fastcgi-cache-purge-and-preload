@@ -94,10 +94,21 @@ jobs:
           [[ -f safexec/rpm/SHA256SUMS ]] || { echo "Missing safexec/rpm/SHA256SUMS"; exit 1; }
           [[ -f safexec/apk/SHA256SUMS ]] || { echo "Missing safexec/apk/SHA256SUMS"; exit 1; }
 
-          # Normalize to "hash  filename" with bare filenames (no dirs), dedupe, and sort.
+          # deb and rpm — strip directory prefix, keep bare filename
           awk '{h=$1; $1=""; sub(/^[ \t]+/,""); f=$0; gsub(/^.*\//,"",f); printf "%s  %s\n",h,f }' \
-            safexec/deb/SHA256SUMS safexec/rpm/SHA256SUMS safexec/apk/SHA256SUMS \
+            safexec/deb/SHA256SUMS safexec/rpm/SHA256SUMS \
             | sort -u > SHA256SUMS
+
+          # apk — strip directory prefix but inject arch suffix before .apk
+          # aarch64/safexec-X.apk → safexec-X.aarch64.apk
+          # x86_64/safexec-X.apk  → safexec-X.x86_64.apk
+          while IFS= read -r line; do
+            hash=$(echo "$line" | awk '{print $1}')
+            path=$(echo "$line" | awk '{print $2}')
+            arch=$(echo "$path" | cut -d/ -f1)
+            base=$(basename "$path" .apk)
+            echo "$hash  ${base}.${arch}.apk"
+          done < safexec/apk/SHA256SUMS | sort -u >> SHA256SUMS
 
           echo "Merged SHA256SUMS:"
           cat SHA256SUMS
