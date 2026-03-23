@@ -343,9 +343,11 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
 
             if ( $deleted && ! $delete_error ) {
                 if (!$chain_autopreload) {
+                    // translators: %s: full page URL
                     nppp_display_admin_notice('success', sprintf(__( 'SUCCESS ADMIN: Nginx cache purged for page %s (index hit — no scan)', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
                 }
             } else {
+                // translators: %s: full page URL
                 nppp_display_admin_notice('error', sprintf(__( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
             }
 
