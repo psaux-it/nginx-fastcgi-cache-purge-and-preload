@@ -2,7 +2,7 @@
 /**
  * Setup controller for Nginx Cache Purge Preload
  * Description: Handles activation routing and setup gating until compatible Nginx conditions are met.
- * Version: 2.1.4
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
