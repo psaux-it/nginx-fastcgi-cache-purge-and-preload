@@ -169,6 +169,7 @@ Release date: 2026-03-22
 * Added: PHP Response Timeout — configurable read timeout for preload. Recommended to increase for WooCommerce stores or sites with heavy plugins.
 * Added: Dashboard widget now shows HTTP Purge, Cloudflare APO, and Redis Object Cache status alongside existing indicators.
 * Added: Help tab expanded with new sections covering HTTP Purge setup, Accept-Encoding, vary double-cache issue fix, Cloudflare APO Sync, Redis Object Cache Sync, Preload Watchdog, Cache Coverage Ratio, and a feature dependency map.
+* Added: Clear URL Index button in the Status tab — allows manual reset of the persistent URL→filepath index when cache paths change or index entries become stale.
 * Security: MILESTONE: Plugin bootstrap is now lazy-loaded — NPP stays completely dormant on requests where no cache operation is needed.
 * Security: REST API now returns 403 when disabled instead of 200. Client IP resolution now validates forwarded headers against a trusted proxy list.
 * Security: Cache purge is now aborted if the configured Nginx cache path is inside or overlaps the WordPress installation directory, preventing accidental deletion of WordPress files. (Credit: @doctorproctor)
@@ -199,6 +200,9 @@ Release date: 2026-03-22
 * Fixed: Preload requests no longer fail with invalid header errors (proxy) — header and user-agent values were incorrectly wrapped in literal double-quote characters which produced malformed HTTP headers.
 * Fixed: Uninstall now performs complete cleanup — all plugin options, all transient groups, runtime files (logs, PID files, crawl snapshot), the runtime directory itself, and scheduled cron hooks are all removed. Multisite installations are fully supported — cleanup runs on every site in the network.
 * Fixed: Status tab Nginx Cache Paths display completely redesigned — each detected path now shows inline contextual badges (Active, Other vhost, Path Blocked) and a cache type badge (FastCGI, Proxy, SCGI, uWSGI). Active path detection now works correctly for FUSE mount setups. A reverse-proxy cache notice is shown when the active path is a proxy_cache_path (common on cPanel and Plesk). Symlinked cache paths no longer incorrectly fail the traversal check.
+* Fixed: Index now stores an array of paths per URL instead of a single path — correctly handles multiple cache variants for the same URL (Vary: Accept-Encoding variants, mobile cache entries when the Nginx cache key includes a mobile variable).
+* Fixed: Single-page purge scan loop now continues past the first URL match instead of returning — all cache variants for a URL (Vary, mobile) are deleted in a single directory walk.
+* Fixed: HTTP Purge is now bypassed when the index holds more than one path for a URL — HTTP purge can only remove one shmem/disk entry; index-based purge is used instead to ensure all variants are removed.
 * Changed: Preload completion email template completely redesigned — now shows a stats dashboard with Crawl Time, URLs Crawled, Transfer Size, Average Speed, Cache Coverage, Cache Size, Broken URLs, Mobile Pass status, Trigger source, and Finish Time. Includes dark mode support and responsive mobile layout.
 * Changed: Allowed Nginx cache path roots updated — /opt/ removed (too broad, risk of data loss), /cache/ added (used by GridPane, RunCloud, SpinupWP and other control panels). If your cache was stored under /opt/, move it to a supported location and re-save settings.
 * Removed: All data collection and opt-in tracking completely removed. NPP collects no data whatsoever.
