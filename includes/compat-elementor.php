@@ -1,8 +1,8 @@
 <?php
 /**
- * Purge action functions for FastCGI Cache Purge and Preload for Nginx
- * Description: Elementor integration — purge Nginx cache when Elementor saves content or regenerates CSS.
- * Version: 2.1.4
+ * Elementor cache purge integration for Nginx Cache Purge Preload
+ * Description: Triggers targeted Nginx cache purges when Elementor saves content or regenerates CSS.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -18,17 +18,16 @@ function nppp__el_mark_purged( $set = null ) {
     return $did;
 }
 
-// Elementor-specific purge triggers
-add_action('plugins_loaded', function () {
-    if ( ! defined('ELEMENTOR_VERSION') ) return;
-
+// Elementor-specific purge triggers.
+// Register directly so lazy bootstrap loading on init does not miss plugins_loaded timing.
+if ( defined('ELEMENTOR_VERSION') && $nppp_auto_purge ) {
     // When an Elementor document is saved
     add_action('elementor/editor/after_save', 'nppp__el_after_save', 10, 2);
     add_action('elementor/document/after_save', 'nppp__el_document_after_save', 10, 2);
 
     // When Elementor clears its own files/CSS
     add_action('elementor/core/files/clear_cache', 'nppp__el_clear_files');
-});
+}
 
 function nppp__el_after_save( $post_id, $editor_data ) {
     $opts = get_option('nginx_cache_settings') ?: [];
@@ -36,7 +35,7 @@ function nppp__el_after_save( $post_id, $editor_data ) {
     if ( nppp__el_mark_purged() ) return;
 
     $cache_path = $opts['nginx_cache_path'] ?? '/dev/shm/change-me-now';
-    $pidfile    = rtrim(dirname(plugin_dir_path(__FILE__)), '/') . '/cache_preload.pid';
+    $pidfile    = nppp_get_runtime_file('cache_preload.pid');
     $tmp        = rtrim($cache_path, '/') . '/tmp';
 
     if ( get_post_status( $post_id ) !== 'publish' ) {
@@ -67,7 +66,7 @@ function nppp__el_document_after_save( $document, $data ) {
     if ( nppp__el_mark_purged() ) return;
 
     $cache_path = $opts['nginx_cache_path'] ?? '/dev/shm/change-me-now';
-    $pidfile    = rtrim(dirname(plugin_dir_path(__FILE__)), '/') . '/cache_preload.pid';
+    $pidfile    = nppp_get_runtime_file('cache_preload.pid');
     $tmp        = rtrim($cache_path, '/') . '/tmp';
 
     $post_id = method_exists($document, 'get_main_id') ? $document->get_main_id() : 0;
@@ -94,7 +93,7 @@ function nppp__el_clear_files() {
     if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
 
     $cache_path = $opts['nginx_cache_path'] ?? '/dev/shm/change-me-now';
-    $pidfile    = rtrim(dirname(plugin_dir_path(__FILE__)), '/') . '/cache_preload.pid';
+    $pidfile    = nppp_get_runtime_file('cache_preload.pid');
     $tmp        = rtrim($cache_path, '/') . '/tmp';
 
     // Elementor regenerated CSS → purge all (site-wide impact)

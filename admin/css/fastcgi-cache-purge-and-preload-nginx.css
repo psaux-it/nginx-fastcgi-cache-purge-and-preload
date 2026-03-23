@@ -1,7 +1,7 @@
 /**
- * Styles for FastCGI Cache Purge and Preload for Nginx
- * Description: This CSS file contains styles for the FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Admin styles for Nginx Cache Purge Preload
+ * Description: Defines styling for plugin admin pages, tabs, tables, and controls.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -188,7 +188,8 @@
 
 /* Status Summary Table */
 #nppp-status-tab .status-summary table,
-#nppp-status-tab .system-checks table {
+#nppp-status-tab .system-checks table,
+#nppp-preload-progress-section table {
     width: 100%;
     border-collapse: collapse;
 }
@@ -838,7 +839,7 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
         width: 36px !important;
         height: 36px !important;
     }
- 
+
     .ui-state-active, .ui-widget-content .ui-state-active, .ui-widget-header .ui-state-active, a.ui-button:active, .ui-button:active, .ui-button.ui-state-active:hover {
         border: unset;
     }
@@ -1774,7 +1775,7 @@ button.nppp-preload-btn[disabled] {
 #nppp_datetimepicker1Input::placeholder {
     color: #2c3338 !important;
     font-size: 14px !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;    
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;
 }
 
 .status-and-nginx-info-container {
@@ -1897,6 +1898,18 @@ button.nppp-preload-btn[disabled] {
     border-collapse: collapse;
 }
 
+/* Cache Hit Ratio — colour bands applied via JS after DOM load */
+#npppCacheHitRatio.ratio-high   span:last-child { color: #008000; } /* >= 80 % */
+#npppCacheHitRatio.ratio-medium span:last-child { color: #e69500; } /* 50-79 % */
+#npppCacheHitRatio.ratio-low    span:last-child { color: #d9534f; } /* < 50 % */
+#npppCacheHitRatio.ratio-na     span:last-child { color: #72777c; }
+
+/* Cache Disk Size — colour bands (low usage = good) */
+#npppCacheDiskSize.disk-low    span:last-child { color: #008000; } /* < 50 % used  */
+#npppCacheDiskSize.disk-medium span:last-child { color: #e69500; } /* 50-79 % used */
+#npppCacheDiskSize.disk-high   span:last-child { color: #d9534f; } /* >= 80 % used */
+#npppCacheDiskSize.disk-na     span:last-child { color: #72777c; }
+
 /* Style for the settings tab group separator */
 .nppp-separator {
     border: none;
@@ -1982,6 +1995,93 @@ button.nppp-preload-btn[disabled] {
 #nginx_cache_purge_on_update {
     position: absolute;
     left: -99em;
+}
+
+/* Style for the toggle switch cloudflare container */
+.nppp-onoffswitch-cloudflare {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default cloudflare checkbox */
+.nppp-onoffswitch-checkbox-cloudflare {
+    display: none;
+}
+
+/* Style for the cloudflare toggle switch label */
+.nppp-onoffswitch-label-cloudflare {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* Style for cloudflare text labels (On and Off) */
+.nppp-onoffswitch-inner-cloudflare .nppp-on-cloudflare,
+.nppp-onoffswitch-inner-cloudflare .nppp-off-cloudflare {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-cloudflare .nppp-on-cloudflare {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-cloudflare .nppp-off-cloudflare {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Style for the toggle switch handle cloudflare */
+.nppp-onoffswitch-switch-cloudflare {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #ea1919;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Adjust styles based on checkbox state */
+#nppp_cloudflare_apo_sync:checked + .nppp-onoffswitch-label-cloudflare .nppp-onoffswitch-inner-cloudflare .nppp-on-cloudflare {
+    color: #23282d;
+}
+
+#nppp_cloudflare_apo_sync:checked + .nppp-onoffswitch-label-cloudflare .nppp-onoffswitch-switch-cloudflare {
+    width: 55px;
+    transform: translateX(60px);
+    background: #66b317;
+}
+
+/* Show the Off label */
+.nppp-onoffswitch-checkbox-cloudflare + .nppp-onoffswitch-label-cloudflare .nppp-off-cloudflare {
+    display: block;
+}
+
+/* Hide the original cloudflare checkbox */
+#nppp_cloudflare_apo_sync {
+    position: absolute;
+    left: -99em;
+}
+
+/* style disabled cloudflare settings accordingly */
+.nppp-onoffswitch-checkbox-cloudflare[disabled] + .nppp-onoffswitch-label-cloudflare {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* style disabled auto purge settings accordingly */
@@ -2743,14 +2843,49 @@ p.description {
     cursor: not-allowed;
 }
 
-.nppp-progress-status {
-    margin-top: 0px;
+/* Preload Progress Section */
+#nppp-preload-progress-section {
+    display: none; /* hidden until JS shows it */
+}
+
+.nppp-progress-wrap {
+    padding: 0;
+}
+
+.nppp-bar-track {
+    width: 100%;
+    height: 22px;
+    background-color: #e5e7eb;
+    overflow: hidden;
+    position: relative;
+}
+
+.nppp-bar-fill {
+    height: 100%;
+    width: 0%;
+    background-color: #337AB7;
+    position: relative;
+    transition: width 0.4s ease;
+}
+
+.nppp-bar-fill span {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    color: #fff;
+    font-weight: 600;
     font-size: 13px;
-    color: #374151;
-    background-color: mintcream;
-    border: 1px solid #e5e7eb;
-    padding: 8px 12px;
-    border-radius: 0px;
+    line-height: 22px;
+    pointer-events: none;
+    user-select: none;
+}
+
+/*
+.nppp-progress-status {
+    margin-top: 0;
     line-height: 1.6;
     word-break: break-word;
 }
@@ -2780,28 +2915,94 @@ p.description {
 .nppp-done {
     margin-top: 6px;
     font-weight: bold;
-    color: green;
+    color: #166534;
+    font-size: 14px;
+}
+.nppp-done.nppp-interrupted {
+    color: #92400e;
+    background-color: #fffbeb;
+    border-left: 3px solid #f59e0b;
+    padding: 4px 8px;
+}
+.nppp-done.nppp-interrupted + .nppp-progress-row {
+    margin-top: 4px;
+    padding: 3px 8px;
+    background-color: #fffbeb;
+    border-left: 3px solid #f59e0b;
+    font-size: 13px;
+    color: #78350f;
+}
+.nppp-broken-urls {
+    margin: 2px 0 0 0;
+    max-height: 140px;
+    overflow: auto;
+}
+.nppp-broken-urls li {
+    margin: 2px 0;
+}
+*/
+
+.nppp-progress-status {
+    word-break: break-word;
+}
+.nppp-broken-urls {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 140px;
+    overflow: auto;
+}
+.nppp-broken-urls li {
+    margin: 0;
+    padding: 0;
+    font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+}
+
+/* Progress section */
+#nppp-preload-progress-section td.status,
+#nppp-preload-progress-section td.check {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
     font-size: 14px;
 }
 
-#wpt-bar-text {
-    position: absolute;
-    top: 0;
-    left: 0;
+/* Inline progress bar inside the Progress (%) td.status cell */
+.nppp-pct-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     width: 100%;
+}
+.nppp-pct-bar-track {
+    flex: 1;
+    height: 18px;
+    background: #e5e7eb;
+    overflow: hidden;
+    position: relative;
+    min-width: 60px;
+}
+.nppp-pct-bar-fill {
     height: 100%;
-    text-align: center;
-    color: white;
+    position: relative;
+    transition: width 0.4s ease;
+}
+.nppp-pct-bar-fill span {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
     font-weight: 600;
-    font-size: 14px;
-    line-height: 20px;
+    font-size: 12px;
     pointer-events: none;
     user-select: none;
+    white-space: nowrap;
 }
 
 /* Toasts  */
 #nppp-toast-container{
-    position:fixed; right:12px; z-index:999999;
+    position:fixed; right:20px; z-index:999999;
     display:flex; flex-direction:column; gap:10px;
     /* fallback in case JS hasn't set top inline yet */
     top:12px;
@@ -2812,12 +3013,14 @@ p.description {
 .nppp-toast{
     min-width:280px; max-width:420px; padding:12px 14px 12px 44px;
     border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.18);
-    color:#111; background:#fff; border-left:6px solid #999;
+    color:#e8eaed; background:#1e2430; border-left:6px solid #999;
+    box-shadow:0 8px 28px rgba(0,0,0,.45);
     font:14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     position:relative; animation:nppp-slide-in .18s ease-out both;
+    font-weight:500;
 }
-.nppp-toast .nppp-close{ position:absolute; top:8px; right:10px; cursor:pointer; opacity:.5; }
-.nppp-toast .nppp-close:hover{ opacity:1; }
+.nppp-toast .nppp-close{ position:absolute; top:8px; right:10px; cursor:pointer; color:#9aa0a6; opacity:1; }
+.nppp-toast .nppp-close:hover{ color:#e8eaed; }
 .nppp-toast .nppp-ico{
     position:absolute; left:10px; top:50%; transform:translateY(-50%);
     font:20px/1 dashicons; width:24px; text-align:center;
@@ -3636,4 +3839,602 @@ body.has-sticky-submit .nppp-scrollfab{
     display:block;
     margin:2px 0 5px;
     font-style:normal;
+}
+
+/* Content category column */
+#nppp-premium-table td.nppp-category-cell {
+    color: #8b5cf6;
+    font-weight: 700;
+}
+
+/* Cache date column */
+#nppp-premium-table td.nppp-date-cell {
+    color: #6b7280;
+    font-weight: 600;
+}
+
+/* ── Advanced Tab: Preload-in-progress loading effect ── */
+.nppp-table-loading-notice {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    margin-bottom: 15px;
+    background-color: #f9edbe;
+    border-left: 6px solid #f0c36d;
+    font-size: 14px;
+    font-weight: 400;
+    color: #3c3c3c;
+    max-width: max-content;
+}
+
+.nppp-table-loading-notice .spin {
+    display: inline-block;
+    animation: nppp-spin 1.1s linear infinite;
+    font-size: 22px;
+    color: #ffba00;
+    flex-shrink: 0;
+}
+
+@keyframes nppp-spin {
+    to { transform: rotate(360deg); }
+}
+
+#nppp-premium-table_wrapper:has(.nppp-table-loading) {
+    animation: nppp-breathe 2s ease-in-out infinite;
+}
+
+@keyframes nppp-breathe {
+    0%, 100% { opacity: 1;    }
+    50%       { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nppp-table-loading-notice .spin,
+    #nppp-premium-table_wrapper:has(.nppp-table-loading) {
+        animation: none;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Excel-like column filter dropdowns  —  #nppp-premium-table
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Filter row cells */
+#nppp-premium-table thead tr.nppp-filter-row th {
+    background-color: #2a6399 !important;
+    padding: 3px 6px !important;
+    vertical-align: middle;
+    border-top: 1px solid #1e4f7a;
+    text-align: center;
+    line-height: 1;
+}
+
+#nppp-premium-table thead tr.nppp-filter-row th.nppp-filter-no-col {
+    background-color: #2a6399 !important;
+}
+
+/* Wrapper inside each filter cell */
+.nppp-filter-wrapper {
+    position: relative;
+    display: inline-flex;
+    justify-content: flex-start;
+    width: 100%;
+}
+
+/* The small trigger button */
+.nppp-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    width: 28px;
+    height: 22px;
+    padding: 0;
+    background: #FF8C00;
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.nppp-filter-btn:hover,
+.nppp-filter-btn:focus {
+    background: rgba(255,255,255,0.25);
+    border-color: rgba(255,255,255,0.6);
+    outline: none;
+}
+
+/* Active (filtered) state */
+.nppp-filter-btn--active {
+    background: #e8a800 !important;
+    border-color: #c98f00 !important;
+    color: #1a1a1a !important;
+}
+
+.nppp-filter-btn--active .nppp-filter-arrow {
+    color: #1a1a1a;
+}
+
+/* Arrow icon */
+.nppp-filter-arrow {
+    font-size: 9px;
+    color: rgba(255,255,255,0.85);
+    pointer-events: none;
+    line-height: 1;
+}
+
+/* Active badge dot */
+.nppp-filter-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    background: #d9534f;
+    color: #fff;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: bold;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* ── Dropdown panel ── */
+.nppp-filter-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 99999;
+    min-width: 200px;
+    max-width: 320px;
+    background: #fff;
+    border: 1px solid #b0c4de;
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    padding: 0;
+    overflow: hidden;
+}
+
+/* Search input inside dropdown */
+.nppp-filter-search {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    border: none;
+    border-bottom: 1px solid #dde4ec;
+    font-size: 12px;
+    color: #333;
+    background: #f5f8fc;
+    outline: none;
+    font-family: inherit;
+}
+
+.nppp-filter-search:focus {
+    background: #eef4ff;
+    border-bottom-color: #337ab7;
+}
+
+/* Scrollable list area */
+.nppp-filter-list-wrap {
+    max-height: 220px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* The UL list */
+.nppp-filter-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.nppp-filter-list li {
+    margin: 0;
+    padding: 0;
+}
+
+.nppp-filter-list li label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #222;
+    transition: background 0.1s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+}
+
+.nppp-filter-list li label:hover {
+    background: #eef4ff;
+}
+
+/* "Select All" row styling */
+.nppp-filter-all-row label {
+    font-weight: 600 !important;
+    border-bottom: 1px solid #dde4ec;
+    background: #f5f8fc;
+    color: #2a6399 !important;
+}
+
+.nppp-filter-all-row label:hover {
+    background: #dce9f7 !important;
+}
+
+/* Checkboxes inside filter list */
+.nppp-filter-list input[type="checkbox"] {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #337ab7;
+}
+
+/* Footer with Apply / Reset */
+.nppp-filter-footer {
+    display: flex;
+    gap: 6px;
+    padding: 7px 10px;
+    border-top: 1px solid #dde4ec;
+    background: #f5f8fc;
+}
+
+.nppp-filter-ok,
+.nppp-filter-clear {
+    flex: 1;
+    padding: 5px 8px;
+    border: none;
+    border-radius: 3px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    transition: background 0.15s;
+}
+
+.nppp-filter-ok {
+    background: #337ab7;
+    color: #fff;
+}
+
+.nppp-filter-ok:hover {
+    background: #2563a0;
+}
+
+.nppp-filter-clear {
+    background: #e8e8e8;
+    color: #444;
+}
+
+.nppp-filter-clear:hover {
+    background: #d0d0d0;
+}
+
+/* Scrollbar styling inside list */
+.nppp-filter-list-wrap::-webkit-scrollbar {
+    width: 6px;
+}
+.nppp-filter-list-wrap::-webkit-scrollbar-track {
+    background: #f0f0f0;
+}
+.nppp-filter-list-wrap::-webkit-scrollbar-thumb {
+    background: #b0c4de;
+    border-radius: 3px;
+}
+.nppp-filter-list-wrap::-webkit-scrollbar-thumb:hover {
+    background: #337ab7;
+}
+
+@media screen and (max-width: 768px) {
+    #nppp-premium-table thead tr.nppp-filter-row {
+        display: none;
+    }
+}
+
+/* ============================================================
+   Redis Object Cache sync toggle
+   ============================================================ */
+
+/* Container */
+.nppp-onoffswitch-redis {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default checkbox */
+.nppp-onoffswitch-checkbox-redis {
+    display: none;
+}
+
+/* Label / track */
+.nppp-onoffswitch-label-redis {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* ON / OFF text labels */
+.nppp-onoffswitch-inner-redis .nppp-on-redis,
+.nppp-onoffswitch-inner-redis .nppp-off-redis {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-redis .nppp-on-redis {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-redis .nppp-off-redis {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Handle (the sliding knob) */
+.nppp-onoffswitch-switch-redis {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #ea1919;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Checked state — slide knob right, turn green */
+#nppp_redis_cache_sync:checked + .nppp-onoffswitch-label-redis .nppp-onoffswitch-inner-redis .nppp-on-redis {
+    color: #23282d;
+}
+
+#nppp_redis_cache_sync:checked + .nppp-onoffswitch-label-redis .nppp-onoffswitch-switch-redis {
+    width: 55px;
+    transform: translateX(60px);
+    background: #66b317;
+}
+
+/* Show OFF label */
+.nppp-onoffswitch-checkbox-redis + .nppp-onoffswitch-label-redis .nppp-off-redis {
+    display: block;
+}
+
+/* Hide the real checkbox off-screen */
+#nppp_redis_cache_sync {
+    position: absolute;
+    left: -99em;
+}
+
+/* Disabled state */
+.nppp-onoffswitch-checkbox-redis[disabled] + .nppp-onoffswitch-label-redis {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Style for the watchdog toggle switch container */
+.nppp-onoffswitch-watchdog {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default watchdog checkbox */
+.nppp-onoffswitch-checkbox-watchdog {
+    display: none;
+}
+
+/* Style for the watchdog toggle switch label */
+.nppp-onoffswitch-label-watchdog {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* Style for watchdog text labels (On and Off) */
+.nppp-onoffswitch-inner-watchdog .nppp-on-watchdog,
+.nppp-onoffswitch-inner-watchdog .nppp-off-watchdog {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-watchdog .nppp-on-watchdog {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-watchdog .nppp-off-watchdog {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Style for the watchdog toggle switch handle */
+.nppp-onoffswitch-switch-watchdog {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #66b317;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Adjust styles based on watchdog checkbox state */
+#nginx_cache_watchdog:checked + .nppp-onoffswitch-label-watchdog .nppp-onoffswitch-inner-watchdog .nppp-on-watchdog {
+    color: #23282d;
+}
+
+#nginx_cache_watchdog:checked + .nppp-onoffswitch-label-watchdog .nppp-onoffswitch-switch-watchdog {
+    width: 55px;
+    transform: translateX(60px);
+    background: #ea1919;
+}
+
+/* Show the Off label watchdog */
+.nppp-onoffswitch-checkbox-watchdog + .nppp-onoffswitch-label-watchdog .nppp-off-watchdog {
+    display: block;
+}
+
+/* Hide the original watchdog checkbox */
+#nginx_cache_watchdog {
+    position: absolute;
+    left: -99em;
+}
+
+/* Style disabled watchdog toggle accordingly */
+.nppp-onoffswitch-checkbox-watchdog[disabled] + .nppp-onoffswitch-label-watchdog {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* HTTP Purge fast-path toggle */
+.nppp-onoffswitch-httppurge {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default checkbox */
+.nppp-onoffswitch-checkbox-httppurge {
+    display: none;
+}
+
+/* Label / track */
+.nppp-onoffswitch-label-httppurge {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* ON / OFF text labels */
+.nppp-onoffswitch-inner-httppurge .nppp-on-httppurge,
+.nppp-onoffswitch-inner-httppurge .nppp-off-httppurge {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-httppurge .nppp-on-httppurge {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-httppurge .nppp-off-httppurge {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Handle (the sliding knob) — RED when OFF, matches cloudflare and redis */
+.nppp-onoffswitch-switch-httppurge {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #ea1919;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Checked state — slide knob right, turn GREEN (feature is ON) */
+#nppp_http_purge_enabled:checked + .nppp-onoffswitch-label-httppurge .nppp-onoffswitch-inner-httppurge .nppp-on-httppurge {
+    color: #23282d;
+}
+
+#nppp_http_purge_enabled:checked + .nppp-onoffswitch-label-httppurge .nppp-onoffswitch-switch-httppurge {
+    width: 55px;
+    transform: translateX(60px);
+    background: #66b317;
+}
+
+/* Show OFF label */
+.nppp-onoffswitch-checkbox-httppurge + .nppp-onoffswitch-label-httppurge .nppp-off-httppurge {
+    display: block;
+}
+
+/* Hide the real checkbox off-screen */
+#nppp_http_purge_enabled {
+    position: absolute;
+    left: -99em;
+}
+
+/* Disabled state — used if the toggle is programmatically disabled */
+.nppp-onoffswitch-checkbox-httppurge[disabled] + .nppp-onoffswitch-label-httppurge {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Override WordPress 7.0 colored notice backgrounds — keep NPP notices stylish */
+.notice-nppp.notice-error,
+.notice-nppp.notice-warning,
+.notice-nppp.notice-success,
+.notice-nppp.notice-info,
+div.error.notice-nppp,
+div.updated.notice-nppp,
+.notice-nppp {
+    background-color: #fff;
+    font-weight: 500;
+    color: #3C434A !important;
+    border-top: 1px solid #c3c4c7;
+    border-right: 1px solid #c3c4c7;
+    border-bottom: 1px solid #c3c4c7;
+}
+
+.notice-nppp p,
+.notice-nppp .notice-title,
+div.error.notice-nppp p,
+div.updated.notice-nppp p,
+.form-table td .notice-nppp p {
+    color: #3C434A;
+}
+
+.notice-nppp {
+    padding: 4px 12px;
+}
+
+.notice-nppp .notice-dismiss {
+    top: 50%;
+    transform: translateY(-50%);
 }

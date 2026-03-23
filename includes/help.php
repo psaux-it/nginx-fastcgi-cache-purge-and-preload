@@ -1,8 +1,8 @@
 <?php
 /**
- * FAQ for FastCGI Cache Purge and Preload for Nginx
- * Description: This help file contains informations about FastCGI Cache Purge and Preload for Nginx plugin usage.
- * Version: 2.1.4
+ * Help and FAQ renderer for Nginx Cache Purge Preload
+ * Description: Outputs plugin documentation, onboarding guidance, and support information in admin.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -72,6 +72,198 @@ function nppp_my_faq_html() {
                     </div>
                 </div>
 
+                <h3 class="nppp-question">How does NPP purge the cache and what is the HTTP Purge?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>NPP Purge Workflow</strong></h3>
+                        <p>NPP uses a layered purge strategy. For single-URL purges (manual, auto-purge on update, related URLs) it tries each path in order and stops as soon as one succeeds. Purge All always uses the filesystem directly.</p>
+
+                        <h4><strong>Fast-Path 1 — HTTP Purge (optional)</strong></h4>
+                        <p>If <strong>HTTP Purge</strong> is enabled in settings and the <code>ngx_cache_purge</code> Nginx module is detected, NPP sends an HTTP request to the module's purge endpoint. The module removes the cache entry from shared memory and disk atomically. On HTTP 200 the filesystem is never touched — the purge is complete. On any other response NPP falls through to the next path automatically.</p>
+
+                        <h4><strong>Fast-Path 2 — Index lookup</strong></h4>
+                        <p>NPP maintains a persistent URL→Filepath index built during Preloading. If the URL is found in the index and the file still exists, NPP deletes it directly with no directory scan needed.</p>
+
+                        <h4><strong>Fast-Path 3 — Recursive filesystem scan</strong></h4>
+                        <p>If neither fast-path succeeds, NPP walks the entire Nginx cache directory, reads each file's cache key header, and deletes the matching entry. This is the original workflow and remains the fallback for all environments.</p>
+
+                        <h4><strong>Purge All</strong></h4>
+                        <p>Purge All always uses filesystem operations — it recursively removes the entire cache directory contents. HTTP Purge does not apply to Purge All. If Cloudflare APO Sync or Redis Object Cache Sync is enabled, those are triggered after the filesystem purge completes.</p>
+
+                        <h4><strong>When HTTP Purge is not available</strong></h4>
+                        <p>HTTP Purge is entirely optional. If the module is not present, not compiled, or the purge location block is not configured in Nginx, NPP falls back to the index and filesystem paths automatically. The existing workflow is fully preserved — nothing breaks.</p>
+
+                        <h4><strong>How to enable HTTP Purge</strong></h4>
+                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and enable <strong>HTTP Purge</strong>. This works out of the box on stacks that include <code>ngx_cache_purge</code> precompiled, such as popular managed hosting platforms, control panels, and servers using the Ubuntu <code>nginx-extras</code> package.</p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">Why does NPP's cache warm get bypassed by real visitors? (Accept-Encoding / Double Cache File)</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>The Problem: NPP Warms Cache, Visitors Create Another, Cache MISS</strong></h3>
+
+                        <p style="font-size: 14px;">
+                            If <strong>PHP compresses output itself</strong> (via <code>zlib.output_compression = On</code> in <code>php.ini</code>),
+                            it adds a <code>Vary: Accept-Encoding</code> response header. Nginx's cache engine
+                            then computes an MD5 <em>variant hash</em> from the request's <code>Accept-Encoding</code> value
+                            and writes a separate cache file for each distinct value.
+                        </p>
+                        <p style="font-size: 14px;">
+                            NPP's preloader sends <code>Accept-Encoding: identity</code> by default — requesting plain, uncompressed content.
+                            Real browsers always send one, so their variant hash never matches the preloaded entry and Nginx writes a second cache file,
+                            bypassing the warm cache entirely. Note that what the NPPs preloader sends is not the real issue —
+                            even if it mimicked a browser exactly, different browsers send different values
+                            (Chrome adds <code>zstd</code>, Safari omits <code>br</code>, older clients send only <code>gzip</code>),
+                            making it impossible to warm a single entry that serves all visitors. This breaks Nginx cache managing logic by NPP.
+                            This effectively breaks NPP's cache warming — preloaded entries are never served to real visitors. The only correct fix is on the Nginx/PHP side.
+                        </p>
+
+                        <p style="font-size: 14px;">
+                            This affects <strong>fastcgi_cache, proxy_cache, uwsgi_cache, and scgi_cache</strong> equally.
+                        </p>
+
+                        <h3><strong>The Fix: Two Required Changes</strong></h3>
+
+                        <h4><strong>Step 1 — Disable PHP-level compression (php.ini)</strong></h4>
+                        <p style="font-size: 14px;">PHP must not compress output or add <code>Vary: Accept-Encoding</code>. Let Nginx handle all compression.</p>
+                        <pre>; /etc/php/fpm-phpX.Y/php.ini
+zlib.output_compression = Off</pre>
+                        <p style="font-size: 14px;">Reload PHP-FPM after saving: <code>systemctl reload php-fpm</code></p>
+
+                        <h4><strong>Step 2 — Add fastcgi_ignore_headers Vary to your Nginx PHP block</strong></h4>
+                        <p style="font-size: 14px;">Even with PHP compression off, other upstream components may still emit a <code>Vary</code> header. This directive tells Nginx to ignore it completely during cache operations:</p>
+
+<pre>location ~ \.php$ {
+    fastcgi_cache_key "$scheme$request_method$host$request_uri";
+    fastcgi_pass unix:/var/run/php-fcgi-yoursite.sock;
+    include /etc/nginx/fastcgi_params;
+
+    fastcgi_param  HTTP_ACCEPT_ENCODING  "";  # ← strip Accept-Encoding before it reaches PHP
+    fastcgi_ignore_headers Vary;              # ← prevents secondary cache file creation
+
+    fastcgi_cache YOUR_ZONE;
+    fastcgi_cache_valid 30d;
+    fastcgi_cache_bypass $skip_cache;
+    fastcgi_no_cache $skip_cache;
+    fastcgi_cache_use_stale error timeout updating invalid_header http_500 http_503;
+    fastcgi_cache_lock on;
+}</pre>
+
+                        <p style="font-size: 14px;">
+                            <strong>Why both?</strong> <code>fastcgi_param HTTP_ACCEPT_ENCODING ""</code> prevents PHP from ever seeing the client's
+                            <code>Accept-Encoding</code> value — so PHP cannot produce compressed output or emit <code>Vary: Accept-Encoding</code>
+                            in the first place. <code>fastcgi_ignore_headers Vary</code> is the second line of defence: even if a <code>Vary</code>
+                            header arrives from any upstream source, Nginx will not act on it during cache operations.
+                            Together they guarantee a single cache file per URL regardless of what the client sends.
+                        </p>
+                        <p style="font-size: 14px;">
+                            📌 If you already set <code>fastcgi_param HTTP_ACCEPT_ENCODING ""</code> in your shared
+                            <code>fastcgi_params</code> file, you do not need to repeat it here — it applies automatically
+                            via <code>include /etc/nginx/fastcgi_params</code>.
+                        </p>
+                        <p style="font-size: 14px;">
+                            Reload Nginx after saving: <code>nginx -t &amp;&amp; systemctl reload nginx</code>
+                        </p>
+
+                        <h4><strong>Step 3 — Let Nginx handle gzip (nginx.conf http block)</strong></h4>
+                        <p style="font-size: 14px;">With PHP compression disabled, Nginx becomes the sole compression layer — which is the correct architecture. Confirm these are present in your <code>http {}</code> block:</p>
+<pre>gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_types text/plain text/css application/javascript application/json text/xml application/xml text/javascript;</pre>
+
+                        <p style="font-size: 14px;">
+                            <code>gzip_vary on</code> adds <code>Vary: Accept-Encoding</code> to responses served from Nginx — but this does <strong>not</strong> affect cache file creation
+                            because it fires <em>after</em> the cache lookup, not before. The cache key is already resolved by then.
+                        </p>
+
+                        <h3><strong>Why fastcgi_ignore_headers Vary is Safe Here</strong></h3>
+                        <p style="font-size: 14px;">
+                            Normally suppressing <code>Vary</code> would risk serving gzip-compressed content to clients that cannot decompress it.
+                            But with <code>zlib.output_compression = Off</code>, PHP never produces compressed output — so there is only one content variant.
+                            Nginx then compresses on the fly per-client using its own <code>gzip</code> module. One cache file, served correctly to all clients.
+                        </p>
+
+                        <h3><strong>Before / After</strong></h3>
+                        <table class="responsive-table">
+                            <thead>
+                                <tr>
+                                    <th>Scenario</th>
+                                    <th>Cache files per URL</th>
+                                    <th>NPP warm hit for real visitors</th>
+                                    <th>Risk</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>zlib.output_compression = On</code>, no fix</td>
+                                    <td>2 (primary + secondary)</td>
+                                    <td>❌ Miss — visitor gets secondary file</td>
+                                    <td>Wasted RAM/disk, NPP preload ineffective</td>
+                                </tr>
+                                <tr>
+                                    <td><code>zlib.output_compression = Off</code> + <code>fastcgi_ignore_headers Vary</code></td>
+                                    <td>1 ✅</td>
+                                    <td>✅ HIT — NPP warmed entry is served</td>
+                                    <td>None</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <p style="font-size: 14px;">
+                            📌 <strong>Note:</strong> This issue exists on all Nginx cache types — <code>fastcgi_cache</code>, <code>proxy_cache</code>, <code>uwsgi_cache</code>, <code>scgi_cache</code>.
+                            Apply <code>fastcgi_ignore_headers Vary</code> / <code>proxy_ignore_headers Vary</code> / <code>uwsgi_ignore_headers Vary</code> accordingly for your setup.
+                        </p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">How do I configure Nginx for HTTP Purge and what options does NPP provide?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Nginx Configuration for HTTP Purge</strong></h3>
+                        <p>HTTP Purge requires the <code>ngx_cache_purge</code> module to be compiled into Nginx and a dedicated purge location block added to your Nginx configuration. Without both, the feature cannot work — but NPP falls back to filesystem purge automatically so nothing breaks.</p>
+
+                        <h4><strong>Required Nginx config</strong></h4>
+                        <p>You need two things in your Nginx server block: a <code>fastcgi_cache_path</code> with a named zone, and a location block that handles purge requests using that zone. A minimal working example:</p>
+
+<pre>## In the http {} block:
+fastcgi_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m inactive=60m;
+fastcgi_cache_key "$scheme$request_method$host$request_uri";
+
+## In the server {} block:
+fastcgi_cache my_cache;
+fastcgi_cache_valid 200 301 302 60m;
+
+## Purge location — required for HTTP Purge fast-path:
+location ~ /purge(/.*) {
+    allow 127.0.0.1;
+    deny all;
+    fastcgi_cache_purge my_cache "$scheme$request_method$host$1";
+}</pre>
+
+                        <p>The location prefix (<code>/purge</code>) must match what NPP is configured to send purge requests to. The cache key in the purge block (<code>$scheme$request_method$host$1</code>) must match your <code>fastcgi_cache_key</code> exactly — with <code>$1</code> capturing the path after <code>/purge</code>.</p>
+
+                        <h4><strong>How NPP builds the purge URL</strong></h4>
+                        <p>When NPP purges <code>https://example.com/my-page/</code> it sends a GET request to <code>https://example.com/purge/my-page/</code>. Nginx matches the purge location, strips <code>/purge</code>, and deletes the cache entry for the remaining path. HTTP 200 = purge confirmed. Any other response = NPP falls through to filesystem.</p>
+
+                        <h4><strong>NPP settings for HTTP Purge</strong></h4>
+                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong>. Three options control how NPP builds the purge URL:</p>
+
+                        <p><strong>HTTP Purge URL Suffix</strong> (default: <code>purge</code>)<br>
+                        The path prefix NPP prepends when building purge requests. Change this if your Nginx purge location uses a different prefix — for example if your location is <code>~ /cache-purge(/.*)</code> set this to <code>cache-purge</code>. NPP will then send requests to <code>https://example.com/cache-purge/my-page/</code>.</p>
+
+                        <p><strong>HTTP Purge Custom Base URL</strong> (optional)<br>
+                        Overrides the suffix entirely. Use this when the purge endpoint is on a different host, port, or internal address — the most common case being Docker where the purge endpoint is not reachable via the public hostname. Examples:</p>
+                        <ul>
+                            <li><code>http://nginx/purge</code> — Docker service name</li>
+                            <li><code>http://127.0.0.1:8080/purge</code> — non-standard port</li>
+                            <li><code>http://localhost_/purge</code> — explicit localhost</li>
+                        </ul>
+                        <p>When a Custom Base URL is set the suffix field is ignored entirely.</p>
+                    </div>
+                </div>
+
                 <h3 class="nppp-question">What Linux commands are required for the preload action?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
@@ -120,12 +312,11 @@ function nppp_my_faq_html() {
                     <div class="nppp-answer-content">
                         <ol class="nginx-list">
                             <pre><code>bash &lt;(curl -Ss https://psaux-it.github.io/install.sh)</code></pre>
-                            <li>The <code>install.sh</code> script serves as a wrapper for executing the main <code>fastcgi_ops_root.sh</code> script from <a href="https://psaux-it.github.io">psaux-it.github.io</a>. This bash script is designed for the FastCGI Cache Purge and Preload for Nginx WordPress plugin (NPP).</li>
+                            <li>The <code>install.sh</code> script serves as a wrapper for executing the main <code>fastcgi_ops_root.sh</code> script from <a href="https://psaux-it.github.io">psaux-it.github.io</a>. This bash script is designed for the Nginx Cache Purge Preload WordPress plugin (NPP).</li>
                             <li>The script first attempts to automatically identify the <strong>PHP-FPM-USER</strong> (also known as the PHP process owner or website user) along with their associated Nginx Cache Paths.</li>
                             <li>If it cannot automatically match the PHP-FPM-USER with their respective Nginx Cache Path, it provides an easy manual setup option using the <code>manual-configs.nginx</code> file.</li>
                             <li>According to matches this script automates the management of Nginx Cache Paths. It utilizes <strong>bindfs</strong> to create a FUSE mount of the original Nginx Cache Paths, enabling the <strong>PHP-FPM-USER</strong> to write to these directories with the necessary permissions automatically.</li>
-                            <li>After the setup (whether automatic or manual) is completed, the script creates an <code>npp-wordpress</code> systemd service that can be managed from the WordPress admin dashboard under the NPP plugin <strong>STATUS</strong> tab.</li>
-                            <li>Additionally, NPP users have the flexibility to manage FUSE mount and unmount operations for the original Nginx Cache Path directly from the WP admin dashboard, effectively preventing unexpected permission issues and maintaining consistent cache stability.</li>
+                            <li>After the setup (whether automatic or manual) is completed, the script creates an <code>npp-wordpress</code> systemd service that ensures the FUSE mount is automatically restored on server reboot.</li>
 
                             <h4>Features:</h4>
                             <ul>
@@ -148,20 +339,40 @@ function nppp_my_faq_html() {
                                 <li><code>fastcgi_cache_path /var/cache/psauxit-fastcgi</code></li>
                                 <li><code>fastcgi_cache_path /var/cache/website-psauxit.com</code></li>
                             </ul>
+                            <p style="font-size: 14px;">⚠️ <strong>Note:</strong> The <code>install.sh</code> script is designed for <strong>monolithic (all-in-one) servers</strong> only — environments where Nginx, PHP-FPM, and WordPress all run on the same host. For <strong>Docker-based setups</strong>, a dedicated Docker integration is available at <a href="https://github.com/psaux-it/wordpress-nginx-cache-docker" target="_blank" rel="noopener">github.com/psaux-it/wordpress-nginx-cache-docker</a>.</p>
                         </ol>
                     </div>
                 </div>
 
-                <h3 class="nppp-question">Why can’t I use my preferred path for the Nginx Cache Directory?</h3>
+                <h3 class="nppp-question">Why can't I use my preferred path for the Nginx Cache Directory?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
-                        <p style="font-size: 14px;">The Nginx Cache Directory option has restrictions on the paths you can use to prevent accidental deletions or harm to critical system files. By default, certain paths, like ‘/home’ and other vital system directories, are blocked to safeguard your system’s stability and prevent data loss.</p>
-                        <p style="font-size: 14px;">While this might limit your options, it ensures your system’s security. Recommended directories to choose from, such as ‘/dev/shm/’ or ‘/var/cache/’, which are commonly used for caching purposes and are generally safer.</p>
-                        <h4>Allowed Cache Paths:</h4>
+                        <p style="font-size: 14px;">The Nginx Cache Directory option restricts which paths are accepted to prevent accidental deletion of critical system files or WordPress installation data.</p>
+
+                        <h4>Allowed root paths:</h4>
                         <ul>
-                            <li><strong>For RAM-based:</strong> Use directories under <code>/dev/</code>, <code>/tmp/</code>, or <code>/var/</code>.</li>
-                            <li><strong>For persistent disk:</strong> Use directories under <code>/opt/</code>.</li>
-                            <li><strong>Important:</strong> Paths must be one level deeper (e.g., <code>/var/cache</code>).</li>
+                            <li><code>/dev/shm/</code> — RAM-based (tmpfs). Fast, lost on reboot. Recommended for high-performance setups.</li>
+                            <li><code>/tmp/</code> — Temporary filesystem. Suitable for testing or low-memory environments.</li>
+                            <li><code>/var/</code> — Persistent disk. Most common for production. Many subdirectories are blocked (see below).</li>
+                            <li><code>/cache/</code> — Custom mount point. Useful for Docker or environments with a dedicated cache volume.</li>
+                        </ul>
+
+                        <h4>Examples of valid paths:</h4>
+                        <ul>
+                            <li><code>/dev/shm/nginx-cache</code></li>
+                            <li><code>/tmp/cache</code></li>
+                            <li><code>/var/cache/nginx</code></li>
+                            <li><code>/var/nginx-cache</code></li>
+                            <li><code>/var/run/nginx-cache</code></li>
+                            <li><code>/cache/mysite</code></li>
+                        </ul>
+
+                        <h4>Important rules:</h4>
+                        <ul>
+                            <li>The path must be <strong>at least one level deeper</strong> than the root — <code>/var/cache</code>, <code>/var/run</code>, and <code>/cache</code> exact roots are blocked. Use a subdirectory like <code>/var/cache/nginx</code>.</li>
+                            <li>The following subtrees within <code>/var/</code> are blocked to protect system data: <code>/var/log</code>, <code>/var/lib</code>, <code>/var/www</code>, <code>/var/spool</code>, <code>/var/mail</code>, <code>/var/lock</code>, <code>/var/backups</code>, <code>/var/snap</code>.</li>
+                            <li>Paths outside the allowed roots — including <code>/home</code>, <code>/opt</code>, <code>/srv</code>, <code>/etc</code>, and the WordPress installation directory — are always rejected.</li>
+                            <li>Symlinks are resolved and the destination is validated against the same rules.</li>
                         </ul>
                     </div>
                 </div>
@@ -193,37 +404,57 @@ function nppp_my_faq_html() {
 
                     <h4>How do I install it?</h4>
                     <p style="font-size: 14px;">
-                        Use the  linux packages from the
-                        <a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases" target="_blank" rel="noopener">Releases page</a>.
-                        Below are quick examples—see GitHub for full details.
+                        Use the <code>.deb</code>, <code>.rpm</code> or <code>.apk</code> packages from the
+                        <a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases" target="_blank" rel="noopener">Releases page</a>,
+                        or directly with one liner:
                     </p>
+                    <pre><code>curl -fsSL https://psaux-it.github.io/install-safexec.sh | sudo sh</code></pre>
 
                     <ol class="nginx-list" style="font-size: 14px;">
-                        <li><strong>Debian / Ubuntu (.deb)</strong>
-                            <pre>wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
+                        <li><strong> Debian / Ubuntu (.deb)</strong>
+                            <pre># Download checksums
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/SHA256SUMS
 
-# x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.2-1_amd64.deb
+# For x86_64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/safexec_1.9.5-1_amd64.deb
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apt install ./safexec_1.9.2-1_amd64.deb
+sudo apt install ./safexec_1.9.5-1_amd64.deb
 
-# arm64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.2-1_arm64.deb
+# For AArch64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/safexec_1.9.5-1_arm64.deb
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apt install ./safexec_1.9.2-1_arm64.deb</pre>
+sudo apt install ./safexec_1.9.5-1_arm64.deb</pre>
                         </li>
 
-                        <li><strong>RHEL / CentOS / Fedora (.rpm)</strong>
-                            <pre>wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
-# x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.2-1.el10.x86_64.rpm
-sha256sum -c SHA256SUMS --ignore-missing
-sudo dnf install ./safexec-1.9.2-1.el10.x86_64.rpm
+                        <li><strong> RHEL / CentOS / Fedora (.rpm)</strong>
+                            <pre># Download checksums
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/SHA256SUMS
 
-# arm64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.2-1.el10.aarch64.rpm
+# For x86_64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/safexec-1.9.5-1.el10.x86_64.rpm
 sha256sum -c SHA256SUMS --ignore-missing
-sudo dnf install ./safexec-1.9.2-1.el10.aarch64.rpm</pre>
+sudo dnf install ./safexec-1.9.5-1.el10.x86_64.rpm
+
+# For AArch64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/safexec-1.9.5-1.el10.aarch64.rpm
+sha256sum -c SHA256SUMS --ignore-missing
+sudo dnf install ./safexec-1.9.5-1.el10.aarch64.rpm</pre>
+                        </li>
+
+                        <li><strong> Alpine Linux (.apk)</strong>
+                            <pre># Download checksums
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/SHA256SUMS
+
+# For x86_64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/safexec-1.9.5-r1.x86_64.apk
+sha256sum -c SHA256SUMS --ignore-missing
+sudo apk add --allow-untrusted ./safexec-1.9.5-r1.x86_64.apk
+
+# For AArch64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/safexec-1.9.5-r1.aarch64.apk
+sha256sum -c SHA256SUMS --ignore-missing
+sudo apk add --allow-untrusted ./safexec-1.9.5-r1.aarch64.apk</pre>
+                            <p style="font-size: 13px;"><em>Note: <code>--allow-untrusted</code> is required because the package is not signed with an Alpine trusted key. The SHA256 checksum above provides integrity verification.</em></p>
                         </li>
 
                         <li><strong>Verify:</strong>
@@ -250,50 +481,356 @@ safexec --kill=&lt;pid&gt;
                   </div>
                 </div>
 
-                <h3 class="nppp-question">What is different about this plugin compared to other Nginx Cache Plugins?</h3>
+                <h3 class="nppp-question">How does Cloudflare APO Sync work and how do I enable it?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
+                        <h3><strong>Cloudflare APO Sync</strong></h3>
+                        <p>When enabled, NPP automatically mirrors every cache purge operation to Cloudflare's edge cache, keeping your Cloudflare-cached pages in sync with your Nginx cache at all times.</p>
+
+                        <h4><strong>Requirements</strong></h4>
+                        <p>The official <strong>Cloudflare WordPress plugin</strong> must be installed, active, and authenticated with your Cloudflare account. NPP reads its configuration directly — no API keys are entered in NPP itself. Either <strong>Automatic Platform Optimization (APO)</strong> or <strong>Plugin-Specific Cache</strong> must be enabled inside the Cloudflare plugin for HTML caching to be active.</p>
+
+                        <h4><strong>How to enable</strong></h4>
+                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and turn on <strong>Cloudflare APO Sync</strong>. If the Cloudflare plugin is not installed or not authenticated, the toggle will show as <em>Unavailable</em> in the dashboard widget and will auto-disable itself.</p>
+
+                        <h4><strong>What gets purged and when</strong></h4>
+                        <p><strong>Single-URL Purge</strong> (manual, auto-purge on update, comment count change, post delete): NPP purges the page and its related URLs (homepage, category archives) from both Nginx and Cloudflare edge cache. Purge requests are batched and sent once at request shutdown for efficiency — up to 30 URLs per API call.</p>
+                        <p><strong>Purge All</strong>: Cloudflare's entire zone cache is wiped with a single API call (<code>zonePurgeCache</code>), matching the full Nginx cache clear.</p>
+                        <p><strong>APO Cache By Device Type</strong>: If this setting is active inside the Cloudflare plugin, NPP automatically sends a second purge pass with the <code>CF-Device-Type: mobile</code> header so mobile-specific cached variants are also cleared.</p>
+
+                        <h4><strong>Important notes</strong></h4>
+                        <p>Cloudflare purge only fires when APO or Plugin-Specific Cache is actually enabled in the Cloudflare plugin — if HTML caching is off on the Cloudflare side, the purge is skipped and logged. NPP does not purge Cloudflare during preload operations, only on purge events.</p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">How does Redis Object Cache Sync work and how do I enable it?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Redis Object Cache Sync</strong></h3>
+                        <p>NPP and Redis Object Cache are two separate caching layers. NPP manages the Nginx full-page cache (FastCGI cache on disk or in RAM). Redis Object Cache stores WordPress database query results and object data in memory. This sync feature keeps both layers consistent with each other through a bidirectional relationship.</p>
+
+                        <h4><strong>Requirements</strong></h4>
+                        <p>The <strong>Redis Object Cache</strong> plugin must be installed, active, and connected to a live Redis server. NPP checks for both the drop-in (<code>WP_REDIS_VERSION</code> constant) and a live connection (<code>redis_status() === true</code>) at runtime. If Redis is unreachable the toggle auto-disables itself.</p>
+
+                        <h4><strong>How to enable</strong></h4>
+                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and turn on <strong>Redis Object Cache Sync</strong>. The toggle shows as <em>Unavailable</em> in the dashboard widget when the Redis plugin is not installed or Redis is disconnected.</p>
+
+                        <h4><strong>Direction 1 — NPP Purge All → Redis flush</strong></h4>
+                        <p>Whenever NPP's <strong>Purge All</strong> runs (manually, via admin bar, Auto Purge, REST API, or Schedule), NPP calls <code>wp_cache_flush()</code> immediately after clearing the Nginx cache. This ensures PHP regenerates fresh data from the database on the next request, so pages rebuilt into the Nginx cache contain up-to-date content rather than stale object-cached results.</p>
+
+                        <h4><strong>Direction 2 — Redis Flush → NPP Purge All</strong></h4>
+                        <p>Whenever Redis is flushed from outside NPP — via the Redis Object Cache plugin dashboard, WP-CLI (<code>wp cache flush</code>), or any plugin calling <code>wp_cache_flush()</code> — NPP automatically triggers a full Nginx cache purge in response. This direction only activates when NPP's <strong>Auto Purge</strong> setting is also enabled, since a full filesystem purge is a heavyweight operation.</p>
+
+                        <h4><strong>Loop prevention</strong></h4>
+                        <p>NPP sets an internal origin flag before triggering either direction. If Direction 1 causes a Redis flush, Direction 2 sees the flag and bails — and vice versa. This prevents an infinite purge loop between the two cache layers.</p>
+
+                        <h4><strong>Important notes</strong></h4>
+                        <p>Direction 2 respects the <strong>Auto Purge</strong> toggle — if Auto Purge is off, a Redis flush from outside NPP will not trigger an Nginx purge. If you want full bidirectional sync, both <strong>Redis Object Cache Sync</strong> and <strong>Auto Purge</strong> must be enabled.</p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">What is the Preload Watchdog and when should I enable it?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Preload Watchdog</strong></h3>
+                        <p>The Preload Watchdog ensures that post-preload tasks — such as building the cache index, sending the completion email, and starting the mobile preload pass — run immediately when preloading finishes.</p>
+
+                        <h4><strong>Why it is needed</strong></h4>
+                        <p>Normally these tasks are handled by WP-Cron, which depends on visitor traffic to trigger. On low-traffic or fully-cached sites, no visitor may arrive after preloading finishes, causing post-preload tasks to be delayed or never run at all. The watchdog removes this dependency by detecting the exact moment preloading finishes and triggering the tasks directly — no visitor needed.</p>
+
+                        <h4><strong>How to enable</strong></h4>
+                        <p>Go to <strong>Settings → NPP Settings</strong> and turn on <strong>Preload Watchdog</strong>. It is especially recommended for low-traffic sites, heavily cached sites, and any site using the <strong>Scheduled Cache</strong> feature.</p>
+
+                        <h4><strong>Notes</strong></h4>
+                        <p>The watchdog starts automatically with each preload cycle and exits on its own once its job is done. If preloading is cancelled by a <strong>Purge All</strong>, the watchdog is also stopped so it does not fire tasks for a cancelled run.</p>
+                    </div>
+                </div>
+
+                 <h3 class="nppp-question">What is different about this plugin compared to other Nginx Cache Plugins?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <p style="font-size: 14px;">Most Nginx cache plugins for WordPress share a common baseline — purge via the <code>ngx_cache_purge</code> module and basic filesystem purge. The table below shows where NPP goes beyond that baseline.</p>
                         <table class="responsive-table">
                           <thead>
                             <tr>
-                              <th>Aspect</th>
-                              <th>Nginx Cache Purge Module</th>
+                              <th>Feature</th>
+                              <th>Typical Nginx Cache Plugin</th>
                               <th>NPP</th>
                             </tr>
                           </thead>
                           <tbody>
                             <tr>
-                              <td>Ease of Setup</td>
-                              <td>Requires module installation and Nginx recompilation.</td>
-                              <td>Simple to implement once permissions are set correctly, no need for Nginx recompilation.</td>
+                              <td>Purge via ngx_cache_purge module</td>
+                              <td>✅ Primary method</td>
+                              <td>✅ Optional fast-path (HTTP Purge)</td>
                             </tr>
                             <tr>
-                              <td>Granularity</td>
-                              <td>Allows precise cache purging based on URLs or cache keys.</td>
-                              <td>Can be controlled at a file level, offering flexibility in managing cache and other resources.</td>
+                              <td>Filesystem purge fallback</td>
+                              <td>✅ Supported</td>
+                              <td>✅ Three-layer strategy: HTTP → URL index → recursive scan</td>
                             </tr>
                             <tr>
-                              <td>Security</td>
-                              <td>Built-in access control via HTTP request.</td>
-                              <td>Offers greater security control by leveraging existing filesystem permissions.</td>
+                              <td>URL→filepath index for instant purge</td>
+                              <td>❌ No</td>
+                              <td>✅ Built and updated automatically during preload — skips directory scan entirely</td>
                             </tr>
                             <tr>
-                              <td>Performance</td>
-                              <td>Efficient, handled by Nginx.</td>
-                              <td>Direct deletion is faster in certain cases when targeting specific files, with no need to rely on Nginx processing.</td>
+                              <td>Multi-user environments (WEBSERVER-USER ≠ PHP-FPM-USER)</td>
+                              <td>❌ No filesystem purge support — known limitation</td>
+                              <td>✅ Fully solved via bindfs + safexec — the core reason NPP was created</td>
                             </tr>
                             <tr>
-                              <td>Integration</td>
-                              <td>Seamless integration with Nginx’s cache system.</td>
-                              <td>Works independently of Nginx and can be adapted for various cache systems, offering broader application.</td>
+                              <td>Process isolation for shell operations</td>
+                              <td>❌ No</td>
+                              <td>✅ safexec — privilege-dropping SUID wrapper, runs as <code>nobody</code></td>
                             </tr>
                             <tr>
-                              <td>Automation</td>
-                              <td>Simple automation via HTTP request (e.g., `PURGE` request).</td>
-                              <td>Highly customizable with scripts to manage cache purging, allowing greater automation and flexibility.</td>
+                              <td>Cache preloading engine</td>
+                              <td>⚠️ Basic — simple HTTP fetch loop</td>
+                              <td>✅ Full wget-based crawler with rate limiting, CPU limiting, reject regex, AMP, mobile pass, proxy support</td>
+                            </tr>
+                            <tr>
+                              <td>Mobile cache preload</td>
+                              <td>❌ No</td>
+                              <td>✅ Separate preload pass with mobile user-agent</td>
+                            </tr>
+                            <tr>
+                              <td>Scheduled cache (cron preload)</td>
+                              <td>❌ No</td>
+                              <td>✅ Full cron scheduler with custom interval and time picker</td>
+                            </tr>
+                            <tr>
+                              <td>Preload Watchdog</td>
+                              <td>❌ No</td>
+                              <td>✅ Guarantees post-preload tasks run without depending on visitor traffic</td>
+                            </tr>
+                            <tr>
+                              <td>Cache Coverage Ratio</td>
+                              <td>❌ No</td>
+                              <td>✅ Live gauge showing % of known URLs currently in cache</td>
+                            </tr>
+                            <tr>
+                              <td>Cloudflare APO sync</td>
+                              <td>❌ No</td>
+                              <td>✅ Mirrors every purge to Cloudflare edge cache automatically</td>
+                            </tr>
+                            <tr>
+                              <td>Redis Object Cache bidirectional sync</td>
+                              <td>⚠️ One-direction only at best</td>
+                              <td>✅ Bidirectional — NPP purge flushes Redis, Redis flush triggers NPP purge</td>
+                            </tr>
+                            <tr>
+                              <td>REST API</td>
+                              <td>❌ No</td>
+                              <td>✅ Full REST API for purge and preload with API key auth</td>
+                            </tr>
+                            <tr>
+                              <td>URL normalization (percent-encoding)</td>
+                              <td>❌ No</td>
+                              <td>✅ Via safexec + libnpp_norm.so or mitmproxy — prevents cache misses on non-ASCII URLs</td>
+                            </tr>
+                            <tr>
+                              <td>Auto purge on plugin/theme update</td>
+                              <td>⚠️ Requires custom filter to enable</td>
+                              <td>✅ Built-in toggle, enabled by default</td>
+                            </tr>
+                            <tr>
+                              <td>Completion email notification</td>
+                              <td>❌ No</td>
+                              <td>✅ Sends email summary after preload completes</td>
                             </tr>
                           </tbody>
                       </table>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">What is the Cache Coverage Ratio in the dashboard widget?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Cache Coverage Ratio</strong></h3>
+                        <p>The circular gauge in the NPP dashboard widget shows what percentage of your site's known URLs are currently present in the Nginx cache. It answers the question: <em>of all the pages NPP crawled during the last preload, how many are cached right now?</em></p>
+
+                        <h4><strong>How it is calculated</strong></h4>
+                        <p><strong>Total</strong> is the number of URLs discovered during the last completed <strong>Preload All</strong> run, taken from the saved preload snapshot. <strong>Hits</strong> is the number of cache files currently found in the Nginx cache directory. <strong>Coverage = Hits ÷ Total × 100</strong>. The ratio is capped at 100% — the cache can contain pages not in the snapshot (manually visited pages, paginated archives) but the gauge will not exceed 100.</p>
+
+                        <h4><strong>Why it shows N/A</strong></h4>
+                        <p>The gauge shows N/A until a <strong>Preload All</strong> has been run at least once and completed successfully. The snapshot is only written when a full preload finishes — an interrupted or partial preload does not produce one. Once the snapshot exists, clicking the <strong>refresh button</strong> on the gauge triggers a live scan of the cache directory and updates the ratio immediately.</p>
+
+                        <h4><strong>When to use it</strong></h4>
+                        <p>Check it after a <strong>Purge All</strong> followed by a new <strong>Preload All</strong> to confirm the cache was fully rebuilt. A ratio well below 100% after preloading may indicate pages were excluded by the reject regex, the preload was interrupted, or cache entries have already expired.</p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">Feature dependency map — what works with what and when?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Feature Dependency Map</strong></h3>
+                        <p style="font-size: 14px;">NPP's features are layered — many behaviors only activate when specific combinations of settings are enabled. This reference shows exactly what fires for every action and under what conditions. Use it to understand what changes when you toggle an option.</p>
+
+                        <div style="overflow-x:auto;">
+                        <table class="responsive-table" style="min-width:900px;">
+                            <thead>
+                                <tr>
+                                    <th>Action / Trigger</th>
+                                    <th>HTTP Purge</th>
+                                    <th>Related URLs Purge</th>
+                                    <th>Cloudflare Sync</th>
+                                    <th>Redis sync</th>
+                                    <th>Single-URL Preload</th>
+                                    <th>Mobile Preload</th>
+                                    <th>Related URLs Preload</th>
+                                    <th>Send Mail</th>
+                                    <th>Watchdog</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Manual Purge All</strong><br><small>Button / Admin bar — No Auto Preload</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>✅ Full Zone purge<br><small>Requires CF Sync ON</small></td>
+                                    <td>✅ Flushes Redis<br><small>Requires Redis Sync ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Manual Purge All + Auto Preload ON</strong><br><small>Purge All immediately followed by full Preload All</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>✅ Full zone purge<br><small>Requires CF Sync ON</small></td>
+                                    <td>✅ Flushes Redis<br><small>Requires Redis Sync ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>✅ After desktop preload completes<br><small>Requires Preload Mobile ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>✅ After all phases complete<br><small>Requires Send Mail ON</small></td>
+                                    <td>✅ Spawned with Preload All<br><small>Requires Watchdog ON</small></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Manual Preload All</strong><br><small>Button / Admin bar</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>✅ Auto-follows after desktop completes<br><small>Requires Preload Mobile ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>✅ After all phases complete<br><small>Requires Send Mail ON</small></td>
+                                    <td>✅ Spawned at start<br><small>Requires Watchdog ON</small></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Manual Single-URL Purge</strong><br><small>Frontend Purge This Page button</small></td>
+                                    <td>✅ First attempt<br><small>Requires HTTP Purge ON</small></td>
+                                    <td>✅ Always<br><small>Scope set by related settings</small></td>
+                                    <td>✅ Purges page + related URLs<br><small>Requires CF Sync ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>✅ Preloads related URLs<br><small>Requires Related Preload after Manual ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Auto Purge</strong><br><small>post save / delete / comment / plugin or theme update / Gutenberg / Elementor / WooCommerce</small></td>
+                                    <td>✅ First attempt<br><small>Requires HTTP Purge ON</small></td>
+                                    <td>✅ Always<br><small>Scope set by related settings</small></td>
+                                    <td>✅ Purges page + related URLs<br><small>Requires CF Sync ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>✅ Preloads the single purged URL<br><small>Requires Auto Purge ON + Auto Preload ON</small></td>
+                                    <td>✅ Mobile variant of single URL<br><small>Requires Auto Purge + Auto Preload + Preload Mobile all ON</small></td>
+                                    <td>✅ Preloads related URLs<br><small>Requires Auto Preload ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Advanced tab — Single-URL Purge</strong><br><small>File selected from cache browser, purged directly by file path</small></td>
+                                    <td>❌ Never<br><small>Always filesystem — no HTTP Purge</small></td>
+                                    <td>✅ Always<br><small>Scope set by related settings</small></td>
+                                    <td>✅ Purges page + related URLs<br><small>Requires CF Sync ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>✅ Preloads related URLs<br><small>Requires Related Preload after Manual ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Advanced tab — Single-URL Preload</strong><br><small></small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>✅ Mobile variant also preloaded<br><small>Requires Preload Mobile ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>REST API Purge</strong><br><small>Purge All, never single URL</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>✅ Full zone purge<br><small>Requires CF Sync ON</small></td>
+                                    <td>✅ Flushes Redis<br><small>Requires Redis Sync ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>REST API Preload</strong><br><small>Preload All</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>✅ Auto-follows after desktop completes<br><small>Requires Preload Mobile ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>✅ After all phases complete<br><small>Requires Send Mail ON</small></td>
+                                    <td>✅ Spawned at start<br><small>Requires Watchdog ON</small></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Scheduled Preload</strong><br><small>WP-Cron</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>✅ Auto-follows after desktop completes<br><small>Requires Preload Mobile ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>✅ After all phases complete<br><small>Requires Send Mail ON</small></td>
+                                    <td>✅ Spawned at start<br><small>Requires Watchdog ON</small></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Redis flush from outside NPP</strong><br><small>Redis plugin dashboard, WP-CLI wp cache flush, any plugin calling wp_cache_flush — with Redis Sync OFF or Auto Purge OFF</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Not applicable</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Redis flush from outside NPP</strong><br><small>with Redis Sync ON + Auto Purge ON — triggers full NPP Purge All cascade</small></td>
+                                    <td>❌ Never</td>
+                                    <td>❌ Never</td>
+                                    <td>✅ Full zone purge<br><small>Via the Purge All it triggers</small></td>
+                                    <td>⚠️ Loop guard prevents re-flush</td>
+                                    <td>❌ Never</td>
+                                    <td>⚠️ If Auto Preload ON → Preload All → mobile follows<br><small>Requires Preload Mobile ON</small></td>
+                                    <td>❌ Never</td>
+                                    <td>⚠️ If Preload All fires<br><small>Requires Send Mail ON</small></td>
+                                    <td>⚠️ If Preload All fires<br><small>Requires Watchdog ON</small></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        </div>
                     </div>
                 </div>
 
@@ -509,6 +1046,60 @@ WantedBy=multi-user.target</pre>
                     </div>
                 </div>
 
+                <h3 class="nppp-question">When should I use Clear Plugin Cache on the Status tab?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Clear Plugin Cache</strong></h3>
+                        <p>NPP caches expensive server-side status checks — Nginx detection, configuration parsing, permission checks, cache path validation — to avoid running them on every page load. This cache is stored as WordPress transients and is normally refreshed automatically.</p>
+
+                        <h4><strong>When to clear it</strong></h4>
+                        <p>Clear the plugin cache whenever you make server-side changes that NPP should immediately reflect:</p>
+                        <ul>
+                            <li>You changed the Nginx cache path in <code>nginx.conf</code> or the NPP settings.</li>
+                            <li>You installed, removed, or reconfigured the <code>ngx_cache_purge</code> module.</li>
+                            <li>You ran the <code>fastcgi_ops_root.sh</code> / bindfs setup script for the first time or re-ran it after a change.</li>
+                            <li>You changed PHP-FPM user permissions or cache directory ownership.</li>
+                            <li>The Status tab shows stale or unexpected values after a server configuration change.</li>
+                            <li>You are in active testing and need accurate real-time status on every check.</li>
+                        </ul>
+
+                        <h4><strong>Where to find it</strong></h4>
+                        <p>Go to <strong>Status tab → Clear Plugin Cache</strong> button at the top of the page. The page reloads automatically after clearing so you see fresh values immediately.</p>
+
+                        <h4><strong>Is it safe to clear?</strong></h4>
+                        <p>Yes. Clearing the plugin cache does not affect your Nginx cache, WordPress content, or any plugin settings. It only discards NPP's internal status snapshots — they rebuild automatically on the next Status tab visit.</p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">When should I use Clear URL Index on the Status tab?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Clear URL Index</strong></h3>
+                        <p>NPP maintains a persistent URL→Filepath index that maps cached page URLs to their exact filesystem paths. This index is what allows single-page purges to skip the full recursive directory scan — making them near-instant regardless of cache size.</p>
+
+                        <h4><strong>How the index is built</strong></h4>
+                        <p>The index is populated automatically during <strong>Preload All</strong>, <strong>Scheduled Preload</strong>, and on each Advanced tab visit. It grows incrementally — every successful single-page purge appends its path via write-back so the index improves over time without a full scan.</p>
+
+                        <h4><strong>When to clear it</strong></h4>
+                        <p>Clearing is only needed when the index contains stale or incorrect entries that can no longer be trusted:</p>
+                        <ul>
+                            <li>You moved the Nginx cache directory to a different path — all stored paths are now wrong.</li>
+                            <li>You changed the <code>fastcgi_cache_key</code> directive — the stored URL-to-path mappings are no longer valid for the new key scheme.</li>
+                            <li>You manually deleted the cache directory and recreated it — old paths no longer exist on disk.</li>
+                            <li>Single-page purges are consistently reporting errors or not deleting the correct file.</li>
+                        </ul>
+
+                        <h4><strong>When NOT to clear it</strong></h4>
+                        <p>Do not clear the index routinely — it is not a cache that needs regular flushing. Clearing it means the next purge operations must fall back to the recursive filesystem scan until the index is rebuilt. On large caches this adds latency to every single-page purge until the index is repopulated.</p>
+
+                        <h4><strong>What happens after clearing</strong></h4>
+                        <p>The index is deleted from the database. The next <strong>Preload All</strong>, <strong>Scheduled Preload</strong>, or <strong>Advanced tab visit</strong> will rebuild it automatically from a fresh directory scan. Single-page purges in the meantime will fall through to the recursive scan as a safe fallback — nothing breaks, purges still succeed.</p>
+
+                        <h4><strong>Where to find it</strong></h4>
+                        <p>Go to <strong>Status tab → Clear URL Index</strong> button.</p>
+                    </div>
+                </div>
+
                 <h3 class="nppp-question">What is the proper PHP-FPM Nginx setup?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
@@ -538,93 +1129,34 @@ WantedBy=multi-user.target</pre>
                         <p>Adjust PHP-FPM pool settings in the configuration file to specify the user, group, ownership, and permissions for the PHP-FPM process.</p>
 
                         <pre>
-<code>[websiteuser.com]
+[websiteuser.com]
 user = websiteuser
 group = websiteuser
 listen.owner = nginx
 listen.group = nginx
 listen.mode = 0660
-listen = /var/run/php-fcgi-websiteuser.sock</code></pre>
+listen = /var/run/php-fcgi-websiteuser.sock</pre>
                     </div>
                 </div>
-
-                <!-- Start of GDPR Compliance Section -->
-                <h3 class="nppp-question">GDPR Compliance and Data Collection</h3>
-                <div class="nppp-answer">
-                    <div class="nppp-answer-content">
-                        <h1>GDPR Compliance and Data Collection</h1>
-                        <p>The <strong>FastCGI Cache Purge and Preload for Nginx</strong> plugin collects essential technical data to improve plugin functionality and performance, while fully adhering to <strong>GDPR</strong> (General Data Protection Regulation) guidelines. Below, we outline the data we collect and explain how it complies with GDPR principles.</p>
-
-                        <h2>What Data Does the Plugin Collect?</h2>
-                        <p>NPP only collects technical data related to its functionality. Specifically, we collect the following metrics:</p>
-                        <ul>
-                            <li><strong>Site URL:</strong> The URL of the website where the plugin is installed.</li>
-                            <li><strong>Plugin Name:</strong> The name of the plugin being used.</li>
-                            <li><strong>Plugin Version:</strong> The version of the plugin currently active.</li>
-                            <li><strong>Plugin Status:</strong> The current status of the plugin (active/inactive/opt-out).</li>
-                        </ul>
-                        <div class="highlight">
-                            <p><strong>Important Note:</strong> We do <strong>not</strong> collect any personal or sensitive data. The collected data is strictly related to the operation of the plugin and is used solely for improving the plugin’s functionality and tracking its activation/deactivation status.</p>
-                        </div>
-
-                        <h2>Why Do We Collect This Data?</h2>
-                        <p>We collect this data for the following reasons:</p>
-                        <ul>
-                            <li><strong>Plugin Usage Statistics:</strong> Understanding how many users are actively using the plugin helps us improve its performance, update features, and ensure compatibility with newer versions of WordPress and Nginx.</li>
-                            <li><strong>Version Tracking:</strong> By tracking the version of the plugin in use, we can provide better support and recommendations for updates, ensuring that users benefit from the latest features and security improvements.</li>
-                            <li><strong>Status Monitoring:</strong> Tracking the plugin’s activation and deactivation helps us improve stability, quickly detect issues, and better understand user behavior to enhance the plugin’s reliability.</li>
-                        </ul>
-
-                        <h2>GDPR Compliance</h2>
-                        <p>We take GDPR compliance seriously. Here’s why the data we collect is fully compliant with GDPR regulations:</p>
-
-                        <h3>1. No Personal Data Collected</h3>
-                        <p>We do not collect any personally identifiable information (PII) such as names, email addresses, or IP addresses. The data we collect is strictly technical (e.g., site URL, plugin version) and is necessary for plugin functionality and performance improvements.</p>
-
-                        <h3>2. Legitimate Interest</h3>
-                        <p>The data we collect falls under the legitimate interest clause of GDPR, as it is necessary for us to maintain, improve, and support the plugin. By collecting only the data that is essential for improving user experience, we ensure that no unnecessary data is collected.</p>
-
-                        <h3>3. Data Security</h3>
-                        <p>All data is transmitted securely over HTTPS, ensuring that it is protected from interception during transmission. We use JWT (JSON Web Token) for secure authentication of data requests, further safeguarding the data.</p>
-
-                        <h3>4. Transparency</h3>
-                        <p>We are fully transparent about the data we collect. Users are informed about what data is being collected and why, through our privacy policy and plugin documentation.</p>
-
-                        <h3>5. User Control and Opt-Out</h3>
-                        <p>Users have full control over the data collection process. Our plugin provides an opt-out option, allowing users to disable data tracking at any time if they choose not to participate in usage statistics collection. This ensures that users have full autonomy over their data.</p>
-
-                        <h2>Conclusion</h2>
-                        <p>NPP collects only technical data essential for improving its performance and functionality. No personal data is collected, and all data is transmitted securely, ensuring full compliance with GDPR. Users have full control over the process and can opt-out at any time.</p>
-
-                        <div class="highlight">
-                            <p>If you have any questions or concerns regarding the data we collect or our GDPR compliance, please feel free to contact us at <a href="mailto:support@psauxit.com">support@psauxit.com</a>.</p>
-                        </div>
-                    </div>
-                </div>
-                <!-- End of GDPR Compliance Section -->
             </div>
         </div>
         <div class="nppp-premium-widget">
             <div id="nppp-ad">
-                <div class="textcenter">
-                    <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="open-nppp-upsell-top" data-pro-ad="sidebar-logo">
-                        <img
-                            src="<?php echo esc_url($image_url_space); ?>"
-                            alt="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
-                            title="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
-                            width="100"
-                            height="100">
-                    </a>
-                </div>
-                <h3 class="textcenter">Hope you are enjoying NPP! Do you still need assistance with the server side integration? Get our server integration service now and optimize your website's caching performance!</h3>
+                <h3 class="textcenter"><?php echo esc_html__('Hope you are enjoying NPP! If it saves you time, consider giving it a star or sponsoring its development.', 'fastcgi-cache-purge-and-preload-nginx'); ?></h3>
                 <p class="textcenter">
-                    <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="open-nppp-upsell" data-pro-ad="sidebar-logo">
                         <img
-                            src="<?php echo esc_url($image_url_ad); ?>"
-                            alt="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
-                            title="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
-                            width="100%"
-                            height="auto">
+                        src="<?php echo esc_url($image_url_ad); ?>"
+                        alt="<?php echo esc_attr__('Give a Star', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
+                        title="<?php echo esc_attr__('Give a Star or Sponsor NPP', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
+                        width="100%"
+                        height="auto">
+                </p>
+                <p class="textcenter">
+                    <a href="https://wordpress.org/support/plugin/fastcgi-cache-purge-and-preload-nginx/reviews/#new-post" target="_blank" rel="noopener" class="button button-secondary" style="margin-right: 8px;">
+                        ⭐ <?php echo esc_html__('Give a Star', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                    </a>
+                    <a href="https://github.com/sponsors/psaux-it" target="_blank" rel="noopener" class="button button-secondary">
+                        ❤️ <?php echo esc_html__('Sponsor', 'fastcgi-cache-purge-and-preload-nginx'); ?>
                     </a>
                 </p>
             </div>

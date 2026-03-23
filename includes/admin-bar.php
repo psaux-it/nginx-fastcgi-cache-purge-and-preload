@@ -1,8 +1,8 @@
 <?php
 /**
- * WP Admin Bar code for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains Admin Bar code for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Admin bar integration for Nginx Cache Purge Preload
+ * Description: Adds admin-bar cache actions and routes them to plugin purge/preload workflows.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -120,7 +120,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         return;
     }
 
-    // Setup completed?
+    // Check whether setup has been completed.
     $setup_url = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
     $needs_setup = class_exists('\NPPP\Setup') ? \NPPP\Setup::nppp_needs_setup() : false;
 
@@ -129,7 +129,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         'id'    => 'fastcgi-cache-operations',
         'title' => sprintf(
             // phpcs:ignore PluginCheck.CodeAnalysis.ImageFunctions.NonEnqueuedImage -- Image is internal plugin asset, not from media library
-            '<img style="height: 20px; margin-bottom: -5px; width: 20px;" src="%s"> %s',
+            '<img style="height: 20px; width: 20px; vertical-align: middle; position: relative; top: -2px;" src="%s"> %s',
             esc_url(plugin_dir_url(__FILE__) . '../admin/img/bar.png'),
             esc_html__('Nginx Cache', 'fastcgi-cache-purge-and-preload-nginx')
         ),
@@ -227,7 +227,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
 
 // Handle button clicks with actions
 function nppp_handle_fastcgi_cache_actions_admin_bar() {
-    // Prevent interfere
+    // Prevent interference with unrelated request contexts.
     if (
         // AJAX
         (function_exists('wp_doing_ajax') && wp_doing_ajax()) ||
@@ -293,7 +293,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     // Set default data for purge & preload actions
     $default_cache_path = '/dev/shm/change-me-now';
     $default_limit_rate = 1280;
-    $default_cpu_limit = 50;
+    $default_cpu_limit = 100;
     $default_reject_regex = nppp_fetch_default_reject_regex();
 
     // Get the necessary data for purge & preload actions
@@ -305,7 +305,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     // Get extra data for purge & preload actions
     $fdomain = get_site_url();
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     $nppp_single_action = false;
@@ -376,6 +376,10 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         $current_page_url = $candidate_ascii;
     }
 
+    // Reset tracker before buffering so a stale value from a previous
+    // request never bleeds into this one.
+    $GLOBALS['nppp_last_notice_type'] = 'success';
+
     // Start output buffering to capture the output of the actions
     ob_start();
 
@@ -401,13 +405,8 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     // Get the status message from the output buffer
     $status_message = wp_strip_all_tags(ob_get_clean());
 
-    // Determine the type of admin notice based on the status message
-    $message_type = 'success';
-    if (strpos($status_message, 'ERROR') !== false) {
-        $message_type = 'error';
-    } elseif (strpos($status_message, 'INFO') !== false) {
-        $message_type = 'info';
-    }
+    // Read the type that nppp_display_admin_notice() recorded directly.
+    $message_type = $GLOBALS['nppp_last_notice_type'] ?? 'success';
 
     // Generate redirect nonce
     $nonce_redirect = wp_create_nonce('nppp_redirect_nonce');

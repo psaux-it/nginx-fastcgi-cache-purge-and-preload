@@ -1,8 +1,8 @@
 <?php
 /**
- * Rest API for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains rest api functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * REST API endpoints for Nginx Cache Purge Preload
+ * Description: Registers API callbacks for cache purge and preload actions with request validation.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -14,9 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Retrieve the client's IP address, considering proxies.
-function nppp_get_client_ip() {
-    // Mask last octet
+// Retrieve the client's IP address, considering trusted proxies.
+function nppp_get_client_ip($mask_for_log = false) {
     $mask_ip = function($ip) {
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
             $parts = explode('.', $ip);
@@ -26,39 +25,40 @@ function nppp_get_client_ip() {
         return $ip;
     };
 
-    // Check for HTTP_X_FORWARDED_FOR (Real IP)
-    if (isset($_SERVER['HTTP_X_FORWARDED_FOR']) && ! empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+    $remote_addr = '';
+    if (isset($_SERVER['REMOTE_ADDR']) && ! empty($_SERVER['REMOTE_ADDR'])) {
+        $candidate_remote_addr = sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
+        if (filter_var($candidate_remote_addr, FILTER_VALIDATE_IP)) {
+            $remote_addr = $candidate_remote_addr;
+        }
+    }
+
+    $client_ip = $remote_addr;
+
+    // Trust forwarded headers only when the direct peer is a trusted proxy.
+    $trusted_proxies = apply_filters('nppp_rest_trusted_proxies', array());
+    if (
+        ! empty($remote_addr) &&
+        is_array($trusted_proxies) &&
+        in_array($remote_addr, $trusted_proxies, true) &&
+        isset($_SERVER['HTTP_X_FORWARDED_FOR']) &&
+        ! empty($_SERVER['HTTP_X_FORWARDED_FOR'])
+    ) {
         $xff = sanitize_text_field(wp_unslash($_SERVER['HTTP_X_FORWARDED_FOR']));
         $ip_list = explode(',', $xff);
-
-        // Trim whitespace from the first IP address
         if (isset($ip_list[0])) {
-            $ip = trim($ip_list[0]);
-            $ip = sanitize_text_field($ip);
-            if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                return $mask_ip($ip);
+            $forwarded_ip = sanitize_text_field(trim($ip_list[0]));
+            if (filter_var($forwarded_ip, FILTER_VALIDATE_IP)) {
+                $client_ip = $forwarded_ip;
             }
         }
     }
 
-    // Check for REMOTE_ADDR
-    if (isset($_SERVER['REMOTE_ADDR']) && ! empty($_SERVER['REMOTE_ADDR'])) {
-        $ip = sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
-        if (filter_var($ip, FILTER_VALIDATE_IP)) {
-            return $mask_ip($ip);
-        }
+    if (empty($client_ip)) {
+        return '';
     }
 
-    // Check for HTTP_CLIENT_IP
-    if (isset($_SERVER['HTTP_CLIENT_IP']) && ! empty($_SERVER['HTTP_CLIENT_IP'])) {
-        $ip = sanitize_text_field(wp_unslash($_SERVER['HTTP_CLIENT_IP']));
-        if (filter_var($ip, FILTER_VALIDATE_IP)) {
-            return $mask_ip($ip);
-        }
-    }
-
-    // If none of the above, return empty string
-    return '';
+    return $mask_for_log ? $mask_ip($client_ip) : $client_ip;
 }
 
 // Determine the endpoint action based on the current route.
@@ -73,15 +73,15 @@ function nppp_get_endpoint_action($route) {
     }
 }
 
-// Add CORS and No-Cache headers to specific REST API endpoints.
+// Add No-Cache headers to specific REST API endpoints.
 add_action('rest_api_init', 'nppp_register_cors_headers');
 
-// Register the callback for adding CORS and No-Cache headers.
+// Register the callback for adding No-Cache headers.
 function nppp_register_cors_headers() {
     add_action('rest_pre_serve_request', 'nppp_add_cors_and_no_cache_headers', 10, 3);
 }
 
-// Add CORS and No-Cache headers to the response for specific endpoints.
+// Add No-Cache headers to the response for NPP endpoints.
 function nppp_add_cors_and_no_cache_headers($served, $result, $request) {
     // Define the specific routes to target
     $allowed_routes = array(
@@ -94,35 +94,23 @@ function nppp_add_cors_and_no_cache_headers($served, $result, $request) {
 
     // Check if the current route is one of the allowed routes
     if (in_array( $route, $allowed_routes, true)) {
-        // Add CORS headers
-        header('Access-Control-Allow-Origin: *');
-        header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Api-Key');
-        header('Access-Control-Max-Age: 86400' );
-
         // Add No-Cache headers
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0' );
         header('Cache-Control: post-check=0, pre-check=0', false );
         header('Pragma: no-cache' );
         header('Expires: 0' );
-
-        // Handle preflight OPTIONS request
-        if (isset($_SERVER['REQUEST_METHOD']) && 'OPTIONS' === $_SERVER['REQUEST_METHOD']) {
-            status_header( 200 );
-            exit();
-        }
     }
 
     return $served;
 }
 
 // Log NPP REST API calls
-function nppp_log_api_request($endpoint, $status) {
+function nppp_log_api_request($endpoint, $status, $is_error = false) {
     // Get the IP address
-    $ip_address = nppp_get_client_ip();
+    $ip_address = nppp_get_client_ip(true);
 
-    // Determine log prefix based on the status
-    $log_prefix = (strpos($status, 'ERROR') !== false) ? 'ERROR API' : 'API REQUEST';
+    // Determine log prefix based on the explicit flag
+    $log_prefix = $is_error ? 'ERROR API' : 'API REQUEST';
 
     // Create a log entry with timestamp, IP, endpoint, and status
     $log_entry = sprintf(
@@ -137,7 +125,7 @@ function nppp_log_api_request($endpoint, $status) {
     // Check if the log file path is defined
     if (!defined('NGINX_CACHE_LOG_FILE')) {
         // If the log file path is not defined or empty
-        define('NGINX_CACHE_LOG_FILE', dirname(__FILE__) . '/../fastcgi_ops.log');
+        define('NGINX_CACHE_LOG_FILE', nppp_get_runtime_file('fastcgi_ops.log'));
     }
 
     // Sanitize the file path to prevent directory traversal
@@ -173,8 +161,9 @@ function nppp_log_api_request($endpoint, $status) {
 }
 
 // Rate limit API requests
-function nppp_api_rate_limit_check($ip_address, $endpoint) {
-    $transient_key = 'nppp_rate_limit_' . md5($ip_address . $endpoint);
+function nppp_api_rate_limit_check($ip_address, $endpoint, $api_key) {
+    $api_key_hash = hash('sha256', $api_key);
+    $transient_key = 'nppp_rate_limit_' . md5($api_key_hash . '|' . $ip_address . '|' . $endpoint);
 
     // Set rate limit based on the endpoint, 1 request in 1 Minute
     $rate_limit = ($endpoint === 'purge') ? 1 : 1;
@@ -190,7 +179,7 @@ function nppp_api_rate_limit_check($ip_address, $endpoint) {
 
         // Limit requests to 1 per minute
         if ($request_count > $rate_limit) {
-            nppp_log_api_request($endpoint, __('ERROR 429 TOO MANY REQUEST', 'fastcgi-cache-purge-and-preload-nginx'));
+            nppp_log_api_request($endpoint, __('ERROR 429 TOO MANY REQUEST', 'fastcgi-cache-purge-and-preload-nginx'), true);
             return new WP_Error('rate_limit_error', __('NPP REST API rate limit exceeded. Try again in 1 minute.', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 429));
         }
 
@@ -206,7 +195,7 @@ function nppp_nginx_cache_register_purge_endpoint() {
     register_rest_route('nppp_nginx_cache/v2', '/purge', array(
         'methods' => 'POST',
         'callback' => 'nppp_nginx_cache_purge_endpoint',
-        'permission_callback' => '__return_true',
+        'permission_callback' => 'nppp_validate_and_rate_limit_endpoint',
     ));
 }
 
@@ -215,7 +204,7 @@ function nppp_nginx_cache_register_preload_endpoint() {
     register_rest_route('nppp_nginx_cache/v2', '/preload', array(
         'methods' => 'POST',
         'callback' => 'nppp_nginx_cache_preload_endpoint',
-        'permission_callback' => '__return_true',
+        'permission_callback' => 'nppp_validate_and_rate_limit_endpoint',
     ));
 }
 
@@ -242,28 +231,25 @@ function nppp_validate_and_rate_limit_endpoint($request) {
     // 4. If no API key is provided, return an error
     // or Sanitize API Key
     if (empty($api_key)) {
-        nppp_log_api_request('global', __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
+        nppp_log_api_request('global', __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'), true);
         return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
     } else {
         $api_key = sanitize_text_field($api_key);
     }
 
-    // Get the IP address for rate limiting
-    $ip_address = nppp_get_client_ip();
-
     // Get the current route to determine the endpoint
     $route = $request->get_route();
     $endpoint = nppp_get_endpoint_action($route);
 
-    // Perform rate limit check
-    $rate_limit = nppp_api_rate_limit_check($ip_address, $endpoint);
-    if (is_wp_error($rate_limit)) {
-        return $rate_limit;
+    // Fail closed for unexpected route/action mapping.
+    if ('' === $endpoint) {
+        nppp_log_api_request('global', __('ERROR 404 INVALID ENDPOINT', 'fastcgi-cache-purge-and-preload-nginx'), true);
+        return new WP_Error('invalid_endpoint', __('NPP REST API endpoint is invalid.', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 404));
     }
 
     // Validate API key format
     if (!preg_match('/^[a-f0-9]{64}$/i', $api_key)) {
-        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
+        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'), true);
         return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
     }
 
@@ -271,37 +257,63 @@ function nppp_validate_and_rate_limit_endpoint($request) {
     $options = get_option('nginx_cache_settings');
     $stored_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : '';
 
-    // Authentication check
-    if (!hash_equals($stored_key, $api_key)) {
-        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'));
+    // Fail closed on invalid option type. hash_equals() requires strings.
+    if (!is_string($stored_key)) {
+        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'), true);
         return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
     }
 
-    // Everything passed
+    // Authentication check
+    if (!hash_equals($stored_key, $api_key)) {
+        nppp_log_api_request($endpoint, __('ERROR 403 AUTHENTICATION FAILED', 'fastcgi-cache-purge-and-preload-nginx'), true);
+        return new WP_Error('authentication_error', __('NPP REST API Authentication Error', 'fastcgi-cache-purge-and-preload-nginx'), array('status' => 403));
+    }
+
+    // Auth completed
     return true;
+}
+
+// Enforce rate limiting for an already-authenticated request.
+function nppp_enforce_rate_limit( WP_REST_Request $request, string $endpoint ) {
+    $ip_address = nppp_get_client_ip();
+
+    // Re-resolve the API key the same way the permission callback did.
+    $api_key = $request->get_header( 'Authorization' );
+    if ( ! empty( $api_key ) && strpos( $api_key, 'Bearer ' ) === 0 ) {
+        $api_key = substr( $api_key, 7 );
+    }
+    if ( empty( $api_key ) ) {
+        $api_key = $request->get_header( 'X-Api-Key' );
+    }
+    if ( empty( $api_key ) ) {
+        $api_key = $request->get_param( 'api_key' );
+    }
+    $api_key = sanitize_text_field( (string) $api_key );
+
+    return nppp_api_rate_limit_check( $ip_address, $endpoint, $api_key );
 }
 
 // Handle the REST API request for purge action.
 function nppp_nginx_cache_purge_endpoint($request) {
+    // Enforce rate limit (authentication already passed).
+    $rate_limit = nppp_enforce_rate_limit( $request, 'purge' );
+    if ( is_wp_error( $rate_limit ) ) {
+        return $rate_limit;
+    }
+
     // Start output buffering for purge endpoint
     ob_start();
 
-    // Validate the API key and check rate limit
-    $validation = nppp_validate_and_rate_limit_endpoint($request);
-    if (is_wp_error($validation)) {
-        return $validation;
-    }
-
     // Log the successful purge API call
     // Not hit the rate limit, authentication errors
-    nppp_log_api_request('purge', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'));
+    nppp_log_api_request('purge', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'), false);
 
     // Necessary data for purge action
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $default_cache_path = '/dev/shm/change-me-now';
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Call purge action
@@ -326,18 +338,18 @@ function nppp_nginx_cache_purge_endpoint($request) {
 
 // Handle the REST API request for preload action.
 function nppp_nginx_cache_preload_endpoint($request) {
+    // Enforce rate limit (authentication already passed).
+    $rate_limit = nppp_enforce_rate_limit( $request, 'preload' );
+    if ( is_wp_error( $rate_limit ) ) {
+        return $rate_limit;
+    }
+
     // Start output buffering for preload endpoint
     ob_start();
 
-    // Validate the API key and check rate limit
-    $validation = nppp_validate_and_rate_limit_endpoint($request);
-    if (is_wp_error($validation)) {
-        return $validation;
-    }
-
     // Log the successful preload API call
     // Not hit the rate limit, authentication errors
-    nppp_log_api_request('preload', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'));
+    nppp_log_api_request('preload', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'), false);
 
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
@@ -345,7 +357,7 @@ function nppp_nginx_cache_preload_endpoint($request) {
     // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';
     $default_limit_rate = 1280;
-    $default_cpu_limit = 50;
+    $default_cpu_limit = 100;
     $default_reject_regex = nppp_fetch_default_reject_regex();
 
     // Get the necessary data for preload action from plugin options
@@ -357,7 +369,7 @@ function nppp_nginx_cache_preload_endpoint($request) {
     // Extra data for preload action
     $fdomain = get_site_url();
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Call preload action

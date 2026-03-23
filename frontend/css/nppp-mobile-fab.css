@@ -1,0 +1,128 @@
+/**
+ * Mobile Floating Action Button (FAB) for Nginx Cache Purge Preload
+ * Description: Provides "Purge This Page" and "Preload This Page" on mobile
+ *              where WordPress hides the admin bar (max-width: 600px).
+ * Version: 2.1.5
+ * Author: Hasan CALISIR
+ * Author Email: hasan.calisir@psauxit.com
+ * Author URI: https://www.psauxit.com
+ * License: GPL-2.0+
+ */
+
+/* Hidden on desktop — only rendered on mobile where WP hides the admin bar */
+#nppp-mobile-fab {
+    display: none;
+}
+
+@media screen and (max-width: 600px) {
+
+    #nppp-mobile-fab {
+        display: block;
+        position: fixed;
+        bottom: 20px;
+        right: 16px;
+        z-index: 99999;
+    }
+
+    /* ── Toggle button ─────────────────────────────────────────── */
+
+    #nppp-mobile-fab-toggle {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: #1d2327;
+        border: 2px solid #3c434a;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, .50);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        margin: 0 0 0 auto;
+        transition: background .15s ease, box-shadow .15s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    #nppp-mobile-fab-toggle:hover,
+    #nppp-mobile-fab-toggle[aria-expanded="true"] {
+        background: #2c3338;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, .55);
+    }
+
+    #nppp-mobile-fab-toggle img {
+        display: block;
+        pointer-events: none;
+    }
+
+    /* ── Action menu ───────────────────────────────────────────── */
+
+    #nppp-mobile-fab-menu {
+        display: none;
+        flex-direction: column;
+        gap: 7px;
+        margin-bottom: 10px;
+        /* Slide up from button */
+        animation: nppp-fab-slide-in .16s ease-out;
+    }
+
+    #nppp-mobile-fab-menu.nppp-fab-open {
+        display: flex;
+    }
+
+    @keyframes nppp-fab-slide-in {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0);   }
+    }
+
+    /* ── Individual action items ───────────────────────────────── */
+
+    .nppp-fab-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 10px 15px;
+        border-radius: 8px;
+        background: #1d2327;
+        color: #f0f0f1 !important;
+        text-decoration: none !important;
+        font-size: 13px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+        font-weight: 500;
+        line-height: 1.3;
+        white-space: nowrap;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .40);
+        border: 1px solid #3c434a;
+        transition: background .12s ease, color .12s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .nppp-fab-item:hover,
+    .nppp-fab-item:focus {
+        background: #2c3338;
+        color: #fff !important;
+        outline: 2px solid #4f94d4;
+        outline-offset: 1px;
+    }
+
+    .nppp-fab-item-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        font-size: 12px;
+        font-style: normal;
+        flex-shrink: 0;
+        opacity: .90;
+    }
+
+    .nppp-fab-purge   .nppp-fab-item-icon { color: #dc3232; }
+    .nppp-fab-preload .nppp-fab-item-icon { color: #46b450; }
+
+    /* Disabled state (when plugin requirements not met) */
+    .nppp-fab-item.nppp-fab-disabled {
+        opacity: .45;
+        pointer-events: none;
+        cursor: not-allowed;
+    }
+}

@@ -1,8 +1,8 @@
 <?php
 /**
- * Logging & WP admin notices function for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contain logging & wp admin notices function for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Logging and admin notice helpers for Nginx Cache Purge Preload
+ * Description: Centralizes plugin log writes and standardized WordPress admin notice rendering.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -22,6 +22,15 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         $type = 'info';
     }
 
+    // Track the highest-severity type seen during any ob_start() capture.
+    // Priority: error > warning > info > success
+    // So once 'error' is set, a later 'success' notice won't overwrite it.
+    $priority = ['success' => 0, 'info' => 1, 'warning' => 2, 'error' => 3];
+    $current  = $GLOBALS['nppp_last_notice_type'] ?? 'success';
+    if ( $display_notice && ($priority[$type] ?? 0) >= ($priority[$current] ?? 0)) {
+        $GLOBALS['nppp_last_notice_type'] = $type;
+    }
+
     // Sanitize the message
     $sanitized_message = sanitize_text_field($message);
 
@@ -29,7 +38,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     if ($log_message) {
         if (!defined('NGINX_CACHE_LOG_FILE')) {
             // If the log file path is not defined or empty
-            define('NGINX_CACHE_LOG_FILE', dirname(__FILE__) . '/../fastcgi_ops.log');
+            define('NGINX_CACHE_LOG_FILE', nppp_get_runtime_file('fastcgi_ops.log'));
         }
 
         // Sanitize the file path to prevent directory traversal
@@ -76,21 +85,34 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         (function_exists('wp_doing_rest') && wp_doing_rest()) ||
         (defined('REST_REQUEST') && REST_REQUEST)
     ) {
-        global $wp;
-        $route = $wp->query_vars['rest_route'] ?? '';
-        // Only echo for our two NPP routes
-        // to prevent interfere with core WP API responses.
-        if (in_array($route, [
-            '/nppp_nginx_cache/v2/purge',
-            '/nppp_nginx_cache/v2/preload',
-        ], true)) {
+        $route = '';
+
+        // REST route can come from query args or the global WP query context.
+        // Guard all access because $wp can be null during some REST save flows.
+        if (isset($_REQUEST['rest_route'])) {
+            $route = '/' . ltrim(sanitize_text_field(wp_unslash($_REQUEST['rest_route'])), '/');
+        } elseif (isset($GLOBALS['wp']) && is_object($GLOBALS['wp']) && isset($GLOBALS['wp']->query_vars) && is_array($GLOBALS['wp']->query_vars) && isset($GLOBALS['wp']->query_vars['rest_route'])) {
+            $route = '/' . ltrim(sanitize_text_field($GLOBALS['wp']->query_vars['rest_route']), '/');
+        }
+
+        // Only echo for our two NPP routes.
+        // Prevent interference with core WordPress REST responses.
+        if (
+            in_array($route, [
+                '/nppp_nginx_cache/v2/purge',
+                '/nppp_nginx_cache/v2/preload',
+            ], true) &&
+            ob_get_level() > 0 &&
+            $display_notice
+        ) {
+            // Emit only when a caller intentionally started buffering (REST endpoint wrappers).
             echo '<p>' . esc_html(sanitize_text_field($message)) . '</p>';
         }
         return;
     }
 
-    // Allow admin notices only for NPP AJAX actions
-    // To prevent interfere with core WP AJAX
+    // Allow admin notices only for NPP AJAX actions.
+    // Prevent interference with core WordPress AJAX responses.
     // Verify nonce for WP Admin Notices
     if (defined('DOING_AJAX') && DOING_AJAX) {
         $allowed_actions = [
@@ -98,7 +120,11 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_get_nginx_cache_logs'                   => 'nppp-clear-nginx-cache-logs',
             'nppp_update_send_mail_option'                => 'nppp-update-send-mail-option',
             'nppp_update_auto_preload_option'             => 'nppp-update-auto-preload-option',
+            'nppp_refresh_cache_ratio'                    => 'nppp_refresh_cache_ratio',
+            'nppp_update_watchdog_option'                 => 'nppp-update-watchdog-option',
             'nppp_update_auto_purge_option'               => 'nppp-update-auto-purge-option',
+            'nppp_update_cloudflare_apo_sync_option'      => 'nppp-update-cloudflare-apo-sync-option',
+            'nppp_update_redis_cache_sync_option'         => 'nppp-update-redis-cache-sync-option',
             'nppp_cache_status'                           => 'cache-status',
             'nppp_load_premium_content'                   => 'load_premium_content_nonce',
             'nppp_purge_cache_premium'                    => 'purge_cache_premium_nonce',
@@ -115,13 +141,13 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_cancel_scheduled_event'                 => 'nppp-cancel-scheduled-event',
             'nppp_get_active_cron_events_ajax'            => 'nppp-get-save-cron-expression',
             'nppp_clear_plugin_cache'                     => 'nppp-clear-plugin-cache-action',
-            'nppp_restart_systemd_service'                => 'nppp-restart-systemd-service',
             'nppp_update_default_cache_key_regex_option'  => 'nppp-update-default-cache-key-regex-option',
             'nppp_update_auto_preload_mobile_option'      => 'nppp-update-auto-preload-mobile-option',
             'nppp_update_enable_proxy_option'             => 'nppp-update-enable-proxy-option',
             'nppp_update_related_fields'                  => 'nppp-related-posts-purge',
             'nppp_locate_cache_file'                      => 'locate_cache_file_nonce',
             'nppp_update_pctnorm_mode'                    => 'nppp-update-pctnorm-mode',
+            'nppp_update_http_purge_option'               => 'nppp-update-http-purge-option',
         ];
 
         // Get the current AJAX action
@@ -157,7 +183,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     }
 
     // Allow admin notices only for NPP CRON actions
-    // To prevent interfere with core WP CRON
+    // Prevent interference with core WordPress Cron responses.
     if (function_exists('wp_doing_cron') && wp_doing_cron()) {
         return;
     } elseif (defined('DOING_CRON') && DOING_CRON) {
@@ -165,11 +191,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     }
 
     // Perform the permission check for admin actions
-    if (is_admin() && !current_user_can('manage_options')) {
-        echo '<div class="notice notice-error"><p>' . esc_html__(
-                 'You do not have sufficient permissions to access this page.',
-                 'fastcgi-cache-purge-and-preload-nginx'
-             ) . '</p></div>';
+    if (!current_user_can('manage_options')) {
         return;
     }
 

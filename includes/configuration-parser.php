@@ -1,8 +1,8 @@
 <?php
 /**
- * Nginx config parser functions for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains Nginx config parser functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Nginx configuration parser for Nginx Cache Purge Preload
+ * Description: Reads server config fragments to detect cache paths, keys, and runtime settings.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -179,6 +179,7 @@ function nppp_check_fuse_cache_paths($cache_paths) {
     nppp_prepare_request_env(true);
 
     $fuse_paths = [];
+    $fuse_map   = [];
 
     // Loop through the cache paths to check their mount points
     foreach ($cache_paths as $directive => $paths) {
@@ -193,6 +194,7 @@ function nppp_check_fuse_cache_paths($cache_paths) {
                     // Extract the FUSE mount point
                     if (preg_match('/on\s+([^\s]+)\s+type\s+fuse/', $output, $matches)) {
                         $fuse_paths[] = $matches[1];
+                        $fuse_map[rtrim($path, '/')] = rtrim($matches[1], '/');
                     }
                 }
             }
@@ -202,17 +204,17 @@ function nppp_check_fuse_cache_paths($cache_paths) {
     // If no fuse mount point found return empty array before setting transient
     if (empty($fuse_paths)) {
         set_transient('nppp_fuse_path_not_found', true, MONTH_IN_SECONDS);
-        return ['fuse_paths' => []];
+        return ['fuse_paths' => [], 'fuse_map' => []];
     }
 
     // Store the result in the cache before returning
-    set_transient($transient_key, ['fuse_paths' => $fuse_paths], MONTH_IN_SECONDS);
+    set_transient($transient_key, ['fuse_paths' => $fuse_paths, 'fuse_map' => $fuse_map], MONTH_IN_SECONDS);
 
     // Reset the error transients
     delete_transient('nppp_fuse_path_not_found');
 
     // Return the array of mount points
-    return ['fuse_paths' => $fuse_paths];
+    return ['fuse_paths' => $fuse_paths, 'fuse_map' => $fuse_map];
 }
 
 // Function to parse Nginx cache paths from the configuration file
@@ -248,7 +250,14 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = t
     }
 
     // Track already parsed files to avoid re-processing duplicates
+    // Reset on every fresh top-level call — stale entries from a previous
+    // call in the same request would otherwise cause all files to be skipped.
     static $parsed_files = [];
+
+    if ($is_top_level) {
+        $parsed_files = [];
+    }
+
     $canonical = realpath($file) ?: $file;
     if (in_array($canonical, $parsed_files)) {
         return ['cache_paths' => []];
@@ -386,29 +395,52 @@ function nppp_get_nginx_info() {
     ];
 }
 
-// Check if the systemd service file exists
-function nppp_is_service_file_exists() {
-    // Initialize the WP Filesystem
-    $wp_filesystem = nppp_initialize_wp_filesystem();
+// Mirror nppp_validate_path() allowed/blocked rules for display purposes.
+// Does NOT check filesystem existence — paths come from nginx.conf, not settings input.
+// Must be kept in sync with nppp_validate_path() in settings.php.
+function nppp_is_cache_path_display_supported(string $directive, string $value): bool {
+    $normalised = rtrim($value, '/');
 
-    // Check if WP Filesystem initialization failed
-    if ($wp_filesystem === false) {
-        nppp_display_admin_notice(
-            'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
-        );
-        return;
+    // Allowed roots — must match nppp_validate_path() $allowed_roots exactly
+    $allowed_roots = ['/dev/shm/', '/tmp/', '/var/', '/cache/'];
+    $allowed = false;
+    foreach ($allowed_roots as $root) {
+        if (strpos($normalised, $root) === 0) {
+            $allowed = true;
+            break;
+        }
+    }
+    if (!$allowed) {
+        return false;
     }
 
-    $systemd_file = '/etc/systemd/system/npp-wordpress.service';
-    return $wp_filesystem->exists($systemd_file);
+    // Blocked subtrees — must match nppp_validate_path() $blocked_subdirs exactly
+    $blocked_subdirs = [
+        '/var/log',
+        '/var/spool',
+        '/var/lib',
+        '/var/www',
+        '/var/mail',
+        '/var/lock',
+        '/var/backups',
+        '/var/snap',
+    ];
+    foreach ($blocked_subdirs as $blocked) {
+        if ($normalised === $blocked || strpos($normalised, $blocked . '/') === 0) {
+            return false;
+        }
+    }
+
+    // /var/cache root itself is blocked — subdirectories are allowed
+    if ($normalised === '/var/cache' || $normalised === '/var/run' || $normalised === '/cache') {
+        return false;
+    }
+
+    return true;
 }
 
 // Function to generate HTML output
 function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths) {
-    // Check if the systemd service file exists
-    $service_file_exists = nppp_is_service_file_exists();
-
     ob_start();
     //img url's
     $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
@@ -416,12 +448,12 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
     <header></header>
     <main>
         <section class="nginx-status" style="background-color: mistyrose;">
-            <h2><?php esc_html_e('Systemd Service Management', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
+            <h2><?php esc_html_e('Clear URL Index', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
             <p style="padding-left: 10px; font-weight: 500;">
-                <?php esc_html_e('In case you used the one-liner automation bash script for the initial setup, you can restart the systemd service here. Restarting the service may help to fix permission issues and keep cache consistency stable. The automation script assigns passwordless sudo permissions to the PHP process owner specifically for managing the npp-wordpress service directly from the frontend.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                <?php esc_html_e('The URL index maps cached URLs to their filesystem paths, enabling fast single-page purges without a full directory scan. Clear it if you suspect stale entries — for example after moving the cache directory, changing the cache key, or if single-page purges are not working correctly. The index rebuilds automatically on the next purge or preload operation.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
             </p>
-            <button id="nppp-restart-systemd-service-btn" class="button button-primary <?php echo !$service_file_exists ? 'disabled' : ''; ?>" style="margin-left: 10px; margin-bottom: 15px; background-color: #2271b1 !important; color: white !important;">
-                <?php esc_html_e('Restart Service', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+            <button id="nppp-clear-url-index-btn" class="button button-primary" style="margin-left: 10px; margin-bottom: 15px;">
+                <?php esc_html_e('Clear URL Index', 'fastcgi-cache-purge-and-preload-nginx'); ?>
             </button>
         </section>
         <section class="nginx-status">
@@ -484,56 +516,99 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     <tr>
                         <td class="action">
                             <?php esc_html_e('Nginx Cache Paths', 'fastcgi-cache-purge-and-preload-nginx'); ?>
-                            <?php
-                            if (!empty($cache_paths) && get_transient('nppp_cache_path_not_found') === false):
-                                $all_supported = true;
-                                foreach ($cache_paths as $values) {
-                                    foreach ($values as $value) {
-                                        $path_parts = explode('/', trim($value, '/'));
-                                        if (!(
-                                            (isset($path_parts[0]) && $path_parts[0] === 'dev' && isset($path_parts[1])) ||
-                                            (isset($path_parts[0]) && $path_parts[0] === 'var' && isset($path_parts[1])) ||
-                                            (isset($path_parts[0]) && $path_parts[0] === 'opt' && isset($path_parts[1])) ||
-                                            (isset($path_parts[0]) && $path_parts[0] === 'tmp' && isset($path_parts[1]))
-                                        )) {
-                                           $all_supported = false;
-                                           break 2;
-                                        }
-                                    }
-                                }
-                                if ($all_supported): ?>
-                                    <br><span style="font-size: 13px; color: green;"><?php esc_html_e('All Supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-                                <?php else: ?>
-                                    <br><span style="font-size: 13px; color: #f0c36d;"><?php esc_html_e('Found Unsupported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-                                <?php endif;
-                            endif; ?>
                         </td>
                         <td class="status">
                             <?php if (empty($cache_paths) || get_transient('nppp_cache_path_not_found') !== false): ?>
                                 <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span style="color: red; font-size: 13px; font-weight: bold;"><?php esc_html_e('Not Found', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                             <?php else: ?>
+                                <?php
+                                $nppp_active_path = '';
+                                $nppp_settings = get_option('nginx_cache_settings', []);
+                                if (!empty($nppp_settings['nginx_cache_path'])) {
+                                    $nppp_active_path = rtrim($nppp_settings['nginx_cache_path'], '/');
+                                }
+                                ?>
+                                <?php
+                                if ($nppp_active_path !== '') {
+                                    $nppp_banner_fuse_map = isset($fuse_paths['fuse_map']) ? $fuse_paths['fuse_map'] : [];
+
+                                    $nppp_is_active_proxy = false;
+                                    foreach ($cache_paths['proxy_cache_path'] ?? [] as $nppp_p) {
+                                        $nppp_pn        = rtrim($nppp_p, '/');
+                                        $nppp_fuse_dest = $nppp_banner_fuse_map[$nppp_pn] ?? '';
+                                        if ($nppp_pn === $nppp_active_path || $nppp_fuse_dest === $nppp_active_path) {
+                                            $nppp_is_active_proxy = true;
+                                            break;
+                                        }
+                                    }
+
+                                    $nppp_is_active_fastcgi = false;
+                                    foreach ($cache_paths['fastcgi_cache_path'] ?? [] as $nppp_p) {
+                                        $nppp_pn        = rtrim($nppp_p, '/');
+                                        $nppp_fuse_dest = $nppp_banner_fuse_map[$nppp_pn] ?? '';
+                                        if ($nppp_pn === $nppp_active_path || $nppp_fuse_dest === $nppp_active_path) {
+                                            $nppp_is_active_fastcgi = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if ($nppp_is_active_proxy && !$nppp_is_active_fastcgi):
+                                ?>
+                                <div style="margin-bottom:10px; padding:8px 12px; background:#fff8e1; border-left:4px solid #f0ad4e; border-radius:0;">
+                                    <span class="dashicons dashicons-warning" style="color:#e6a817; vertical-align:middle;"></span>
+                                    <strong style="color:#7a4f00;"><?php esc_html_e('Reverse-Proxy Cache Detected!', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong><br>
+                                    <span style="font-size:13px; color:#5a3800;">
+                                        <?php esc_html_e('The plugin supports this setup, but you must verify that your Cache Key Regex option. Incorrect regex will cause purge operations to fail silently.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                                    </span>
+                                </div>
+                                <?php
+                                    endif;
+                                }
+                                ?>
+                                <?php
+                                $nppp_directive_badges = [
+                                    'fastcgi_cache_path' => ['FastCGI', '#edf7ed', '#1a6e1a'],
+                                    'proxy_cache_path'   => ['Proxy',   '#fdf0ff', '#6a0dad'],
+                                    'scgi_cache_path'    => ['SCGI',    '#fff0f0', '#8b0000'],
+                                    'uwsgi_cache_path'   => ['uWSGI',   '#f0f4ff', '#1a3a8b'],
+                                ];
+                                ?>
                                 <table class="nginx-config-table">
                                     <tbody>
-                                        <?php foreach ($cache_paths as $values): ?>
+                                        <?php foreach ($cache_paths as $directive => $values): ?>
                                             <?php foreach ($values as $value): ?>
                                                 <tr>
                                                     <?php
-                                                    $path_parts = explode('/', trim($value, '/'));
-                                                    $is_supported = (
-                                                        (isset($path_parts[0]) && $path_parts[0] === 'dev' && isset($path_parts[1])) ||
-                                                        (isset($path_parts[0]) && $path_parts[0] === 'var' && isset($path_parts[1])) ||
-                                                        (isset($path_parts[0]) && $path_parts[0] === 'opt' && isset($path_parts[1])) ||
-                                                        (isset($path_parts[0]) && $path_parts[0] === 'tmp' && isset($path_parts[1]))
+                                                    $is_supported = nppp_is_cache_path_display_supported($directive, $value);
+                                                    $fuse_map     = isset($fuse_paths['fuse_map']) ? $fuse_paths['fuse_map'] : [];
+                                                    $fuse_dest    = isset($fuse_map[rtrim($value, '/')]) ? $fuse_map[rtrim($value, '/')] : '';
+                                                    $is_active    = ($nppp_active_path !== '') && (
+                                                        rtrim($value, '/') === $nppp_active_path ||
+                                                        $fuse_dest === $nppp_active_path
                                                     );
                                                     ?>
                                                     <td>
-                                                        <?php if ($is_supported): ?>
+                                                        <?php if ($is_active || $is_supported): ?>
                                                             <span class="dashicons dashicons-yes" style="color: green; font-size: 20px !important;"></span>
                                                         <?php else: ?>
                                                             <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
                                                         <?php endif; ?>
                                                         <span style="color: <?php echo $is_supported ? 'teal' : 'orange'; ?>; font-size: 13px; font-weight: bold;"><?php echo esc_html($value); ?></span>
+                                                        <?php if ($is_active): ?>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #e6f1fb; color: #0c447c;"><?php esc_html_e('Active', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                        <?php else: ?>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #f1efe8; color: #5f5e5a;"><?php esc_html_e('Other vhost', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                        <?php endif; ?>
+                                                        <?php if (!$is_supported): ?>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #faeeda; color: #633806;"><?php esc_html_e('Path Blocked', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                        <?php endif; ?>
+                                                        <?php
+                                                        if (isset($nppp_directive_badges[$directive])):
+                                                            [$nppp_badge_label, $nppp_badge_bg, $nppp_badge_color] = $nppp_directive_badges[$directive];
+                                                        ?>
+                                                            <span style="font-size: 12px; font-weight: 600; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: <?php echo esc_attr($nppp_badge_bg); ?>; color: <?php echo esc_attr($nppp_badge_color); ?>; letter-spacing: 0.3px;"><?php echo esc_html($nppp_badge_label); ?></span>
+                                                        <?php endif; ?>
                                                     </td>
                                                 </tr>
                                             <?php endforeach; ?>
@@ -547,20 +622,6 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     <tr>
                         <td class="action">
                             <?php esc_html_e('Nginx Cache Keys', 'fastcgi-cache-purge-and-preload-nginx'); ?>
-                            <?php
-                            if (
-                                $cache_keys !== 'Not Found' &&
-                                $cache_keys !== 'Filesystem Error' &&
-                                $cache_keys !== 'Conf Not Found' &&
-                                $cache_keys !== 'Key Not Found'
-                            ):
-                                if ($cache_keys === '$scheme$request_method$host$request_uri'):
-                            ?>
-                                    <br><span style="font-size: 13px; color: green;"><?php esc_html_e('All Supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-                                <?php else: ?>
-                                    <br><span style="font-size: 13px; color: #f0c36d;"><?php esc_html_e('Found Unsupported', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-                                <?php endif; ?>
-                            <?php endif; ?>
                         </td>
                         <td class="status">
                             <?php if ($cache_keys === 'Not Found'): ?>
@@ -650,15 +711,21 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
     </main>
     <div class="nppp-premium-widget">
         <div id="nppp-ad" style="margin-top: 20px; margin-bottom: 0; margin-left: 0; margin-right: 0;">
-            <h3 class="textcenter"><?php esc_html_e('Hope you are enjoying NPP! Do you still need assistance with the server-side integration? Get our server integration service now and optimize your website\'s speed!', 'fastcgi-cache-purge-and-preload-nginx'); ?></h3>
+            <h3 class="textcenter"><?php esc_html_e('Hope you are enjoying NPP! If it saves you time, consider giving it a star or sponsoring its development.', 'fastcgi-cache-purge-and-preload-nginx'); ?></h3>
             <p class="textcenter">
-                <a href="https://www.psauxit.com/nginx-fastcgi-cache-purge-preload-for-wordpress/" class="open-nppp-upsell" data-pro-ad="sidebar-logo">
-                    <img
-                        src="<?php echo esc_url($image_url_ad); ?>"
-                        alt="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
-                        title="<?php echo esc_attr__('Nginx Cache Purge & Preload PRO', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
-                        width="100%"
-                        height="auto">
+                <img
+                    src="<?php echo esc_url($image_url_ad); ?>"
+                    alt="<?php echo esc_attr__('Give a Star', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
+                    title="<?php echo esc_attr__('Give a Star or Sponsor NPP', 'fastcgi-cache-purge-and-preload-nginx'); ?>"
+                    width="100%"
+                    height="auto">
+            </p>
+            <p class="textcenter">
+                <a href="https://wordpress.org/support/plugin/fastcgi-cache-purge-and-preload-nginx/reviews/#new-post" target="_blank" rel="noopener" class="button button-secondary" style="margin-right: 8px;">
+                    ⭐ <?php esc_html_e('Give a Star', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                </a>
+                <a href="https://github.com/sponsors/psaux-it" target="_blank" rel="noopener" class="button button-secondary">
+                    ❤️ <?php esc_html_e('Sponsor', 'fastcgi-cache-purge-and-preload-nginx'); ?>
                 </a>
             </p>
         </div>
@@ -667,79 +734,15 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
     return ob_get_clean();
 }
 
-// Handles the AJAX request to restart the systemd service
-function nppp_restart_systemd_service() {
-    // Set env
-    nppp_prepare_request_env(true);
-
-    // Define the systemd service name
-    $service_name = 'npp-wordpress.service';
-
-    // Check nonce
-    if (isset($_POST['_wpnonce'])) {
-        $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
-        if (!wp_verify_nonce($nonce, 'nppp-restart-systemd-service')) {
-            wp_send_json_error('Nonce verification failed.');
-        }
-    } else {
-        wp_send_json_error('Nonce is missing.');
-    }
-
-    // Check user capability
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error('You do not have permission to access this action.');
-    }
-
-    // Get full paths for sudo and systemctl
-    $sudo_path = trim(shell_exec('command -v sudo'));
-    $systemctl_path = trim(shell_exec('command -v systemctl'));
-
-    if (empty($sudo_path) || empty($systemctl_path)) {
-        wp_send_json_error('Required commands sudo or systemctl not found.');
-    }
-
-    $output = [];
-    $return_var = 0;
-
-    // Construct and execute the restart command
-    $restart_command = "echo '' | sudo -S " . escapeshellcmd($systemctl_path) . " restart " . escapeshellcmd($service_name);
-    exec($restart_command . ' 2>&1', $output, $return_var);
-
-    // Check if sudo prompted for a password
-    if ($return_var === 1 && strpos(implode("\n", $output), 'password') !== false) {
-        wp_send_json_error('Sudo password prompt detected. Failed to restart the systemd service.');
-    }
-
-    // Check command output and return status
-    if ($return_var !== 0) {
-        wp_send_json_error('Failed to restart the systemd service. Output: ' . implode("\n", $output));
-    }
-
-    // Execute the status command
-    $status_command = 'sudo ' . escapeshellcmd($systemctl_path) . ' is-active ' . escapeshellcmd($service_name);
-    $status = trim(shell_exec($status_command));
-
-    if ($status === 'active') {
-        // Clear plugin cache
-        nppp_clear_plugin_cache();
-
-        wp_send_json_success(
-            __('Systemd service restarted and is active. Plugin cache cleared.', 'fastcgi-cache-purge-and-preload-nginx')
-        );
-    } else {
-        $msg = sprintf(
-            /* Translators: %s is the systemd service status string (e.g. "failed") */
-            __('Restart completed but the service is not active. Status: %s', 'fastcgi-cache-purge-and-preload-nginx'),
-            $status
-        );
-        wp_send_json_error($msg);
-    }
-}
-
 // Shortcode function to display the Nginx configuration on status tab
 function nppp_nginx_config_shortcode() {
-    $wp_filesystem = nppp_initialize_wp_filesystem();
+    // This shortcode reads and outputs nginx configuration file paths from the filesystem.
+    // Never render it for non-admins — the output is sensitive server configuration data.
+    if (! current_user_can('manage_options')) {
+        return '';
+    }
 
+    $wp_filesystem = nppp_initialize_wp_filesystem();
     if ($wp_filesystem === false) {
         nppp_display_admin_notice(
             'error',

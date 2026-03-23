@@ -1,8 +1,8 @@
 <?php
 /**
- * Preload action related schedule cron events for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains preload action related schedule cron events functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Cron scheduling utilities for Nginx Cache Purge Preload
+ * Description: Manages preload-related cron events and reports active plugin schedules.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -267,121 +267,38 @@ function nppp_create_scheduled_events($cron_expression) {
 }
 
 // Create process status check event for preload action
-function nppp_create_scheduled_event_preload_status($start_time) {
-    // Create a DateTime object for the current time in WordPress timezone
-    $wordpress_timezone = new DateTimeZone(wp_timezone_string());
-    $current_time = new DateTime('now', $wordpress_timezone);
+function nppp_create_scheduled_event_preload_status() {
+    // Reset phase transient on every fresh preload start so stale state
+    // from any previous interrupted cycle never corrupts the new one.
+    $phase_transient_key = 'nppp_preload_phase_' . md5('nppp');
+    delete_transient($phase_transient_key);
 
-    // Create a DateTime object for the selected execution time in WordPress timezone
-    $selected_execution_time = new DateTime('today ' . $start_time, $wordpress_timezone);
+    // Save cycle start timestamp for total elapsed time calculation
+    $start_transient_key = 'nppp_preload_cycle_start_' . md5('nppp');
+    set_transient($start_transient_key, time(), 12 * HOUR_IN_SECONDS);
 
-    // Add 5 seconds to the selected execution time
-    $next_execution_time = $selected_execution_time->modify('+5 seconds');
+    // Generate a fresh watchdog token for this preload cycle.
+    // The watchdog spawned in preload will carry this token.
+    nppp_watcher_generate_token();
 
-    // Get the timestamp for the next execution time
-    $next_execution_timestamp = $next_execution_time->getTimestamp();
-
-    // If there's an existing scheduled event, clear it
+    // Clear any existing tick and schedule the first check 5 seconds out.
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
-
-    // Schedule new event
-    wp_schedule_single_event($next_execution_timestamp, 'npp_cache_preload_status_event');
+    wp_schedule_single_event(time() + 5, 'npp_cache_preload_status_event');
 }
 
-// Here we will calculate elapsed time for preload action
-// So first we need the first scheduled time of event
-function nppp_get_preload_start_time() {
-    $wp_filesystem = nppp_initialize_wp_filesystem();
-
-    if ($wp_filesystem === false) {
-        nppp_display_admin_notice(
-            'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
-        );
-        return;
-    }
-
-    // Define a constant for the log file path
-    if ( ! defined( 'NGINX_CACHE_LOG_FILE' ) ) {
-        define('NGINX_CACHE_LOG_FILE', dirname(__FILE__) . '/../fastcgi_ops.log');
-    }
-
-    // Check if the log file constant is defined
-    if (defined('NGINX_CACHE_LOG_FILE')) {
-        $log_file_path = NGINX_CACHE_LOG_FILE;
-
-        // Check if log file exists
-        if ($wp_filesystem->exists($log_file_path)) {
-            // Read the log file
-            $log_contents = $wp_filesystem->get_contents($log_file_path);
-
-            // Split log contents into lines
-            $log_lines = explode("\n", $log_contents);
-
-            // Variable to hold the latest timestamp
-            $latest_timestamp = null;
-
-            // check preload triggered by auto preload feature
-            $options = get_option('nginx_cache_settings');
-            $auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
-
-            // Define the translated strings for the different variations of the preload initiation message
-            $auto_preload_messages = [
-                __( 'SUCCESS REST: Nginx cache purged successfully. Auto preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                __( 'SUCCESS ADMIN: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                __( 'SUCCESS: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' )
-            ];
-
-            // Define the translated strings for the manual preload messages
-            $manual_preload_messages = [
-                __( 'SUCCESS: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                __( 'SUCCESS REST: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                __( 'SUCCESS CRON: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                __( 'SUCCESS ADMIN: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' )
-            ];
-
-            // Iterate through each line in the log to find the latest preload initiation time
-            foreach (array_reverse($log_lines) as $line) {
-                if ($auto_preload) {
-                    // Check for any of the "auto preload" initiation messages
-                    foreach ($auto_preload_messages as $auto_preload_message) {
-                        if (strpos($line, $auto_preload_message) !== false) {
-                            // Extract the timestamp part from the line
-                            preg_match('/\[(.*?)\]/', $line, $match);
-                            if (isset($match[1])) {
-                                $latest_timestamp = $match[1];
-                                return $latest_timestamp;
-                            }
-                        }
-                    }
-                } else {
-                    // Check for any of the "manual preload" initiation messages
-                    foreach ($manual_preload_messages as $manual_preload_message) {
-                        if (strpos($line, $manual_preload_message) !== false) {
-                            // Extract the timestamp part from the line
-                            preg_match('/\[(.*?)\]/', $line, $match);
-                            if (isset($match[1])) {
-                                $latest_timestamp = $match[1];
-                                return $latest_timestamp;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Return the latest timestamp found
-            return null;
-        } else {
-            // Log file doesn't exist
-            return null;
-        }
-    } else {
-        // Log file constant is not defined
-        return null;
-    }
-}
-
-// Function to check the status of the background process
+// Non-blocking tick callback for preload status monitoring.
+//
+// Architecture: instead of one long-lived PHP process,
+// each tick wakes up, does a single PID check (~0.1s), then either reschedules
+// the next tick and returns, or does the post-completion bookkeeping and exits.
+//
+// This means no single PHP execution ever approaches max_execution_time,
+// request_terminate_timeout, or fastcgi_read_timeout — regardless of how long
+// the preload takes.
+//
+// Phase tracking via transient:
+//   nppp_preload_phase = 'desktop'  (default, set implicitly)
+//   nppp_preload_phase = 'mobile'   (set after desktop finishes + mobile starts)
 function nppp_create_scheduled_event_preload_status_callback() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -393,211 +310,239 @@ function nppp_create_scheduled_event_preload_status_callback() {
         return;
     }
 
-    // Track status of Preload Mobile
-    $mobile_enabled = false;
-
-    // Get scheduled time
-    $scheduled_time_str = nppp_get_preload_start_time();
-
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
 
-    // Convert the scheduled time string to a DateTime object
-    $wordpress_timezone = new DateTimeZone(wp_timezone_string());
+    // Get preload pid file
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
-    // Check if the scheduled time string is not null
-    if ($scheduled_time_str !== null) {
-        $scheduled_time = DateTime::createFromFormat('Y-m-d H:i:s', $scheduled_time_str, $wordpress_timezone);
+    // Determine current phase — 'desktop' (default) or 'mobile'
+    $static_key_base = 'nppp';
+    $phase_transient_key = 'nppp_preload_phase_' . md5($static_key_base);
+    $phase = get_transient($phase_transient_key);
+    if ($phase === false) {
+        $phase = 'desktop';
     }
 
-    // Get preload pid file
-    $PIDFILE = dirname(__FILE__) . '/../cache_preload.pid';
+    // PIDFILE gone means a purge action stopped the preload externally.
+    // Clean up our phase transient and exit — nothing more to do.
+    if (!$wp_filesystem->exists($PIDFILE)) {
+        delete_transient($phase_transient_key);
+        delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
+        return;
+    }
 
-    // Check if there is an ongoing preload process active
-    if ($wp_filesystem->exists($PIDFILE)) {
-        $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
+    $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
-        // Process is alive
-        while ($pid > 0 && nppp_is_process_alive($pid)) {
-            // Sleep for a short duration before checking again
-            sleep(5);
+    // Process still alive — reschedule next tick 5 seconds out
+    if ($pid > 0 && nppp_is_process_alive($pid)) {
+        wp_schedule_single_event(time() + 5, 'npp_cache_preload_status_event');
+        return;
+    }
 
-            // If a purge action is triggered during preloading, the preload action is already stopped,
-            // and the PID file is removed, so there’s no need to check the preload status anymore.
-            if ($wp_filesystem->exists($PIDFILE)) {
-                // Check again for pid
-                $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
-            } else {
-                exit(0);
-            }
-        }
+    // Process has finished.
+    // If we just finished the desktop phase and mobile is enabled, start mobile now.
+    if ($phase === 'desktop' &&
+        isset($nginx_cache_settings['nginx_cache_auto_preload_mobile']) &&
+        $nginx_cache_settings['nginx_cache_auto_preload_mobile'] === 'yes') {
 
-        // Check if the Preload Mobile option is enabled
-        // The ongoing Preload action has just finished!
-        // If the Preload Mobile feature is enabled, safely remove the process PID first,
-        // then immediately start warming the Nginx cache for mobile devices.
-        if (isset($nginx_cache_settings['nginx_cache_auto_preload_mobile']) && $nginx_cache_settings['nginx_cache_auto_preload_mobile'] === 'yes') {
-            $mobile_enabled = true;
-
-            // Safely delete the PID file since the previous preload action has already completed
-            nppp_perform_file_operation($PIDFILE, 'delete');
-
-            // Set default options to prevent any error
-            $default_cache_path = '/dev/shm/change-me-now';
-            $default_limit_rate = 5120;
-            $default_cpu_limit = 80;
-            $default_reject_regex = nppp_fetch_default_reject_regex();
-
-            // Get the necessary data for preload action from plugin options
-            $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
-            $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
-            $nginx_cache_cpu_limit = isset($nginx_cache_settings['nginx_cache_cpu_limit']) ? $nginx_cache_settings['nginx_cache_cpu_limit'] : $default_cpu_limit;
-            $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
-
-            // Extra data for preload action
-            $fdomain = get_site_url();
-            $this_script_path = dirname(plugin_dir_path(__FILE__));
-            $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
-            $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
-
-            // Start the preload action with $user_agent set to true
-            // The cache preloading will now begin again using the mobile USER_AGENT.
-            nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, false, false, true, false, true);
-            sleep(1);
-        }
-
-        // Re-check if any process triggered by Preload Mobile is still running
-        // If Preload Mobile was not triggered, the loop will end immediately
-        // Otherwise, it will wait until the Preload Mobile process completes.
-        if ($mobile_enabled) {
-            // Get the new pid of Preload Mobile process
-            $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
-
-            // Wait until the Preload Mobile process completes.
-            while ($pid > 0 && nppp_is_process_alive($pid)) {
-                // Sleep for a short duration before checking again
-                sleep(5);
-
-                // If a purge action is triggered during preloading, the preload action is already stopped,
-                // and the PID file is removed, so there’s no need to check the preload status anymore.
-                if ($wp_filesystem->exists($PIDFILE)) {
-                    // Check again for pid
-                    $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
-                } else {
-                    exit(0);
-                }
-            }
-        }
-
-        /** ALL PRELOAD ACTIONS ENDED  */
-
-        // Set default options
-        $default_cache_path = '/dev/shm/change-me-now';
-
-        // Get the necessary data for actions from plugin options
-        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
-
-        // wget downloaded content path
-        $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
-
-        // Define plugin path and log file
-        $plugin_path = dirname(plugin_dir_path( __FILE__ ));
-        $log_path = rtrim($plugin_path, '/') . '/nppp-wget.log';
-
-        // Initialize final total
-        $final_total = 0;
-
-        // Parse log file using to get total processed URL
-        if ($wp_filesystem->exists($log_path) && $wp_filesystem->is_readable($log_path)) {
-            $log_contents = $wp_filesystem->get_contents($log_path);
-
-            if ($log_contents) {
-                $lines = explode( "\n", $log_contents );
-
-                foreach ($lines as $line) {
-                    if (trim($line) === '') continue;
-
-                    // Count processed URLs
-                    if (preg_match('/URL:(https?:\/\/[^\s]+).*?->/', $line)) {
-                        $final_total++;
-                    }
-
-                    // Extract wall clock time
-                    if (stripos($line, 'Total wall clock time:') !== false) {
-                        if (preg_match('/Total wall clock time:\s*((?:[0-9]+m\s*)?[0-9]+s)/i', $line, $match)) {
-                            $elapsed_time_str = trim($match[1]);
-                        }
-                    }
-
-                    // Extract preload finish timestamp
-                    if (preg_match('/^FINISHED\s+--([\d\-]+\s+[\d:]+)--$/', $line, $match)) {
-                        $last_preload_time = trim($match[1]);
-                    }
-                }
-            }
-        }
-
-        // Add buffer to total count
-        if ($final_total > 0) {
-            $final_total += 20;
-        } else {
-            $final_total = 2000;
-        }
-
-        // Save to transient for frontend preload progress
-        $static_key_base = 'nppp';
-        $count_transient_key = 'nppp_est_url_counts_' . md5($static_key_base);
-        set_transient($count_transient_key, $final_total, DAY_IN_SECONDS);
-
-        if (!empty($last_preload_time)) {
-            $timestamp_transient_key = 'nppp_last_preload_time_' . md5($static_key_base);
-            set_transient($timestamp_transient_key, $last_preload_time, DAY_IN_SECONDS);
-        }
-
-        // Remove downloaded content
-        nppp_wp_remove_directory($tmp_path, true);
-
-        // Delete the PID file
+        // Safely delete the desktop PID file since desktop preload completed
         nppp_perform_file_operation($PIDFILE, 'delete');
 
-        // Create a DateTime object for the current time in WordPress timezone
-        $current_time = new DateTime('now', $wordpress_timezone);
+        // Lock phase to 'mobile' IMMEDIATELY after deleting desktop PIDFILE.
+        // Any REST poll firing from this point on sees phase='mobile' and
+        // cannot re-enter this branch
+        set_transient($phase_transient_key, 'mobile', 12 * HOUR_IN_SECONDS);
 
-        // Calculate elapsed time
-        if (empty($elapsed_time_str)) {
-            if (isset($scheduled_time) && $scheduled_time instanceof DateTime) {
-                $elapsed_time = $current_time->diff($scheduled_time);
+        // Generate a fresh watchdog token for this preload cycle.
+        // The watchdog spawned in preload will carry this token.
+        nppp_watcher_generate_token();
 
-                // Format elapsed time as a string
-                $elapsed_time_str = sprintf(
-                    /* Translators: %1$s, %2$s, and %3$s are numeric values representing hours, minutes, and seconds respectively. */
-                    __('%1$s hours, %2$s minutes, %3$s seconds', 'fastcgi-cache-purge-and-preload-nginx'),
-                    $elapsed_time->format('%h'),
-                    $elapsed_time->format('%i'),
-                    $elapsed_time->format('%s')
-                );
-            } else {
-                // Process complete time can not calculated
-                $elapsed_time_str = __( '(unable to calculate elapsed time)', 'fastcgi-cache-purge-and-preload-nginx' );
+        // Set default options to prevent any error
+        $default_cache_path = '/dev/shm/change-me-now';
+        $default_limit_rate = 5120;
+        $default_cpu_limit = 100;
+        $default_reject_regex = nppp_fetch_default_reject_regex();
+
+        // Get the necessary data for mobile preload from plugin options
+        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+        $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
+        $nginx_cache_cpu_limit = isset($nginx_cache_settings['nginx_cache_cpu_limit']) ? $nginx_cache_settings['nginx_cache_cpu_limit'] : $default_cpu_limit;
+        $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
+
+        // Extra data for preload action
+        $fdomain = get_site_url();
+        $this_script_path = dirname(plugin_dir_path(__FILE__));
+        $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
+        $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+
+        // Start the preload action for Mobile
+        nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, false, false, true, false, true);
+
+        // Schedule next tick to monitor mobile PID
+        wp_schedule_single_event(time() + 5, 'npp_cache_preload_status_event');
+        return;
+    }
+
+    // All phases done — clean up phase transient
+    $mobile_enabled = ($phase === 'mobile');
+    delete_transient($phase_transient_key);
+
+    /** ALL PRELOAD ACTIONS ENDED  */
+
+    // Set default options
+    $default_cache_path = '/dev/shm/change-me-now';
+
+    // Get the necessary data for actions from plugin options
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+
+    // wget downloaded content path
+    $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+
+    // Define runtime files
+    $log_path = nppp_get_runtime_file('nppp-wget.log');
+    $snapshot_path = nppp_get_runtime_file('nppp-wget-snapshot.log');
+
+    // Initialize log-parsed values to safe defaults so they are always defined
+    // even when the wget log is absent, incomplete, or contains unparseable data.
+    // $elapsed_time_str feeds nppp_send_mail_now() and sprintf() unconditionally.
+    $final_total = 0;
+    $elapsed_time_str  = '';
+    $last_preload_time = '';
+    $log_contents      = '';
+
+    // Parse log file using to get total processed URL
+    if ($wp_filesystem->exists($log_path) && $wp_filesystem->is_readable($log_path)) {
+        $log_contents = $wp_filesystem->get_contents($log_path);
+
+        if ($log_contents) {
+            // Get processed URLs
+            if (preg_match('/^Downloaded:\s+(\d+)\s+files/m', $log_contents, $m)) {
+                $final_total = (int) $m[1];
             }
-        }
 
-        // Send Mail
-        $mail_message = __('The Nginx cache preload operation has been completed', 'fastcgi-cache-purge-and-preload-nginx');
-        nppp_send_mail_now($mail_message, $elapsed_time_str);
+            // Get wall clock time
+            if (preg_match('/^Total wall clock time:\s*((?:[0-9]+h\s*)?(?:[0-9]+m\s*)?[0-9]+(?:\.[0-9]+)?s)/im', $log_contents, $match)) {
+                $elapsed_time_str = trim($match[1]);
+            }
 
-        // Log the preload process status
-        if ($mobile_enabled) {
-            // Translators: %s is the elapsed time.
-            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed for both Mobile and Desktop in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
-        } else {
-            // Translators: %s is the elapsed time.
-            nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
+            // Get preload finish timestamp
+            if (preg_match('/^FINISHED\s+--([\d\-]+\s+[\d:]+)--$/m', $log_contents, $match)) {
+                $last_preload_time = trim($match[1]);
+            }
         }
     }
 
-    // Gracefully exit from wp cron job
-    exit(0);
+    // Persist a stable snapshot only when the crawl completed successfully.
+    // This snapshot is what the Advanced tab reads for MISS data. It survives
+    // across purges and interrupted runs, so the table stays populated.
+    if ( !empty($log_contents) && nppp_wget_log_is_complete( $log_contents ) ) {
+        $wp_filesystem->put_contents( $snapshot_path, $log_contents, FS_CHMOD_FILE );
+
+        // Build the URL→filepath index used by single-page and related purges
+        // to skip expensive recursive cache directory scans.
+        // Best moment to rebuild: cache is fully populated and we are already
+        // inside the post-preload cleanup tick, so the directory walk costs
+        // nothing extra relative to what just completed.
+        // Merge strategy: existing entries are preserved, incoming entries
+        // add or update. Never truncate — Preload All only crawls URLs allowed
+        // by Exclude Endpoints, so pages outside that ruleset never appear in
+        // $nppp_index_data. Those pages accumulate in the index over time as
+        // real visitors or bots hit them and purge operations add them via
+        // write-back. They must survive across Purge All + Preload All cycles
+        // because nginx will always re-cache them to the same deterministic
+        // path on next visit. Single URL can hold multiple PATH.
+        $nppp_index_data = nppp_extract_cached_urls( $wp_filesystem, $nginx_cache_path );
+        if ( is_array( $nppp_index_data ) && ! isset( $nppp_index_data['error'] ) ) {
+            $nppp_index = get_option( 'nppp_url_filepath_index' );
+            $nppp_index = is_array( $nppp_index ) ? $nppp_index : [];
+            foreach ( $nppp_index_data as $nppp_entry ) {
+                $nppp_key      = preg_replace( '#^https?://#', '', $nppp_entry['url_encoded'] );
+                $nppp_existing = $nppp_index[ $nppp_key ] ?? [];
+                if ( ! in_array( $nppp_entry['file_path'], $nppp_existing, true ) ) {
+                    $nppp_existing[] = $nppp_entry['file_path'];
+                }
+                $nppp_index[ $nppp_key ] = $nppp_existing;
+            }
+            update_option( 'nppp_url_filepath_index', $nppp_index, false );
+            unset( $nppp_index_data, $nppp_index, $nppp_entry, $nppp_key, $nppp_existing );
+        }
+    }
+
+    // Save to transient for frontend preload progress
+    $static_key_base = 'nppp';
+    $count_transient_key = 'nppp_est_url_counts_' . md5($static_key_base);
+    set_transient($count_transient_key, $final_total > 0 ? $final_total : 2000, DAY_IN_SECONDS);
+
+    if (!empty($last_preload_time)) {
+        $timestamp_transient_key = 'nppp_last_preload_time_' . md5($static_key_base);
+        set_transient($timestamp_transient_key, $last_preload_time, DAY_IN_SECONDS);
+    }
+
+    // Remove downloaded content
+    nppp_wp_remove_directory($tmp_path, true);
+
+    // Delete the PID file
+    nppp_perform_file_operation($PIDFILE, 'delete');
+
+    // Elapsed time comes from wget's own wall clock line parsed above.
+    // If wget did not write it (e.g. interrupted), fall back to a plain notice.
+    $start_transient_key = 'nppp_preload_cycle_start_' . md5('nppp');
+    $cycle_start = get_transient($start_transient_key);
+    delete_transient($start_transient_key);
+
+    if ($mobile_enabled && $cycle_start && !empty($last_preload_time)) {
+        // Use wget's own FINISHED timestamp as end — immune to cron delay
+        $end_time = DateTime::createFromFormat(
+            'Y-m-d H:i:s',
+            $last_preload_time,
+            new DateTimeZone(wp_timezone_string())
+        );
+        if ($end_time) {
+            $total_seconds = $end_time->getTimestamp() - intval($cycle_start);
+            $total_seconds = max(0, $total_seconds);
+            $hours   = intdiv($total_seconds, 3600);
+            $minutes = intdiv($total_seconds % 3600, 60);
+            $seconds = $total_seconds % 60;
+            $elapsed_time_str = $hours > 0
+                ? sprintf('%sh %sm %ss', $hours, $minutes, $seconds)
+                : sprintf('%sm %ss', $minutes, $seconds);
+        }
+    } elseif (empty($elapsed_time_str)) {
+        $elapsed_time_str = __('(unable to calculate elapsed time)', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    // Parse extra metrics — zero extra I/O
+    $download_size  = '';
+    $transfer_speed = '';
+    $error_count    = 0;
+    if ( ! empty( $log_contents ) ) {
+        if ( preg_match( '/Downloaded:.*?,\s+([\d.]+\s*)([KMG])\s+in\s+[\d.]+s/i', $log_contents, $ds ) ) {
+            $unit_map = [ 'K' => 'KB', 'M' => 'MB', 'G' => 'GB' ];
+            $download_size = trim( $ds[1] ) . ( $unit_map[ strtoupper( $ds[2] ) ] ?? $ds[2] );
+        }
+        if ( preg_match( '/Downloaded:.*?\(([\d.]+\s+\w+\/s)\)/i', $log_contents, $sp ) ) {
+            $transfer_speed = trim( $sp[1] );
+        }
+        // Same pattern preload-progress.php uses for broken URL detection
+        $error_count = preg_match_all( '/ERROR\s+404/i', $log_contents );
+    }
+
+    // Send Mail
+    $mail_message = __('The Nginx cache preload operation has been completed', 'fastcgi-cache-purge-and-preload-nginx');
+    nppp_send_mail_now($mail_message, $elapsed_time_str, $final_total, $mobile_enabled, $last_preload_time, $download_size, $transfer_speed, $error_count);
+
+    // Log the preload process status
+    if ($mobile_enabled) {
+        // Translators: %s is the elapsed time.
+        nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed for both Mobile and Desktop in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
+    } else {
+        // Translators: %s is the elapsed time.
+        nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
+    }
+
+    // Return control to WP-Cron so other due events can continue in this request.
+    return;
 }
 
 // Custom cron schedule for monthly recurrence
@@ -626,7 +571,7 @@ function nppp_create_scheduled_event_preload_callback() {
     // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';
     $default_limit_rate = 5120;
-    $default_cpu_limit = 80;
+    $default_cpu_limit = 100;
     $default_reject_regex = nppp_fetch_default_reject_regex();
 
     // Get the necessary data for preload action from plugin options
@@ -638,7 +583,7 @@ function nppp_create_scheduled_event_preload_callback() {
     // Extra data for preload action
     $fdomain = get_site_url();
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Start the preload action

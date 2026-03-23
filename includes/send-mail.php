@@ -1,8 +1,8 @@
 <?php
 /**
- * Send mail code for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains send mail code for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Email notification handlers for Nginx Cache Purge Preload
+ * Description: Sends completion and status emails for preload and related background tasks.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -14,68 +14,137 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Send mail function for completed preload action
-function nppp_send_mail_now($mail_message, $elapsed_time_str) {
-    // Retrieve the Nginx Cache Email setting value
-    $options = get_option('nginx_cache_settings');
+function nppp_send_mail_now(
+    $mail_message,
+    $elapsed_time_str,
+    $final_total    = 0,
+    $mobile_enabled = false,
+    $last_preload_time = '',
+    $download_size  = '',
+    $transfer_speed = '',
+    $error_count    = 0
+) {
+    $options           = get_option( 'nginx_cache_settings' );
+    $nginx_cache_email = isset( $options['nginx_cache_email'] ) ? $options['nginx_cache_email'] : '';
+    $send_mail         = isset( $options['nginx_cache_send_mail'] ) && $options['nginx_cache_send_mail'] === 'yes';
+    $default_email     = 'your-email@example.com';
 
-    // Retrieve the Nginx Cache Email setting value
-    $nginx_cache_email = isset($options['nginx_cache_email']) ? $options['nginx_cache_email'] : '';
-
-    // Check if Send Mail is checked
-    $send_mail = isset($options['nginx_cache_send_mail']) && $options['nginx_cache_send_mail'] === 'yes';
-
-    // Only send if user customized email address and send mail enabled
-    $default_email = 'your-email@example.com';
-
-    // Send mail
-    if ($send_mail && !empty($nginx_cache_email) && $nginx_cache_email !== $default_email) {
-        // Extract the domain from the WordPress site URL
-        $site_url = get_site_url();
-        $site_url_parts = wp_parse_url($site_url);
-        $domain = str_replace('www.', '', $site_url_parts['host']);
-
-        // Translators: NPP is the plugin shortname
-        $mail_subject = __('NPP Wordpress Report', 'fastcgi-cache-purge-and-preload-nginx');
-
-        // Set the path to the email template file
-        $template_file = __DIR__ . '/mail.html';
-
-        // Get the mail image URL
-        $image_url = plugins_url('/admin/img/logo-blackwhite.png', dirname(__FILE__));
-
-        // Initialize wp filesystem
-        $wp_filesystem = nppp_initialize_wp_filesystem();
-        if ($wp_filesystem === false) {
-            nppp_display_admin_notice(
-                'error',
-                __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
-            );
-            return;
-        }
-
-        // Read the content of the HTML file
-        $html_content = '';
-        if ($wp_filesystem->exists($template_file)) {
-            $html_content = $wp_filesystem->get_contents($template_file);
-
-            // Ensure the HTML content is not empty before replacing placeholders
-            if (!empty($html_content)) {
-                // Replace placeholders with actual values
-                $html_content = str_replace('{{domain}}', $domain, $html_content);
-                $html_content = str_replace('{{mail_message}}', $mail_message, $html_content);
-                $html_content = str_replace('{{elapsed_time_str}}', $elapsed_time_str, $html_content);
-                $html_content = str_replace('{{image_url}}', $image_url, $html_content);
-            }
-        }
-
-        // Set mail headers
-        $headers = array(
-            "Content-Type: text/html; charset=UTF-8",
-            "From: NPP Wordpress <npp-no-reply@$domain>"
-        );
-
-        // Send email
-        wp_mail($nginx_cache_email, $mail_subject, $html_content, $headers);
+    if ( ! $send_mail || empty( $nginx_cache_email ) || $nginx_cache_email === $default_email ) {
+        return;
     }
+
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ( $wp_filesystem === false ) {
+        return;
+    }
+
+    // Site info
+    $site_url       = get_site_url();
+    $site_url_parts = wp_parse_url( $site_url );
+    $domain         = str_replace( 'www.', '', $site_url_parts['host'] );
+
+    // Cache path
+    $default_cache_path = '/dev/shm/change-me-now';
+    $nginx_cache_path   = isset( $options['nginx_cache_path'] ) ? $options['nginx_cache_path'] : $default_cache_path;
+
+    // METRIC: URLs crawled
+    $urls_crawled = $final_total > 0 ? number_format( $final_total ) : '–';
+
+    // METRIC: Download size & speed
+    $download_size_str  = ! empty( $download_size )  ? $download_size  : '–';
+    $transfer_speed_str = ! empty( $transfer_speed ) ? $transfer_speed : '–';
+
+    // METRIC: 404 Broken URLs
+    $errors_str   = number_format( max( 0, (int) $error_count ) );
+
+    // METRIC: Finish timestamp
+    $finish_time = ! empty( $last_preload_time ) ? $last_preload_time : '–';
+
+    // METRIC: Cache coverage ratio
+    $cache_ratio  = '–';
+    $cache_hits   = '–';
+    $cache_misses = '–';
+    if ( function_exists( 'nppp_get_in_cache_page_count' ) && function_exists( 'nppp_parse_wget_log_urls' ) ) {
+        $real_hits = nppp_get_in_cache_page_count();
+        if ( is_numeric( $real_hits ) && (int) $real_hits >= 0 ) {
+            $real_hits   = (int) $real_hits;
+            $wget_urls   = nppp_parse_wget_log_urls( $wp_filesystem );
+            $total_known = count( $wget_urls );
+            if ( $total_known > 0 ) {
+                $ratio        = min( 100.0, ( $real_hits / $total_known ) * 100.0 );
+                $misses       = max( 0, $total_known - $real_hits );
+                $cache_ratio  = number_format( $ratio, 1 ) . '%';
+                $cache_hits   = number_format( $real_hits );
+                $cache_misses = number_format( $misses );
+            }
+            // Persist for dashboard widget — scan just ran, store it
+            update_option( 'nppp_last_known_hits',      $real_hits, false );
+            update_option( 'nppp_last_hits_scanned_at', time(),     false );
+        }
+    }
+
+    // METRIC: Cache size on disk
+    $cache_size = '–';
+    if ( function_exists( 'nppp_get_cache_disk_size' ) && function_exists( 'nppp_format_cache_size' ) ) {
+        $disk = nppp_get_cache_disk_size( $nginx_cache_path );
+        if ( is_array( $disk ) && isset( $disk['used'] ) && $disk['used'] > 0 ) {
+            $cache_size = nppp_format_cache_size( (int) $disk['used'] );
+        }
+    }
+
+    // METRIC: Bandwidth limit
+    $limit_rate     = isset( $options['nginx_cache_limit_rate'] ) ? (int) $options['nginx_cache_limit_rate'] : 1280;
+    $limit_rate_str = $limit_rate >= 1024
+        ? number_format( $limit_rate / 1024, 1 ) . ' MB/s'
+        : $limit_rate . ' KB/s';
+
+    // METRIC: Mobile pass
+    $mobile_pass = $mobile_enabled ? '&#10003; Yes' : '&#10007; No';
+
+    // METRIC: Trigger
+    $trigger = get_transient( 'nppp_preload_trigger_' . md5('nppp') );
+    if ( empty( $trigger ) ) {
+        $trigger = '–';
+    }
+    delete_transient( 'nppp_preload_trigger_' . md5('nppp') );
+
+    // Template
+    $template_file = __DIR__ . '/mail.html';
+    $image_url     = plugins_url( '/admin/img/logo-blackwhite.png', dirname( __FILE__ ) );
+
+    $html_content = '';
+    if ( $wp_filesystem->exists( $template_file ) ) {
+        $html_content = $wp_filesystem->get_contents( $template_file );
+        if ( ! empty( $html_content ) ) {
+            $html_content = str_replace( '{{domain}}',         $domain,            $html_content );
+            $html_content = str_replace( '{{site_url}}',       $site_url,          $html_content );
+            $html_content = str_replace( '{{mail_message}}',   $mail_message,      $html_content );
+            $html_content = str_replace( '{{elapsed_time}}',   $elapsed_time_str,  $html_content );
+            $html_content = str_replace( '{{finish_time}}',    $finish_time,       $html_content );
+            $html_content = str_replace( '{{urls_crawled}}',   $urls_crawled,      $html_content );
+            $html_content = str_replace( '{{download_size}}',  $download_size_str, $html_content );
+            $html_content = str_replace( '{{transfer_speed}}', $transfer_speed_str,$html_content );
+            $html_content = str_replace( '{{cache_size}}',     $cache_size,        $html_content );
+            $html_content = str_replace( '{{cache_ratio}}',    $cache_ratio,       $html_content );
+            $html_content = str_replace( '{{cache_hits}}',     $cache_hits,        $html_content );
+            $html_content = str_replace( '{{cache_misses}}',   $cache_misses,      $html_content );
+            $html_content = str_replace( '{{errors}}',         $errors_str,        $html_content );
+            $html_content = str_replace( '{{limit_rate}}',     $limit_rate_str,    $html_content );
+            $html_content = str_replace( '{{mobile_pass}}',    $mobile_pass,       $html_content );
+            $html_content = str_replace( '{{trigger}}',        $trigger,           $html_content );
+            $html_content = str_replace( '{{image_url}}',      $image_url,         $html_content );
+        }
+    }
+
+    $headers = array(
+        'Content-Type: text/html; charset=UTF-8',
+        "From: NPP Wordpress <npp-no-reply@$domain>",
+    );
+
+    wp_mail(
+        $nginx_cache_email,
+        __( 'NPP Wordpress Report', 'fastcgi-cache-purge-and-preload-nginx' ),
+        $html_content,
+        $headers
+    );
 }

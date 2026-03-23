@@ -1,8 +1,8 @@
 <?php
 /**
- * Lightweight autoloader for NPPP\
- * Description: Tries classmap; WordPress-style files; falls back to PSR-4; supports APCu path caching.
- * Version: 2.1.4
+ * Class autoloader for Nginx Cache Purge Preload
+ * Description: Resolves plugin classes via classmap, WordPress-style paths, and PSR-4 fallback with caching.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -18,7 +18,7 @@ if ( ! defined('ABSPATH') ) {
 if (!isset($GLOBALS['NPPP_AUTOLOADER_REGISTERED'])) {
     $GLOBALS['NPPP_AUTOLOADER_REGISTERED'] = true;
 
-    $loader = static function (string $class): bool {
+    $nppp_loader = static function (string $class): bool {
         $prefix  = 'NPPP\\';
         $baseDir = __DIR__ . '/';
 
@@ -88,8 +88,8 @@ if (!isset($GLOBALS['NPPP_AUTOLOADER_REGISTERED'])) {
 
     // PHP 8.4+
     if (PHP_VERSION_ID >= 80400) {
-        spl_autoload_register($loader, prepend: true);
+        spl_autoload_register($nppp_loader, prepend: true);
     } else {
-        spl_autoload_register($loader, true, true);
+        spl_autoload_register($nppp_loader, true, true);
     }
 }

@@ -1,8 +1,8 @@
 <?php
 /**
- * Setup controller for FastCGI Cache Purge and Preload for Nginx
- * Description: Handles activation redirect, gates Settings until Nginx is detected or Assume-Nginx is enabled, renders the hidden Setup admin page.
- * Version: 2.1.4
+ * Setup controller for Nginx Cache Purge Preload
+ * Description: Handles activation routing and setup gating until compatible Nginx conditions are met.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -78,9 +78,6 @@ final class Setup {
             self::PAGE_SLUG,
             [__CLASS__, 'nppp_render_setup_page']
         );
-
-        // Run once-per-while OPcache refresh ONLY on this page
-        add_action('load-' . $hook, [__CLASS__, 'nppp_maybe_reset_opcache']);
     }
 
     public static function nppp_render_setup_page(): void {
@@ -366,7 +363,7 @@ services:
         $action = isset($_POST['nppp_action']) ? sanitize_key($_POST['nppp_action']) : '';
 
         if ($action === 'assume_on') {
-            update_option(self::RUNTIME_OPTION, 1, false);
+            update_option(self::RUNTIME_OPTION, 1, true);
 
             // Define constant for current request lifecycle so subsequent code sees it.
             if (! defined('NPPP_ASSUME_NGINX')) {
@@ -381,7 +378,7 @@ services:
 
             // Clear plugin caches after switching mode
             if (function_exists('\\nppp_clear_plugin_cache')) {
-                \nppp_clear_plugin_cache();
+                \nppp_clear_plugin_cache(true);
             }
 
             wp_safe_redirect(admin_url('admin.php?page=' . self::SETTINGS_SLUG));
@@ -481,10 +478,6 @@ services:
 
     // Insert of the define into wp-config.php
     private static function nppp_try_write_wp_config_define(): void {
-        if (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX) {
-            // still try to persist to file so future requests have it early.
-        }
-
         $wp_filesystem = nppp_initialize_wp_filesystem();
         if ($wp_filesystem === false) {
             nppp_display_admin_notice(
@@ -497,23 +490,13 @@ services:
         $wp_config_path = self::nppp_locate_wp_config_path();
         if (! $wp_config_path) return;
 
-        if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
-            if (!function_exists('WP_Filesystem')) {
-                require_once ABSPATH . 'wp-admin/includes/file.php';
-            }
-            $creds = request_filesystem_credentials(admin_url(''), '', false, dirname($wp_config_path), null);
-            if ($creds && WP_Filesystem($creds)) {
-                global $wp_filesystem;
-            }
-        }
-
-        // Re-check after the JIT re-init
+        // Bail gracefully if wp-config.php isn't directly writable
         if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
             return;
         }
 
         $contents = $wp_filesystem->get_contents($wp_config_path);
-        if (! $contents) return;
+        if ($contents === false || $contents === '') return;
 
         $has_active_define = preg_match("/^[ \t]*define\(\s*['\"]NPPP_ASSUME_NGINX['\"]\s*,\s*true\s*\)\s*;/mi", $contents);
         if ($has_active_define) return;
@@ -541,10 +524,27 @@ services:
             }
         }
 
-        $wp_filesystem->put_contents($wp_config_path, $contents, FS_CHMOD_FILE);
-        if (function_exists('opcache_invalidate')) {
-            @opcache_invalidate($wp_config_path, true);
+        self::nppp_write_atomically($wp_filesystem, $wp_config_path, $contents);
+    }
+
+    private static function nppp_write_atomically($wp_filesystem, string $target_path, string $new_contents): bool {
+        $tmp_path = $target_path . '.nppp-tmp-' . uniqid('', true);
+
+        if (! $wp_filesystem->put_contents($tmp_path, $new_contents, FS_CHMOD_FILE)) {
+            $wp_filesystem->delete($tmp_path);
+            return false;
         }
+
+        if (! $wp_filesystem->move($tmp_path, $target_path, true)) {
+            $wp_filesystem->delete($tmp_path);
+            return false;
+        }
+
+        if (function_exists('opcache_invalidate')) {
+            @opcache_invalidate($target_path, true);
+        }
+
+        return true;
     }
 
     private static function nppp_locate_wp_config_path(): ?string {
@@ -572,7 +572,7 @@ services:
 
             // Clear plugin caches after switching back to detected mode
             if (function_exists('\\nppp_clear_plugin_cache')) {
-                \nppp_clear_plugin_cache();
+                \nppp_clear_plugin_cache(true);
             }
         }
 
@@ -618,62 +618,21 @@ services:
         $wp_config_path = self::nppp_locate_wp_config_path();
         if (! $wp_config_path) return;
 
-        // If not writable, JIT re-init with a context
-        if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
-            if (!function_exists('WP_Filesystem')) {
-                require_once ABSPATH . 'wp-admin/includes/file.php';
-            }
-            $creds = request_filesystem_credentials(admin_url(''), '', false, dirname($wp_config_path), null);
-            if ($creds && WP_Filesystem($creds)) {
-                global $wp_filesystem;
-            }
-        }
-
-        // Re-check
+        // Bail gracefully if wp-config.php isn't directly writable
         if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
             return;
         }
 
         $contents = $wp_filesystem->get_contents($wp_config_path);
-        if (! $contents) return;
+        if ($contents === false || $contents === '') return;
 
         // Match lines that define NPPP_ASSUME_NGINX as true
         $pattern = "/^[ \t]*define\(\s*['\"]NPPP_ASSUME_NGINX['\"]\s*,\s*true\s*\)\s*;[^\r\n]*\r?\n?/mi";
         $new = preg_replace($pattern, '', $contents);
 
         if ($new !== null && $new !== $contents) {
-            $wp_filesystem->put_contents($wp_config_path, $new, FS_CHMOD_FILE);
-            if (function_exists('opcache_invalidate')) {
-                @opcache_invalidate($wp_config_path, true);
-            }
+            self::nppp_write_atomically($wp_filesystem, $wp_config_path, $new);
         }
-    }
-
-    /**
-     * OPcache: lightly and safely refresh when the Setup page loads.
-     * - Runs at most once per minute (transient gate).
-     * - Only executes on admin.php?page=nppp-setup (via load-$hook above).
-     * - No fatal if OPcache is disabled.
-    */
-    public static function nppp_maybe_reset_opcache(): void {
-        // Optional manual trigger: ?nppp_force_opcache=1 bypasses the cooldown
-        $force = isset($_GET['nppp_force_opcache']) && $_GET['nppp_force_opcache'] === '1';
-
-        if ( ! $force && get_transient('nppp_opcache_reset_done') ) {
-            return;
-        }
-
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_opcache_reset
-        if (function_exists('opcache_reset')) {
-            @opcache_reset();
-        } elseif (function_exists('opcache_invalidate')) {
-            // Minimal noop if reset is unavailable; invalidating this file ensures at least the Setup class is fresh.
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_opcache_invalidate
-            @opcache_invalidate(__FILE__, true);
-        }
-
-        // Cooldown so we don’t reset on every refresh
-        set_transient('nppp_opcache_reset_done', 1, MINUTE_IN_SECONDS);
     }
 
     private static function nppp_dummy_nginx_conf(): string {

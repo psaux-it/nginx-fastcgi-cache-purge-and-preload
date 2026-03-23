@@ -1,7 +1,7 @@
 /**
- * JavaScript for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains code to manage the plugin's admin interface for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Admin interface scripts for Nginx Cache Purge Preload
+ * Description: Handles interactive behavior for plugin settings, tabs, and admin actions.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -11,7 +11,7 @@
 // NPP plugin admin side main js code
 (function ($) {
     'use strict';
-    const { __, _x, _n, _nx } = wp.i18n;
+    const { __, _x, _n, _nx, sprintf } = wp.i18n;
 
 $(document).ready(function() {
     // Selectors
@@ -137,14 +137,6 @@ $(document).ready(function() {
                     window.NPPPAurora.setProgressGate(true);
                 }
                 npppFabSet(true);
-                // Warn the user if a systemd service restart
-                // is required due to missing fuse cache path mounts
-                const statusTabContent = document.querySelector('#status');
-                if (statusTabContent) {
-                    if (!npppCurrentObserver) {
-                        nppobserveFuseStatusChange(statusTabContent);
-                    }
-                }
                 break;
             case 'premium':
                 showPreloader();
@@ -157,61 +149,6 @@ $(document).ready(function() {
                 $helpPlaceholder.show();
                 npppFabSet(true);
                 break;
-        }
-    }
-
-    // Function to observe changes in the "Status" tab
-    function nppobserveFuseStatusChange(tabContent) {
-        // Create a MutationObserver to observe the status content
-        const observer = new MutationObserver((mutationsList, observer) => {
-            const fuseStatusSpan = document.querySelector('#npppFuseMountStatus span:last-of-type');
-            if (fuseStatusSpan) {
-                // Compare the trimmed text
-                if (fuseStatusSpan.textContent.trim() === 'Not Mounted') {
-                    nppinsertWarningIcon(tabContent);
-                }
-                // Disconnect the observer after finding the status
-                observer.disconnect();
-            }
-        });
-
-        // Store the observer to be cleaned up later
-        npppCurrentObserver = observer;
-
-        // Start observing the tab content for changes in the DOM
-        observer.observe(tabContent, { childList: true, subtree: true });
-    }
-
-    // Function to insert the warning icon into the "Status" tab
-    function nppinsertWarningIcon(tabContent) {
-        try {
-            // Create the warning icon
-            const attentionIcon = document.createElement('span');
-            attentionIcon.className = 'dashicons dashicons-warning';
-            attentionIcon.style.cssText = 'color: orange; margin-left: 8px; font-size: 28px;';
-
-            // Ensure the restart button exists before inserting the icon
-            const restartButton = document.querySelector('#nppp-restart-systemd-service-btn');
-            if (restartButton) {
-                restartButton.parentNode.insertBefore(attentionIcon, restartButton.nextSibling);
-
-                // Apply blink effect
-                const blinkEffect = attentionIcon.animate([
-                    { opacity: 1 },
-                    { opacity: 0 }
-                 ], {
-                    duration: 500,
-                    iterations: Infinity,
-                    direction: 'alternate'
-                });
-
-                // Stop blinking after 2 seconds
-                setTimeout(() => {
-                    blinkEffect.cancel();
-                }, 2000);
-            }
-        } catch (error) {
-            console.error('Error in warning icon insertion:', error);
         }
     }
 
@@ -283,6 +220,9 @@ $(document).ready(function() {
             const index = $nppTabsLinks.filter(`[href="${hash}"]`).parent().index();
             if (index !== -1) {
                 $nppTabs.tabs("option", "active", index);
+
+                // Hash-driven activation path: activate callback intentionally skips
+                // npppActivateTab while isTabChangeFromHash is true.
                 npppActivateTab(hash.replace('#', ''));
 
                 // Scroll to the top of the page
@@ -471,6 +411,7 @@ $(document).ready(function() {
 
     let npppPollActive = false;
     let npppPollTimer  = null;
+    let snapshotMissingCount = 0;
 
     // Preload progress status
     function fetchWgetProgress() {
@@ -507,52 +448,295 @@ $(document).ready(function() {
         })
         .then(data => {
             if (!data.log_found) {
-                const preloadRow = document.getElementById("nppp-preload-progress-row");
-                if (preloadRow) preloadRow.style.display = "none";
+                const preloadSection = document.getElementById("nppp-preload-progress-section");
+                if (preloadSection) preloadSection.style.display = "none";
                 npppStopWgetPolling();
                 return;
             } else {
-                const preloadRow = document.getElementById("nppp-preload-progress-row");
-                if (preloadRow) preloadRow.style.display = "";
+                const preloadSection = document.getElementById("nppp-preload-progress-section");
+                if (preloadSection) preloadSection.style.display = "block";
             }
+
+            // Notify the aurora header with a targeted event — no global fetch/XHR patching needed.
+            // nppp-header.js listens for this and drives all visual state from it.
+            try {
+                window.dispatchEvent(new CustomEvent('nppp:preload-progress', { detail: data }));
+            } catch(_) {}
 
             const estTotal = data.total || 2000;
             let pct = Math.min(100, Math.round((data.checked / estTotal) * 100));
 
-            if (data.status === "done") {
+            // Detect interrupted BEFORE overriding pct so the raw estimate is preserved
+            const isInterrupted = data.status === "done" && data.log_found && !data.log_complete && data.checked > 0;
+
+            if (data.status === "done" && !isInterrupted) {
                 pct = 100;
             }
 
-            bar.style.width = pct + "%";
-            if (barText) barText.textContent = pct + "%";
+            // Bar hidden — progress shown as table metric instead
+            const barTrack = document.querySelector(".nppp-bar-track");
+            if (barTrack) barTrack.style.display = "none";
 
-            let html = `
-                <div class="nppp-progress-row">
-                    <span class="nppp-label">${__('Processed URLs:', 'fastcgi-cache-purge-and-preload-nginx')}</span> <code>${data.checked}</code>
-                    &nbsp;|&nbsp;
-                    <span class="nppp-label">${__('Broken URLs (404):', 'fastcgi-cache-purge-and-preload-nginx')}</span> <code>${data.errors}</code>
-                </div>
-                <div class="nppp-progress-row">
-                    <span class="nppp-label">${__('Last Processed Page:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
-                    <span class="nppp-url">${data.last_url}</span>
-                </div>
-            `;
+            const escapeHtml = (value) => String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
 
+            const icon = (cls, color) =>
+                `<span class="dashicons ${cls}" style="color:${color};font-size:20px;vertical-align:middle;margin-right:4px;"></span>`;
+
+            let rows = '';
+
+            // Progress % — three distinct states
+            let pctColor, pctIcon, pctCell;
+
+            if (data.status === "running") {
+                // In progress: animated bar, blue
+                pctColor = "#337AB7";
+                pctIcon  = "dashicons-chart-line";
+                pctCell  = `<div class="nppp-pct-bar-wrap">
+                                ${icon(pctIcon, pctColor)}
+                                <div class="nppp-pct-bar-track">
+                                    <div class="nppp-pct-bar-fill" style="width:${pct}%;background-color:${pctColor};">
+                                        <span>${pct}%</span>
+                                    </div>
+                                </div>
+                            </div>`;
+            } else if (isInterrupted) {
+                // Interrupted: approximate %, amber warning, tilde prefix
+                pctColor = "#b45309";
+                pctIcon  = "dashicons-warning";
+                pctCell  = `${icon(pctIcon, pctColor)}<span style="color:${pctColor};font-weight:bold;">~${pct}%</span>`;
+            } else {
+                // Completed: 100%, green
+                pctColor = "green";
+                pctIcon  = "dashicons-chart-line";
+                pctCell  = `${icon(pctIcon, pctColor)}<span style="color:${pctColor};font-weight:bold;">${pct}%</span>`;
+            }
+
+            rows += `<tr>
+                <td class="check">${__('Progress (%)', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                <td class="status">${pctCell}</td>
+            </tr>`;
+
+            // Last Processed Page
+            if (data.last_url) {
+                rows += `<tr>
+                    <td class="check">${__('Last Processed Page', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status">${icon('dashicons-visibility', '#2563eb')}<a href="${escapeHtml(data.last_url)}" target="_blank" rel="noopener" style="color:#2563eb;word-break:break-all;">${escapeHtml(data.last_url)}</a></td>
+                </tr>`;
+            }
+
+            // Processed URLs
+            rows += `<tr>
+                <td class="check">${__('Processed URLs Count', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                <td class="status" style="color:green;">${icon('dashicons-admin-links', 'green')}${data.checked}</td>
+            </tr>`;
+
+            // Broken URLs Count
+            if (data.errors > 0) {
+                const hasErrors  = data.errors > 0;
+                const errColor   = hasErrors ? "#d63638" : "green";
+                const errIco     = hasErrors ? "dashicons-warning" : "dashicons-yes";
+                rows += `<tr>
+                    <td class="check">${__('Broken URLs (404) Count', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status" style="color:${errColor};">${icon(errIco, errColor)}${data.errors}</td>
+                </tr>`;
+            }
+
+            // Recent Broken URLs
+            if (Array.isArray(data.broken_urls) && data.broken_urls.length) {
+                const brokenList = data.broken_urls
+                    .map(url => `<li style="color:#d63638;">${icon('dashicons-warning','#d63638')}${escapeHtml(url)}</li>`)
+                    .join('');
+                rows += `<tr>
+                    <td class="check">${__('Recent Broken URLs', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status"><ul class="nppp-broken-urls">${brokenList}</ul></td>
+                </tr>`;
+            }
+
+            // Last Preload Started At — completion time minus elapsed duration
+            if (data.last_preload_time && data.time) {
+                const npppParseDuration = (str) => {
+                    let secs = 0;
+                    const h = str.match(/(\d+)\s*h/i);
+                    const m = str.match(/(\d+)\s*m/i);
+                    const s = str.match(/([\d.]+)\s*s/i);
+                    if (h) secs += parseInt(h[1]) * 3600;
+                    if (m) secs += parseInt(m[1]) * 60;
+                    if (s) secs += parseFloat(s[1]);
+                    return secs;
+                };
+
+                const durationSecs = npppParseDuration(data.time);
+                const completedMs  = new Date(data.last_preload_time.replace(' ', 'T')).getTime();
+
+                if (durationSecs > 0 && !isNaN(completedMs)) {
+                    const startDate = new Date(completedMs - durationSecs * 1000);
+                    const pad = (n) => String(n).padStart(2, '0');
+                    const startStr = `${startDate.getFullYear()}-${pad(startDate.getMonth()+1)}-${pad(startDate.getDate())} ${pad(startDate.getHours())}:${pad(startDate.getMinutes())}:${pad(startDate.getSeconds())}`;
+                    rows += `<tr>
+                        <td class="check">${__('Last Preload Started At', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                        <td class="status" style="color:#374151;font-size:13px;font-weight:600;">${icon('dashicons-calendar-alt', '#6b7280')}${startStr}</td>
+                    </tr>`;
+                }
+            }
+
+            // Last Preload Completed At
+            if (data.last_preload_time) {
+                rows += `<tr>
+                    <td class="check">${__('Last Preload Completed At', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status" style="color:#374151;font-size:13px;font-weight:600;">${icon('dashicons-calendar-alt', '#6b7280')}${data.last_preload_time}</td>
+                </tr>`;
+            }
+
+            // Last Preload Completed In
             if (data.time) {
-                html += `
-                    <div class="nppp-progress-row">
-                        <span class="nppp-label">${__('Time Elapsed:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
-                        <code>${data.time || '-'}</code>
-                        &nbsp;|&nbsp;
-                        <span class="nppp-label">${__('Last Preload:', 'fastcgi-cache-purge-and-preload-nginx')}</span>
-                        <code>${data.last_preload_time || '-'}</code>
-                    </div>
-                `;
+                rows += `<tr>
+                    <td class="check">${__('Last Preload Completed In', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status" style="color:#374151;">${icon('dashicons-clock', '#6b7280')}${data.time}</td>
+                </tr>`;
             }
 
-            if (pct >= 100 || data.status === "done") {
-                html += `<div class="nppp-done">✅ <span>${__('Preload Complete', 'fastcgi-cache-purge-and-preload-nginx')}</span></div>`;
+            // Last Preload Status
+            let statusValue = '';
+            if (isInterrupted) {
+                statusValue = `${icon('dashicons-warning', 'orange')}<span style="color:orange;font-weight:bold;">${__('Interrupted', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+            } else if (pct >= 100 || data.status === "done") {
+                statusValue = `${icon('dashicons-update', 'green')}<span style="color:green;font-weight:bold;">${__('Completed', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+            } else {
+                statusValue = `${icon('dashicons-clock', '#337AB7')}<span style="color:#337AB7;font-weight:bold;">${__('In Progress', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
             }
+            rows += `<tr>
+                <td class="check">${__('Last Preload Status', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                <td class="status">${statusValue}</td>
+            </tr>`;
+
+            // Snapshot Status + Last Snapshot Time — shown when interrupted OR completed-but-missing
+            // Counter guards against false positive: snapshot write can lag up to ~5s after wget finishes.
+            // Only flag as genuinely missing after 2 consecutive "done + no snapshot" polls (~6s grace).
+            if (data.status === "running") {
+                snapshotMissingCount = 0;
+            } else if (data.status === "done" && !isInterrupted && !data.snapshot_exists) {
+                snapshotMissingCount++;
+            } else {
+                snapshotMissingCount = 0;
+            }
+
+            const snapshotGenuinelyMissing = snapshotMissingCount >= 2;
+            const showSnapshotRow = isInterrupted || snapshotGenuinelyMissing;
+            if (showSnapshotRow) {
+                let snapStatus = '';
+
+                if (data.snapshot_exists) {
+                    // Interrupted but a previous good snapshot exists
+                    snapStatus = `${icon('dashicons-yes', '#16a34a')}<span style="color:#16a34a;">${__('Available', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                } else if (isInterrupted) {
+                    // Interrupted AND no snapshot at all
+                    snapStatus = `${icon('dashicons-no', '#d63638')}<span style="color:#d63638;">${__('None — run Preload All to build one.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                } else {
+                    // Completed successfully but snapshot not yet written.
+                    // Two causes: (1) WP-Cron tick has not fired yet — normal on
+                    // low-traffic sites, resolves on next visitor request.
+                    // (2) Snapshot write actually failed (disk full, permissions) or manually deleted.
+                    snapStatus = `${icon('dashicons-warning', '#b45309')}<span style="color:#b45309;font-weight:bold;">${__('Missing — last preload completed but snapshot not yet saved. On low-traffic sites this resolves automatically on the next visitor request (WP-Cron). If it persists, re-run Preload All.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                }
+
+                rows += `<tr>
+                    <td class="check">${__('Snapshot Status', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                    <td class="status">${snapStatus}</td>
+                </tr>`;
+
+                // Second row: timestamp only when snapshot exists and date is known
+                if (data.snapshot_exists && data.snapshot_time) {
+                    rows += `<tr>
+                        <td class="check">${__('Last Snapshot Time', 'fastcgi-cache-purge-and-preload-nginx')}</td>
+                        <td class="status" style="color:#374151;font-size:13px;">${icon('dashicons-calendar-alt', '#6b7280')}${data.snapshot_time}</td>
+                    </tr>`;
+                }
+            }
+
+            // Server Load
+            if ( data.load_1 !== undefined && data.cpu_count ) {
+                const loadPct   = ( data.load_1 / data.cpu_count ) * 100;
+                const loadColor = loadPct > 80 ? '#d63638'
+                                : loadPct > 50 ? '#b45309'
+                                : '#16a34a';
+                rows += `<tr>
+                    <td class="check">${__( 'Server Load (1m / 5m)', 'fastcgi-cache-purge-and-preload-nginx' )}</td>
+                    <td class="status">
+                        ${icon( 'dashicons-performance', loadColor )}
+                        <span style="color:${loadColor};font-weight:bold;">${data.load_1} / ${data.load_5}</span>
+                        <span style="color:#9ca3af;font-size:12px;margin-left:4px;">(${data.cpu_count} CPU)</span>
+                    </td>
+                </tr>`;
+            }
+
+            // System RAM
+            if ( data.mem_total_mb && data.mem_avail_mb !== undefined ) {
+                const memUsedMb  = data.mem_total_mb - data.mem_avail_mb;
+                const memPct     = Math.round( ( memUsedMb / data.mem_total_mb ) * 100 );
+                const memColor   = memPct > 85 ? '#d63638'
+                                 : memPct > 65 ? '#b45309'
+                                 : '#16a34a';
+                rows += `<tr>
+                    <td class="check">${__( 'System RAM', 'fastcgi-cache-purge-and-preload-nginx' )}</td>
+                    <td class="status">
+                        ${icon( 'dashicons-database', memColor )}
+                        <span style="color:${memColor};font-weight:bold;">${memPct}%</span>
+                        <span style="color:#6b7280;font-size:12px;margin-left:4px;">${memUsedMb} / ${data.mem_total_mb} MB used</span>
+                    </td>
+                </tr>`;
+            }
+
+            // Swap — only show if swap is configured; red immediately if any swap used during preload
+            if ( data.swap_total_mb > 0 ) {
+                const swapPct   = Math.round( ( data.swap_used_mb / data.swap_total_mb ) * 100 );
+                const swapColor = data.swap_used_mb > 0 ? '#d63638' : '#16a34a';
+                rows += `<tr>
+                    <td class="check">${__( 'Swap Usage', 'fastcgi-cache-purge-and-preload-nginx' )}</td>
+                    <td class="status">
+                        ${icon( 'dashicons-warning', swapColor )}
+                        <span style="color:${swapColor};font-weight:bold;">${data.swap_used_mb} MB (${swapPct}%)</span>
+                    </td>
+                </tr>`;
+            }
+
+            // PHP-FPM pool pressure
+            if ( data.fpm_active !== null && data.fpm_active !== undefined ) {
+                const total       = ( data.fpm_active || 0 ) + ( data.fpm_idle || 0 );
+                const queueed     = data.fpm_listen_queue || 0;
+                const maxHit      = data.fpm_max_children || 0;
+                const fpmColor    = queueed > 0 ? '#d63638'
+                                  : maxHit  > 0 ? '#b45309'
+                                  : '#16a34a';
+                const queueBadge  = queueed > 0
+                    ? `<span style="color:#d63638;font-weight:bold;margin-left:6px;">⚠ ${queueed} queued</span>`
+                    : '';
+                rows += `<tr>
+                    <td class="check">${__( 'PHP-FPM Workers', 'fastcgi-cache-purge-and-preload-nginx' )}</td>
+                    <td class="status">
+                        ${icon( 'dashicons-networking', fpmColor )}
+                        <span style="color:${fpmColor};font-weight:bold;">${data.fpm_active} active / ${data.fpm_idle} idle</span>
+                        <span style="color:#9ca3af;font-size:12px;margin-left:4px;">(${total} total)</span>
+                        ${queueBadge}
+                    </td>
+                </tr>`;
+            }
+
+            const html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> ${__('Metric', 'fastcgi-cache-purge-and-preload-nginx')}</th>
+                            <th class="status-header"><span class="dashicons dashicons-info"></span> ${__('Value', 'fastcgi-cache-purge-and-preload-nginx')}</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
 
             status.innerHTML = html;
 
@@ -573,35 +757,10 @@ $(document).ready(function() {
                     preloadStatusSpan.style.color = "green";
                     iconSpan.classList.add("dashicons", "dashicons-yes");
                     preloadStatusText = ' ' + __('Ready', 'fastcgi-cache-purge-and-preload-nginx');
-
-                    if (preloadStatusCell._npppAnimation) {
-                        preloadStatusCell._npppAnimation.cancel();
-                        preloadStatusCell._npppAnimation = null;
-                    }
-
-                    // Remove any running animation background
-                    if (preloadStatusCell) {
-                        preloadStatusCell.style.backgroundColor = "inherit";
-                    }
                 } else if (data.status === "running") {
-                    preloadStatusSpan.style.color = "orange";
-                    iconSpan.classList.add("dashicons", "dashicons-clock");
-                    preloadStatusText = ' ' + __('In Progress', 'fastcgi-cache-purge-and-preload-nginx');
-
-                    if (preloadStatusCell) {
-                        preloadStatusCell.style.backgroundColor = "lightgreen";
-
-                        if (preloadStatusCell._npppAnimation) {
-                            preloadStatusCell._npppAnimation.cancel();
-                        }
-
-                        preloadStatusCell._npppAnimation = preloadStatusCell.animate([
-                            { backgroundColor: '#90ee90' }
-                        ], {
-                            duration: 1,
-                            iterations: 1
-                        });
-                    }
+                    preloadStatusSpan.style.color = "green";
+                    iconSpan.classList.add("dashicons", "dashicons-yes");
+                    preloadStatusText = ' ' + __('Ready', 'fastcgi-cache-purge-and-preload-nginx');
                 } else {
                     // Use pre-stored raw value (true/false)
                     const rawStatus = preloadStatusSpan.dataset.statusRaw;
@@ -615,12 +774,6 @@ $(document).ready(function() {
                         iconSpan.classList.add("dashicons", "dashicons-no");
                         preloadStatusText = ' ' + __('Not Ready', 'fastcgi-cache-purge-and-preload-nginx');
                     }
-
-                    if (preloadStatusCell._npppAnimation) {
-                        preloadStatusCell._npppAnimation.cancel();
-                        preloadStatusCell._npppAnimation = null;
-                    }
-                    preloadStatusCell.style.backgroundColor = "inherit";
                 }
 
                 preloadStatusSpan.appendChild(iconSpan);
@@ -678,13 +831,13 @@ $(document).ready(function() {
                         await new Promise(resolve => setTimeout(resolve, 100));
 
                         const preloadStatusSpan = document.getElementById("nppppreloadStatus");
-                        const preloadProgressRow = document.getElementById("nppp-preload-progress-row");
+                        const preloadProgressRow = document.getElementById("nppp-preload-progress-section");
 
                         if (!preloadStatusSpan || !preloadProgressRow) return;
 
                         const preloadRawStatus = preloadStatusSpan.dataset.statusRaw?.toLowerCase();
                         if (preloadRawStatus === "true" || preloadRawStatus === "progress") {
-                            preloadProgressRow.style.display = "";
+                            preloadProgressRow.style.display = "block";
                             npppStartWgetPolling();
                         } else {
                             preloadProgressRow.style.display = "none";
@@ -843,7 +996,7 @@ $(document).ready(function() {
         // Responsive child sync
         var $child = $main.next('.child');
         if ($child.length){
-            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_status) ? nppp_admin_data.col_cache_status : 'Status';
+            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_status) ? nppp_admin_data.col_cache_status : __('Status', 'fastcgi-cache-purge-and-preload-nginx');
             $child.find('.dtr-details li').each(function(){
                 var $li = $(this);
                 if ($li.find('.dtr-title').text().trim() === label){
@@ -871,7 +1024,7 @@ $(document).ready(function() {
         // responsive child: match by label text, update .dtr-data
         var $child = $main.next('.child');
         if ($child.length){
-            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_path) ? nppp_admin_data.col_cache_path : 'Cache Path';
+            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_path) ? nppp_admin_data.col_cache_path : __('Cache Path', 'fastcgi-cache-purge-and-preload-nginx');
             $child.find('.dtr-details li').each(function(){
                 var $li = $(this);
                 if ($li.find('.dtr-title').text().trim() === label){
@@ -949,9 +1102,12 @@ $(document).ready(function() {
 
         npppFlashRow($main);
 
-        // Invalidate the row in DataTables cache (optional, light)
+        // Invalidate the row in DataTables cache
         var dt = npppDT();
-        if (dt) dt.row($main[0]).invalidate('dom');
+        if (dt) {
+            dt.row($main[0]).invalidate('dom');
+            dt.draw(false);
+        }
     }
 
     // Tiny helper to attach file path to purge button on the same row
@@ -1027,6 +1183,13 @@ $(document).ready(function() {
 
                     $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
                     $main.removeData('npppLocateReqId');
+
+                    // Redraw to re-apply column filters against updated status
+                    var dtAfter = npppDT();
+                    if (dtAfter) {
+                        dtAfter.row($main[0]).invalidate('dom');
+                        dtAfter.draw(false);
+                    }
 
                     // Release global lock + re-enable all preload buttons
                     npppPreloadInProgress = false;
@@ -1393,7 +1556,7 @@ $(document).ready(function() {
     // Update send mail status when state changes
     $('#nginx_cache_send_mail').change(function() {
         // Calculate the notification position
-        var sendMailElement = jQuery(this);
+        var sendMailElement = $(this);
         var clickToCopySpanMail = sendMailElement.next('.nppp-onoffswitch-label');
         var clickToCopySpanOffsetMail = clickToCopySpanMail.offset();
         var notificationLeftMail = clickToCopySpanOffsetMail.left + clickToCopySpanMail.outerWidth() + 10;
@@ -1433,7 +1596,7 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_send_mail').prop('checked', !$('#nginx_cache_send_mail').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
@@ -1441,7 +1604,7 @@ $(document).ready(function() {
     // Update auto preload status when state changes
     $('#nginx_cache_auto_preload').change(function() {
         // Calculate the notification position
-        var autoPreloadElement = jQuery(this);
+        var autoPreloadElement = $(this);
         var clickToCopySpanAutoPreload = autoPreloadElement.next('.nppp-onoffswitch-label-preload');
         var clickToCopySpanOffsetAutoPreload = clickToCopySpanAutoPreload.offset();
         var notificationLeftAutoPreload = clickToCopySpanOffsetAutoPreload.left + clickToCopySpanAutoPreload.outerWidth() + 10;
@@ -1481,14 +1644,14 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_auto_preload').prop('checked', !$('#nginx_cache_auto_preload').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
 
     // Update enable proxy status when state changes
     $('#nginx_cache_preload_enable_proxy').change(function() {
-        var proxyElement = jQuery(this);
+        var proxyElement = $(this);
         var clickToCopySpanProxy = proxyElement.next('.nppp-onoffswitch-label-proxy');
         var clickToCopySpanOffsetProxy = clickToCopySpanProxy.offset();
         var notificationLeftProxy = clickToCopySpanOffsetProxy.left + clickToCopySpanProxy.outerWidth() + 10;
@@ -1528,14 +1691,14 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_preload_enable_proxy').prop('checked', !$('#nginx_cache_preload_enable_proxy').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
 
     // Update preload mobile status when state changes
     $('#nginx_cache_auto_preload_mobile').change(function() {
-        var mobilePreloadElement = jQuery(this);
+        var mobilePreloadElement = $(this);
         var clickToCopySpanMobilePreload = mobilePreloadElement.next('.nppp-onoffswitch-label-preload-mobile');
         var clickToCopySpanOffsetMobilePreload = clickToCopySpanMobilePreload.offset();
         var notificationLeftMobilePreload = clickToCopySpanOffsetMobilePreload.left + clickToCopySpanMobilePreload.outerWidth() + 10;
@@ -1575,7 +1738,50 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_auto_preload_mobile').prop('checked', !$('#nginx_cache_auto_preload_mobile').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+            }
+        }, 'json');
+    });
+
+    // Update watchdog status when state changes
+    $('#nginx_cache_watchdog').change(function() {
+        var watchdogElement = $(this);
+        var clickToCopySpanWatchdog = watchdogElement.next('.nppp-onoffswitch-label-watchdog');
+        var clickToCopySpanOffsetWatchdog = clickToCopySpanWatchdog.offset();
+        var notificationLeftWatchdog = clickToCopySpanOffsetWatchdog.left + clickToCopySpanWatchdog.outerWidth() + 10;
+        var notificationTopWatchdog = clickToCopySpanOffsetWatchdog.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action: 'nppp_update_watchdog_option',
+            watchdog: isChecked,
+            _wpnonce: nppp_admin_data.watchdog_nonce
+        }, function(response) {
+            if (response.success) {
+                var notification = document.createElement('div');
+                notification.textContent = '✔';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftWatchdog + 'px';
+                notification.style.top = notificationTopWatchdog + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
+            } else {
+                $('#nginx_cache_watchdog').prop('checked', !$('#nginx_cache_watchdog').prop('checked'));
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
@@ -1583,7 +1789,7 @@ $(document).ready(function() {
     // Update auto purge status when state changes
     $('#nginx_cache_purge_on_update').change(function() {
         // Calculate the notification position
-        var autoPurgeElement = jQuery(this);
+        var autoPurgeElement = $(this);
         var clickToCopySpanAutoPurge = autoPurgeElement.next('.nppp-onoffswitch-label-autopurge');
         var clickToCopySpanOffsetAutoPurge = clickToCopySpanAutoPurge.offset();
         var notificationLeftAutoPurge = clickToCopySpanOffsetAutoPurge.left + clickToCopySpanAutoPurge.outerWidth() + 10;
@@ -1623,7 +1829,140 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_purge_on_update').prop('checked', !$('#nginx_cache_purge_on_update').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+            }
+        }, 'json');
+    });
+
+    // Update Cloudflare APO sync status when state changes
+    $('#nppp_cloudflare_apo_sync').change(function() {
+        var cloudflareElement = $(this);
+        var clickToCopySpanCloudflare = cloudflareElement.next('.nppp-onoffswitch-label-cloudflare');
+        var clickToCopySpanOffsetCloudflare = clickToCopySpanCloudflare.offset();
+        var notificationLeftCloudflare = clickToCopySpanOffsetCloudflare.left + clickToCopySpanCloudflare.outerWidth() + 10;
+        var notificationTopCloudflare = clickToCopySpanOffsetCloudflare.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action: 'nppp_update_cloudflare_apo_sync_option',
+            cloudflare_sync: isChecked,
+            _wpnonce: nppp_admin_data.cloudflare_apo_sync_nonce
+        }, function(response) {
+            // Handle response
+            if (response.success) {
+                // Show a small notification indicating successfully saved option
+                var notification = document.createElement('div');
+                notification.textContent = '✔';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftCloudflare + 'px';
+                notification.style.top = notificationTopCloudflare + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                // Set the notification duration
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
+            } else {
+                // Error updating option, revert checkbox
+                $('#nppp_cloudflare_apo_sync').prop('checked', !$('#nppp_cloudflare_apo_sync').prop('checked'));
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+            }
+        }, 'json');
+    });
+
+    // Redis Object Cache sync toggle
+    $('#nppp_redis_cache_sync').change(function() {
+        var redisElement     = $(this);
+        var labelSpan        = redisElement.next('.nppp-onoffswitch-label-redis');
+        var labelOffset      = labelSpan.offset();
+        var notifLeft        = labelOffset.left + labelSpan.outerWidth() + 10;
+        var notifTop         = labelOffset.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action:           'nppp_update_redis_cache_sync_option',
+            redis_cache_sync: isChecked,
+            _wpnonce:         nppp_admin_data.redis_cache_sync_nonce
+        }, function(response) {
+            if (response.success) {
+                var notification       = document.createElement('div');
+                notification.textContent = '\u2714';
+                notification.style.cssText = [
+                    'position:absolute',
+                    'left:'  + notifLeft + 'px',
+                    'top:'   + notifTop  + 'px',
+                    'background-color:#50C878',
+                    'color:#fff',
+                    'padding:8px 12px',
+                    'transition:opacity 0.3s ease-in-out',
+                    'opacity:1',
+                    'z-index:9999',
+                    'font-size:13px',
+                    'font-weight:700'
+                ].join(';');
+                document.body.appendChild(notification);
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() { document.body.removeChild(notification); }, 300);
+                }, 1000);
+            } else {
+                $('#nppp_redis_cache_sync').prop('checked', !$('#nppp_redis_cache_sync').prop('checked'));
+                if (typeof npppToast === 'function') {
+                    npppToast('Error updating option!', 'error');
+                }
+            }
+        }, 'json');
+    });
+
+    // Update HTTP purge fast-path toggle when state changes
+    $('#nppp_http_purge_enabled').change(function() {
+        var httpPurgeElement = $(this);
+        var labelSpan        = httpPurgeElement.next('.nppp-onoffswitch-label-httppurge');
+        var labelOffset      = labelSpan.offset();
+        var notifLeft        = labelOffset.left + labelSpan.outerWidth() + 10;
+        var notifTop         = labelOffset.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action:     'nppp_update_http_purge_option',
+            http_purge: isChecked,
+            _wpnonce:   nppp_admin_data.http_purge_nonce
+        }, function(response) {
+            if (response.success) {
+                var notification       = document.createElement('div');
+                notification.textContent = '\u2714';
+                notification.style.cssText = [
+                    'position:absolute',
+                    'left:'  + notifLeft + 'px',
+                    'top:'   + notifTop  + 'px',
+                    'background-color:#50C878',
+                    'color:#fff',
+                    'padding:8px 12px',
+                    'transition:opacity 0.3s ease-in-out',
+                    'opacity:1',
+                    'z-index:9999',
+                    'font-size:13px',
+                    'font-weight:700'
+                ].join(';');
+                document.body.appendChild(notification);
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() { document.body.removeChild(notification); }, 300);
+                }, 1000);
+            } else {
+                $('#nppp_http_purge_enabled').prop('checked', !$('#nppp_http_purge_enabled').prop('checked'));
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
@@ -1800,7 +2139,7 @@ $(document).ready(function() {
     // Update rest api status when state changes
     $('#nginx_cache_api').change(function() {
         // Calculate the notification position
-        var restApiElement = jQuery(this);
+        var restApiElement = $(this);
         var clickToCopySpanRestApi = restApiElement.next('.nppp-onoffswitch-label-api');
         var clickToCopySpanOffsetRestApi = clickToCopySpanRestApi.offset();
         var notificationLeftRestApi = clickToCopySpanOffsetRestApi.left + clickToCopySpanRestApi.outerWidth() + 10;
@@ -1840,7 +2179,7 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_api').prop('checked', !$('#nginx_cache_api').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
@@ -1855,14 +2194,14 @@ $(document).ready(function() {
 
         // Validate npppcronEvent on client side
         if (!npppcronEvent || (npppcronEvent !== 'daily' && npppcronEvent !== 'weekly' && npppcronEvent !== 'monthly')) {
-            alert('Please select cron schedule frequency "On Every"');
+            npppToast(__('Please select cron schedule frequency "On Every"', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             return;
         }
 
         // Validate nppptime format on client side
         var timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
         if (!nppptime || !nppptime.match(timeRegex)) {
-            alert('Please select cron "Time"');
+            npppToast(__('Please select cron "Time"', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             return;
         }
 
@@ -1961,7 +2300,7 @@ $(document).ready(function() {
     // Update cache schedule status when state changes
     $('#nginx_cache_schedule').change(function() {
         // Calculate the notification position
-        var cacheScheduleElement = jQuery(this);
+        var cacheScheduleElement = $(this);
         var clickToCopySpanCacheSchedule = cacheScheduleElement.next('.nppp-onoffswitch-label-schedule');
         var clickToCopySpanOffsetCacheSchedule = clickToCopySpanCacheSchedule.offset();
         var notificationLeftCacheSchedule = clickToCopySpanOffsetCacheSchedule.left + clickToCopySpanCacheSchedule.outerWidth() + 10;
@@ -2030,7 +2369,7 @@ $(document).ready(function() {
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_schedule').prop('checked', !$('#nginx_cache_schedule').prop('checked'));
-                alert('Error updating option!');
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
     });
@@ -2296,6 +2635,70 @@ $(document).ready(function() {
         });
     });
 
+    // Event handler for the clear url index button
+    $(document).off('click', '#nppp-clear-url-index-btn').on('click', '#nppp-clear-url-index-btn', function(e) {
+        e.preventDefault();
+
+        var buttonElement = $('#nppp-clear-url-index-btn');
+        var buttonOffset = buttonElement.offset();
+        var buttonWidth = buttonElement.outerWidth();
+
+        var spinner = document.createElement('div');
+        spinner.className = 'nppp-loading-spinner';
+        spinner.style.position = 'absolute';
+        spinner.style.left = buttonOffset.left + buttonWidth + 10 + 'px';
+        spinner.style.top = (buttonOffset.top - 12) + 'px';
+        spinner.style.zIndex = '9999';
+        document.body.appendChild(spinner);
+
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'nppp_clear_url_index',
+                _wpnonce: nppp_admin_data.clear_url_index_nonce
+            },
+            success: function(response) {
+                document.body.removeChild(spinner);
+
+                var notification = document.createElement('div');
+                notification.style.position = 'absolute';
+                notification.style.left = (buttonOffset.left + buttonWidth + 10) + 'px';
+                notification.style.top = (buttonOffset.top - 3) + 'px';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                notification.style.borderRadius = '4px';
+
+                if (response.success) {
+                    notification.style.backgroundColor = '#50C878';
+                    notification.textContent = 'Index Cleared';
+                } else {
+                    notification.style.backgroundColor = '#D32F2F';
+                    notification.textContent = 'Index cannot be cleared';
+                }
+
+                document.body.appendChild(notification);
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        if (document.body.contains(notification)) {
+                            document.body.removeChild(notification);
+                        }
+                    }, 300);
+                }, 1700);
+            },
+            error: function() {
+                document.body.removeChild(spinner);
+            }
+        });
+    });
+
     // Event handler for the clear plugin cache button
     $(document).off('click', '#nppp-clear-plugin-cache-btn').on('click', '#nppp-clear-plugin-cache-btn', function(e) {
         e.preventDefault();
@@ -2411,118 +2814,199 @@ $(document).ready(function() {
         });
     });
 
-    // Event listener for the restart systemd service button
-    $(document).off('click', '#nppp-restart-systemd-service-btn').on('click', '#nppp-restart-systemd-service-btn', function(e) {
-        e.preventDefault();
+    /**
+     * Build and wire the Excel-style per-column filter dropdowns.
+     * Columns 0-2-3 get a multi-select dropdown with search + Select-All.
+     * Columns 1-4-5 (Action) is intentionally skipped.
+     */
+    function initColumnFilters(table) {
+        var FILTER_COLS  = [0, 2, 3];              // indices of filterable columns
+        var EXACT_COLS   = [2, 3, 4];              // use ^(...)$ regex (discrete values)
+        var $filterRow   = $('#nppp-premium-table thead tr.nppp-filter-row');
+        var activeFilters = {};                    // colIdx → Set of selected raw values
 
-        // Get the button element and its position
-        var buttonElement = $('#nppp-restart-systemd-service-btn');
-        var buttonOffset = buttonElement.offset();
-        var buttonWidth = buttonElement.outerWidth();
+        // Close every open dropdown when clicking outside
+        $(document).on('click.nppp-col-filter', function () {
+            $('.nppp-filter-dropdown').hide();
+        });
 
-        // Set the loading spinner
-        var spinner = document.createElement('div');
-        spinner.className = 'nppp-loading-spinner';
-        spinner.style.position = 'absolute';
-        spinner.style.left = buttonOffset.left + buttonWidth + 10 + 'px';
-        spinner.style.top = (buttonOffset.top - 12) + 'px';
-        spinner.style.zIndex = '9999';
+        FILTER_COLS.forEach(function (colIdx) {
+            var $th = $filterRow.find('th').eq(colIdx);
 
-        // Show loading spinner
-        document.body.appendChild(spinner);
+            // gather unique display values for this column
+            var rawVals = [];
+            table.column(colIdx).data().each(function (cellData) {
+                // strip HTML tags to get display text
+                var txt = $('<span>').html(cellData).text().trim();
+                if (txt !== '' && rawVals.indexOf(txt) === -1) {
+                    rawVals.push(txt);
+                }
+            });
+            rawVals.sort();
 
-        // Make AJAX request to restart systemd service
-        $.ajax({
-            url: nppp_admin_data.ajaxurl,
-            type: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'nppp_restart_systemd_service',
-                _wpnonce: nppp_admin_data.systemd_service_nonce
-            },
-            success: function(response) {
-                // Remove the spinner
-                document.body.removeChild(spinner);
+            // initialise filter state: all selected
+            activeFilters[colIdx] = new Set(rawVals);
 
-                // Calculate the notification position
-                var notificationLeft = buttonOffset.left + buttonWidth + 10;
-                var notificationTop = buttonOffset.top - 3;
+            // build DOM
+            var $wrapper  = $('<div class="nppp-filter-wrapper"></div>');
+            var $btn      = $('<button type="button" class="nppp-filter-btn" aria-expanded="false" title="Filter"></button>');
+            var $arrow    = $('<span class="nppp-filter-arrow">&#9660;</span>');
+            var $badge    = $('<span class="nppp-filter-badge" style="display:none">!</span>');
+            $btn.append($arrow).append($badge);
 
-                // Show a small notification indicating status
-                var notification = document.createElement('div');
-                notification.style.position = 'absolute';
-                notification.style.left = notificationLeft + 'px';
-                notification.style.top = notificationTop + 'px';
-                notification.style.color = '#fff';
-                notification.style.padding = '8px 12px';
-                notification.style.transition = 'opacity 0.3s ease-in-out';
-                notification.style.opacity = '1';
-                notification.style.zIndex = '9999';
-                notification.style.fontSize = '13px';
-                notification.style.fontWeight = '700';
-                notification.style.borderRadius = '4px';
+            var $dropdown = $('<div class="nppp-filter-dropdown" role="dialog" aria-label="Column filter"></div>');
+            var $search   = $('<input type="text" class="nppp-filter-search" placeholder="&#128269; Search values…" autocomplete="off">');
+            var $listWrap = $('<div class="nppp-filter-list-wrap"></div>');
+            var $list     = $('<ul class="nppp-filter-list"></ul>');
 
-                if (response.success) {
-                    // Handle success case
-                    notification.textContent = 'Service Restarted';
-                    notification.style.backgroundColor = '#50C878';
+            // Select All row
+            var $allLi    = $('<li class="nppp-filter-all-row"></li>');
+            var $allLabel = $('<label></label>');
+            var $allChk   = $('<input type="checkbox" checked>');
+            $allLabel.append($allChk).append('<span>Select All</span>');
+            $allLi.append($allLabel);
+            $list.append($allLi);
+
+            // Value rows
+            rawVals.forEach(function (val) {
+                var $li    = $('<li></li>');
+                var $label = $('<label></label>');
+                var $chk   = $('<input type="checkbox" checked>');
+                $chk.attr('data-val', val);
+                $label.append($chk).append($('<span>').text(val));
+                $li.append($label);
+                $list.append($li);
+            });
+
+            $listWrap.append($list);
+
+            var $footer = $('<div class="nppp-filter-footer"></div>');
+            var $okBtn  = $('<button type="button" class="nppp-filter-ok">Apply</button>');
+            var $clrBtn = $('<button type="button" class="nppp-filter-clear">Reset</button>');
+            $footer.append($okBtn).append($clrBtn);
+
+            $dropdown.append($search).append($listWrap).append($footer);
+            $wrapper.append($btn).append($dropdown);
+            $th.append($wrapper);
+
+            // Helpers
+            function getCheckedVals() {
+                var vals = [];
+                $list.find('input[data-val]:checked').each(function () {
+                    vals.push($(this).attr('data-val'));
+                });
+                return vals;
+            }
+
+            function syncSelectAll() {
+                var total   = $list.find('input[data-val]:not(:hidden)').length;
+                var checked = $list.find('input[data-val]:not(:hidden):checked').length;
+                if (checked === 0) {
+                    $allChk.prop({ checked: false, indeterminate: false });
+                } else if (checked === total) {
+                    $allChk.prop({ checked: true, indeterminate: false });
                 } else {
-                    // Handle error case
-                    notification.textContent = 'Service cannot be restarted';
-                    notification.style.backgroundColor = '#D32F2F';
+                    $allChk.prop({ checked: false, indeterminate: true });
+                }
+            }
+
+            function applyFilter() {
+                var selected = getCheckedVals();
+                activeFilters[colIdx] = new Set(selected);
+                var total = rawVals.length;
+                var isFiltered = (selected.length !== total);
+
+                // Update badge
+                $badge.toggle(isFiltered);
+                $btn.toggleClass('nppp-filter-btn--active', isFiltered);
+
+                if (selected.length === 0) {
+                    // Nothing selected — match nothing
+                    table.column(colIdx).search(function () { return false; }).draw();
+                    return;
+                }
+                if (!isFiltered) {
+                    // All selected — clear filter
+                    table.column(colIdx).search('').draw();
+                    return;
                 }
 
-                // Show status notification
-                document.body.appendChild(notification);
+                var useExact  = (EXACT_COLS.indexOf(colIdx) !== -1);
+                var selSet    = selected.slice();
 
-                // Set the notification duration
-                setTimeout(function() {
-                    notification.style.opacity = '0';
-                    setTimeout(function() {
-                        document.body.removeChild(notification);
-
-                        // Reload settings page to see updated fuse mount status
-                        if (response.success) {
-                            location.reload();
-                        }
-                    }, 300);
-                }, 1700);
-            },
-            error: function() {
-                // Remove the loading spinner
-                document.body.removeChild(spinner);
-
-                // Calculate the notification position
-                var notificationLeft = buttonOffset.left + buttonWidth + 10;
-                var notificationTop = buttonOffset.top - 3;
-
-                // Show a small notification indicating failure
-                var notification = document.createElement('div');
-                notification.textContent = 'An ajax error occured';
-                notification.style.position = 'absolute';
-                notification.style.left = notificationLeft + 'px';
-                notification.style.top = notificationTop + 'px';
-                notification.style.backgroundColor = '#D32F2F';
-                notification.style.color = '#fff';
-                notification.style.padding = '8px 12px';
-                notification.style.transition = 'opacity 0.3s ease-in-out';
-                notification.style.opacity = '1';
-                notification.style.zIndex = '9999';
-                notification.style.fontSize = '13px';
-                notification.style.fontWeight = '700';
-                notification.style.borderRadius = '4px';
-                document.body.appendChild(notification);
-
-                // Set the notification duration
-                setTimeout(function() {
-                    notification.style.opacity = '0';
-                    setTimeout(function() {
-                        document.body.removeChild(notification);
-                    }, 300);
-                }, 2000);
+                table.column(colIdx).search(function (value) {
+                    var text = $('<span>').html(value).text().trim();
+                    if (useExact) {
+                        return selSet.indexOf(text) !== -1;
+                    }
+                    return selSet.some(function (v) { return text.indexOf(v) !== -1; });
+                }).draw();
             }
+
+            // Toggle dropdown open/close
+            $btn.on('click', function (e) {
+                e.stopPropagation();
+                var isOpen = $dropdown.is(':visible');
+                // Close any sibling dropdowns
+                $('.nppp-filter-dropdown').hide();
+                $('.nppp-filter-btn').attr('aria-expanded', 'false');
+                if (!isOpen) {
+                    $dropdown.show();
+                    $btn.attr('aria-expanded', 'true');
+                    $search.val('').trigger('input').focus();
+                }
+            });
+
+            // Prevent dropdown clicks from bubbling to document
+            $dropdown.on('click', function (e) { e.stopPropagation(); });
+
+            // Live search within list
+            $search.on('input', function () {
+                var q = $(this).val().toLowerCase();
+                $list.find('li:not(.nppp-filter-all-row)').each(function () {
+                    var txt = $(this).find('span').text().toLowerCase();
+                    $(this).toggle(q === '' || txt.indexOf(q) !== -1);
+                });
+                syncSelectAll();
+            });
+
+            // Select All checkbox
+            $allChk.on('change', function () {
+                var doCheck = $(this).prop('checked');
+                $list.find('input[data-val]:not(:hidden)').prop('checked', doCheck);
+                $allChk.prop('indeterminate', false);
+            });
+
+            // Individual checkbox
+            $list.on('change', 'input[data-val]', function () {
+                syncSelectAll();
+            });
+
+            // Apply button
+            $okBtn.on('click', function () {
+                applyFilter();
+                $dropdown.hide();
+                $btn.attr('aria-expanded', 'false');
+            });
+
+            // Reset button
+            $clrBtn.on('click', function () {
+                $search.val('').trigger('input');
+                $list.find('input[data-val]').prop('checked', true);
+                $allChk.prop({ checked: true, indeterminate: false });
+                $list.find('li').show();
+                applyFilter();
+                $dropdown.hide();
+                $btn.attr('aria-expanded', 'false');
+            });
+
+            // Apply on Enter key within search
+            $search.on('keydown', function (e) {
+                if (e.key === 'Enter') { $okBtn.trigger('click'); }
+                if (e.key === 'Escape') { $dropdown.hide(); $btn.attr('aria-expanded', 'false'); }
+            });
         });
-    });
+    }
 
     // Function to initialize DataTables.js for premium table
     function initializePremiumTable() {
@@ -2531,18 +3015,19 @@ $(document).ready(function() {
 
         // Already initialised?
         if ($.fn.dataTable.isDataTable($tbl)) {
-            $tbl.DataTable().columns.adjust().responsive.recalc();
-            applyCategoryStyles();
-            //hideEmptyCells();
+            var dtExisting = $tbl.DataTable();
+            dtExisting.columns.adjust();
+            if (dtExisting.responsive) dtExisting.responsive.recalc();
             return;
         }
 
         // Initialise
-        var table = $tbl.DataTable({
+        $tbl.DataTable({
             autoWidth: false,
             responsive: true,
             paging: true,
             ordering: true,
+            orderCellsTop: true,
             searching: true,
             lengthMenu: [10, 25, 50, 100],
             pageLength: 10,
@@ -2563,22 +3048,16 @@ $(document).ready(function() {
 
             // Set column widths
             columnDefs: [
-                { width: "23%", targets: 0, className: 'text-left' }, // Cached URL
-                { width: "37%", targets: 1, className: 'text-left' }, // Cache Path
-                { width: "8%", targets: 2, className: 'text-left' },  // Content
-                { width: "5%", targets: 3, className: 'text-left' },  // Status
-                { width: "12%", targets: 4, className: 'text-left' }, // Cache Date
-                { width: "15%", targets: 5, className: 'text-left' }, // Actions
-                { responsivePriority: 1, targets: 0 }, // Cached URL gets priority for responsiveness
-                { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] }, // Collapse all in first row on mobile, hide actions always
-                { defaultContent: "", targets: "_all" } // Ensures all columns render even if empty
-            ],
-
-            // Ensure callback on table draw for initial load
-            initComplete: function() {
-                applyCategoryStyles();
-                //hideEmptyCells();
-            }
+                { width: "23%", targets: 0, className: 'text-left' },                    // Cached URL
+                { width: "37%", targets: 1, className: 'text-left' },                    // Cache Path
+                { width: "8%", targets: 2, className: 'text-left nppp-category-cell' },  // Content
+                { width: "5%", targets: 3, className: 'text-left' },                     // Status
+                { width: "12%", targets: 4, className: 'text-left nppp-date-cell' },     // Cache Date
+                { width: "15%", targets: 5, className: 'text-left' },                    // Actions
+                { responsivePriority: 1, targets: 0 },                                   // Cached URL gets priority for responsiveness
+                { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] },                 // Collapse all in first row on mobile, hide actions always
+                { defaultContent: "", targets: "_all" }                                  // Ensures all columns render even if empty
+            ]
         });
 
         // clear one-shot highlight before any redraw
@@ -2587,115 +3066,8 @@ $(document).ready(function() {
                 $(this).find('tr.purged-row, tr.child.purged-row').removeClass('purged-row');
             });
 
-        // Apply styles whenever the table is redrawn
-        table.on('draw', function() {
-            applyCategoryStyles();
-            //hideEmptyCells();
-        });
-    }
-
-    // Function to apply custom styles based on Content Category column
-    function applyCategoryStyles() {
-        $('#nppp-premium-table tbody tr').each(function() {
-            var $cell = $(this).find('td').eq(2);
-
-            // Get the text of the Content Category column
-            var category = $cell.text().trim();
-
-            // Apply different CSS styles based on the category
-            switch (category) {
-                case 'POST':
-                    $cell.css({
-                        'color': 'fuchsia',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'AUTHOR':
-                    $cell.css({
-                        'color': 'orange',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'PAGE':
-                    $cell.css({
-                        'color': 'green',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'TAG':
-                    $cell.css({
-                        'color': 'blue',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'CATEGORY':
-                    $cell.css({
-                        'color': 'mediumslateblue',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'DAILY_ARCHIVE':
-                    $cell.css({
-                        'color': 'red',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'MONTHLY_ARCHIVE':
-                    $cell.css({
-                        'color': 'brown',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'YEARLY_ARCHIVE':
-                    $cell.css({
-                        'color': 'darkblue',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'DATE_ARCHIVE':
-                    $cell.css({
-                        'color': 'darkmagenta',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                case 'PRODUCT':
-                    $cell.css({
-                        'color': 'coral',
-                        'font-weight': 'bold'
-                    });
-                    break;
-                default:
-                    $cell.css({
-                        'color': 'burlywood',
-                        'font-weight': 'bold'
-                    });
-            }
-        });
-    }
-
-    // Function to hide empty cells
-    function hideEmptyCells() {
-        // Get all the table rows
-        var rows = document.querySelectorAll('#nppp-premium-table > tbody > tr');
-
-        // Loop through each row
-        rows.forEach(function(row) {
-            // Get the cells from the second, third, and fourth columns
-            var cells = [
-                row.querySelector('td:nth-child(2)'),
-                row.querySelector('td:nth-child(3)'),
-                row.querySelector('td:nth-child(4)'),
-                row.querySelector('td:nth-child(5)')
-            ];
-
-            // Loop through each cell
-            cells.forEach(function(cell) {
-                // Check if the cell is empty
-                if (cell && cell.textContent.trim() === '') {
-                    cell.textContent = '—';
-                }
-            });
-        });
+        // Initialize Excel-like column filter dropdowns
+        initColumnFilters($tbl.DataTable());
     }
 
     // Toggle switch rules for send mail
@@ -2728,6 +3100,92 @@ $(document).ready(function() {
             $('.nppp-onoffswitch-switch').css('background', '#ea1919');
             $('.nppp-on').css('color', '#000000');
             $('.nppp-off').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for Cloudflare APO sync
+    var isCloudflareChecked = $('#nppp_cloudflare_apo_sync').prop('checked');
+    if (isCloudflareChecked) {
+        // Checkbox is checked, toggle switch to On
+        $('.nppp-onoffswitch-switch-cloudflare').css('background', '#66b317');
+        $('.nppp-on-cloudflare').css('color', '#ffffff');
+        $('.nppp-off-cloudflare').css('color', '#000000');
+    } else {
+        // Checkbox is unchecked, toggle switch to Off
+        $('.nppp-onoffswitch-switch-cloudflare').css('background', '#ea1919');
+        $('.nppp-on-cloudflare').css('color', '#000000');
+        $('.nppp-off-cloudflare').css('color', '#ffffff');
+    }
+
+    // Add event listener to the original checkbox
+    $('#nppp_cloudflare_apo_sync').change(function() {
+        var isCloudflareChecked = $(this).prop('checked');
+        if (isCloudflareChecked) {
+            // Checkbox is checked, toggle switch to On
+            $('.nppp-onoffswitch-switch-cloudflare').css('background', '#66b317');
+            $('.nppp-on-cloudflare').css('color', '#ffffff');
+            $('.nppp-off-cloudflare').css('color', '#000000');
+        } else {
+            // Checkbox is unchecked, toggle switch to Off
+            $('.nppp-onoffswitch-switch-cloudflare').css('background', '#ea1919');
+            $('.nppp-on-cloudflare').css('color', '#000000');
+            $('.nppp-off-cloudflare').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for Redis Object Cache sync
+    var isRedisChecked = $('#nppp_redis_cache_sync').prop('checked');
+    if (isRedisChecked) {
+        $('.nppp-onoffswitch-switch-redis').css('background', '#66b317');
+        $('.nppp-on-redis').css('color', '#ffffff');
+        $('.nppp-off-redis').css('color', '#000000');
+    } else {
+        $('.nppp-onoffswitch-switch-redis').css('background', '#ea1919');
+        $('.nppp-on-redis').css('color', '#000000');
+        $('.nppp-off-redis').css('color', '#ffffff');
+    }
+
+    $('#nppp_redis_cache_sync').change(function() {
+        var isRedisChecked = $(this).prop('checked');
+        if (isRedisChecked) {
+            $('.nppp-onoffswitch-switch-redis').css('background', '#66b317');
+            $('.nppp-on-redis').css('color', '#ffffff');
+            $('.nppp-off-redis').css('color', '#000000');
+        } else {
+            $('.nppp-onoffswitch-switch-redis').css('background', '#ea1919');
+            $('.nppp-on-redis').css('color', '#000000');
+            $('.nppp-off-redis').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for HTTP purge fast-path
+    function npppHttpPurgeSubOptions(isChecked) {
+        $('#nppp-http-purge-suffix-row, #nppp-http-purge-custom-url-row').toggle(isChecked);
+    }
+    var isHttpPurgeChecked = $('#nppp_http_purge_enabled').prop('checked');
+    npppHttpPurgeSubOptions(isHttpPurgeChecked);
+
+    if (isHttpPurgeChecked) {
+        $('.nppp-onoffswitch-switch-httppurge').css('background', '#66b317');
+        $('.nppp-on-httppurge').css('color', '#ffffff');
+        $('.nppp-off-httppurge').css('color', '#000000');
+    } else {
+        $('.nppp-onoffswitch-switch-httppurge').css('background', '#ea1919');
+        $('.nppp-on-httppurge').css('color', '#000000');
+        $('.nppp-off-httppurge').css('color', '#ffffff');
+    }
+
+    $('#nppp_http_purge_enabled').change(function() {
+        var isHttpPurgeChecked = $(this).prop('checked');
+        npppHttpPurgeSubOptions(isHttpPurgeChecked);
+        if (isHttpPurgeChecked) {
+            $('.nppp-onoffswitch-switch-httppurge').css('background', '#66b317');
+            $('.nppp-on-httppurge').css('color', '#ffffff');
+            $('.nppp-off-httppurge').css('color', '#000000');
+        } else {
+            $('.nppp-onoffswitch-switch-httppurge').css('background', '#ea1919');
+            $('.nppp-on-httppurge').css('color', '#000000');
+            $('.nppp-off-httppurge').css('color', '#ffffff');
         }
     });
 
@@ -2794,6 +3252,31 @@ $(document).ready(function() {
             $('.nppp-onoffswitch-switch-preload-mobile').css('background', '#ea1919');
             $('.nppp-on-preload-mobile').css('color', '#000000');
             $('.nppp-off-preload-mobile').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for watchdog
+    var isCheckedWatchdog = $('#nginx_cache_watchdog').prop('checked');
+    if (isCheckedWatchdog) {
+        $('.nppp-onoffswitch-switch-watchdog').css('background', '#66b317');
+        $('.nppp-on-watchdog').css('color', '#ffffff');
+        $('.nppp-off-watchdog').css('color', '#000000');
+    } else {
+        $('.nppp-onoffswitch-switch-watchdog').css('background', '#ea1919');
+        $('.nppp-on-watchdog').css('color', '#000000');
+        $('.nppp-off-watchdog').css('color', '#ffffff');
+    }
+
+    $('#nginx_cache_watchdog').change(function() {
+        var isChecked = $(this).prop('checked');
+        if (isChecked) {
+            $('.nppp-onoffswitch-switch-watchdog').css('background', '#66b317');
+            $('.nppp-on-watchdog').css('color', '#ffffff');
+            $('.nppp-off-watchdog').css('color', '#000000');
+        } else {
+            $('.nppp-onoffswitch-switch-watchdog').css('background', '#ea1919');
+            $('.nppp-on-watchdog').css('color', '#000000');
+            $('.nppp-off-watchdog').css('color', '#ffffff');
         }
     });
 
@@ -2944,48 +3427,14 @@ $(document).ready(function() {
     }
 
     // Unique ID copy clipboard
-    jQuery('#nppp-unique-id').on('click', async function (event) {
-        var uniqueIdElement = jQuery(this);
-        var clickToRevealSpan = uniqueIdElement.find('span');
-        var clickToRevealSpanOffset = clickToRevealSpan.offset();
-        var notificationLeft = clickToRevealSpanOffset.left + clickToRevealSpan.outerWidth() + 10;
-        var notificationTop = clickToRevealSpanOffset.top;
-
-        var uniqueId = uniqueIdElement.data('unique-id');
+    $('#nppp-unique-id').on('click', async function (event) {
+        var uniqueId = $(this).data('unique-id');
         await npppCopy(uniqueId);
-
-        // Show a small notification just after the 'Unique ID' text
-        var notification = document.createElement('div');
-        notification.textContent = 'Copied to clipboard';
-        notification.style.position = 'absolute';
-        notification.style.left = notificationLeft + 'px';
-        notification.style.top = notificationTop + 'px';
-        notification.style.backgroundColor = '#50C878';
-        notification.style.color = '#fff';
-        notification.style.padding = '2px 5px';
-        notification.style.transition = 'opacity 0.3s ease-in-out';
-        notification.style.opacity = '1';
-        notification.style.zIndex = '9999';
-        notification.style.fontSize = '12px';
-        notification.style.fontWeight = '700';
-        document.body.appendChild(notification);
-
-        setTimeout(function() {
-            notification.style.opacity = '0';
-            setTimeout(function() {
-                document.body.removeChild(notification);
-            }, 300);
-        }, 2000);
+        npppToast(__('Copied to clipboard', 'fastcgi-cache-purge-and-preload-nginx'), 'success', 2000);
     });
 
     // Click event handler for copying the API key to clipboard
-    jQuery('#nppp-api-key').click(function(event) {
-        var apiKeyElement = jQuery(this);
-        var clickToCopySpan = apiKeyElement.find('span');
-        var clickToCopySpanOffset = clickToCopySpan.offset();
-        var notificationLeft = clickToCopySpanOffset.left + clickToCopySpan.outerWidth() + 10;
-        var notificationTop = clickToCopySpanOffset.top;
-
+    $('#nppp-api-key').click(function(event) {
         // Perform AJAX request to fetch the API key
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
@@ -2996,33 +3445,20 @@ $(document).ready(function() {
                 _wpnonce: nppp_admin_data.api_key_copy_nonce
             },
             success: async function(response) {
-                var apiKey = response.data.api_key;
+                var apiKey = (response && response.data && response.data.api_key) || '';
+                if (!apiKey) {
+                    console.error('API key not found in response');
+                    return;
+                }
 
                 // Copy the API key to clipboard
-                await npppCopy(apiKey);
-
-                // Show a small notification indicating successful copy
-                var notification = document.createElement('div');
-                notification.textContent = 'Copied to clipboard';
-                notification.style.position = 'absolute';
-                notification.style.left = notificationLeft + 'px';
-                notification.style.top = notificationTop + 'px';
-                notification.style.backgroundColor = '#50C878';
-                notification.style.color = '#fff';
-                notification.style.padding = '2px 5px';
-                notification.style.transition = 'opacity 0.3s ease-in-out';
-                notification.style.opacity = '1';
-                notification.style.zIndex = '9999';
-                notification.style.fontSize = '12px';
-                notification.style.fontWeight = '700';
-                document.body.appendChild(notification);
-
-                setTimeout(function() {
-                    notification.style.opacity = '0';
-                    setTimeout(function() {
-                        document.body.removeChild(notification);
-                    }, 300);
-                }, 2000);
+                try {
+                    await npppCopy(apiKey);
+                } catch (e) {
+                    console.error('Clipboard write failed:', e);
+                    return;
+                }
+                npppToast(__('Copied to clipboard', 'fastcgi-cache-purge-and-preload-nginx'), 'success', 2000);
             },
             error: function(xhr, status, error) {
                 console.error('Error fetching API key:', error);
@@ -3031,13 +3467,7 @@ $(document).ready(function() {
     });
 
     // Click event handler for copying the Purge URL to clipboard
-    jQuery('#nppp-purge-url').click(function(event) {
-        var purgeUrlElement = jQuery(this);
-        var clickToCopySpan = purgeUrlElement.find('span');
-        var clickToCopySpanOffset = clickToCopySpan.offset();
-        var notificationLeft = clickToCopySpanOffset.left + clickToCopySpan.outerWidth() + 10;
-        var notificationTop = clickToCopySpanOffset.top;
-
+    $('#nppp-purge-url').click(function(event) {
         // Perform AJAX request to fetch the Purge URL
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
@@ -3052,29 +3482,7 @@ $(document).ready(function() {
 
                 // Copy the Purge URL to clipboard
                 await npppCopy(purgeUrl);
-
-                // Show a small notification indicating successful copy
-                var notification = document.createElement('div');
-                notification.textContent = 'Copied to clipboard';
-                notification.style.position = 'absolute';
-                notification.style.left = notificationLeft + 'px';
-                notification.style.top = notificationTop + 'px';
-                notification.style.backgroundColor = '#50C878';
-                notification.style.color = '#fff';
-                notification.style.padding = '2px 5px';
-                notification.style.transition = 'opacity 0.3s ease-in-out';
-                notification.style.opacity = '1';
-                notification.style.zIndex = '9999';
-                notification.style.fontSize = '12px';
-                notification.style.fontWeight = '700';
-                document.body.appendChild(notification);
-
-                setTimeout(function() {
-                    notification.style.opacity = '0';
-                    setTimeout(function() {
-                        document.body.removeChild(notification);
-                    }, 300);
-                }, 2000);
+                npppToast(__('Copied to clipboard', 'fastcgi-cache-purge-and-preload-nginx'), 'success', 2000);
             },
             error: function(xhr, status, error) {
                 console.error('Error fetching Purge URL:', error);
@@ -3083,13 +3491,7 @@ $(document).ready(function() {
     });
 
     // Click event handler for copying the Preload URL to clipboard
-    jQuery('#nppp-preload-url').click(function(event) {
-        var preloadUrlElement = jQuery(this);
-        var clickToCopySpan = preloadUrlElement.find('span');
-        var clickToCopySpanOffset = clickToCopySpan.offset();
-        var notificationLeft = clickToCopySpanOffset.left + clickToCopySpan.outerWidth() + 10;
-        var notificationTop = clickToCopySpanOffset.top;
-
+    $('#nppp-preload-url').click(function(event) {
         // Perform AJAX request to fetch the Preload URL
         $.ajax({
             url:  nppp_admin_data.ajaxurl,
@@ -3104,29 +3506,7 @@ $(document).ready(function() {
 
                 // Copy the Preload URL to clipboard
                 await npppCopy(preloadUrl);
-
-                // Show a small notification indicating successful copy
-                var notification = document.createElement('div');
-                notification.textContent = 'Copied to clipboard';
-                notification.style.position = 'absolute';
-                notification.style.left = notificationLeft + 'px';
-                notification.style.top = notificationTop + 'px';
-                notification.style.backgroundColor = '#50C878';
-                notification.style.color = '#fff';
-                notification.style.padding = '2px 5px';
-                notification.style.transition = 'opacity 0.3s ease-in-out';
-                notification.style.opacity = '1';
-                notification.style.zIndex = '9999';
-                notification.style.fontSize = '12px';
-                notification.style.fontWeight = '700';
-                document.body.appendChild(notification);
-
-                setTimeout(function() {
-                    notification.style.opacity = '0';
-                    setTimeout(function() {
-                        document.body.removeChild(notification);
-                    }, 300);
-                }, 2000);
+                npppToast(__('Copied to clipboard', 'fastcgi-cache-purge-and-preload-nginx'), 'success', 2000);
             },
             error: function(xhr, status, error) {
                 console.error('Error fetching Preload URL:', error);
@@ -3273,12 +3653,15 @@ $(document).ready(function() {
         '#nginx_cache_reject_extension',
         '#nginx_cache_limit_rate',
         '#nginx_cache_wait_request',
+        '#nginx_cache_read_timeout',
         '#nginx_cache_email',
         '#nginx_cache_tracking_opt_in',
         '#nginx_cache_api_key',
         '#nginx_cache_key_custom_regex',
         '#nginx_cache_preload_proxy_port',
-        '#nginx_cache_preload_proxy_host'
+        '#nginx_cache_preload_proxy_host',
+        '#nppp_http_purge_suffix',
+        '#nppp_http_purge_custom_url'
     ];
 
     // Initialize originalValues with current field values
@@ -3504,12 +3887,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Update status tab metrics
 function npppupdateStatus() {
-    const { __, _x, _n, _nx } = wp.i18n;
+    const { __, _x, _n, _nx, sprintf } = wp.i18n;
 
     // Elements we need ready on DOM
     const elementsToCheck = [
         "#npppphpFpmStatus",
         "#npppphpPagesInCache",
+        "#npppCacheHitRatio",
         "#npppphpProcessOwner",
         "#npppphpWebServer",
         "#npppcachePath",
@@ -3522,7 +3906,8 @@ function npppupdateStatus() {
         "#npppBindfsVersion",
         "#nppppermIsolation",
         "#npppcpulimitStatus",
-        "#npppsafexecStatus"
+        "#npppsafexecStatus",
+        "#npppCacheDiskSize"
     ];
 
     // Verify all elements are in the DOM
@@ -3595,6 +3980,108 @@ function npppupdateStatus() {
     npppcacheInPageSpan.textContent = '';
     npppcacheInPageSpan.appendChild(iconSpanCache);
     npppcacheInPageSpan.append(cacheStatusText);
+
+    // Cache Hit Ratio colour-band
+    (function () {
+        var ratioCell = document.getElementById('npppCacheHitRatio');
+        if (!ratioCell) { return; }
+
+        ratioCell.style.fontSize = '14px';
+
+        var rawText     = ratioCell.textContent.trim();
+        var iconSpan    = document.createElement('span');
+        var bandClass   = 'ratio-na';
+        var displayText = ' ' + rawText;
+
+        // Extract leading percentage number if present (e.g. "87.5%  (35 HIT …)")
+        var pctMatch = rawText.match(/^(\d+(?:\.\d+)?)\s*%/);
+        if (pctMatch) {
+            var pct = parseFloat(pctMatch[1]);
+            if (pct >= 80) {
+                bandClass = 'ratio-high';
+                iconSpan.classList.add('dashicons', 'dashicons-yes');
+                iconSpan.style.color = '#008000';
+            } else if (pct >= 50) {
+                bandClass = 'ratio-medium';
+                iconSpan.classList.add('dashicons', 'dashicons-warning');
+                iconSpan.style.color = '#e69500';
+            } else {
+                bandClass = 'ratio-low';
+                iconSpan.classList.add('dashicons', 'dashicons-no');
+                iconSpan.style.color = '#ff0000';
+            }
+        } else {
+            // N/A states
+            iconSpan.classList.add('dashicons', 'dashicons-no');
+            iconSpan.style.color = '#ff0000';
+        }
+
+        iconSpan.style.fontSize = '20px';
+        iconSpan.style.width    = '20px';
+        iconSpan.style.height   = '20px';
+
+        var textSpan       = document.createElement('span');
+        textSpan.textContent = displayText;
+        textSpan.style.color  = iconSpan.style.color;
+        textSpan.style.fontWeight = '700';
+
+        ratioCell.classList.add(bandClass);
+        ratioCell.textContent = '';
+        ratioCell.appendChild(iconSpan);
+        ratioCell.appendChild(textSpan);
+    })();
+
+    // Cache Disk Size colour-band (low usage = good, high usage = bad)
+    (function () {
+        var diskCell = document.getElementById('npppCacheDiskSize');
+        if (!diskCell) { return; }
+
+        diskCell.style.fontSize = '14px';
+
+        var rawText  = diskCell.textContent.trim();
+        var iconSpan = document.createElement('span');
+        var diskClass = 'disk-na';
+        var displayText = ' ' + rawText;
+
+        // Extract trailing percentage
+        var pctMatch = rawText.match(/^(\d+(?:\.\d+)?)\s*%/);
+        if (pctMatch) {
+            var pct = parseFloat(pctMatch[1]);
+            if (pct < 50) {
+                diskClass = 'disk-low';
+                iconSpan.classList.add('dashicons', 'dashicons-yes');
+                iconSpan.style.color = '#008000';
+            } else if (pct < 80) {
+                diskClass = 'disk-medium';
+                iconSpan.classList.add('dashicons', 'dashicons-warning');
+                iconSpan.style.color = '#e69500';
+            } else {
+                diskClass = 'disk-high';
+                iconSpan.classList.add('dashicons', 'dashicons-no');
+                iconSpan.style.color = '#ff0000';
+            }
+        } else if (rawText === 'Unavailable') {
+            iconSpan.classList.add('dashicons', 'dashicons-clock');
+            iconSpan.style.color = '#e69500';
+        } else {
+            iconSpan.classList.add('dashicons', 'dashicons-clock');
+            iconSpan.style.color = '#72777c';
+        }
+
+        iconSpan.style.fontSize = '20px';
+        iconSpan.style.width    = '20px';
+        iconSpan.style.height   = '20px';
+
+        var textSpan          = document.createElement('span');
+        textSpan.textContent  = displayText;
+        textSpan.style.color  = iconSpan.style.color;
+        textSpan.style.fontWeight = '700';
+
+        diskCell.classList.add(diskClass);
+        diskCell.textContent = '';
+        diskCell.appendChild(iconSpan);
+        diskCell.appendChild(textSpan);
+    })();
 
     // Fetch and update php process owner
     // PHP-FPM (website user)

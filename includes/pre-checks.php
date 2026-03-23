@@ -1,8 +1,8 @@
 <?php
 /**
- * Pre-checks for FastCGI Cache Purge and Preload for Nginx
- * Description: This pre-check file contains several critical checks for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Environment pre-checks for Nginx Cache Purge Preload
+ * Description: Validates required server, filesystem, and plugin runtime prerequisites.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -14,24 +14,86 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Fast head readers (minimal I/O)
-if (! function_exists('nppp_head_fast')) {
-    // Uses file_get_contents() length arg (C-level).
-    function nppp_head_fast( $path, $max = 16384 ) {
-        $data = @file_get_contents( $path, false, null, 0, $max );
-        return ($data === false) ? '' : $data;
-    }
-}
+// Detect wget compatibility required by NPP.
+if (! function_exists('nppp_get_wget_compatibility')) {
+    function nppp_get_wget_compatibility(): array {
+        $transient_key = 'nppp_wget_compatibility_' . md5('nppp');
+        $cached = get_transient($transient_key);
 
-if (! function_exists('nppp_read_head')) {
-    // Partial read with WP_Filesystem fallback.
-    function nppp_read_head( $wp_filesystem, $path, $max = 16384 ) {
-        $buf = nppp_head_fast( $path, $max );
-        if ( $buf !== '' ) return $buf;
+        if (is_array($cached) && array_key_exists('ok', $cached) && array_key_exists('reason', $cached)) {
+            return $cached;
+        }
 
-        // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
-        $all = $wp_filesystem->get_contents( $path );
-        return ( $all === false || $all === '' ) ? '' : substr( $all, 0, $max );
+        $binary = trim((string) shell_exec('command -v wget 2>/dev/null'));
+        if ($binary === '') {
+            $cached = [
+                'ok' => false,
+                'reason' => 'missing',
+            ];
+            set_transient($transient_key, $cached, 300);
+            return $cached;
+        }
+
+        $version_output = (string) shell_exec('wget --version 2>&1');
+        $first_line     = trim((string) strtok($version_output, "\n"));
+
+        if (stripos($first_line, 'GNU Wget2') !== false || stripos($version_output, 'GNU Wget2') !== false) {
+            $cached = [
+                'ok' => false,
+                'reason' => 'wget2',
+            ];
+            set_transient($transient_key, $cached, 300);
+            return $cached;
+        }
+
+        if (stripos($version_output, 'busybox') !== false || stripos($version_output, 'toybox') !== false) {
+            $cached = [
+                'ok' => false,
+                'reason' => 'busybox_toybox',
+            ];
+            set_transient($transient_key, $cached, 300);
+            return $cached;
+        }
+
+        if (stripos($first_line, 'GNU Wget') === false) {
+            $cached = [
+                'ok' => false,
+                'reason' => 'non_gnu',
+            ];
+            set_transient($transient_key, $cached, 300);
+            return $cached;
+        }
+
+        $version = '';
+        if (preg_match('/GNU\s+Wget\s+([0-9]+(?:\.[0-9]+){1,2})/i', $first_line, $matches)) {
+            $version = $matches[1];
+        }
+
+        if ($version === '') {
+            $cached = [
+                'ok' => false,
+                'reason' => 'unknown_version',
+            ];
+            set_transient($transient_key, $cached, 300);
+            return $cached;
+        }
+
+        if (version_compare($version, '1.16', '<')) {
+            $cached = [
+                'ok' => false,
+                'reason' => 'unsupported_version',
+            ];
+            set_transient($transient_key, $cached, 300);
+            return $cached;
+        }
+
+        $cached = [
+            'ok' => true,
+            'reason' => 'ok',
+        ];
+        set_transient($transient_key, $cached, 300);
+
+        return $cached;
     }
 }
 
@@ -62,7 +124,7 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
                 'headers'     => array(
                     'Cache-Control' => 'no-cache, no-store, max-age=0',
                     'Pragma'        => 'no-cache',
-                    'User-Agent'    => 'NPPP-Precheck/2.1.4',
+                    'User-Agent'    => 'NPPP-Precheck/2.1.5',
                 ),
             ));
 
@@ -224,6 +286,7 @@ function nppp_get_nginx_conf_paths($wp_filesystem, bool $honor_assume = true) {
             '/opt/nginx/conf/nginx.conf',
             '/www/server/nginx/conf/nginx.conf',
             '/etc/nginx/conf.d/ea-nginx.conf',
+            '/usr/local/openresty/nginx/conf/nginx.conf',
         ];
 
         foreach ($possible_paths as $path) {
@@ -271,6 +334,7 @@ function nppp_get_nginx_conf_paths($wp_filesystem, bool $honor_assume = true) {
 // Parses the Nginx configuration files and extracts fastcgi_cache_key directives.
 function nppp_parse_nginx_cache_key() {
     static $parsed_files = [];
+    $parsed_files = [];
     $cache_keys = [];
     $found_keys = 0;
 
@@ -459,7 +523,7 @@ function nppp_pre_checks_critical() {
             'headers'     => array(
                 'Cache-Control' => 'no-cache, no-store, max-age=0',
                 'Pragma'        => 'no-cache',
-                'User-Agent'    => 'NPPP-Precheck/2.1.4',
+                'User-Agent'    => 'NPPP-Precheck/2.1.5',
             ),
         ));
 
@@ -601,6 +665,35 @@ function nppp_pre_checks_critical() {
             // Translators: %s will be replaced with the list of missing commands
             return sprintf(__('GLOBAL ERROR COMMAND: Preload action is not functional on your environment. The required shell command(s) not found: %s', 'fastcgi-cache-purge-and-preload-nginx'), $missing_commands_str);
         }
+
+        if (function_exists('nppp_get_wget_compatibility')) {
+            $wget_compat = nppp_get_wget_compatibility();
+            if (empty($wget_compat['ok'])) {
+                $reason = isset($wget_compat['reason']) ? $wget_compat['reason'] : '';
+
+                if ($reason === 'missing') {
+                    return __('GLOBAL ERROR WGET: Preload action requires GNU Wget 1.x (>=1.16), but Wget is not installed.', 'fastcgi-cache-purge-and-preload-nginx');
+                }
+
+                if ($reason === 'busybox_toybox') {
+                    return __('GLOBAL ERROR WGET: Preload action requires GNU Wget 1.x (>=1.16). BusyBox/Toybox Wget is not supported.', 'fastcgi-cache-purge-and-preload-nginx');
+                }
+
+                if ($reason === 'non_gnu') {
+                    return __('GLOBAL ERROR WGET: Preload action requires GNU Wget 1.x (>=1.16). Non-GNU Wget implementations are not supported.', 'fastcgi-cache-purge-and-preload-nginx');
+                }
+
+                if ($reason === 'unknown_version') {
+                    return __('GLOBAL ERROR WGET: Preload action requires GNU Wget 1.x (>=1.16), but the installed GNU Wget version could not be detected.', 'fastcgi-cache-purge-and-preload-nginx');
+                }
+
+                if ($reason === 'wget2') {
+                    return __('GLOBAL ERROR WGET: Preload action requires GNU Wget 1.x (>=1.16). Your system provides GNU Wget2 (often via wget shim), which is not supported.', 'fastcgi-cache-purge-and-preload-nginx');
+                }
+
+                return __('GLOBAL ERROR WGET: Preload action requires GNU Wget 1.x (>=1.16). Older GNU Wget and Wget2 are not supported.', 'fastcgi-cache-purge-and-preload-nginx');
+            }
+        }
     }
 
     // All requirements met
@@ -617,6 +710,15 @@ function nppp_pre_checks() {
             __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
         );
         return;
+    }
+
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation.
+
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
     // Optimize performance by caching results of recursive permission checks
@@ -654,15 +756,12 @@ function nppp_pre_checks() {
     try {
         $cache_iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
-                RecursiveIteratorIterator::SELF_FIRST
+                RecursiveIteratorIterator::LEAVES_ONLY
         );
 
         $has_files = '';
         foreach ($cache_iterator as $file) {
             $pathname = $file->getPathname();
-            if ( ! $wp_filesystem->is_file( $pathname ) ) {
-                continue;
-            }
 
             // Read only the head (binary-safe)
             $content = nppp_read_head( $wp_filesystem, $pathname, $head_bytes_primary );
@@ -690,7 +789,7 @@ function nppp_pre_checks() {
 
     // Warn about empty cache
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     $preload_running = false;
     $pid = 0;

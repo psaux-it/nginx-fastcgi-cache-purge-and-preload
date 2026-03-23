@@ -1,7 +1,7 @@
 /**
- * JavaScript for Aurora Canvas Header Effect
- * Description: Aurora ribbons that react to plugin actions and preload progress (status, % complete, errors).
- * Version: 2.1.4
+ * Aurora header effect script for Nginx Cache Purge Preload
+ * Description: Renders animated admin-header ribbons tied to plugin action and preload status updates.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -26,22 +26,14 @@
     alpha: 0.18,
     ribbons: 4,
     thickness: 1.12,
-    trail: 0.075,
+
     speed: 0.20,
     noiseScale: 0.0018,
     pulseEvery: [4, 6],
-    ajaxPulseAmp: 1.25,
-    ajaxPulseHueBias: 25,
     autopulse: false,
 
     // Progress coupling
-    progressEndpoint: null,              // will auto-fill from window.nppp_admin_data.wget_progress_api if present
-    progressEndpointMatch: null,         // optional RegExp string to match endpoint
-    reactToAjax: false,                   // keep generic network pulses
-    reactToProgressResponse: true,       // parse progress JSON and map to visuals
-    reducedMotionFallbackAlpha: 0.10,    // lower glow when reduced motion is requested
-    trailFade: 0.08,                     // 0..1 (higher = faster fade)
-    trailFadePerSec: 5,
+    reducedMotionFallbackAlpha: 0.10,
     disableProgressFX: false,
     enablePulses: false,
   };
@@ -59,16 +51,6 @@
   // -------------------------------
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const lerp = (a, b, t) => a + (b - a) * t;
-
-  function safeGetProgressEndpoint(){
-    try{
-      if (CFG.progressEndpoint) return CFG.progressEndpoint;
-      if (window.nppp_admin_data && window.nppp_admin_data.wget_progress_api){
-        return String(window.nppp_admin_data.wget_progress_api);
-      }
-    }catch(e){}
-    return null;
-  }
 
   function hslaStr(h,s,l,a){ return `hsla(${h},${s}%,${l}%,${a})`; }
 
@@ -344,9 +326,9 @@
 
     if (CFG.enablePulses) {
       switch(mode){
-        case MODE.RUNNING: pulse(1.4, 20); break;   // energetic warm bump
-        case MODE.DONE:    pulse(0.9, -40); break;  // cool calm
-        case MODE.ALERT:   pulse(2.0, -120); break; // red flash
+        case MODE.RUNNING: pulse(1.4, 20); break;
+        case MODE.DONE:    pulse(0.9, -40); break;
+        case MODE.ALERT:   pulse(2.0, -120); break;
         default:           pulse(0.6, 6);
       }
     }
@@ -361,10 +343,8 @@
   // -------------------------------
   const API = {
     pulse,
-    networkStart(){ if (CFG.reactToAjax && CFG.enablePulses) pulse(0.6, 6); },
-    networkEnd(ok=true){ if (CFG.reactToAjax && CFG.enablePulses) pulse(ok ? 0.8 : 1.1, ok ? 12 : -25); },
-    setMode,                     // setMode('running'|'done'|'alert'|'idle')
-    setProgressPercent,          // setProgressPercent(0..100)
+    setMode,
+    setProgressPercent,
     setProgressGate(allow){
       state.allowProgress = !!allow;
       // expose for the overlay patch to read, too
@@ -373,6 +353,7 @@
     dispose(){
       state.disposed = true;
       window.removeEventListener('resize', resize);
+      window.removeEventListener('nppp:preload-progress', _onProgressEvent);
       if (state.canvas) state.canvas.remove();
       if (state._dprTimer) { clearInterval(state._dprTimer); state._dprTimer = null; }
       if (state._io) { try{ state._io.disconnect(); }catch(_){} state._io = null; }
@@ -383,66 +364,15 @@
   // expose only once
   if (!window.NPPPAurora) window.NPPPAurora = API;
 
-  // -------------------------------
-  // Progress wiring (non-invasive)
-  // -------------------------------
-
-  // 1) Listen for a push-style custom event (best separation of concerns):
+  // Listen for a push-style custom event (best separation of concerns):
   // dispatchEvent(new CustomEvent('nppp:preload-progress', { detail: { status, checked, total, errors } }))
-  window.addEventListener('nppp:preload-progress', (ev)=>{
+  function _onProgressEvent(ev){
     try{
       const data = ev.detail || {};
       mapProgressDataToAurora(data);
     }catch(e){}
-  });
-
-  // 2) Enhance fetch wrapper to sniff the progress endpoint without breaking callers
-  //    We *clone* the Response and parse JSON only when URL matches.
-  (function wireFetchSniffer(){
-    const endpoint = safeGetProgressEndpoint();
-    const pattern = CFG.progressEndpointMatch
-      ? new RegExp(CFG.progressEndpointMatch)
-      : (endpoint ? new RegExp(escapeRegExp(endpoint)) : null);
-
-    if (!window.fetch || !pattern) return;
-
-    if (!window.__NPPP_AJAX_FETCH_HOOKED2){
-      window.__NPPP_AJAX_FETCH_HOOKED2 = true;
-      const _fetch = window.fetch;
-      window.fetch = function(){
-        if (CFG.reactToAjax){ try{ API.networkStart(); }catch(e){} }
-        return _fetch.apply(this, arguments)
-          .then(res=>{
-            if (CFG.reactToAjax){ try{ API.networkEnd(res.ok); }catch(e){} }
-            try{
-              let url = '';
-              try {
-                const arg0 = arguments[0];
-                if (arg0 instanceof Request) url = arg0.url;
-                else if (typeof arg0 === 'string') url = arg0;
-                else if (arg0 && typeof arg0 === 'object' && arg0.url) url = String(arg0.url);
-              } catch(_) {}
-
-              if (CFG.reactToProgressResponse && url && pattern.test(url)){
-                // clone and parse without consuming caller body
-                res.clone().json().then((json)=>{
-                  mapProgressDataToAurora(json);
-                }).catch(()=>{ /* ignore parse errors */ });
-              }
-            }catch(e){}
-            return res;
-          })
-          .catch(err=>{
-            if (CFG.reactToAjax){ try{ API.networkEnd(false); }catch(e){} }
-            throw err;
-          });
-      };
-    }
-  })();
-
-  function escapeRegExp(s){
-    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
+  window.addEventListener('nppp:preload-progress', _onProgressEvent);
 
   // Convert REST payload → visual state
   function mapProgressDataToAurora(data){
@@ -475,32 +405,6 @@
       setMode(MODE.IDLE);
     }
   }
-
-  // -------------------------------
-  // jQuery + XHR auto hooks (keep existing behavior)
-  // -------------------------------
-  (function wireAjaxHooks(){
-    if (window.jQuery && !window.__NPPP_AJAX_JQ_HOOKED2){
-      window.__NPPP_AJAX_JQ_HOOKED2 = true;
-      jQuery(document).on('ajaxSend', ()=> API.networkStart());
-      jQuery(document).on('ajaxComplete', (e, xhr)=> API.networkEnd(xhr ? (xhr.status>=200 && xhr.status<400) : true));
-      jQuery(document).on('ajaxError', ()=> API.networkEnd(false));
-    }
-    if (window.XMLHttpRequest && !window.__NPPP_AJAX_XHR_HOOKED2){
-      window.__NPPP_AJAX_XHR_HOOKED2 = true;
-      const _open = XMLHttpRequest.prototype.open;
-      const _send = XMLHttpRequest.prototype.send;
-      XMLHttpRequest.prototype.open = function(){ this.__nppp_listened2=false; return _open.apply(this, arguments); };
-      XMLHttpRequest.prototype.send = function(){
-        try{ API.networkStart(); }catch(e){}
-        if(!this.__nppp_listened2){
-          this.addEventListener('loadend', ()=>{ try{ API.networkEnd(this.status>=200 && this.status<400); }catch(e){} }, {once:true});
-          this.__nppp_listened2 = true;
-        }
-        return _send.apply(this, arguments);
-      };
-    }
-  })();
 
   // -------------------------------
   // Bootstrap
@@ -561,7 +465,7 @@
 /**
  * Aurora Effects Patch (Drop-in)
  * Description: Feature-flagged overlay effects (sheen/crackle/flare) + tempo pulses
- * Version: 2.1.4
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * License: GPL-2.0+
  *
@@ -577,10 +481,6 @@
   // Prevent double-wrapping on hot reloads
   if (window.NPPPAurora.__overlayPatched) return;
   window.NPPPAurora.__overlayPatched = true;
-
-  // Stash originals so we can restore on dispose
-  let _origSetMode = null;
-  let _origSetPct  = null;
 
   // ------------------------------
   // Configurable feature flags
@@ -666,7 +566,7 @@
   // Effect updaters
   // ------------------------------
   function onProgressData(data){
-    if (!window.NPPPAurora || window.NPPPAurora.__allowProgress === false) return;
+    if (!window.NPPPAurora || !window.NPPPAurora.__allowProgress) return;
 
     // Accepts your REST payload or a subset
     const total   = Number(data.total)   || 0;
@@ -738,7 +638,7 @@
     if (!document.body.contains(S.host)) { window.NPPPAuroraPatchDispose?.(); return; }
 
     // Gate: if progress visuals are disabled, keep canvas clear
-    if (!window.NPPPAurora || window.NPPPAurora.__allowProgress === false) {
+    if (!window.NPPPAurora || !window.NPPPAurora.__allowProgress) {
       if (S.ctx) S.ctx.clearRect(0, 0, S.W, S.H);
       requestAnimationFrame(drawOverlay);
       return;
@@ -860,47 +760,20 @@
       }
     }, { passive: true });
 
-    // Listen to your progress event (preferred)
-    window.addEventListener('nppp:preload-progress', ev=>{
-      if (ev && ev.detail) onProgressData(ev.detail);
-    });
+    window.addEventListener('nppp:preload-progress', _onOverlayProgressEvent);
+  }
 
-    // Also listen to explicit API calls if you use them
-    // (If you set mode/percent directly without the event)
-    _origSetMode = window.NPPPAurora.setMode || null;
-    if (_origSetMode){
-      const _setMode = _origSetMode.bind(window.NPPPAurora);
-      window.NPPPAurora.setMode = function(mode){
-        const prevRunning = S.running;
-        const running = (mode === 'running');
-        if (prevRunning && !running){ S.flare = 1; }
-        S.running = running;
-        return _setMode(mode);
-      };
-    }
-
-    _origSetPct = window.NPPPAurora.setProgressPercent || null;
-    if (_origSetPct){
-      const _setPct = _origSetPct.bind(window.NPPPAurora);
-      window.NPPPAurora.setProgressPercent = function(p){
-        S.pct = Math.max(0, Math.min(100, Number(p)||0));
-        if (CFG.effects.heartbeat) scheduleHeartbeat();
-        return _setPct(p);
-      };
-    }
+  function _onOverlayProgressEvent(ev){
+    if (ev && ev.detail) onProgressData(ev.detail);
   }
 
   window.NPPPAuroraPatchDispose = function(){
     try { S.disposed = true; } catch(_) {}
     try { window.removeEventListener('resize', resize); } catch(_) {}
+    try { window.removeEventListener('nppp:preload-progress', _onOverlayProgressEvent); } catch(_) {}
     try { if (S._io) { S._io.disconnect(); S._io = null; } } catch(_) {}
     try { if (S._ro) { S._ro.disconnect(); S._ro = null; } } catch(_) {}
     try { if (S.overlay) { S.overlay.remove(); S.overlay = null; } } catch(_) {}
-
-    // restore API
-    try { if (_origSetMode) window.NPPPAurora.setMode = _origSetMode; } catch(_) {}
-    try { if (_origSetPct)  window.NPPPAurora.setProgressPercent = _origSetPct; } catch(_) {}
-
     try { delete window.NPPPAurora.__overlayPatched; } catch(_) {}
   };
 
@@ -909,5 +782,4 @@
   } else {
     start();
   }
-
 })();

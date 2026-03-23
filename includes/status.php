@@ -1,8 +1,8 @@
 <?php
 /**
- * Status page for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains functions which shows information about FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Status page renderer for Nginx Cache Purge Preload
+ * Description: Collects and displays runtime diagnostics, cache details, and health information.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -12,27 +12,6 @@
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
-}
-
-// Fast head readers (minimal I/O)
-if (! function_exists('nppp_head_fast')) {
-    // Uses file_get_contents() length arg (C-level).
-    function nppp_head_fast( $path, $max = 16384 ) {
-        $data = @file_get_contents( $path, false, null, 0, $max );
-        return ($data === false) ? '' : $data;
-    }
-}
-
-if (! function_exists('nppp_read_head')) {
-    // Partial read with WP_Filesystem fallback.
-    function nppp_read_head( $wp_filesystem, $path, $max = 16384 ) {
-        $buf = nppp_head_fast( $path, $max );
-        if ( $buf !== '' ) return $buf;
-
-        // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
-        $all = $wp_filesystem->get_contents( $path );
-        return ( $all === false || $all === '' ) ? '' : substr( $all, 0, $max );
-    }
 }
 
 // To optimize performance and prevent redundancy, we use cached recursive permission checks.
@@ -67,14 +46,14 @@ function nppp_check_permissions_recursive_with_cache() {
         $result = $result ? 'true' : 'false';
 
         // Cache the result for 1 hour
-        set_transient($transient_key, $result, MONTH_IN_SECONDS);
+        set_transient($transient_key, $result, 2 * HOUR_IN_SECONDS);
     }
 
     return $result;
 }
 
 // Function to clear all transients related to the plugin
-function nppp_clear_plugin_cache() {
+function nppp_clear_plugin_cache($silent = false) {
     global $wpdb;
 
     // Static key base
@@ -98,6 +77,12 @@ function nppp_clear_plugin_cache() {
         'nppp_last_preload_time_' . md5($static_key_base),
         'nppp_safexec_version_' . md5($static_key_base),
         'nppp_wget_urls_cache_' . md5($static_key_base),
+        'nppp_wget_compatibility_' . md5($static_key_base),
+        'nppp_missing_commands_' . md5($static_key_base),
+        'nppp_preload_trigger_' . md5($static_key_base),
+        'nppp_http_purge_endpoint_broken',
+        'nppp_wget_urls_cache_prev_key',
+        'nppp_safexec_ok',
     );
 
     // Delete each known transient
@@ -105,18 +90,62 @@ function nppp_clear_plugin_cache() {
         delete_transient($transient);
     }
 
+    // Transients that must not be cleared while a preload is running:
+    //   nppp_preload_phase_        — tick monitor reads this every 5s to track desktop/mobile phase
+    //   nppp_preload_cycle_start_  — needed at completion to calculate total elapsed time
+    //   nppp_ping_token_           — watchdog validates this token when preload finishes;
+    //                                deleting it causes watchdog to 403 and post-preload tasks never fire
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ( ! nppp_is_preload_running( $wp_filesystem ) ) {
+        $job_transients = array(
+            'nppp_preload_phase_'       . md5($static_key_base),
+            'nppp_preload_cycle_start_' . md5($static_key_base),
+            'nppp_ping_token_'          . md5($static_key_base),
+        );
+        foreach ($job_transients as $transient) {
+            delete_transient($transient);
+        }
+    }
+
+    // Safe clean up of dynamic transients directly in DB.
+    // Uses esc_like() + prepare() — same pattern as uninstall.php.
+    $like_category              = $wpdb->esc_like('_transient_nppp_category_') . '%';
+    $like_category_timeout      = $wpdb->esc_like('_transient_timeout_nppp_category_') . '%';
+    $like_rate_limit            = $wpdb->esc_like('_transient_nppp_rate_limit_') . '%';
+    $like_rate_limit_timeout    = $wpdb->esc_like('_transient_timeout_nppp_rate_limit_') . '%';
+    $like_front_message         = $wpdb->esc_like('_transient_nppp_front_message_') . '%';
+    $like_front_message_timeout = $wpdb->esc_like('_transient_timeout_nppp_front_message_') . '%';
+    $like_wget_cache            = $wpdb->esc_like('_transient_nppp_wget_urls_cache_') . '%';
+    $like_wget_cache_timeout    = $wpdb->esc_like('_transient_timeout_nppp_wget_urls_cache_') . '%';
+
     // Safe clean up transients directly in DB
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-    $wpdb->query("
-        DELETE FROM $wpdb->options
-        WHERE option_name LIKE '\\_transient_nppp_category_%'
-           OR option_name LIKE '\\_transient_timeout_nppp_category_%'
-           OR option_name LIKE '\\_transient_nppp_rate_limit_%'
-           OR option_name LIKE '\\_transient_timeout_nppp_rate_limit_%'
-    ");
+    $wpdb->query(
+        $wpdb->prepare(
+            "DELETE FROM {$wpdb->options}
+            WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s",
+            $like_category,
+            $like_category_timeout,
+            $like_rate_limit,
+            $like_rate_limit_timeout,
+            $like_front_message,
+            $like_front_message_timeout,
+            $like_wget_cache,
+            $like_wget_cache_timeout
+        )
+    );
 
     // Log all transients were cleared successfully
-    nppp_display_admin_notice('success', __('SUCCESS: Plugin cache cleared successfully.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
+    if (!$silent) {
+        nppp_display_admin_notice('success', __('SUCCESS: Plugin cache cleared successfully.', 'fastcgi-cache-purge-and-preload-nginx'), true, false);
+    }
 }
 
 // Check server side action need for cache path permissions.
@@ -186,7 +215,7 @@ function nppp_check_preload_status() {
     }
 
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
@@ -196,12 +225,20 @@ function nppp_check_preload_status() {
         }
     }
 
-    // Check permission status, wget command status and cache path existence
+    // Check permission status, wget command compatibility and cache path existence
     $cached_result = nppp_check_perm_in_cache();
-    $wget_status = nppp_check_command_status('wget');
     $path_status = nppp_check_path();
 
-    if ($cached_result === 'false' || $wget_status !== 'Installed' || $path_status !== 'Found') {
+    $wget_compatible = true;
+    if (function_exists('nppp_get_wget_compatibility')) {
+        $wget_compat = nppp_get_wget_compatibility();
+        $wget_compatible = !empty($wget_compat['ok']);
+    } else {
+        $wget_status = nppp_check_command_status('wget');
+        $wget_compatible = ($wget_status === 'Installed');
+    }
+
+    if ($cached_result === 'false' || !$wget_compatible || $path_status !== 'Found') {
         return 'false';
     }
 
@@ -251,6 +288,74 @@ function nppp_shell_exec() {
     }
 
     return 'Not Ok';
+}
+
+// Returns cache filesystem stats as array [used, free, total, dedicated], null on failure.
+// dedicated=true  → path is its own mount (tmpfs, bindfs, etc.) — disk stats are exact for cache.
+// dedicated=false → path is a directory on a shared partition — du gives actual cache bytes only.
+function nppp_get_cache_disk_size( string $path ): ?array {
+    if ( empty( $path ) || ! is_dir( $path ) ) {
+        return null;
+    }
+
+    $total = @disk_total_space( $path );
+    $free  = @disk_free_space( $path );
+
+    if ( $total === false || $free === false ) {
+        return null;
+    }
+
+    // Detect dedicated filesystem by comparing device IDs of path vs its parent.
+    // Different device ID means path is a separate mount point (tmpfs, bindfs, NFS, etc.)
+    $path_stat   = @stat( $path );
+    $parent_stat = @stat( dirname( rtrim( $path, '/' ) ) );
+
+    $is_dedicated = (
+        $path_stat !== false &&
+        $parent_stat !== false &&
+        $path_stat['dev'] !== $parent_stat['dev']
+    );
+
+    if ( $is_dedicated ) {
+        // Dedicated filesystem — disk_total_space/free are exactly for this cache.
+        return [
+            'used'      => (int) ( $total - $free ),
+            'free'      => (int) $free,
+            'total'     => (int) $total,
+            'dedicated' => true,
+        ];
+    }
+
+    // Shared partition — use du to get actual cache directory bytes only.
+    // This prevents showing entire partition usage as "cache size".
+    $raw = shell_exec( 'du -sb ' . escapeshellarg( $path ) . ' 2>/dev/null' );
+    if ( $raw ) {
+        $parts = explode( "\t", trim( $raw ) );
+        if ( isset( $parts[0] ) && ctype_digit( $parts[0] ) ) {
+            return [
+                'used'      => (int) $parts[0],
+                'free'      => (int) $free,
+                'total'     => (int) $total,
+                'dedicated' => false,
+            ];
+        }
+    }
+
+    // du failed — fall back to filesystem stats, flag as non-dedicated.
+    return [
+        'used'      => (int) ( $total - $free ),
+        'free'      => (int) $free,
+        'total'     => (int) $total,
+        'dedicated' => false,
+    ];
+}
+
+// Format bytes into human-readable string.
+function nppp_format_cache_size( int $bytes ): string {
+    if ( $bytes >= 1073741824 ) { return number_format( $bytes / 1073741824, 2 ) . ' GB'; }
+    if ( $bytes >= 1048576 )    { return number_format( $bytes / 1048576,    2 ) . ' MB'; }
+    if ( $bytes >= 1024 )       { return number_format( $bytes / 1024,       2 ) . ' KB'; }
+    return $bytes . ' B';
 }
 
 // Function to get the PHP process owner (website-user)
@@ -449,22 +554,17 @@ function nppp_get_in_cache_page_count() {
     try {
         $cache_iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
+            RecursiveIteratorIterator::LEAVES_ONLY
         );
 
         $regex_tested = false;
         foreach ($cache_iterator as $file) {
             $pathname = $file->getPathname();
-            if (! $wp_filesystem->is_file($pathname)) {
-                continue;
-            }
 
-            // Okunabilir değilse global durum belirsiz
-            if (! $wp_filesystem->is_readable($pathname)) {
+            if (! $file->isReadable()) {
                 return 'Undetermined';
             }
 
-            // Yalnızca başı oku
             $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
             if ($content === '') { continue; }
 
@@ -531,6 +631,81 @@ function nppp_get_in_cache_page_count() {
 
     // Return the count of URLs, if no URLs found, return 0
     return $urls_count > 0 ? $urls_count : 0;
+}
+
+/**
+ * Calculate live cache coverage.
+ *
+ * Cache count  : pre-computed by nppp_get_in_cache_page_count() and passed in
+ *              to avoid a second expensive directory scan.
+ * Total count: derived from the wget snapshot (nppp-wget-snapshot.log) via
+ *              nppp_parse_wget_log_urls(), which is already used by the
+ *              Advanced tab and is backed by a 5-minute transient.
+ *              The snapshot is only ever written when a full Preload run
+ *              completes, so it always represents a coherent, complete baseline.
+ *
+ * Coverage = Caches ÷ Total × 100
+ * Meaning: "of every URL the crawler discovered, what % is currently in cache."
+ *
+ * Returns a formatted string like "87.5% (35 Cached / 40 Not Cached / 40 total)" or a
+ * descriptive string when the data is not yet available.
+ *
+ */
+function nppp_get_cache_ratio( $hits_count ) {
+    // If the hit count is not a usable integer, we cannot compute a ratio.
+    if ( ! is_numeric( $hits_count ) ) {
+        // Propagate meaningful error strings as-is so the UI can show them.
+        if ( in_array( $hits_count, [ 'Not Found', 'Undetermined', 'RegexError' ], true ) ) {
+            return __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
+        }
+        return __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    $hits = (int) $hits_count;
+
+    // Require WP_Filesystem to call nppp_parse_wget_log_urls().
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ( $wp_filesystem === false ) {
+        return __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    // Check whether a completed snapshot exists. Without it we have no
+    // reliable denominator and should not show a misleading ratio.
+    $snapshot_path = nppp_get_runtime_file( 'nppp-wget-snapshot.log' );
+    if ( ! $wp_filesystem->exists( $snapshot_path ) ) {
+        return __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    // It returns a keyed array of every URL from the completed snapshot,
+    // backed by a 5-min transient, so repeated calls are cheap.
+    if ( ! function_exists( 'nppp_parse_wget_log_urls' ) ) {
+        return __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    $wget_urls = nppp_parse_wget_log_urls( $wp_filesystem );
+    $total     = count( $wget_urls );
+
+    // An empty snapshot (all URLs were filtered out by reject-regex, etc.)
+    // means we cannot compute a meaningful denominator.
+    if ( $total === 0 ) {
+        return __( 'N/A — snapshot empty', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    // The cache can contain pages not included in the snapshot (e.g. manually
+    // visited pages, paginated archives created after the last crawl).
+    // We cap the ratio at 100 % to keep it intuitive.
+    $ratio = min( 100.0, ( $hits / $total ) * 100.0 );
+
+    // Return raw numbers — callers format for display themselves.
+    // This prevents __() translations from silently breaking regex parsers.
+    $misses = max( 0, $total - $hits );
+
+    return [
+        'ratio'  => round( $ratio, 1 ),
+        'hits'   => $hits,
+        'misses' => $misses,
+        'total'  => $total,
+    ];
 }
 
 // Function to check for same Nginx cache path for multiple instance
@@ -621,6 +796,11 @@ function nppp_my_status_html() {
                 </div>';
     }
 
+    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path'])
+        ? $nginx_cache_settings['nginx_cache_path']
+        : '/dev/shm/change-me-now';
+
     $perm_in_cache_status_purge = nppp_check_perm_in_cache(true, false, false);
     $perm_in_cache_status_fpm = nppp_check_perm_in_cache(false, false, true);
     $perm_in_cache_status_perm = nppp_check_perm_in_cache(false, true, false);
@@ -648,16 +828,30 @@ function nppp_my_status_html() {
     $config_file = $conf_paths[0];
     $duplicates = nppp_check_duplicate_nginx_cache_paths($config_file, $wp_filesystem);
 
+    // Pre-compute pages in cache count here — needed by warning logic below
+    // and reused in the Cache Status table. Single filesystem scan for both.
+    $nppp_pages_in_cache = nppp_get_in_cache_page_count();
+    if ( is_numeric( $nppp_pages_in_cache ) ) {
+        update_option( 'nppp_last_known_hits',      (int) $nppp_pages_in_cache, false );
+        update_option( 'nppp_last_hits_scanned_at', time(),                     false );
+    }
+
     // Warn about not found cache key
     if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
         echo '<div class="nppp-status-wrap">
                   <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: No <span style="color: #FFDEAD;">_cache_key</span> directive was found.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
               </div>';
-    // Warn about the unsupported cache key
+    // Warn about non-default cache key — severity depends on whether it affects this site
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
-        echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Unsupported</span> cache key found!', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
-              </div>';
+        if ( $nppp_pages_in_cache === 'RegexError' ) {
+            echo '<div class="nppp-status-wrap">
+                      <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Non-default</span> cache key detected — Cache Key Regex update required.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
+                  </div>';
+        } else {
+            echo '<div class="nppp-status-wrap">
+                      <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Non-default</span> cache key found on server — not affecting this site.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
+                  </div>';
+        }
     }
 
     // Warn about same Nginx cache path for multiple instance
@@ -674,20 +868,28 @@ function nppp_my_status_html() {
                      <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>' . wp_kses(__('Please check your <strong>Nginx cache setup</strong> to ensure that the <strong>cache key</strong> directive is defined. If you continue to encounter this error, this may indicate a <strong>parsing error</strong> and can be safely ignored.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]) . '
                  </p>
              </div>';
-    // Details about the unsupported cache key
+    // Details about the non-default cache key
     } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
-        echo '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                 <p style="margin: 0; align-items: center;">
-                     <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>' . sprintf(
-                         /* Translators: %1$s, %2$s, %3$s, %4$s are dynamic strings */
-                         wp_kses(__('If <strong>%1$s</strong> indicates <strong>%2$s</strong>, please check the <strong>%3$s</strong> option in the plugin <strong>%4$s</strong> section and try again.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]),
-                         wp_kses(__('Pages In Cache Count', 'fastcgi-cache-purge-and-preload-nginx'), []),
-                         wp_kses(__('Regex Error', 'fastcgi-cache-purge-and-preload-nginx'), []),
-                         wp_kses(__('Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'), []),
-                         wp_kses(__('Advanced Options', 'fastcgi-cache-purge-and-preload-nginx'), [])
-                     ) . '
-                 </p>
-             </div>';
+        if ( $nppp_pages_in_cache === 'RegexError' ) {
+            // Situation B — regex is failing on this site's actual cache files
+            echo '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                     <p style="margin: 0; align-items: center;">
+                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>' . sprintf(
+                             /* Translators: %1$s, %2$s are dynamic strings */
+                             wp_kses(__('Non-default <strong>_cache_key</strong> is active on this site. Update <strong>%1$s</strong> in <strong>%2$s</strong> to match your key format.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]),
+                             wp_kses(__('Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'), []),
+                             wp_kses(__('Advanced Options', 'fastcgi-cache-purge-and-preload-nginx'), [])
+                         ) . '
+                     </p>
+                 </div>';
+        } else {
+            // Situation A — non-default key exists on another vhost, not on this site
+            echo '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                     <p style="margin: 0; align-items: center;">
+                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>' . wp_kses(__('Non-default <strong>_cache_key</strong> found on another vhost — no action needed for this site.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]) . '
+                     </p>
+                 </div>';
+        }
     }
 
     // Details about same Nginx cache path for multiple instance
@@ -773,23 +975,23 @@ function nppp_my_status_html() {
                                     <span><?php echo esc_html(nppp_check_preload_status()); ?></span>
                                 </td>
                             </tr>
-                            <tr id="nppp-preload-progress-row">
-                                <td colspan="2">
-                                    <!-- Progress Bar Container -->
-                                    <div style="width: 100%; height: 20px; background-color: #e5e7eb; margin-top: 10px; overflow: hidden;">
-                                        <div id="wpt-bar-inner" style="width: 0%; height: 100%; background-color: #5A9BD5; position: relative; text-align: center; color: white; font-size: 12px; line-height: 20px;">
-                                            <span id="wpt-bar-text" style="position: absolute; width: 100%; left: 0;">0%</span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Progress Status Text -->
-                                    <div id="wpt-status" class="nppp-progress-status" style="margin-top: 0px; font-size: 13px; color: #374151;">
-                                        <?php esc_html_e( 'Initializing...', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                    </div>
-                                </td>
-                            </tr>
                         </tbody>
                     </table>
+                </section>
+
+                <!-- Preload Progress Section -->
+                <section id="nppp-preload-progress-section">
+                    <h2><?php esc_html_e( 'Preload Progress', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h2>
+                    <div class="nppp-progress-wrap">
+                        <div class="nppp-bar-track">
+                            <div id="wpt-bar-inner" class="nppp-bar-fill">
+                                <span id="wpt-bar-text">0%</span>
+                            </div>
+                        </div>
+                        <div id="wpt-status" class="nppp-progress-status">
+                            <?php esc_html_e( 'Initializing...', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- System Checks Section -->
@@ -885,7 +1087,52 @@ function nppp_my_status_html() {
                                 <td class="check"><?php esc_html_e('Pages In Cache Count', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppphpPagesInCache">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html(nppp_get_in_cache_page_count()); ?></span>
+                                    <span><?php echo esc_html($nppp_pages_in_cache); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check"><?php esc_html_e('Cache Coverage', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="status" id="npppCacheHitRatio">
+                                    <span class="dashicons"></span>
+                                    <?php
+                                    $nppp_status_ratio = nppp_get_cache_ratio( $nppp_pages_in_cache );
+                                    if ( is_array( $nppp_status_ratio ) ) {
+                                        $nppp_status_label = number_format( $nppp_status_ratio['ratio'], 1 ) . '%  ('
+                                            . $nppp_status_ratio['hits']   . ' ' . __( 'Cached',     'fastcgi-cache-purge-and-preload-nginx' ) . ' / '
+                                            . $nppp_status_ratio['misses'] . ' ' . __( 'Not Cached', 'fastcgi-cache-purge-and-preload-nginx' ) . ' / '
+                                            . $nppp_status_ratio['total']  . ' ' . __( 'total',      'fastcgi-cache-purge-and-preload-nginx' ) . ')';
+                                        echo '<span>' . esc_html( $nppp_status_label ) . '</span>';
+                                    } else {
+                                        echo '<span>' . esc_html( $nppp_status_ratio ) . '</span>';
+                                    }
+                                    ?>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check"><?php esc_html_e('Cache RAM/Disk Size', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="status" id="npppCacheDiskSize">
+                                    <span class="dashicons"></span>
+                                    <?php
+                                    $nppp_disk = nppp_get_cache_disk_size( $nginx_cache_path );
+                                    if ( $nppp_disk === null ): ?>
+                                        <span style="color: orange;"><?php esc_html_e('Unavailable', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                    <?php elseif ( $nppp_disk['dedicated'] ): ?>
+                                        <span><?php echo esc_html(
+                                            ( $nppp_disk['total'] > 0 ? number_format( ( $nppp_disk['used'] / $nppp_disk['total'] ) * 100, 1 ) : 0 )
+                                            . '% ('
+                                            . nppp_format_cache_size( $nppp_disk['used'] )
+                                            . ' used / '
+                                            . nppp_format_cache_size( $nppp_disk['total'] )
+                                            . ' total)'
+                                        ); ?></span>
+                                    <?php else: ?>
+                                        <span><?php echo esc_html(
+                                            nppp_format_cache_size( $nppp_disk['used'] )
+                                            . ' cache dir ('
+                                            . nppp_format_cache_size( $nppp_disk['free'] )
+                                            . ' free on partition)'
+                                        ); ?></span>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         </tbody>
@@ -927,6 +1174,21 @@ function nppp_clear_plugin_cache_callback() {
     );
 }
 
+// AJAX handler to clear the URL→path index
+function nppp_clear_url_index_callback() {
+    if ( ! current_user_can('manage_options') ) {
+        wp_send_json_error( __( 'Insufficient permissions.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    $nonce = isset( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
+    if ( ! wp_verify_nonce( $nonce, 'nppp-clear-url-index' ) ) {
+        wp_send_json_error( __( 'Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    delete_option( 'nppp_url_filepath_index' );
+    wp_send_json_success( __( 'URL index cleared successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+}
+
 // AJAX handler to fetch shortcode content
 function nppp_cache_status_callback() {
     // Check nonce
@@ -942,6 +1204,15 @@ function nppp_cache_status_callback() {
     // Check user capability
     if (!current_user_can('manage_options')) {
         wp_die(esc_html__('You do not have permission to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
+    }
+
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation.
+
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
     // Call the shortcode function to get HTML content
@@ -961,5 +1232,10 @@ function nppp_cache_status_callback() {
 
 // Shortcode to display the Status HTML
 function nppp_my_status_shortcode() {
+    // This shortcode exposes server internals (nginx paths, filesystem permissions,
+    // PHP process owner, web server user). Never render it for non-admins.
+    if (! current_user_can('manage_options')) {
+        return '';
+    }
     return nppp_my_status_html();
 }

@@ -1,8 +1,8 @@
 <?php
 /**
- * Dashboard widget for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains dashboard widget functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Dashboard widget module for Nginx Cache Purge Preload
+ * Description: Renders WordPress dashboard status widgets and recent preload/purge summaries.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -37,7 +37,7 @@ function nppp_get_last_preload_complete_date() {
 
     // Define a constant for the log file path
     if ( ! defined( 'NGINX_CACHE_LOG_FILE' ) ) {
-        define('NGINX_CACHE_LOG_FILE', dirname(__FILE__) . '/../fastcgi_ops.log');
+        define('NGINX_CACHE_LOG_FILE', nppp_get_runtime_file('fastcgi_ops.log'));
     }
 
     // Check if the log file constant is defined
@@ -96,7 +96,7 @@ function nppp_check_preload_status_widget() {
     }
 
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     if ($wp_filesystem->exists($PIDFILE)) {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
@@ -196,6 +196,43 @@ function nppp_dashboard_widget() {
     // Fetch the NPP plugin settings from the database
     $settings = get_option('nginx_cache_settings', []);
 
+    // URL Normalization
+    $pctnorm_mode = isset($settings['nginx_cache_pctnorm_mode']) ? $settings['nginx_cache_pctnorm_mode'] : 'off';
+    $pctnorm_enabled = $pctnorm_mode !== 'off';
+
+    if ($pctnorm_enabled && function_exists('nppp_find_safexec_path') && function_exists('nppp_is_safexec_usable')) {
+        $safexec_path = nppp_find_safexec_path();
+        $pctnorm_enabled = $safexec_path && nppp_is_safexec_usable($safexec_path, false);
+    }
+
+    // Cloudflare APO Sync — three states: Enabled / Disabled / Unavailable
+    // Unavailable means the Cloudflare APO plugin is not installed/active,
+    // so the sync option cannot function regardless of the saved setting.
+    $cf_available = function_exists('nppp_cloudflare_apo_is_available') && nppp_cloudflare_apo_is_available();
+    $cf_sync_on   = isset($settings['nppp_cloudflare_apo_sync']) && $settings['nppp_cloudflare_apo_sync'] === 'yes';
+
+    if ( ! $cf_available ) {
+        $cf_status = __('Unavailable', 'fastcgi-cache-purge-and-preload-nginx');
+    } elseif ( $cf_sync_on ) {
+        $cf_status = __('Enabled', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        $cf_status = __('Disabled', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    // Redis Object Cache Sync — three states: Enabled / Disabled / Unavailable
+    // Unavailable means the Redis Object Cache plugin is not installed/active/connected,
+    // so the sync option cannot function regardless of the saved setting.
+    $redis_available = function_exists( 'nppp_redis_cache_is_available' ) && nppp_redis_cache_is_available();
+    $redis_sync_on   = isset( $settings['nppp_redis_cache_sync'] ) && $settings['nppp_redis_cache_sync'] === 'yes';
+
+    if ( ! $redis_available ) {
+        $redis_status = __( 'Unavailable', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $redis_sync_on ) {
+        $redis_status = __( 'Enabled', 'fastcgi-cache-purge-and-preload-nginx' );
+    } else {
+        $redis_status = __( 'Disabled', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
     // Need setup
     $needs_setup = class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup();
     $setup_url   = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
@@ -214,6 +251,11 @@ function nppp_dashboard_widget() {
             'status' => isset($settings['nginx_cache_purge_on_update']) && $settings['nginx_cache_purge_on_update'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon' => 'dashicons-trash'
         ],
+        'http_purge' => [
+            'label' => __('HTTP Purge', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status' => isset($settings['nppp_http_purge_enabled']) && $settings['nppp_http_purge_enabled'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
+            'icon' => 'dashicons-migrate'
+        ],
         'auto_preload' => [
             'label' => __('Auto Preload', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nginx_cache_auto_preload']) && $settings['nginx_cache_auto_preload'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
@@ -224,10 +266,32 @@ function nppp_dashboard_widget() {
             'status' => isset($settings['nginx_cache_auto_preload_mobile']) && $settings['nginx_cache_auto_preload_mobile'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon' => 'dashicons-smartphone'
         ],
+        'preload_watchdog' => [
+            'label' => __('Preload Watchdog', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status' => isset($settings['nginx_cache_watchdog']) && $settings['nginx_cache_watchdog'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
+            'icon' => 'dashicons-visibility'
+        ],
         'enable_proxy' => [
             'label' => __('Proxy', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nginx_cache_preload_enable_proxy']) && $settings['nginx_cache_preload_enable_proxy'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon'   => 'dashicons-randomize'
+        ],
+        'url_normalization' => [
+            'label' => __('URL Normalization', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status' => $pctnorm_enabled ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
+            'icon' => 'dashicons-admin-links'
+        ],
+        'cloudflare_apo' => [
+            'label'       => __('Cloudflare APO', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status'      => $cf_status,
+            'icon'        => 'dashicons-cloud',
+            'unavailable' => ! $cf_available,
+        ],
+        'redis_object_cache' => [
+            'label'       => __( 'Redis Object Cache', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'status'      => $redis_status,
+            'icon'        => 'dashicons-database',
+            'unavailable' => ! $redis_available,
         ],
         'scheduled_cache' => [
             'label' => __('Scheduled Cache', 'fastcgi-cache-purge-and-preload-nginx'),
@@ -243,11 +307,6 @@ function nppp_dashboard_widget() {
             'label' => __('Send Mail', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nginx_cache_send_mail']) && $settings['nginx_cache_send_mail'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon' => 'dashicons-email-alt'
-        ],
-        'opt_in' => [
-            'label' => __('Opt-In', 'fastcgi-cache-purge-and-preload-nginx'),
-            'status' => isset($settings['nginx_cache_tracking_opt_in']) && $settings['nginx_cache_tracking_opt_in'] === '1' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
-            'icon' => 'dashicons-flag'
         ],
     ];
 
@@ -297,6 +356,82 @@ function nppp_dashboard_widget() {
             echo '</a>';
         echo '</div>';
 
+        // Cache Coverage Ratio.
+        // Read the hit count stored by the Status or Advanced tab (zero scan cost).
+        // nppp_get_cache_ratio() derives the total from the wget snapshot log via its
+        // own 5-min transient.
+        $nppp_widget_hits     = get_option( 'nppp_last_known_hits',      false );
+        $nppp_widget_scan_at  = get_option( 'nppp_last_hits_scanned_at', false );
+        $nppp_ratio_pct       = null;
+        $nppp_ratio_hits      = null;
+        $nppp_ratio_misses    = null;
+        $nppp_ratio_total     = null;
+        $nppp_ratio_na        = true;
+
+        // Checkpoint 1: does a completed preload snapshot exist?
+        // We check this directly — no option dependency needed for this state.
+        $nppp_snapshot_path   = nppp_get_runtime_file( 'nppp-wget-snapshot.log' );
+        $nppp_snapshot_exists = file_exists( $nppp_snapshot_path );
+
+        if ( ! $nppp_snapshot_exists ) {
+            // No snapshot at all — user needs to run Preload All first.
+            $nppp_ratio_na_reason = 'no_snapshot';
+
+        } elseif ( $nppp_widget_hits === false ) {
+            // Snapshot exists but hit count option not yet written.
+            $nppp_ratio_na_reason = 'not_initialized';
+
+        } elseif ( function_exists( 'nppp_get_cache_ratio' ) ) {
+            $nppp_ratio_data = nppp_get_cache_ratio( (int) $nppp_widget_hits );
+            if ( is_array( $nppp_ratio_data ) ) {
+                $nppp_ratio_pct       = (float) $nppp_ratio_data['ratio'];
+                $nppp_ratio_hits      = (int)   $nppp_ratio_data['hits'];
+                $nppp_ratio_misses    = (int)   $nppp_ratio_data['misses'];
+                $nppp_ratio_total     = (int)   $nppp_ratio_data['total'];
+                $nppp_ratio_na        = false;
+                $nppp_ratio_na_reason = '';
+            } else {
+                $nppp_ratio_na_reason = 'no_snapshot';
+            }
+        } else {
+            $nppp_ratio_na_reason = 'no_snapshot';
+        }
+
+        echo '<div id="nppp-ratio-strip" class="nppp-ratio-strip"'
+           . ' data-ratio="'     . esc_attr( $nppp_ratio_na ? '' : $nppp_ratio_pct ) . '"'
+           . ' data-hits="'      . esc_attr( $nppp_ratio_na ? '' : $nppp_ratio_hits ) . '"'
+           . ' data-misses="'    . esc_attr( $nppp_ratio_na ? '' : $nppp_ratio_misses ) . '"'
+           . ' data-total="'     . esc_attr( $nppp_ratio_na ? '' : $nppp_ratio_total ) . '"'
+           . ' data-na="'        . esc_attr( $nppp_ratio_na ? '1' : '0' ) . '"'
+           . ' data-na-reason="' . esc_attr( $nppp_ratio_na_reason ) . '"'
+           . ' data-scanned-at="'. esc_attr( $nppp_widget_scan_at ? (string) $nppp_widget_scan_at : '' ) . '"'
+           . '>';
+            // SVG circular gauge  (r = 28 → circumference = 2πr ≈ 175.93)
+            echo '<div class="nppp-ratio-gauge" aria-label="' . esc_attr__( 'Cache coverage ratio gauge', 'fastcgi-cache-purge-and-preload-nginx' ) . '">';
+                echo '<svg class="nppp-gauge-svg" viewBox="0 0 96 96" width="96" height="96">';
+                    echo '<circle class="nppp-gauge-track"    cx="48" cy="48" r="37" fill="none" stroke-width="9"/>';
+                    echo '<circle class="nppp-gauge-progress" cx="48" cy="48" r="37" fill="none" stroke-width="9"'
+                       . ' stroke-dasharray="232.48" stroke-dashoffset="232.48"'
+                       . ' stroke-linecap="round" transform="rotate(-90 48 48)"/>';
+                echo '</svg>';
+                echo '<span class="nppp-gauge-pct" aria-live="polite">&ndash;</span>';
+                // Show refresh whenever a snapshot exists — clicking it will also
+                // initialize the hits option if it hasn't been written yet.
+                if ( $nppp_snapshot_exists ) {
+                    echo '<button type="button" class="nppp-ratio-refresh"'
+                       . ' title="'      . esc_attr__( 'Refresh cache coverage ratio', 'fastcgi-cache-purge-and-preload-nginx' ) . '"'
+                       . ' aria-label="' . esc_attr__( 'Refresh',                 'fastcgi-cache-purge-and-preload-nginx' ) . '">'
+                       . '<span class="dashicons dashicons-update"></span>'
+                       . '</button>';
+                }
+            echo '</div>';
+            // Right-side text block
+            echo '<div class="nppp-ratio-info">';
+                echo '<span class="nppp-ratio-title">' . esc_html__( 'CACHE COVERAGE', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>';
+                echo '<span id="nppp-ratio-detail" class="nppp-ratio-detail"></span>';
+            echo '</div>';
+        echo '</div>';
+
         // Output the main NPP pluging settings statuses
         echo '<table style="width: 100%; border-collapse: collapse;">';
             foreach ($statuses as $key => $status_info) {
@@ -304,8 +439,18 @@ function nppp_dashboard_widget() {
                 $icon = $status_info['icon'];
 
                 // Determine the Dashicon and color based on status
-                $status_icon = ($status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) ? 'dashicons-yes-alt' : 'dashicons-dismiss';
-                $status_color = ($status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) ? '#5cb85c' : '#d9534f';
+                // Three possible states: Enabled (green), Disabled (red), Unavailable (gray + lock)
+                $is_unavailable = ! empty($status_info['unavailable']);
+                if ($is_unavailable) {
+                    $status_icon  = 'dashicons-lock';
+                    $status_color = '#999999';
+                } elseif ($status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) {
+                    $status_icon  = 'dashicons-yes-alt';
+                    $status_color = '#5cb85c';
+                } else {
+                    $status_icon  = 'dashicons-dismiss';
+                    $status_color = '#d9534f';
+                }
 
                 echo '<tr style="border-bottom: 1px solid #f1f1f1;">';
                     echo '<td style="padding: 8px 15px; color: #555; font-weight: 500; width: 60%;">';
@@ -380,4 +525,58 @@ function nppp_add_dashboard_widget() {
         __('NPP - Nginx Cache Status', 'fastcgi-cache-purge-and-preload-nginx'),
         'nppp_dashboard_widget'
     );
+}
+
+// AJAX handler — refresh cache coverage ratio on demand from the dashboard widget.
+function nppp_refresh_cache_ratio_callback() {
+    // Capability check
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( __( 'Permission denied.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
+    }
+
+    // Nonce check
+    if ( empty( $_POST['_wpnonce'] ) ||
+         ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'nppp_refresh_cache_ratio' ) ) {
+        wp_send_json_error( __( 'Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    // Allow long-running scans on large caches
+    if ( function_exists( 'set_time_limit' ) ) {
+        @set_time_limit( 0 ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+    }
+
+    // Fresh HITs scan
+    $hits = nppp_get_in_cache_page_count();
+
+    if ( is_numeric( $hits ) ) {
+        update_option( 'nppp_last_known_hits',      (int) $hits, false );
+        update_option( 'nppp_last_hits_scanned_at', time(),      false );
+    } elseif ( in_array( $hits, [ 'Not Found', 'Undetermined', 'RegexError' ], true ) ) {
+        $na_reason_map = [
+            'Not Found'    => 'path_not_found',
+            'Undetermined' => 'undetermined',
+            'RegexError'   => 'regex_error',
+        ];
+        wp_send_json_success( [ 'na' => true, 'na_reason' => $na_reason_map[ $hits ] ] );
+    }
+
+    if ( ! function_exists( 'nppp_get_cache_ratio' ) ) {
+        wp_send_json_success( [ 'na' => true, 'na_reason' => 'no_snapshot' ] );
+    }
+
+    $ratio_data = nppp_get_cache_ratio( $hits );
+
+    if ( is_array( $ratio_data ) ) {
+        wp_send_json_success( [
+            'na'         => false,
+            'ratio'      => (float) $ratio_data['ratio'],
+            'hits'       => (int)   $ratio_data['hits'],
+            'misses'     => (int)   $ratio_data['misses'],
+            'total'      => (int)   $ratio_data['total'],
+            'scanned_at' => time(),
+        ] );
+    }
+
+    // nppp_get_cache_ratio returned N/A (no snapshot, empty snapshot, etc.)
+    wp_send_json_success( [ 'na' => true, 'na_reason' => 'no_snapshot' ] );
 }

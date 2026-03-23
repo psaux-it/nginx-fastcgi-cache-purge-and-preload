@@ -1,7 +1,7 @@
 /**
- * JavaScript for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains code to disable plugin functionality in unsupported environments for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Unsupported-environment guards for Nginx Cache Purge Preload
+ * Description: Disables plugin actions in admin when required runtime conditions are not met.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -162,7 +162,112 @@
                 ensureHiddenMirror($form, name, currentVal);
             })();
 
-            // disable the rest API elements non-clickable
+            // Disable Cloudflare APO sync toggle and preserve current value
+            (function disableCloudflareApoSync(){
+                const $cloudflareToggle = $('#nppp_cloudflare_apo_sync');
+                if (!$cloudflareToggle.length) return;
+
+                const $form = $cloudflareToggle.closest('form');
+                const name = $cloudflareToggle.attr('name');
+                const currentVal = $cloudflareToggle.is(':checked') ? 'yes' : 'no';
+
+                $cloudflareToggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                $cloudflareToggle
+                    .closest('.nppp-onoffswitch-cloudflare')
+                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .find('.nppp-onoffswitch-label-cloudflare')
+                    .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+
+                ensureHiddenMirror($form, name, currentVal);
+            })();
+
+            // Disable Redis Object Cache sync toggle and preserve current value
+            (function disableRedisCacheSync(){
+                const $redisToggle = $('#nppp_redis_cache_sync');
+                if (!$redisToggle.length) return;
+
+                const $form = $redisToggle.closest('form');
+                const name = $redisToggle.attr('name');
+                const currentVal = $redisToggle.is(':checked') ? 'yes' : 'no';
+
+                $redisToggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                $redisToggle
+                    .closest('.nppp-onoffswitch-redis')
+                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .find('.nppp-onoffswitch-label-redis')
+                    .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+
+                ensureHiddenMirror($form, name, currentVal);
+            })();
+
+            // Disable HTTP purge fast-path toggle and sub-fields
+            (function disableHttpPurge(){
+                const $toggle = $('#nppp_http_purge_enabled');
+                if (!$toggle.length) return;
+
+                const $form     = $toggle.closest('form');
+                const name      = $toggle.attr('name');
+                const currentVal = $toggle.is(':checked') ? 'yes' : 'no';
+
+                $toggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                $toggle
+                    .closest('.nppp-onoffswitch-httppurge')
+                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .find('.nppp-onoffswitch-label-httppurge')
+                    .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+
+                ensureHiddenMirror($form, name, currentVal);
+
+                // Disable Test Connection button
+                $('#nppp-test-http-purge').prop('disabled', true).css({ opacity:.5, cursor:'not-allowed' });
+
+                // Disable sub-fields
+                $('#nppp_http_purge_suffix, #nppp_http_purge_custom_url')
+                    .prop('disabled', true)
+                    .attr('readonly', 'readonly')
+                    .css({ opacity:.5, cursor:'not-allowed' });
+            })();
+
+            // Disable watchdog toggle and preserve current value
+            (function disableWatchdog(){
+                const $watchdogToggle = $('#nginx_cache_watchdog');
+                if (!$watchdogToggle.length) return;
+
+                const $form = $watchdogToggle.closest('form');
+                const name = $watchdogToggle.attr('name');
+                const currentVal = $watchdogToggle.is(':checked') ? 'yes' : 'no';
+
+                $watchdogToggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                $watchdogToggle
+                    .closest('.nppp-onoffswitch-watchdog')
+                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .find('.nppp-onoffswitch-label-watchdog')
+                    .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+
+                ensureHiddenMirror($form, name, currentVal);
+            })();
+
+            // Make REST API helper elements non-clickable.
             $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({
                 'opacity': '0.5',
                 'cursor': 'not-allowed'
@@ -170,7 +275,7 @@
                 $(this).off('click');
             });
 
-            // ensure the parent <p> tags are also non-clickable
+            // Ensure parent <p> containers are also non-clickable.
             $('#nppp-api-key, #nppp-purge-url, #nppp-preload-url').css({
                 'opacity': '0.5',
                 'cursor': 'not-allowed'

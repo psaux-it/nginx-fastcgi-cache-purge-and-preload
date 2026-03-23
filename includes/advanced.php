@@ -1,8 +1,8 @@
 <?php
 /**
- * Advanced table for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains advanced table functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Advanced tab handlers for Nginx Cache Purge Preload
+ * Description: Implements advanced admin actions for targeted URL purge and preload tasks.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -67,7 +67,7 @@ function nppp_url_match_key( $url ) {
 // Is preload running
 function nppp_is_preload_running( $wp_filesystem ) {
     $this_script_path = dirname( plugin_dir_path( __FILE__ ) );
-    $PIDFILE = rtrim( $this_script_path, '/' ) . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     if ( ! $wp_filesystem->exists( $PIDFILE ) ) {
         return false;
@@ -122,54 +122,56 @@ function nppp_get_plugin_root_path() {
    ========================================== */
 
 function nppp_parse_wget_log_urls( $wp_filesystem ) {
-    $static_key_base = 'nppp';
-    $transient_key   = 'nppp_wget_urls_cache_' . md5( $static_key_base );
-
-    $plugin_root = nppp_get_plugin_root_path();
-    $log_path    = $plugin_root . '/nppp-wget.log';
+    $log_path    = nppp_get_runtime_file('nppp-wget.log');
+    $snapshot_path = nppp_get_runtime_file('nppp-wget-snapshot.log');
 
     // Detect live crawl
     $preload_running = nppp_is_preload_running( $wp_filesystem );
 
-    // If preload running always get fresh crawl data
-    if ( $preload_running ) {
-        delete_transient( $transient_key );
-    } else {
+    $urls = [];
+
+    // While preload is running: read the live log for real-time progress.
+    // Once preload finishes: read the snapshot which only exists when a
+    // run has fully completed. This prevents a partial/interrupted live log
+    // from ever replacing a previously complete snapshot.
+    $read_path = $preload_running ? $log_path : $snapshot_path;
+
+    if ( ! $wp_filesystem->exists( $read_path ) ) {
+        return $urls;
+    }
+
+    // Build a transient key tied to the file's actual modification time.
+    // When the snapshot is deleted and recreated, or manually removed,
+    // the mtime changes → new key → automatic cache miss, no manual
+    // delete_transient() calls needed anywhere.
+    // During a live preload we never cache (partial data), so the key
+    // is only meaningful for the stable snapshot path.
+    if ( ! $preload_running ) {
+        $mtime         = (int) @filemtime( $read_path );
+        $transient_key = 'nppp_wget_urls_cache_' . md5( $read_path . $mtime );
+
         $cached = get_transient( $transient_key );
         if ( $cached !== false && is_array( $cached ) ) {
             return $cached;
         }
     }
 
-    $urls = [];
-
-    if ( ! $wp_filesystem->exists( $log_path ) ) {
-        if ( ! $preload_running ) {
-            set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
-        }
-        return $urls;
-    }
-
-    $contents = $wp_filesystem->get_contents( $log_path );
+    $contents = $wp_filesystem->get_contents( $read_path );
     if ( $contents === false || $contents === '' ) {
-        if ( ! $preload_running ) {
-            set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
-        }
         return $urls;
     }
 
-    // If preload is NOT running and log has NO FINISHED marker,
-    // we consider it an aborted/partial crawl → do NOT trust it.
+    // The snapshot is always complete by definition (only written on FINISHED).
+    // The live log during a running preload is partial by definition — that is
+    // expected and fine, so we do not apply the completion guard here.
+    // The guard below is kept only as a safety net in case the snapshot file
+    // somehow became corrupted (manually edited, partial write, etc.).
     if ( ! $preload_running && ! nppp_wget_log_is_complete( $contents ) ) {
-        delete_transient( $transient_key );
         return $urls;
     }
 
     $site_host = wp_parse_url( get_site_url(), PHP_URL_HOST );
     if ( empty( $site_host ) ) {
-        if ( ! $preload_running ) {
-            set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
-        }
         return $urls;
     }
 
@@ -222,9 +224,25 @@ function nppp_parse_wget_log_urls( $wp_filesystem ) {
         }
     }
 
-    // Only persist when NOT running (stable snapshot)
+    // Only persist when NOT running (stable snapshot).
+    // TTL is orphan cleanup only — actual invalidation is guaranteed by the
+    // mtime-based key. When the snapshot changes, the old key is never
+    // queried again and expires here naturally.
     if ( ! $preload_running ) {
-        set_transient( $transient_key, $urls, 5 * MINUTE_IN_SECONDS );
+        // Delete the previous mtime-based key before writing the new one.
+        // Each preload completion generates a new key (mtime changes), leaving
+        // the old key as an orphan for up to MONTH_IN_SECONDS. On active sites
+        // running daily preloads this accumulates 30+ stale rows in wp_options.
+        $prev_key_pointer = 'nppp_wget_urls_cache_prev_key';
+        $prev_key = get_transient( $prev_key_pointer );
+        if ( $prev_key && $prev_key !== $transient_key ) {
+            delete_transient( $prev_key );
+        }
+
+        set_transient( $transient_key, $urls, MONTH_IN_SECONDS );
+
+        // Store current key so the next run can clean it up.
+        set_transient( $prev_key_pointer, $transient_key, MONTH_IN_SECONDS );
     }
 
     return $urls;
@@ -323,8 +341,7 @@ function nppp_premium_html($nginx_cache_path) {
                         <span style="font-size: 14px;">' . esc_html__( 'ERROR PERMISSION: Please ensure proper permissions are set for the Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>
                     </p>
                 </div>';
-
-    } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
+    } elseif (nppp_check_permissions_recursive_with_cache() !== 'true') {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                     <h2>&nbsp;' . esc_html__( 'Error Displaying Cached Content', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>
                     <p style="margin: 0; display: flex; align-items: center;">
@@ -339,72 +356,127 @@ function nppp_premium_html($nginx_cache_path) {
 
     // Get extracted URLs (HITs)
     $extractedUrls = nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path);
+    $preload_running = nppp_is_preload_running( $wp_filesystem );
 
     $hits = [];
 
-    // Check for errors, no need to display missing URLs at that point
+    // Check for errors
     if (isset($extractedUrls['error'])) {
-        // Sanitize and allow specific HTML tags
-        $error_message = wp_kses(
-            $extractedUrls['error'],
-            array(
-                'strong' => array(),
-            )
-        );
+        $is_empty_cache = ( $extractedUrls['error'] === 'NPPP_EMPTY_CACHE' );
 
-        // Stop execution if no cached content is found due to an empty cache or cache key regex error.
-        return '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                    <p style="margin: 0; display: flex; align-items: center;">
-                        <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-                        <span style="font-size: 14px;">' . $error_message . '</span>
+        if ( $is_empty_cache ) {
+            $snapshot_path   = nppp_get_runtime_file('nppp-wget-snapshot.log');
+
+            if ( ! $preload_running && ! $wp_filesystem->exists( $snapshot_path ) ) {
+                // Fresh install: no cache, no snapshot — return just the notice, no table.
+                $wget_msg = __(
+                    'No completed <strong>crawl</strong> snapshot found. Run <strong>Preload All</strong> once to build the full snapshot — <strong>ALL</strong> URLs will then appear here.',
+                    'fastcgi-cache-purge-and-preload-nginx'
+                );
+                return '<div style="background-color:#f9edbe;border-left:6px solid #f0c36d;padding:10px;margin-bottom:15px;max-width:max-content;">
+                    <p style="margin:0;display:flex;align-items:center;">
+                        <span class="dashicons dashicons-warning" style="font-size:22px;color:#ffba00;margin-right:8px;"></span>
+                        <span style="font-size:14px;">' .
+                            wp_kses( $wget_msg, array( 'strong' => array() ) ) .
+                        '</span>
                     </p>
                 </div>';
+            }
+
+            // Snapshot exists but cache is empty (normal post-purge state).
+            // Fall through with zero HITs so snapshot MISSes populate the table.
+            $hits = [];
+        } else {
+            // Real error (permissions, regex, path) — hard stop.
+            $error_message = wp_kses( $extractedUrls['error'], array( 'strong' => array() ) );
+            return '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+                        <p style="margin: 0; display: flex; align-items: center;">
+                            <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
+                            <span style="font-size: 14px;">' . $error_message . '</span>
+                        </p>
+                    </div>';
+        }
     } else {
         $hits = $extractedUrls;
+    }
+
+    // Advanced tab visit → persist fresh hit count.
+    // These metrics used for live cache coverage calculations
+    if ( ! empty( $hits ) && is_array( $hits ) ) {
+        update_option( 'nppp_last_known_hits',      count( $hits ), false );
+        update_option( 'nppp_last_hits_scanned_at', time(),         false );
+    }
+
+    // Build the URL→filepath index used by single-page and related purges
+    // to skip expensive recursive cache directory scans.
+    // Zero extra filesystem I/O — $hits is already the full directory scan
+    // that just ran to build the table above, so we reuse it directly.
+    // Merge strategy: existing entries are preserved, incoming entries
+    // add or update. Never truncate — Preload All only crawls URLs allowed
+    // by Exclude Endpoints, so pages outside that ruleset never appear in
+    // $hits. Those pages accumulate in the index over time as real visitors
+    // or bots hit them and purge operations add them via write-back. They
+    // must survive across Purge All + Preload All cycles because nginx will
+    // always re-cache them to the same deterministic path on next visit.
+    // Single URL can hold multiple PTAH.
+    if ( ! empty( $hits ) && is_array( $hits ) && ! $preload_running ) {
+        $nppp_index = get_option( 'nppp_url_filepath_index' );
+        $nppp_index = is_array( $nppp_index ) ? $nppp_index : [];
+        foreach ( $hits as $nppp_entry ) {
+            $nppp_key      = preg_replace( '#^https?://#', '', $nppp_entry['url_encoded'] );
+            $nppp_existing = $nppp_index[ $nppp_key ] ?? [];
+            if ( ! in_array( $nppp_entry['file_path'], $nppp_existing, true ) ) {
+                $nppp_existing[] = $nppp_entry['file_path'];
+            }
+            $nppp_index[ $nppp_key ] = $nppp_existing;
+        }
+        update_option( 'nppp_url_filepath_index', $nppp_index, false );
+        unset( $nppp_index, $nppp_entry, $nppp_key, $nppp_existing );
     }
 
     // Merge HIT + MISS
     $mergedRows = nppp_merge_cached_and_wget($hits, $wp_filesystem);
 
-    // Warn about cache keys not found
-    if ($config_data === false) {
-        echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: No <span style="color: #f0c36d;">_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
-              </div>';
-    // Warn about cache keys not found
-    } elseif (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
-        echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: No <span style="color: #f0c36d;">_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
-              </div>';
-    // Warn about the unsupported cache keys
-    } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
-        echo '<div class="nppp-premium-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: <span style="color: #f0c36d;">Unsupported</span> cache key found!', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
-              </div>';
+    // Warnings - only meaningful when table has data
+    if ( ! $preload_running ) {
+        if ( ! empty( $mergedRows ) && $config_data === false) {
+            echo '<div class="nppp-premium-wrap">
+                      <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: No <span style="color: #f0c36d;">_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
+                  </div>';
+        } elseif ( ! empty( $mergedRows ) && isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
+            echo '<div class="nppp-premium-wrap">
+                      <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: No <span style="color: #f0c36d;">_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
+                  </div>';
+        // Warn about the unsupported cache keys
+        } elseif ( ! empty( $mergedRows ) && isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
+            echo '<div class="nppp-premium-wrap">
+                      <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: <span style="color: #f0c36d;">Unsupported</span> cache key found!', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
+                  </div>';
+        }
     }
-    // Warn about the aborted Preload All
+
+    // Warn if no complete crawl snapshot exists yet.
+    // The snapshot file (nppp-wget-snapshot.log) is only written when a
+    // Preload All run finishes successfully. If it does not exist, the admin
+    // has never completed a full preload and MISSes cannot be shown.
     $plugin_root      = nppp_get_plugin_root_path();
-    $log_path         = $plugin_root . '/nppp-wget.log';
-    $preload_running  = nppp_is_preload_running( $wp_filesystem );
+    $snapshot_path    = nppp_get_runtime_file('nppp-wget-snapshot.log');
     $wget_notice_html = '';
 
-    if ( ! $preload_running && $wp_filesystem->exists( $log_path ) ) {
-        $log_contents = $wp_filesystem->get_contents( $log_path );
-        if ( $log_contents && ! nppp_wget_log_is_complete( $log_contents ) ) {
-            /* Translators: "MISS" is a cache status label. Keep the <strong> tags. */
-            $wget_msg = __(
-                '<strong>Preload All</strong> was interrupted before finishing. The <strong>full crawl snapshot is incomplete</strong>, so uncached (<strong>MISS</strong>) URLs are hidden. Run <strong>Preload All</strong> again to rebuild snapshot.',
-                'fastcgi-cache-purge-and-preload-nginx'
-            );
-            $wget_notice_html = '<div style="background-color:#f9edbe;border-left:6px solid #f0c36d;padding:10px;margin-bottom:15px;max-width:max-content;">
-                <p style="margin:0;display:flex;align-items:center;">
-                    <span class="dashicons dashicons-warning" style="font-size:22px;color:#ffba00;margin-right:8px;"></span>
-                    <span style="font-size:14px;">' .
-                        wp_kses( $wget_msg, array( 'strong' => array() ) ) .
-                    '</span>
-                </p>
-            </div>';
-        }
+    if ( ! $preload_running && ! $wp_filesystem->exists( $snapshot_path ) ) {
+        /* Translators: "MISS" is a cache status label. Keep the <strong> tags. */
+        $wget_msg = __(
+            'No completed <strong>crawl</strong> snapshot found. Run <strong>Preload All</strong> once to build the full snapshot — uncached <strong>MISS</strong> URLs will then appear here.',
+            'fastcgi-cache-purge-and-preload-nginx'
+        );
+        $wget_notice_html = '<div style="background-color:#f9edbe;border-left:6px solid #f0c36d;padding:5px;margin-bottom:15px;max-width:max-content;">
+            <p style="margin:0;display:flex;align-items:center;">
+                <span class="dashicons dashicons-warning" style="font-size:22px;color:#ffba00;margin-right:8px;"></span>
+                <span style="font-size:13px;">' .
+                    wp_kses( $wget_msg, array( 'strong' => array() ) ) .
+                '</span>
+            </p>
+        </div>';
     }
 
     // Output the premium tab content
@@ -422,14 +494,22 @@ function nppp_premium_html($nginx_cache_path) {
         )
     );
     ?>
-    <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
+    <?php if ( ! empty( $mergedRows ) && ! $preload_running ) : ?>
+    <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 5px; margin-bottom: 15px; max-width: max-content;">
         <p style="margin: 0; display: flex; align-items: center;">
             <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
             <?php echo wp_kses_post( __( 'If the <strong>Cached URL\'s</strong> are incorrect, <strong>Preload</strong> will not work as expected. Please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section, ensure the regex is configured correctly, and try again.', 'fastcgi-cache-purge-and-preload-nginx' ) ); ?>
         </p>
     </div>
+    <?php endif; ?>
     <h2></h2>
-    <table id="nppp-premium-table" class="display">
+    <?php if ($preload_running) : ?>
+    <div class="nppp-table-loading-notice">
+        <span class="dashicons dashicons-update-alt spin"></span>
+        <?php esc_html_e( 'Preload is running — data reflects crawl progress at tab load. Revisit this tab for updated results or check the Status tab for live progress.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+    </div>
+    <?php endif; ?>
+    <table id="nppp-premium-table" class="display<?php if ($preload_running) echo ' nppp-table-loading'; ?>">
         <thead>
             <tr>
                 <th><?php esc_html_e( 'Cached URL', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
@@ -438,6 +518,14 @@ function nppp_premium_html($nginx_cache_path) {
                 <th><?php esc_html_e( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Cache Date', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Action', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+            </tr>
+            <tr class="nppp-filter-row">
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th class="nppp-filter-no-col"></th>
             </tr>
         </thead>
         <tbody>
@@ -548,6 +636,15 @@ function nppp_load_premium_content_callback() {
         wp_send_json_error( __( 'Permission denied.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
     }
 
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation.
+
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+    }
+
     // Retrieve plugin settings
     $options = get_option('nginx_cache_settings');
     $nginx_cache_path = isset($options['nginx_cache_path']) ? $options['nginx_cache_path'] : '';
@@ -614,6 +711,19 @@ function nppp_purge_cache_premium_callback() {
         wp_send_json_error('Nonce is missing.');
     }
 
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation.
+
+    // Note: because gate to nppp_purge_urls_silent
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+    }
+    if (function_exists('ignore_user_abort')) {
+        ignore_user_abort(true);
+    }
+
     // Create log file
     $log_file_path = NGINX_CACHE_LOG_FILE;
     nppp_perform_file_operation($log_file_path, 'create');
@@ -636,7 +746,7 @@ function nppp_purge_cache_premium_callback() {
 
     // Get the PID file path
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     // First, check if any cache preloading action is in progress.
     // Purging the cache for a single page or post in Advanced tab while cache preloading is in progress can cause issues
@@ -681,7 +791,7 @@ function nppp_purge_cache_premium_callback() {
 
     // Get the purged URL
     $https_enabled = wp_is_using_https();
-    $content = $wp_filesystem->get_contents($file_path);
+    $content = nppp_read_head($wp_filesystem, $file_path, 4096);
 
     $final_url = '';
     if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
@@ -720,6 +830,15 @@ function nppp_purge_cache_premium_callback() {
         nppp_log_and_send_error($error_message, $log_file_path);
     }
 
+    // Acquire exclusive purge lock — prevents concurrent Advanced-tab purge
+    // racing with Purge All or another admin's single-page purge.
+    // Must be released explicitly before every nppp_log_and_send_* call
+    // because those call wp_send_json_* → wp_die() which bypasses finally.
+    if ( ! nppp_acquire_purge_lock( 'premium' ) ) {
+        $error_message = __( 'INFO ADMIN: Single-page purge skipped — another cache purge operation is already in progress. Please try again shortly.', 'fastcgi-cache-purge-and-preload-nginx' );
+        nppp_log_and_send_error( $error_message, $log_file_path );
+    }
+
     // Perform the purge action (delete the file)
     $deleted = $wp_filesystem->delete($file_path);
 
@@ -733,9 +852,24 @@ function nppp_purge_cache_premium_callback() {
         $settings = get_option('nginx_cache_settings');
         $related_urls = nppp_get_related_urls_for_single($final_url);
 
-        // Purge related silently (no extra notices, as this is an AJAX JSON response)
-        foreach ($related_urls as $rel) {
-            nppp_purge_url_silent($nginx_cache_path, $rel);
+        // Purge related cache (no extra notices, as this is an AJAX JSON response)
+        nppp_purge_urls_silent($nginx_cache_path, $related_urls);
+
+        // All cache filesystem work done — release lock before post-purge
+        // side effects (Cloudflare, preload) so other admins are unblocked.
+        nppp_release_purge_lock();
+
+        // Cloudflare purge cache (sync with advanced single-page purge)
+        $purged_urls = array_merge($final_url ? array($final_url) : array(), $related_urls);
+        $purged_urls = array_values(array_filter($purged_urls));
+        if (!empty($purged_urls)) {
+            do_action(
+                'nppp_purged_urls',
+                $purged_urls,
+                $final_url,
+                $final_url ? (int) url_to_postid($final_url) : 0,
+                false
+            );
         }
 
         // Preload policy for manual (Advanced tab is manual)
@@ -791,6 +925,7 @@ function nppp_purge_cache_premium_callback() {
         ) ? true : false;
 
         // Return structured payload so JS can update other rows
+        // Lock already released above after filesystem work completed.
         nppp_log_and_send_success_data(
             $success_message,
             $log_file_path,
@@ -802,6 +937,7 @@ function nppp_purge_cache_premium_callback() {
     } else {
         // Translators: %s is the page URL
         $error_message = sprintf( __( 'ERROR ADMIN: Nginx cache can not be purged for page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $final_url_decoded );
+        nppp_release_purge_lock();
         nppp_log_and_send_error($error_message, $log_file_path);
     }
 }
@@ -823,9 +959,6 @@ function nppp_preload_cache_premium_callback() {
         wp_send_json_error('You do not have permission to access this page.');
     }
 
-    // Get the main path from plugin settings
-    $nginx_cache_path = get_option('nginx_cache_path');
-
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -843,12 +976,12 @@ function nppp_preload_cache_premium_callback() {
     // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';
     $default_limit_rate = 1280;
-    $default_cpu_limit = 50;
+    $default_cpu_limit = 100;
     $default_reject_regex = nppp_fetch_default_reject_regex();
 
     // Preload action options
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
     $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
@@ -857,6 +990,9 @@ function nppp_preload_cache_premium_callback() {
 
     // Validate the sanitized URL
     if (filter_var($cache_url, FILTER_VALIDATE_URL) !== false) {
+        // Reset tracker before buffering
+        $GLOBALS['nppp_last_notice_type'] = 'success';
+
         // Start output buffering
         ob_start();
 
@@ -866,34 +1002,15 @@ function nppp_preload_cache_premium_callback() {
         // Capture and clean the buffer
         $output = wp_strip_all_tags(ob_get_clean());
 
-        // Determine if the message is a success or an error
-        if (strpos($output, 'SUCCESS ADMIN') !== false) {
-            wp_send_json_success($output);
-        } else {
+        // Read the type that nppp_display_admin_notice() recorded directly.
+        // Language-independent
+        if (($GLOBALS['nppp_last_notice_type'] ?? 'success') === 'error') {
             wp_send_json_error($output);
+        } else {
+            wp_send_json_success($output);
         }
     } else {
         wp_send_json_error('Preload Cache URL validation failed.');
-    }
-}
-
-// Uses file_get_contents() length arg (C-level).
-if (! function_exists('nppp_head_fast')) {
-    function nppp_head_fast($path, $max = 16384) {
-        $data = @file_get_contents($path, false, null, 0, $max);
-        return ($data === false) ? '' : $data;
-    }
-}
-
-// Partial read with WP_Filesystem fallback.
-if (! function_exists('nppp_read_head')) {
-    function nppp_read_head($wp_filesystem, $path, $max = 16384) {
-        $buf = nppp_head_fast($path, $max);
-        if ($buf !== '') return $buf;
-
-        // Fallback: WP_Filesystem may read via FTP/SSH; trim to $max
-        $all = $wp_filesystem->get_contents($path);
-        return ($all === false || $all === '') ? '' : substr($all, 0, $max);
     }
 }
 
@@ -912,6 +1029,15 @@ function nppp_locate_cache_file_ajax() {
     $cache_url = isset($_POST['cache_url']) ? trim( wp_unslash($_POST['cache_url']) ) : '';
     if ( ! $cache_url || ! filter_var($cache_url, FILTER_VALIDATE_URL) ) {
         wp_send_json_error( __( 'Invalid URL.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation.
+
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
     $settings = get_option('nginx_cache_settings');
@@ -942,12 +1068,11 @@ function nppp_locate_cache_file_ajax() {
     try {
         $iter = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
+            RecursiveIteratorIterator::LEAVES_ONLY
         );
 
         foreach ( $iter as $file ) {
             $pathname = $file->getPathname();
-            if (! $wp_filesystem->is_file($pathname)) { continue; }
             if (($now - $file->getMTime()) > $window_secs) { continue; }
 
             $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
@@ -1010,6 +1135,15 @@ function nppp_locate_cache_file_ajax() {
 // so for file_path we don't apply any sanitize and validate
 // we only sanitize and validate the urls parsed from files
 function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation.
+
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+    }
+
     $urls = [];
 
     // Determine if HTTPS is enabled
@@ -1031,13 +1165,12 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
         // Traverse the cache directory and its subdirectories
         $cache_iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
+            RecursiveIteratorIterator::LEAVES_ONLY
         );
 
         $regex_tested = false;
         foreach ($cache_iterator as $file) {
             $path = $file->getPathname();
-            if (!$wp_filesystem->is_file($path)) { continue; }
 
             $content = nppp_read_head($wp_filesystem, $path, $head_bytes_primary);
             if ($content === '') { continue; }
@@ -1107,7 +1240,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             }
 
             // Extract URLs using regex
-            if (preg_match($regex, $content, $matches)) {
+            if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
                 // Build the URL
                 $host = trim($matches[1]);
                 $request_uri = trim($matches[2]);
@@ -1152,7 +1285,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     // Check if any URLs were extracted
     if (empty($urls)) {
         return [
-            'error' => __( 'Cache is empty. Click <strong>Preload All</strong> to warm Nginx cache first and try again.', 'fastcgi-cache-purge-and-preload-nginx' )
+            'error' => 'NPPP_EMPTY_CACHE',
         ];
     }
 

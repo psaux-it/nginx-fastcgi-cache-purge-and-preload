@@ -1,8 +1,8 @@
 <?php
 /**
- * Preload action functions for FastCGI Cache Purge and Preload for Nginx
- * Description: This file contains preload action functions for FastCGI Cache Purge and Preload for Nginx
- * Version: 2.1.4
+ * Cache preload handlers for Nginx Cache Purge Preload
+ * Description: Builds URL queues and executes preload requests for Nginx cache warming.
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Get proxy options
+// Read proxy preload settings.
 function nppp_get_proxy_settings() {
     $nginx_cache_settings = get_option('nginx_cache_settings');
     $proxy_host = isset($nginx_cache_settings['nginx_cache_preload_proxy_host']) && !empty($nginx_cache_settings['nginx_cache_preload_proxy_host'])
@@ -35,25 +35,17 @@ function nppp_get_proxy_settings() {
     );
 }
 
-// Test DNS resolution on WP server
+// Simple outbound HTTP check
 function nppp_check_network_env(): array {
-    $test_domain = 'google.com';
+    nppp_prepare_request_env(true);
 
-    // Check DNS
-    $dns_ok = checkdnsrr($test_domain, 'A') || checkdnsrr($test_domain, 'AAAA');
-
-    // Check outbound connectivity
-    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen
-    $fp = @fsockopen($test_domain, 80, $errno, $errstr, 2);
-    $outbound_ok = ($fp !== false);
-    if ($fp) {
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closing probe socket
-        @fclose($fp);
-    }
-
+    $url = add_query_arg('nppp_probe', wp_generate_password(8, false), home_url('/'));
+    $output = shell_exec('wget -q --no-check-certificate --server-response --spider ' . escapeshellarg($url) . ' 2>&1; echo $?');
+    $lines = explode("\n", trim($output));
+    $ok = trim(end($lines)) === '0';
     return [
-        'dns_ok'      => $dns_ok,
-        'outbound_ok' => $outbound_ok,
+        'dns_ok'      => $ok,
+        'outbound_ok' => $ok,
     ];
 }
 
@@ -132,7 +124,7 @@ function nppp_is_safexec_usable($path, $notify = true) {
         return false;
     }
 
-    // Prevent interfere with REST and others
+    // Prevent interference with REST, AJAX, and Cron responses.
     $notify = $notify && !(
         (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) ||
         (function_exists('wp_doing_rest') && wp_doing_rest()) ||
@@ -239,7 +231,7 @@ function nppp_detect_premature_process(
     // Set env
     nppp_prepare_request_env(true);
 
-    // Get proxy options
+    // Read proxy preload settings.
     $proxy_settings = nppp_get_proxy_settings();
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
@@ -271,9 +263,6 @@ function nppp_detect_premature_process(
     $www_host  = 'www.' . $base_host;
     $domain_list = implode(',', array_unique([$base_host, $www_host]));
 
-    // Wrap with literal double quotes
-    $dq = function ($s) { return '"' . $s . '"'; };
-
     // Check safexec availability
     $safexec_path = nppp_find_safexec_path();
     $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', false);
@@ -281,9 +270,9 @@ function nppp_detect_premature_process(
     $testCommand =
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'wget ' .
-        '--quiet --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
-        '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-        '--ignore-length --timeout=5 --tries=1 --ignore-case --compression=auto ' .
+        '--quiet --recursive -l inf --no-cache --no-config --no-cookies --no-directories --delete-after ' .
+        '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+        '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --ignore-case ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -291,11 +280,11 @@ function nppp_detect_premature_process(
         '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
         '--wait=' . ((int)$nginx_cache_wait) . ' ' .
-        '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
-        '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
-        '--domains='      . escapeshellarg($domain_list) . ' ' .
-        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-        '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
+        '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
+        '--reject=' . escapeshellarg($nginx_cache_reject_extension) . ' ' .
+        '--domains=' . escapeshellarg($domain_list) . ' ' .
+        '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+        '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
         '-- ' .
         escapeshellarg($fdomain);
 
@@ -333,7 +322,7 @@ function nppp_detect_premature_process(
         } else {
             // If safexec is available, kill nobody process
             if ($use_safexec) {
-                $kill_cmd = escapeshellcmd($safexec_path) . " --kill=" . (int)($test_pid) . " 2>&1";
+                $kill_cmd = escapeshellarg($safexec_path) . ' --kill=' . (int) $test_pid . ' 2>&1';
                 $output = shell_exec($kill_cmd);
             }
 
@@ -345,7 +334,7 @@ function nppp_detect_premature_process(
             // Fallback to hard SIGKILL
             if (!@posix_kill($test_pid, SIGTERM)) {
                 $kill_path = trim(shell_exec('command -v kill'));
-                shell_exec(escapeshellcmd("$kill_path -9 " . (int)$test_pid));
+                shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $test_pid);
             }
             $test_process = true;
         }
@@ -359,6 +348,29 @@ function nppp_detect_premature_process(
 
 // Preload operation
 function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nppp_is_auto_preload = false, $nppp_is_rest_api = false, $nppp_is_wp_cron = false, $nppp_is_admin_bar = false, $preload_mobile = false) {
+    // On a large cache (100 k+ files)
+    // on slow or network-attached storage this can easily exceed the default
+    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
+    // mid-operation and leaving the purge lock (stored as a wp_options row via
+    // WP_Upgrader::create_lock()) permanently orphaned until its TTL expires.
+
+    // set_time_limit(0) resets the countdown to "unlimited" for this request
+    // only — it has no effect on other processes or future requests.
+    // The @ suppressor silences the E_WARNING that some hardened hosts emit
+    // when the function appears in disable_functions; the call is otherwise
+    // a safe no-op in that environment.
+
+    // Note: this only disables PHP's own timer. PHP-FPM's independent
+    // request_terminate_timeout and Nginx's fastcgi_read_timeout are enforced
+    // by the FPM master process and the upstream proxy respectively and cannot
+    // be overridden from PHP at runtime.
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+    }
+    if (function_exists('ignore_user_abort')) {
+        ignore_user_abort(true);
+    }
+
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
@@ -379,13 +391,23 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         }
     }
 
+    // Abort if a purge operation is actively holding the lock. Spawning wget
+    // into a cache directory being concurrently deleted can produce partial
+    // cache entries, stall on blocked I/O, or write files that are immediately
+    // removed. The admin can retry once the purge finishes.
+    if ( function_exists('nppp_is_purge_lock_held') && nppp_is_purge_lock_held() ) {
+        nppp_display_admin_notice('info', __( 'INFO: Nginx cache preload skipped — a cache purge operation is currently in progress. Please try again after the purge completes.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        return;
+    }
+
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
-    $default_wait_time = 1;
+    $default_wait_time = 0;
     $default_reject_extension = nppp_fetch_default_reject_extension();
     $nginx_cache_reject_extension = isset($nginx_cache_settings['nginx_cache_reject_extension']) ? $nginx_cache_settings['nginx_cache_reject_extension'] : $default_reject_extension;
     $nginx_cache_wait = isset($nginx_cache_settings['nginx_cache_wait_request']) ? $nginx_cache_settings['nginx_cache_wait_request'] : $default_wait_time;
-    $log_path = rtrim($this_script_path, '/') . '/nppp-wget.log';
+    $nginx_cache_read_timeout = isset($nginx_cache_settings['nginx_cache_read_timeout']) ? (int)$nginx_cache_settings['nginx_cache_read_timeout'] : 60;
+    $log_path = nppp_get_runtime_file('nppp-wget.log');
 
     // Determine which USER_AGENT to use
     // Check Preload Mobile is enabled
@@ -400,7 +422,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     // Set env
     nppp_prepare_request_env(true);
 
-    // Get proxy options
+    // Read proxy preload settings.
     $proxy_settings = nppp_get_proxy_settings();
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
@@ -418,9 +440,6 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     $base_host = preg_replace('/^www\./i', '', $host);
     $www_host  = 'www.' . $base_host;
     $domain_list = implode(',', array_unique([$base_host, $www_host]));
-
-    // Wrap with literal double quotes
-    $dq = function ($s) { return '"' . $s . '"'; };
 
     // Here, we check the source of the preload request. There are several possible routes.
     // If nppp_is_auto_preload is false, it means we arrived here through one of the following routes:
@@ -559,9 +578,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             $command =
                 ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
                 'nohup wget ' .
-                '--no-verbose --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
-                '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-                '--ignore-length --timeout=5 --tries=1 --ignore-case --compression=auto ' .
+                '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
+                '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+                '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case ' .
                 '-e robots=off ' .
                 '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
                 '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -569,11 +588,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
                 '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
                 '--wait=' . ((int)$nginx_cache_wait) . ' ' .
-                '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
-                '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
-                '--domains='      . escapeshellarg($domain_list) . ' ' .
-                '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-                '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
+                '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
+                '--reject=' . escapeshellarg($nginx_cache_reject_extension) . ' ' .
+                '--domains=' . escapeshellarg($domain_list) . ' ' .
+                '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+                '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
                 '-- ' .
                 escapeshellarg($fdomain) . ' ' .
                 '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
@@ -586,21 +605,33 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             $pid = trim(end($parts));
             nppp_perform_file_operation($PIDFILE, 'write', $pid);
 
-            // Create a DateTime object for the current time in WordPress timezone
-            $wordpress_timezone = new DateTimeZone(wp_timezone_string());
-            $current_time = new DateTime('now', $wordpress_timezone);
-
-            // Format the current time as the start time for the scheduled event
-            $start_time = $current_time->format('H:i:s');
-
             // Call the function to schedule the status check event
             if (!$preload_mobile) {
-                nppp_create_scheduled_event_preload_status($start_time);
+                $nppp_trigger = 'Manual';
+                if ( $nppp_is_auto_preload ) $nppp_trigger = 'Auto Preload';
+                elseif ( $nppp_is_rest_api )  $nppp_trigger = 'REST API';
+                elseif ( $nppp_is_wp_cron )   $nppp_trigger = 'Scheduled';
+                set_transient( 'nppp_preload_trigger_' . md5('nppp'), $nppp_trigger, 12 * HOUR_IN_SECONDS );
+                nppp_create_scheduled_event_preload_status();
             }
 
-            // Start cpulimit if it is exist
-            if ($cpulimit === 1) {
-                $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
+            // Spawn the preload watchdog — monitors preload process,
+            // when preload finishes, guaranteeing post-preload tasks runs even on zero-traffic
+            // or fully-cached sites without relying on WP-Cron.
+            $nppp_watchdog_on   = isset( $nginx_cache_settings['nginx_cache_watchdog'] ) && $nginx_cache_settings['nginx_cache_watchdog'] === 'yes';
+            $nppp_watcher_token = nppp_watcher_get_token();
+            if ( $nppp_watchdog_on && ! empty( $nppp_watcher_token ) && function_exists( 'nppp_spawn_preload_watcher' ) ) {
+                nppp_spawn_preload_watcher( (int) $pid, $nppp_watcher_token );
+            }
+
+            // Start cpulimit conditionally
+            if ($cpulimit === 1 && (int) $nginx_cache_cpu_limit < 100) {
+                $command = sprintf(
+                    'cpulimit -p %d -l %d -zb >/dev/null 2>&1',
+                    (int) $pid,
+                    (int) $nginx_cache_cpu_limit
+                );
+
                 shell_exec($command);
             }
 
@@ -773,9 +804,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         $command =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--no-verbose --recursive -l inf --no-cache --no-cookies --no-directories --delete-after ' .
-            '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-            '--ignore-length --timeout=5 --tries=1 --ignore-case --compression=auto ' .
+            '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
+            '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
@@ -783,11 +814,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--wait=' . ((int)$nginx_cache_wait) . ' ' .
-            '--reject-regex=' . escapeshellarg($dq($nginx_cache_reject_regex)) . ' ' .
-            '--reject='       . escapeshellarg($dq($nginx_cache_reject_extension)) . ' ' .
-            '--domains='      . escapeshellarg($domain_list) . ' ' .
-            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-            '--user-agent='   . escapeshellarg($dq($NPPP_DYNAMIC_USER_AGENT)) . ' ' .
+            '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
+            '--reject=' . escapeshellarg($nginx_cache_reject_extension) . ' ' .
+            '--domains=' . escapeshellarg($domain_list) . ' ' .
+            '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+            '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
             '-- ' .
             escapeshellarg($fdomain) . ' ' .
             '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
@@ -800,21 +831,33 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         $pid   = trim(end($parts));
         nppp_perform_file_operation($PIDFILE, 'write', $pid);
 
-        // Create a DateTime object for the current time in WordPress timezone
-        $wordpress_timezone = new DateTimeZone(wp_timezone_string());
-        $current_time = new DateTime('now', $wordpress_timezone);
-
-        // Format the current time as the start time for the scheduled event
-        $start_time = $current_time->format('H:i:s');
-
         // Call the function to schedule the status check event
         if (!$preload_mobile) {
-            nppp_create_scheduled_event_preload_status($start_time);
+            $nppp_trigger = 'Manual';
+            if ( $nppp_is_auto_preload ) $nppp_trigger = 'Auto Preload';
+            elseif ( $nppp_is_rest_api )  $nppp_trigger = 'REST API';
+            elseif ( $nppp_is_wp_cron )   $nppp_trigger = 'Scheduled';
+            set_transient( 'nppp_preload_trigger_' . md5('nppp'), $nppp_trigger, 12 * HOUR_IN_SECONDS );
+            nppp_create_scheduled_event_preload_status();
         }
 
-        // Start cpulimit if it is exist
-        if ($cpulimit === 1) {
-            $command = "cpulimit -p \"$pid\" -l \"$nginx_cache_cpu_limit\" -zb >/dev/null 2>&1";
+        // Spawn the preload watchdog — monitors preload process,
+        // when preload finishes, guaranteeing post-preload tasks runs even on zero-traffic
+        // or fully-cached sites without relying on WP-Cron.
+        $nppp_watchdog_on   = isset( $nginx_cache_settings['nginx_cache_watchdog'] ) && $nginx_cache_settings['nginx_cache_watchdog'] === 'yes';
+        $nppp_watcher_token = nppp_watcher_get_token();
+        if ( $nppp_watchdog_on && ! empty( $nppp_watcher_token ) && function_exists( 'nppp_spawn_preload_watcher' ) ) {
+            nppp_spawn_preload_watcher( (int) $pid, $nppp_watcher_token );
+        }
+
+        // Start cpulimit conditionally
+        if ($cpulimit === 1 && (int) $nginx_cache_cpu_limit < 100) {
+            $command = sprintf(
+                'cpulimit -p %d -l %d -zb >/dev/null 2>&1',
+                (int) $pid,
+                (int) $nginx_cache_cpu_limit
+            );
+
             shell_exec($command);
         }
 
@@ -866,6 +909,12 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         return;
     }
 
+    // Abort if a purge is in progress — same race-condition guard as nppp_preload().
+    if ( function_exists('nppp_is_purge_lock_held') && nppp_is_purge_lock_held() ) {
+        nppp_display_admin_notice('info', __( 'INFO: Nginx cache preload skipped — a cache purge operation is currently in progress. Please try again after the purge completes.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        return;
+    }
+
     // PATCH: CVE ID: CVE-2025-6213
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) === false) {
         nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
@@ -886,8 +935,8 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         // Translators: %s: Current page URL
         nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
         return;
-    // Recusive check for permission issues deeply
-    } elseif (!nppp_check_permissions_recursive($nginx_cache_path)) {
+    // Ask cached Recusive status for permission issues deeply
+    } elseif (nppp_check_permissions_recursive_with_cache() !== 'true') {
         // Translators: %s: Current page URL
         nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
         return;
@@ -895,6 +944,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_read_timeout = isset($nginx_cache_settings['nginx_cache_read_timeout']) ? (int)$nginx_cache_settings['nginx_cache_read_timeout'] : 60;
 
     // Set env
     nppp_prepare_request_env(true);
@@ -908,14 +958,11 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     // Initialize an array to hold the PIDs for both desktop and mobile preload processes
     $pids = [];
 
-    // Get proxy options
+    // Read proxy preload settings.
     $proxy_settings = nppp_get_proxy_settings();
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
-
-    // Wrap with literal double quotes
-    $dq = function ($s) { return '"' . $s . '"'; };
 
     // Create domain allowlist
     $parsed = wp_parse_url($current_page_url);
@@ -983,18 +1030,18 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $command_desktop =
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'nohup wget ' .
-        '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
-        '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-        '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
+        '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+        '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+        '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
         '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
         '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-        '--domains='      . escapeshellarg($domain_list) . ' ' .
-        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-        '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
+        '--domains=' . escapeshellarg($domain_list) . ' ' .
+        '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+        '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
         '-- ' .
         escapeshellarg($current_page_url) . ' ' .
         '>/dev/null 2>&1 & echo $!';
@@ -1025,18 +1072,18 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         $command_mobile =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
-            '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-            '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
+            '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+            '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
             '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-            '--domains='      . escapeshellarg($domain_list) . ' ' .
-            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-            '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
+            '--domains=' . escapeshellarg($domain_list) . ' ' .
+            '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+            '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
             '-- ' .
             escapeshellarg($current_page_url) . ' ' .
             '>/dev/null 2>&1 & echo $!';
@@ -1165,10 +1212,11 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // Get the necessary data for preload action from plugin options
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
     $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
+    $nginx_cache_read_timeout = isset($nginx_cache_settings['nginx_cache_read_timeout']) ? (int)$nginx_cache_settings['nginx_cache_read_timeout'] : 60;
 
     // Extra data for preload action
     $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = rtrim($this_script_path, '/') . '/cache_preload.pid';
+    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Check Preload Mobile enabled
@@ -1195,14 +1243,11 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // Initialize an array to hold the PIDs for both desktop and mobile preload processes
     $pids = [];
 
-    // Get proxy options
+    // Read proxy preload settings.
     $proxy_settings = nppp_get_proxy_settings();
     $use_proxy  = $proxy_settings['use_proxy'];
     $http_proxy = $proxy_settings['http_proxy'];
     $https_proxy = $http_proxy;
-
-    // Wrap with literal double quotes
-    $dq = function ($s) { return '"' . $s . '"'; };
 
     // Create domain allowlist
     $parsed = wp_parse_url($current_page_url);
@@ -1270,18 +1315,18 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $command_desktop =
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'nohup wget ' .
-        '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
-        '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-        '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
+        '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+        '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+        '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
         '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
         '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-        '--domains='      . escapeshellarg($domain_list) . ' ' .
-        '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-        '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT)) . ' ' .
+        '--domains=' . escapeshellarg($domain_list) . ' ' .
+        '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+        '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
         '-- ' .
         escapeshellarg($current_page_url) . ' ' .
         '>/dev/null 2>&1 & echo $!';
@@ -1312,18 +1357,18 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         $command_mobile =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--quiet --no-cache --no-cookies --no-directories --delete-after ' .
-            '--no-dns-cache --no-check-certificate --no-use-server-timestamps --no-if-modified-since ' .
-            '--ignore-length --timeout=5 --tries=1 --compression=auto ' .
+            '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+            '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
+            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
             '-e robots=off ' .
             '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
             '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
             '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-            '--domains='      . escapeshellarg($domain_list) . ' ' .
-            '--header='       . escapeshellarg($dq(NPPP_HEADER_ACCEPT)) . ' ' .
-            '--user-agent=' . escapeshellarg($dq(NPPP_USER_AGENT_MOBILE)) . ' ' .
+            '--domains=' . escapeshellarg($domain_list) . ' ' .
+            '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
+            '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
             '-- ' .
             escapeshellarg($current_page_url) . ' ' .
             '>/dev/null 2>&1 & echo $!';

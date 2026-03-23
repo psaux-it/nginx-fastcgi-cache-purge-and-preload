@@ -2,10 +2,10 @@
 Contributors: psauxit
 Donate link: https://github.com/sponsors/psaux-it
 Tags: nginx, cache, purge, preload, performance
-Requires at least: 6.3
+Requires at least: 6.5
 Requires PHP: 7.4
-Tested up to: 6.8
-Stable tag: 2.1.4
+Tested up to: 6.9
+Stable tag: 2.1.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -13,31 +13,14 @@ The most comprehensive solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI)
 
 == Description ==
 
-👇 Test NPP Instantly in a Live Sandbox
-Experience real-time cache purging, preloading with proxy support, and REST API features — all in a fully interactive WordPress environment.
+**NPP** lets WordPress users manage **Nginx Cache Purge and Preload** (FastCGI, Proxy, SCGI, UWSGI) operations directly from the WordPress admin dashboard — actively warming the cache via site crawl, so your Nginx cache is always preloaded and ready.
 
-👉 **[Launch Live Test](https://npp.psauxit.com/npp-login/)**
+➡️ **Resources:**
 
-This plugin, **NPP**, allows WordPress users to manage **Nginx Cache Purge and Preload** (FastCGI, Proxy, SCGI, UWSGI) operations directly from the WordPress admin dashboard, enhancing website performance and caching efficiency.
-
-Unlike other solutions that depend on Nginx modules, **NPP** directly manages cache files without needing to interact with Nginx.
-
-➡️ **This approach provides the following benefits:**
-
-⚡ **Faster** – No waiting for Nginx to process cache purges; works without interacting with Nginx.
-🌐 **Greater flexibility** – Works seamlessly across different architectures, including containerized environments where Nginx may run on a host, in a separate container, or distributed across systems.
-🤖 **Automations** - NPP is flexible for server-side automations, making it easy to integrate into your workflow.
-
-⚠️ **IMPORTANT:**
-
-**NPP** is feature rich, completely free & functional and great for users who manage their own servers and have technical know-how. For those with less technical experience, pre-made Bash scripts are available, making it easy to get started and benefit from the plugin.
-
-➡️ **For detailed integration steps and guidance:**
-
-• Visit the [NPP Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload)
-• Visit the [safexec Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec)
-• Explore [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) for easy deployments and developing NPP locally.
-• Refer to the **FAQ** or the plugin’s **Help tab** for further instructions.
+• Visit the [NPP Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload) - Docs, issues & contributions and more.
+• Visit the [safexec Main Development Repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec) - NPP's privilege-dropping C wrapper.
+• Explore [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) - Ready to run full stack Nginx Docker setup.
+• Refer to the plugin’s **Help tab** for additional guidance.
 
 == Features ==
 
@@ -45,27 +28,41 @@ Unlike other solutions that depend on Nginx modules, **NPP** directly manages ca
 
 🔄 **Preload All Nginx Cache**: Warm the Nginx cache with the most recent data for the entire website.
 
+🎯 **HTTP Purge (ngx_cache_purge)**: When the Nginx cache module is available, NPP uses it as the fastest purge path. Falls back gracefully to index and filesystem purge when the module is not present.
+
 🚀 **Auto Preload Nginx Cache**: Automatically preloads the cache when Auto Purge is enabled for a POST/PAGE or after the Purge All action.
 
 🧼 **Auto Purge Nginx Cache**: Purge cache on Post/Page content changes, comment status updates, theme/plugin updates, or when compatible Cache Plugins trigger a purge. Nginx cache is preloaded automatically if Auto Preload is enabled (for the entire site or individual page).
+
+🔗 **Purge Scope (Related Pages)**: Automatically purge related pages such as the Homepage, WooCommerce Shop page, and Category/Tag archives when a single URL is purged. Optionally preload those pages to keep the cache warm.
 
 ⏰ **Schedule Nginx Cache Purge & Preload via WP Cron**: Automate the purge and preload process using WordPress Cron jobs.
 
 🧭 **Proxy Support for Preload**: Route preload requests through a proxy server for edge-case environments and containerized deployments.
 
-⏱️ **Live Preload Progress Monitoring**: Watch the Nginx cache preload process in real time — complete with a dynamic progress bar, currently processed URL, 404 tracking, and total completion time.
+⏱️ **Live Preload Progress Monitoring**: Watch the Nginx cache preload process in real time — complete with a dynamic progress bar, currently processed URL, 404 tracking, server load, and total completion time.
 
 🌐 **Remote Nginx Cache Purge & Preload via REST API**: Remotely trigger cache purging and preloading through REST API endpoints.
 
 ⚙️ **Manual Nginx Cache Purge & Preload**: Allow manual purging and preloading of cache through the table view in the Advanced Tab.
 
+📚 **Nginx Cache Analyzer**: Full HIT/MISS cache analyzer dashboard, from the last preload crawl with what is currently stored in the Nginx cache. Instantly spot uncached pages and Purge or Preload them directly in the Advanced Tab.
+
 🔍 **On-Page Nginx Cache Purge & Preload**: Manually purge and preload Nginx cache for the currently visited page directly from the frontend.
 
 🗝️ **Custom Cache Key Support**: Define a regex pattern to parse URLs based on your custom `_cache_key` format.
 
-⚡ **Optimized Nginx Cache Preload**: Enhance Nginx cache preload performance with options to limit CPU usage, exclude endpoints, wait retrievals, and apply rate limiting.
-
 📊 **Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, and Nginx status from the Status tab.
+
+📈 **Cache Coverage Ratio**: Live gauge in the WordPress dashboard widget showing the cache coverage ratio, based on the last preload snapshot. Refreshable on demand without a page reload.
+
+☁️ **Cloudflare APO Sync**: Automatically mirrors NPP purge actions to Cloudflare APO to keep edge cache synchronized with your Nginx cache.
+
+🔴 **Redis Object Cache Sync**: Bidirectional sync between NPP and Redis Object Cache. NPP Purge All flushes the Redis object cache, and a Redis flush triggers a full Nginx cache purge via NPP (when auto-purge is enabled).
+
+🛒 **WooCommerce Auto-Purge**: Automatically purges Nginx cache when WooCommerce product stock quantity changes, stock status changes (in stock / out of stock / on backorder), or when an order is cancelled and stock is restored.
+
+🔒 **Concurrent Purge Serialization**: Atomic lock mechanism prevents simultaneous purge operations from colliding, ensuring cache integrity during concurrent admin actions or background events.
 
 🧩 **Modular by Design**: Easily integrate with external scripts and automation tools.
 
@@ -91,79 +88,45 @@ Automatic Installation
 
 == Frequently Asked Questions ==
 
-= Is the plugin completely free? =
+= Does this plugin require Nginx? =
 
-Yes, the plugin is completely free to use.
+Yes. NPP is designed exclusively for Nginx web servers running on Linux. It does not work on Apache, shared hosting, or environments where `shell_exec` is disabled.
 
-= Who is this plugin intended for? =
-	
-For users looking to efficiently manage Nginx cache Purge and Preload actions, this plugin provides a seamless solution for managing these processes directly from the WordPress admin dashboard.
+= Does it require the ngx_cache_purge Nginx module? =
 
-= Will this plugin slow my site down? =
-	
-No, this plugin does not introduce any performance overhead to your website. It operates exclusively within the WordPress admin environment and does not affect the frontend or public-facing aspects of your site.
+No. The `ngx_cache_purge` module is optional. When available, NPP uses it as the fastest purge path (HTTP Purge). If it is not present, NPP automatically falls back to a URL index lookup and then a full filesystem scan. Nothing breaks either way.
 
-= Will it work on my theme? =
-	
-Sure! Works 100% with all themes.
-	
-= Will it work with my plugins? =
-	
-Sure! It works 100% with all plugins.
+= What server dependencies are required? =
 
-= What changes will it make to my site? =
+Mostly basic, built-in shell tools are required. **wget** is required for cache preloading. For hardened shell execution, **safexec** is highly recommended — see the Help tab for installation instructions.
 
-None.
+= Why is the plugin not working on my environment? =
 
-= Is this plugin compatible with other Wordpress cache plugins? =
+The most common reasons are: `shell_exec` is disabled, the PHP-FPM user lacks write permission to the Nginx cache directory, or `nginx.conf` is not detected. See the **Help tab** for a full environment checklist and solutions.
 
-When using NPP with other WordPress caching plugins, consider disabing their page caching features to avoid conflicts and redundancy. These plugins can still handle frontend optimizations.
+= I am getting permission errors. What should I do? =
 
-**Keep frontend optimization features active, such as**:
-* Minify and combine CSS/JS files
-* Lazy load images and videos
-* Optimize the database
-* Integrate a CDN
+This is the most common issue in environments where the WEBSERVER-USER (nginx/www-data) and PHP-FPM-USER are different. NPP provides a one-liner bash script to automate the fix using bindfs on monolithic servers. For containerized environments, users can review the full configuration setup via [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) See the **Help tab → Permission Issues** section or the [GitHub repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload) for details.
 
-This combined setup ensures NPP manages server-side caching while other plugins handle frontend tasks, avoiding conflicts and improving performance.
+= Does it work with Cloudflare? =
 
-= How do I configure the plugin settings? =
+Yes. NPP has built-in Cloudflare APO Sync that mirrors every purge to Cloudflare’s edge cache automatically. Requires the official Cloudflare WordPress plugin. Enable it under **Settings**.
 
-Navigate to Settings -> **Nginx Cache Purge Preload** in the WordPress admin dashboard or navigate to Admin Bar -> **Nginx Cache** to configure the options and use the actions.
+= Does it work with Redis Object Cache? =
 
-= Why plugin not functional on my environment? =
+Yes. NPP supports bidirectional sync with the Redis Object Cache plugin. A Purge All in NPP flushes Redis, and a Redis flush triggers a full Nginx cache purge. Enable it under **Settings**.
 
-This wordpress plugin is compatible exclusively with Nginx web servers running on Linux-powered systems. Additionally, the shell_exec function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native Linux commands are blocked from running via PHP.
+= Is it compatible with WooCommerce? =
 
-Moreover, granting the correct permissions to the PHP process owner (PHP-FPM-USER) is essential for the proper functioning of the purge and preload operations. This is necessary in isolated user environments that have two distinct user roles: the WEBSERVER-USER (nginx or www-data) and the PHP-FPM-USER.
+Yes. NPP includes built-in WooCommerce Auto-Purge for stock changes and order events, and supports purging the Shop page as a related URL when a product is updated.
 
-If you see warnings or if any plugin settings or tabs are disabled, this could indicate permission issues, an unsupported environment, or missing dependencies that the plugin requires to function properly.
+= Can I use it alongside other caching plugins? =
 
-= What Linux commands are required for the preload action? =
+Yes, but disable page caching in other plugins to avoid conflicts. You can keep their frontend optimization features (minification, lazy loading, CDN) active. See the **Help tab** for details.
 
-For the preload action to work properly, the server must have the **wget** command installed, as the plugin uses it to preload the cache by fetching pages. Additionally, it is recommended to have the **cpulimit** command installed to effectively manage **wget** process server load during the preload action.
+= Where can I find the allowed Nginx cache paths? =
 
-= Why am I encountering a permission error? =
-
-Permission errors when purging cache in Nginx environments are common, especially when the **WEBSERVER-USER** and **PHP-FPM-USER** have different permissions. This can restrict PHP-FPM-USER access to cache files. For detailed guidance on resolving this issue and automating tasks with a pre-made bash script, refer to the plugin settings Help tab or visit the plugin's [main development repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload).
-
-= Why can not I use my preferred path for the Nginx Cache Directory? =
-
-The Nginx Cache Directory option has restrictions on the paths you can use to prevent accidental deletions or harm to critical system files. By default, certain paths, like '/home' and other vital system directories, are blocked to safeguard your system's stability and prevent data loss. While this might limit your options, it ensures your system's security.
-
-**Allowed Cache Paths**
-
-* For RAM-based: Use directories under /dev/ | /tmp/ | /var/
-* For persistent disk: Use directories under /opt/
-* Important: Paths must be one level deeper (e.g. /var/cache).
-
-= What is different about this plugin compared to other Nginx Cache Plugins? =
-
-Because NPP does not depend on external Nginx modules, It provides a simpler and more flexible solution. This plugin directly traverses the cache directory and deletes cache files If the PHP-FPM-USER (website-user or PHP process owner) has read and write permissions granted to the Nginx cache path. Note that, NPP also supports Nginx cache preloading with a simple direct approach, with the help of **wget**.
-
-= I am still encountering difficulties. Do you provide server-side integration services? =
-
-Yes, please refer to the plugin settings **Help** tab.
+NPP restricts cache paths to prevent accidental deletion of system files. Allowed roots are `/dev/shm/`, `/tmp/`, `/var/`, and `/cache/`. The path must be at least one level deep (e.g. `/var/cache/nginx`). Full details in the **Help tab**.
 
 == Screenshots ==
 
@@ -177,6 +140,74 @@ Yes, please refer to the plugin settings **Help** tab.
 8. Front-end Admin Bar
 
 == Changelog ==
+
+= 2.1.5 =
+
+Release date: 2026-03-23
+
+* Added: HTTP Purge via ngx_cache_purge module — fastest purge path when the Nginx module is present. Falls back to filesystem automatically when not available.
+* Added: MILESTONE: Index Purge — single-page purges now use a persistent URL index to skip full directory scans. The base index replicates the snapshot, and the index is automatically updated after each purge if the URL is not already indexed.
+* Added: Preload Watchdog — ensures post-preload tasks run immediately when preloading finishes, without depending on visitor traffic to trigger WP-Cron.
+* Added: Mobile Floating Action Button (FAB) — logged-in admins on mobile devices get a floating action button with Purge and Preload actions on the frontend.
+* Added: Frontend toast notifications — purge and preload result messages on the frontend now display as clean toast notifications.
+* Added: Cache Coverage ratio in the dashboard widget and Status tab — shows live Cached / Not Cached / Total counts based on the last preload snapshot. Refreshable on demand from the dashboard widget without a page reload.
+* Added: Cloudflare APO Sync — automatically mirrors NPP purge actions to Cloudflare edge cache. Requires the official Cloudflare WordPress plugin with APO or Plugin-Specific Cache enabled.(Credit: @doctorproctor)
+* Added: Redis Object Cache Sync — bidirectional sync with the Redis Object Cache plugin. NPP Purge All flushes Redis; a Redis flush triggers a full Nginx cache purge.
+* Added: WooCommerce Auto-Purge — automatically purges cache on stock quantity changes, stock status changes, and order cancellations.
+* Added: Broken URLs list in the Status tab — tracks and displays URLs that returned 404 during the last preload crawl.
+* Added: Column filter dropdowns in the Advanced tab for faster URL browsing on large sites.
+* Added: Server load and PHP-FPM pool metrics in the Preload Progress section.
+* Added: Cache disk/RAM size indicator in the Status tab with colour-coded thresholds.
+* Added: URL Normalization status in the dashboard widget.
+* Added: Persistent crawl snapshot — NPP now saves a completed preload crawl as a persistent snapshot. The Cache Analyzer (Advanced Tab) read from this snapshot, ensuring accurate data is always available between preload runs.
+* Added: Expanded allowed cache paths — improved support for control panels and non-standard setups.
+* Added: Non-admin users with the new nppp_purge_cache capability can trigger auto-purge on content saves without access to any NPP settings or UI.
+* Added: Purge now fires on permanent post deletion and on WordPress background auto-updates.
+* Added: Preload progress now shows three distinct completion states.
+* Added: Smart cache key warnings based on live regex validation against the actual cache files.
+* Added: Product tag and post tag archives are now included in Purge Scope related pages.
+* Added: PHP Response Timeout — configurable read timeout for preload. Recommended to increase for WooCommerce stores or sites with heavy plugins.
+* Added: Dashboard widget now shows HTTP Purge, Cloudflare APO, and Redis Object Cache status alongside existing indicators.
+* Added: Help tab expanded with new sections covering HTTP Purge setup, Accept-Encoding, vary double-cache issue fix, Cloudflare APO Sync, Redis Object Cache Sync, Preload Watchdog, Cache Coverage Ratio, and a feature dependency map.
+* Added: Clear URL Index button in the Status tab — allows manual reset of the persistent URL→filepath index when cache paths change or index entries become stale.
+* Security: MILESTONE: Plugin bootstrap is now lazy-loaded — NPP stays completely dormant on requests where no cache operation is needed.
+* Security: REST API now returns 403 when disabled instead of 200. Client IP resolution now validates forwarded headers against a trusted proxy list.
+* Security: Cache purge is now aborted if the configured Nginx cache path is inside or overlaps the WordPress installation directory, preventing accidental deletion of WordPress files. (Credit: @doctorproctor)
+* Security: CORS wildcard headers removed from REST API endpoints — cross-origin browser requests to NPP endpoints are no longer permitted.
+* Fixed: Comment purge now fires only when the approved comment count actually changes, not on every comment event.
+* Fixed: Published post taken offline (to draft, trash, or private) now correctly purges cache.
+* Fixed: Auto-purge no longer triggers on WooCommerce orders, coupons, and other private post types that are never publicly cached.
+* Fixed: Trashed post purge now uses the correct pre-trash URL instead of the WordPress-modified trashed slug.
+* Fixed: Scheduled posts going live during WP-Cron now correctly purge cache.
+* Fixed: Single plugin and theme updates now correctly trigger cache purge, not only bulk updates.
+* Fixed: Gutenberg purge now also fires on trash and permanent delete via the block editor REST API.
+* Fixed: Purge operations are now serialized with an atomic lock — concurrent purges from multiple sessions no longer collide.
+* Fixed: PHP timeout is now disabled before large purge and preload operations to prevent mid-operation kills on large caches.
+* Fixed: Preload flags overhauled — improved retry logic, IPv4 preference, and timeouts.
+* Fixed: WP_Filesystem no longer prompts for credentials in non-interactive contexts such as WP-Cron or REST API calls.
+* Fixed: Preload now checks the purge lock before spawning — concurrent Purge All and Preload operations no longer race against each other on the cache directory.
+* Fixed: MILESTONE: Advanced tab correctly retains the full MISS list immediately after a Purge All.
+* Fixed: Auto-purge no longer fires on fresh install before settings have been saved.
+* Fixed: GNU Wget2 (aliased as wget on some distributions-Fedora) is now detected and rejected. GNU Wget 1.x is required.
+* Fixed: cpulimit is now skipped entirely when the CPU limit is set to 100%
+* Fixed: wp-config.php writes during Setup now use atomic temp-file replacement to prevent corruption on interrupted writes.
+* Fixed: Post-preload completion tasks (email, mobile preload, cache snapshot) no longer silently fail on long preloads — replaced blocking while/sleep loop with a non-blocking tick system that never approaches PHP or Nginx execution time limits.
+* Fixed: Existing tracking cron jobs and options left over from versions 2.0.1–2.1.4 are automatically cleaned up on upgrade.
+* Fixed: All runtime files (PID files, logs, crawl snapshot) are now stored in wp-content/uploads instead of the plugin directory. This prevents data loss during plugin updates and avoids writing to directories that should be read-only on hardened servers.
+* Fixed: safexec no longer crashes with "pathconf: Permission denied" on multi-site setups or environments where the current working directory is not traversable. safexec now switches to a safe working directory before executing.
+* Fixed: REST API rate limiting now runs after authentication instead of before — unauthenticated requests can no longer exhaust rate limit slots and lock out legitimate API clients.
+* Fixed: Filesystem performance significantly improved across purge, status, and cache analysis operations — related URL purges now complete in a single cache directory walk instead of one walk per URL (up to 5x less I/O on sites with Purge Scope enabled), directory iterators now use LEAVES_ONLY mode eliminating redundant directory visits, and SPL native file checks replace slower WP_Filesystem equivalents throughout.
+* Fixed: Preload requests no longer fail with invalid header errors (proxy) — header and user-agent values were incorrectly wrapped in literal double-quote characters which produced malformed HTTP headers.
+* Fixed: Uninstall now performs complete cleanup — all plugin options, all transient groups, runtime files (logs, PID files, crawl snapshot), the runtime directory itself, and scheduled cron hooks are all removed. Multisite installations are fully supported — cleanup runs on every site in the network.
+* Fixed: Status tab Nginx Cache Paths display completely redesigned — each detected path now shows inline contextual badges (Active, Other vhost, Path Blocked) and a cache type badge (FastCGI, Proxy, SCGI, uWSGI). Active path detection now works correctly for FUSE mount setups. A reverse-proxy cache notice is shown when the active path is a proxy_cache_path (common on cPanel and Plesk). Symlinked cache paths no longer incorrectly fail the traversal check.
+* Fixed: Index now stores an array of paths per URL instead of a single path — correctly handles multiple cache variants for the same URL (Vary: Accept-Encoding variants, mobile cache entries when the Nginx cache key includes a mobile variable).
+* Fixed: Single-page purge scan loop now continues past the first URL match instead of returning — all cache variants for a URL (Vary, mobile) are deleted in a single directory walk.
+* Fixed: HTTP Purge is now bypassed when the index holds more than one path for a URL — HTTP purge can only remove one shmem/disk entry; index-based purge is used instead to ensure all variants are removed.
+* Changed: Preload completion email template completely redesigned — now shows a stats dashboard with Crawl Time, URLs Crawled, Transfer Size, Average Speed, Cache Coverage, Cache Size, Broken URLs, Mobile Pass status, Trigger source, and Finish Time. Includes dark mode support and responsive mobile layout.
+* Changed: Allowed Nginx cache path roots updated — /opt/ removed (too broad, risk of data loss), /cache/ added (used by GridPane, RunCloud, SpinupWP and other control panels). If your cache was stored under /opt/, move it to a supported location and re-save settings.
+* Removed: All data collection and opt-in tracking completely removed. NPP collects no data whatsoever.
+* Removed: Systemd service management removed — the ability to restart the npp-wordpress FUSE mount service directly from the WordPress admin has been dropped. Use standard system tools to manage the service instead.
+* Compatibility: Tested with WordPress 6.9.4, PHP 8.4, Nginx 1.29.6, FUSE 3.18.2, safexec 1.9.3 and bindfs 1.18.4
 
 = 2.1.4 =
 
@@ -484,15 +515,25 @@ Release date: 2024-03-14
 
 == Upgrade Notice ==
 
-= 2.0.1 =
+= 2.1.5 =
+Security and data-safety fixes included. Upgrade immediately.
 
-* Important fixes for function/class/define/namespace/option names.
-* Properly enqueued inline JavaScript.
-* Internationalization and security improvements.
+= 2.1.4 =
+Introduces Nginx Cache Analyzer, safexec hardened execution, Purge Scope for related pages, and a Setup Wizard. Recommended upgrade for all users.
+
+= 2.1.3 =
+Security patch for CVE-2025-6213. Upgrade immediately.
+
+= 2.0.1 =
+Important fixes for function/class/define/namespace/option names. Internationalization and security improvements.
 
 == Credits ==
 
-This plugin is developed and maintained by Hasan CALISIR. 
+This plugin is developed and maintained by Hasan CALISIR.
+
+== Privacy Policy ==
+
+Prior to version 2.1.5, NPP optionally collected basic anonymous usage data when users explicitly opted in. As of version 2.1.5, all data collection and the opt-in mechanism have been completely removed. NPP collects no data whatsoever.
 
 == Support ==
 
