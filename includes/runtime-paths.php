@@ -2,7 +2,7 @@
 /**
  * Runtime path helpers for Nginx Cache Purge Preload
  * Description: Resolves and creates runtime directories and files used by plugin operations.
- * Version: 2.1.4
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
