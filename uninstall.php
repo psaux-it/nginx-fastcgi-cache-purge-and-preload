@@ -2,7 +2,7 @@
 /**
  * Uninstall cleanup routines for Nginx Cache Purge Preload
  * Description: Removes plugin options, transients, runtime artifacts, and scheduled events during uninstall.
- * Version: 2.1.4
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
