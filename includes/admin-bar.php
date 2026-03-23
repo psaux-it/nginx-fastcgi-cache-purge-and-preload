@@ -2,7 +2,7 @@
 /**
  * Admin bar integration for Nginx Cache Purge Preload
  * Description: Adds admin-bar cache actions and routes them to plugin purge/preload workflows.
- * Version: 2.1.4
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
