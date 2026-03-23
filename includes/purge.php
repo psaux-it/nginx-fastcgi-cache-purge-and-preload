@@ -2,7 +2,7 @@
 /**
  * Cache purge handlers for Nginx Cache Purge Preload
  * Description: Executes full and targeted purge operations for supported Nginx cache backends.
- * Version: 2.1.4
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
