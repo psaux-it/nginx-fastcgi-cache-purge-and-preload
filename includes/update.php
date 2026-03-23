@@ -93,7 +93,7 @@ function nppp_run_pending_migrations( $old_version, $new_version ) {
             'nppp_migration_notice',
             sprintf(
                 /* translators: 1: migration version(s), 2: old version, 3: new version */
-                __( 'MIGRATION: Plugin updated from %2$s to %3$s. Changes in version %1$s: (1) Opt-in usage tracking has been completely removed — no tracking data is collected or sent. (2) Cache path support expanded — fixing compatibility with GridPane, RunCloud, and SpinupWP. (3) /opt/ removed from allowed Nginx cache path roots — if your Nginx cache was stored under /opt/, please move it to a supported location and re-save in Settings.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'MIGRATION: Plugin updated from %2$s to %3$s. In version %1$s: Opt-in usage tracking has been completely removed. /opt/ removed from allowed Nginx cache path roots, if your Nginx cache was stored under /opt/, please move it to a supported location and re-save in Settings.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $versions_str,
                 $old_version,
                 $new_version
