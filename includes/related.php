@@ -448,7 +448,6 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . $nginx_cache_limit_rate . 'k ' .
             '--domains=' . $domain_list . ' ' .
-            '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
             '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ';
 
         $safexec_prefix = $use_safexec ? escapeshellarg($safexec_path) . ' ' : '';
