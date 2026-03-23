@@ -62,6 +62,7 @@ function nppp_nginx_cache_preload_progress($request) {
             // Process just finished — fire the tick callback directly without
             // going through WP-Cron at all. This is shortcut for snapshot creation
             // if only user actively watching preload progress on Status tab.
+            // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- legacy hook name
             do_action( 'npp_cache_preload_status_event' );
         }
     }
