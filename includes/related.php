@@ -3,7 +3,7 @@
  * Related URL purge helpers for Nginx Cache Purge Preload
  * Description: Purges and optionally preloads related archives when singular content is purged.
  *              whenever a single post/page is purged (via auto purge, front-end action, or Advanced tab).
- * Version: 2.1.4
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
