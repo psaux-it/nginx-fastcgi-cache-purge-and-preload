@@ -258,7 +258,7 @@ location ~ /purge(/.*) {
                         <ul>
                             <li><code>http://nginx/purge</code> — Docker service name</li>
                             <li><code>http://127.0.0.1:8080/purge</code> — non-standard port</li>
-                            <li><code>http://localhost/purge</code> — explicit localhost</li>
+                            <li><code>http://localhost_/purge</code> — explicit localhost</li>
                         </ul>
                         <p>When a Custom Base URL is set the suffix field is ignored entirely.</p>
                     </div>
