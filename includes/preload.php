@@ -283,7 +283,6 @@ function nppp_detect_premature_process(
         '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
         '--reject=' . escapeshellarg($nginx_cache_reject_extension) . ' ' .
         '--domains=' . escapeshellarg($domain_list) . ' ' .
-        '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
         '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
         '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
         '-- ' .
@@ -592,7 +591,6 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
                 '--reject=' . escapeshellarg($nginx_cache_reject_extension) . ' ' .
                 '--domains=' . escapeshellarg($domain_list) . ' ' .
-                '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
                 '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
                 '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
                 '-- ' .
@@ -819,7 +817,6 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
             '--reject=' . escapeshellarg($nginx_cache_reject_extension) . ' ' .
             '--domains=' . escapeshellarg($domain_list) . ' ' .
-            '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
             '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
             '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
             '-- ' .
@@ -1043,7 +1040,6 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
         '--domains=' . escapeshellarg($domain_list) . ' ' .
-        '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
         '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
         '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
         '-- ' .
@@ -1086,7 +1082,6 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--domains=' . escapeshellarg($domain_list) . ' ' .
-            '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
             '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
             '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
             '-- ' .
@@ -1330,7 +1325,6 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
         '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
         '--domains=' . escapeshellarg($domain_list) . ' ' .
-        '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
         '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
         '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
         '-- ' .
@@ -1373,7 +1367,6 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--domains=' . escapeshellarg($domain_list) . ' ' .
-            '--header=' . escapeshellarg('Accept-Encoding: ') . ' ' .
             '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
             '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
             '-- ' .
