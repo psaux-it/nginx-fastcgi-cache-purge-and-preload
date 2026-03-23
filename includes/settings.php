@@ -365,13 +365,12 @@ function nppp_nginx_cache_settings_page() {
                                 <span class="dashicons dashicons-warning" style="color:#e6a817;"></span>
                                 <?php esc_html_e( 'Vary: Accept-Encoding', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </th>
-                            <td style="padding: 6px 0 10px 0;">
+                            <td>
                                 <div style="background:#fff8e1; border-left:4px solid #f0ad4e; padding:10px 14px; max-width:500px;">
-                                    <strong style="color:#7a4f00;"><?php esc_html_e( 'Double Cache Issue', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br><br>
+                                    <strong style="color:#7a4f00;"><?php esc_html_e( 'Double Cache Issue', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
                                     <span style="font-size:13px; color:#5a3800;">
-                                        <?php esc_html_e( 'If PHP emits Vary: Accept-Encoding, Nginx creates a separate cache per encoding variant. Preloaded cache will not be served to real browsers — visitors get a MISS and trigger a second cache.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                        <br><br>
-                                        <a href="#help" style="font-size:13px; color:#7a4f00; font-weight:600;">
+                                        <?php esc_html_e( 'If you encounter this issue ', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <a href="#help" style="font-size:13px; color:#7a4f00; font-weight:600; text-decoration:none;">
                                             <?php esc_html_e( '→ See Help tab for fix and full explanation', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                         </a>
                                     </span>
