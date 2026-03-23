@@ -112,6 +112,7 @@ add_action('init', function (): void {
 foreach ([
     'npp_cache_preload_event',
     'npp_cache_preload_status_event',
+    'nppp_index_updater_event',
     'publish_future_post',
 ] as $nppp_cron_event) {
     add_action($nppp_cron_event, 'nppp_load_bootstrap', 0);
@@ -319,12 +320,20 @@ function nppp_on_activation() {
     if (function_exists('nppp_defaults_on_plugin_activation')) {
         nppp_defaults_on_plugin_activation();
     }
+
+    if (function_exists('nppp_schedule_index_updater')) {
+        nppp_schedule_index_updater();
+    }
 }
 
 register_activation_hook(__FILE__, 'nppp_on_activation');
 register_deactivation_hook(__FILE__, function() {
     nppp_load_bootstrap();
     nppp_reset_plugin_settings_on_deactivation();
+
+    if (function_exists('nppp_unschedule_index_updater')) {
+        nppp_unschedule_index_updater();
+    }
 
     // Remove the custom purge capability from every role that holds it.
     foreach ( wp_roles()->role_objects as $role ) {
