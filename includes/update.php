@@ -38,7 +38,7 @@ function nppp_check_for_plugin_update() {
 // NEVER remove entries from this array; only append new ones.
 function nppp_get_db_migrations() {
     return array(
-        '2.1.5' => array( 'nppp_migration_215_remove_tracking' ),
+        '2.1.5' => array( 'nppp_migration_215' ),
     );
 }
 
@@ -58,8 +58,8 @@ function nppp_run_update_routines( $old_version, $new_version ) {
 
 // Execute all migrations whose version is greater than the current DB version.
 function nppp_run_pending_migrations( $old_version, $new_version ) {
-    // Tracking existed only in 2.0.1–2.1.4. Users already on 2.1.5+
-    // never had the feature so there is nothing to clean up.
+    // All 2.1.5 migrations target installs coming from 2.0.1–2.1.4.
+    // Users already on 2.1.5+ have already run them — skip entirely.
     if ( version_compare( $old_version, '2.1.5', '>=' ) ) {
         return;
     }
@@ -126,8 +126,10 @@ function nppp_migration_admin_notice() {
 }
 add_action( 'admin_notices', 'nppp_migration_admin_notice' );
 
-// Migration 2.1.5: remove all opt-in tracking data left by 2.0.1–2.1.4.
-function nppp_migration_215_remove_tracking() {
+// Migration 2.1.5:
+// 1) Remove all opt-in tracking data left by 2.0.1–2.1.4.
+// 2) Also backfills 2.1.5 features for existing installs
+function nppp_migration_215() {
     // Clear cron events — may be scheduled with or without args.
     wp_clear_scheduled_hook( 'npp_plugin_tracking_event', array( 'active' ) );
     wp_clear_scheduled_hook( 'npp_plugin_tracking_event' );
@@ -137,5 +139,17 @@ function nppp_migration_215_remove_tracking() {
     if ( is_array( $options ) && array_key_exists( 'nginx_cache_tracking_opt_in', $options ) ) {
         unset( $options['nginx_cache_tracking_opt_in'] );
         update_option( 'nginx_cache_settings', $options );
+    }
+
+    // Backfill: grant the custom purge capability to Administrators.
+    // Existing installs never got this via activation hook.
+    $admin_role = get_role( 'administrator' );
+    if ( $admin_role && ! isset( $admin_role->capabilities['nppp_purge_cache'] ) ) {
+        $admin_role->add_cap( 'nppp_purge_cache' );
+    }
+
+    // Backfill: schedule the daily index updater introduced in 2.1.5.
+    if ( function_exists( 'nppp_schedule_index_updater' ) ) {
+        nppp_schedule_index_updater();
     }
 }
