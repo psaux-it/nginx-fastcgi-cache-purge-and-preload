@@ -5,7 +5,7 @@ Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.5
 Requires PHP: 7.4
 Tested up to: 6.9.4
-Stable tag: 2.1.4
+Stable tag: 2.1.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -143,7 +143,7 @@ NPP restricts cache paths to prevent accidental deletion of system files. Allowe
 
 = 2.1.5 =
 
-Release date: 2026-03-22
+Release date: 2026-03-23
 
 * Added: HTTP Purge via ngx_cache_purge module — fastest purge path when the Nginx module is present. Falls back to filesystem automatically when not available.
 * Added: MILESTONE: Index Purge — single-page purges now use a persistent URL index to skip full directory scans. The base index replicates the snapshot, and the index is automatically updated after each purge if the URL is not already indexed.
