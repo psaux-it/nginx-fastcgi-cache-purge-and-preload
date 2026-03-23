@@ -4405,3 +4405,36 @@ body.has-sticky-submit .nppp-scrollfab{
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Override WordPress 7.0 colored notice backgrounds — keep NPP notices stylish */
+.notice-nppp.notice-error,
+.notice-nppp.notice-warning,
+.notice-nppp.notice-success,
+.notice-nppp.notice-info,
+div.error.notice-nppp,
+div.updated.notice-nppp,
+.notice-nppp {
+    background-color: #fff;
+    font-weight: 500;
+    color: #3C434A !important;
+    border-top: 1px solid #c3c4c7;
+    border-right: 1px solid #c3c4c7;
+    border-bottom: 1px solid #c3c4c7;
+}
+
+.notice-nppp p,
+.notice-nppp .notice-title,
+div.error.notice-nppp p,
+div.updated.notice-nppp p,
+.form-table td .notice-nppp p {
+    color: #3C434A;
+}
+
+.notice-nppp {
+    padding: 4px 12px;
+}
+
+.notice-nppp .notice-dismiss {
+    top: 50%;
+    transform: translateY(-50%);
+}
