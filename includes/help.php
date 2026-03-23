@@ -110,13 +110,13 @@ function nppp_my_faq_html() {
                             and writes a separate cache file for each distinct value.
                         </p>
                         <p style="font-size: 14px;">
-                            NPP's preloader sends no <code>Accept-Encoding</code> header — this is default.
+                            NPP's preloader sends <code>Accept-Encoding: identity</code> by default — requesting plain, uncompressed content.
                             Real browsers always send one, so their variant hash never matches the preloaded entry and Nginx writes a second cache file,
                             bypassing the warm cache entirely. Note that what the NPPs preloader sends is not the real issue —
                             even if it mimicked a browser exactly, different browsers send different values
                             (Chrome adds <code>zstd</code>, Safari omits <code>br</code>, older clients send only <code>gzip</code>),
-                            making it impossible to warm a single entry that serves all visitors.
-                            The only correct fix is on the Nginx/PHP side.
+                            making it impossible to warm a single entry that serves all visitors. This breaks Nginx cache managing logic by NPP.
+                            This effectively breaks NPP's cache warming — preloaded entries are never served to real visitors. The only correct fix is on the Nginx/PHP side.
                         </p>
 
                         <p style="font-size: 14px;">
