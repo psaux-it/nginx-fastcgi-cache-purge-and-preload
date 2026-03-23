@@ -2,7 +2,7 @@
 /**
  * Cache preload handlers for Nginx Cache Purge Preload
  * Description: Builds URL queues and executes preload requests for Nginx cache warming.
- * Version: 2.1.4
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
