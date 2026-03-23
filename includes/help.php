@@ -104,19 +104,19 @@ function nppp_my_faq_html() {
                         <h3><strong>The Problem: NPP Warms Cache, Visitors Create Another, Cache MISS</strong></h3>
 
                         <p style="font-size: 14px;">
-                            NPP's preloader always sends requests with an <strong>empty <code>Accept-Encoding</code> header</strong> (<code>--header='Accept-Encoding: '</code>).
-                            This is intentional — it tells Nginx to cache plain, uncompressed HTML.
-                        </p>
-
-                        <p style="font-size: 14px;">
-                            However, if <strong>PHP compresses output itself</strong> (via <code>zlib.output_compression = On</code> in <code>php.ini</code>),
+                            If <strong>PHP compresses output itself</strong> (via <code>zlib.output_compression = On</code> in <code>php.ini</code>),
                             it adds a <code>Vary: Accept-Encoding</code> response header. Nginx's cache engine
-                            then computes an MD5 <em>variant hash</em> from the request's <code>Accept-Encoding</code> value.
+                            then computes an MD5 <em>variant hash</em> from the request's <code>Accept-Encoding</code> value
+                            and writes a separate cache file for each distinct value.
                         </p>
-
                         <p style="font-size: 14px;">
-                            When a real browser arrives with <code>Accept-Encoding: gzip, deflate, br</code>, its variant hash <strong>does not match</strong>
-                            the one stored by NPP. Nginx writes a <strong>second cache file</strong> — effectively bypassing the warm cache entry entirely.
+                            NPP's preloader sends no <code>Accept-Encoding</code> header — this is default.
+                            Real browsers always send one, so their variant hash never matches the preloaded entry and Nginx writes a second cache file,
+                            bypassing the warm cache entirely. Note that what the NPPs preloader sends is not the real issue —
+                            even if it mimicked a browser exactly, different browsers send different values
+                            (Chrome adds <code>zstd</code>, Safari omits <code>br</code>, older clients send only <code>gzip</code>),
+                            making it impossible to warm a single entry that serves all visitors.
+                            The only correct fix is on the Nginx/PHP side.
                         </p>
 
                         <p style="font-size: 14px;">
@@ -404,37 +404,57 @@ location ~ /purge(/.*) {
 
                     <h4>How do I install it?</h4>
                     <p style="font-size: 14px;">
-                        Use the  linux packages from the
-                        <a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases" target="_blank" rel="noopener">Releases page</a>.
-                        Below are quick examples—see GitHub for full details.
+                        Use the <code>.deb</code>, <code>.rpm</code> or <code>.apk</code> packages from the
+                        <a href="https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases" target="_blank" rel="noopener">Releases page</a>,
+                        or directly with one liner:
                     </p>
+                    <pre><code>curl -fsSL https://psaux-it.github.io/install-safexec.sh | sudo sh</code></pre>
 
                     <ol class="nginx-list" style="font-size: 14px;">
-                        <li><strong>Debian / Ubuntu (.deb)</strong>
-                            <pre>wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
+                        <li><strong> Debian / Ubuntu (.deb)</strong>
+                            <pre># Download checksums
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
 
-# x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.2-1_amd64.deb
+# For x86_64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.5-1_amd64.deb
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apt install ./safexec_1.9.2-1_amd64.deb
+sudo apt install ./safexec_1.9.5-1_amd64.deb
 
-# arm64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.2-1_arm64.deb
+# For AArch64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec_1.9.5-1_arm64.deb
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apt install ./safexec_1.9.2-1_arm64.deb</pre>
+sudo apt install ./safexec_1.9.5-1_arm64.deb</pre>
                         </li>
 
-                        <li><strong>RHEL / CentOS / Fedora (.rpm)</strong>
-                            <pre>wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
-# x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.2-1.el10.x86_64.rpm
-sha256sum -c SHA256SUMS --ignore-missing
-sudo dnf install ./safexec-1.9.2-1.el10.x86_64.rpm
+                        <li><strong> RHEL / CentOS / Fedora (.rpm)</strong>
+                            <pre># Download checksums
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
 
-# arm64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.2-1.el10.aarch64.rpm
+# For x86_64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.5-1.el10.x86_64.rpm
 sha256sum -c SHA256SUMS --ignore-missing
-sudo dnf install ./safexec-1.9.2-1.el10.aarch64.rpm</pre>
+sudo dnf install ./safexec-1.9.5-1.el10.x86_64.rpm
+
+# For AArch64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.5-1.el10.aarch64.rpm
+sha256sum -c SHA256SUMS --ignore-missing
+sudo dnf install ./safexec-1.9.5-1.el10.aarch64.rpm</pre>
+                        </li>
+
+                        <li><strong> Alpine Linux (.apk)</strong>
+                            <pre># Download checksums
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/SHA256SUMS
+
+# For x86_64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.5-r1.x86_64.apk
+sha256sum -c SHA256SUMS --ignore-missing
+sudo apk add --allow-untrusted ./safexec-1.9.5-r1.x86_64.apk
+
+# For AArch64
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.4/safexec-1.9.5-r1.aarch64.apk
+sha256sum -c SHA256SUMS --ignore-missing
+sudo apk add --allow-untrusted ./safexec-1.9.5-r1.aarch64.apk</pre>
+                            <p style="font-size: 13px;"><em>Note: <code>--allow-untrusted</code> is required because the package is not signed with an Alpine trusted key. The SHA256 checksum above provides integrity verification.</em></p>
                         </li>
 
                         <li><strong>Verify:</strong>
@@ -1023,6 +1043,60 @@ WantedBy=multi-user.target</pre>
                         <p style="font-size: 14px;">
                             This lets the plugin auto-parse your live Nginx configuration to accurately detect cache paths, user directives, and cache key settings.
                         </p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">When should I use Clear Plugin Cache on the Status tab?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Clear Plugin Cache</strong></h3>
+                        <p>NPP caches expensive server-side status checks — Nginx detection, configuration parsing, permission checks, cache path validation — to avoid running them on every page load. This cache is stored as WordPress transients and is normally refreshed automatically.</p>
+
+                        <h4><strong>When to clear it</strong></h4>
+                        <p>Clear the plugin cache whenever you make server-side changes that NPP should immediately reflect:</p>
+                        <ul>
+                            <li>You changed the Nginx cache path in <code>nginx.conf</code> or the NPP settings.</li>
+                            <li>You installed, removed, or reconfigured the <code>ngx_cache_purge</code> module.</li>
+                            <li>You ran the <code>fastcgi_ops_root.sh</code> / bindfs setup script for the first time or re-ran it after a change.</li>
+                            <li>You changed PHP-FPM user permissions or cache directory ownership.</li>
+                            <li>The Status tab shows stale or unexpected values after a server configuration change.</li>
+                            <li>You are in active testing and need accurate real-time status on every check.</li>
+                        </ul>
+
+                        <h4><strong>Where to find it</strong></h4>
+                        <p>Go to <strong>Status tab → Clear Plugin Cache</strong> button at the top of the page. The page reloads automatically after clearing so you see fresh values immediately.</p>
+
+                        <h4><strong>Is it safe to clear?</strong></h4>
+                        <p>Yes. Clearing the plugin cache does not affect your Nginx cache, WordPress content, or any plugin settings. It only discards NPP's internal status snapshots — they rebuild automatically on the next Status tab visit.</p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">When should I use Clear URL Index on the Status tab?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Clear URL Index</strong></h3>
+                        <p>NPP maintains a persistent URL→Filepath index that maps cached page URLs to their exact filesystem paths. This index is what allows single-page purges to skip the full recursive directory scan — making them near-instant regardless of cache size.</p>
+
+                        <h4><strong>How the index is built</strong></h4>
+                        <p>The index is populated automatically during <strong>Preload All</strong>, <strong>Scheduled Preload</strong>, and on each Advanced tab visit. It grows incrementally — every successful single-page purge appends its path via write-back so the index improves over time without a full scan.</p>
+
+                        <h4><strong>When to clear it</strong></h4>
+                        <p>Clearing is only needed when the index contains stale or incorrect entries that can no longer be trusted:</p>
+                        <ul>
+                            <li>You moved the Nginx cache directory to a different path — all stored paths are now wrong.</li>
+                            <li>You changed the <code>fastcgi_cache_key</code> directive — the stored URL-to-path mappings are no longer valid for the new key scheme.</li>
+                            <li>You manually deleted the cache directory and recreated it — old paths no longer exist on disk.</li>
+                            <li>Single-page purges are consistently reporting errors or not deleting the correct file.</li>
+                        </ul>
+
+                        <h4><strong>When NOT to clear it</strong></h4>
+                        <p>Do not clear the index routinely — it is not a cache that needs regular flushing. Clearing it means the next purge operations must fall back to the recursive filesystem scan until the index is rebuilt. On large caches this adds latency to every single-page purge until the index is repopulated.</p>
+
+                        <h4><strong>What happens after clearing</strong></h4>
+                        <p>The index is deleted from the database. The next <strong>Preload All</strong>, <strong>Scheduled Preload</strong>, or <strong>Advanced tab visit</strong> will rebuild it automatically from a fresh directory scan. Single-page purges in the meantime will fall through to the recursive scan as a safe fallback — nothing breaks, purges still succeed.</p>
+
+                        <h4><strong>Where to find it</strong></h4>
+                        <p>Go to <strong>Status tab → Clear URL Index</strong> button.</p>
                     </div>
                 </div>
 
