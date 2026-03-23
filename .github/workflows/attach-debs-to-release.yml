@@ -5,7 +5,7 @@ on:
     workflows: ["safexec CI"]
     types: [completed]
   release:
-     types: [published, edited, prereleased]
+    types: [published, edited, prereleased]
   workflow_dispatch:
     inputs:
       tag:
