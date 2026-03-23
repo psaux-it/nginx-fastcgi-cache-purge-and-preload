@@ -2,7 +2,7 @@
 /**
  * REST API endpoints for Nginx Cache Purge Preload
  * Description: Registers API callbacks for cache purge and preload actions with request validation.
- * Version: 2.1.4
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
