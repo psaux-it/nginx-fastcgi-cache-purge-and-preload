@@ -557,7 +557,7 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                     update_option( 'nppp_url_filepath_index', $nppp_wb_index, false );
                     unset( $nppp_wb_index, $nppp_existing );
                 } else {
-                    // Translators: %s: full page URL that failed to purge.
+                    // translators: %s: full page URL
                     nppp_display_admin_notice('error', sprintf(__( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
                 }
 
