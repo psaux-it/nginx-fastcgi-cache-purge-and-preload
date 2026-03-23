@@ -2,7 +2,7 @@
 /**
  * Purge operation locking for Nginx Cache Purge Preload
  * Description: Atomic WP_Upgrader-based lock helpers for concurrent purge serialization
- * Version: 2.1.4
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
