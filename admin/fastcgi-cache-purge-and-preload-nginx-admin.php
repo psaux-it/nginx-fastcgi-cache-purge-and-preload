@@ -1,7 +1,7 @@
 <?php
 /*
  * NPP admin bootstrap
- * Version:           2.1.4
+ * Version:           2.1.5
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
  * License:           GPL-2.0+
@@ -19,12 +19,12 @@ if (! defined('NGINX_CACHE_LOG_FILE')) {
 
 // Define a constant for the desktop user agent
 if (!defined('NPPP_USER_AGENT')) {
-    define('NPPP_USER_AGENT', 'NPP/2.1.4 (NginxCacheWarm; device=desktop; Desktop)');
+    define('NPPP_USER_AGENT', 'NPP/2.1.5 (NginxCacheWarm; device=desktop; Desktop)');
 }
 
 // Define a constant for the mobile user agent
 if (!defined('NPPP_USER_AGENT_MOBILE')) {
-    define('NPPP_USER_AGENT_MOBILE', 'NPP/2.1.4 (NginxCacheWarm; device=mobile; Mobile)');
+    define('NPPP_USER_AGENT_MOBILE', 'NPP/2.1.5 (NginxCacheWarm; device=mobile; Mobile)');
 }
 
 // Define an Accept header constant that mimics a real browser request.
