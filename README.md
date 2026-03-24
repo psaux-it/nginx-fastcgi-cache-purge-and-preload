@@ -16,7 +16,10 @@
 
 ---
 
-🚀 **Support this project!** If NPP has improved your workflow, consider giving it a ⭐
+<div align="center">
+🚀 <strong>Support this project!</strong> — If NPP has improved your workflow, consider giving it a ⭐
+
+</div>
 
 ---
 
