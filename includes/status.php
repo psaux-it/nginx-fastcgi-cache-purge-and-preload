@@ -589,7 +589,12 @@ function nppp_get_in_cache_page_count() {
 
             // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
             $key_line = $match[1];
-            if (strpos($key_line, 'GET') === false) {
+            if (strpos($key_line, 'POST') !== false ||
+                strpos($key_line, 'HEAD') !== false ||
+                strpos($key_line, 'PUT') !== false ||
+                strpos($key_line, 'DELETE') !== false ||
+                strpos($key_line, 'PATCH') !== false ||
+                strpos($key_line, 'OPTIONS') !== false) {
                 continue;
             }
 
