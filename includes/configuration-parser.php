@@ -302,7 +302,7 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = t
 
             if (strpos($include_path, '*') !== false) {
                 // Expand wildcards safely
-                $files = glob($include_path, GLOB_BRACE) ?: [];
+                $files = glob($include_path, defined('GLOB_BRACE') ? GLOB_BRACE : 0) ?: [];
                 $included_files = array_merge($included_files, $files);
             } else {
                 // Handle single file includes
