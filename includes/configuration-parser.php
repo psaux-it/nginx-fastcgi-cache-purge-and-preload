@@ -66,8 +66,12 @@ function nppp_check_bindfs_version() {
         $mapped_response = array_map(function($ref) {
             return isset($ref['ref']) ? preg_replace('/^refs\/tags\//', '', $ref['ref']) : '';
         }, $response);
+
         // Filter out any empty results after the map
         $mapped_response = array_filter($mapped_response);
+
+        // Sort by semver — /git/refs/tags returns alphabetical order
+        usort($mapped_response, 'version_compare');
         $latest_version = !empty($mapped_response) ? end($mapped_response) : 'Not Determined';
     }
 
@@ -80,7 +84,7 @@ function nppp_check_bindfs_version() {
 
     // Decide the result based on install status and API fetch success
     if ($installed_version) {
-        if ($latest_version && version_compare($installed_version, $latest_version, '<')) {
+        if ($latest_version !== 'Not Determined' && version_compare($installed_version, $latest_version, '<')) {
             $result = "$installed_version ($latest_version)";
         } else {
             $result = "$installed_version ($latest_version)";
@@ -125,7 +129,7 @@ function nppp_check_libfuse_version() {
 
     // Decide the result based on API fetch success
     if ($installed_version) {
-        if ($latest_version && version_compare($installed_version, $latest_version, '<')) {
+        if ($latest_version !== 'Not Determined' && version_compare($installed_version, $latest_version, '<')) {
             $result = "$installed_version ($latest_version)";
         } else {
             $result = "$installed_version ($latest_version)";
