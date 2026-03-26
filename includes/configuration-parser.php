@@ -170,7 +170,6 @@ function nppp_check_fuse_cache_paths($cache_paths) {
 
     // Return cached result if available
     $cached_result = get_transient($transient_key);
-    // Return cached result if available
     if ($cached_result !== false) {
         return $cached_result;
     }
@@ -181,21 +180,24 @@ function nppp_check_fuse_cache_paths($cache_paths) {
     $fuse_paths = [];
     $fuse_map   = [];
 
+    // Parse mount output once
+    $mount_output = shell_exec('mount 2>/dev/null') ?? '';
+    $mount_lines  = explode("\n", $mount_output);
+
     // Loop through the cache paths to check their mount points
     foreach ($cache_paths as $directive => $paths) {
         foreach ($paths as $path) {
-            if (!empty($path)) {
-                // Execute a shell command to get the mount point for the given path
-                $command = "mount | grep " . escapeshellarg($path);
-                $output = shell_exec($command);
+            if (empty($path)) {
+                continue;
+            }
 
-                // If a valid output is found, extract the fuse mount point
-                if ($output) {
-                    // Extract the FUSE mount point
-                    if (preg_match('/on\s+([^\s]+)\s+type\s+fuse/', $output, $matches)) {
-                        $fuse_paths[] = $matches[1];
-                        $fuse_map[rtrim($path, '/')] = rtrim($matches[1], '/');
-                    }
+            // Anchor the search to " on <path> type fuse" to avoid partial matches
+            $source = rtrim($path, '/');
+
+            foreach ($mount_lines as $line) {
+                if (preg_match('/^' . preg_quote($source, '/') . ' on (\S+) type fuse/', $line, $matches)) {
+                    $fuse_paths[] = $matches[1];
+                    $fuse_map[$source] = rtrim($matches[1], '/');
                 }
             }
         }
