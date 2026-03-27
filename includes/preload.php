@@ -171,7 +171,7 @@ function nppp_is_safexec_usable($path, $notify = true) {
 
 // PATCH: CVE ID: CVE-2025-6213
 // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
-function nppp_referer_is_allowed(string $url): bool {
+function nppp_is_internal_url(string $url): bool {
     $ref  = wp_parse_url($url);
     $home = wp_parse_url(home_url());
 
@@ -917,13 +917,13 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 
     // PATCH: CVE ID: CVE-2025-6213
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) === false) {
-        nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        nppp_display_admin_notice('error', __( 'ERROR SECURITY: The provided URL is invalid.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
 
     // PATCH: CVE ID: CVE-2025-6213
-    if (!nppp_referer_is_allowed($current_page_url)) {
-        nppp_display_admin_notice('error', __('ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx'));
+    if (!nppp_is_internal_url($current_page_url)) {
+        nppp_display_admin_notice('error', __('ERROR SECURITY: Preloading is only allowed for internal website URLs.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
@@ -1185,14 +1185,14 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // PATCH: CVE ID: CVE-2025-6213
     // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) === false) {
-        nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        nppp_display_admin_notice('error', __( 'ERROR SECURITY: The provided URL is invalid.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
 
     // PATCH: CVE ID: CVE-2025-6213
     // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
-    if (!nppp_referer_is_allowed($current_page_url)) {
-        nppp_display_admin_notice('error', __('ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx'));
+    if (!nppp_is_internal_url($current_page_url)) {
+        nppp_display_admin_notice('error', __('ERROR SECURITY: Preloading is only allowed for internal website URLs.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
