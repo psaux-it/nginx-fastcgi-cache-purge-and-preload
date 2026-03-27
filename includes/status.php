@@ -83,6 +83,7 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_http_purge_endpoint_broken',
         'nppp_wget_urls_cache_prev_key',
         'nppp_safexec_ok',
+        'nppp_category_map',
     );
 
     // Delete each known transient
