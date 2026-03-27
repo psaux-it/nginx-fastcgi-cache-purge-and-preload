@@ -1302,172 +1302,170 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     return $urls;
 }
 
-// Categorizes a URL based on WordPress permalink structures and template files.
-function nppp_categorize_url($url) {
-    static $url_cache = [];
+/**
+ * Categorize a URL into a human-readable content-type label.
+ *
+ * @param  string $url  Absolute URL to categorize.
+ * @return string       Uppercase label (e.g. 'POST', 'PRODUCT', 'CATEGORY').
+ */
+function nppp_categorize_url( $url ) {
+    // 0. Static per-request cache
+    static $url_cache    = [];
     static $rewrite_rules = null;
-    static $all_post_types = null;
-    static $taxonomies = null;
+    static $bulk_map     = null;
+    static $needs_update  = false;
 
-    if (isset($url_cache[$url])) {
-        return $url_cache[$url];
+    if ( isset( $url_cache[ $url ] ) ) {
+        return $url_cache[ $url ];
     }
 
-    $cache_key = 'nppp_category_' . md5($url);
-    $cached = get_transient($cache_key);
-    if ($cached !== false) {
-        $url_cache[$url] = $cached;
-        return $cached;
+    // 1. Bulk transient
+    if ( $bulk_map === null ) {
+        $bulk_map = get_transient( 'nppp_category_map' );
+        $bulk_map = is_array( $bulk_map ) ? $bulk_map : [];
+
+        add_action('shutdown', function() use (&$bulk_map, &$needs_update) {
+            if ( $needs_update ) {
+                set_transient('nppp_category_map', $bulk_map, WEEK_IN_SECONDS);
+            }
+        });
     }
 
-    $site_url = get_site_url();
-    $parsed_site = wp_parse_url($site_url);
-    $parsed_url = wp_parse_url($url);
+    $map_key = md5( $url );
 
-    if (!isset($parsed_url['host']) || $parsed_url['host'] !== $parsed_site['host']) {
-        $category = 'EXTERNAL';
-        set_transient($cache_key, $category, MONTH_IN_SECONDS);
-        $url_cache[$url] = $category;
-        return $category;
+    if ( isset( $bulk_map[ $map_key ] ) ) {
+        $url_cache[ $url ] = $bulk_map[ $map_key ];
+        return $bulk_map[ $map_key ];
     }
 
-    $path = isset($parsed_url['path']) ? $parsed_url['path'] : '';
-    $request = trim($path, '/');
-    $request = preg_replace('#/page/\d+/?$#', '', $request);
+    // Shared finalize helper
+    $finish = function ( $label ) use ( $url, $map_key, &$url_cache, &$bulk_map, &$needs_update ) {
+        $label = (string) apply_filters( 'nppp_categorize_url_result', $label, $url );
+        $url_cache[ $url ]   = $label;
+        $bulk_map[ $map_key ] = $label;
+        $needs_update = true;
+        return $label;
+    };
 
-    if ($request === '') {
-        $category = 'HOMEPAGE';
-    } else {
-        $post_id = url_to_postid($url);
-        if ($post_id) {
-            $post_type = get_post_type($post_id);
-            if ($all_post_types === null) {
-                $all_post_types = get_post_types([], 'objects');
+    // 2. Host guard
+    $site_host = (string) wp_parse_url( get_site_url(), PHP_URL_HOST );
+    $url_host  = (string) wp_parse_url( $url, PHP_URL_HOST );
+    if ( $url_host === '' || strcasecmp( $url_host, $site_host ) !== 0 ) {
+        return $finish( 'EXTERNAL' );
+    }
+
+    // 3. Normalize path
+    $raw_path = (string) ( wp_parse_url( $url, PHP_URL_PATH ) ?? '/' );
+    $path     = trim( rawurldecode( $raw_path ), '/' );
+    $path     = (string) preg_replace( '#(?:^|/)page/\d+(?:/.*)?$#', '', $path );
+    $path     = trim( $path, '/' );
+
+    // 4. Homepage early-exit
+    if ( $path === '' ) {
+        return $finish( 'HOMEPAGE' );
+    }
+
+    // 5. Rewrite rules → query vars
+    global $wp_rewrite;
+    if ( $rewrite_rules === null ) {
+        $rewrite_rules = (array) $wp_rewrite->wp_rewrite_rules();
+    }
+
+    $query_vars = [];
+    foreach ( $rewrite_rules as $match => $query ) {
+        if ( preg_match( "#^{$match}#", $path, $matches )
+             || preg_match( "#^{$match}#", rawurlencode( $path ), $matches ) ) {
+            $query = preg_replace( '!^.+\?!', '', $query );
+            if ( class_exists( 'WP_MatchesMapRegex' ) ) {
+                $query = addslashes( WP_MatchesMapRegex::apply( $query, $matches ) );
             }
+            parse_str( $query, $query_vars );
+            break;
+        }
+    }
 
-            if (isset($all_post_types[$post_type])) {
-                $category = strtoupper($all_post_types[$post_type]->labels->singular_name);
-            } else {
-                $category = strtoupper($post_type);
+    if ( empty( $query_vars ) ) {
+        $qs = (string) ( wp_parse_url( $url, PHP_URL_QUERY ) ?? '' );
+        if ( $qs !== '' ) {
+            parse_str( $qs, $query_vars );
+        }
+    }
+
+    if ( empty( $query_vars ) ) {
+        return $finish( 'UNKNOWN' );
+    }
+
+    // 5b. WooCommerce shortcut
+    if ( function_exists( 'wc_get_page_id' ) ) {
+        if ( ! empty( $query_vars['product'] ) )     { return $finish( 'PRODUCT' ); }
+        if ( ! empty( $query_vars['product_cat'] ) ) { return $finish( 'PRODUCT CATEGORY' ); }
+        if ( ! empty( $query_vars['product_tag'] ) ) { return $finish( 'PRODUCT TAG' ); }
+
+        if ( isset( $query_vars['post_type'] ) ) {
+            $pt = (array) $query_vars['post_type'];
+            if ( in_array( 'product', $pt, true ) ) {
+                return $finish(
+                    ! empty( $query_vars['name'] ) || ! empty( $query_vars['p'] )
+                        ? 'PRODUCT'
+                        : 'SHOP'
+                );
             }
-        } else {
-            global $wp_rewrite;
-            $query_vars = [];
+        }
 
-            if (!empty($wp_rewrite->wp_rewrite_rules())) {
-                if ($rewrite_rules === null) {
-                    $rewrite_rules = $wp_rewrite->wp_rewrite_rules();
-                }
-
-                foreach ($rewrite_rules as $match => $query) {
-                    if (preg_match("#^$match#", $request, $matches)) {
-                        $query = preg_replace("#^.+\?#", '', $query);
-                        $query = addslashes(WP_MatchesMapRegex::apply($query, $matches));
-                        parse_str($query, $query_vars);
-                        break;
-                    }
-                }
-            }
-
-            if (!empty($query_vars)) {
-                if (!empty($query_vars['category_name']) || !empty($query_vars['cat'])) {
-                    $category = 'CATEGORY';
-                } elseif (!empty($query_vars['tag']) || !empty($query_vars['tag_id'])) {
-                    $category = 'TAG';
-                } elseif (!empty($query_vars['author_name']) || !empty($query_vars['author'])) {
-                    $category = 'AUTHOR';
-                } elseif (!empty($query_vars['post_type'])) {
-                    $post_type = is_array($query_vars['post_type']) ? reset($query_vars['post_type']) : $query_vars['post_type'];
-                    if ($all_post_types === null) {
-                        $all_post_types = get_post_types([], 'objects');
-                    }
-                    if (isset($all_post_types[$post_type])) {
-                        $category = strtoupper($all_post_types[$post_type]->labels->singular_name);
-                    } else {
-                        $category = strtoupper($post_type);
-                    }
-                } elseif (!empty($query_vars['year']) || !empty($query_vars['monthnum']) || !empty($query_vars['day'])) {
-                    $category = 'DATE_ARCHIVE';
-                } elseif (!empty($query_vars['s'])) {
-                    $category = 'SEARCH_RESULTS';
-                }
-            }
-
-            if (empty($category)) {
-                if ($taxonomies === null) {
-                    $taxonomies = get_taxonomies(['public' => true], 'objects');
-                    foreach (['product_cat', 'product_tag'] as $tax) {
-                        if (!isset($taxonomies[$tax]) && taxonomy_exists($tax)) {
-                            $taxonomies[$tax] = get_taxonomy($tax);
-                        }
-                    }
-                }
-
-                foreach ($taxonomies as $taxonomy) {
-                    $slug = $taxonomy->rewrite['slug'] ?? $taxonomy->name;
-                    if (!$slug) continue;
-
-                    $pattern = '#^' . preg_quote($slug, '#') . '(/[^/]+(?:/[^/]+)*)?(?:/page/\d+)?/?$#';
-                    if (preg_match($pattern, $request, $matches)) {
-                        $term_path = isset($matches[1]) ? trim($matches[1], '/') : '';
-
-                        if ($taxonomy->hierarchical) {
-                            $slugs = explode('/', $term_path);
-                            $parent = 0;
-                            $term = null;
-
-                            foreach ($slugs as $slug_part) {
-                                $term = get_term_by('slug', $slug_part, $taxonomy->name);
-                                if (!$term || is_wp_error($term) || (int) $term->parent !== (int) $parent) {
-                                    $term = null;
-                                    break;
-                                }
-                                $parent = $term->term_id;
-                            }
-
-                            if ($term) {
-                                $category = strtoupper($taxonomy->labels->singular_name);
-                                break;
-                            }
-                        } else {
-                            $slug_part = basename($term_path);
-                            $term = get_term_by('slug', $slug_part, $taxonomy->name);
-                            if ($term && !is_wp_error($term)) {
-                                $category = strtoupper($taxonomy->labels->singular_name);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (empty($category)) {
-                $author_base = $wp_rewrite->author_base ?: 'author';
-                if (preg_match('#^' . preg_quote($author_base, '#') . '/([^/]+)/?$#', $request, $matches)) {
-                    $author = get_user_by('slug', $matches[1]);
-                    $category = $author ? 'AUTHOR' : 'UNKNOWN';
-                } else {
-                    $date_structure = $wp_rewrite->get_date_permastruct();
-                    if ($date_structure) {
-                        $date_regex = str_replace(
-                            ['%year%', '%monthnum%', '%day%'],
-                            ['([0-9]{4})', '([0-9]{1,2})', '([0-9]{1,2})'],
-                            $date_structure
-                        );
-                        $date_regex = '!^' . trim($date_regex, '/') . '/?$!';
-                        $category = preg_match($date_regex, $request) ? 'DATE_ARCHIVE' : 'UNKNOWN';
-                    } else {
-                        $category = 'UNKNOWN';
-                    }
-                }
+        foreach ( array_keys( $query_vars ) as $var ) {
+            if ( strpos( $var, 'pa_' ) === 0 && ! empty( $query_vars[ $var ] ) ) {
+                return $finish( 'PRODUCT ATTR: ' . strtoupper( substr( $var, 3 ) ) );
             }
         }
     }
 
-    $category = apply_filters('nppp_categorize_url_result', $category ?: 'UNKNOWN', $url);
+    // 6. WP_Query::parse_query()
+    $q = new WP_Query();
+    $q->parse_query( $query_vars );
 
-    $url_cache[$url] = $category;
-    set_transient($cache_key, $category, MONTH_IN_SECONDS);
+    // 7. is_* → label
+    if ( function_exists( 'wc_get_page_id' ) ) {
+        if ( $q->is_post_type_archive ) {
+            $pt = (array) $q->get( 'post_type' );
+            if ( in_array( 'product', $pt, true ) ) { return $finish( 'SHOP' ); }
+        }
+        if ( $q->is_tax ) {
+            $tax_name = (string) $q->get( 'taxonomy' );
+            if ( $tax_name === 'product_cat' )         { return $finish( 'PRODUCT CATEGORY' ); }
+            if ( $tax_name === 'product_tag' )         { return $finish( 'PRODUCT TAG' ); }
+            if ( strpos( $tax_name, 'pa_' ) === 0 )   { return $finish( 'PRODUCT ATTR: ' . strtoupper( substr( $tax_name, 3 ) ) ); }
+        }
+    }
 
-    return $category;
+    if ( $q->is_singular || $q->is_single ) {
+        $pt = (string) ( $q->get( 'post_type' ) ?: 'post' );
+        if ( function_exists( 'wc_get_page_id' ) && $pt === 'product' ) { return $finish( 'PRODUCT' ); }
+        if ( $pt === 'post' ) { return $finish( 'POST' ); }
+        if ( $pt === 'page' ) { return $finish( 'PAGE' ); }
+        $pt_obj = get_post_type_object( $pt );
+        return $finish( $pt_obj ? strtoupper( $pt_obj->labels->singular_name ) : strtoupper( $pt ) );
+    }
+
+    if ( $q->is_page )     { return $finish( 'PAGE' ); }
+    if ( $q->is_category ) { return $finish( 'CATEGORY' ); }
+    if ( $q->is_tag )      { return $finish( 'TAG' ); }
+
+    if ( $q->is_tax ) {
+        $tax_name = (string) $q->get( 'taxonomy' );
+        $tax_obj  = $tax_name ? get_taxonomy( $tax_name ) : null;
+        return $finish( $tax_obj ? strtoupper( $tax_obj->labels->singular_name ) : 'TAXONOMY' );
+    }
+
+    if ( $q->is_author ) { return $finish( 'AUTHOR' ); }
+    if ( $q->is_date )   { return $finish( 'DATE_ARCHIVE' ); }
+    if ( $q->is_search ) { return $finish( 'SEARCH_RESULTS' ); }
+    if ( $q->is_home )   { return $finish( 'BLOG' ); }
+
+    if ( $q->is_post_type_archive ) {
+        $pt     = (string) $q->get( 'post_type' );
+        $pt_obj = $pt ? get_post_type_object( $pt ) : null;
+        return $finish( $pt_obj ? strtoupper( $pt_obj->labels->name ) : 'ARCHIVE' );
+    }
+
+    return $finish( 'UNKNOWN' );
 }
