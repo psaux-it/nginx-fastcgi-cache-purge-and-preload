@@ -248,6 +248,7 @@ function nppp_disable_features($unsupported, $preload) {
             'nppp_related_preload_after_manual'  => 'no',
             'nginx_cache_pctnorm_mode'           => 'off',
             'nppp_http_purge_enabled'            => 'no',
+            'nppp_rg_purge_enabled'              => 'no',
         );
     } elseif ( $preload === true ) {
         // If preload feature not useable
