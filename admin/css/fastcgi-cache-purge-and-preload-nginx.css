@@ -4438,3 +4438,85 @@ div.updated.notice-nppp p,
     top: 50%;
     transform: translateY(-50%);
 }
+
+/* ============================================================
+   Ripgrep Turbo Purge toggle
+   ============================================================ */
+
+.nppp-onoffswitch-rgpurge {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+.nppp-onoffswitch-checkbox-rgpurge {
+    display: none;
+}
+
+.nppp-onoffswitch-label-rgpurge {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+.nppp-onoffswitch-inner-rgpurge .nppp-on-rgpurge,
+.nppp-onoffswitch-inner-rgpurge .nppp-off-rgpurge {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-rgpurge .nppp-on-rgpurge {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-rgpurge .nppp-off-rgpurge {
+    left: 20px;
+    color: #23282d;
+}
+
+.nppp-onoffswitch-switch-rgpurge {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #ea1919;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+#nppp_rg_purge_enabled:checked + .nppp-onoffswitch-label-rgpurge .nppp-onoffswitch-inner-rgpurge .nppp-on-rgpurge {
+    color: #23282d;
+}
+
+#nppp_rg_purge_enabled:checked + .nppp-onoffswitch-label-rgpurge .nppp-onoffswitch-switch-rgpurge {
+    width: 55px;
+    transform: translateX(60px);
+    background: #66b317;
+}
+
+.nppp-onoffswitch-checkbox-rgpurge + .nppp-onoffswitch-label-rgpurge .nppp-off-rgpurge {
+    display: block;
+}
+
+#nppp_rg_purge_enabled {
+    position: absolute;
+    left: -99em;
+}
+
+.nppp-onoffswitch-checkbox-rgpurge[disabled] + .nppp-onoffswitch-label-rgpurge {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
