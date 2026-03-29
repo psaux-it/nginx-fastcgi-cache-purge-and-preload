@@ -85,6 +85,8 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_safexec_ok',
         'nppp_category_map',
         'nppp_rg_ok',
+        'nppp_wget_version_' . md5($static_key_base),
+        'nppp_rg_version_' . md5($static_key_base),
     );
 
     // Delete each known transient
