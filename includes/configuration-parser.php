@@ -750,7 +750,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
             <table>
                 <tbody>
                     <tr>
-                        <td class="action highlight-metric"><?php esc_html_e('libfuse Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action highlight-metric"><?php esc_html_e('libfuse (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status highlight-metric" id="npppLibfuseVersion">
                             <?php
                             echo esc_html(nppp_check_libfuse_version());
@@ -758,7 +758,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                         </td>
                     </tr>
                     <tr>
-                        <td class="action highlight-metric"><?php esc_html_e('bindfs Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action highlight-metric"><?php esc_html_e('bindfs (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status highlight-metric" id="npppBindfsVersion">
                             <?php
                             echo esc_html(nppp_check_bindfs_version());
