@@ -839,10 +839,20 @@ function nppp_my_status_html() {
 
     // Pre-compute pages in cache count here — needed by warning logic below
     // and reused in the Cache Status table. Single filesystem scan for both.
-    $nppp_pages_in_cache = nppp_get_in_cache_page_count();
-    if ( is_numeric( $nppp_pages_in_cache ) ) {
-        update_option( 'nppp_last_known_hits',      (int) $nppp_pages_in_cache, false );
-        update_option( 'nppp_last_hits_scanned_at', time(),                     false );
+    // On large caches the recursive scan is expensive — cache the result for
+    // 2 hours (same TTL as the permissions check). "Clear Plugin Cache" busts it.
+    $static_key_base = 'nppp';
+    $nppp_hits_transient_key = 'nppp_pages_in_cache_' . md5($static_key_base);
+    $nppp_pages_in_cache = get_transient($nppp_hits_transient_key);
+
+    if ($nppp_pages_in_cache === false) {
+        $nppp_pages_in_cache = nppp_get_in_cache_page_count();
+        set_transient($nppp_hits_transient_key, $nppp_pages_in_cache, 2 * HOUR_IN_SECONDS);
+
+        if ( is_numeric( $nppp_pages_in_cache ) ) {
+            update_option( 'nppp_last_known_hits',      (int) $nppp_pages_in_cache, false );
+            update_option( 'nppp_last_hits_scanned_at', time(),                     false );
+        }
     }
 
     // Warn about not found cache key
