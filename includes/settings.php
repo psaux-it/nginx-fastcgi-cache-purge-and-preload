@@ -49,7 +49,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nppp_http_purge_enabled', 'HTTP Purge', 'nppp_http_purge_enabled_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nppp_http_purge_suffix', 'Purge URL Suffix', 'nppp_http_purge_suffix_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nppp_http_purge_custom_url', 'Purge Custom Base URL', 'nppp_http_purge_custom_url_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
-    add_settings_field('nppp_rg_purge_enabled', 'Ripgrep Turbo Purge', 'nppp_rg_purge_enabled_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nppp_rg_purge_enabled', 'Turbo Purge', 'nppp_rg_purge_enabled_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -774,11 +774,11 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description"><?php echo esc_html__( 'Set this when the purge endpoint differs from your public site URL — Docker networks, separate Nginx server, non-standard port, or cPanel/Plesk environments with a custom Nginx layer.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
-                        <!-- Ripgrep Turbo Purge Row -->
+                        <!-- Turbo Purge -->
                         <tr valign="top">
                             <th scope="row">
                                 <span class="dashicons dashicons-performance"></span>
-                                <?php echo esc_html__( 'Ripgrep Turbo Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                <?php echo esc_html__( 'Turbo Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </th>
                             <td>
                                 <div class="nppp-auto-preload-container">
@@ -786,11 +786,10 @@ function nppp_nginx_cache_settings_page() {
                                         <?php nppp_rg_purge_enabled_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'Accelerates single-URL cache purge by using ripgrep (rg) to locate cache files — up to 60× faster than PHP\'s recursive filesystem scan on large caches.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'ripgrep parallelises the search across all CPU cores, reads only the bytes it needs, and finishes in under 1 second even on 100 000-file caches where the PHP iterator would time out.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'After the first ripgrep hit the cache file path is written back to the URL index, so subsequent purges of the same URL skip the scan entirely.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Accelerates single-URL cache purge by using ripgrep (rg) to locate cache files — up to 60× faster than recursive filesystem scan on large caches.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Applies only to single-URL purges. Purge All always uses filesystem operations.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Requirements: ripgrep (rg) binary installed and available in PATH.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'HIGHLY Recommended for large cache sites with over 1,000 URLs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Requirements: ripgrep (rg) linux binary installed and available in PATH.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
                         <!-- Start Mail Options Section -->
@@ -924,11 +923,14 @@ function nppp_handle_nginx_cache_settings_submission() {
                         $existing_options = (array) $existing_options;
                         $merged = wp_parse_args($new_settings, $existing_options);
 
-                        // Always delete the plugin permission cache when the form is submitted
+                        // Always delete the permission cache
                         $static_key_base = 'nppp';
                         $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
                         delete_transient($transient_key_permissions_check);
+
+                        // Delete cache related binary checks
                         delete_transient('nppp_safexec_ok');
+                        delete_transient('nppp_rg_ok');
 
                         // Update the settings
                         // Note: This will re-encode 'nginx_cache_key_custom_regex' via sanitization
@@ -1389,7 +1391,7 @@ function nppp_update_http_purge_option(): void {
     }
 }
 
-// AJAX handler Ripgrep Turbo Purge
+// AJAX handler Turbo Purge
 function nppp_update_rg_purge_option(): void {
     if ( isset( $_POST['_wpnonce'] ) ) {
         $nonce = sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) );
@@ -1413,7 +1415,7 @@ function nppp_update_rg_purge_option(): void {
     if ( $rg_purge === 'yes' ) {
         $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
         if ( $rg_bin === '' || ! is_executable( $rg_bin ) ) {
-            wp_send_json_error( 'ripgrep (rg) binary not found. Install it to enable Ripgrep Turbo Purge.' );
+            wp_send_json_error( 'ripgrep (rg) binary not found. Install it to enable Turbo Purge.' );
             return;
         }
     }
@@ -2418,7 +2420,7 @@ function nppp_http_purge_custom_url_callback(): void {
     echo "<input type='text' id='nppp_http_purge_custom_url' name='nginx_cache_settings[nppp_http_purge_custom_url]' value='" . esc_attr( $options['nppp_http_purge_custom_url'] ?? '' ) . "' class='regular-text' placeholder='https://docker/purge' />";
 }
 
-// Callback function for Ripgrep Turbo Purge
+// Callback function for Turbo Purge
 function nppp_rg_purge_enabled_callback(): void {
     $options    = get_option( 'nginx_cache_settings', [] );
 
@@ -2444,7 +2446,7 @@ function nppp_rg_purge_enabled_callback(): void {
     }
 
     if ( ! $rg_bin ) {
-        $status_note = esc_html__( 'Unavailable: ripgrep (rg) not found. Install it to enable Ripgrep Turbo Purge (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
+        $status_note = esc_html__( 'Unavailable: ripgrep (rg) not found. Install it to enable Turbo Purge (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
     } elseif ( ! $rg_ok ) {
         $status_note = esc_html__( 'Unavailable: ripgrep (rg) binary is not executable. Check permissions.', 'fastcgi-cache-purge-and-preload-nginx' );
     } else {
@@ -2987,7 +2989,7 @@ function nppp_nginx_cache_settings_sanitize($input) {
         );
     }
 
-    // Ripgrep Turbo Purge
+    // Turbo Purge
     $sanitized_input['nppp_rg_purge_enabled'] =
         ( isset( $input['nppp_rg_purge_enabled'] ) && $input['nppp_rg_purge_enabled'] === 'yes' )
         ? 'yes' : 'no';
