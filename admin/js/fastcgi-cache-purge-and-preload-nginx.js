@@ -1967,7 +1967,7 @@ $(document).ready(function() {
         }, 'json');
     });
 
-    // Ripgrep Turbo Purge toggle when state changes
+    // RG Purge toggle when state changes
     $('#nppp_rg_purge_enabled').change(function() {
         var rgPurgeElement = $(this);
         var labelSpan      = rgPurgeElement.next('.nppp-onoffswitch-label-rgpurge');
@@ -3231,7 +3231,7 @@ $(document).ready(function() {
         }
     });
 
-    // Toggle switch rules for Ripgrep Turbo Purge
+    // Toggle switch rules for RG Purge
     var isRgPurgeChecked = $('#nppp_rg_purge_enabled').prop('checked');
     if (isRgPurgeChecked) {
         $('.nppp-onoffswitch-switch-rgpurge').css('background', '#66b317');
