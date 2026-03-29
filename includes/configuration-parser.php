@@ -166,6 +166,48 @@ function nppp_check_safexec_version() {
     return $installed_version;
 }
 
+// Function to check wget version
+function nppp_check_wget_version() {
+    $transient_key = 'nppp_wget_version_' . md5('nppp');
+    $cached = get_transient($transient_key);
+    if ($cached !== false) {
+        return $cached;
+    }
+
+    $installed_version = 'Not Installed';
+
+    if (nppp_get_command_output('command -v wget')) {
+        $line = nppp_get_command_output("wget --version 2>&1 | head -n1 | awk '{print \$3}'");
+        if (!empty($line)) {
+            $installed_version = trim($line);
+        }
+    }
+
+    set_transient($transient_key, $installed_version, MONTH_IN_SECONDS);
+    return $installed_version;
+}
+
+// Function to check rg (ripgrep) version
+function nppp_check_rg_version() {
+    $transient_key = 'nppp_rg_version_' . md5('nppp');
+    $cached = get_transient($transient_key);
+    if ($cached !== false) {
+        return $cached;
+    }
+
+    $installed_version = 'Not Installed';
+
+    if (nppp_get_command_output('command -v rg')) {
+        $line = nppp_get_command_output("rg --version 2>&1 | head -n1 | awk '{print \$2}'");
+        if (!empty($line)) {
+            $installed_version = trim($line);
+        }
+    }
+
+    set_transient($transient_key, $installed_version, MONTH_IN_SECONDS);
+    return $installed_version;
+}
+
 // Function to check nginx cache path fuse mount points
 function nppp_check_fuse_cache_paths($cache_paths) {
     // Ask result in cache first
@@ -474,7 +516,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                 <tbody>
                     <!-- Section for Nginx Version -->
                     <tr>
-                        <td class="action"><?php esc_html_e('Nginx Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action"><?php esc_html_e('Nginx (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppNginxVersion">
                             <?php if ($nginx_info['nginx_version'] === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
@@ -489,7 +531,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     </tr>
                     <!-- Section for PHP Version -->
                     <tr>
-                        <td class="action"><?php esc_html_e('PHP Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action"><?php esc_html_e('PHP (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppOpenSSLVersion">
                             <?php if ($nginx_info['php_version'] === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
@@ -504,7 +546,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     </tr>
                     <!-- Section for safexec Version -->
                     <tr>
-                        <td class="action"><?php esc_html_e('safexec Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action"><?php esc_html_e('safexec (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppSafexecVersion">
                             <?php $safexec_version = nppp_check_safexec_version(); ?>
                             <?php if ($safexec_version === 'Unknown'): ?>
@@ -515,6 +557,38 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                             <?php else: ?>
                                 <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span><?php echo esc_html($safexec_version); ?></span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <!-- Section for wget Version -->
+                    <tr>
+                        <td class="action"><?php esc_html_e('wget (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="status" id="npppWgetVersion">
+                            <?php $wget_version = nppp_check_wget_version(); ?>
+                            <?php if ($wget_version === 'Not Installed' || $wget_version === 'Unknown'): ?>
+                                <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: orange; font-size: 14px; font-weight: bold;">
+                                    <?php echo esc_html($wget_version); ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span><?php echo esc_html($wget_version); ?></span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <!-- Section for rg Version -->
+                    <tr>
+                        <td class="action"><?php esc_html_e('rg (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="status" id="npppRgVersion">
+                            <?php $rg_version = nppp_check_rg_version(); ?>
+                            <?php if ($rg_version === 'Not Installed' || $rg_version === 'Unknown'): ?>
+                                <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: orange; font-size: 14px; font-weight: bold;">
+                                    <?php echo esc_html($rg_version); ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span><?php echo esc_html($rg_version); ?></span>
                             <?php endif; ?>
                         </td>
                     </tr>
