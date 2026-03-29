@@ -148,6 +148,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_locate_cache_file'                      => 'locate_cache_file_nonce',
             'nppp_update_pctnorm_mode'                    => 'nppp-update-pctnorm-mode',
             'nppp_update_http_purge_option'               => 'nppp-update-http-purge-option',
+            'nppp_update_rg_purge_option'                 => 'nppp-update-rg-purge-option',
         ];
 
         // Get the current AJAX action
