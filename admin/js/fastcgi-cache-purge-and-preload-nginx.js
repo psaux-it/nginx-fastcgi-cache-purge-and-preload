@@ -1967,6 +1967,48 @@ $(document).ready(function() {
         }, 'json');
     });
 
+    // Ripgrep Turbo Purge toggle when state changes
+    $('#nppp_rg_purge_enabled').change(function() {
+        var rgPurgeElement = $(this);
+        var labelSpan      = rgPurgeElement.next('.nppp-onoffswitch-label-rgpurge');
+        var labelOffset    = labelSpan.offset();
+        var notifLeft      = labelOffset.left + labelSpan.outerWidth() + 10;
+        var notifTop       = labelOffset.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action:    'nppp_update_rg_purge_option',
+            rg_purge:  isChecked,
+            _wpnonce:  nppp_admin_data.rg_purge_nonce
+        }, function(response) {
+            if (response.success) {
+                var notification       = document.createElement('div');
+                notification.textContent = '\u2714';
+                notification.style.cssText = [
+                    'position:absolute',
+                    'left:'  + notifLeft + 'px',
+                    'top:'   + notifTop  + 'px',
+                    'background-color:#50C878',
+                    'color:#fff',
+                    'padding:8px 12px',
+                    'transition:opacity 0.3s ease-in-out',
+                    'opacity:1',
+                    'z-index:9999',
+                    'font-size:13px',
+                    'font-weight:700'
+                ].join(';');
+                document.body.appendChild(notification);
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() { document.body.removeChild(notification); }, 300);
+                }, 1000);
+            } else {
+                $('#nppp_rg_purge_enabled').prop('checked', !$('#nppp_rg_purge_enabled').prop('checked'));
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+            }
+        }, 'json');
+    });
+
     // Related Pages
     (function npppSetupRelatedAutoSave() {
         const $npppRelWrappers = $('.nppp-related-pages').not('[data-nppp-rel-init]');
@@ -3186,6 +3228,31 @@ $(document).ready(function() {
             $('.nppp-onoffswitch-switch-httppurge').css('background', '#ea1919');
             $('.nppp-on-httppurge').css('color', '#000000');
             $('.nppp-off-httppurge').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for Ripgrep Turbo Purge
+    var isRgPurgeChecked = $('#nppp_rg_purge_enabled').prop('checked');
+    if (isRgPurgeChecked) {
+        $('.nppp-onoffswitch-switch-rgpurge').css('background', '#66b317');
+        $('.nppp-on-rgpurge').css('color', '#ffffff');
+        $('.nppp-off-rgpurge').css('color', '#000000');
+    } else {
+        $('.nppp-onoffswitch-switch-rgpurge').css('background', '#ea1919');
+        $('.nppp-on-rgpurge').css('color', '#000000');
+        $('.nppp-off-rgpurge').css('color', '#ffffff');
+    }
+
+    $('#nppp_rg_purge_enabled').change(function() {
+        var isRgPurgeChecked = $(this).prop('checked');
+        if (isRgPurgeChecked) {
+            $('.nppp-onoffswitch-switch-rgpurge').css('background', '#66b317');
+            $('.nppp-on-rgpurge').css('color', '#ffffff');
+            $('.nppp-off-rgpurge').css('color', '#000000');
+        } else {
+            $('.nppp-onoffswitch-switch-rgpurge').css('background', '#ea1919');
+            $('.nppp-on-rgpurge').css('color', '#000000');
+            $('.nppp-off-rgpurge').css('color', '#ffffff');
         }
     });
 
