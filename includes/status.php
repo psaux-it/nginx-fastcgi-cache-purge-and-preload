@@ -1069,6 +1069,13 @@ function nppp_my_status_html() {
                                 </td>
                             </tr>
                             <tr>
+                                <td class="check"><?php esc_html_e('rg (Recommended)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="status" id="nppprgStatus">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_check_command_status('rg')); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
                                 <td class="check"><?php esc_html_e('cpulimit (Optional)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppcpulimitStatus">
                                     <span class="dashicons"></span>
