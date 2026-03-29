@@ -243,6 +243,30 @@
                     .css({ opacity:.5, cursor:'not-allowed' });
             })();
 
+            // Disable Ripgrep Turbo Purge toggle
+            (function disableRgPurge(){
+                const $toggle = $('#nppp_rg_purge_enabled');
+                if (!$toggle.length) return;
+
+                const $form      = $toggle.closest('form');
+                const name       = $toggle.attr('name');
+                const currentVal = $toggle.is(':checked') ? 'yes' : 'no';
+
+                $toggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                $toggle
+                    .closest('.nppp-onoffswitch-rgpurge')
+                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .find('.nppp-onoffswitch-label-rgpurge')
+                    .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+
+                ensureHiddenMirror($form, name, currentVal);
+            })();
+
             // Disable watchdog toggle and preserve current value
             (function disableWatchdog(){
                 const $watchdogToggle = $('#nginx_cache_watchdog');
