@@ -50,6 +50,7 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_wget_urls_cache_prev_key',
         'nppp_safexec_ok',
         'nppp_category_map',
+        'nppp_rg_ok',
     );
 
     // Delete each transient
