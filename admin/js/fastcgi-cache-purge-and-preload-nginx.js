@@ -3974,6 +3974,7 @@ function npppupdateStatus() {
         "#nppppermIsolation",
         "#npppcpulimitStatus",
         "#npppsafexecStatus",
+        "#nppprgStatus",
         "#npppCacheDiskSize"
     ];
 
@@ -4517,6 +4518,28 @@ function npppupdateStatus() {
 
     npppsafexecStatusSpan.appendChild(iconSpanSafexec);
     npppsafexecStatusSpan.append(safexecStatusText);
+
+    // Fetch and update rg command status
+    var nppprgStatusSpan = document.getElementById("nppprgStatus");
+    var nppprgStatus = nppprgStatusSpan.textContent.trim();
+    nppprgStatusSpan.textContent = '';
+    nppprgStatusSpan.style.fontSize = "14px";
+
+    let iconSpanRg = document.createElement('span');
+    let rgStatusText = '';
+
+    if (nppprgStatus === "Installed") {
+        nppprgStatusSpan.style.color = "green";
+        iconSpanRg.classList.add("dashicons", "dashicons-yes");
+        rgStatusText = ' ' + __('Installed', 'fastcgi-cache-purge-and-preload-nginx');
+    } else if (nppprgStatus === "Not Installed") {
+        nppprgStatusSpan.style.color = "red";
+        iconSpanRg.classList.add("dashicons", "dashicons-no");
+        rgStatusText = ' ' + __('Not Installed', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    nppprgStatusSpan.appendChild(iconSpanRg);
+    nppprgStatusSpan.append(rgStatusText);
 
     // Add spin effect to icons
     document.querySelectorAll('.status').forEach(status => {
