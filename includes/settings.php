@@ -49,7 +49,7 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nppp_http_purge_enabled', 'HTTP Purge', 'nppp_http_purge_enabled_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nppp_http_purge_suffix', 'Purge URL Suffix', 'nppp_http_purge_suffix_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nppp_http_purge_custom_url', 'Purge Custom Base URL', 'nppp_http_purge_custom_url_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
-    add_settings_field('nppp_rg_purge_enabled', 'Turbo Purge', 'nppp_rg_purge_enabled_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nppp_rg_purge_enabled', 'RG Purge', 'nppp_rg_purge_enabled_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
 // Add settings page
@@ -774,11 +774,11 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description"><?php echo esc_html__( 'Set this when the purge endpoint differs from your public site URL — Docker networks, separate Nginx server, non-standard port, or cPanel/Plesk environments with a custom Nginx layer.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
-                        <!-- Turbo Purge -->
+                        <!-- RG Purge -->
                         <tr valign="top">
                             <th scope="row">
                                 <span class="dashicons dashicons-performance"></span>
-                                <?php echo esc_html__( 'Turbo Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                <?php echo esc_html__( 'RG Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </th>
                             <td>
                                 <div class="nppp-auto-preload-container">
@@ -1391,7 +1391,7 @@ function nppp_update_http_purge_option(): void {
     }
 }
 
-// AJAX handler Turbo Purge
+// AJAX handler RG Purge
 function nppp_update_rg_purge_option(): void {
     if ( isset( $_POST['_wpnonce'] ) ) {
         $nonce = sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) );
@@ -1415,7 +1415,7 @@ function nppp_update_rg_purge_option(): void {
     if ( $rg_purge === 'yes' ) {
         $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
         if ( $rg_bin === '' || ! is_executable( $rg_bin ) ) {
-            wp_send_json_error( 'ripgrep (rg) binary not found. Install it to enable Turbo Purge.' );
+            wp_send_json_error( 'ripgrep (rg) binary not found. Install it to enable RG Purge.' );
             return;
         }
     }
@@ -2420,7 +2420,7 @@ function nppp_http_purge_custom_url_callback(): void {
     echo "<input type='text' id='nppp_http_purge_custom_url' name='nginx_cache_settings[nppp_http_purge_custom_url]' value='" . esc_attr( $options['nppp_http_purge_custom_url'] ?? '' ) . "' class='regular-text' placeholder='https://docker/purge' />";
 }
 
-// Callback function for Turbo Purge
+// Callback function for RG Purge
 function nppp_rg_purge_enabled_callback(): void {
     $options    = get_option( 'nginx_cache_settings', [] );
 
@@ -2446,7 +2446,7 @@ function nppp_rg_purge_enabled_callback(): void {
     }
 
     if ( ! $rg_bin ) {
-        $status_note = esc_html__( 'Unavailable: ripgrep (rg) not found. Install it to enable Turbo Purge (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
+        $status_note = esc_html__( 'Unavailable: ripgrep (rg) not found. Install it to enable RG Purge (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
     } elseif ( ! $rg_ok ) {
         $status_note = esc_html__( 'Unavailable: ripgrep (rg) binary is not executable. Check permissions.', 'fastcgi-cache-purge-and-preload-nginx' );
     } else {
@@ -2989,7 +2989,7 @@ function nppp_nginx_cache_settings_sanitize($input) {
         );
     }
 
-    // Turbo Purge
+    // RG Purge
     $sanitized_input['nppp_rg_purge_enabled'] =
         ( isset( $input['nppp_rg_purge_enabled'] ) && $input['nppp_rg_purge_enabled'] === 'yes' )
         ? 'yes' : 'no';
