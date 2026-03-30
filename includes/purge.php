@@ -63,176 +63,103 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
 }
 
 // Auto Purge & On page purge operations
-function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purge = false) {
-    // On a large cache (100 k+ files)
-    // on slow or network-attached storage this can easily exceed the default
-    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
-    // mid-operation and leaving the purge lock (stored as a wp_options row via
-    // WP_Upgrader::create_lock()) permanently orphaned until its TTL expires.
-
-    // set_time_limit(0) resets the countdown to "unlimited" for this request
-    // only — it has no effect on other processes or future requests.
-    // The @ suppressor silences the E_WARNING that some hardened hosts emit
-    // when the function appears in disable_functions; the call is otherwise
-    // a safe no-op in that environment.
-
-    // Note: this only disables PHP's own timer. PHP-FPM's independent
-    // request_terminate_timeout and Nginx's fastcgi_read_timeout are enforced
-    // by the FPM master process and the upstream proxy respectively and cannot
-    // be overridden from PHP at runtime.
-    if (function_exists('set_time_limit')) {
-        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_purge = false ) {
+    // Disable PHP's own request timer for large caches.
+    // PHP-FPM's request_terminate_timeout and Nginx's fastcgi_read_timeout
+    // are enforced by their respective processes and cannot be overridden here.
+    if ( function_exists( 'set_time_limit' ) ) {
+        @set_time_limit( 0 ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
-    if (function_exists('ignore_user_abort')) {
-        ignore_user_abort(true);
+    if ( function_exists( 'ignore_user_abort' ) ) {
+        ignore_user_abort( true );
     }
 
-    // Initialize WordPress filesystem
+    // Bootstrap
     $wp_filesystem = nppp_initialize_wp_filesystem();
-
-    if ($wp_filesystem === false) {
-        nppp_display_admin_notice(
-            'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
-        );
+    if ( $wp_filesystem === false ) {
+        nppp_display_admin_notice( 'error', __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         return;
     }
 
-    // Display decoded URL to user
-    $current_page_url_decoded = rawurldecode($current_page_url);
+    $current_page_url_decoded = rawurldecode( $current_page_url );
+    $PIDFILE                  = nppp_get_runtime_file( 'cache_preload.pid' );
 
-    // Get the PIDFILE location
-    $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
+    // Single settings fetch — reused across all fast-paths.
+    $nginx_cache_settings = get_option( 'nginx_cache_settings' );
+    $nppp_auto_preload    = isset( $nginx_cache_settings['nginx_cache_auto_preload'] ) && $nginx_cache_settings['nginx_cache_auto_preload'] === 'yes';
+    $chain_autopreload    = ( $nppp_auto_purge && $nppp_auto_preload );
+    $regex                = isset( $nginx_cache_settings['nginx_cache_key_custom_regex'] )
+                            ? base64_decode( $nginx_cache_settings['nginx_cache_key_custom_regex'] )
+                            : nppp_fetch_default_regex_for_cache_key();
 
-    // Get the status of Auto Preload option
-    $options = get_option('nginx_cache_settings');
-    $nppp_auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
-    $chain_autopreload = ($nppp_auto_purge && $nppp_auto_preload);
-
-    // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
-    $nginx_cache_settings = get_option('nginx_cache_settings');
-
-    // User defined regex in Cache Key Regex option
-    $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
-             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
-             : nppp_fetch_default_regex_for_cache_key();
-
-    // First, check if any active cache preloading action is in progress.
-    // Purging the cache for a single page or post, whether done manually (Fonrtpage) or automatically (Auto Purge) after content updates,
-    // can cause issues if there is an active cache preloading process.
-    if ($wp_filesystem->exists($PIDFILE)) {
-        $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
-
-        if ($pid > 0 && nppp_is_process_alive($pid)) {
-            // Translators: %s is the page URL
-            nppp_display_admin_notice('info', sprintf( __( 'INFO: Single-page purge for %s skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion or use "Purge All" to cancel.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
+    // Bail if a full preload is already running.
+    if ( $wp_filesystem->exists( $PIDFILE ) ) {
+        $pid = intval( nppp_perform_file_operation( $PIDFILE, 'read' ) );
+        if ( $pid > 0 && nppp_is_process_alive( $pid ) ) {
+            nppp_display_admin_notice( 'info', sprintf(
+                __( 'INFO: Single-page purge for %s skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion or use "Purge All" to cancel.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $current_page_url_decoded
+            ) );
             return;
         }
     }
 
-    // Valitade the sanitized url before process
-    if (filter_var($current_page_url, FILTER_VALIDATE_URL) !== false) {
-        $url_to_search_exact = preg_replace('#^https?://#', '', $current_page_url);
-    } else {
-        nppp_display_admin_notice('error', __( 'ERROR URL: URL can not validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
+    // Validate URL and derive the scheme-stripped form used for cache-key matching.
+    if ( filter_var( $current_page_url, FILTER_VALIDATE_URL ) === false ) {
+        nppp_display_admin_notice( 'error', __( 'ERROR URL: URL can not validated.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         return;
     }
+    $url_to_search_exact = preg_replace( '#^https?://#', '', $current_page_url );
 
-    // Read only the head (binary-safe)
-    $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
-    $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
+    $head_bytes_primary  = (int) apply_filters( 'nppp_locate_head_bytes', 4096 );
+    $head_bytes_fallback = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
 
-    // Serialize concurrent single-page purges and prevent collision with
-    // Purge All from another admin session. Released immediately after
-    // all cache filesystem work is done — post-purge side effects
-    // (Cloudflare, preload, notices) run outside the lock.
-    // TTL only matters if PHP crashes mid-operation.
+    // Serialize concurrent single-page purges and prevent collision with Purge All.
+    // Lock is released after all cache filesystem work is done;
+    // post-purge side effects (Cloudflare, preload) run outside the lock.
     if ( ! nppp_acquire_purge_lock( 'single' ) ) {
         nppp_display_admin_notice( 'info', sprintf(
-            // Translators: %s is the page URL
             __( 'INFO: Single-page purge for %s skipped — another cache purge operation is already in progress. Please try again shortly.', 'fastcgi-cache-purge-and-preload-nginx' ),
             $current_page_url_decoded
         ) );
         return;
     }
 
-    // Tracks whether the lock has been released inside the try block on
-    // the success path. Prevents the finally block from double-releasing.
+    // Tracks lock release so the finally block never double-releases.
     $nppp_lock_released = false;
 
-    // FAST-PATH 1 — HTTP (Nginx module)
-    // Asks the ngx_cache_purge module to delete the entry via HTTP.
+    // Post-purge side-effects closure
+    // Eliminates the identical block that was previously duplicated in every
+    // fast-path exit. Called once per purge attempt, regardless of outcome.
     //
-    //   true   — HTTP 200: entry deleted from shmem + disk atomically.
-    //   'miss' — HTTP 412: nginx confirmed URL not in cache (v2.5.x).
-    //            Shmem is the authority — if it has no entry, filesystem scan is pointless.
-    //   false  — Any other outcome (404 ambiguous, 403, connection error, etc.):
-    //            fall through to Fast-Path 2 (index) or recursive scan.
-    //
-    // BYPASS: If the index holds more than one path for this URL (e.g. Nginx
-    // Vary variants created when PHP emits Vary: Accept-Encoding), HTTP purge
-    // can only delete one variant — it has no way to address the others by
-    // filesystem path. Delegate to Fast-Path 2 instead so all variants are
-    // deleted in a single index loop before the recursive scan is ever opened.
-    // To prevent stale cache.
-
-    $nppp_http_bypass = false;
-    $nppp_fp1_index   = get_option( 'nppp_url_filepath_index' );
-    if ( is_array( $nppp_fp1_index )
-        && isset( $nppp_fp1_index[ $url_to_search_exact ] )
-        && is_array( $nppp_fp1_index[ $url_to_search_exact ] )
-        && count( $nppp_fp1_index[ $url_to_search_exact ] ) > 1
+    // $primary_found   — true if the primary cache entry was actually deleted.
+    // $trigger_preload — gates nppp_preload_cache_on_update; defaults true.
+    //                    FP2 passes $deleted so preload is skipped on delete error,
+    //                    preserving the original per-path behaviour exactly.
+    $run_post_purge = function ( bool $primary_found, bool $trigger_preload = true ) use (
+        $nginx_cache_path, $current_page_url, $nppp_auto_purge,
+        $chain_autopreload, &$nppp_lock_released
     ) {
-        $nppp_http_bypass = true;
-        nppp_display_admin_notice( 'info', sprintf(
-            /* translators: %s: full page URL */
-            __( 'INFO HTTP PURGE BYPASS: Multiple cache variants detected for page %s — delegating to index-based purge to ensure all variants are removed.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            $current_page_url_decoded
-        ), true, false );
-    }
-    unset( $nppp_fp1_index );
-
-    $nppp_http_result = $nppp_http_bypass ? false : nppp_http_purge_try_first( $current_page_url );
-
-    // HTTP 200: Cache purged
-    if ( $nppp_http_result === true ) {
-        if ( ! $chain_autopreload ) {
-            nppp_display_admin_notice( 'success', sprintf(
-                /* translators: %s: full page URL that had its cache purged via HTTP */
-                __( 'SUCCESS HTTP PURGE: Nginx cache purged for page %s (Index + filesystem scan skipped.)', 'fastcgi-cache-purge-and-preload-nginx' ),
-                $current_page_url_decoded
-            ) );
-        }
-
-        // Get related URLs
         $is_manual    = ! $nppp_auto_purge;
         $related_urls = nppp_get_related_urls_for_single( $current_page_url );
 
-        // Purge related cache
         nppp_purge_urls_silent( $nginx_cache_path, $related_urls );
-
-        // All cache work done — release lock
         nppp_release_purge_lock();
         $nppp_lock_released = true;
 
-        // Auto preload cache with found=true — primary purged
-        if ( $chain_autopreload ) {
-            nppp_preload_cache_on_update( $current_page_url, true );
+        if ( $chain_autopreload && $trigger_preload ) {
+            nppp_preload_cache_on_update( $current_page_url, $primary_found );
         }
 
-        // Check preload policy
         $settings = get_option( 'nginx_cache_settings' );
         $should_preload_related =
-            ( $is_manual && ! empty( $settings['nppp_related_preload_after_manual'] ) && $settings['nppp_related_preload_after_manual'] === 'yes' )
-            || ( ! $is_manual && ! empty( $settings['nginx_cache_auto_preload'] ) && $settings['nginx_cache_auto_preload'] === 'yes' );
+            ( $is_manual  && ! empty( $settings['nppp_related_preload_after_manual'] ) && $settings['nppp_related_preload_after_manual'] === 'yes' )
+            || ( ! $is_manual && ! empty( $settings['nginx_cache_auto_preload'] )          && $settings['nginx_cache_auto_preload']          === 'yes' );
 
-        // Preload related cache
         if ( $should_preload_related ) {
             nppp_preload_urls_fire_and_forget( $related_urls );
         }
 
-        // Cloudflare purge cache
         $post_id = (int) url_to_postid( $current_page_url );
         do_action(
             'nppp_purged_urls',
@@ -241,13 +168,42 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
             $post_id,
             (bool) $nppp_auto_purge
         );
+    };
 
+    // FP1: HTTP purge (ngx_cache_purge module)
+    // Bypass when the index holds multiple variants — HTTP can only address one
+    // entry at a time, so delegate to FP2 to cover all variants atomically.
+    $nppp_index       = get_option( 'nppp_url_filepath_index' );
+    $nppp_index       = is_array( $nppp_index ) ? $nppp_index : [];
+    $nppp_http_bypass = isset( $nppp_index[ $url_to_search_exact ] )
+        && is_array( $nppp_index[ $url_to_search_exact ] )
+        && count( $nppp_index[ $url_to_search_exact ] ) > 1;
+
+    if ( $nppp_http_bypass ) {
+        nppp_display_admin_notice( 'info', sprintf(
+            /* translators: %s: full page URL */
+            __( 'INFO HTTP PURGE BYPASS: Multiple cache variants detected for page %s — delegating to index-based purge to ensure all variants are removed.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $current_page_url_decoded
+        ), true, false );
+    }
+
+    $nppp_http_result = $nppp_http_bypass ? false : nppp_http_purge_try_first( $current_page_url );
+
+    if ( $nppp_http_result === true ) {
+        // HTTP 200 — entry deleted from shmem + disk atomically.
+        if ( ! $chain_autopreload ) {
+            nppp_display_admin_notice( 'success', sprintf(
+                /* translators: %s: full page URL */
+                __( 'SUCCESS HTTP PURGE: Nginx cache purged for page %s (Index + filesystem scan skipped.)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $current_page_url_decoded
+            ) );
+        }
+        $run_post_purge( true );
         return;
     }
 
-    // HTTP 412: not in cache (v2.5.x)
-    // Skip directly to the post-purge path.
     if ( $nppp_http_result === 'miss' ) {
+        // HTTP 412 — Nginx confirmed the URL is not in cache (v2.5.x).
         if ( ! $chain_autopreload ) {
             nppp_display_admin_notice( 'info', sprintf(
                 /* translators: %s: full page URL */
@@ -255,72 +211,31 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 $current_page_url_decoded
             ) );
         }
-
-        // Get related URLs
-        $is_manual    = ! $nppp_auto_purge;
-        $related_urls = nppp_get_related_urls_for_single( $current_page_url );
-
-        // Purge related cache
-        nppp_purge_urls_silent( $nginx_cache_path, $related_urls );
-
-        // All cache work done — release lock
-        nppp_release_purge_lock();
-        $nppp_lock_released = true;
-
-        // Auto preload cache with found=false — primary was not in cache
-        if ( $chain_autopreload ) {
-            nppp_preload_cache_on_update( $current_page_url, false );
-        }
-
-        // Check preload policy
-        $settings = get_option( 'nginx_cache_settings' );
-        $should_preload_related =
-            ( $is_manual && ! empty( $settings['nppp_related_preload_after_manual'] ) && $settings['nppp_related_preload_after_manual'] === 'yes' )
-            || ( ! $is_manual && ! empty( $settings['nginx_cache_auto_preload'] ) && $settings['nginx_cache_auto_preload'] === 'yes' );
-
-        // Preload related cache
-        if ( $should_preload_related ) {
-            nppp_preload_urls_fire_and_forget( $related_urls );
-        }
-
-        // Cloudflare purge cache
-        $post_id = (int) url_to_postid( $current_page_url );
-        do_action(
-            'nppp_purged_urls',
-            array_merge( [ $current_page_url ], $related_urls ),
-            $current_page_url,
-            $post_id,
-            (bool) $nppp_auto_purge
-        );
-
+        $run_post_purge( false );
         return;
     }
 
-    // FAST-PATH 2 — Index (wp_option filepath lookup)
-    // Looks up the known disk paths for this URL from nppp_url_filepath_index.
-    // Hit + valid files → delete directly, no directory walk needed.
-    // Miss or stale pointer → fall through to recursive scan below.
-
-    $nppp_index = get_option('nppp_url_filepath_index');
-    if (is_array($nppp_index) && isset($nppp_index[$url_to_search_exact])) {
-        // Index stores an array of paths — one per Nginx cache variant
-        $nppp_index_paths = $nppp_index[$url_to_search_exact];
-        unset($nppp_index);
+    // FP2: Persistent index lookup
+    // Each URL maps to one or more filesystem paths (one per Nginx cache variant).
+    // Hit + all valid paths → delete directly, no directory walk needed.
+    // All stale → fall through to FP3/FP4.
+    if ( isset( $nppp_index[ $url_to_search_exact ] ) ) {
+        $nppp_index_paths = $nppp_index[ $url_to_search_exact ];
 
         $deleted      = false;
         $delete_error = false;
         $any_valid    = false;
 
         foreach ( $nppp_index_paths as $nppp_index_path ) {
-            if ( ! $wp_filesystem->exists($nppp_index_path)
-                || ! $wp_filesystem->is_readable($nppp_index_path)
-                || ! $wp_filesystem->is_writable($nppp_index_path)
-                || nppp_validate_path($nppp_index_path, true) !== true
+            if ( ! $wp_filesystem->exists( $nppp_index_path )
+                || ! $wp_filesystem->is_readable( $nppp_index_path )
+                || ! $wp_filesystem->is_writable( $nppp_index_path )
+                || nppp_validate_path( $nppp_index_path, true ) !== true
             ) {
                 continue;
             }
             $any_valid = true;
-            if ( $wp_filesystem->delete($nppp_index_path) ) {
+            if ( $wp_filesystem->delete( $nppp_index_path ) ) {
                 $deleted = true;
             } else {
                 $delete_error = true;
@@ -328,10 +243,10 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
         }
 
         if ( ! $any_valid ) {
-            // All pointers stale — fall through to recursive scan.
+            // All pointers stale — fall through to FP3/FP4.
             nppp_display_admin_notice( 'info', sprintf(
                 /* translators: %s: full page URL */
-                __( 'INFO INDEX MISS: Running full recursive scan for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'INFO INDEX MISS: Running full recursive scan (RG or Iterative) for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $current_page_url_decoded
             ), true, false );
         } else {
@@ -342,101 +257,248 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
             ), true, false );
 
             if ( $deleted && ! $delete_error ) {
-                if (!$chain_autopreload) {
-                    // translators: %s: full page URL
-                    nppp_display_admin_notice('success', sprintf(__( 'SUCCESS ADMIN: Nginx cache purged for page %s (index hit — no scan)', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
+                if ( ! $chain_autopreload ) {
+                    nppp_display_admin_notice( 'success', sprintf(
+                        /* translators: %s: full page URL */
+                        __( 'SUCCESS ADMIN: Nginx cache purged for page %s (index hit — no scan)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $current_page_url_decoded
+                    ) );
                 }
             } else {
-                // translators: %s: full page URL
-                nppp_display_admin_notice('error', sprintf(__( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
+                nppp_display_admin_notice( 'error', sprintf(
+                    /* translators: %s: full page URL */
+                    __( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $current_page_url_decoded
+                ) );
             }
 
-            // Get related URLs
-            $is_manual    = !$nppp_auto_purge;
-            $related_urls = nppp_get_related_urls_for_single($current_page_url);
-
-            // Purge related cache
-            nppp_purge_urls_silent($nginx_cache_path, $related_urls);
-
-            // All cache work done — release lock
-            nppp_release_purge_lock();
-            $nppp_lock_released = true;
-
-            // Auto preload with found=true — primary purged
-            if ($deleted && $chain_autopreload) {
-                nppp_preload_cache_on_update($current_page_url, true);
-            }
-
-            // Check preload policy
-            $settings = get_option('nginx_cache_settings');
-            $should_preload_related =
-                ($is_manual && !empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes')
-                || (!$is_manual && !empty($settings['nginx_cache_auto_preload']) && $settings['nginx_cache_auto_preload'] === 'yes');
-
-            // Preload related cache
-            if ($should_preload_related) {
-                nppp_preload_urls_fire_and_forget($related_urls);
-            }
-
-            // Cloudflare purge cache
-            $post_id = (int) url_to_postid($current_page_url);
-            do_action(
-                'nppp_purged_urls',
-                array_merge( [ $current_page_url ], $related_urls ),
-                $current_page_url,
-                $post_id,
-                (bool) $nppp_auto_purge
-            );
-
+            unset( $nppp_index );
+            $run_post_purge( true, $deleted );
             return;
         }
     } else {
-        unset($nppp_index);
-
         nppp_display_admin_notice( 'info', sprintf(
             /* translators: %s: full page URL */
-            __( 'INFO INDEX ABSENT: Running full recursive scan for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'INFO INDEX ABSENT: Running full recursive scan (RG or Iterative) for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
             $current_page_url_decoded
         ), true, false );
     }
 
-    try { // Outer try: ensures the purge lock is always released via finally
-    try { // Inner try: catches filesystem/iterator exceptions during cache scan
+    // FP3 + FP4 inside try/finally — guarantees lock release on all exits
+    try {
+
+    // FP3: ripgrep binary search
+    // rg parallelises across all CPU cores (-j 0) and scans 100k-file caches
+    // in <1 s — 30–60× faster than PHP's recursive iterator (FP4).
+    if ( isset( $nginx_cache_settings['nppp_rg_purge_enabled'] ) && $nginx_cache_settings['nppp_rg_purge_enabled'] === 'yes' ) {
+        // Set env
+        nppp_prepare_request_env();
+
+		$nppp_rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+        $nppp_rg_cmd = sprintf(
+            '%s -n -m 1 --text -E none --no-messages --no-ignore --no-config -j 0 %s %s',
+            escapeshellarg( $nppp_rg_bin ),
+            escapeshellarg( '^KEY: .*' . preg_quote( $url_to_search_exact, '/' ) ),
+            escapeshellarg( $nginx_cache_path )
+        );
+
+        $nppp_rg_out  = [];
+        $nppp_rg_exit = 0;
+        exec( $nppp_rg_cmd, $nppp_rg_out, $nppp_rg_exit );
+
+        // Exit code 2 = rg I/O or permission error inside the cache path.
+        if ( $nppp_rg_exit === 2 ) {
+            nppp_display_admin_notice( 'error', sprintf(
+                __( 'ERROR RG PURGE: Nginx cache purge for page %s was aborted due to a permission or I/O error. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $current_page_url_decoded
+            ) );
+            return;
+        }
+
+        if ( ! empty( $nppp_rg_out ) ) {
+            // rg found candidate files — verify each and delete exact matches.
+            nppp_display_admin_notice( 'info', sprintf(
+                /* translators: %s: full page URL */
+                __( 'INFO RG HIT: Candidates found via RG; verifying and purging for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $current_page_url_decoded
+            ), true, false );
+
+            $nppp_rg_lines          = array_filter( $nppp_rg_out, 'strlen' );
+            $nppp_fp3_found         = false;
+            $nppp_fp3_any_deleted   = false;
+            $nppp_fp3_regex_tested  = false;
+            $nppp_fp3_deleted_paths = [];
+
+            foreach ( $nppp_rg_lines as $nppp_rg_raw_line ) {
+                $nppp_rg_raw_line = trim( $nppp_rg_raw_line );
+                if ( $nppp_rg_raw_line === '' ) {
+                    continue;
+                }
+
+                // Format: "filepath:line_number:KEY line" — limit splits so the KEY value is never truncated.
+                $nppp_rg_parts = explode( ':', $nppp_rg_raw_line, 3 );
+                if ( count( $nppp_rg_parts ) < 3 ) {
+                    continue;
+                }
+
+                $nppp_rg_candidate = trim( $nppp_rg_parts[0] );
+                $nppp_rg_key_line  = trim( $nppp_rg_parts[2] );
+
+                if ( $nppp_rg_candidate === '' || $nppp_rg_key_line === '' ) {
+                    continue;
+                }
+
+                // Unwritable candidate = cache path integrity failure (e.g. broken bindfs sync).
+                if ( ! $wp_filesystem->is_writable( $nppp_rg_candidate ) ) {
+                    nppp_display_admin_notice( 'error', sprintf(
+                        __( 'ERROR PERMISSION: Nginx cache purge for page %s was aborted due to a permission error. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $current_page_url_decoded
+                    ) );
+                    return;
+                }
+
+                // Skip non-GET cache entries.
+                foreach ( [ 'POST', 'HEAD', 'PUT', 'DELETE', 'PATCH', 'OPTIONS' ] as $nppp_method ) {
+                    if ( strpos( $nppp_rg_key_line, $nppp_method ) !== false ) {
+                        continue 2;
+                    }
+                }
+
+                if ( nppp_validate_path( $nppp_rg_candidate, true ) !== true ) {
+                    continue;
+                }
+
+                // Validate the regex once against the first viable candidate.
+                $nppp_fp3_rx = [];
+                if ( ! $nppp_fp3_regex_tested ) {
+                    if ( preg_match( $regex, $nppp_rg_key_line, $nppp_fp3_rx ) && isset( $nppp_fp3_rx[1], $nppp_fp3_rx[2] ) ) {
+                        $nppp_fp3_test_url = 'https://' . trim( $nppp_fp3_rx[1] ) . trim( $nppp_fp3_rx[2] );
+                        if ( filter_var( $nppp_fp3_test_url, FILTER_VALIDATE_URL ) ) {
+                            $nppp_fp3_regex_tested = true;
+                        } else {
+                            nppp_display_admin_notice( 'error', sprintf(
+                                __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\$host\$request_uri</strong> portion correctly.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                                $current_page_url_decoded
+                            ) );
+                            return;
+                        }
+                    } else {
+                        nppp_display_admin_notice( 'error', sprintf(
+                            __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            $current_page_url_decoded
+                        ) );
+                        return;
+                    }
+                } elseif ( ! ( preg_match( $regex, $nppp_rg_key_line, $nppp_fp3_rx ) && isset( $nppp_fp3_rx[1], $nppp_fp3_rx[2] ) ) ) {
+                    continue;
+                }
+
+                // Reject rg substring false positives — require an exact URL match.
+                if ( trim( $nppp_fp3_rx[1] ) . trim( $nppp_fp3_rx[2] ) !== $url_to_search_exact ) {
+                    continue;
+                }
+
+                $nppp_fp3_found = true;
+                if ( $wp_filesystem->delete( $nppp_rg_candidate ) ) {
+                    $nppp_fp3_any_deleted     = true;
+                    $nppp_fp3_deleted_paths[] = $nppp_rg_candidate;
+                } else {
+                    nppp_display_admin_notice( 'error', sprintf(
+                        /* translators: %s: full page URL */
+                        __( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $current_page_url_decoded
+                    ) );
+                }
+            }
+
+            // Write-back: persist deleted paths so FP2 skips rg/scan on the next purge.
+            if ( ! empty( $nppp_fp3_deleted_paths ) ) {
+                $nppp_fp3_existing = $nppp_index[ $url_to_search_exact ] ?? [];
+                foreach ( $nppp_fp3_deleted_paths as $nppp_fp3_p ) {
+                    if ( ! in_array( $nppp_fp3_p, $nppp_fp3_existing, true ) ) {
+                        $nppp_fp3_existing[] = $nppp_fp3_p;
+                    }
+                }
+                $nppp_index[ $url_to_search_exact ] = $nppp_fp3_existing;
+                update_option( 'nppp_url_filepath_index', $nppp_index, false );
+                unset( $nppp_index, $nppp_fp3_existing );
+            }
+
+            if ( $nppp_fp3_found && $nppp_fp3_any_deleted ) {
+                nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: %s: full page URL */
+                    __( 'INFO INDEX WRITE-BACK: Index updated after (RG) scan for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $current_page_url_decoded
+                ), true, false );
+                if ( ! $chain_autopreload ) {
+                    nppp_display_admin_notice( 'success', sprintf(
+                        /* translators: %s: full page URL */
+                        __( 'SUCCESS ADMIN: Nginx cache purged for page %s (RG)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $current_page_url_decoded
+                    ) );
+                }
+            } elseif ( ! $nppp_fp3_found && ! $chain_autopreload ) {
+                nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: %s: full page URL */
+                    __( 'INFO ADMIN: Nginx cache purge attempted, but the page %s is not currently found in the cache (RG)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $current_page_url_decoded
+                ) );
+            }
+
+            $run_post_purge( $nppp_fp3_any_deleted );
+            return;
+
+        } else {
+            // rg exit 0/1 with no output — URL is genuinely not in cache.
+            if ( ! $chain_autopreload ) {
+                nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: %s: full page URL */
+                    __( 'INFO ADMIN: Nginx cache purge attempted, but the page %s is not currently found in the cache (RG)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $current_page_url_decoded
+                ) );
+            }
+            $run_post_purge( false );
+            return;
+        }
+    }
+
+    // FP4: Recursive iterator scan
+    // Fallback when rg is unavailable. Walks every cache file one by one from PHP.
+    try {
         $cache_iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
+            new RecursiveDirectoryIterator( $nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS ),
             RecursiveIteratorIterator::LEAVES_ONLY
         );
 
-        $found = false;
-        $any_deleted  = false;
-        $regex_tested = false;
+        $found         = false;
+        $any_deleted   = false;
+        $regex_tested  = false;
+        $deleted_paths = [];
 
-        foreach ($cache_iterator as $file) {
-            if (!$file->isReadable() || !$file->isWritable()) {
-                // Any unreadable/unwritable file signals cache directory permission
-                // integrity is broken — either misconfigured from the start or broken
-                // mid-operation (e.g. bindfs sync failure between WEBSERVER-USER and
-                // PHP-FPM-USER). Either way we cannot safely identify or delete cache
-                // files — abort entirely rather than risk partial or silent failure.
-
-                nppp_display_admin_notice('error', sprintf(
+        foreach ( $cache_iterator as $file ) {
+            // Any unreadable/unwritable file = cache directory integrity failure
+            // (e.g. misconfiguration or broken bindfs sync) — abort entirely.
+            if ( ! $file->isReadable() || ! $file->isWritable() ) {
+                nppp_display_admin_notice( 'error', sprintf(
                     // Translators: %s is the page URL
-                    __('ERROR PERMISSION: Nginx cache purge for page %s was aborted — a permission issue was detected in the cache directory. This may indicate a cache path integrity problem (e.g. broken bindfs sync). Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'),
+                    __( 'ERROR PERMISSION: Nginx cache purge for page %s was aborted — a permission issue was detected in the cache directory. This may indicate a cache path integrity problem (e.g. broken bindfs sync). Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $current_page_url_decoded
-                ));
+                ) );
                 return;
             }
 
             $pathname = $file->getPathname();
-            $content  = nppp_read_head($wp_filesystem, $pathname, $head_bytes_primary);
-            if ($content === '') { continue; }
+            $content  = nppp_read_head( $wp_filesystem, $pathname, $head_bytes_primary );
+            if ( $content === '' ) {
+                continue;
+            }
 
+            // Locate the KEY header; retry with a larger read window if not found.
             $match = [];
-            if (!preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
-                // Try fallback
-                if (strlen($content) >= $head_bytes_primary) {
-                    $content = nppp_read_head($wp_filesystem, $pathname, $head_bytes_fallback);
-                    if ($content === '' || !preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
+            if ( ! preg_match( '/^KEY:\s([^\r\n]*)/m', $content, $match ) ) {
+                if ( strlen( $content ) >= $head_bytes_primary ) {
+                    $content = nppp_read_head( $wp_filesystem, $pathname, $head_bytes_fallback );
+                    if ( $content === '' || ! preg_match( '/^KEY:\s([^\r\n]*)/m', $content, $match ) ) {
                         continue;
                     }
                 } else {
@@ -444,200 +506,151 @@ function nppp_purge_single($nginx_cache_path, $current_page_url, $nppp_auto_purg
                 }
             }
 
-            // Ignore redirects
-            if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
-                strpos($content, 'Status: 302 Found') !== false) {
+            // Skip redirect responses — they are not cacheable GET responses.
+            if ( strpos( $content, 'Status: 301 Moved Permanently' ) !== false ||
+                 strpos( $content, 'Status: 302 Found' ) !== false ) {
                 continue;
             }
 
-            // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
+            // Skip non-GET cache entries.
             $key_line = $match[1];
-            if (strpos($key_line, 'POST') !== false ||
-                strpos($key_line, 'HEAD') !== false ||
-                strpos($key_line, 'PUT') !== false ||
-                strpos($key_line, 'DELETE') !== false ||
-                strpos($key_line, 'PATCH') !== false ||
-                strpos($key_line, 'OPTIONS') !== false) {
-                continue;
+            foreach ( [ 'POST', 'HEAD', 'PUT', 'DELETE', 'PATCH', 'OPTIONS' ] as $nppp_method ) {
+                if ( strpos( $key_line, $nppp_method ) !== false ) {
+                    continue 2;
+                }
             }
 
-            // Test regex only once
-            // Regex operations can be computationally expensive,
-            // especially when iterating over multiple files.
-            // So here we test regex only once
-            if (!$regex_tested) {
-                if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
-                    // Build the URL
-                    $host = trim($matches[1]);
-                    $request_uri = trim($matches[2]);
+            // Validate the regex once against the first viable file.
+            if ( ! $regex_tested ) {
+                if ( preg_match( $regex, $content, $matches ) && isset( $matches[1], $matches[2] ) ) {
+                    $host            = trim( $matches[1] );
+                    $request_uri     = trim( $matches[2] );
                     $constructed_url = $host . $request_uri;
-
-                    // Test parsed URL via regex with FILTER_VALIDATE_URL
-                    // We need to add prefix here
-                    $constructed_url_test = 'https://' . $constructed_url;
-
-                    // Test if the URL is in the expected format
-                    if ($constructed_url !== '' && filter_var($constructed_url_test, FILTER_VALIDATE_URL)) {
+                    if ( $constructed_url !== '' && filter_var( 'https://' . $constructed_url, FILTER_VALIDATE_URL ) ) {
                         $regex_tested = true;
                     } else {
-                        // Translators: %s is the page URL, $host$request_uri is just string the part of the cache key
-                        nppp_display_admin_notice('error', sprintf( __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\$host\$request_uri</strong> portion correctly.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ), true, false);
+                        nppp_display_admin_notice( 'error', sprintf(
+                            // Translators: %s is the page URL
+                            __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>\$host\$request_uri</strong> portion correctly.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            $current_page_url_decoded
+                        ), true, false );
                         return;
                     }
                 } else {
-                    // Translators: %s is the page URL
-                    nppp_display_admin_notice('error', sprintf( __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ), true, false);
+                    nppp_display_admin_notice( 'error', sprintf(
+                        // Translators: %s is the page URL
+                        __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $current_page_url_decoded
+                    ), true, false );
                     return;
                 }
             }
 
-            // Extract the in cache URL from fastcgi_cache_key
-            //preg_match($regex, $content, $matches);
+            // Extract host + request_uri from the KEY header and compare.
             $matches = [];
-            if (!(preg_match($regex, $content, $matches) && isset($matches[1], $matches[2]))) {
+            if ( ! ( preg_match( $regex, $content, $matches ) && isset( $matches[1], $matches[2] ) ) ) {
                 continue;
             }
 
-            // Build the URL
-            $host = trim($matches[1]);
-            $request_uri = trim($matches[2]);
-            $constructed_url = $host . $request_uri;
+            $host        = trim( $matches[1] );
+            $request_uri = trim( $matches[2] );
 
-            // Check extracted URL from fastcgi_cache_key and the URL attempted to purge is equal
-            if ($constructed_url === $url_to_search_exact) {
-                $cache_path = $file->getPathname();
-                $found = true;
-
-                // Sanitize and validate the file path before delete
-                // This is an extra security layer
-                $validation_result = nppp_validate_path($cache_path, true);
-
-                // Check the validation result
-                if ($validation_result !== true) {
-                    switch ($validation_result) {
-                        case 'critical_path':
-                            $error_message = sprintf(
-                                /* translators: %s: full page URL */
-                                __( 'ERROR PATH: A cache variant for page %s was skipped — its path points outside the allowed cache roots or resolves via a symlink to a restricted location.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                                $current_page_url_decoded
-                            );
-                            break;
-                        case 'file_not_found_or_not_readable':
-                            $error_message = sprintf(
-                                /* translators: %s: full page URL */
-                                __( 'ERROR PATH: A cache variant for page %s was skipped — the file no longer exists (possibly removed by a concurrent operation).', 'fastcgi-cache-purge-and-preload-nginx' ),
-                                $current_page_url_decoded
-                            );
-                            break;
-                        default:
-                            $error_message = sprintf(
-                                /* translators: %s: full page URL */
-                                __( 'ERROR PATH: A cache variant for page %s was skipped — invalid path detected.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                                $current_page_url_decoded
-                            );
-                    }
-                    nppp_display_admin_notice('error', $error_message);
-                    continue;
-                }
-
-                // Perform the purge action
-                $deleted = $wp_filesystem->delete($cache_path);
-
-                if ($deleted) {
-                    $any_deleted = true;
-
-                    // Write-back: store url→path in the persistent index so future
-                    // purges of this URL skip the scan entirely.
-                    // Safe even after delete — nginx always re-caches this URL to
-                    // the exact same deterministic path (MD5 + levels slicing).
-                    // Using append so multiple Vary variants or mobile versions
-                    // accumulate in the index.
-                    $nppp_wb_index  = get_option( 'nppp_url_filepath_index' );
-                    $nppp_wb_index  = is_array( $nppp_wb_index ) ? $nppp_wb_index : [];
-                    $nppp_existing  = $nppp_wb_index[ $url_to_search_exact ] ?? [];
-                    if ( ! in_array( $cache_path, $nppp_existing, true ) ) {
-                        $nppp_existing[] = $cache_path;
-                    }
-                    $nppp_wb_index[ $url_to_search_exact ] = $nppp_existing;
-                    update_option( 'nppp_url_filepath_index', $nppp_wb_index, false );
-                    unset( $nppp_wb_index, $nppp_existing );
-                } else {
-                    // translators: %s: full page URL
-                    nppp_display_admin_notice('error', sprintf(__( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
-                }
-
-                // The same URL may have multiple cache entries e.g. mobile or nginx vary variants.
+            if ( $host . $request_uri !== $url_to_search_exact ) {
                 continue;
+            }
+
+            $cache_path = $file->getPathname();
+            $found      = true;
+
+            $validation_result = nppp_validate_path( $cache_path, true );
+            if ( $validation_result !== true ) {
+                switch ( $validation_result ) {
+                    case 'critical_path':
+                        $error_message = sprintf(
+                            /* translators: %s: full page URL */
+                            __( 'ERROR PATH: A cache variant for page %s was skipped — its path points outside the allowed cache roots or resolves via a symlink to a restricted location.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            $current_page_url_decoded
+                        );
+                        break;
+                    case 'file_not_found_or_not_readable':
+                        $error_message = sprintf(
+                            /* translators: %s: full page URL */
+                            __( 'ERROR PATH: A cache variant for page %s was skipped — the file no longer exists (possibly removed by a concurrent operation).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            $current_page_url_decoded
+                        );
+                        break;
+                    default:
+                        $error_message = sprintf(
+                            /* translators: %s: full page URL */
+                            __( 'ERROR PATH: A cache variant for page %s was skipped — invalid path detected.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            $current_page_url_decoded
+                        );
+                }
+                nppp_display_admin_notice( 'error', $error_message );
+                continue;
+            }
+
+            if ( $wp_filesystem->delete( $cache_path ) ) {
+                $any_deleted     = true;
+                $deleted_paths[] = $cache_path;
+            } else {
+                nppp_display_admin_notice( 'error', sprintf(
+                    /* translators: %s: full page URL */
+                    __( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $current_page_url_decoded
+                ) );
             }
         }
-    } catch (Exception $e) {
-        // Translators: %s is the page URL
-        nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
+
+        // Write-back: persist deleted paths so FP2 skips the scan on the next purge.
+        if ( ! empty( $deleted_paths ) ) {
+            $nppp_existing = $nppp_index[ $url_to_search_exact ] ?? [];
+            foreach ( $deleted_paths as $nppp_wb_p ) {
+                if ( ! in_array( $nppp_wb_p, $nppp_existing, true ) ) {
+                    $nppp_existing[] = $nppp_wb_p;
+                }
+            }
+            $nppp_index[ $url_to_search_exact ] = $nppp_existing;
+            update_option( 'nppp_url_filepath_index', $nppp_index, false );
+            unset( $nppp_index, $nppp_existing );
+        }
+
+    } catch ( Exception $e ) {
+        nppp_display_admin_notice( 'error', sprintf(
+            // Translators: %s is the page URL
+            __( 'ERROR PERMISSION: Nginx cache purge failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $current_page_url_decoded
+        ) );
         return;
     }
 
-    // All matching cache files deleted (or none found).
-    // Run notices and post-purge side effects once, after the full scan.
+    // Post-scan notices then shared side effects.
     if ( $found && $any_deleted ) {
         nppp_display_admin_notice( 'info', sprintf(
             /* translators: %s: full page URL */
             __( 'INFO INDEX WRITE-BACK: Index updated after scan for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
             $current_page_url_decoded
         ), true, false );
-
-        if (!$chain_autopreload) {
-            // Translators: %s: full page URL that had its cache purged.
-            nppp_display_admin_notice('success', sprintf(__( 'SUCCESS ADMIN: Nginx cache purged for page %s (scan)', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded));
+        if ( ! $chain_autopreload ) {
+            nppp_display_admin_notice( 'success', sprintf(
+                // Translators: %s: full page URL that had its cache purged.
+                __( 'SUCCESS ADMIN: Nginx cache purged for page %s (scan)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $current_page_url_decoded
+            ) );
         }
+    } elseif ( ! $found && ! $chain_autopreload ) {
+        nppp_display_admin_notice( 'info', sprintf(
+            // Translators: %s is the page URL
+            __( 'INFO ADMIN: Nginx cache purge attempted, but the page %s is not currently found in the cache (scan)', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $current_page_url_decoded
+        ) );
     }
 
-    // Post-scan: after full directory walk completes.
-    if (!$found && !$chain_autopreload) {
-        // Translators: %s is the page URL
-        nppp_display_admin_notice('info', sprintf( __( 'INFO ADMIN: Nginx cache purge attempted, but the page %s is not currently found in the cache (scan)', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
-    }
-
-    // Get related URLs
-    $is_manual    = !$nppp_auto_purge;
-    $related_urls = nppp_get_related_urls_for_single($current_page_url);
-
-    // Purge related cache
-    nppp_purge_urls_silent($nginx_cache_path, $related_urls);
-
-    // All cache work done — release lock
-    nppp_release_purge_lock();
-    $nppp_lock_released = true;
-
-    // Auto preload — pass $any_deleted so preload knows whether primary was actually deleted.
-    if ($chain_autopreload) {
-        nppp_preload_cache_on_update($current_page_url, $any_deleted);
-    }
-
-    // Check preload policy
-    $settings = get_option('nginx_cache_settings');
-    $should_preload_related =
-        ($is_manual && !empty($settings['nppp_related_preload_after_manual']) && $settings['nppp_related_preload_after_manual'] === 'yes')
-        || (!$is_manual && !empty($settings['nginx_cache_auto_preload']) && $settings['nginx_cache_auto_preload'] === 'yes');
-
-    // Preload related cache
-    if ($should_preload_related) {
-        nppp_preload_urls_fire_and_forget($related_urls);
-    }
-
-    // Cloudflare purge cache
-    $post_id = (int) url_to_postid($current_page_url);
-    do_action(
-        'nppp_purged_urls',
-        array_merge( [ $current_page_url ], $related_urls ),
-        $current_page_url,
-        $post_id,
-        (bool) $nppp_auto_purge
-    );
+    $run_post_purge( $any_deleted );
 
     } finally {
-        // Safety net: releases the lock on all error/early-return exit paths
-        // where nppp_purge_urls_silent was never reached.
-        // No-op if already released on the success path above.
+        // Safety net: releases the lock on any error/early-return path where
+        // $run_post_purge was never reached. No-op if already released above.
         if ( ! $nppp_lock_released ) {
             nppp_release_purge_lock();
         }
