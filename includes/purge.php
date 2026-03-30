@@ -294,7 +294,7 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
         // Set env
         nppp_prepare_request_env();
 
-		$nppp_rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+        $nppp_rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
         $nppp_rg_cmd = sprintf(
             '%s -n -m 1 --text -E none --no-messages --no-ignore --no-config -j 0 %s %s',
             escapeshellarg( $nppp_rg_bin ),
