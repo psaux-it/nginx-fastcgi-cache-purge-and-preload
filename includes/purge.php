@@ -129,13 +129,9 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
     $nppp_lock_released = false;
 
     // Post-purge side-effects closure
-    // Eliminates the identical block that was previously duplicated in every
-    // fast-path exit. Called once per purge attempt, regardless of outcome.
-    //
     // $primary_found   — true if the primary cache entry was actually deleted.
     // $trigger_preload — gates nppp_preload_cache_on_update; defaults true.
-    //                    FP2 passes $deleted so preload is skipped on delete error,
-    //                    preserving the original per-path behaviour exactly.
+    //                    FP2 passes $deleted so preload is skipped on delete error.
     $run_post_purge = function ( bool $primary_found, bool $trigger_preload = true ) use (
         $nginx_cache_path, $current_page_url, $nppp_auto_purge,
         $chain_autopreload, &$nppp_lock_released
@@ -143,23 +139,28 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
         $is_manual    = ! $nppp_auto_purge;
         $related_urls = nppp_get_related_urls_for_single( $current_page_url );
 
+        // Purge related URLs
         nppp_purge_urls_silent( $nginx_cache_path, $related_urls );
         nppp_release_purge_lock();
         $nppp_lock_released = true;
 
+        // Auto Preload
         if ( $chain_autopreload && $trigger_preload ) {
             nppp_preload_cache_on_update( $current_page_url, $primary_found );
         }
 
+        // Check Related Preload policy
         $settings = get_option( 'nginx_cache_settings' );
         $should_preload_related =
-            ( $is_manual  && ! empty( $settings['nppp_related_preload_after_manual'] ) && $settings['nppp_related_preload_after_manual'] === 'yes' )
-            || ( ! $is_manual && ! empty( $settings['nginx_cache_auto_preload'] )          && $settings['nginx_cache_auto_preload']          === 'yes' );
+            ( $is_manual && ! empty( $settings['nppp_related_preload_after_manual'] ) && $settings['nppp_related_preload_after_manual'] === 'yes' )
+            || ( ! $is_manual && ! empty( $settings['nginx_cache_auto_preload'] ) && $settings['nginx_cache_auto_preload'] === 'yes' );
 
+        // Related Preload
         if ( $should_preload_related ) {
             nppp_preload_urls_fire_and_forget( $related_urls );
         }
 
+        // Cloudflare sync
         $post_id = (int) url_to_postid( $current_page_url );
         do_action(
             'nppp_purged_urls',
@@ -187,10 +188,11 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
         ), true, false );
     }
 
+    // Call HTTP Purge endpoint
     $nppp_http_result = $nppp_http_bypass ? false : nppp_http_purge_try_first( $current_page_url );
 
+    // HTTP 200 — entry deleted from shmem + disk atomically.
     if ( $nppp_http_result === true ) {
-        // HTTP 200 — entry deleted from shmem + disk atomically.
         if ( ! $chain_autopreload ) {
             nppp_display_admin_notice( 'success', sprintf(
                 /* translators: %s: full page URL */
@@ -198,19 +200,23 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
                 $current_page_url_decoded
             ) );
         }
+
+        // Call post purge
         $run_post_purge( true );
         return;
     }
 
+    // HTTP 412 — Nginx confirmed the URL is not in cache (nginx-modules - v2.5.x).
     if ( $nppp_http_result === 'miss' ) {
-        // HTTP 412 — Nginx confirmed the URL is not in cache (v2.5.x).
         if ( ! $chain_autopreload ) {
             nppp_display_admin_notice( 'info', sprintf(
                 /* translators: %s: full page URL */
-                __( 'INFO HTTP PURGE: Nginx cache purge attempted, but the page %s is not currently found in the cache. (Index + filesystem scan skipped.)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'INFO HTTP PURGE: Nginx cache purge attempted, but the page %s is not currently found in the cache. (Index + scan skipped.)', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $current_page_url_decoded
             ) );
         }
+
+        // Call post purge
         $run_post_purge( false );
         return;
     }
@@ -235,6 +241,7 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
             ) {
                 continue;
             }
+
             $any_valid = true;
             if ( $wp_filesystem->delete( $nppp_index_path ) ) {
                 $deleted = true;
@@ -283,13 +290,15 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
             }
 
             unset( $nppp_index );
+
+            // Call post purge
             $run_post_purge( true, $deleted );
             return;
         }
     } else {
         nppp_display_admin_notice( 'info', sprintf(
             /* translators: %s: full page URL */
-            __( 'INFO INDEX ABSENT: Running full recursive scan (RG or Iterative) for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'INFO INDEX ABSENT: Running full recursive scan (RG - PHP Iterative) for: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
             $current_page_url_decoded
         ), true, false );
     }
@@ -298,7 +307,7 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
     try {
 
         // FP3: ripgrep binary search
-        // rg parallelises across all CPU cores (-j 0) and scans 100k-file caches
+        // rg parallelises across all CPU cores and scans 100k-file caches
         // in <1 s — 30–60× faster than PHP's recursive iterator (FP4).
         if ( isset( $nginx_cache_settings['nppp_rg_purge_enabled'] ) && $nginx_cache_settings['nppp_rg_purge_enabled'] === 'yes' ) {
             // Set env
@@ -345,7 +354,7 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
                         continue;
                     }
 
-                    // Format: "filepath:line_number:KEY line" — limit splits so the KEY value is never truncated.
+                    // Limit splits so the KEY value is never truncated.
                     $nppp_rg_parts = explode( ':', $nppp_rg_raw_line, 3 );
                     if ( count( $nppp_rg_parts ) < 3 ) {
                         continue;
@@ -490,11 +499,13 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
                     ) );
                 }
 
+                // Call post purge
                 $run_post_purge( $nppp_fp3_any_deleted );
                 return;
 
             } else {
-                // rg exit 0/1 with no output — URL is genuinely not in cache.
+                // URL is genuinely not in cache.
+                // If RG enabled no need to enter PHP Iterative branch.
                 if ( ! $chain_autopreload ) {
                     nppp_display_admin_notice( 'info', sprintf(
                         /* translators: %s: full page URL */
@@ -502,13 +513,16 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
                         $current_page_url_decoded
                     ) );
                 }
+
+                // Call post purge
                 $run_post_purge( false );
                 return;
             }
         }
 
-        // FP4: Recursive iterator scan
+        // FP4: Recursive PHP iterator scan
         // Fallback when rg is unavailable. Walks every cache file one by one from PHP.
+        // Last effort, very slow on large cache sites.
         try {
             $cache_iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator( $nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS ),
@@ -522,7 +536,6 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
 
             foreach ( $cache_iterator as $file ) {
                 // Any unreadable/unwritable file = cache directory integrity failure
-                // (e.g. misconfiguration or broken bindfs sync) — abort entirely.
                 if ( ! $file->isReadable() || ! $file->isWritable() ) {
                     nppp_display_admin_notice( 'error', sprintf(
                         // Translators: %s is the page URL
@@ -551,7 +564,7 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
                     }
                 }
 
-                // Skip redirect responses — they are not cacheable GET responses.
+                // Skip redirect responses.
                 if ( strpos( $content, 'Status: 301 Moved Permanently' ) !== false ||
                     strpos( $content, 'Status: 302 Found' ) !== false ) {
                     continue;
@@ -700,6 +713,7 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
             ) );
         }
 
+        // Call post purge
         $run_post_purge( $any_deleted );
 
     } finally {
