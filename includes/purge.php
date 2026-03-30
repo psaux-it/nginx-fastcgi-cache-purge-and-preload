@@ -270,7 +270,7 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
                 if ( ! $chain_autopreload ) {
                     nppp_display_admin_notice( 'success', sprintf(
                         /* translators: %s: full page URL */
-                        __( 'SUCCESS ADMIN: Nginx cache purged for page %s (index hit — no scan)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        __( 'SUCCESS ADMIN: Nginx cache purged for page %s (index)', 'fastcgi-cache-purge-and-preload-nginx' ),
                         $current_page_url_decoded
                     ) );
                 }
