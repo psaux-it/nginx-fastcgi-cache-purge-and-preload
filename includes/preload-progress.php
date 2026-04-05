@@ -58,12 +58,6 @@ function nppp_nginx_cache_preload_progress($request) {
         $pid = intval( trim( $wp_filesystem->get_contents( $pid_path ) ) );
         if ( $pid > 0 && nppp_is_process_alive( $pid ) ) {
             $is_running = true;
-        } else {
-            // Process just finished — fire the tick callback directly without
-            // going through WP-Cron at all. This is shortcut for snapshot creation
-            // if only user actively watching preload progress on Status tab.
-            // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- legacy hook name
-            do_action( 'npp_cache_preload_status_event' );
         }
     }
 
