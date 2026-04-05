@@ -702,6 +702,12 @@ function nppp_pre_checks_critical() {
 
 // Pre-checks and global warnings
 function nppp_pre_checks() {
+    // Exlude Advanced and Help Tab
+    $nppp_active_tab = isset( $_GET['nppp_tab'] ) ? sanitize_key( wp_unslash( $_GET['nppp_tab'] ) ) : 'settings'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+    if ( ! in_array( $nppp_active_tab, [ 'settings', 'status' ], true ) ) {
+        return;
+    }
+
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
