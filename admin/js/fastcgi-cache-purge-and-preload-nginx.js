@@ -190,7 +190,10 @@ $(document).ready(function() {
                 if (!isTabChangeFromHash) {
                     const tabId = ui.newPanel.attr('id');
                     if (tabId) {
-                        window.history.replaceState(null, null, `#${tabId}`);
+                        const _npppTabUrl = new URL(window.location.href);
+                        _npppTabUrl.searchParams.set('nppp_tab', tabId);
+                        _npppTabUrl.hash = tabId;
+                        window.history.replaceState(null, null, _npppTabUrl.toString());
                         npppActivateTab(tabId);
                     }
                 }
@@ -223,7 +226,14 @@ $(document).ready(function() {
 
                 // Hash-driven activation path: activate callback intentionally skips
                 // npppActivateTab while isTabChangeFromHash is true.
-                npppActivateTab(hash.replace('#', ''));
+                const tabId = hash.replace('#', '');
+                npppActivateTab(tabId);
+
+                // Persist active tab as GET param so PHP can see it on next hard reload.
+                const _npppHashUrl = new URL(window.location.href);
+                _npppHashUrl.searchParams.set('nppp_tab', tabId);
+                _npppHashUrl.hash = tabId;
+                window.history.replaceState(null, null, _npppHashUrl.toString());
 
                 // Scroll to the top of the page
                 window.scrollTo(0, 0);
