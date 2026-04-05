@@ -45,8 +45,8 @@ function nppp_check_permissions_recursive_with_cache() {
         // Convert boolean result to string
         $result = $result ? 'true' : 'false';
 
-        // Cache the result for 1 hour
-        set_transient($transient_key, $result, 2 * HOUR_IN_SECONDS);
+        // Cache the result for 1 month
+        set_transient($transient_key, $result, 30 * DAY_IN_SECONDS);
     }
 
     return $result;
