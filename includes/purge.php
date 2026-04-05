@@ -272,6 +272,16 @@ function nppp_purge_post_purge( array &$ctx, bool $pf, bool $trigger_preload = t
             fn( string $u ) => $u !== $ctx['current_page_url']
         ) );
         if ( ! empty( $deleted_related ) ) {
+            nppp_display_admin_notice( 'info', sprintf(
+                /* translators: %d: number of related pages queued for background preload */
+                _n(
+                    'INFO RELATED PRELOAD: %d related page queued for background preload (fire-and-forget).',
+                    'INFO RELATED PRELOAD: %d related pages queued for background preload (fire-and-forget).',
+                    count( $deleted_related ),
+                    'fastcgi-cache-purge-and-preload-nginx'
+                ),
+                count( $deleted_related )
+            ), true, false );
             nppp_preload_urls_fire_and_forget( $deleted_related );
         }
     }
