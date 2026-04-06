@@ -1055,15 +1055,128 @@ function nppp_locate_cache_file_ajax() {
 
     // Build the target match key from the URL we just preloaded
     $needle_key = nppp_url_match_key( $cache_url );
-
-    // Only scan *recent* files (default 10 minutes) for speed
-    $window_secs = apply_filters('nppp_locate_recent_window', 600);
-    $now = time();
+    $url_key    = preg_replace( '#^https?://#', '', $cache_url );
     $found_path = '';
 
     // Read only the head (binary-safe)
     $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
     $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
+
+    // FP1 — ripgrep scan
+    if ( ! empty( $settings['nppp_rg_purge_enabled'] ) && $settings['nppp_rg_purge_enabled'] === 'yes' ) {
+        nppp_prepare_request_env();
+        $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+
+        if ( $rg_bin !== '' ) {
+            // -l  → print file paths only (one per file, deduplicated).
+            // -m 1 → stop scanning each file after the first KEY match (perf).
+            $rg_cmd = sprintf(
+                '%s -l -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config %s %s',
+                escapeshellarg( $rg_bin ),
+                escapeshellarg( '^KEY: .*' . preg_quote( $url_key, '/' ) . '$' ),
+                escapeshellarg( $nginx_cache_path )
+            );
+            $rg_out  = [];
+            $rg_exit = 0;
+            exec( $rg_cmd, $rg_out, $rg_exit );
+
+            if ( $rg_exit === 2 ) {
+                nppp_display_admin_notice( 'error', sprintf(
+                    __( 'ERROR RG LOCATE: Cache file locate for %s aborted — I/O or permission error (RG)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $cache_url
+                ), true, false );
+
+            } elseif ( $rg_exit === 0 && ! empty( $rg_out ) ) {
+                foreach ( $rg_out as $rg_line ) {
+                    $candidate = trim( $rg_line );
+                    if ( $candidate === '' ) {
+                        continue;
+                    }
+
+                    // Path safety — same gate the purge endpoint enforces.
+                    if ( nppp_validate_path( $candidate, true ) !== true ) {
+                        nppp_display_admin_notice( 'error', sprintf(
+                            __( 'ERROR PATH: Cache file locate skipped — invalid path for %s (RG)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            $cache_url
+                        ), true, false );
+                        continue;
+                    }
+
+                    if ( ! $wp_filesystem->exists( $candidate )
+                        || ! $wp_filesystem->is_readable( $candidate )
+                    ) {
+                        continue;
+                    }
+
+                    $content = nppp_read_head( $wp_filesystem, $candidate, $head_bytes_primary );
+                    if ( $content === '' ) {
+                        continue;
+                    }
+
+                    // Expand read window if KEY header not found in primary slice.
+                    $rg_match = [];
+                    if ( ! preg_match( '/^KEY:\s([^\r\n]*)/m', $content, $rg_match ) ) {
+                        if ( strlen( $content ) >= $head_bytes_primary ) {
+                            $content = nppp_read_head( $wp_filesystem, $candidate, $head_bytes_fallback );
+                            if ( $content === '' || ! preg_match( '/^KEY:\s([^\r\n]*)/m', $content, $rg_match ) ) {
+                                continue;
+                            }
+                        } else {
+                            continue;
+                        }
+                    }
+
+                    // Skip redirects.
+                    if ( strpos( $content, 'Status: 301 Moved Permanently' ) !== false ||
+                         strpos( $content, 'Status: 302 Found' ) !== false ) {
+                        continue;
+                    }
+
+                    // Skip non-GET entries.
+                    $rg_key_line = $rg_match[1];
+                    $rg_skip     = false;
+                    foreach ( [ 'POST', 'HEAD', 'PUT', 'DELETE', 'PATCH', 'OPTIONS' ] as $rg_method ) {
+                        if ( strpos( $rg_key_line, $rg_method ) !== false ) {
+                            $rg_skip = true;
+                            break;
+                        }
+                    }
+                    if ( $rg_skip ) {
+                        continue;
+                    }
+
+                    // Exact URL match
+                    $rg_rx = [];
+                    if ( ! ( preg_match( $regex, $content, $rg_rx ) && isset( $rg_rx[1], $rg_rx[2] ) ) ) {
+                        continue;
+                    }
+
+                    $rg_scheme    = ( parse_url( $cache_url, PHP_URL_SCHEME ) === 'https' ) ? 'https://' : 'http://';
+                    $rg_built_url = $rg_scheme . trim( $rg_rx[1] ) . trim( $rg_rx[2] );
+
+                    if ( ! filter_var( $rg_built_url, FILTER_VALIDATE_URL ) ) {
+                        continue;
+                    }
+
+                    if ( nppp_url_match_key( $rg_built_url ) !== $needle_key ) {
+                        continue;
+                    }
+
+                    nppp_display_admin_notice( 'info', sprintf(
+                        __( 'INFO RG HIT: Cache file located for %s (RG)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $cache_url
+                    ), true, false );
+
+                    wp_send_json_success( [ 'file_path' => $candidate ] );
+                    return;
+                }
+            }
+        }
+    }
+
+    // FP2 — PHP recursive iterator (recent files only, 10-min window).
+    $window_secs = apply_filters('nppp_locate_recent_window', 600);
+    $now = time();
 
     try {
         $iter = new RecursiveIteratorIterator(
@@ -1120,12 +1233,20 @@ function nppp_locate_cache_file_ajax() {
                     $key = nppp_url_match_key($final_encoded);
                     if ($key === $needle_key) {
                         $found_path = $pathname;
+                        nppp_display_admin_notice( 'info', sprintf(
+                            __( 'INFO SCAN HIT: Cache file located for %s (SCAN)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            $cache_url
+                        ), true, false );
                         break;
                     }
                 }
             }
         }
     } catch ( Exception $e ) {
+        nppp_display_admin_notice( 'error', sprintf(
+            __( 'ERROR PERMISSION: Cache file locate failed for %s — permission issue (SCAN)', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $cache_url
+        ), true, false );
     }
 
     if ($found_path) {
