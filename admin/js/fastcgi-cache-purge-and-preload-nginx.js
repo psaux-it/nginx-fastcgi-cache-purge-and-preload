@@ -1231,19 +1231,28 @@ $(document).ready(function() {
                     $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
                 }
             }).fail(function () {
-                if (!npppInDom($main)) return;
+                if (!npppInDom($main)) {
+                    npppPreloadInProgress = false;
+                    $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
+                    return;
+                }
                 if ($main.data('npppLocateReqId') !== reqId) return;
 
                 if (attempt < maxAttempts) {
                     setTimeout(function () {
                         if (npppInDom($main)) {
                             npppLocateCacheFile($main, url, attempt + 1, opts);
+                        } else {
+                            npppPreloadInProgress = false;
+                            $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
                         }
                     }, delay);
                 } else {
                     // final fail: clear cell, stop spinner
                     npppUpdateCachePath($main, '—');
                     $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
+                    npppPreloadInProgress = false;
+                    $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
                 }
             });
         }
