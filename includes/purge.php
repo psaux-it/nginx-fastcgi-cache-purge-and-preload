@@ -258,12 +258,11 @@ function nppp_purge_post_purge( array &$ctx, bool $pf, bool $trigger_preload = t
     // Determine whether to also preload related URLs.
     $settings               = get_option( 'nginx_cache_settings' );
     $should_preload_related =
-        ( $is_manual
-            && ! empty( $settings['nppp_related_preload_after_manual'] )
-            && $settings['nppp_related_preload_after_manual'] === 'yes' )
-        || ( ! $is_manual
-            && ! empty( $settings['nginx_cache_auto_preload'] )
-            && $settings['nginx_cache_auto_preload'] === 'yes' );
+        ! empty( $settings['nppp_related_preload_after_manual'] )
+        && $settings['nppp_related_preload_after_manual'] === 'yes'
+        && ( $is_manual
+            || ( ! empty( $settings['nginx_cache_auto_preload'] )
+                && $settings['nginx_cache_auto_preload'] === 'yes' ) );
 
     // Trigger Preload related
     if ( $should_preload_related ) {
