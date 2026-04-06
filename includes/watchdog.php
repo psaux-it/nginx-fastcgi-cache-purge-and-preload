@@ -161,7 +161,7 @@ function nppp_spawn_preload_watcher( int $wget_pid, string $token ): bool {
 
     // Build the watchdog
     $watchdog = sprintf(
-        'echo $$ > %s; while kill -0 %d 2>/dev/null; do sleep 5; done; '
+        'echo $$ > %s; while [ -d /proc/%d ]; do sleep 5; done; '
         . 'wget -q -O /dev/null --no-check-certificate '
         . '--no-config --no-cookies --prefer-family=IPv4 '
         . '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 '
