@@ -556,7 +556,7 @@ function nppp_nginx_cache_settings_page() {
                         </tr>
                         <tr valign="top">
                             <th scope="row">
-                                <span class="dashicons dashicons-clock"></span>
+                                <span class="dashicons dashicons-shield"></span>
                                 <?php echo esc_html__( 'PHP Response Timeout', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </th>
                             <td>
@@ -777,7 +777,7 @@ function nppp_nginx_cache_settings_page() {
                         <!-- RG Purge -->
                         <tr valign="top">
                             <th scope="row">
-                                <span class="dashicons dashicons-performance"></span>
+                                <span class="dashicons dashicons-superhero"></span>
                                 <?php echo esc_html__( 'RG Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </th>
                             <td>
