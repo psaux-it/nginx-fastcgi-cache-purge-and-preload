@@ -2464,7 +2464,7 @@ function nppp_rg_purge_enabled_callback(): void {
            class="nppp-onoffswitch-checkbox-rgpurge"
            value="yes"
            id="nppp_rg_purge_enabled"
-           <?php echo esc_attr( $checked ); ?><?php echo $disabled; ?>>
+           <?php echo esc_attr( $checked ); ?><?php echo esc_attr( $disabled ); ?>>
     <label class="nppp-onoffswitch-label-rgpurge" for="nppp_rg_purge_enabled">
         <span class="nppp-onoffswitch-inner-rgpurge">
             <span class="nppp-off-rgpurge"><?php esc_html_e( 'OFF', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
