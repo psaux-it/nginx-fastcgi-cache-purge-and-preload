@@ -114,7 +114,6 @@ function nppp_clear_plugin_cache($silent = false) {
     }
 
     // Safe clean up of dynamic transients directly in DB.
-    // Uses esc_like() + prepare() — same pattern as uninstall.php.
     $like_category              = $wpdb->esc_like('_transient_nppp_category_') . '%';
     $like_category_timeout      = $wpdb->esc_like('_transient_timeout_nppp_category_') . '%';
     $like_rate_limit            = $wpdb->esc_like('_transient_nppp_rate_limit_') . '%';
@@ -123,6 +122,8 @@ function nppp_clear_plugin_cache($silent = false) {
     $like_front_message_timeout = $wpdb->esc_like('_transient_timeout_nppp_front_message_') . '%';
     $like_wget_cache            = $wpdb->esc_like('_transient_nppp_wget_urls_cache_') . '%';
     $like_wget_cache_timeout    = $wpdb->esc_like('_transient_timeout_nppp_wget_urls_cache_') . '%';
+    $like_ep8_fail              = $wpdb->esc_like('_transient_nppp_ep8_fail_') . '%';
+    $like_ep8_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep8_fail_') . '%';
 
     // Safe clean up transients directly in DB
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -130,6 +131,8 @@ function nppp_clear_plugin_cache($silent = false) {
         $wpdb->prepare(
             "DELETE FROM {$wpdb->options}
             WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
@@ -144,7 +147,9 @@ function nppp_clear_plugin_cache($silent = false) {
             $like_front_message,
             $like_front_message_timeout,
             $like_wget_cache,
-            $like_wget_cache_timeout
+            $like_wget_cache_timeout,
+            $like_ep8_fail,
+            $like_ep8_fail_timeout
         )
     );
 
