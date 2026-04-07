@@ -233,6 +233,19 @@ function nppp_dashboard_widget() {
         $redis_status = __( 'Disabled', 'fastcgi-cache-purge-and-preload-nginx' );
     }
 
+    // RG Purge
+    $rg_cached    = get_transient( 'nppp_rg_ok' );
+    $rg_available = is_array( $rg_cached ) ? (bool) $rg_cached['ok'] : false;
+    $rg_on        = isset( $settings['nppp_rg_purge_enabled'] ) && $settings['nppp_rg_purge_enabled'] === 'yes';
+
+    if ( ! $rg_available ) {
+        $rg_status = __( 'Unavailable', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $rg_on ) {
+        $rg_status = __( 'Enabled', 'fastcgi-cache-purge-and-preload-nginx' );
+    } else {
+        $rg_status = __( 'Disabled', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
     // Need setup
     $needs_setup = class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup();
     $setup_url   = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
@@ -254,7 +267,13 @@ function nppp_dashboard_widget() {
         'http_purge' => [
             'label' => __('HTTP Purge', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nppp_http_purge_enabled']) && $settings['nppp_http_purge_enabled'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
-            'icon' => 'dashicons-migrate'
+            'icon' => 'dashicons-rest-api'
+        ],
+        'rg_purge' => [
+            'label'       => __('RG Purge', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status'      => $rg_status,
+            'icon'        => 'dashicons-superhero',
+            'unavailable' => ! $rg_available,
         ],
         'auto_preload' => [
             'label' => __('Auto Preload', 'fastcgi-cache-purge-and-preload-nginx'),
