@@ -1153,7 +1153,7 @@ function nppp_locate_cache_file_ajax() {
                         continue;
                     }
 
-                    $rg_scheme    = ( parse_url( $cache_url, PHP_URL_SCHEME ) === 'https' ) ? 'https://' : 'http://';
+                    $rg_scheme    = ( wp_parse_url( $cache_url, PHP_URL_SCHEME ) === 'https' ) ? 'https://' : 'http://';
                     $rg_built_url = $rg_scheme . trim( $rg_rx[1] ) . trim( $rg_rx[2] );
 
                     if ( ! filter_var( $rg_built_url, FILTER_VALIDATE_URL ) ) {
