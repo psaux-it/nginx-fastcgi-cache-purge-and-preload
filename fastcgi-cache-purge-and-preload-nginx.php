@@ -120,6 +120,42 @@ foreach ([
 unset($nppp_cron_event);
 
 // ---------------------------------------------------------------------------
+// Shared pre-bootstrap abuse logger — used by EP3 and EP8 gates.
+// Increments the per-IP fail counter and writes to the plugin log at
+// attempt #1 and every 5th attempt thereafter to avoid log flooding.
+// ---------------------------------------------------------------------------
+function nppp_ep_gate_log(
+    string $masked,
+    string $raw,
+    string $ep,
+    string $action,
+    string $status
+): void {
+    $rate_key   = 'nppp_' . $ep . '_fail_' . md5($raw);
+    $fail_count = (int) get_transient($rate_key);
+    $fail_count++;
+    set_transient($rate_key, $fail_count, HOUR_IN_SECONDS);
+
+    if ($fail_count !== 1 && $fail_count % 5 !== 0) {
+        return;
+    }
+
+    if (!function_exists('nppp_get_runtime_file')) {
+        require_once plugin_dir_path(NPPP_PLUGIN_FILE) . 'includes/runtime-paths.php';
+    }
+
+    $entry = PHP_EOL . '[' . current_time('Y-m-d H:i:s') . '] ERROR ' . strtoupper($ep) . ':'
+           . ' IP: '     . $masked
+           . ' | Action: ' . $action
+           . ' | Status: ' . $status
+           . ' | Attempt: #' . $fail_count
+           . PHP_EOL;
+
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    file_put_contents(NGINX_CACHE_LOG_FILE, $entry, FILE_APPEND | LOCK_EX);
+}
+
+// ---------------------------------------------------------------------------
 // EP3 — NPP REST namespace (/nppp_nginx_cache/v2/)
 // Pre-screens all /nppp_nginx_cache/ traffic before bootstrap loads.
 // Invalid or missing keys bail immediately — zero plugin files load.
@@ -132,7 +168,30 @@ add_action('rest_api_init', function (): void {
         return;
     }
 
-    // Extract API key — Bearer header → X-Api-Key header → request body.
+    // Get IP
+    $nppp_ep3_raw_ip = isset($_SERVER['REMOTE_ADDR'])
+        ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']))
+        : '';
+
+    // Early block abusing IP
+    $nppp_ep3_rate_key = 'nppp_ep3_fail_' . md5($nppp_ep3_raw_ip);
+    if ((int) get_transient($nppp_ep3_rate_key) >= 10) {
+        wp_die('', '', ['response' => 429]);
+    }
+
+    // Mask IP
+    if (filter_var($nppp_ep3_raw_ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        $nppp_ep3_parts    = explode('.', $nppp_ep3_raw_ip);
+        $nppp_ep3_parts[3] = '**';
+        $nppp_ep3_masked   = implode('.', $nppp_ep3_parts);
+    } elseif (filter_var($nppp_ep3_raw_ip, FILTER_VALIDATE_IP)) {
+        $nppp_ep3_masked = $nppp_ep3_raw_ip;
+    } else {
+        $nppp_ep3_raw_ip = 'unknown';
+        $nppp_ep3_masked = 'unknown';
+    }
+
+    // Extract API key
     $api_key = '';
     $auth_header = sanitize_text_field(
         wp_unslash( $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '' )
@@ -155,19 +214,29 @@ add_action('rest_api_init', function (): void {
             $body    = json_decode(file_get_contents('php://input'), true);
             $api_key = isset($body['api_key']) && is_string($body['api_key']) ? $body['api_key'] : '';
         } else {
-            // phpcs:ignore WordPress.Security.NonceVerification.Missing -- REST API bearer token prescreen, not a form submission
+            // phpcs:ignore WordPress.Security.NonceVerification.Missing
             $api_key = isset($_POST['api_key']) ? sanitize_text_field( wp_unslash( $_POST['api_key'] ) ) : '';
         }
     }
 
-    // Reject invalid format before touching the database.
     $api_key = sanitize_text_field($api_key);
-    if (empty($api_key) || !preg_match('/^[a-f0-9]{64}$/i', $api_key)) return;
 
-    // Validate against stored key.
+    // Empty key — silent.
+    if (empty($api_key)) return;
+
+    // Wrong format — log and penalise.
+    if (!preg_match('/^[a-f0-9]{64}$/i', $api_key)) {
+        nppp_ep_gate_log($nppp_ep3_masked, $nppp_ep3_raw_ip, 'ep3', 'nppp_nginx_cache', 'ERROR 403 MALFORMED API KEY');
+        return;
+    }
+
+    // Validate against stored key - log and penalise.
     $options    = get_option('nginx_cache_settings');
     $stored_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : '';
-    if (!is_string($stored_key) || !hash_equals($stored_key, $api_key)) return;
+    if (!is_string($stored_key) || !hash_equals($stored_key, $api_key)) {
+        nppp_ep_gate_log($nppp_ep3_masked, $nppp_ep3_raw_ip, 'ep3', 'nppp_nginx_cache', 'ERROR 403 API KEY MISMATCH OR INVALID');
+        return;
+    }
 
     nppp_load_bootstrap();
 }, 1);
@@ -300,32 +369,6 @@ add_action('init', function(): void {
         $nppp_ep8_masked = 'unknown';
     }
 
-    // Log abuse, brute forces
-    $nppp_ep8_log = static function (string $masked, string $raw, string $status): void {
-        $rate_key   = 'nppp_ep8_fail_' . md5($raw);
-        $fail_count = (int) get_transient($rate_key);
-        $fail_count++;
-        set_transient($rate_key, $fail_count, HOUR_IN_SECONDS);
-
-        if ($fail_count !== 1 && $fail_count % 5 !== 0) {
-            return;
-        }
-
-        if (!function_exists('nppp_get_runtime_file')) {
-            require_once plugin_dir_path(NPPP_PLUGIN_FILE) . 'includes/runtime-paths.php';
-        }
-
-        $entry = PHP_EOL . '[' . current_time('Y-m-d H:i:s') . '] ERROR WATCHDOG:'
-               . ' IP: '     . $masked
-               . ' | Action: nppp_cron_wake'
-               . ' | Status: ' . $status
-               . ' | Attempt: #' . $fail_count
-               . PHP_EOL;
-
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-        file_put_contents(NGINX_CACHE_LOG_FILE, $entry, FILE_APPEND | LOCK_EX);
-    };
-
     // Layer 1a
     // phpcs:disable WordPress.Security.NonceVerification.Missing -- EP8 watchdog
     $submitted = isset($_POST['token'])
@@ -333,14 +376,14 @@ add_action('init', function(): void {
         : '';
     // phpcs:enable WordPress.Security.NonceVerification.Missing
     if (empty($submitted) || !preg_match('/^[a-f0-9]{32}$/i', $submitted)) {
-        $nppp_ep8_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ERROR 403 MALFORMED OR MISSING TOKEN');
+        nppp_ep_gate_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ep8', 'nppp_cron_wake', 'ERROR 403 MALFORMED OR MISSING TOKEN');
         wp_die('', '', ['response' => 403]);
     }
 
     // Layer 1b
     $stored = get_transient('nppp_ping_token_' . md5('nppp'));
     if (empty($stored) || !hash_equals((string) $stored, $submitted)) {
-        $nppp_ep8_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ERROR 403 TOKEN MISMATCH OR EXPIRED');
+        nppp_ep_gate_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ep8', 'nppp_cron_wake', 'ERROR 403 TOKEN MISMATCH OR EXPIRED');
         wp_die('', '', ['response' => 403]);
     }
 
