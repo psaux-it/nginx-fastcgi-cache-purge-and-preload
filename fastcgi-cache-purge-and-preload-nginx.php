@@ -257,7 +257,7 @@ add_action('automatic_updates_complete', function ( $results ): void {
 // for this one action.
 //
 // Two-layer gate — bootstrap only loads when the token is genuinely valid:
-//   Layer 1 (here)   : format check + transient existence + hash_equals
+//   Layer 1 (here)   : format check + transient ext + hash_equals + abuse logs
 //   Layer 2 (handler): rate limit + same checks again as defense-in-depth
 // ---------------------------------------------------------------------------
 add_action('init', function(): void {
@@ -267,7 +267,7 @@ add_action('init', function(): void {
     $action = isset($_POST['action'])
         ? sanitize_key(wp_unslash($_POST['action']))
         : '';
-    // phpcs:enable WordPress.Security.NonceVerification.Missing
+    // phpcs:enable WordPress.Security.NonceVerification.Missing -- EP8 watchdog
     if ($action !== 'nppp_cron_wake') return;
 
     // Watchdog feature disabled — endpoint intentionally unreachable.
@@ -276,6 +276,56 @@ add_action('init', function(): void {
         wp_die('', '', ['response' => 403]);
     }
 
+    // Get IP
+    // phpcs:disable WordPress.Security.NonceVerification.Missing -- EP8 watchdog
+    $nppp_ep8_raw_ip = isset($_SERVER['REMOTE_ADDR'])
+        ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']))
+        : '';
+
+    // Early block abusing IP
+    $rate_key = 'nppp_ep8_fail_' . md5($nppp_ep8_raw_ip);
+    if ((int)get_transient($rate_key) >= 10) {
+        wp_die('', '', ['response' => 429]);
+    }
+
+    // Mask IP
+    if (filter_var($nppp_ep8_raw_ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        $nppp_ep8_parts    = explode('.', $nppp_ep8_raw_ip);
+        $nppp_ep8_parts[3] = '**';
+        $nppp_ep8_masked   = implode('.', $nppp_ep8_parts);
+    } elseif (filter_var($nppp_ep8_raw_ip, FILTER_VALIDATE_IP)) {
+        $nppp_ep8_masked = $nppp_ep8_raw_ip;
+    } else {
+        $nppp_ep8_raw_ip = 'unknown';
+        $nppp_ep8_masked = 'unknown';
+    }
+
+    // Log abuse, brute forces
+    $nppp_ep8_log = static function (string $masked, string $raw, string $status): void {
+        $rate_key   = 'nppp_ep8_fail_' . md5($raw);
+        $fail_count = (int) get_transient($rate_key);
+        $fail_count++;
+        set_transient($rate_key, $fail_count, HOUR_IN_SECONDS);
+
+        if ($fail_count !== 1 && $fail_count % 5 !== 0) {
+            return;
+        }
+
+        if (!function_exists('nppp_get_runtime_file')) {
+            require_once plugin_dir_path(NPPP_PLUGIN_FILE) . 'includes/runtime-paths.php';
+        }
+
+        $entry = PHP_EOL . '[' . current_time('Y-m-d H:i:s') . '] ERROR WATCHDOG:'
+               . ' IP: '     . $masked
+               . ' | Action: nppp_cron_wake'
+               . ' | Status: ' . $status
+               . ' | Attempt: #' . $fail_count
+               . PHP_EOL;
+
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+        file_put_contents(NGINX_CACHE_LOG_FILE, $entry, FILE_APPEND | LOCK_EX);
+    };
+
     // Layer 1a
     // phpcs:disable WordPress.Security.NonceVerification.Missing -- EP8 watchdog
     $submitted = isset($_POST['token'])
@@ -283,12 +333,14 @@ add_action('init', function(): void {
         : '';
     // phpcs:enable WordPress.Security.NonceVerification.Missing
     if (empty($submitted) || !preg_match('/^[a-f0-9]{32}$/i', $submitted)) {
+        $nppp_ep8_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ERROR 403 MALFORMED OR MISSING TOKEN');
         wp_die('', '', ['response' => 403]);
     }
 
     // Layer 1b
     $stored = get_transient('nppp_ping_token_' . md5('nppp'));
     if (empty($stored) || !hash_equals((string) $stored, $submitted)) {
+        $nppp_ep8_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ERROR 403 TOKEN MISMATCH OR EXPIRED');
         wp_die('', '', ['response' => 403]);
     }
 
