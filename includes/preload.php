@@ -327,7 +327,6 @@ function nppp_detect_premature_process(
             }
 
             // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
-            // Terminate softly
             if (!defined('SIGTERM')) {
                 define('SIGTERM', 15);
             }
