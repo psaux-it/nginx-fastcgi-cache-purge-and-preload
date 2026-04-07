@@ -1082,6 +1082,7 @@ function nppp_locate_cache_file_ajax() {
 
             if ( $rg_exit === 2 ) {
                 nppp_display_admin_notice( 'error', sprintf(
+                    /* translators: %s = cache URL; shown if locating the cache file failed due to I/O or permission error */
                     __( 'ERROR RG LOCATE: Cache file locate for %s aborted — I/O or permission error (RG)', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $cache_url
                 ), true, false );
@@ -1096,6 +1097,7 @@ function nppp_locate_cache_file_ajax() {
                     // Path safety — same gate the purge endpoint enforces.
                     if ( nppp_validate_path( $candidate, true ) !== true ) {
                         nppp_display_admin_notice( 'error', sprintf(
+                            /* translators: %s = cache URL; shown if the cache file path is invalid and skipped */
                             __( 'ERROR PATH: Cache file locate skipped — invalid path for %s (RG)', 'fastcgi-cache-purge-and-preload-nginx' ),
                             $cache_url
                         ), true, false );
@@ -1163,6 +1165,7 @@ function nppp_locate_cache_file_ajax() {
                     }
 
                     nppp_display_admin_notice( 'info', sprintf(
+                        /* translators: %s = cache URL; shown when the cache file was successfully located */
                         __( 'INFO RG HIT: Cache file located for %s (RG)', 'fastcgi-cache-purge-and-preload-nginx' ),
                         $cache_url
                     ), true, false );
@@ -1234,6 +1237,7 @@ function nppp_locate_cache_file_ajax() {
                     if ($key === $needle_key) {
                         $found_path = $pathname;
                         nppp_display_admin_notice( 'info', sprintf(
+                            /* translators: %s = cache URL; shown when a cache file is successfully located during a scan */
                             __( 'INFO SCAN HIT: Cache file located for %s (SCAN)', 'fastcgi-cache-purge-and-preload-nginx' ),
                             $cache_url
                         ), true, false );
@@ -1244,6 +1248,7 @@ function nppp_locate_cache_file_ajax() {
         }
     } catch ( Exception $e ) {
         nppp_display_admin_notice( 'error', sprintf(
+            /* translators: %s = cache URL; shown if locating the cache file fails due to a permission issue during scan */
             __( 'ERROR PERMISSION: Cache file locate failed for %s — permission issue (SCAN)', 'fastcgi-cache-purge-and-preload-nginx' ),
             $cache_url
         ), true, false );
