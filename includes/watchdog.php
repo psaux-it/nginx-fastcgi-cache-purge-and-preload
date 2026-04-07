@@ -30,29 +30,41 @@ define( 'NPPP_WATCHER_AJAX_ACTION', 'nppp_cron_wake' );
 // ---------------------------------------------------------------------------
 
 /**
- * Check rate limit for the watchdog endpoint — max 3 requests per minute per IP.
+ * Check rate limit for the watchdog endpoint — max 10 requests per minute per IP.
  * Fires before token validation to stop brute-force probing at minimal cost.
  */
-function nppp_watchdog_rate_limit_check(): bool {
-    $ip = isset( $_SERVER['REMOTE_ADDR'] )
+function nppp_watchdog_rate_limit_check(): array {
+    $raw_ip = isset( $_SERVER['REMOTE_ADDR'] )
         ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) )
-        : 'unknown';
+        : '';
 
-    $transient_key = 'nppp_rate_limit_' . md5( 'watchdog|' . $ip );
+    if ( filter_var( $raw_ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 ) ) {
+        $parts     = explode( '.', $raw_ip );
+        $parts[3]  = '**';
+        $masked_ip = implode( '.', $parts );
+    } elseif ( filter_var( $raw_ip, FILTER_VALIDATE_IP ) ) {
+        $masked_ip = $raw_ip;
+    } else {
+        $raw_ip    = 'unknown';
+        $masked_ip = 'unknown';
+    }
+
+    $transient_key = 'nppp_rate_limit_' . md5( 'watchdog|' . $raw_ip );
     $count         = get_transient( $transient_key );
 
     if ( false === $count ) {
         set_transient( $transient_key, 1, 60 );
-        return true;
+        return [ 'allowed' => true, 'ip' => $masked_ip, 'count' => 1 ];
     }
 
-    $count++;
+    $count = (int) $count + 1;
+
     if ( $count > 10 ) {
-        return false;
+        return [ 'allowed' => false, 'ip' => $masked_ip, 'count' => $count ];
     }
 
     set_transient( $transient_key, $count, 60 );
-    return true;
+    return [ 'allowed' => true, 'ip' => $masked_ip, 'count' => $count ];
 }
 
 // ---------------------------------------------------------------------------
@@ -161,7 +173,7 @@ function nppp_spawn_preload_watcher( int $wget_pid, string $token ): bool {
 
     // Build the watchdog
     $watchdog = sprintf(
-        'echo $$ > %s; while [ -d /proc/%d ]; do sleep 5; done; '
+        'echo $$ > %s; while [ -d /proc/%d ]; do sleep 3; done; '
         . 'wget -q -O /dev/null --no-check-certificate '
         . '--no-config --no-cookies --prefer-family=IPv4 '
         . '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 '
@@ -284,11 +296,16 @@ add_action( 'wp_ajax_'        . NPPP_WATCHER_AJAX_ACTION, 'nppp_cron_wake_handle
  */
 function nppp_cron_wake_handler(): void {
     // Rate limit — max 10 requests per minute per IP.
-    // Fires before token validation to stop brute-force probing cheaply.
-    if ( ! nppp_watchdog_rate_limit_check() ) {
+    $rate = nppp_watchdog_rate_limit_check();
+    if ( ! $rate['allowed'] ) {
         nppp_display_admin_notice(
             'error',
-            __( 'ERROR WATCHDOG: Rate limit exceeded. Post-preload jobs will be handled by WP-Cron.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            sprintf(
+                /* Translators: 1: masked IP address 2: request count in the current minute */
+                __( 'ERROR WATCHDOG: Rate limit exceeded (IP: %1$s, %2$d req/min). Post-preload jobs will be handled by WP-Cron.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $rate['ip'],
+                $rate['count']
+            ),
             true,
             false
         );
@@ -338,13 +355,17 @@ function nppp_cron_wake_handler(): void {
     // Log the wake event — visible in plugin log (fastcgi_ops.log).
     nppp_display_admin_notice(
         'info',
-        __( 'INFO WATCHDOG: Preload finished. Executing post-preload jobs.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        sprintf(
+            /* Translators: %s: masked IP address of the watchdog request */
+            __( 'INFO WATCHDOG: Preload finished (IP: %s). Executing post-preload jobs.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $rate['ip']
+        ),
         true,
         false
     );
 
     // Complete post-preload tasks
-    // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- legacy hook name stored in wp_options
+    // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
     do_action( 'npp_cache_preload_status_event' );
 
     // Respond and exit cleanly.
