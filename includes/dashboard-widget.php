@@ -197,12 +197,27 @@ function nppp_dashboard_widget() {
     $settings = get_option('nginx_cache_settings', []);
 
     // URL Normalization
-    $pctnorm_mode = isset($settings['nginx_cache_pctnorm_mode']) ? $settings['nginx_cache_pctnorm_mode'] : 'off';
-    $pctnorm_enabled = $pctnorm_mode !== 'off';
+    $pctnorm_mode   = isset($settings['nginx_cache_pctnorm_mode']) ? $settings['nginx_cache_pctnorm_mode'] : 'off';
+    $safexec_cached = get_transient('nppp_safexec_ok');
+    if ($safexec_cached === false) {
+        if (function_exists('nppp_find_safexec_path') && function_exists('nppp_is_safexec_usable')) {
+            $_se_path           = nppp_find_safexec_path();
+            $_se_ok             = $_se_path && nppp_is_safexec_usable($_se_path, false);
+            set_transient('nppp_safexec_ok', ['path' => $_se_path, 'ok' => $_se_ok], HOUR_IN_SECONDS);
+            $pctnorm_available  = $_se_ok;
+        } else {
+            $pctnorm_available  = false;
+        }
+    } else {
+        $pctnorm_available = ! empty($safexec_cached['ok']);
+    }
 
-    if ($pctnorm_enabled && function_exists('nppp_find_safexec_path') && function_exists('nppp_is_safexec_usable')) {
-        $safexec_path = nppp_find_safexec_path();
-        $pctnorm_enabled = $safexec_path && nppp_is_safexec_usable($safexec_path, false);
+    if (!$pctnorm_available) {
+        $pctnorm_status = __('Unavailable', 'fastcgi-cache-purge-and-preload-nginx');
+    } elseif ($pctnorm_mode !== 'off') {
+        $pctnorm_status = __('Enabled', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        $pctnorm_status = __('Disabled', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Cloudflare APO Sync — three states: Enabled / Disabled / Unavailable
@@ -296,9 +311,10 @@ function nppp_dashboard_widget() {
             'icon'   => 'dashicons-randomize'
         ],
         'url_normalization' => [
-            'label' => __('URL Normalization', 'fastcgi-cache-purge-and-preload-nginx'),
-            'status' => $pctnorm_enabled ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
-            'icon' => 'dashicons-admin-links'
+            'label'       => __('URL Normalization', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status'      => $pctnorm_status,
+            'icon'        => 'dashicons-admin-links',
+            'unavailable' => ! $pctnorm_available,
         ],
         'cloudflare_apo' => [
             'label'       => __('Cloudflare APO', 'fastcgi-cache-purge-and-preload-nginx'),
