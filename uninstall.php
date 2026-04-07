@@ -71,12 +71,16 @@ function nppp_clear_plugin_cache_on_uninstall() {
     $like_front_message_timeout = $wpdb->esc_like('_transient_timeout_nppp_front_message_') . '%';
     $like_wget_cache            = $wpdb->esc_like('_transient_nppp_wget_urls_cache_') . '%';
     $like_wget_cache_timeout    = $wpdb->esc_like('_transient_timeout_nppp_wget_urls_cache_') . '%';
+    $like_ep8_fail              = $wpdb->esc_like('_transient_nppp_ep8_fail_') . '%';
+    $like_ep8_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep8_fail_') . '%';
 
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->query(
         $wpdb->prepare(
             "DELETE FROM {$wpdb->options}
             WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
@@ -91,7 +95,9 @@ function nppp_clear_plugin_cache_on_uninstall() {
             $like_front_message,
             $like_front_message_timeout,
             $like_wget_cache,
-            $like_wget_cache_timeout
+            $like_wget_cache_timeout,
+            $like_ep8_fail,
+            $like_ep8_fail_timeout
         )
     );
 }
