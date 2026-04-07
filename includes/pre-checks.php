@@ -754,6 +754,20 @@ function nppp_pre_checks() {
         return;
     }
 
+    // open_basedir soft warning
+    if ( $nppp_active_tab === 'settings' ) {
+        $nppp_obd = trim( (string) ini_get( 'open_basedir' ) );
+        if ( $nppp_obd !== '' && strtolower( $nppp_obd ) !== 'none' ) {
+            $nppp_obd_key = 'nppp_obd_warned_' . md5( 'nppp' );
+            if ( ! get_transient( $nppp_obd_key ) ) {
+                set_transient( $nppp_obd_key, true, DAY_IN_SECONDS );
+                nppp_display_pre_check_warning(
+                    __( 'GLOBAL WARNING OPEN_BASEDIR: PHP open_basedir restriction is active on your environment. This can silently break preloading and nginx.conf reading. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' )
+                );
+            }
+        }
+    }
+
     // Head-only read sizes (once per call)
     $head_bytes_primary  = (int) apply_filters( 'nppp_locate_head_bytes', 4096 );
     $head_bytes_fallback = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
