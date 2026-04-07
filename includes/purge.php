@@ -145,6 +145,7 @@ function nppp_purge_single_init( $nginx_cache_path, $current_page_url, $nppp_aut
         $pid = intval( nppp_perform_file_operation( $PIDFILE, 'read' ) );
         if ( $pid > 0 && nppp_is_process_alive( $pid ) ) {
             nppp_display_admin_notice( 'info', sprintf(
+                /* translators: %s = current page URL; shown if preload is running */
                 __( 'INFO: Single-page purge for %s skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion or use "Purge All" to cancel.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $current_page_url_decoded
             ) );
@@ -178,6 +179,7 @@ function nppp_purge_single_init( $nginx_cache_path, $current_page_url, $nppp_aut
     // Serialize concurrent single-page purges and prevent collision with Purge All.
     if ( ! nppp_acquire_purge_lock( 'single' ) ) {
         nppp_display_admin_notice( 'info', sprintf(
+            /* translators: %s = current page URL; shown if another purge is already running */
             __( 'INFO: Single-page purge for %s skipped — another cache purge operation is already in progress. Please try again shortly.', 'fastcgi-cache-purge-and-preload-nginx' ),
             $current_page_url_decoded
         ) );
@@ -1183,6 +1185,7 @@ function nppp_purge_fp4_scan( array &$ctx ): string {
                 $ctx['deleted_urls'][]                       = $ctx['current_page_url'];
             } else {
                 nppp_display_admin_notice( 'error', sprintf(
+                    /* translators: %s = current page URL; shown if the plugin fails to purge the cache for this page */
                     __( "ERROR UNKNOWN: An unexpected error occurred while purging Nginx cache for page %s. Please report this issue on the plugin's support page.", 'fastcgi-cache-purge-and-preload-nginx' ),
                     $current_page_url_decoded
                 ) );
