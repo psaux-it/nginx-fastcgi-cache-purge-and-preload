@@ -224,9 +224,9 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_nginx_cache_path_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'Provide the full NGINX cache directory path for plugin operation.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'The directory must be configured in NGINX and accessible by the PHP process.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'With read and write permissions for cache purge and preload to function properly.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Enter the full NGINX cache directory path for the plugin to operate.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'This directory must be configured in NGINX and be accessible by the PHP process.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Read and write permissions are required for purge and preload to function properly.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <div class="cache-paths-info">
                                     <h4><?php echo esc_html__( 'Allowed Cache Paths', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
                                     <p>
@@ -259,7 +259,7 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Automatically purges cache when content or site changes occurs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Automatically purges cache when content or site changes occur.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
                                     <?php echo esc_html__( 'Single-item events purge the page and, if enabled under Related Pages, also purge the Homepage, Shop Page and/or Category. Site-wide events purge the entire cache.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
@@ -289,7 +289,7 @@ function nppp_nginx_cache_settings_page() {
                                         <?php echo esc_html__( 'is approved or its status is changed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p><br>
                                     <p>
-                                        <?php echo esc_html__( 'If Auto Preload is ON, single-item automatic purges will preload the page and—if Related Pages are enabled—the Homepage, Shop Page and/or Category archives. Site-wide automatic purges will start a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <?php echo esc_html__( 'If Auto Preload is ON, single-item automatic purges will preload the page and—if Related Pages are enabled—the Homepage, Shop Page and/or Category archives. Site-wide automatic purges will trigger a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
                                 </div>
                             </td>
@@ -309,10 +309,10 @@ function nppp_nginx_cache_settings_page() {
                                     <?php echo esc_html__( 'Sync Cloudflare cache purges to keep both caches aligned.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Independent from “Auto Purge”. When ON, Cloudflare cache is purged whenever Nginx cache purges (URLs or purge-all).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Independent of “Auto Purge”. When ON, the Cloudflare cache is purged whenever the Nginx cache is purged (whether for specific URLs or the entire cache).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Requires the official Cloudflare WordPress plugin with APO or PSC enabled and authentication completed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Requires the official Cloudflare WordPress plugin with APO or PSC enabled and proper authentication.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                             </td>
                         </tr>
@@ -329,13 +329,13 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Sync Redis Object Cache with Nginx cache to keep both caches aligned.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Synchronize the Redis Object Cache with the Nginx cache to keep both layers aligned.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'When ON: Nginx purge-all also flushes Redis object cache. Redis flush also purges Nginx cache (requires Auto Purge enabled).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'When ON: Clearing the Nginx cache also flushes the Redis object cache. Flushing Redis will also purge the Nginx cache (requires Auto Purge to be enabled).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Requires the Redis Object Cache plugin installed, configured, and connected.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Requires the Redis Object Cache plugin to be installed, configured, and connected.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                             </td>
                         </tr>
@@ -389,10 +389,10 @@ function nppp_nginx_cache_settings_page() {
                                         <?php nppp_nginx_cache_auto_preload_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'Enable this feature to automatically preload the cache after purging. This ensures fast page load times for visitors by proactively caching content.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'When enabled, your website\'s cache will preload with the latest content automatically after purge, ensuring quick loading times even for uncached pages.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'This feature is particularly useful for dynamic websites with frequently changing content.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'This feature triggers when either Auto Purge feature is enabled or when the Purge All cache action is used manually.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Enable this feature to automatically preload the cache after a purge. This ensures fast load times by proactively caching content before the first visitor arrives.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'When enabled, your website will automatically rebuild the cache with the latest content, ensuring a high cache hit rate even for frequently changing pages.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'This process is triggered by the Auto Purge feature or when the "Purge All" action is used manually.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'To trigger Preload Related Pages (Purge Scope) when Auto Purge is ON, this setting must be turned ON.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -661,7 +661,7 @@ function nppp_nginx_cache_settings_page() {
                                         <?php echo esc_html__( 'Click to copy a pre-configured curl command for cache preloading.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </li>
                                 </ul>
-                                <p class="description"><strong><?php echo esc_html__( 'Allowed API Authentication Headers:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong></p>
+                                <br><p class="description"><strong><?php echo esc_html__( 'Allowed API Authentication Headers:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong></p>
                                 <ul class="description" style="color: #646970; font-size: 14px;">
                                     <li>
                                         <strong><?php echo esc_html__( 'Authorization Header:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
@@ -670,10 +670,6 @@ function nppp_nginx_cache_settings_page() {
                                     <li>
                                         <strong><?php echo esc_html__( 'X-Api-Key Header:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
                                         <code><?php echo esc_html__( 'X-Api-Key: YOUR_API_KEY', 'fastcgi-cache-purge-and-preload-nginx' ); ?></code>
-                                    </li>
-                                    <li>
-                                        <strong><?php echo esc_html__( 'Request Body or Query String Parameter:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <code><?php echo esc_html__( 'api_key=YOUR_API_KEY', 'fastcgi-cache-purge-and-preload-nginx' ); ?></code>
                                     </li>
                                 </ul>
                             </td>
@@ -705,7 +701,6 @@ function nppp_nginx_cache_settings_page() {
                                     <p class="description">⚡ <?php echo esc_html__('If you use a non-standard or complex \'_cache_key\' format, you must define a custom regex pattern to correctly parse \'$host\' and \'$request_uri\' portions in order to ensure proper plugin functionality.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
                                     <p class="description">⚡ <?php echo esc_html__('For example, if your custom key format is \'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args\', you will need to provide a corresponding regex pattern that accurately captures the \'$host\' and \'$request_uri\' parts.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
                                     <p class="description">📌 <strong><?php echo esc_html__('Guidelines for creating a compatible regex:', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong></p>
-                                    <p class="description">📣 <?php echo esc_html__('Ensure your regex pattern targets only GET requests, as HEAD or any other request methods do not represent cached content and cause duplicates.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
                                     <p class="description">📣 <?php echo esc_html__('Ensure that your regex pattern is entered with delimiters. (e.g., /your-regex/ - #your-regex#)', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
                                     <p class="description">📣 <?php echo esc_html__('The regex must capture the \'$host\' in capture group 1 as matches[1] and \'$request_uri\' in capture group 2 as matches[2] from your custom _cache_key', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
                                 </div>
@@ -1698,20 +1693,22 @@ function nppp_rest_api_purge_url_copy() {
         wp_send_json_error('You do not have permission to update this option.');
     }
 
-    // Get Plugin settings and set default API Key
+    // Get API Key
     $options = get_option('nginx_cache_settings');
     $default_api_key = bin2hex(random_bytes(32));
+    $api_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : $default_api_key;
 
     // Construct the REST API purge URL
-    $fdomain = get_site_url();
-    $rest_api_route_purge = 'wp-json/nppp_nginx_cache/v2/purge';
-    $rest_api_purge_url = $fdomain . '/' . $rest_api_route_purge;
-    // Create the JSON data string with the API key
-    $api_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : $default_api_key;
-    $json_data = '{"api_key": "' . $api_key . '"}';
-    // Construct the CURL command string
-    $curl_command = 'curl -X POST -H "Content-Type: application/json" -d \'' . $json_data . '\' ' . $rest_api_purge_url;
-    // Return the rest api purge curl url the AJAX response
+    $rest_url = get_rest_url(null, '/nppp_nginx_cache/v2/purge');
+
+    // Construct the CURL command
+    $curl_command = sprintf(
+        'curl -k -X POST -H "Authorization: Bearer %s" -H "Accept: application/json" "%s"',
+        $api_key,
+        $rest_url
+    );
+
+    // Return the command to the AJAX requester
     wp_send_json_success($curl_command);
 }
 
@@ -1725,20 +1722,22 @@ function nppp_rest_api_preload_url_copy() {
         wp_send_json_error('You do not have permission to update this option.');
     }
 
-    // Get Plugin settings and set default API Key
+    // Get API Key
     $options = get_option('nginx_cache_settings');
     $default_api_key = bin2hex(random_bytes(32));
-
-    // Construct the REST API preload URL
-    $fdomain = get_site_url();
-    $rest_api_route_preload = 'wp-json/nppp_nginx_cache/v2/preload';
-    $rest_api_preload_url = $fdomain . '/' . $rest_api_route_preload;
-    // Create the JSON data string with the API key
     $api_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : $default_api_key;
-    $json_data = '{"api_key": "' . $api_key . '"}';
-    // Construct the CURL command string
-    $curl_command = 'curl -X POST -H "Content-Type: application/json" -d \'' . $json_data . '\' ' . $rest_api_preload_url;
-    // Return the rest api preload curl url the AJAX response
+
+    // Construct the REST API purge URL
+    $rest_url = get_rest_url(null, '/nppp_nginx_cache/v2/preload');
+
+    // Construct the CURL command
+    $curl_command = sprintf(
+        'curl -k -X POST -H "Authorization: Bearer %s" -H "Accept: application/json" "%s"',
+        $api_key,
+        $rest_url
+    );
+
+    // Return the command to the AJAX requester
     wp_send_json_success($curl_command);
 }
 
@@ -1944,7 +1943,7 @@ function nppp_nginx_cache_cloudflare_apo_sync_callback() {
         <div class="nppp-related-pages" aria-live="polite">
             <em class="nppp-hint" role="note" style="max-width:max-content; opacity: 0.5;">
                 <span class="dashicons dashicons-lock" aria-hidden="true"></span>
-                <?php echo esc_html__( 'Cloudflare APO plugin not detected. Install and configure it to enable sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                <?php echo esc_html__( 'Cloudflare APO plugin not detected. Install and configure it to enable synchronization.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
             </em>
         </div>
     <?php endif; ?>
@@ -2221,7 +2220,7 @@ function nppp_nginx_cache_related_pages_callback() {
             <label for="nppp_rel_cat">
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
-                    <span class="title"><?php esc_html_e( 'Always Purge Category & Tag (WordPress + WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="title"><?php esc_html_e( 'Always Purge Categories & Tags (WordPress + WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     <span class="desc"><?php esc_html_e( 'When a post or product is purged (manual or auto), also purge its category and tag archives.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
                 </span>
             </label>
@@ -2238,7 +2237,7 @@ function nppp_nginx_cache_related_pages_callback() {
             <label for="nppp_rel_preload">
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
-                    <span class="title"><?php esc_html_e( 'Also preload all included pages above', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="title"><?php esc_html_e( 'Preload Related Pages', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     <span class="desc">
                         <?php esc_html_e( 'Manual Single Purge (On-Page or Advanced Tab): turn this ON to also preload related pages above. Auto Purge ON: related pages are preloaded automatically only when Auto Preload is ON', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     </span>
