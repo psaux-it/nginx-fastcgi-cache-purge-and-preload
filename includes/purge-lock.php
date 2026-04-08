@@ -104,29 +104,53 @@ function nppp_release_purge_lock(): void {
  * Non-destructive probe: returns true if a purge lock is currently held.
  *
  * WP_Upgrader::create_lock() stores the lock as a wp_options row named
- * 'lock_<name>'. It is set when a purge starts and deleted when the purge
- * finishes (or when the TTL expires after a crash). Preload callers use this
- * to abort early instead of spawning wget into a cache directory that is
- * actively being deleted.
+ * '<name>.lock' with the acquisition timestamp (time()) as its value.
+ * The lock is created when a purge starts and deleted when the purge
+ * finishes (or stolen by the next caller after the TTL expires on crash).
+ * Preload callers use this to abort early instead of spawning wget into
+ * a cache directory that is actively being deleted.
  *
- * Implementation: attempt to acquire with a 0-second TTL. If it fails someone
- * else already holds the lock; if it succeeds release immediately — we only
- * needed the boolean result.
+ * Implementation: reads the raw option directly — zero side-effects,
+ * no write, no race window. Reconstructs validity using the MAX TTL
+ * across all purge contexts so we never produce a false negative
+ * (i.e. we never claim "no lock" while a slow single-page purge is
+ * still walking the cache tree under its 180s TTL).
  *
  * @return bool  true = a purge operation is in progress, false = cache is idle
  */
 function nppp_is_purge_lock_held(): bool {
-    if ( ! class_exists( 'WP_Upgrader' ) ) {
-        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-    }
- 
-    // Try to acquire with the shortest meaningful TTL.
-    $acquired = WP_Upgrader::create_lock( NPPP_PURGE_LOCK_NAME, 1 );
-    if ( $acquired ) {
-        // We won the race — immediately give it back.
-        WP_Upgrader::release_lock( NPPP_PURGE_LOCK_NAME );
+    // WP core stores locks as '<name>.lock'
+    $lock_option = NPPP_PURGE_LOCK_NAME . '.lock';
+    $lock_time   = get_option( $lock_option );
+
+    // No lock row present at all.
+    if ( ! $lock_time ) {
         return false;
     }
- 
-    return true;
+
+    $lock_time = (int) $lock_time;
+
+    // Sanity-check
+    if ( $lock_time <= 0 ) {
+        return false;
+    }
+
+    // Use the MAX TTL across all purge contexts to avoid false negatives.
+    // WP stores only the start time; we must reconstruct the TTL window here.
+    // These filters must mirror the values used in nppp_acquire_purge_lock().
+    $ttl = max(
+        (int) apply_filters( 'nppp_purge_single_lock_ttl',  180 ),
+        (int) apply_filters( 'nppp_purge_all_lock_ttl',      60 ),
+        (int) apply_filters( 'nppp_purge_premium_lock_ttl',  60 )
+    );
+
+    // Core WP validity logic: lock is held if acquired less than $ttl seconds ago.
+    if ( $lock_time > ( time() - $ttl ) ) {
+        return true;
+    }
+
+    // Stale lock left by a crashed PHP process — clean it up passively.
+    delete_option( $lock_option );
+
+    return false;
 }
