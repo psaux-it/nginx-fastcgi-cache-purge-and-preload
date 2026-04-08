@@ -223,8 +223,8 @@ function nppp_validate_and_rate_limit_endpoint($request) {
         $api_key = $request->get_header('X-Api-Key');
     }
 
-    // 3. Fallback to the request body 'api_key' if no header is found
-    if (empty($api_key)) {
+    // 3. Body-based API key is disabled — header-only prevents key leakage in logs.
+    if (empty($api_key) && defined('NPPP_ALLOW_BODY_API_KEY') && NPPP_ALLOW_BODY_API_KEY) {
         $api_key = $request->get_param('api_key');
     }
 
