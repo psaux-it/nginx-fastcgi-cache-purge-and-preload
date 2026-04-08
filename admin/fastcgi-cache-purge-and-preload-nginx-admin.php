@@ -218,6 +218,10 @@ if ($nppp_auto_purge) {
     add_action('switch_theme', 'nppp_purge_cache_on_theme_switch', 10, 3);
     add_action('activated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
     add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
+    add_action('created_term', 'nppp_purge_cache_on_term_change', 10, 3);
+    add_action('edited_term', 'nppp_purge_cache_on_term_change', 10, 3);
+    add_action('pre_delete_term', 'nppp_capture_term_url_pre_delete', 10, 2);
+    add_action('delete_term', 'nppp_purge_cache_on_term_delete',  10, 3);
 }
 add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_preload_mobile_option');
 add_action('wp_ajax_nppp_update_watchdog_option', 'nppp_update_watchdog_option');
