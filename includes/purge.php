@@ -1685,24 +1685,85 @@ function nppp_purge_cache_on_comment_count( $post_id, $new_count, $old_count ) {
     nppp_purge_single( $nginx_cache_path, $post_url, true );
 }
 
+// Auto Purge (Single)
+// Purges the Nginx cache for a taxonomy term's archive page when the term is
+// created or edited directly from the admin (Posts > Categories, Posts > Tags, etc.).
+//
+// Scope: only public taxonomies that have a rewrite (i.e. they have real archive URLs).
+// Private / internal taxonomies (e.g. WooCommerce's product_visibility) are skipped
+// because they produce no cacheable frontend page.
+//
+// Trigger:
+//   created_term — new term added  (homepage / nav sidebars may embed category lists)
+//   edited_term  — term name, slug, or description changed (archive is now stale)
+function nppp_purge_cache_on_term_change( $term_id, $tt_id, $taxonomy ) {
+    $nginx_cache_settings = get_option( 'nginx_cache_settings' );
+    if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
+
+    // Only public taxonomies with a URL-based rewrite (public archives exist).
+    $tax_obj = get_taxonomy( $taxonomy );
+    if ( ! $tax_obj || empty( $tax_obj->public ) || false === $tax_obj->rewrite ) {
+        return;
+    }
+
+    $term_link = get_term_link( (int) $term_id, $taxonomy );
+    if ( is_wp_error( $term_link ) || ! filter_var( $term_link, FILTER_VALIDATE_URL ) ) {
+        return;
+    }
+
+    $nginx_cache_path = $nginx_cache_settings['nginx_cache_path'] ?? '/dev/shm/change-me-now';
+    nppp_purge_single( $nginx_cache_path, $term_link, true );
+}
+
+// Auto Purge (Single)
+// Step 1 of 2 for term deletion: capture the term's archive URL BEFORE WordPress
+// removes the term from the database.
+//
+// `get_term_link()` returns WP_Error once the term row is gone, so it must be
+// called in `pre_delete_term` (fires before deletion) and the result cached in
+// memory via the WP object cache (non-persistent group — valid for this request only).
+//
+// The actual purge is performed in nppp_purge_cache_on_term_delete() which hooks
+// `delete_term` (fires after deletion).
+function nppp_capture_term_url_pre_delete( $term_id, $taxonomy ) {
+    $tax_obj = get_taxonomy( $taxonomy );
+    if ( ! $tax_obj || empty( $tax_obj->public ) || false === $tax_obj->rewrite ) {
+        return;
+    }
+
+    $term_link = get_term_link( (int) $term_id, $taxonomy );
+    if ( ! is_wp_error( $term_link ) && filter_var( $term_link, FILTER_VALIDATE_URL ) ) {
+        // Store in in-memory object cache (single-request lifetime, no DB hit).
+        wp_cache_set( 'nppp_del_term_' . (int) $term_id, $term_link, 'nppp_term_purge' );
+    }
+}
+
+// Auto Purge (Single)
+// Step 2 of 2 for term deletion: purge the archive URL that was captured by
+// nppp_capture_term_url_pre_delete() before WordPress deleted the term.
+//
+// Hooked to: delete_term (fires after the term is removed from the database).
+function nppp_purge_cache_on_term_delete( $term_id, $tt_id, $taxonomy ) {
+    $term_link = wp_cache_get( 'nppp_del_term_' . (int) $term_id, 'nppp_term_purge' );
+    wp_cache_delete( 'nppp_del_term_' . (int) $term_id, 'nppp_term_purge' );
+
+    if ( ! $term_link ) {
+        return;
+    }
+
+    $nginx_cache_settings = get_option( 'nginx_cache_settings' );
+    if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
+
+    $nginx_cache_path = $nginx_cache_settings['nginx_cache_path'] ?? '/dev/shm/change-me-now';
+    nppp_purge_single( $nginx_cache_path, $term_link, true );
+}
+
 // Purge cache operation
 function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = false, $nppp_is_admin_bar = false, $nppp_is_auto_purge = false) {
-    // On a large cache (100 k+ files)
-    // on slow or network-attached storage this can easily exceed the default
-    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
-    // mid-operation and leaving the purge lock (stored as a wp_options row via
-    // WP_Upgrader::create_lock()) permanently orphaned until its TTL expires.
-
-    // set_time_limit(0) resets the countdown to "unlimited" for this request
-    // only — it has no effect on other processes or future requests.
-    // The @ suppressor silences the E_WARNING that some hardened hosts emit
-    // when the function appears in disable_functions; the call is otherwise
-    // a safe no-op in that environment.
-
-    // Note: this only disables PHP's own timer. PHP-FPM's independent
-    // request_terminate_timeout and Nginx's fastcgi_read_timeout are enforced
-    // by the FPM master process and the upstream proxy respectively and cannot
-    // be overridden from PHP at runtime.
     if (function_exists('set_time_limit')) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
