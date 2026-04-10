@@ -19,5 +19,5 @@ if ( ! defined( 'ABSPATH' ) ) {
 return [
     'reject_regex'     => '/wp-admin/|/wp-content/|/wp-includes/|/wp-json/|/xmlrpc.php|/wp-.*\.php|/cart/|/checkout/|/order-received/|/order-pay/|/wc-ajax/|/wc-auth/|/my-account/|/wc-api/|/addons/|/robots\.txt|/sitemap(_index)?\.xml|[a-z0-9_-]+-sitemap([0-9]+)?\.xml|/wp-sitemap.*\.xml|comment-page-|/feed/|/embed/|/cgi-bin/|/login/|/logout/|/register/|/lost-password/|/password-reset/|/activate/|\.well-known/|\?|\=|\&|\#',
     'reject_extension' => '*.css,*.min.css,*.js,*.min.js,*.png,*.jpg,*.jpeg,*.gif,*.ico,*.mp4,*.webm,*.mov,*.avi,*.mkv,*.flv,*.wmv,*.mpeg,*.mpg,*.m4v,*.3gp,*.woff,*.woff2,*.ttf,*.eot,*.svg,*.bmp,*.pdf,*.doc,*.docx,*.xls,*.xlsx,*.ppt,*.pptx,*.zip,*.rar,*.tar,*.gz,*.bz2,*.7z,*.xml,*.txt,*.sql,*.log,*.ini,*.conf,*.json,*.bak,*.old,*.tmp,*.swp,*.md,*.rst,*.py,*.sh,*.iso,*.crt,*.key,*.pem,*.out,*.xsl',
-    'cache_key_regex'  => '/^KEY:\s+https?(?:GET)?([^\/]+)(\/[^\s]*)/m',
+    'cache_key_regex'  => '/^KEY:\s+https?(?:GET|HEAD)?([^\/]+)(\/[^\s]*)/m',
 ];
