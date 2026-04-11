@@ -212,6 +212,8 @@
 
 // Rebuild the final table including optional buckets
 static const char *const ALLOWED_BINS[] = {
+    // Scan
+    "rg",
     // Fetch
     "wget","curl",
     // Archives
@@ -1288,6 +1290,76 @@ static void set_locale_utf8_best_effort(void) {
     setenv("CHARSET", "ASCII", 1);
 }
 
+/*
+ * Resolve the UID needed to read the nginx cache path by lstat()-ing
+ * the path itself. This is the most reliable cross-environment method:
+ *
+ *   Monolithic:    lstat(/dev/shm/fastcgi-cache-psauxit) → nginx uid
+ *   Containerized: original path is bind-mounted into the WP container
+ *                  lstat() still works, returns the nginx uid
+ *
+ * We never need to scan /proc or parse nginx.conf — the path owner
+ * IS the user who can read it. Returns (uid_t)-1 on any failure.
+ * Refuses symlinks (/dev/shm is 1777; any local user could plant one).
+ * Refuses to return uid 0 (root) — if root owns the path, fall back
+ * to FUSE mount in PHP (opendir check already handles this).
+ */
+static uid_t resolve_cache_path_owner(const char *cache_path) {
+    if (!cache_path || !*cache_path) return (uid_t)-1;
+
+    struct stat st;
+    if (lstat(cache_path, &st) != 0) {
+        s_fprintf(stderr,
+            "Error: safexec: lstat('%s') failed: %s\n", cache_path, strerror(errno));
+        return (uid_t)-1;
+    }
+
+    /* Reject symlinks unconditionally */
+    if (S_ISLNK(st.st_mode)) {
+        s_fprintf(stderr,
+            "Error: safexec: '%s' is a symlink\n", cache_path);
+        return (uid_t)-1;
+    }
+
+    /* Must be a directory */
+    if (!S_ISDIR(st.st_mode)) {
+        s_fprintf(stderr,
+            "Error: safexec: '%s' is not a directory\n", cache_path);
+        return (uid_t)-1;
+    }
+
+    /* Refuse root — we cannot drop to root */
+    if (st.st_uid == 0) {
+        s_fprintf(stderr,
+            "Error: safexec: '%s' is owned by root\n", cache_path);
+        return (uid_t)-1;
+    }
+
+    s_fprintf(stderr,
+        "Info: safexec: '%s' owned by uid=%lu\n",
+        cache_path, (unsigned long)st.st_uid);
+
+    return st.st_uid;
+}
+
+/*
+ * Find the path argument from rg's argv.
+ *
+ * rg is called as:
+ *   safexec rg -m 1 --text ... '<pattern>' '<path>'
+ *
+ */
+static const char *find_rg_cache_path(int argc, char **argv, int prog_i) {
+    if (argc <= prog_i + 1) return NULL;
+
+    const char *last = argv[argc - 1];
+
+    /* Must be absolute path */
+    if (!last || last[0] != '/') return NULL;
+
+    return last;
+}
+
 // Sanitize environment & process state early
 static void sanitize_process_early(void) {
     clearenv_portable();
@@ -1588,10 +1660,12 @@ int main(int argc, char *argv[]) {
             chdir_safe_if_cwd_inaccessible();
         }
 
+        s_fprintf(stderr, "Info: safexec: Pass-Through Mode (euid=%ld)\n", (long)geteuid());
+        s_fprintf(stderr, "Info: safexec: Starting '%s' as original user\n", argv[1]);
+
         s_fprintf(stderr,
-            "Info: Pass-Through Mode (euid=%ld). Starting '%s' as original user. "
-            "To enable hardening: chown root:root %s && chmod 4755 %s (avoid nosuid).\n",
-            (long)geteuid(), argv[1], argv[0], argv[0]);
+            "Note: To enable hardening: chown root:root %s && chmod 4755 %s (avoid nosuid)\n",
+            argv[0], argv[0]);
 
         execvp(argv[1], &argv[1]);
         s_perror("safexec: execvp");
@@ -1666,7 +1740,52 @@ int main(int argc, char *argv[]) {
     gid_t rgid = getgid();
     int   was_root = (geteuid() == 0);
 
-    struct passwd *pw = getpwnam("nobody");
+    /*
+     * For rg: resolve the target drop UID from the cache path's owner.
+     * This works in both monolithic and containerized deployments because
+     * the original nginx cache path is always accessible to root (us),
+     * and its owner uid is exactly the user rg needs to run as.
+     *
+     * For all other tools: drop to 'nobody' as usual.
+     */
+    struct passwd *pw = NULL;
+
+    if (is_prog(argv[prog_i], "rg")) {
+        const char *rg_cache_path = find_rg_cache_path(argc, argv, prog_i);
+        uid_t cache_owner = (rg_cache_path)
+            ? resolve_cache_path_owner(rg_cache_path)
+            : (uid_t)-1;
+
+        if (cache_owner == (uid_t)-1) {
+            s_fprintf(stderr,
+                "Error: safexec: root-owned or invalid path; refusing exec\n");
+            FREE_PCT();
+            return 1;
+        }
+
+        if (cache_owner == ruid) {
+            s_fprintf(stderr,
+                "Info: safexec: path owner matches caller (uid=%lu); skipping drop\n",
+                (unsigned long)ruid);
+            goto drop_to_fpm_user;
+        }
+
+        pw = getpwuid(cache_owner);
+        if (!pw) {
+            s_fprintf(stderr,
+                "Error: safexec: uid %lu not in passwd; refusing exec\n",
+                (unsigned long)cache_owner);
+            FREE_PCT();
+            return 1;
+        }
+
+        s_fprintf(stderr,
+            "Info: safexec: dropping to '%s' (uid=%lu)\n",
+            pw->pw_name, (unsigned long)pw->pw_uid);
+    } else {
+        pw = getpwnam("nobody");
+    }
+
     if (pw) {
         if (setgroups(0, NULL) != 0) { s_perror("setgroups (nobody)"); goto drop_to_fpm_user; }
         if (setgid(pw->pw_gid) != 0) { s_perror("setgid (nobody)");    goto drop_to_fpm_user; }
