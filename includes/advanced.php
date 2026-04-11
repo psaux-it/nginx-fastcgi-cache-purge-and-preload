@@ -810,26 +810,6 @@ function nppp_purge_cache_premium_callback() {
         }
     }
 
-    // Sanitize and validate the file path again deeply before purge cache
-    // This is an extra security layer
-    $validation_result = nppp_validate_path($file_path, true);
-
-    // Check the validation result
-    if ($validation_result !== true) {
-        // Handle different validation outcomes
-        switch ($validation_result) {
-            case 'critical_path':
-                $error_message = __( 'ERROR PATH: The Nginx cache path appears to be a critical system directory or a first-level directory. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
-                break;
-            case 'file_not_found_or_not_readable':
-                $error_message = __( 'ERROR PATH: The specified Nginx cache path was not found. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
-                break;
-            default:
-                $error_message = __( 'ERROR PATH: An invalid Nginx cache path was provided. Failed to purge Nginx cache!', 'fastcgi-cache-purge-and-preload-nginx' );
-        }
-        nppp_log_and_send_error($error_message, $log_file_path);
-    }
-
     // Acquire exclusive purge lock — prevents concurrent Advanced-tab purge
     // racing with Purge All or another admin's single-page purge.
     // Must be released explicitly before every nppp_log_and_send_* call
@@ -1068,8 +1048,6 @@ function nppp_locate_cache_file_ajax() {
         $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
 
         if ( $rg_bin !== '' ) {
-            // -l  → print file paths only (one per file, deduplicated).
-            // -m 1 → stop scanning each file after the first KEY match (perf).
             $rg_cmd = sprintf(
                 '%s -l -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config %s %s',
                 escapeshellarg( $rg_bin ),
@@ -1091,16 +1069,6 @@ function nppp_locate_cache_file_ajax() {
                 foreach ( $rg_out as $rg_line ) {
                     $candidate = trim( $rg_line );
                     if ( $candidate === '' ) {
-                        continue;
-                    }
-
-                    // Path safety — same gate the purge endpoint enforces.
-                    if ( nppp_validate_path( $candidate, true ) !== true ) {
-                        nppp_display_admin_notice( 'error', sprintf(
-                            /* translators: %s = cache URL; shown if the cache file path is invalid and skipped */
-                            __( 'ERROR PATH: Cache file locate skipped — invalid path for %s (RG)', 'fastcgi-cache-purge-and-preload-nginx' ),
-                            $cache_url
-                        ), true, false );
                         continue;
                     }
 
@@ -1131,19 +1099,6 @@ function nppp_locate_cache_file_ajax() {
                     // Skip redirects.
                     if ( strpos( $content, 'Status: 301 Moved Permanently' ) !== false ||
                          strpos( $content, 'Status: 302 Found' ) !== false ) {
-                        continue;
-                    }
-
-                    // Skip non-GET entries.
-                    $rg_key_line = $rg_match[1];
-                    $rg_skip     = false;
-                    foreach ( [ 'POST', 'HEAD', 'PUT', 'DELETE', 'PATCH', 'OPTIONS' ] as $rg_method ) {
-                        if ( strpos( $rg_key_line, $rg_method ) !== false ) {
-                            $rg_skip = true;
-                            break;
-                        }
-                    }
-                    if ( $rg_skip ) {
                         continue;
                     }
 
@@ -1210,17 +1165,6 @@ function nppp_locate_cache_file_ajax() {
             // Ignore redirects
             if (strpos($content, 'Status: 301 Moved Permanently') !== false ||
                 strpos($content, 'Status: 302 Found') !== false) {
-                continue;
-            }
-
-            // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
-            $key_line = $match[1];
-            if (strpos($key_line, 'POST') !== false ||
-                strpos($key_line, 'HEAD') !== false ||
-                strpos($key_line, 'PUT') !== false ||
-                strpos($key_line, 'DELETE') !== false ||
-                strpos($key_line, 'PATCH') !== false ||
-                strpos($key_line, 'OPTIONS') !== false) {
                 continue;
             }
 
