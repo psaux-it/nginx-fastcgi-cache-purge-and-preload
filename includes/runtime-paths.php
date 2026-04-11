@@ -53,3 +53,148 @@ if (!function_exists('nppp_get_runtime_file')) {
 if (!defined('NGINX_CACHE_LOG_FILE')) {
     define('NGINX_CACHE_LOG_FILE', nppp_get_runtime_file('fastcgi_ops.log'));
 }
+
+/**
+ * If $mount_path is a FUSE filesystem mount (e.g. bindfs), return the
+ * underlying source directory path. Returns null when $mount_path is not a
+ * FUSE mount or when neither /proc/self/mountinfo nor /proc/mounts can be read.
+ */
+function nppp_fuse_source_path( string $mount_path ): ?string {
+    $mount_path = rtrim( $mount_path, '/' );
+
+    // Prefer /proc/self/mountinfo (Linux 2.6.26+): correctly disambiguates
+    if ( is_readable( '/proc/self/mountinfo' ) ) {
+        $lines = file( '/proc/self/mountinfo', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES );
+        if ( $lines !== false ) {
+            foreach ( $lines as $line ) {
+                $sep = strpos( $line, ' - ' );
+                if ( $sep === false ) {
+                    continue;
+                }
+
+                $left = preg_split( '/\s+/', substr( $line, 0, $sep ) );
+                if ( ! isset( $left[4] ) ) {
+                    continue;
+                }
+
+                $mountpoint = rtrim( preg_replace_callback(
+                    '/\\\\([0-7]{3})/',
+                    fn( $m ) => chr( octdec( $m[1] ) ),
+                    $left[4]
+                ), '/' );
+
+                if ( $mountpoint !== $mount_path ) {
+                    continue;
+                }
+
+                $right = preg_split( '/\s+/', ltrim( substr( $line, $sep + 3 ) ) );
+                if ( ! isset( $right[0], $right[1] ) ) {
+                    continue;
+                }
+
+                $fstype = $right[0];
+                $source = rtrim( preg_replace_callback(
+                    '/\\\\([0-7]{3})/',
+                    fn( $m ) => chr( octdec( $m[1] ) ),
+                    $right[1]
+                ), '/' );
+
+                if ( strpos( $fstype, 'fuse' ) === false ) {
+                    continue;
+                }
+
+                if ( $source !== '' && $source !== $mount_path ) {
+                    return $source;
+                }
+            }
+        }
+    }
+
+    // Fallback: /proc/mounts (older kernels / containers without /proc/self).
+    if ( is_readable( '/proc/mounts' ) ) {
+        $lines = file( '/proc/mounts', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES );
+        if ( $lines !== false ) {
+            foreach ( $lines as $line ) {
+                $parts = explode( ' ', $line );
+                if ( count( $parts ) < 3 ) {
+                    continue;
+                }
+
+                $source     = rtrim( $parts[0], '/' );
+                $mountpoint = rtrim( $parts[1], '/' );
+                $fstype     = $parts[2];
+
+                if ( $mountpoint !== $mount_path ) {
+                    continue;
+                }
+
+                if ( strpos( $fstype, 'fuse' ) === false ) {
+                    continue;
+                }
+
+                if ( $source !== '' && $source !== $mount_path ) {
+                    return $source;
+                }
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Return the best path to use for read-only directory scanning.
+ *
+ * When $cache_path is a FUSE (e.g. bindfs) mount AND the underlying source
+ * directory is accessible to the current process, scanning the source directly
+ * eliminates all FUSE kernel<->userspace round-trips.
+ *
+ * Falls back to $cache_path unchanged when:
+ *   - /proc/mounts is unreadable or the path is not a FUSE mount,
+ *   - the resolved source directory cannot be opened by the current process.
+ *
+ * Scan callers (FP3/FP4) must still use $cache_path for all delete operations
+ * since only the FUSE mount exposes the write permissions needed by php-fpm.
+ */
+function nppp_resolve_scan_path( string $cache_path ): string {
+    $source = nppp_fuse_source_path( $cache_path );
+    if ( $source === null ) {
+        return $cache_path;
+    }
+
+    // Quick traversability test: attempt to open the source directory.
+    // This catches the common case where php-fpm cannot enter the top-level
+    // directory (e.g. 0700 nginx:root) even though subdirs are world-readable.
+    $dh = @opendir( $source );
+    if ( $dh === false ) {
+        return $cache_path;
+    }
+    closedir( $dh );
+
+    return rtrim( $source, '/' ) . '/';
+}
+
+/**
+ * Translate a file path found under $scan_path to its equivalent path under
+ * the FUSE mount at $fuse_path.
+ *
+ * This is the inverse of the FUSE mount: if rg or the PHP iterator returns
+ * /source/a/b/file, the deletable path is /fuse-mount/a/b/file.
+ *
+ * Returns $filepath unchanged when both roots are identical (no FUSE
+ * optimisation active) or when the path does not start with $scan_path.
+ */
+function nppp_translate_path_to_fuse( string $filepath, string $scan_path, string $fuse_path ): string {
+    $scan_root = rtrim( $scan_path, '/' ) . '/';
+    $fuse_root = rtrim( $fuse_path, '/' ) . '/';
+
+    if ( $scan_root === $fuse_root ) {
+        return $filepath;
+    }
+
+    if ( str_starts_with( $filepath, $scan_root ) ) {
+        return $fuse_root . substr( $filepath, strlen( $scan_root ) );
+    }
+
+    return $filepath;
+}
