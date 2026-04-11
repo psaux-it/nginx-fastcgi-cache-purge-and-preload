@@ -383,11 +383,6 @@ function nppp_purge_urls_silent( string $nginx_cache_path, array $urls ): array 
                     $rg_key_line  = trim( $rg_parts[1] );
                     if ( $rg_candidate === '' || $rg_key_line === '' ) continue;
 
-                    // Non-GET filter.
-                    foreach ( [ 'POST', 'HEAD', 'PUT', 'DELETE', 'PATCH', 'OPTIONS' ] as $m ) {
-                        if ( strpos( $rg_key_line, $m ) !== false ) continue 2;
-                    }
-
                     // Validate regex once against the first viable line.
                     $rg_rx = [];
                     if ( ! $rg_regex_ok ) {
@@ -421,17 +416,6 @@ function nppp_purge_urls_silent( string $nginx_cache_path, array $urls ): array 
                         nppp_display_admin_notice( 'error', sprintf(
                             /* translators: %s: related page URL */
                             __( 'ERROR PERMISSION: Nginx cache purge for related page %s was aborted due to a permission error. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                            $rel['decoded']
-                        ), true, false );
-                        $rg_path_errors[ $constructed ] = true;
-                        continue;
-                    }
-
-                    // Path validation.
-                    if ( nppp_validate_path( $rg_candidate, true ) !== true ) {
-                        nppp_display_admin_notice( 'error', sprintf(
-                            /* translators: %s: related page URL */
-                            __( 'ERROR PATH: A cache variant for related page %s was skipped (RG) — invalid path detected.', 'fastcgi-cache-purge-and-preload-nginx' ),
                             $rel['decoded']
                         ), true, false );
                         $rg_path_errors[ $constructed ] = true;
@@ -583,12 +567,6 @@ function nppp_purge_urls_silent( string $nginx_cache_path, array $urls ): array 
                 continue;
             }
 
-            // Non-GET filter.
-            $key_line = $match[1];
-            foreach ( [ 'POST', 'HEAD', 'PUT', 'DELETE', 'PATCH', 'OPTIONS' ] as $m ) {
-                if ( strpos( $key_line, $m ) !== false ) continue 2;
-            }
-
             // Validate regex once against the first viable file; abort with notice on failure.
             if ( ! $fp4_regex_ok ) {
                 $tmp = [];
@@ -627,16 +605,6 @@ function nppp_purge_urls_silent( string $nginx_cache_path, array $urls ): array 
             if ( ! isset( $pending[ $constructed ] ) ) continue;
 
             $cache_path = $file->getPathname();
-
-            if ( nppp_validate_path( $cache_path, true ) !== true ) {
-                nppp_display_admin_notice( 'error', sprintf(
-                    /* translators: %s: related page URL */
-                    __( 'ERROR PATH: A cache variant for related page %s was skipped (SCAN) — invalid path detected.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                    $pending[ $constructed ]['decoded']
-                ), true, false );
-                $fp4_path_errors[ $constructed ] = true;
-                continue;
-            }
 
             // Accumulate — keep scanning for further variants of the same URL.
             $fp4_candidates[ $constructed ][] = $cache_path;
