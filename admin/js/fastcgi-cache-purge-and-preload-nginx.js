@@ -3820,6 +3820,7 @@ function npppupdateStatus() {
         "#nppppermIsolation",
         "#npppcpulimitStatus",
         "#npppsafexecStatus",
+        "#npppSafexecVersion",
         "#nppprgStatus",
         "#npppCacheDiskSize"
     ];
@@ -4364,6 +4365,55 @@ function npppupdateStatus() {
 
     npppsafexecStatusSpan.appendChild(iconSpanSafexec);
     npppsafexecStatusSpan.append(safexecStatusText);
+
+    var npppSafexecVersionSpan = document.getElementById("npppSafexecVersion");
+    var npppSafexecVersion = npppSafexecVersionSpan.textContent.trim();
+
+    npppSafexecVersionSpan.style.fontSize = "14px";
+    npppSafexecVersionSpan.style.fontWeight = "bold";
+    npppSafexecVersionSpan.textContent = '';
+
+    let iconSpanSafexecVersion = document.createElement('span');
+    let safexecVersionText = '';
+
+    if (npppSafexecVersion === "Not Installed" || npppSafexecVersion === "Unknown") {
+        npppSafexecVersionSpan.style.color = "orange";
+        iconSpanSafexecVersion.classList.add("dashicons", "dashicons-warning");
+        iconSpanSafexecVersion.style.fontSize = "18px";
+        iconSpanSafexecVersion.style.setProperty('font-weight', 'normal', 'important');
+        safexecVersionText = ' ' + npppSafexecVersion;
+    } else if (npppSafexecVersion.includes("(")) {
+        var versions = npppSafexecVersion.match(/(\d+\.\d+\.\d+)\s\((\d+\.\d+\.\d+)\)/);
+        if (versions) {
+            var installedVersion = versions[1];
+            var pluginVersion = versions[2];
+
+            if (installedVersion === pluginVersion) {
+                npppSafexecVersionSpan.style.color = "green";
+                iconSpanSafexecVersion.classList.add("dashicons", "dashicons-yes");
+                iconSpanSafexecVersion.style.fontSize = "20px";
+                iconSpanSafexecVersion.style.color = "green";
+                iconSpanSafexecVersion.style.setProperty('font-weight', 'normal', 'important');
+                safexecVersionText = ` ${installedVersion} (${pluginVersion})`;
+            } else {
+                iconSpanSafexecVersion.classList.add("dashicons", "dashicons-update");
+                iconSpanSafexecVersion.style.fontSize = "18px";
+                iconSpanSafexecVersion.style.color = "orange";
+                iconSpanSafexecVersion.style.setProperty('font-weight', 'normal', 'important');
+                safexecVersionText = `<span style="color:orange;">${installedVersion}</span> <span style="color:green;">(${pluginVersion})</span>`;
+            }
+        }
+    } else {
+        npppSafexecVersionSpan.style.color = "green";
+        iconSpanSafexecVersion.classList.add("dashicons", "dashicons-yes");
+        iconSpanSafexecVersion.style.fontSize = "20px";
+        iconSpanSafexecVersion.style.color = "green";
+        iconSpanSafexecVersion.style.setProperty('font-weight', 'normal', 'important');
+        safexecVersionText = ' ' + npppSafexecVersion;
+    }
+
+    npppSafexecVersionSpan.appendChild(iconSpanSafexecVersion);
+    npppSafexecVersionSpan.insertAdjacentHTML('beforeend', safexecVersionText);
 
     // Fetch and update rg command status
     var nppprgStatusSpan = document.getElementById("nppprgStatus");
