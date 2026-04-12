@@ -143,38 +143,6 @@ function nppp_fuse_source_path( string $mount_path ): ?string {
 }
 
 /**
- * Return the best path to use for read-only directory scanning.
- *
- * When $cache_path is a FUSE (e.g. bindfs) mount AND the underlying source
- * directory is accessible to the current process, scanning the source directly
- * eliminates all FUSE kernel<->userspace round-trips.
- *
- * Falls back to $cache_path unchanged when:
- *   - /proc/mounts is unreadable or the path is not a FUSE mount,
- *   - the resolved source directory cannot be opened by the current process.
- *
- * Scan callers (FP3/FP4) must still use $cache_path for all delete operations
- * since only the FUSE mount exposes the write permissions needed by php-fpm.
- */
-function nppp_resolve_scan_path( string $cache_path ): string {
-    $source = nppp_fuse_source_path( $cache_path );
-    if ( $source === null ) {
-        return $cache_path;
-    }
-
-    // Quick traversability test: attempt to open the source directory.
-    // This catches the common case where php-fpm cannot enter the top-level
-    // directory (e.g. 0700 nginx:root) even though subdirs are world-readable.
-    $dh = @opendir( $source );
-    if ( $dh === false ) {
-        return $cache_path;
-    }
-    closedir( $dh );
-
-    return rtrim( $source, '/' ) . '/';
-}
-
-/**
  * Translate a file path found under $scan_path to its equivalent path under
  * the FUSE mount at $fuse_path.
  *
