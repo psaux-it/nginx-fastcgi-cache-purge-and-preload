@@ -1019,31 +1019,6 @@ $(document).ready(function() {
         }
     }
 
-    // Change Cache Path on fly in table
-    function npppUpdateCachePath($row, pathText){
-        var $main = $row.hasClass('child') ? $row.prev('tr') : $row;
-
-        // main row cell
-        var $cell = $main.find('td.nppp-cache-path');
-        $cell.text(pathText);
-
-        // invalidate JUST this cell in DT cache (no redraw)
-        var dt = npppDT();
-        if (dt && $cell.length) dt.cell($cell[0]).invalidate('dom');
-
-        // responsive child: match by label text, update .dtr-data
-        var $child = $main.next('.child');
-        if ($child.length){
-            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_path) ? nppp_admin_data.col_cache_path : __('Cache Path', 'fastcgi-cache-purge-and-preload-nginx');
-            $child.find('.dtr-details li').each(function(){
-                var $li = $(this);
-                if ($li.find('.dtr-title').text().trim() === label){
-                    $li.find('.dtr-data').text(pathText);
-                }
-            });
-        }
-    }
-
     // Extract a human message from a WP AJAX response
     function npppMsg(resp, fallback){
         if (!resp) return fallback || '';
@@ -1092,14 +1067,11 @@ $(document).ready(function() {
         // Status -> MISS
         npppSetStatus($main, false);
 
-        // Clear cache path + purge button
-        npppUpdateCachePath($main, '—');
-
         var $purgeBtn = $main.hasClass('dtr-expanded')
             ? $main.next('.child').find('.nppp-purge-btn')
             : $main.find('.nppp-purge-btn');
 
-        $purgeBtn.prop('disabled', true).addClass('disabled').removeAttr('data-file');
+        $purgeBtn.prop('disabled', true).addClass('disabled');
 
         // Make preload available (unless it’s the global preload button you gate elsewhere)
         var $preloadBtn = $main.hasClass('dtr-expanded')
@@ -1117,151 +1089,6 @@ $(document).ready(function() {
         if (dt) {
             dt.row($main[0]).invalidate('dom');
             dt.draw(false);
-        }
-    }
-
-    // Tiny helper to attach file path to purge button on the same row
-    function npppAttachPurgeFile(row, filePath) {
-        var mainRow = row.hasClass('child') ? row.prev('tr') : row;
-        var purgeBtn;
-
-        if (mainRow.hasClass('dtr-expanded')) {
-            purgeBtn = mainRow.next('.child').find('.nppp-purge-btn');
-        } else {
-            purgeBtn = mainRow.find('.nppp-purge-btn');
-        }
-
-        purgeBtn.attr('data-file', filePath);
-        purgeBtn.prop('disabled', false).removeClass('disabled');
-
-        npppUpdateCachePath(mainRow, filePath);
-    }
-
-    // Quick retry helper (backoff + UX polish + stale-response guard + optional initial delay)
-    function npppLocateCacheFile(row, url, attempt, opts) {
-        attempt = attempt || 1;
-        opts = opts || {};
-
-        var maxAttempts   = opts.maxAttempts   || 4;
-        var baseDelay     = opts.baseDelay     || 250;
-        var maxDelay      = opts.maxDelay      || 1500;
-        var initialDelay  = (attempt === 1)
-            ? (opts.initialDelay != null
-            ? opts.initialDelay
-            : (window.nppp_admin_data && +nppp_admin_data.locate_initial_delay) || 400)
-        : 0;
-
-        // compute exp backoff + a dash of jitter
-        var delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
-        delay += Math.floor(Math.random() * 60);
-
-        var $main = row.hasClass('child') ? row.prev('tr') : row;
-
-        function npppInDom($el) {
-            return $el && $el.length && document.contains($el[0]);
-        }
-
-        if (attempt === 1) {
-            var resolving = (window.nppp_admin_data && nppp_admin_data.str_resolving_path)
-                ? nppp_admin_data.str_resolving_path
-                : '(resolving path…)';
-            npppUpdateCachePath($main, resolving);
-            $main.find('td.nppp-cache-path').addClass('is-resolving spinner--arc');
-        }
-
-        // Tag this attempt; newer attempts win
-        var reqId = Date.now() + ':' + attempt;
-        $main.data('npppLocateReqId', reqId);
-
-        function doRequest() {
-            $.ajax({
-                url: nppp_admin_data.ajaxurl,
-                type: 'POST',
-                dataType: 'json',
-                data: {
-                    action: 'nppp_locate_cache_file',
-                    cache_url: url,
-                    _wpnonce: nppp_admin_data.premium_nonce_locate
-                }
-            }).done(function (r) {
-                if (!npppInDom($main)) return;
-                if ($main.data('npppLocateReqId') !== reqId) return;
-
-                if (r && r.success && r.data && r.data.file_path) {
-                    npppSetStatus($main, true);
-                    npppAttachPurgeFile($main, r.data.file_path);
-
-                    $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
-                    $main.removeData('npppLocateReqId');
-
-                    // Redraw to re-apply column filters against updated status
-                    var dtAfter = npppDT();
-                    if (dtAfter) {
-                        dtAfter.row($main[0]).invalidate('dom');
-                        dtAfter.draw(false);
-                    }
-
-                    // Release global lock + re-enable all preload buttons
-                    npppPreloadInProgress = false;
-                    $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
-                } else if (attempt < maxAttempts) {
-                    setTimeout(function () {
-                        npppLocateCacheFile($main, url, attempt + 1, opts);
-                    }, delay);
-                } else {
-                    // final fallback: keep HIT, clear cell, stop spinner
-                    npppUpdateCachePath($main, '—');
-                    $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
-                    var cleanUrl = String(url || '').trim();
-                    /* Translators: %s: the URL that failed cache verification */
-                    npppToast(
-                        sprintf(
-                            __(
-                                "Couldn't verify that the cache was warmed for %s. This URL may be bypassed by Nginx " +
-                                "or the cache hasn't warmed yet. Refresh to recheck.",
-                                'fastcgi-cache-purge-and-preload-nginx'
-                            ),
-                            cleanUrl
-                        ),
-                        'info'
-                    );
-
-                    // Release global lock
-                    npppPreloadInProgress = false;
-                    $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
-                }
-            }).fail(function () {
-                if (!npppInDom($main)) {
-                    npppPreloadInProgress = false;
-                    $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
-                    return;
-                }
-                if ($main.data('npppLocateReqId') !== reqId) return;
-
-                if (attempt < maxAttempts) {
-                    setTimeout(function () {
-                        if (npppInDom($main)) {
-                            npppLocateCacheFile($main, url, attempt + 1, opts);
-                        } else {
-                            npppPreloadInProgress = false;
-                            $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
-                        }
-                    }, delay);
-                } else {
-                    // final fail: clear cell, stop spinner
-                    npppUpdateCachePath($main, '—');
-                    $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
-                    npppPreloadInProgress = false;
-                    $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
-                }
-            });
-        }
-
-        // Small grace period before the very first probe
-        if (initialDelay > 0) {
-            setTimeout(doRequest, initialDelay);
-        } else {
-            doRequest();
         }
     }
 
@@ -1300,7 +1127,6 @@ $(document).ready(function() {
                     }
 
                     npppSetStatus(row, false);
-                    npppUpdateCachePath(row, '—');
 
                     // find the preload button
                     var preloadBtn;
@@ -1398,16 +1224,14 @@ $(document).ready(function() {
                 _wpnonce: nppp_admin_data.premium_nonce_preload
             },
             success: function(response) {
-                var msg  = (response && response.data) ? response.data : __('Preload queued.','fastcgi-cache-purge-and-preload-nginx');
+                // response.data is now { message: '...', cached: true/false }
+                var msg  = (response && response.data && response.data.message) ? response.data.message
+                         : (response && typeof response.data === 'string')      ? response.data
+                         : __('Preload queued.', 'fastcgi-cache-purge-and-preload-nginx');
                 var type = (response && response.success) ? 'success' : npppInferType(msg, 'error');
                 npppToast(msg, type);
 
                 if (response && response.success) {
-                    // Was MISS before flipping?
-                    var wasMiss =
-                        row.find('.nppp-status').hasClass('is-miss') ||
-                        (row.hasClass('child') && row.prev('tr').find('.nppp-status').hasClass('is-miss'));
-
                     // Check if the row is expanded on mobile
                     if (row.hasClass('child')) {
                         row = row.prev('tr');
@@ -1420,33 +1244,36 @@ $(document).ready(function() {
 
                     npppFlashRow(row);
 
-                    var filePath = (response && response.data && response.data.file_path) ? response.data.file_path : '';
-                    if (filePath){
+                    if (response.data && response.data.cached === true) {
                         npppSetStatus(row, true);
-                        npppAttachPurgeFile(row, filePath);
-
+                        purgeBtn.prop('disabled', false).removeClass('disabled');
                         purgeBtn.css('background-color', '#43A047');
-                        setTimeout(function(){ purgeBtn.css('background-color',''); }, 1200);
-
-                        npppPreloadInProgress = false;
-                        $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
-                    } else if (wasMiss) {
-                        // Keep MISS; show 'warming…' in cache-path cell and try to locate
-                        var resolving = (window.nppp_admin_data && nppp_admin_data.str_resolving_path)
-                            ? nppp_admin_data.str_resolving_path
-                            : '(Warming…)';
-                        npppUpdateCachePath(row, resolving);
-                        row.find('td.nppp-cache-path').addClass('is-resolving spinner--arc');
-
-                        // Let locator decide when to flip to HIT; it will also release the lock
-                        npppLocateCacheFile(row, cacheUrl, 1, { initialDelay: 300 });
+                        setTimeout(function(){ purgeBtn.css('background-color', ''); }, 1200);
+                    } else if (response.data && response.data.rg_used === true) {
+                        // not cached
+                        var cleanUrl = String(cacheUrl || '').trim();
+                        npppToast(
+                            sprintf(
+                                __(
+                                    "Couldn't verify that the cache was warmed for %s. This URL may be bypassed by Nginx " +
+                                    "or the cache hasn't warmed yet. Refresh to recheck.",
+                                    'fastcgi-cache-purge-and-preload-nginx'
+                                ),
+                                cleanUrl
+                            ),
+                            'info'
+                        );
                     } else {
-                        // also unlock in case nothing else runs
-                        npppPreloadInProgress = false;
-                        $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
+                        // optimistic HIT flip
+                        npppSetStatus(row, true);
+                        purgeBtn.prop('disabled', false).removeClass('disabled');
+                        purgeBtn.css('background-color', '#43A047');
+                        setTimeout(function(){ purgeBtn.css('background-color', ''); }, 1200);
                     }
+
+                    npppPreloadInProgress = false;
+                    $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
                 } else {
-                    // on error
                     npppPreloadInProgress = false;
                     allBtns.prop('disabled', false).removeClass('disabled');
                     btn.prop('disabled', false).removeClass('disabled');
