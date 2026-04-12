@@ -20,31 +20,6 @@ function nppp_get_command_output($command) {
     return trim(shell_exec($command));
 }
 
-// Function to get the latest release from GitHub API using wp_remote_get
-function nppp_get_latest_version_git($url) {
-    $response = wp_remote_get($url, [
-        'timeout'   => 3,
-        'httpversion' => '1.1',
-        'user-agent' => 'PHP',
-    ]);
-
-    // Check if the response has an error
-    if (is_wp_error($response)) {
-        return 'Not Determined';
-    }
-
-    // Get the response body and decode the JSON
-    $body = wp_remote_retrieve_body($response);
-    $data = $body ? json_decode($body, true) : null;
-
-    // Ensure $data is an array before proceeding
-    if (is_array($data)) {
-        return $data;
-    } else {
-        return 'Not Determined';
-    }
-}
-
 // Function to check bindfs version
 function nppp_check_bindfs_version() {
     // Ask result in cache first
@@ -57,43 +32,15 @@ function nppp_check_bindfs_version() {
         return $cached_result;
     }
 
-    // Fetch latest version
-    $bindfs_repo_url = "https://api.github.com/repos/mpartel/bindfs/git/refs/tags";
-    $response = nppp_get_latest_version_git($bindfs_repo_url);
-
-    $latest_version = 'Not Determined';
-    if (is_array($response) && !empty($response)) {
-        $mapped_response = array_map(function($ref) {
-            return isset($ref['ref']) ? preg_replace('/^refs\/tags\//', '', $ref['ref']) : '';
-        }, $response);
-
-        // Filter out any empty results after the map
-        $mapped_response = array_filter($mapped_response);
-
-        // Sort by semver — /git/refs/tags returns alphabetical order
-        usort($mapped_response, 'version_compare');
-        $latest_version = !empty($mapped_response) ? end($mapped_response) : 'Not Determined';
-    }
-
-    // Check if bindfs is installed
+    // Check if bindfs is installed — no external API call
     if (nppp_get_command_output('command -v bindfs')) {
         $installed_version = nppp_get_command_output('bindfs --version | head -n1 | awk \'{print $2}\'');
+        $result = !empty($installed_version) ? $installed_version : 'Unknown';
     } else {
-        $installed_version = null;
+        $result = 'Not Installed';
     }
 
-    // Decide the result based on install status and API fetch success
-    if ($installed_version) {
-        if ($latest_version !== 'Not Determined' && version_compare($installed_version, $latest_version, '<')) {
-            $result = "$installed_version ($latest_version)";
-        } else {
-            $result = "$installed_version ($latest_version)";
-        }
-    } else {
-        $result = "Not Installed";
-    }
-
-    // Store the result in the cache 1 month
+    // Store the result in the cache for 1 month
     set_transient($transient_key, $result, MONTH_IN_SECONDS);
 
     return $result;
@@ -111,13 +58,6 @@ function nppp_check_libfuse_version() {
         return $cached_result;
     }
 
-    // Attempt to fetch the latest version
-    $libfuse_repo_url = "https://api.github.com/repos/libfuse/libfuse/releases/latest";
-    $response = nppp_get_latest_version_git($libfuse_repo_url);
-    $latest_version = is_array($response) && isset($response['tag_name'])
-                      ? str_replace('fuse-', '', $response['tag_name'])
-                      : 'Not Determined';
-
     // Check for FUSE 3 or FUSE 2
     if (nppp_get_command_output('command -v fusermount3')) {
         $installed_version = preg_replace('/version:\s*/', '', nppp_get_command_output('fusermount3 -V | grep -oP \'version:\s*\K[0-9.]+\''));
@@ -127,18 +67,11 @@ function nppp_check_libfuse_version() {
         $installed_version = null;
     }
 
-    // Decide the result based on API fetch success
-    if ($installed_version) {
-        if ($latest_version !== 'Not Determined' && version_compare($installed_version, $latest_version, '<')) {
-            $result = "$installed_version ($latest_version)";
-        } else {
-            $result = "$installed_version ($latest_version)";
-        }
-    } else {
-        $result = "Not Installed";
-    }
+    $result = ($installed_version !== null && $installed_version !== '')
+        ? $installed_version
+        : 'Not Installed';
 
-    // Store the result in the cache 1 month
+    // Store the result in the cache for 1 month
     set_transient($transient_key, $result, MONTH_IN_SECONDS);
 
     return $result;
