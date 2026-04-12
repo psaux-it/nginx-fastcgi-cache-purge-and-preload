@@ -265,7 +265,7 @@ function nppp_nginx_cache_settings_page() {
                                     <?php echo esc_html__( 'Single-item events purge the page and, if enabled under Related Pages, also purge the Homepage, Shop Page and/or Category. Site-wide events purge the entire cache.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'This setting does not warm cache by itself. To warm automatically after automatic purges, enable Auto Preload below.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'This setting does not warm cache by itself. To warm the cache after any purge, enable Auto Preload below.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <div class="cache-paths-info">
                                     <h4><?php echo esc_html__( 'The entire cache is automatically purged when:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
@@ -289,7 +289,7 @@ function nppp_nginx_cache_settings_page() {
                                         <?php echo esc_html__( 'is approved or its status is changed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p><br>
                                     <p>
-                                        <?php echo esc_html__( 'If Auto Preload is ON, single-item automatic purges will preload the page and—if Related Pages are enabled—the Homepage, Shop Page and/or Category archives. Site-wide automatic purges will trigger a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <?php echo esc_html__( 'If Auto Preload is ON, any single-item purge (automatic or manual) will immediately preload the page and—if Related Pages are enabled—the Homepage, Shop Page and/or Category archives. Site-wide purges will trigger a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
                                 </div>
                             </td>
@@ -391,7 +391,7 @@ function nppp_nginx_cache_settings_page() {
                                 </div>
                                 <p class="description"><?php echo esc_html__( 'Enable this feature to automatically preload the cache after a purge. This ensures fast load times by proactively caching content before the first visitor arrives.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'When enabled, your website will automatically rebuild the cache with the latest content, ensuring a high cache hit rate even for frequently changing pages.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'This process is triggered by the Auto Purge feature or when the "Purge All" action is used manually.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'This process is triggered after any purge: automatically via the Auto Purge feature, manually via "Purge All", or via a single-URL purge from the Admin Bar or Advanced Tab.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'To trigger Preload Related Pages (Purge Scope) when Auto Purge is ON, this setting must be turned ON.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
@@ -410,8 +410,8 @@ function nppp_nginx_cache_settings_page() {
                                     <p class="description"><?php echo esc_html__( 'Preload also Nginx cache for Mobile devices separately. This feature supports for both entire and single POST/PAGE cache events.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'Only enable if you have different content, themes or configurations for Mobile and Desktop devices and need to warm the cache for both.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'If enabled, this feature always triggers automatically when Preload actions are called via Rest, Cron or Admin, regardless of whether Auto Preload or Auto Purge are enabled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'If only Auto Preload is enabled, it also triggers automatically after Purge actions are called via Rest, Admin.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'When both Auto Purge and Auto Preload are enabled, it triggers automatically when the cache is purged through Auto Purge conditions or when Purge actions are called via Rest or Admin.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'If only Auto Preload is enabled, it also triggers automatically after any Purge action: REST API, Admin Bar, Advanced Tab, or Auto Purge events.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'When both Auto Purge and Auto Preload are enabled, it triggers automatically whenever cache is purged — whether by Auto Purge events, Purge All, single-URL purges from the Admin Bar or Advanced Tab, or via REST.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 </div>
                                 <div class="cache-paths-info">
                                     <h4><strong><?php echo esc_html__( 'Note:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong></h4>
