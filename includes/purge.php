@@ -145,7 +145,7 @@ function nppp_purge_single_init( $nginx_cache_path, $current_page_url, $nppp_aut
     }
 
     $auto_preload      = ! empty( $settings['nginx_cache_auto_preload'] ) && $settings['nginx_cache_auto_preload'] === 'yes';
-    $chain_autopreload = $nppp_auto_purge && $auto_preload;
+    $chain_autopreload = $auto_preload;
     $regex             = ! empty( $settings['nginx_cache_key_custom_regex'] )
                          ? base64_decode( $settings['nginx_cache_key_custom_regex'] )
                          : nppp_fetch_default_regex_for_cache_key();
@@ -244,7 +244,7 @@ function nppp_purge_post_purge( array &$ctx ): void {
 
     // Auto-preload
     if ( $ctx['chain_autopreload'] ) {
-        nppp_preload_cache_on_update( $ctx['primary_url'], $ctx['primary_purged'] );
+        nppp_preload_cache_on_update( $ctx['primary_url'], $ctx['primary_purged'], ! $ctx['nppp_auto_purge'] );
     }
 
     // Determine whether to also preload related URLs.
