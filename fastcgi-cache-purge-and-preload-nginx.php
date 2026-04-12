@@ -63,6 +63,11 @@ if (!defined('NPPP_PLUGIN_VERSION')) {
     define('NPPP_PLUGIN_VERSION', '2.1.5');
 }
 
+// Single source of truth for the safexec version
+if (!defined('NPPP_SAFEXEC_VERSION')) {
+    define('NPPP_SAFEXEC_VERSION', '1.9.6');
+}
+
 // Loads runtime paths → SPL class autoloader → full admin bootstrap.
 // require_once deduplicates — safe to call from multiple entry points.
 function nppp_load_bootstrap(): void {
