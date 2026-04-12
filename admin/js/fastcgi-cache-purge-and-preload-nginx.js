@@ -1271,7 +1271,7 @@ $(document).ready(function() {
 
         // Get the data
         var btn = $(this);
-        var filePath = btn.data('file');
+        var cacheUrl = btn.data('url');
         var row = btn.closest('tr');
 
         // disable during request + inline spinner
@@ -1285,7 +1285,7 @@ $(document).ready(function() {
             dataType: 'json',
             data: {
                 action: 'nppp_purge_cache_premium',
-                file_path: filePath,
+                cache_url: cacheUrl,
                 _wpnonce: nppp_admin_data.premium_nonce_purge
             },
             success: function(response) {
