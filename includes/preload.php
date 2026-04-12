@@ -1171,7 +1171,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 // Only triggers conditionally if Auto Purge & Auto Preload enabled at the same time
 // Only preloads cache for single post/page if Auto Purge triggered before for this modified/updated post/page
 // This functions not trgiggers after On-Page purge actions
-function nppp_preload_cache_on_update($current_page_url, $found = false) {
+function nppp_preload_cache_on_update($current_page_url, $found = false, $is_manual = false) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
@@ -1409,7 +1409,9 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
                     $success_message = sprintf( __( 'SUCCESS ADMIN: Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                 } else {
                     // Translators: %s1: device type (desktop or mobile), %s2: current page URL
-                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto purge cache completed, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                    $success_message = $is_manual
+                        ? sprintf( __( 'SUCCESS ADMIN: Cache purged, preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded )
+                        : sprintf( __( 'SUCCESS ADMIN: Auto purge cache completed, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                 }
             } else {
                 if ($device === 'mobile') {
@@ -1417,7 +1419,9 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
                     $success_message = sprintf( __( 'SUCCESS ADMIN: Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                 } else {
                     // Translators: %s1: device type (desktop or mobile), %s2: current page URL
-                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto purge cache attempted but page not found in cache, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                    $success_message = $is_manual
+                        ? sprintf( __( 'SUCCESS ADMIN: Page not found in cache, preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded )
+                        : sprintf( __( 'SUCCESS ADMIN: Auto purge cache attempted but page not found in cache, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                 }
             }
 
