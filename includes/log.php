@@ -145,7 +145,6 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_update_auto_preload_mobile_option'      => 'nppp-update-auto-preload-mobile-option',
             'nppp_update_enable_proxy_option'             => 'nppp-update-enable-proxy-option',
             'nppp_update_related_fields'                  => 'nppp-related-posts-purge',
-            'nppp_locate_cache_file'                      => 'locate_cache_file_nonce',
             'nppp_update_pctnorm_mode'                    => 'nppp-update-pctnorm-mode',
             'nppp_update_http_purge_option'               => 'nppp-update-http-purge-option',
             'nppp_update_rg_purge_option'                 => 'nppp-update-rg-purge-option',
