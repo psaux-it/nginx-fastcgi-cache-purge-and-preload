@@ -915,6 +915,41 @@ function nppp_preload_cache_premium_callback() {
                 }
             }
 
+            // Inform user about rg scan decision
+            $rg_fuse_active = ($rg_source_path !== null);
+            if ($rg_used) {
+                if ($rg_fuse_active) {
+                    if ($rg_cmd_prefix !== '') {
+                        nppp_display_admin_notice('info', sprintf(
+                            __('INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                            $rg_scan_path
+                        ), true, false);
+                    } else {
+                        nppp_display_admin_notice('info', sprintf(
+                            __('INFO RG SCAN: FUSE mount detected, scanning source dir directly (rg has direct access): %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                            $rg_scan_path
+                        ), true, false);
+                    }
+                } elseif ($rg_cmd_prefix !== '') {
+                    nppp_display_admin_notice('info', sprintf(
+                        __('INFO RG SCAN: Scanning cache dir via safexec: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        $rg_scan_path
+                    ), true, false);
+                }
+            } elseif ($probe_exit === 2) {
+                if ($rg_fuse_active) {
+                    nppp_display_admin_notice('info', sprintf(
+                        __('WARNING RG SCAN: FUSE mount detected, rg scan skipped (cannot access source dir and safexec unavailable): %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        $rg_scan_path
+                    ), true, false);
+                } else {
+                    nppp_display_admin_notice('info', sprintf(
+                        __('WARNING RG SCAN: rg scan skipped (cannot access cache dir and safexec unavailable): %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        $rg_scan_path
+                    ), true, false);
+                }
+            }
+
             if ($rg_used) {
                 $url_key = preg_replace('#^https?://#', '', $cache_url);
 
