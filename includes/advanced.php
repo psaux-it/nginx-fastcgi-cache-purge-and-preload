@@ -771,15 +771,20 @@ function nppp_purge_cache_premium_callback() {
             && !empty($related_urls)
         );
 
+        $primary_preload = (
+            !empty($options['nginx_cache_auto_preload'])
+            && $options['nginx_cache_auto_preload'] === 'yes'
+        );
+
         nppp_log_and_send_success_data(
             $success_message,
             $log_file_path,
-            array('affected_urls' => $affected_urls, 'preload_auto' => $preload_auto),
+            array('affected_urls' => $affected_urls, 'preload_auto' => $preload_auto, 'primary_preload' => $primary_preload),
             true
         );
     }
 
-    // INFO-WARNING Soft outcome
+    // Soft outcome
     wp_send_json_error(
         $log_text ?: sprintf(
             /* translators: %s: page URL */
@@ -789,7 +794,7 @@ function nppp_purge_cache_premium_callback() {
     );
 }
 
-// Deletes the selected file when purging is triggered via AJAX
+// Preload triggered from the Advanced tab
 function nppp_preload_cache_premium_callback() {
     // Verify nonce
     if (isset($_POST['_wpnonce'])) {
@@ -939,15 +944,7 @@ function nppp_preload_cache_premium_callback() {
 }
 
 // Recursively traverses directories and extracts necessary data from files.
-// We already sanitized and validated the $nginx_cache_path
-// so for file_path we don't apply any sanitize and validate
-// we only sanitize and validate the urls parsed from files
 function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
-    // On a large cache (100 k+ files)
-    // on slow or network-attached storage this can easily exceed the default
-    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
-    // mid-operation.
-
     if (function_exists('set_time_limit')) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
