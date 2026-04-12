@@ -152,18 +152,24 @@ function nppp_check_safexec_version() {
         return $cached;
     }
 
-    $installed_version = 'Unknown';
+    // Plugin's bundled/required safexec version
+    $plugin_safexec_version = defined('NPPP_SAFEXEC_VERSION') ? NPPP_SAFEXEC_VERSION : 'Unknown';
 
     // Check if safexec is in PATH
     if (nppp_get_command_output('command -v safexec')) {
         $line = nppp_get_command_output("safexec -v 2>&1 | awk 'NR==1{print \$2}'");
         if (!empty($line)) {
             $installed_version = trim($line);
+            $result = "$installed_version ($plugin_safexec_version)";
+        } else {
+            $result = "Unknown";
         }
+    } else {
+        $result = "Not Installed";
     }
 
-    set_transient($transient_key, $installed_version, MONTH_IN_SECONDS);
-    return $installed_version;
+    set_transient($transient_key, $result, MONTH_IN_SECONDS);
+    return $result;
 }
 
 // Function to check wget version
@@ -548,16 +554,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     <tr>
                         <td class="action"><?php esc_html_e('safexec (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppSafexecVersion">
-                            <?php $safexec_version = nppp_check_safexec_version(); ?>
-                            <?php if ($safexec_version === 'Unknown'): ?>
-                                <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span style="color: orange; font-size: 14px; font-weight: bold;">
-                                    <?php echo esc_html($safexec_version); ?>
-                                </span>
-                            <?php else: ?>
-                                <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span><?php echo esc_html($safexec_version); ?></span>
-                            <?php endif; ?>
+                            <?php echo esc_html(nppp_check_safexec_version()); ?>
                         </td>
                     </tr>
                     <!-- Section for wget Version -->
