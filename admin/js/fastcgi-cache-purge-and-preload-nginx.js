@@ -1126,7 +1126,14 @@ $(document).ready(function() {
                         row = row.prev('tr');
                     }
 
-                    npppSetStatus(row, false);
+                    // Do not flip status to MISS when Auto Preload is enabled
+                    var primaryPreload = !!(response && response.data && response.data.primary_preload);
+                    if (!primaryPreload) {
+                        npppSetStatus(row, false);
+                    } else {
+                        // Status stays HIT — page re-warms immediately, keep purge button active.
+                        btn.prop('disabled', false).removeClass('disabled');
+                    }
 
                     // find the preload button
                     var preloadBtn;
