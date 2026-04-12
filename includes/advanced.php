@@ -835,30 +835,107 @@ function nppp_preload_cache_premium_callback() {
     $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
     $nginx_cache_cpu_limit = isset($nginx_cache_settings['nginx_cache_cpu_limit']) ? $nginx_cache_settings['nginx_cache_cpu_limit'] : $default_cpu_limit;
 
-    // Validate the sanitized URL
-    if (filter_var($cache_url, FILTER_VALIDATE_URL) !== false) {
-        // Reset tracker before buffering
-        $GLOBALS['nppp_last_notice_type'] = 'success';
-
-        // Start output buffering
-        ob_start();
-
-        // call single preload action
-        nppp_preload_single($cache_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
-
-        // Capture and clean the buffer
-        $output = wp_strip_all_tags(ob_get_clean());
-
-        // Read the type that nppp_display_admin_notice() recorded directly.
-        // Language-independent
-        if (($GLOBALS['nppp_last_notice_type'] ?? 'success') === 'error') {
-            wp_send_json_error($output);
-        } else {
-            wp_send_json_success($output);
-        }
-    } else {
+    // Validate the URL
+    if (filter_var($cache_url, FILTER_VALIDATE_URL) === false) {
         wp_send_json_error('Preload Cache URL validation failed.');
     }
+
+    // Reset tracker before buffering
+    $GLOBALS['nppp_last_notice_type'] = 'success';
+
+    // Start output buffering
+    ob_start();
+
+    // Call single preload action
+    nppp_preload_single($cache_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
+
+    // Capture and clean the buffer
+    $output = wp_strip_all_tags(ob_get_clean());
+
+    if (($GLOBALS['nppp_last_notice_type'] ?? 'success') === 'error') {
+        wp_send_json_error($output);
+    }
+
+    // Give enough headroom for PID wait + rg scan
+    if (function_exists('set_time_limit')) {
+        @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+    }
+
+    $cached  = false;
+    $rg_used = false;
+
+    if ( ! empty($nginx_cache_settings['nppp_rg_purge_enabled'])
+        && $nginx_cache_settings['nppp_rg_purge_enabled'] === 'yes'
+    ) {
+        // Wait for wget to finish before scanning.
+        $pid      = intval( nppp_perform_file_operation($PIDFILE, 'read') );
+        $deadline = time() + 15;
+
+        while ( time() < $deadline && $pid > 0 && nppp_is_process_alive($pid) ) {
+            usleep(200000);
+        }
+
+        nppp_prepare_request_env();
+        $rg_bin = trim( (string) shell_exec('command -v rg 2>/dev/null') );
+
+        if ($rg_bin !== '') {
+            // Resolve real scan path
+            $rg_source_path = nppp_fuse_source_path($nginx_cache_path);
+            $rg_scan_path   = ($rg_source_path !== null)
+                ? rtrim($rg_source_path, '/') . '/'
+                : $nginx_cache_path;
+
+            // Probe whether rg can traverse the scan path as the PHP-FPM user.
+            $probe_out  = [];
+            $probe_exit = 0;
+            exec(
+                sprintf(
+                    '%s -q --files --no-ignore --no-config %s 2>/dev/null',
+                    escapeshellarg($rg_bin),
+                    escapeshellarg($rg_scan_path)
+                ),
+                $probe_out,
+                $probe_exit
+            );
+
+            if ($probe_exit !== 2) {
+                $rg_used       = true;
+                $rg_cmd_prefix = '';
+            } else {
+                $safexec_path = nppp_find_safexec_path();
+
+                if ($safexec_path && nppp_is_safexec_usable($safexec_path, false)) {
+                    $rg_used       = true;
+                    $rg_cmd_prefix = escapeshellarg($safexec_path) . ' ';
+                }
+            }
+
+            if ($rg_used) {
+                $url_key = preg_replace('#^https?://#', '', $cache_url);
+
+                $rg_cmd = sprintf(
+                    '%s%s -l -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config %s %s',
+                    $rg_cmd_prefix,
+                    escapeshellarg($rg_bin),
+                    escapeshellarg('^KEY: .*' . preg_quote($url_key, '/') . '$'),
+                    escapeshellarg($rg_scan_path)
+                );
+
+                $rg_out  = [];
+                $rg_exit = 0;
+                exec($rg_cmd, $rg_out, $rg_exit);
+
+                // Cache file found on disk
+                $cached = ($rg_exit === 0 && ! empty($rg_out));
+            }
+        }
+    }
+
+    wp_send_json_success([
+        'message' => $output,
+        'cached'  => $cached,
+        'rg_used' => $rg_used,
+    ]);
 }
 
 // Recursively traverses directories and extracts necessary data from files.
