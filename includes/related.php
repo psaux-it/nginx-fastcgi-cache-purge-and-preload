@@ -151,7 +151,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
         $domain_list = escapeshellarg(implode(',', array_unique([$base_host, 'www.' . $base_host])));
 
         $common =
-            '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+            '--quiet --no-config --no-cookies --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 ' .
             '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=1 ' .
             '-e robots=off ' .
