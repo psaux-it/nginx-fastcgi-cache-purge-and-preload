@@ -531,6 +531,16 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     // Deletion always goes through the FUSE mount so FPM has write access.
     $rg_fuse_path   = $ctx['nginx_cache_path'];
     $rg_source_path = nppp_fuse_source_path( $rg_fuse_path );
+
+    // Mount table may list a FUSE source path that no longer exists on disk
+    if ( $rg_source_path !== null && ! $wp_filesystem->is_dir( $rg_source_path ) ) {
+        nppp_display_admin_notice( 'info', sprintf(
+            __( 'WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $rg_source_path
+        ), true, false );
+        $rg_source_path = null;
+    }
+
     $rg_fuse_active = $rg_source_path !== null;
     $rg_use_safexec = false;
     $rg_safexec_bin = '';
