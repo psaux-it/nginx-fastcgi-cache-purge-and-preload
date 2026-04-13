@@ -268,9 +268,10 @@ function nppp_detect_premature_process(
     $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', false);
 
     $testCommand =
+        'exec ' .
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'wget ' .
-        '--quiet --recursive -l inf --no-cache --no-config --no-cookies --no-directories --delete-after ' .
+        '--quiet --recursive -l inf --no-cache --no-config --no-cookies --delete-after ' .
         '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
         '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --ignore-case ' .
         '-e robots=off ' .
@@ -578,7 +579,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             $command =
                 ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
                 'nohup wget ' .
-                '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
+                '--no-verbose --recursive -l inf --no-config --no-cookies --delete-after ' .
                 '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
                 '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case ' .
                 '-e robots=off ' .
@@ -804,7 +805,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         $command =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
+            '--no-verbose --recursive -l inf --no-config --no-cookies --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
             '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case ' .
             '-e robots=off ' .
@@ -1030,7 +1031,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $command_desktop =
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'nohup wget ' .
-        '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+        '--quiet --no-config --no-cookies --delete-after ' .
         '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
         '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
         '-e robots=off ' .
@@ -1072,7 +1073,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         $command_mobile =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+            '--quiet --no-config --no-cookies --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
             '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
             '-e robots=off ' .
@@ -1315,7 +1316,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
     $command_desktop =
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'nohup wget ' .
-        '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+        '--quiet --no-config --no-cookies --delete-after ' .
         '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
         '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
         '-e robots=off ' .
@@ -1357,7 +1358,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
         $command_mobile =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+            '--quiet --no-config --no-cookies --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
             '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
             '-e robots=off ' .
