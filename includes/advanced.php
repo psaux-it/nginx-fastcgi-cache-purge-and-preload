@@ -869,6 +869,7 @@ function nppp_preload_cache_premium_callback() {
     $cached  = false;
     $rg_used = false;
 
+    // Try to confirm preload completed
     if ( ! empty($nginx_cache_settings['nppp_rg_purge_enabled'])
         && $nginx_cache_settings['nppp_rg_purge_enabled'] === 'yes'
     ) {
@@ -884,8 +885,19 @@ function nppp_preload_cache_premium_callback() {
         $rg_bin = trim( (string) shell_exec('command -v rg 2>/dev/null') );
 
         if ($rg_bin !== '') {
-            // Resolve real scan path
+            // Resolve scan path
             $rg_source_path = nppp_fuse_source_path($nginx_cache_path);
+
+            // Mount table may list a source path that no longer exists on disk.
+            if ($rg_source_path !== null && !$wp_filesystem->is_dir($rg_source_path)) {
+                nppp_display_admin_notice('info', sprintf(
+                    /* translators: %s: The FUSE mount source directory. */
+                    __('WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                    $rg_source_path
+                ), true, false);
+                $rg_source_path = null;
+            }
+
             $rg_scan_path   = ($rg_source_path !== null)
                 ? rtrim($rg_source_path, '/') . '/'
                 : $nginx_cache_path;
