@@ -956,7 +956,7 @@ static enum detach_mode parse_detach_mode(void) {
 
 // Safe DIR
 static void chdir_safe_if_cwd_inaccessible(void) {
-    if (access(".", X_OK) == 0) return;
+    if (access(".", W_OK) == 0) return;
     s_fprintf(stderr, "Info: CWD not accessible; switching to /tmp\n");
     if (chdir("/tmp") != 0) {
         int rc = chdir("/");
@@ -1532,8 +1532,30 @@ static int try_kill_mode(const char *arg) {
 
     // inside Linux branch of try_kill_mode
     if (!proc_in_nppp_cgroup(pid)) {
-        s_fprintf(stderr, "Info: Refusing to kill PID %d: not in safexec cgroup\n", pid);
-        return 1;
+        /* cgroup check failed — container may not allow cgroup delegation.
+         * Fall back: accept kill if NoNewPrivs=1 (set by safexec before exec,
+         * kernel-enforced one-way flag). /proc/pid/status is already open
+         * above so we just re-read it here. */
+        int nnp = 0;
+        FILE *fp2 = fopen(path, "r");
+        if (fp2) {
+            while (fgets(line, sizeof(line), fp2)) {
+                if (strncmp(line, "NoNewPrivs:", 11) == 0) {
+                    nnp = atoi(line + 11);
+                    break;
+                }
+            }
+            fclose(fp2);
+        }
+        if (!nnp) {
+            s_fprintf(stderr,
+                "Info: Refusing to kill PID %d: not in safexec cgroup "
+                "and NoNewPrivs not set\n", pid);
+            return 1;
+        }
+        s_fprintf(stderr,
+            "Info: cgroup check skipped (no delegation); "
+            "killing PID %d via NoNewPrivs fallback\n", pid);
     }
 
     // Use pidfd if available to avoid PID reuse races
