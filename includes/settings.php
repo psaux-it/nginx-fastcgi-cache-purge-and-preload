@@ -163,6 +163,7 @@ function nppp_nginx_cache_settings_page() {
         );
 
         $nppp_show_safexec_warn = false;
+        $nppp_safexec_latest_ver = '';
         if ( function_exists( 'nppp_check_safexec_version' ) ) {
             $nppp_safexec_str = nppp_check_safexec_version();
             if ( ! in_array( $nppp_safexec_str, [ 'Not Installed', 'Unknown' ], true ) ) {
