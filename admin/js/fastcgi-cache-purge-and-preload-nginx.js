@@ -122,6 +122,16 @@ $(document).ready(function() {
         $premiumPlaceholder.hide();
         $helpPlaceholder.hide();
 
+        // Badge bar: settings tab only
+        var $badgeBar = $('#nppp-badge-bar');
+        if ($badgeBar.length) {
+            if (tabId === 'settings') {
+                $badgeBar.show();
+            } else {
+                $badgeBar.hide();
+            }
+        }
+
         // Handle specific tab actions
         switch (tabId) {
             case 'settings':
