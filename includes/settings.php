@@ -146,15 +146,79 @@ function nppp_nginx_cache_settings_page() {
                 </p>
             </div>
         </div>
-        <?php if (nppp_is_assume_nginx_mode()) : ?>
-        <div id="nppp-assume">
-            <span class="dashicons dashicons-warning" aria-hidden="true"></span>
-            <strong><?php echo esc_html__('Assume-Nginx Mode Active', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong>
-            <?php if (class_exists('\NPPP\Setup')): ?>
-                <a href="<?php echo esc_url( admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG) ); ?>" class="button button-small" style="margin-left:auto;">
-                    <?php echo esc_html__('Setup', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+        <?php
+        // Pre-compute all badge flags
+        $nppp_show_assume = nppp_is_assume_nginx_mode();
+        $nppp_badge_opts  = get_option( 'nginx_cache_settings', [] );
+        $nppp_badge_path  = isset( $nppp_badge_opts['nginx_cache_path'] ) ? $nppp_badge_opts['nginx_cache_path'] : '';
+        $nppp_badge_disk  = ( ! empty( $nppp_badge_path ) && function_exists( 'nppp_get_cache_disk_size' ) )
+                              ? nppp_get_cache_disk_size( $nppp_badge_path )
+                              : null;
+
+        $nppp_show_cache_warn = (
+            $nppp_badge_disk !== null &&
+            $nppp_badge_disk['dedicated'] &&
+            $nppp_badge_disk['total'] > 0 &&
+            ( $nppp_badge_disk['used'] / $nppp_badge_disk['total'] ) >= 0.90
+        );
+
+        $nppp_show_safexec_warn = false;
+        if ( function_exists( 'nppp_check_safexec_version' ) ) {
+            $nppp_safexec_str = nppp_check_safexec_version();
+            if ( ! in_array( $nppp_safexec_str, [ 'Not Installed', 'Unknown' ], true ) ) {
+                if ( preg_match( '/^(\S+)\s+\((\S+)\)$/', trim( $nppp_safexec_str ), $nppp_ver_parts ) ) {
+                    $nppp_show_safexec_warn = version_compare( $nppp_ver_parts[1], $nppp_ver_parts[2], '!=' );
+                    $nppp_safexec_latest_ver = $nppp_ver_parts[2];
+                }
+            }
+        }
+
+        // Only renders when at least one badge is visible
+        if ( $nppp_show_assume || $nppp_show_cache_warn || $nppp_show_safexec_warn ) : ?>
+        <div id="nppp-badge-bar">
+
+            <?php if ( $nppp_show_assume ) : ?>
+            <div id="nppp-assume">
+                <span class="dashicons dashicons-warning" aria-hidden="true"></span>
+                <strong><?php echo esc_html__( 'Assume-Nginx Mode Active', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                <?php if ( class_exists( '\NPPP\Setup' ) ) : ?>
+                <a href="<?php echo esc_url( admin_url( 'admin.php?page=' . \NPPP\Setup::PAGE_SLUG ) ); ?>" class="button button-small">
+                    <?php echo esc_html__( 'Setup', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                 </a>
+                <?php endif; ?>
+            </div>
             <?php endif; ?>
+
+            <?php if ( $nppp_show_cache_warn ) : ?>
+            <div id="nppp-cache-warn">
+                <span class="dashicons dashicons-warning" aria-hidden="true"></span>
+                <strong><?php echo esc_html__( 'Cache Storage Above 90%', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                <a href="#status" class="button button-small">
+                    <?php echo esc_html__( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </a>
+            </div>
+            <?php endif; ?>
+
+            <?php if ( $nppp_show_safexec_warn ) : ?>
+            <div id="nppp-safexec-warn">
+                <span class="dashicons dashicons-update" aria-hidden="true"></span>
+                <strong>
+                    <?php
+                    echo esc_html(
+                        sprintf(
+                            /* translators: %s: safexec version number */
+                            __( 'safexec %s update', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            $nppp_safexec_latest_ver
+                        )
+                    );
+                    ?>
+                </strong>
+                <a href="#status" class="button button-small">
+                    <?php echo esc_html__( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </a>
+            </div>
+            <?php endif; ?>
+
         </div>
         <?php endif; ?>
         <h2></h2>
