@@ -351,6 +351,9 @@ function nppp_premium_html($nginx_cache_path) {
                 </div>';
     }
 
+    // Start output buffering for all subsequent content (warnings, notices, table)
+    ob_start();
+
     // Check FastCGI Cache Key
     $config_data = nppp_parse_nginx_cache_key();
 
@@ -368,6 +371,7 @@ function nppp_premium_html($nginx_cache_path) {
             $snapshot_path   = nppp_get_runtime_file('nppp-wget-snapshot.log');
 
             if ( ! $preload_running && ! $wp_filesystem->exists( $snapshot_path ) ) {
+                ob_end_clean();
                 // Fresh install: no cache, no snapshot — return just the notice, no table.
                 $wget_msg = __(
                     'No completed <strong>crawl</strong> snapshot found. Run <strong>Preload All</strong> once to build the full snapshot — <strong>ALL</strong> URLs will then appear here.',
@@ -387,6 +391,7 @@ function nppp_premium_html($nginx_cache_path) {
             // Fall through with zero HITs so snapshot MISSes populate the table.
             $hits = [];
         } else {
+            ob_end_clean();
             // Real error (permissions, regex, path) — hard stop.
             $error_message = wp_kses( $extractedUrls['error'], array( 'strong' => array() ) );
             return '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
@@ -479,8 +484,6 @@ function nppp_premium_html($nginx_cache_path) {
         </div>';
     }
 
-    // Output the premium tab content
-    ob_start();
     ?>
     <?php
     // Aborted wget/preload notice (may be empty)
@@ -990,28 +993,282 @@ function nppp_preload_cache_premium_callback() {
     ]);
 }
 
+function nppp_extract_cached_urls_rg(
+    $wp_filesystem,
+    string $scan_path,
+    string $fuse_path,
+    string $rg_bin,
+    string $regex,
+    string $rg_cmd_prefix = '',
+    bool   $https_enabled  = false
+): ?array {
+
+    $scan_path = rtrim( $scan_path, '/' ) . '/';
+    $fuse_path = rtrim( $fuse_path, '/' ) . '/';
+
+    // Pass B — redirect blacklist
+    // Also linux Page Cache Warm‑Up (Dentry Cache) for Pass A scan
+    $redirect_cmd = sprintf(
+        '%s%s -F --text -l -m 1 -E none --no-unicode'
+        . ' --no-heading --no-ignore --no-config --no-messages -e %s -e %s %s 2>/dev/null',
+        $rg_cmd_prefix,
+        escapeshellarg( $rg_bin ),
+        escapeshellarg( 'Status: 301' ),
+        escapeshellarg( 'Status: 302' ),
+        escapeshellarg( $scan_path )
+    );
+
+    $redirect_out  = [];
+    $redirect_exit = 0;
+    exec( $redirect_cmd, $redirect_out, $redirect_exit );
+
+    if ( $redirect_exit === 2 ) {
+        return null;
+    }
+
+    $redirect_set = array_flip( array_filter( array_map( 'trim', $redirect_out ), 'strlen' ) );
+    unset( $redirect_out );
+
+    // Pass A — extract KEY: line from every cache file.
+    $key_cmd = sprintf(
+        '%s%s --text -m 1 -E none --no-unicode'
+        . ' --no-heading --no-ignore --no-config --no-messages %s %s 2>/dev/null',
+        $rg_cmd_prefix,
+        escapeshellarg( $rg_bin ),
+        escapeshellarg( '^KEY: [^\r\n]+' ),
+        escapeshellarg( $scan_path )
+    );
+
+    $key_out  = [];
+    $key_exit = 0;
+    exec( $key_cmd, $key_out, $key_exit );
+
+    // Permission error → fall back to PHP iterator.
+    if ( $key_exit === 2 ) {
+        return null;
+    }
+    if ( $key_exit === 1 || empty( $key_out ) ) {
+        return [ 'error' => 'NPPP_EMPTY_CACHE' ];
+    }
+
+    // Parse rg output lines: "FILEPATH:KEY: <cache_key_string>"
+    $scheme       = $https_enabled ? 'https' : 'http';
+    $urls         = [];
+    $regex_tested = false;
+
+    foreach ( $key_out as $raw_line ) {
+        $raw_line = trim( $raw_line );
+        if ( $raw_line === '' ) {
+            continue;
+        }
+
+        // Split
+        $sep = strpos( $raw_line, ':' );
+        if ( $sep === false ) {
+            continue;
+        }
+
+        $scan_filepath = substr( $raw_line, 0, $sep );
+        $key_line      = substr( $raw_line, $sep + 1 );
+        if ( $scan_filepath === '' || $key_line === '' ) {
+            continue;
+        }
+
+        // Skip redirect files
+        if ( isset( $redirect_set[ $scan_filepath ] ) ) {
+            continue;
+        }
+
+        // Regex validation
+        if ( ! $regex_tested ) {
+            if ( ! preg_match( $regex, $key_line, $m ) || ! isset( $m[1], $m[2] ) ) {
+                return [
+                    'error' => sprintf(
+                        __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        __( 'Advanced Options',  'fastcgi-cache-purge-and-preload-nginx' )
+                    ),
+                ];
+            }
+            if ( filter_var( 'https://' . trim( $m[1] ) . trim( $m[2] ), FILTER_VALIDATE_URL ) === false ) {
+                return [
+                    'error' => sprintf(
+                        __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is parsing the string <strong>\$host\$request_uri</strong> correctly.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        __( 'Advanced Options',  'fastcgi-cache-purge-and-preload-nginx' )
+                    ),
+                ];
+            }
+            $regex_tested = true;
+        } else {
+            $m = [];
+            if ( ! preg_match( $regex, $key_line, $m ) || ! isset( $m[1], $m[2] ) ) {
+                continue;
+            }
+        }
+
+        // Build URL
+        $host        = trim( $m[1] );
+        $request_uri = trim( $m[2] );
+        $url_encoded = $scheme . '://' . $host . $request_uri;
+
+        if ( filter_var( $url_encoded, FILTER_VALIDATE_URL ) === false ) {
+            continue;
+        }
+
+        // Translate scan-dir path → FUSE-mount path for file_path field
+        $fuse_filepath = nppp_translate_path_to_fuse( $scan_filepath, $scan_path, $fuse_path );
+
+        // Human-readable decoded URL for display; encoded URL for operations.
+        $url_decoded = $scheme . '://' . $host . rawurldecode( $request_uri );
+
+        // Calculating cache date is expensive with rg
+        $urls[] = [
+            'file_path'   => $fuse_filepath,
+            'url'         => $url_decoded,
+            'url_encoded' => $url_encoded,
+            'category'    => nppp_categorize_url( $url_decoded ),
+            'cache_date'  => '—',
+        ];
+    }
+
+    return empty( $urls ) ? [ 'error' => 'NPPP_EMPTY_CACHE' ] : $urls;
+}
+
 // Recursively traverses directories and extracts necessary data from files.
+// Cannot cache, we always need live stats for HITs and MISS
 function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     if (function_exists('set_time_limit')) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
-    $urls = [];
-
-    // Determine if HTTPS is enabled
-    $https_enabled = wp_is_using_https();
-
-    // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
     $nginx_cache_settings = get_option('nginx_cache_settings');
-
-    // User defined regex in Cache Key Regex option
     $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
              ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
              : nppp_fetch_default_regex_for_cache_key();
 
-    // Read only the head (binary-safe)
-    $head_bytes_primary  = (int) apply_filters('nppp_locate_head_bytes', 4096);
-    $head_bytes_fallback = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
+    $https_enabled = wp_is_using_https();
+    $head_bytes    = (int) apply_filters('nppp_locate_head_bytes', 4096);
+    $head_bytes_fb = (int) apply_filters('nppp_locate_head_bytes_fallback', 32768);
+
+    // FP1 — ripgrep
+
+    /**
+    * Test switch for testing RG vs PHP Iterative
+    *
+    * $rg_enabled = ! empty( $nginx_cache_settings['nppp_rg_purge_enabled'] )
+    *     && $nginx_cache_settings['nppp_rg_purge_enabled'] === 'yes';
+    * $rg_bin = $rg_enabled ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
+
+    * Always use ripgrep (rg) if the binary is present on the system.
+    *
+    * PERFORMANCE BENCHMARK (5,000 cached URLs, containerised environment):
+    * ---------------------------------------------------------------------
+    * | Method               | Cold dcache | Warm dcache |
+    * |----------------------|-------------|-------------|
+    * | ripgrep (rg)         | ~10 seconds | ~6 seconds  |
+    * | PHP RecursiveIterator| ~52 seconds | ~23 seconds |
+    * ---------------------------------------------------------------------
+    */
+
+    nppp_prepare_request_env();
+    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+    if ( $rg_bin !== '' ) {
+
+        // Resolve FUSE mount
+        $rg_fuse_path   = $nginx_cache_path;
+        $rg_source_path = nppp_fuse_source_path( $rg_fuse_path );
+
+        // Mount table may list a FUSE source path that no longer exists on disk.
+        if ( $rg_source_path !== null && ! $wp_filesystem->is_dir( $rg_source_path ) ) {
+            nppp_display_admin_notice( 'info', sprintf(
+                __( 'WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $rg_source_path
+            ), true, false );
+            $rg_source_path = null;
+        }
+
+        $rg_fuse_active = ( $rg_source_path !== null );
+        $rg_use_safexec = false;
+        $rg_safexec_bin = '';
+
+        if ( $rg_fuse_active ) {
+            $rg_scan_path = rtrim( $rg_source_path, '/' ) . '/';
+
+            // Probe: can rg access the real (non-FUSE)
+            $probe_out  = [];
+            $probe_exit = 0;
+            exec(
+                sprintf(
+                    '%s -q --files --no-ignore --no-config %s 2>/dev/null',
+                    escapeshellarg( $rg_bin ),
+                    escapeshellarg( $rg_scan_path )
+                ),
+                $probe_out,
+                $probe_exit
+            );
+
+            if ( $probe_exit === 2 ) {
+                $sfx = nppp_find_safexec_path();
+                if ( $sfx && nppp_is_safexec_usable( $sfx, false ) ) {
+                    $rg_use_safexec = true;
+                    $rg_safexec_bin = $sfx;
+                    nppp_display_admin_notice( 'info', sprintf(
+                        __( 'INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $rg_scan_path
+                    ), true, false );
+                } else {
+                    $rg_scan_path = $rg_fuse_path;
+                    nppp_display_admin_notice( 'info', sprintf(
+                        __( 'WARNING RG SCAN: FUSE mount detected, scanning FUSE mount path (safexec unavailable): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $rg_scan_path
+                    ), true, false );
+                }
+            } else {
+                nppp_display_admin_notice( 'info', sprintf(
+                    __( 'INFO RG SCAN: FUSE mount detected, scanning source dir directly (rg has access): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $rg_scan_path
+                ), true, false );
+            }
+        } else {
+            $rg_scan_path = $rg_fuse_path;
+            $sfx          = nppp_find_safexec_path();
+            if ( $sfx && nppp_is_safexec_usable( $sfx, false ) ) {
+                $rg_use_safexec = true;
+                $rg_safexec_bin = $sfx;
+                nppp_display_admin_notice( 'info', sprintf(
+                    __( 'INFO RG SCAN: Scanning cache dir via safexec: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $rg_scan_path
+                ), true, false );
+            }
+        }
+
+        $rg_cmd_prefix = $rg_use_safexec ? escapeshellarg( $rg_safexec_bin ) . ' ' : '';
+
+        // Run rg
+        $rg_result = nppp_extract_cached_urls_rg(
+            $wp_filesystem,
+            $rg_scan_path,
+            $rg_fuse_path,
+            $rg_bin,
+            $regex,
+            $rg_cmd_prefix,
+            $https_enabled
+        );
+
+        if ( $rg_result !== null ) {
+            // Fall through to PHP iterator.
+            return $rg_result;
+        }
+
+        // Log and fall through.
+        nppp_display_admin_notice( 'info',
+            __( 'INFO RG SCAN: rg scan encountered a permission error mid-run, falling back to PHP recursive scan.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            true, false
+        );
+    }
+
+    $urls = [];
 
     try {
         // Traverse the cache directory and its subdirectories
@@ -1024,13 +1281,13 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
         foreach ($cache_iterator as $file) {
             $path = $file->getPathname();
 
-            $content = nppp_read_head($wp_filesystem, $path, $head_bytes_primary);
+            $content = nppp_read_head($wp_filesystem, $path, $head_bytes);
             if ($content === '') { continue; }
 
             $match = [];
             if (!preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
-                if (strlen($content) >= $head_bytes_primary) {
-                    $content = nppp_read_head($wp_filesystem, $path, $head_bytes_fallback);
+                if (strlen($content) >= $head_bytes) {
+                    $content = nppp_read_head($wp_filesystem, $path, $head_bytes_fb);
                     if ($content === '' || !preg_match('/^KEY:\s([^\r\n]*)/m', $content, $match)) {
                         continue;
                     }
@@ -1045,10 +1302,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                 continue;
             }
 
-            // Test regex only once
-            // Regex operations can be computationally expensive,
-            // especially when iterating over multiple files.
-            // So here we test regex only once
+            // Test regex
             if (!$regex_tested) {
                 if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
                     // Build the URL
@@ -1116,7 +1370,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                         'url'         => $final_url,
                         'url_encoded' => $final_url_encoded,
                         'category'    => $category,
-                        'cache_date'  => $cache_date
+                        'cache_date'  => $cache_date,
                     );
                 }
             }
@@ -1159,6 +1413,15 @@ function nppp_categorize_url( $url ) {
     if ( $bulk_map === null ) {
         $bulk_map = get_transient( 'nppp_category_map' );
         $bulk_map = is_array( $bulk_map ) ? $bulk_map : [];
+
+        add_action('shutdown', function() use (&$bulk_map, &$needs_update) {
+            if ( $needs_update ) {
+                if ( count($bulk_map) > 20000 ) {
+                    $bulk_map = array_slice($bulk_map, -20000, 20000, true);
+                }
+                set_transient('nppp_category_map', $bulk_map, WEEK_IN_SECONDS);
+            }
+        });
 
         add_action('shutdown', function() use (&$bulk_map, &$needs_update) {
             if ( $needs_update ) {
