@@ -17,12 +17,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 function nppp_send_mail_now(
     $mail_message,
     $elapsed_time_str,
-    $final_total    = 0,
-    $mobile_enabled = false,
+    $final_total       = 0,
+    $mobile_enabled    = false,
     $last_preload_time = '',
-    $download_size  = '',
-    $transfer_speed = '',
-    $error_count    = 0
+    $download_size     = '',
+    $transfer_speed    = '',
+    $error_count       = 0,
+    $precomputed_hits  = null
 ) {
     $options           = get_option( 'nginx_cache_settings' );
     $nginx_cache_email = isset( $options['nginx_cache_email'] ) ? $options['nginx_cache_email'] : '';
@@ -64,23 +65,30 @@ function nppp_send_mail_now(
     $cache_ratio  = '–';
     $cache_hits   = '–';
     $cache_misses = '–';
-    if ( function_exists( 'nppp_get_in_cache_page_count' ) && function_exists( 'nppp_parse_wget_log_urls' ) ) {
-        $real_hits = nppp_get_in_cache_page_count();
-        if ( is_numeric( $real_hits ) && (int) $real_hits >= 0 ) {
-            $real_hits   = (int) $real_hits;
-            $wget_urls   = nppp_parse_wget_log_urls( $wp_filesystem );
-            $total_known = count( $wget_urls );
-            if ( $total_known > 0 ) {
-                $ratio        = min( 100.0, ( $real_hits / $total_known ) * 100.0 );
-                $misses       = max( 0, $total_known - $real_hits );
-                $cache_ratio  = number_format( $ratio, 1 ) . '%';
-                $cache_hits   = number_format( $real_hits );
-                $cache_misses = number_format( $misses );
-            }
-            // Persist for dashboard widget — scan just ran, store it
-            update_option( 'nppp_last_known_hits',      $real_hits, false );
-            update_option( 'nppp_last_hits_scanned_at', time(),     false );
+    
+    // Use the pre-computed hit count from the caller when available
+    if ( $precomputed_hits !== null && is_int( $precomputed_hits ) && $precomputed_hits >= 0 ) {
+        $real_hits_resolved = $precomputed_hits;
+    } elseif ( function_exists( 'nppp_get_in_cache_page_count' ) ) {
+        $real_hits_resolved = nppp_get_in_cache_page_count();
+    } else {
+        $real_hits_resolved = null;
+    }
+
+    if ( function_exists( 'nppp_parse_wget_log_urls' ) && is_numeric( $real_hits_resolved ) && (int) $real_hits_resolved >= 0 ) {
+        $real_hits   = (int) $real_hits_resolved;
+        $wget_urls   = nppp_parse_wget_log_urls( $wp_filesystem );
+        $total_known = count( $wget_urls );
+        if ( $total_known > 0 ) {
+            $ratio        = min( 100.0, ( $real_hits / $total_known ) * 100.0 );
+            $misses       = max( 0, $total_known - $real_hits );
+            $cache_ratio  = number_format( $ratio, 1 ) . '%';
+            $cache_hits   = number_format( $real_hits );
+            $cache_misses = number_format( $misses );
         }
+        // Persist for dashboard widget
+        update_option( 'nppp_last_known_hits',      $real_hits, false );
+        update_option( 'nppp_last_hits_scanned_at', time(),     false );
     }
 
     // METRIC: Cache size on disk
