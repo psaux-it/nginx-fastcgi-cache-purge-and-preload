@@ -528,9 +528,20 @@ function nppp_create_scheduled_event_preload_status_callback() {
         $error_count = preg_match_all( '/ERROR\s+404/i', $log_contents );
     }
 
-    // Send Mail
+    // Send Mail — use the hit count we already have from the index scan above
+    $nppp_mail_hits = ( isset( $nppp_index_data )
+        && is_array( $nppp_index_data )
+        && ! isset( $nppp_index_data['error'] ) )
+        ? count( $nppp_index_data )
+        : null;
+
+    if ( $nppp_mail_hits !== null ) {
+        update_option( 'nppp_last_known_hits',      $nppp_mail_hits, false );
+        update_option( 'nppp_last_hits_scanned_at', time(),          false );
+    }
+
     $mail_message = __('The Nginx cache preload operation has been completed', 'fastcgi-cache-purge-and-preload-nginx');
-    nppp_send_mail_now($mail_message, $elapsed_time_str, $final_total, $mobile_enabled, $last_preload_time, $download_size, $transfer_speed, $error_count);
+    nppp_send_mail_now($mail_message, $elapsed_time_str, $final_total, $mobile_enabled, $last_preload_time, $download_size, $transfer_speed, $error_count, $nppp_mail_hits);
 
     // Log the preload process status
     if ($mobile_enabled) {
