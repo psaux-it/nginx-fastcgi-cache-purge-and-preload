@@ -160,7 +160,7 @@ function nppp_translate_path_to_fuse( string $filepath, string $scan_path, strin
         return $filepath;
     }
 
-    if ( str_starts_with( $filepath, $scan_root ) ) {
+    if ( strpos( $filepath, $scan_root ) === 0 ) {
         return $fuse_root . substr( $filepath, strlen( $scan_root ) );
     }
 
