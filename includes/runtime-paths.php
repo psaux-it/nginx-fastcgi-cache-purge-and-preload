@@ -152,7 +152,7 @@ function nppp_fuse_source_path( string $mount_path ): ?string {
  * Returns $filepath unchanged when both roots are identical (no FUSE
  * optimisation active) or when the path does not start with $scan_path.
  */
-function nppp_translate_path_to_fuse( string $filepath, string $scan_path, string $fuse_path ): string {
+function nppp_translate_path_to_fuse( string $filepath, string $scan_path, string $fuse_path ): ?string {
     $scan_root = rtrim( $scan_path, '/' ) . '/';
     $fuse_root = rtrim( $fuse_path, '/' ) . '/';
 
