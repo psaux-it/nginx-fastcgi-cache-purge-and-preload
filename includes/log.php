@@ -80,34 +80,22 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
      */
 
     // Bail out on *all* REST requests except our own purge/preload endpoints
-    if (
-        (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) ||
-        (function_exists('wp_doing_rest') && wp_doing_rest()) ||
-        (defined('REST_REQUEST') && REST_REQUEST)
-    ) {
-        $route = '';
+    if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+        // ONLY emit into a buffer that WE started.
+        // We track the ob level in $GLOBALS['nppp_rest_ob_level'] set in rest-api.php
+        // just before ob_start(). If the current level is exactly one above what we
+        // recorded, this is our buffer — safe to echo into.
+        // If it's anything else (0, or a different depth), another plugin owns the
+        // active buffer and we must not touch it.
+        $our_level = isset($GLOBALS['nppp_rest_ob_level'])
+            ? (int) $GLOBALS['nppp_rest_ob_level'] + 1
+            : -1;
 
-        // REST route can come from query args or the global WP query context.
-        // Guard all access because $wp can be null during some REST save flows.
-        if (isset($_REQUEST['rest_route'])) {
-            $route = '/' . ltrim(sanitize_text_field(wp_unslash($_REQUEST['rest_route'])), '/');
-        } elseif (isset($GLOBALS['wp']) && is_object($GLOBALS['wp']) && isset($GLOBALS['wp']->query_vars) && is_array($GLOBALS['wp']->query_vars) && isset($GLOBALS['wp']->query_vars['rest_route'])) {
-            $route = '/' . ltrim(sanitize_text_field($GLOBALS['wp']->query_vars['rest_route']), '/');
-        }
-
-        // Only echo for our two NPP routes.
-        // Prevent interference with core WordPress REST responses.
-        if (
-            in_array($route, [
-                '/nppp_nginx_cache/v2/purge',
-                '/nppp_nginx_cache/v2/preload',
-            ], true) &&
-            ob_get_level() > 0 &&
-            $display_notice
-        ) {
-            // Emit only when a caller intentionally started buffering (REST endpoint wrappers).
+        // Only echo if the current buffer level exactly matches the one we started.
+        if (ob_get_level() === $our_level && $display_notice) {
             echo '<p>' . esc_html(sanitize_text_field($message)) . '</p>';
         }
+
         return;
     }
 
