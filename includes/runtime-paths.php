@@ -164,5 +164,5 @@ function nppp_translate_path_to_fuse( string $filepath, string $scan_path, strin
         return $fuse_root . substr( $filepath, strlen( $scan_root ) );
     }
 
-    return $filepath;
+    return null;
 }
