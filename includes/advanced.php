@@ -993,6 +993,7 @@ function nppp_preload_cache_premium_callback() {
     ]);
 }
 
+// Extract cached URLs from Nginx cache directory using ripgrep.
 function nppp_extract_cached_urls_rg(
     $wp_filesystem,
     string $scan_path,
@@ -1006,8 +1007,8 @@ function nppp_extract_cached_urls_rg(
     $scan_path = rtrim( $scan_path, '/' ) . '/';
     $fuse_path = rtrim( $fuse_path, '/' ) . '/';
 
-    // Pass B — redirect blacklist
-    // Also linux Page Cache Warm‑Up (Dentry Cache) for Pass A scan
+    // SCAN 1 — Redirect check with -F
+    // Linux Page Cache Warm‑Up (Dentry Cache) for SCAN 2
     $redirect_cmd = sprintf(
         '%s%s -F --text -l -m 1 -E none --no-unicode'
         . ' --no-heading --no-ignore --no-config --no-messages -e %s -e %s %s 2>/dev/null',
@@ -1029,7 +1030,8 @@ function nppp_extract_cached_urls_rg(
     $redirect_set = array_flip( array_filter( array_map( 'trim', $redirect_out ), 'strlen' ) );
     unset( $redirect_out );
 
-    // Pass A — extract KEY: line from every cache file.
+    // SCAN 2 — extract KEY: line from every cache file.
+    // Linux dcache already warmed here
     $key_cmd = sprintf(
         '%s%s --text -m 1 -E none --no-unicode'
         . ' --no-heading --no-ignore --no-config --no-messages %s %s 2>/dev/null',
@@ -1043,7 +1045,7 @@ function nppp_extract_cached_urls_rg(
     $key_exit = 0;
     exec( $key_cmd, $key_out, $key_exit );
 
-    // Permission error → fall back to PHP iterator.
+    // Permission error
     if ( $key_exit === 2 ) {
         return null;
     }
@@ -1116,11 +1118,25 @@ function nppp_extract_cached_urls_rg(
             continue;
         }
 
-        // Translate scan-dir path → FUSE-mount path for file_path field
-        $fuse_filepath = nppp_translate_path_to_fuse( $scan_filepath, $scan_path, $fuse_path );
-
         // Human-readable decoded URL for display; encoded URL for operations.
         $url_decoded = $scheme . '://' . $host . rawurldecode( $request_uri );
+
+        // FUSE active: translate real source path to writable FUSE mount.
+        if ( $scan_path !== $fuse_path ) {
+            $translated = nppp_translate_path_to_fuse( $scan_filepath, $scan_path, $fuse_path );
+            if ( $translated === null ) {
+                nppp_display_admin_notice( 'error', sprintf(
+                    __( 'WARNING PATH TRANSLATE: Purge failed for "%1$s". Failed path translation - "%2$s" does not start with "%3$s"', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $url_decoded,
+                    $scan_filepath,
+                    $scan_path
+                ) );
+                continue;
+            }
+            $fuse_filepath = $translated;
+        } else {
+            $fuse_filepath = $scan_filepath;
+        }
 
         // Calculating cache date is expensive with rg
         $urls[] = [
@@ -1136,7 +1152,7 @@ function nppp_extract_cached_urls_rg(
 }
 
 // Recursively traverses directories and extracts necessary data from files.
-// Cannot cache, we always need live stats for HITs and MISS
+// We always need live stats for HITs and MISS
 function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     if (function_exists('set_time_limit')) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
@@ -1162,7 +1178,8 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
 
     * Always use ripgrep (rg) if the binary is present on the system.
     *
-    * PERFORMANCE BENCHMARK (5,000 cached URLs, containerised environment):
+    * PERFORMANCE BENCHMARK | Advanced Tab Load Times | ripgrep + safexec
+    * (5,000 cached URLs, containerised environment):
     * ---------------------------------------------------------------------
     * | Method               | Cold dcache | Warm dcache |
     * |----------------------|-------------|-------------|
@@ -1192,15 +1209,20 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
         $rg_use_safexec = false;
         $rg_safexec_bin = '';
 
+        // FUSE active: try scanning the real source dir (fast).
+        // If php lacks read access(probably always), use safexec to elevate read privileges.
+        // Fall back to FUSE mount if safexec unavailable (slow).
+        // Purge always go through the writable FUSE mount
         if ( $rg_fuse_active ) {
+            // FUSE active – try to scan the real source path directly
             $rg_scan_path = rtrim( $rg_source_path, '/' ) . '/';
 
-            // Probe: can rg access the real (non-FUSE)
+            // Cheap Probe: can php read the real source directory
             $probe_out  = [];
             $probe_exit = 0;
             exec(
                 sprintf(
-                    '%s -q --files --no-ignore --no-config %s 2>/dev/null',
+                    '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
                     escapeshellarg( $rg_bin ),
                     escapeshellarg( $rg_scan_path )
                 ),
@@ -1208,44 +1230,40 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                 $probe_exit
             );
 
+            // Permission error – try to use safexec (elevated read)
             if ( $probe_exit === 2 ) {
                 $sfx = nppp_find_safexec_path();
                 if ( $sfx && nppp_is_safexec_usable( $sfx, false ) ) {
                     $rg_use_safexec = true;
                     $rg_safexec_bin = $sfx;
-                    nppp_display_admin_notice( 'info', sprintf(
-                        __( 'INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-                        $rg_scan_path
-                    ), true, false );
                 } else {
                     $rg_scan_path = $rg_fuse_path;
-                    nppp_display_admin_notice( 'info', sprintf(
-                        __( 'WARNING RG SCAN: FUSE mount detected, scanning FUSE mount path (safexec unavailable): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-                        $rg_scan_path
-                    ), true, false );
                 }
-            } else {
-                nppp_display_admin_notice( 'info', sprintf(
-                    __( 'INFO RG SCAN: FUSE mount detected, scanning source dir directly (rg has access): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-                    $rg_scan_path
-                ), true, false );
             }
         } else {
+            // No safexec – fall back to scanning the FUSE mount path (slow)
             $rg_scan_path = $rg_fuse_path;
-            $sfx          = nppp_find_safexec_path();
-            if ( $sfx && nppp_is_safexec_usable( $sfx, false ) ) {
-                $rg_use_safexec = true;
-                $rg_safexec_bin = $sfx;
+        }
+
+        // Prepend safexec to the rg command if needed
+        $rg_cmd_prefix = $rg_use_safexec ? escapeshellarg( $rg_safexec_bin ) . ' ' : '';
+
+        // Debug logs for decision taken
+        if ( $rg_fuse_active ) {
+            if ( $rg_scan_path === $rg_fuse_path ) {
                 nppp_display_admin_notice( 'info', sprintf(
-                    __( 'INFO RG SCAN: Scanning cache dir via safexec: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    __( 'WARNING RG SCAN: FUSE mount detected, scanning FUSE mount path (safexec unavailable, install safexec for better performance): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $rg_scan_path
+                ), true, false );
+            } elseif ( $rg_use_safexec ) {
+                nppp_display_admin_notice( 'info', sprintf(
+                    __( 'INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $rg_scan_path
                 ), true, false );
             }
         }
 
-        $rg_cmd_prefix = $rg_use_safexec ? escapeshellarg( $rg_safexec_bin ) . ' ' : '';
-
-        // Run rg
+        // Run ripgrep extraction
         $rg_result = nppp_extract_cached_urls_rg(
             $wp_filesystem,
             $rg_scan_path,
@@ -1256,16 +1274,13 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             $https_enabled
         );
 
+        // If rg succeeded, return immediately.
         if ( $rg_result !== null ) {
-            // Fall through to PHP iterator.
             return $rg_result;
         }
 
-        // Log and fall through.
-        nppp_display_admin_notice( 'info',
-            __( 'INFO RG SCAN: rg scan encountered a permission error mid-run, falling back to PHP recursive scan.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            true, false
-        );
+        // Fatal error (permission denied or path not accessible). rg is authoritative here – PHP would fail the same way.
+        return [ 'error' => __( 'Failed to scan cache directory with ripgrep: permission denied or path not accessible.', 'fastcgi-cache-purge-and-preload-nginx' ) ];
     }
 
     $urls = [];
@@ -1376,13 +1391,12 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             }
         }
     } catch (Exception $e) {
-        // Handle exceptions and return an error message
         return [
             'error' => __( 'An error occurred while accessing the Nginx cache directory. Please report this issue on the plugin\'s support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         ];
     }
 
-    // Check if any URLs were extracted
+    // Empty cache
     if (empty($urls)) {
         return [
             'error' => 'NPPP_EMPTY_CACHE',
