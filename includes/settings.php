@@ -3227,7 +3227,6 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
 
     $allowed = false;
     foreach ($allowed_roots as $root) {
-
         if (strpos($normalised, $root) === 0) {
             $allowed = true;
             break;
