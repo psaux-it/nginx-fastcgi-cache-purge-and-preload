@@ -869,9 +869,11 @@ function nppp_preload_cache_premium_callback() {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
-    // Try to confirm preload completed
-    // Always try this branch when ripgrep (rg) binary is present on the system.
-    // FUSE must be enabled and safexec exists for scan confirmation works
+    // Try to confirm preload completed using ripgrep (rg).
+    // Scan works when:
+    // - Direct read access to the cache directory (any user/permission setup), OR
+    // - FUSE is active and safexec is available to elevate read privileges.
+    // Otherwise, scan is skipped (cached = false, but preload itself still succeeded).
     $cached  = false;
     $rg_used = false;
 
@@ -906,7 +908,7 @@ function nppp_preload_cache_premium_callback() {
             ? rtrim($rg_source_path, '/') . '/'
             : $nginx_cache_path;
 
-        // Cheap Probe: can php read the real source directory
+        // Cheap Probe: can php process owner read the real source directory
         $probe_out  = [];
         $probe_exit = 0;
         exec(
