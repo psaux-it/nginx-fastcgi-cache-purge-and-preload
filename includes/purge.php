@@ -418,7 +418,7 @@ function nppp_purge_fp2_index( array &$ctx ): bool {
             $any_valid = true;
             if ( $wp_filesystem->delete( $path ) ) {
                 $deleted++;
-            } else {
+            } elseif ( $wp_filesystem->exists( $path ) ) {
                 $perm_failure++;
             }
         }
@@ -553,7 +553,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
         $probe_exit = 0;
         exec(
             sprintf(
-                '%s -q --files --no-ignore --no-config %s 2>/dev/null',
+                '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
                 escapeshellarg( $rg_bin ),
                 escapeshellarg( $rg_scan_path )
             ),
@@ -572,11 +572,6 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
         }
     } else {
         $rg_scan_path = $rg_fuse_path;
-        $rg_sfx_try   = nppp_find_safexec_path();
-        if ( $rg_sfx_try && nppp_is_safexec_usable( $rg_sfx_try, false ) ) {
-            $rg_use_safexec = true;
-            $rg_safexec_bin = $rg_sfx_try;
-        }
     }
     $rg_cmd_prefix = $rg_use_safexec ? escapeshellarg( $rg_safexec_bin ) . ' ' : '';
 
@@ -592,17 +587,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
                 __( 'INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $rg_scan_path
             ), true, false );
-        } else {
-            nppp_display_admin_notice( 'info', sprintf(
-                __( 'INFO RG SCAN: FUSE mount detected, scanning source dir directly (web server and PHP user match): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-                $rg_scan_path
-            ), true, false );
         }
-    } elseif ( $rg_use_safexec ) {
-        nppp_display_admin_notice( 'info', sprintf(
-            __( 'INFO RG SCAN: Scanning cache dir via safexec: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-            $rg_scan_path
-        ), true, false );
     }
 
     $url_alts = implode( '|', array_map(
@@ -684,7 +669,25 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
         }
 
         // Translate the rg output path (under real cache dir) to its FUSE mount
-        $candidates[ $constructed ][] = nppp_translate_path_to_fuse( $filepath, $rg_scan_path, $rg_fuse_path );
+        if ( $rg_fuse_active ) {
+            // When FUSE is active, rg scans the real source path (directly or via safexec).
+            // Translate the real path to the FUSE mount path for purge (where the php has write access).
+            $translated = nppp_translate_path_to_fuse( $filepath, $rg_scan_path, $rg_fuse_path );
+
+            if ( $translated === null ) {
+                $failed_url = $ctx['pending'][ $constructed ]['decoded'] ?? 'unknown';
+                nppp_display_admin_notice( 'error', sprintf(
+                    __( 'ERROR PATH TRANSLATE: Purge failed for "%1$s". Failed path translation - "%2$s" does not start with "%3$s"', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $failed_url,
+                    $filepath,
+                    $rg_scan_path
+                ) );
+                continue;
+            }
+            $candidates[ $constructed ][] = $translated;
+        } else {
+            $candidates[ $constructed ][] = $filepath;
+        }
     }
 
     // Purge All (primary + related)
@@ -698,7 +701,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
             if ( $wp_filesystem->delete( $path ) ) {
                 $deleted++;
                 $ctx['write_back'][ $key ][] = $path;
-            } else {
+            } elseif ( $wp_filesystem->exists( $path ) ) {
                 $perm_failure++;
             }
         }
@@ -891,7 +894,7 @@ function nppp_purge_fp4_scan( array &$ctx ): string {
             if ( $wp_filesystem->delete( $path ) ) {
                 $deleted++;
                 $ctx['write_back'][ $key ][] = $path;
-            } else {
+            } elseif ( $wp_filesystem->exists( $path ) ) {
                 $perm_failure++;
             }
         }
