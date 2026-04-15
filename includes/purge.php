@@ -144,11 +144,14 @@ function nppp_purge_single_init( $nginx_cache_path, $current_page_url, $nppp_aut
         return false;
     }
 
-    $auto_preload      = ! empty( $settings['nginx_cache_auto_preload'] ) && $settings['nginx_cache_auto_preload'] === 'yes';
+    $auto_preload = ! empty( $settings['nginx_cache_auto_preload'] ) && $settings['nginx_cache_auto_preload'] === 'yes';
     $chain_autopreload = $auto_preload;
-    $regex             = ! empty( $settings['nginx_cache_key_custom_regex'] )
-                         ? base64_decode( $settings['nginx_cache_key_custom_regex'] )
-                         : nppp_fetch_default_regex_for_cache_key();
+    $decoded = ! empty( $settings['nginx_cache_key_custom_regex'] )
+        ? base64_decode( $settings['nginx_cache_key_custom_regex'], true )
+        : false;
+    $regex = ( $decoded !== false && $decoded !== '' )
+        ? $decoded
+        : nppp_fetch_default_regex_for_cache_key();
 
     $primary_key = preg_replace( '#^https?://#', '', $current_page_url );
     $targets     = [
