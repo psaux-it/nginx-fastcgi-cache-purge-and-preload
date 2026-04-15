@@ -869,120 +869,114 @@ function nppp_preload_cache_premium_callback() {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
+    // Try to confirm preload completed
+    // Always try this branch when ripgrep (rg) binary is present on the system.
+    // FUSE must be enabled and safexec exists for scan confirmation works
     $cached  = false;
     $rg_used = false;
 
-    // Try to confirm preload completed
-    if ( ! empty($nginx_cache_settings['nppp_rg_purge_enabled'])
-        && $nginx_cache_settings['nppp_rg_purge_enabled'] === 'yes'
-    ) {
+    nppp_prepare_request_env();
+    $rg_bin = trim( (string) shell_exec('command -v rg 2>/dev/null') );
+
+    if ($rg_bin !== '') {
         // Wait for wget to finish before scanning.
         $pid      = intval( nppp_perform_file_operation($PIDFILE, 'read') );
-        $deadline = time() + 15;
+        $deadline = time() + 3;
 
         while ( time() < $deadline && $pid > 0 && nppp_is_process_alive($pid) ) {
-            usleep(200000);
+            usleep(100000);
         }
 
-        nppp_prepare_request_env();
-        $rg_bin = trim( (string) shell_exec('command -v rg 2>/dev/null') );
+        // Resolve scan path
+        $rg_source_path = nppp_fuse_source_path($nginx_cache_path);
+        $rg_fuse_active = ($rg_source_path !== null);
 
-        if ($rg_bin !== '') {
-            // Resolve scan path
-            $rg_source_path = nppp_fuse_source_path($nginx_cache_path);
+        // Mount table may list a source path that no longer exists on disk.
+        if ($rg_source_path !== null && !$wp_filesystem->is_dir($rg_source_path)) {
+            nppp_display_admin_notice('info', sprintf(
+                /* translators: %s: The FUSE mount source directory. */
+                __('WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                $rg_source_path
+            ), true, false);
+            $rg_source_path = null;
+            $rg_fuse_active = false;
+        }
 
-            // Mount table may list a source path that no longer exists on disk.
-            if ($rg_source_path !== null && !$wp_filesystem->is_dir($rg_source_path)) {
-                nppp_display_admin_notice('info', sprintf(
-                    /* translators: %s: The FUSE mount source directory. */
-                    __('WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                    $rg_source_path
-                ), true, false);
-                $rg_source_path = null;
-            }
+        $rg_scan_path   = ($rg_source_path !== null)
+            ? rtrim($rg_source_path, '/') . '/'
+            : $nginx_cache_path;
 
-            $rg_scan_path   = ($rg_source_path !== null)
-                ? rtrim($rg_source_path, '/') . '/'
-                : $nginx_cache_path;
+        // Cheap Probe: can php read the real source directory
+        $probe_out  = [];
+        $probe_exit = 0;
+        exec(
+            sprintf(
+                '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
+                escapeshellarg($rg_bin),
+                escapeshellarg($rg_scan_path)
+            ),
+            $probe_out,
+            $probe_exit
+        );
 
-            // Probe whether rg can traverse the scan path as the PHP-FPM user.
-            $probe_out  = [];
-            $probe_exit = 0;
-            exec(
-                sprintf(
-                    '%s -q --files --no-ignore --no-config %s 2>/dev/null',
-                    escapeshellarg($rg_bin),
-                    escapeshellarg($rg_scan_path)
-                ),
-                $probe_out,
-                $probe_exit
-            );
+        if ($probe_exit !== 2) {
+            $rg_used       = true;
+            $rg_cmd_prefix = '';
+        } elseif ($rg_fuse_active) {
+            $safexec_path = nppp_find_safexec_path();
 
-            if ($probe_exit !== 2) {
+            if ($safexec_path && nppp_is_safexec_usable($safexec_path, false)) {
                 $rg_used       = true;
-                $rg_cmd_prefix = '';
-            } else {
-                $safexec_path = nppp_find_safexec_path();
-
-                if ($safexec_path && nppp_is_safexec_usable($safexec_path, false)) {
-                    $rg_used       = true;
-                    $rg_cmd_prefix = escapeshellarg($safexec_path) . ' ';
-                }
+                $rg_cmd_prefix = escapeshellarg($safexec_path) . ' ';
             }
+        }
 
-            // Inform user about rg scan decision
-            $rg_fuse_active = ($rg_source_path !== null);
-            if ($rg_used) {
-                if ($rg_fuse_active) {
-                    if ($rg_cmd_prefix !== '') {
-                        nppp_display_admin_notice('info', sprintf(
-                            __('INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                            $rg_scan_path
-                        ), true, false);
-                    } else {
-                        nppp_display_admin_notice('info', sprintf(
-                            __('INFO RG SCAN: FUSE mount detected, scanning source dir directly (rg has direct access): %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                            $rg_scan_path
-                        ), true, false);
-                    }
-                } elseif ($rg_cmd_prefix !== '') {
+        // Inform user about rg scan decision
+        if ($rg_used) {
+            if ($rg_fuse_active) {
+                if ($rg_cmd_prefix !== '') {
                     nppp_display_admin_notice('info', sprintf(
-                        __('INFO RG SCAN: Scanning cache dir via safexec: %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                        $rg_scan_path
-                    ), true, false);
-                }
-            } elseif ($probe_exit === 2) {
-                if ($rg_fuse_active) {
-                    nppp_display_admin_notice('info', sprintf(
-                        __('WARNING RG SCAN: FUSE mount detected, rg scan skipped (cannot access source dir and safexec unavailable): %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        __('INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx'),
                         $rg_scan_path
                     ), true, false);
                 } else {
                     nppp_display_admin_notice('info', sprintf(
-                        __('WARNING RG SCAN: rg scan skipped (cannot access cache dir and safexec unavailable): %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        __('INFO RG SCAN: FUSE mount detected, scanning source dir directly (rg has direct access): %s', 'fastcgi-cache-purge-and-preload-nginx'),
                         $rg_scan_path
                     ), true, false);
                 }
             }
-
-            if ($rg_used) {
-                $url_key = preg_replace('#^https?://#', '', $cache_url);
-
-                $rg_cmd = sprintf(
-                    '%s%s -l -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config %s %s',
-                    $rg_cmd_prefix,
-                    escapeshellarg($rg_bin),
-                    escapeshellarg('^KEY: .*' . preg_quote($url_key, '/') . '$'),
-                    escapeshellarg($rg_scan_path)
-                );
-
-                $rg_out  = [];
-                $rg_exit = 0;
-                exec($rg_cmd, $rg_out, $rg_exit);
-
-                // Cache file found on disk
-                $cached = ($rg_exit === 0 && ! empty($rg_out));
+        } elseif ($probe_exit === 2) {
+            if ($rg_fuse_active) {
+                nppp_display_admin_notice('info', sprintf(
+                    __('WARNING RG SCAN: FUSE mount detected, rg scan skipped (install safexec to enable scan): %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                    $rg_scan_path
+                ), true, false);
+            } else {
+                nppp_display_admin_notice('info', sprintf(
+                    __('WARNING RG SCAN: rg scan skipped (cannot access cache dir and safexec unavailable): %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                    $rg_scan_path
+                ), true, false);
             }
+        }
+
+        if ($rg_used) {
+            $url_key = preg_replace('#^https?://#', '', $cache_url);
+
+            $rg_cmd = sprintf(
+                '%s%s -l -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config %s %s',
+                $rg_cmd_prefix,
+                escapeshellarg($rg_bin),
+                escapeshellarg('^KEY: .*' . preg_quote($url_key, '/') . '$'),
+                escapeshellarg($rg_scan_path)
+            );
+
+            $rg_out  = [];
+            $rg_exit = 0;
+            exec($rg_cmd, $rg_out, $rg_exit);
+
+            // Cache file found on disk
+            $cached = ($rg_exit === 0 && ! empty($rg_out));
         }
     }
 
