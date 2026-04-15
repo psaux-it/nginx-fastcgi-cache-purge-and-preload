@@ -120,7 +120,7 @@ function nppp_purge_single_init( $nginx_cache_path, $current_page_url, $nppp_aut
     }
 
     $decoded  = rawurldecode( $current_page_url );
-    $settings = get_option( 'nginx_cache_settings' );
+    $settings = get_option('nginx_cache_settings', []);
     $PIDFILE  = nppp_get_runtime_file( 'cache_preload.pid' );
 
     if ( $wp_filesystem->exists( $PIDFILE ) ) {
@@ -1037,7 +1037,7 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     }
 
     // Early quit if auto purge disabled
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     if (($nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no') !== 'yes') {
         return;
     }
@@ -1198,7 +1198,7 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
 // This function hooks into the 'upgrader_process_complete' action
 function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
     // Retrieve plugin settings
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
 
     // Check if auto-purge is enabled
     if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
@@ -1236,7 +1236,7 @@ function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
 // Purge entire cache when WordPress finishes a background automatic update.
 // This function hooks into the 'automatic_updates_complete' action.
 function nppp_purge_cache_on_auto_update( $results = [] ) {
-    $nginx_cache_settings = get_option( 'nginx_cache_settings' );
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
         return;
     }
@@ -1252,7 +1252,7 @@ function nppp_purge_cache_on_auto_update( $results = [] ) {
 // This function hooks into the 'activated_plugin-deactivated_plugin' action
 function nppp_purge_cache_plugin_activation_deactivation() {
     // Retrieve plugin settings
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
 
     // Check if auto-purge is enabled
     if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
@@ -1272,7 +1272,7 @@ function nppp_purge_cache_plugin_activation_deactivation() {
 // This function hooks into the 'switch_theme' action
 function nppp_purge_cache_on_theme_switch($new_name, $new_theme, $old_theme) {
     // Retrieve plugin settings
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
 
     // Check if auto-purge is enabled
     if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
@@ -1315,7 +1315,7 @@ function nppp_purge_cache_on_delete_post( $post_id, $post ) {
         return;
     }
 
-    $nginx_cache_settings = get_option( 'nginx_cache_settings' );
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
         return;
     }
@@ -1352,7 +1352,7 @@ function nppp_purge_cache_on_comment_count( $post_id, $new_count, $old_count ) {
         return;
     }
 
-    $nginx_cache_settings = get_option( 'nginx_cache_settings' );
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
         return;
     }
@@ -1385,7 +1385,7 @@ function nppp_purge_cache_on_comment_count( $post_id, $new_count, $old_count ) {
 //   created_term — new term added  (homepage / nav sidebars may embed category lists)
 //   edited_term  — term name, slug, or description changed (archive is now stale)
 function nppp_purge_cache_on_term_change( $term_id, $tt_id, $taxonomy ) {
-    $nginx_cache_settings = get_option( 'nginx_cache_settings' );
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
         return;
     }
@@ -1441,7 +1441,7 @@ function nppp_purge_cache_on_term_delete( $term_id, $tt_id, $taxonomy ) {
         return;
     }
 
-    $nginx_cache_settings = get_option( 'nginx_cache_settings' );
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
         return;
     }
@@ -1469,7 +1469,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         return;
     }
 
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
 
     // Set env
     nppp_prepare_request_env(true);
@@ -1818,7 +1818,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
     // If set call preload immediately after purge
     if ($auto_preload) {
         // Get the plugin options
-        $nginx_cache_settings = get_option('nginx_cache_settings');
+        $nginx_cache_settings = get_option('nginx_cache_settings', []);
 
         // Set default options to prevent any error
         $default_cache_path = '/dev/shm/change-me-now';
@@ -1857,7 +1857,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 // Callback function to trigger Purge All
 function nppp_purge_callback() {
     // Get the plugin options
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
 
     // Get the necessary data for purge action from plugin options
     $default_cache_path = '/dev/shm/change-me-now';
