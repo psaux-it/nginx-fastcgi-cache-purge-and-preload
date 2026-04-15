@@ -100,8 +100,21 @@ function nppp_front_error_notice(string $msg, ?string $target_url = null, string
         }
     }
 
-    // 3) Nuke any previous output so headers can be sent
-    while (ob_get_level() > 0) { @ob_end_clean(); }
+    // 3) Clean ONLY output buffers that this plugin may have opened.
+    //    We use the level recorded at the start of the admin-bar handler.
+    //    If that variable is not set, fall back to cleaning just the topmost buffer.
+    $start_level = $GLOBALS['nppp_admin_bar_start_ob_level'] ?? null;
+    if ($start_level !== null) {
+        // Only drain down to the level that existed when we entered the handler.
+        while (ob_get_level() > $start_level) {
+            @ob_end_clean();
+        }
+    } else {
+        // Fallback: clean only the most recently opened buffer (if any).
+        if (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+    }
 
     // 4) Store the message and redirect
     $key   = 'nppp_front_message_' . uniqid('', true);
@@ -227,6 +240,9 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
 
 // Handle button clicks with actions
 function nppp_handle_fastcgi_cache_actions_admin_bar() {
+    // Record the output buffer level at the very start of this handler.
+    $GLOBALS['nppp_admin_bar_start_ob_level'] = ob_get_level();
+
     // Prevent interference with unrelated request contexts.
     if (
         // AJAX
@@ -241,9 +257,6 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         (defined('WP_CLI') && WP_CLI) ||
 
         // REST
-        (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request() ) ||
-        (function_exists('wp_doing_rest') && wp_doing_rest()) ||
-        (function_exists('wp_is_json_request') && wp_is_json_request()) ||
         (defined('REST_REQUEST') && REST_REQUEST)
     ) {
         return;
