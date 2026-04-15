@@ -3227,7 +3227,8 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
 
     $allowed = false;
     foreach ($allowed_roots as $root) {
-        if (str_starts_with($normalised, $root)) {
+
+        if (strpos($normalised, $root) === 0) {
             $allowed = true;
             break;
         }
@@ -3252,7 +3253,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
 
     foreach ($blocked_subdirs as $blocked) {
         if ($normalised === $blocked ||
-            str_starts_with($normalised, $blocked . '/')) {
+            strpos($normalised, $blocked . '/') === 0) {
             return 'critical_path';
         }
     }
@@ -3289,7 +3290,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
 
     $resolved_allowed = false;
     foreach ($allowed_roots as $root) {
-        if (str_starts_with($resolved_normalised, $root)) {
+        if (strpos($resolved_normalised, $root) === 0) {
             $resolved_allowed = true;
             break;
         }
@@ -3301,7 +3302,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
 
     foreach ($blocked_subdirs as $blocked) {
         if ($resolved_normalised === $blocked ||
-            str_starts_with($resolved_normalised, $blocked . '/')) {
+            strpos($resolved_normalised, $blocked . '/') === 0) {
             return 'critical_path';
         }
     }
