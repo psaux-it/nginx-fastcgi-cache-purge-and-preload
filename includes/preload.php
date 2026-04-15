@@ -601,6 +601,12 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             // We are ready to call main command
             $output = shell_exec($command);
 
+            // PHP 8.1+
+            if ($output === null || $output === false) {
+                nppp_display_admin_notice('error', __( 'FATAL ERROR: Failed to start preload process.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                return;
+            }
+
             // Get the process ID
             $parts = explode(" ", $output);
             $pid = trim(end($parts));
@@ -826,6 +832,12 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
         // We are ready to call main command
         $output = shell_exec($command);
+
+        // PHP 8.1+
+        if ($output === null || $output === false) {
+            nppp_display_admin_notice('error', __( 'FATAL ERROR: Failed to start preload process.', 'fastcgi-cache-purge-and-preload-nginx' ));
+            return;
+        }
 
         // Get the process ID
         $parts = explode(" ", $output);
