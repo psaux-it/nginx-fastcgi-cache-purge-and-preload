@@ -301,6 +301,10 @@ function nppp_nginx_cache_purge_endpoint($request) {
         return $rate_limit;
     }
 
+    // Record the buffer level BEFORE we start our own output buffer.
+    // This allows log.php to verify that the buffer being written to belongs to us.
+    $GLOBALS['nppp_rest_ob_level'] = ob_get_level();
+
     // Start output buffering for purge endpoint
     ob_start();
 
@@ -329,6 +333,9 @@ function nppp_nginx_cache_purge_endpoint($request) {
     // Get status message
     $status_message = wp_strip_all_tags(ob_get_clean());
 
+    // Clean up the global marker so it doesn't leak to other requests
+    unset($GLOBALS['nppp_rest_ob_level']);
+
     // Return status response
     return new WP_REST_Response(array(
         'success' => true,
@@ -343,6 +350,10 @@ function nppp_nginx_cache_preload_endpoint($request) {
     if ( is_wp_error( $rate_limit ) ) {
         return $rate_limit;
     }
+
+    // Record the buffer level BEFORE we start our own output buffer.
+    // This allows log.php to verify that the buffer being written to belongs to us.
+    $GLOBALS['nppp_rest_ob_level'] = ob_get_level();
 
     // Start output buffering for preload endpoint
     ob_start();
@@ -390,6 +401,9 @@ function nppp_nginx_cache_preload_endpoint($request) {
 
     // Get status message
     $status_message = wp_strip_all_tags(ob_get_clean());
+
+    // Clean up the global marker so it doesn't leak to other requests
+    unset($GLOBALS['nppp_rest_ob_level']);
 
     // Return status response.
     return new WP_REST_Response(array(
