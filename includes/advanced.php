@@ -122,7 +122,7 @@ function nppp_get_plugin_root_path() {
    ========================================== */
 
 function nppp_parse_wget_log_urls( $wp_filesystem ) {
-    $log_path    = nppp_get_runtime_file('nppp-wget.log');
+    $log_path      = nppp_get_runtime_file('nppp-wget.log');
     $snapshot_path = nppp_get_runtime_file('nppp-wget-snapshot.log');
 
     // Detect live crawl
@@ -176,7 +176,7 @@ function nppp_parse_wget_log_urls( $wp_filesystem ) {
     }
 
     // Load reject regex (DB override or default file), then compile safely
-    $settings      = get_option('nginx_cache_settings');
+    $settings      = get_option('nginx_cache_settings', []);
     $reject_raw    = isset($settings['nginx_cache_reject_regex'])
         ? $settings['nginx_cache_reject_regex']
         : nppp_fetch_default_reject_regex();
@@ -649,7 +649,7 @@ function nppp_load_premium_content_callback() {
     }
 
     // Retrieve plugin settings
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $nginx_cache_path = isset($options['nginx_cache_path']) ? $options['nginx_cache_path'] : '';
 
     // Generate the HTML content
@@ -727,7 +727,7 @@ function nppp_purge_cache_premium_callback() {
         );
     }
 
-    $options          = get_option('nginx_cache_settings');
+    $options          = get_option('nginx_cache_settings', []);
     $nginx_cache_path = isset($options['nginx_cache_path']) ? $options['nginx_cache_path'] : '/dev/shm/change-me-now';
 
     // Reset severity tracker before capturing notices.
@@ -826,7 +826,7 @@ function nppp_preload_cache_premium_callback() {
     $cache_url = isset($_POST['cache_url']) ? trim( wp_unslash($_POST['cache_url']) ) : '';
 
     // Get the plugin options
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
 
     // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';
@@ -1154,9 +1154,13 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
-    $nginx_cache_settings = get_option('nginx_cache_settings');
-    $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
-             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
+    $decoded = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
+             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'], true)
+             : false;
+
+    $regex   = ($decoded !== false && $decoded !== '')
+             ? $decoded
              : nppp_fetch_default_regex_for_cache_key();
 
     $https_enabled = wp_is_using_https();
