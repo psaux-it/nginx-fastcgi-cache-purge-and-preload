@@ -311,7 +311,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
     }
 
     // Get the plugin options
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
 
     // Get preload pid file
     $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
@@ -339,6 +339,14 @@ function nppp_create_scheduled_event_preload_status_callback() {
         wp_schedule_single_event(time() + 5, 'npp_cache_preload_status_event');
         return;
     }
+
+    // Prevent duplicate execution when both watchdog and cron tick fire simultaneously.
+    $completion_lock_key = 'nppp_preload_completion_lock_' . md5('nppp');
+    if (get_transient($completion_lock_key)) {
+        // Another process is already handling post‑preload tasks.
+        return;
+    }
+    set_transient($completion_lock_key, 1, 30); // 30‑second lock
 
     // Process has finished.
     // If we just finished the desktop phase and mobile is enabled, start mobile now.
@@ -577,7 +585,7 @@ function nppp_custom_every_min_schedule($schedules) {
 // Callback function for the scheduled event
 function nppp_create_scheduled_event_preload_callback() {
     // Get the plugin options
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
 
     // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';
