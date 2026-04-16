@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // This technique stores the results of time-consuming (expensive) permission verifications for reuse.
 // The results are cached for to reduce performance overhead, especially useful when the Nginx cache path is extensive.
 function nppp_check_permissions_recursive_with_cache() {
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     $default_cache_path = '/dev/shm/change-me-now';
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
@@ -274,7 +274,7 @@ function nppp_check_path() {
         return;
     }
 
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     $default_cache_path = '/dev/shm/change-me-now';
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
@@ -527,13 +527,17 @@ function nppp_get_webserver_user() {
 
 // Function to get pages in cache count
 function nppp_get_in_cache_page_count() {
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     $default_cache_path = '/dev/shm/change-me-now';
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
     // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
-    $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
-             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
+    $decoded = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
+             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'], true)
+             : false;
+
+    $regex   = ($decoded !== false && $decoded !== '')
+             ? $decoded
              : nppp_fetch_default_regex_for_cache_key();
 
     $urls_count = 0;
@@ -818,7 +822,7 @@ function nppp_my_status_html() {
                 </div>';
     }
 
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path'])
         ? $nginx_cache_settings['nginx_cache_path']
         : '/dev/shm/change-me-now';
