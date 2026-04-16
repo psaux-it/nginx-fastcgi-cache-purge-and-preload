@@ -303,6 +303,106 @@ location ~ /purge(/.*) {
                     </div>
                 </div>
 
+                <h3 class="nppp-question">What is RG Purge and how does it accelerate single‑URL purges?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>RG Purge – Turbocharged Cache Purging</strong></h3>
+                        <p><strong>RG Purge</strong> is an optional fast‑path that uses <strong>ripgrep (rg)</strong> — a blazing‑fast, line‑oriented search tool — to locate cache files on disk. It replaces the traditional recursive PHP directory scan (Fast‑Path 4) with a single, highly optimised system call, dramatically reducing the time and I/O required to find and delete cached pages.</p>
+
+                        <h4><strong>Why RG Purge matters</strong></h4>
+                        <p>In a standard Nginx cache, a single‑page purge must locate one or more cache files among potentially hundreds of thousands of files. The default PHP recursive iterator (Fast‑Path 4) walks the entire cache directory tree, calling <code>is_file()</code> and reading file headers one by one. On large caches, this can take <strong>30–60 seconds</strong> and consume substantial CPU and disk I/O.</p>
+                        <p><strong>RG Purge reduces this to 1–2 seconds</strong> regardless of cache size. It does this by delegating the search to <code>rg</code>, which is written in Rust and optimised for parallel directory traversal, memory‑mapped I/O, and early exit.</p>
+
+                        <h4><strong>Architecture – How RG Purge fits into the purge workflow</strong></h4>
+                        <p>NPP's single‑URL purge follows a layered fallback strategy. RG Purge sits at <strong>Fast‑Path 3</strong>:</p>
+                        <ol>
+                            <li><strong>FP1 – HTTP Purge</strong> (if enabled) – asks Nginx to purge via the <code>ngx_cache_purge</code> module.</li>
+                            <li><strong>FP2 – Index lookup</strong> – consults the persistent URL→filepath index built during preloading.</li>
+                            <li><strong>FP3 – RG Purge</strong> – uses <code>rg</code> to scan the cache directory for the target URL(s).</li>
+                            <li><strong>FP4 – PHP recursive scan</strong> – the original fallback, used only if RG Purge is unavailable or fails.</li>
+                        </ol>
+                        <p>RG Purge is <strong>entirely optional</strong>. If <code>rg</code> is not installed or the feature is disabled in settings, NPP seamlessly falls through to FP4. There is no change to the existing filesystem purge logic — RG Purge simply makes it faster when available.</p>
+
+                        <h4><strong>Technical workflow of RG Purge</strong></h4>
+                        <ol>
+                            <li>NPP builds a combined regular expression that matches the cache key lines of all pending URLs (primary + related).</li>
+                            <li>It executes a single <code>rg</code> command that scans the entire cache directory, printing only file paths where the <code>KEY:</code> header matches the pattern.</li>
+                            <li>The output is parsed, and each file path is validated and (if necessary) translated from a FUSE source path to a writable mount point.</li>
+                            <li>All matching cache files are deleted in bulk, and their paths are written back to the URL→filepath index for future instant purges.</li>
+                        </ol>
+                        <p>Because <code>rg</code> respects the Linux page cache, subsequent scans are even faster — often <strong>under 0.5 seconds</strong> for a warm cache directory.</p>
+
+                        <h4><strong>RG Purge vs. HTTP Purge vs. PHP recursive scan</strong></h4>
+                        <table class="responsive-table">
+                            <thead>
+                                <tr>
+                                    <th>Method</th>
+                                    <th>Speed (10k files)</th>
+                                    <th>Speed (100k files)</th>
+                                    <th>Requires</th>
+                                    <th>Works with FUSE/bindfs</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>HTTP Purge</strong></td>
+                                    <td>&lt;0.1s</td>
+                                    <td>&lt;0.1s</td>
+                                    <td><code>ngx_cache_purge</code> module + Nginx config</td>
+                                    <td>✅ Yes (purges via Nginx)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>RG Purge</strong></td>
+                                    <td>~0.3s</td>
+                                    <td>~1.5s</td>
+                                    <td><code>rg</code> binary in PATH</td>
+                                    <td>✅ Yes (with safexec or direct access)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>PHP recursive scan</strong></td>
+                                    <td>~8s</td>
+                                    <td>~50s+</td>
+                                    <td>None (built‑in)</td>
+                                    <td>⚠️ Slower, but always works</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h4><strong>When should I enable RG Purge?</strong></h4>
+                        <p>Enable RG Purge if <strong>any</strong> of the following apply to your site:</p>
+                        <ul>
+                            <li>Your Nginx cache contains more than <strong>1,000 files</strong>.</li>
+                            <li>Single‑page purges (manual, auto‑purge, or front‑end actions) feel sluggish or time out.</li>
+                            <li>You are using a FUSE mount (bindfs) and want to avoid the overhead of PHP walking a virtual filesystem.</li>
+                            <li>You want to reduce CPU / I/O spikes caused by large directory scans.</li>
+                        </ul>
+                        <p>RG Purge is <strong>highly recommended for any production site</strong> with a non‑trivial cache size. The performance gains are immediate and there is no downside — if <code>rg</code> is missing, NPP falls back silently to the standard PHP scan.</p>
+
+                        <h4><strong>How to enable RG Purge</strong></h4>
+                        <ol>
+                            <li>Install <strong>ripgrep</strong> on your server:<br>
+                                <code>apt install ripgrep</code> (Debian/Ubuntu) or <code>dnf install ripgrep</code> (RHEL/Fedora).
+                            </li>
+                            <li>Go to <strong>Settings → NPP Settings → Advanced</strong> and turn on <strong>RG Purge</strong>.</li>
+                            <li>The toggle will show <em>Unavailable</em> if <code>rg</code> is not detected. Once installed, refresh the page and enable it.</li>
+                        </ol>
+                        <p>After enabling, single‑page purges will automatically use RG Purge. No further configuration is required.</p>
+
+                        <h4><strong>RG Purge and safexec</strong></h4>
+                        <p>If your cache directory is a FUSE mount (e.g., bindfs) and the PHP process lacks read access to the underlying source directory, NPP will attempt to use <strong>safexec</strong> to run <code>rg</code> with elevated read privileges. This ensures RG Purge works even in isolated multi‑user environments. If safexec is not available, RG Purge gracefully falls back to scanning the FUSE mount directly (slower, but still faster than PHP).</p>
+
+                        <h4><strong>Troubleshooting</strong></h4>
+                        <p><strong>Q: The RG Purge toggle shows "Unavailable".</strong><br>
+                        A: The <code>rg</code> binary is not installed or not in the <code>PATH</code>. Install ripgrep via your package manager and refresh the page.</p>
+
+                        <p><strong>Q: Purges are still slow after enabling RG Purge.</strong><br>
+                        A: Check the <strong>Status</strong> tab to confirm <code>rg</code> is detected. If you are using a FUSE mount, ensure safexec is installed and SUID‑root (see the safexec FAQ). If neither is available, RG Purge will fall back to the PHP scan.</p>
+
+                        <p><strong>Q: Does RG Purge work with Purge All?</strong><br>
+                        A: No. Purge All always uses filesystem operations (recursive directory deletion). RG Purge applies only to single‑URL and related‑URL purges.</p>
+                    </div>
+                </div>
+
                 <h3 class="nppp-question">What Linux commands are required for the preload action?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
