@@ -1039,12 +1039,6 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         return;
     }
 
-    // Early quit if auto purge disabled
-    $nginx_cache_settings = get_option('nginx_cache_settings', []);
-    if (($nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no') !== 'yes') {
-        return;
-    }
-
     // Skip non-publicly-viewable post types entirely.
     // is_post_type_viewable() checks publicly_queryable (custom types) or
     // public (built-in types). Returns false automatically for ALL private CPTs:
@@ -1052,6 +1046,14 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     // shop_coupon, shop_webhook, shop_subscription, scheduled-action,
     // edd_*, gravity forms entries, and any future private CPT
     if ( ! is_post_type_viewable( $post->post_type ) ) {
+        return;
+    }
+
+    // Check is_post_type_viewable() before get_option() to avoid unnecessary
+    // database reads on non-public post types like WooCommerce shop_order.
+    // Reduces load on high‑traffic WooCommerce sites.
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
+    if (($nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no') !== 'yes') {
         return;
     }
 
@@ -1355,15 +1357,18 @@ function nppp_purge_cache_on_comment_count( $post_id, $new_count, $old_count ) {
         return;
     }
 
-    $nginx_cache_settings = get_option('nginx_cache_settings', []);
-    if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
-        return;
-    }
-
     // Skip private/internal post types.
     // Covers shop_order, wc_order, shop_coupon, scheduled-action, and any
     // future private CPT
     if ( ! is_post_type_viewable( get_post_type( $post_id ) ) ) {
+        return;
+    }
+
+    // Check is_post_type_viewable() before get_option() to avoid unnecessary
+    // database reads on non-public post types like WooCommerce shop_order.
+    // Reduces load on high‑traffic WooCommerce sites.
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
+    if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
         return;
     }
 
@@ -1388,14 +1393,15 @@ function nppp_purge_cache_on_comment_count( $post_id, $new_count, $old_count ) {
 //   created_term — new term added  (homepage / nav sidebars may embed category lists)
 //   edited_term  — term name, slug, or description changed (archive is now stale)
 function nppp_purge_cache_on_term_change( $term_id, $tt_id, $taxonomy ) {
-    $nginx_cache_settings = get_option('nginx_cache_settings', []);
-    if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
-        return;
-    }
-
     // Only public taxonomies with a URL-based rewrite (public archives exist).
     $tax_obj = get_taxonomy( $taxonomy );
     if ( ! $tax_obj || empty( $tax_obj->public ) || false === $tax_obj->rewrite ) {
+        return;
+    }
+
+    // Perform the database read — only for viewable taxonomies.
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
+    if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
         return;
     }
 
