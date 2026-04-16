@@ -25,17 +25,18 @@ function nppp_get_related_urls_for_single(string $primary_url): array {
     $include_shop = ! empty( $settings['nppp_related_apply_manual'] ) && $settings['nppp_related_apply_manual'] === 'yes'; // repurposed to "Shop"
     $include_cat  = ! empty( $settings['nppp_related_include_category'] ) && $settings['nppp_related_include_category'] === 'yes';
 
-    // 1) Home page (if enabled)
+    // 1) Home page (if enabled) — already unconditional, applies to all purge targets.
     if ( $include_home ) {
         $urls[] = home_url( '/' );
     }
 
-    // Resolve post from URL (posts, pages, products, CPTs)
+    // Resolve post from URL (posts, pages, products, CPTs).
+    // url_to_postid() returns 0 for taxonomy archive URLs (it only resolves singular posts).
     $post_id = url_to_postid( $primary_url );
     if ( $post_id ) {
         $post_type = get_post_type( $post_id );
 
-        // 2) WooCommerce Shop page (if enabled, and this is a product)
+        // 2) WooCommerce Shop page (if enabled, and primary URL is a product).
         if ( $include_shop && 'product' === $post_type && function_exists( 'wc_get_page_id' ) ) {
             $shop_id = (int) wc_get_page_id( 'shop' );
             if ( $shop_id > 0 && 'publish' === get_post_status( $shop_id ) ) {
@@ -92,6 +93,36 @@ function nppp_get_related_urls_for_single(string $primary_url): array {
                                 $urls[] = $link;
                             }
                         }
+                    }
+                }
+            }
+        }
+    } else {
+        // 2b) WooCommerce Shop page for product taxonomy archive URLs.
+        if ( $include_shop && function_exists( 'wc_get_page_id' ) ) {
+            $is_wc_product_tax = false;
+            foreach ( array( 'product_cat', 'product_tag' ) as $_wc_tax ) {
+                $tax_obj = get_taxonomy( $_wc_tax );
+                if ( ! $tax_obj || empty( $tax_obj->rewrite ) || false === $tax_obj->rewrite ) {
+                    continue;
+                }
+                $rewrite_slug = $tax_obj->rewrite['slug'] ?? '';
+                if ( $rewrite_slug === '' ) {
+                    continue;
+                }
+                $path = wp_parse_url( $primary_url, PHP_URL_PATH ) ?? '';
+                // Match /<rewrite-slug>/ anywhere in the path (handles sub-paths too).
+                if ( false !== strpos( $path, '/' . ltrim( $rewrite_slug, '/' ) . '/' ) ) {
+                    $is_wc_product_tax = true;
+                    break;
+                }
+            }
+            if ( $is_wc_product_tax ) {
+                $shop_id = (int) wc_get_page_id( 'shop' );
+                if ( $shop_id > 0 && 'publish' === get_post_status( $shop_id ) ) {
+                    $shop_url = get_permalink( $shop_id );
+                    if ( $shop_url ) {
+                        $urls[] = $shop_url;
                     }
                 }
             }
