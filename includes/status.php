@@ -19,8 +19,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 // The results are cached for to reduce performance overhead, especially useful when the Nginx cache path is extensive.
 function nppp_check_permissions_recursive_with_cache() {
     $nginx_cache_settings = get_option('nginx_cache_settings', []);
-    $default_cache_path = '/dev/shm/change-me-now';
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+    $default_cache_path   = '/dev/shm/change-me-now';
+    $nginx_cache_path     = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -275,8 +275,8 @@ function nppp_check_path() {
     }
 
     $nginx_cache_settings = get_option('nginx_cache_settings', []);
-    $default_cache_path = '/dev/shm/change-me-now';
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+    $default_cache_path   = '/dev/shm/change-me-now';
+    $nginx_cache_path     = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
      // Check if directory exists
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
@@ -528,8 +528,8 @@ function nppp_get_webserver_user() {
 // Function to get pages in cache count
 function nppp_get_in_cache_page_count() {
     $nginx_cache_settings = get_option('nginx_cache_settings', []);
-    $default_cache_path = '/dev/shm/change-me-now';
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+    $default_cache_path   = '/dev/shm/change-me-now';
+    $nginx_cache_path     = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
     // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
     $decoded = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
@@ -823,7 +823,7 @@ function nppp_my_status_html() {
     }
 
     $nginx_cache_settings = get_option('nginx_cache_settings', []);
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path'])
+    $nginx_cache_path     = isset($nginx_cache_settings['nginx_cache_path'])
         ? $nginx_cache_settings['nginx_cache_path']
         : '/dev/shm/change-me-now';
 
