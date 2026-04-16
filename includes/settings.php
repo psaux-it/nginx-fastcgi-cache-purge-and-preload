@@ -965,7 +965,7 @@ function nppp_handle_nginx_cache_settings_submission() {
                 // Check if 'nginx_cache_settings' is set in the POST data
                 if (isset($_POST['nginx_cache_settings'])) {
                     // Retrieve existing options before sanitizing the input
-                    $existing_options = get_option('nginx_cache_settings');
+                    $existing_options = get_option('nginx_cache_settings', []);
 
                     // Ignored PCP warning because we use custom sanitization via 'nppp_nginx_cache_settings_sanitize()'.
                     // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Already sanitized
@@ -1565,7 +1565,7 @@ function nppp_update_cache_schedule_option() {
     }
 
     // Get the current options
-    $current_options = get_option('nginx_cache_settings');
+    $current_options = get_option('nginx_cache_settings', []);
 
     // Update the specific option within the array
     $current_options['nginx_cache_schedule'] = $cache_schedule;
@@ -1600,9 +1600,11 @@ function nppp_update_api_key_option() {
     // Generate new API key
     $new_api_key = bin2hex(random_bytes(32));
     // Get the current options
-    $current_options = get_option('nginx_cache_settings');
+    $current_options = get_option('nginx_cache_settings', []);
+
     // Update the specific option within the array
     $current_options['nginx_cache_api_key'] = $new_api_key;
+
     // Save the updated options
     $updated = update_option('nginx_cache_settings', $current_options);
 
@@ -1627,7 +1629,7 @@ function nppp_update_api_key_copy_value() {
     }
 
     // Get the current options
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
 
     // Check if the retrieval was successful
     if ($options === false || !is_array($options)) {
@@ -1663,7 +1665,7 @@ function nppp_update_api_option() {
     $nppp_api = isset($_POST['nppp_api']) ? sanitize_text_field(wp_unslash($_POST['nppp_api'])) : '';
 
     // Get the current options
-    $current_options = get_option('nginx_cache_settings');
+    $current_options = get_option('nginx_cache_settings', []);
 
     // Update the specific option within the array
     $current_options['nginx_cache_api'] = $nppp_api;
@@ -1691,10 +1693,13 @@ function nppp_update_default_reject_regex_option() {
 
     // Get default reject regex
     $default_reject_regex = nppp_fetch_default_reject_regex();
+
     // Get the current options
-    $current_options = get_option('nginx_cache_settings');
+    $current_options = get_option('nginx_cache_settings', []);
+
     // Update the specific option within the array
     $current_options['nginx_cache_reject_regex'] = $default_reject_regex;
+
     // Save the option
     update_option('nginx_cache_settings', $current_options);
 
@@ -1714,10 +1719,13 @@ function nppp_update_default_reject_extension_option() {
 
     // Get default reject extension
     $default_reject_extension = nppp_fetch_default_reject_extension();
+
     // Get the current options
-    $current_options = get_option('nginx_cache_settings');
+    $current_options = get_option('nginx_cache_settings', []);
+
     // Update the specific option within the array
     $current_options['nginx_cache_reject_extension'] = $default_reject_extension;
+
     // Save the option
     update_option('nginx_cache_settings', $current_options);
 
@@ -1737,10 +1745,13 @@ function nppp_update_default_cache_key_regex_option() {
 
     // Get default reject extension
     $default_cache_key_regex = nppp_fetch_default_regex_for_cache_key();
+
     // Get the current options
-    $current_options = get_option('nginx_cache_settings');
+    $current_options = get_option('nginx_cache_settings', []);
+
     // Update the specific option within the array
     $current_options['nginx_cache_key_custom_regex'] = $default_cache_key_regex;
+
     // Save the option
     update_option('nginx_cache_settings', $current_options);
 
@@ -1759,7 +1770,7 @@ function nppp_rest_api_purge_url_copy() {
     }
 
     // Get API Key
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_api_key = bin2hex(random_bytes(32));
     $api_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : $default_api_key;
 
@@ -1788,7 +1799,7 @@ function nppp_rest_api_preload_url_copy() {
     }
 
     // Get API Key
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_api_key = bin2hex(random_bytes(32));
     $api_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : $default_api_key;
 
@@ -1882,42 +1893,42 @@ function nppp_nginx_cache_settings_section_callback() {
 
 // Callback function to display the input field for Nginx Cache Path setting
 function nppp_nginx_cache_path_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_cache_path = '/dev/shm/change-me-now';
     echo "<input type='text' id='nginx_cache_path' name='nginx_cache_settings[nginx_cache_path]' value='" . esc_attr($options['nginx_cache_path'] ?? $default_cache_path) . "' class='regular-text' />";
 }
 
 // Callback function to display the input field for Email Address setting
 function nppp_nginx_cache_email_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_email = 'your-email@example.com';
     echo "<input type='text' id='nginx_cache_email' name='nginx_cache_settings[nginx_cache_email]' value='" . esc_attr($options['nginx_cache_email'] ?? $default_email) . "' class='regular-text' />";
 }
 
 // Callback function to display the input field for CPU Usage Limit setting
 function nppp_nginx_cache_cpu_limit_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_cpu_limit = 100;
     echo "<input type='number' id='nginx_cache_cpu_limit' name='nginx_cache_settings[nginx_cache_cpu_limit]' min='10' max='100' value='" . esc_attr($options['nginx_cache_cpu_limit'] ?? $default_cpu_limit) . "' class='small-text' />";
 }
 
 // Callback function to display the input field for Per Request Wait Time setting
 function nppp_nginx_cache_wait_request_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_wait_time = 0;
     echo "<input type='number' id='nginx_cache_wait_request' name='nginx_cache_settings[nginx_cache_wait_request]' min='0' max='60' value='" . esc_attr($options['nginx_cache_wait_request'] ?? $default_wait_time) . "' class='small-text' />";
 }
 
 // Callback function to display the input field for PHP Response Timeout setting
 function nppp_nginx_cache_read_timeout_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_read_timeout = 60;
     echo "<input type='number' id='nginx_cache_read_timeout' name='nginx_cache_settings[nginx_cache_read_timeout]' min='10' max='300' value='" . esc_attr($options['nginx_cache_read_timeout'] ?? $default_read_timeout) . "' class='small-text' />";
 }
 
 // Callback function to display the checkbox for Send Email Notification setting
 function nppp_nginx_cache_send_mail_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $send_mail_checked = isset($options['nginx_cache_send_mail']) && $options['nginx_cache_send_mail'] === 'yes' ? 'checked="checked"' : '';
     ?>
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_send_mail]" class="nppp-onoffswitch-checkbox" value='yes' id="nginx_cache_send_mail" <?php echo esc_attr($send_mail_checked); ?>>
@@ -1933,7 +1944,7 @@ function nppp_nginx_cache_send_mail_callback() {
 
 // Callback function for the nginx_cache_auto_preload field
 function nppp_nginx_cache_auto_preload_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $auto_preload_checked = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes' ? 'checked="checked"' : '';
 
     ?>
@@ -1950,7 +1961,7 @@ function nppp_nginx_cache_auto_preload_callback() {
 
 // Callback function for the nginx_cache_schedule field
 function nppp_nginx_cache_schedule_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $cache_schedule_checked = isset($options['nginx_cache_schedule']) && $options['nginx_cache_schedule'] === 'yes' ? 'checked="checked"' : '';
 
     ?>
@@ -1967,7 +1978,7 @@ function nppp_nginx_cache_schedule_callback() {
 
 // Callback function for the nginx_cache_purge_on_update field
 function nppp_nginx_cache_purge_on_update_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $auto_purge_checked = isset($options['nginx_cache_purge_on_update']) && $options['nginx_cache_purge_on_update'] === 'yes' ? 'checked="checked"' : '';
 
     ?>
@@ -1984,7 +1995,7 @@ function nppp_nginx_cache_purge_on_update_callback() {
 
 // Callback function for the Cloudflare APO sync field.
 function nppp_nginx_cache_cloudflare_apo_sync_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $is_checked = isset($options['nppp_cloudflare_apo_sync']) && $options['nppp_cloudflare_apo_sync'] === 'yes';
     $cloudflare_checked = $is_checked ? 'checked="checked"' : '';
     $is_available = function_exists('nppp_cloudflare_apo_is_available') && nppp_cloudflare_apo_is_available();
@@ -2017,8 +2028,8 @@ function nppp_nginx_cache_cloudflare_apo_sync_callback() {
 
 // Callback function for the Redis Cache field.
 function nppp_nginx_cache_redis_cache_sync_callback() {
-    $options     = get_option( 'nginx_cache_settings' );
-    $is_checked  = isset( $options['nppp_redis_cache_sync'] ) && $options['nppp_redis_cache_sync'] === 'yes';
+    $options      = get_option('nginx_cache_settings', []);
+    $is_checked   = isset( $options['nppp_redis_cache_sync'] ) && $options['nppp_redis_cache_sync'] === 'yes';
     $checked_attr = $is_checked ? 'checked="checked"' : '';
     $is_available = function_exists( 'nppp_redis_cache_is_available' ) && nppp_redis_cache_is_available();
 
@@ -2052,7 +2063,7 @@ function nppp_nginx_cache_redis_cache_sync_callback() {
 
 // Callback function for the nginx_cache_auto_preload_mobile field
 function nppp_nginx_cache_auto_preload_mobile_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $auto_preload_mobile_checked = isset($options['nginx_cache_auto_preload_mobile']) && $options['nginx_cache_auto_preload_mobile'] === 'yes' ? 'checked="checked"' : '';
 
     ?>
@@ -2069,7 +2080,7 @@ function nppp_nginx_cache_auto_preload_mobile_callback() {
 
 // Callback function for the nginx_cache_watchdog field
 function nppp_nginx_cache_watchdog_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $watchdog_checked = isset($options['nginx_cache_watchdog']) && $options['nginx_cache_watchdog'] === 'yes' ? 'checked="checked"' : '';
     ?>
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_watchdog]" class="nppp-onoffswitch-checkbox-watchdog" value="yes" id="nginx_cache_watchdog" <?php echo esc_attr($watchdog_checked); ?>>
@@ -2085,7 +2096,7 @@ function nppp_nginx_cache_watchdog_callback() {
 
 // Callback function to display the Reject Regex field
 function nppp_nginx_cache_reject_regex_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_reject_regex = nppp_fetch_default_reject_regex();
     $default_reject_regex = isset($options['nginx_cache_reject_regex']) ? $options['nginx_cache_reject_regex'] : $default_reject_regex;
     $reject_regex = preg_replace('/\\\\+/', '\\', $default_reject_regex);
@@ -2094,7 +2105,7 @@ function nppp_nginx_cache_reject_regex_callback() {
 
 // Callback function to display the custom Regex field for fastcgi_cache_key
 function nppp_nginx_cache_key_custom_regex_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_cache_key_regex = nppp_fetch_default_regex_for_cache_key();
     $cache_key_regex = isset($options['nginx_cache_key_custom_regex']) ? base64_decode($options['nginx_cache_key_custom_regex']) : $default_cache_key_regex;
     // Use wp_kses() with an empty array to allow raw text without HTML sanitization
@@ -2103,7 +2114,7 @@ function nppp_nginx_cache_key_custom_regex_callback() {
 
 // Callback function to display the Reject extension field
 function nppp_nginx_cache_reject_extension_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_reject_extension = nppp_fetch_default_reject_extension();
     $default_reject_extension = isset($options['nginx_cache_reject_extension']) ? $options['nginx_cache_reject_extension'] : $default_reject_extension;
     $reject_extension = preg_replace('/\\\\+/', '\\', $default_reject_extension);
@@ -2157,28 +2168,28 @@ function nppp_nginx_cache_logs_callback() {
 
 // Callback function to display the input field for Limit Rate setting.
 function nppp_nginx_cache_limit_rate_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_limit_rate = 5120;
     echo "<input type='number' id='nginx_cache_limit_rate' name='nginx_cache_settings[nginx_cache_limit_rate]' min='1' max='102400' value='" . esc_attr($options['nginx_cache_limit_rate'] ?? $default_limit_rate) . "' class='small-text' />";
 }
 
 // Callback function to display the input field for Proxy Port setting.
 function nppp_nginx_cache_proxy_port_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_port = 3434;
     echo "<input type='number' id='nginx_cache_preload_proxy_port' name='nginx_cache_settings[nginx_cache_preload_proxy_port]' value='" . esc_attr($options['nginx_cache_preload_proxy_port'] ?? $default_port) . "' class='small-text' />";
 }
 
 // Callback function to display the input field for Proxy Host setting (IP field).
 function nppp_nginx_cache_proxy_host_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_host = '127.0.0.1';
     echo "<input type='text' id='nginx_cache_preload_proxy_host' name='nginx_cache_settings[nginx_cache_preload_proxy_host]' value='" . esc_attr($options['nginx_cache_preload_proxy_host'] ?? $default_host) . "' class='regular-text' />";
 }
 
 // Callback function for the nginx_cache_preload_enable_proxy field
 function nppp_nginx_cache_enable_proxy_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $enable_proxy_checked = isset($options['nginx_cache_preload_enable_proxy']) && $options['nginx_cache_preload_enable_proxy'] === 'yes' ? 'checked="checked"' : '';
     ?>
     <input type="checkbox" name="nginx_cache_settings[nginx_cache_preload_enable_proxy]" class="nppp-onoffswitch-checkbox-proxy" value="yes" id="nginx_cache_preload_enable_proxy" <?php echo esc_attr($enable_proxy_checked); ?>>
@@ -2220,7 +2231,7 @@ function nppp_fetch_default_reject_extension(): string {
 
 // Callback function for REST API Key
 function nppp_nginx_cache_api_key_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $default_api_key = bin2hex(random_bytes(32));
     $api_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : $default_api_key;
     echo "<input type='text' id='nginx_cache_api_key' name='nginx_cache_settings[nginx_cache_api_key]' value='" . esc_attr($api_key) . "' class='regular-text' />";
@@ -2437,7 +2448,7 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
 
 // Callback function for REST API
 function nppp_nginx_cache_api_callback() {
-    $options = get_option('nginx_cache_settings');
+    $options = get_option('nginx_cache_settings', []);
     $api_checked = isset($options['nginx_cache_api']) && $options['nginx_cache_api'] === 'yes' ? 'checked="checked"' : '';
 
     ?>
