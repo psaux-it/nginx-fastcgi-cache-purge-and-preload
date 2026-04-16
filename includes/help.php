@@ -222,7 +222,17 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h3><strong>Nginx Configuration for HTTP Purge</strong></h3>
-                        <p>HTTP Purge requires the <code>ngx_cache_purge</code> module to be compiled into Nginx and a dedicated purge location block added to your Nginx configuration. Without both, the feature cannot work — but NPP falls back to filesystem purge automatically so nothing breaks.</p>
+                        <p>HTTP Purge requires the <code>ngx_cache_purge</code> module to be compiled into Nginx and a <strong>dedicated purge location block</strong> added to your Nginx configuration. Without both, the feature cannot work — but NPP falls back to filesystem purge automatically so nothing breaks.</p>
+
+                        <h4><strong>Why a dedicated purge location?</strong></h4>
+                        <p>NPP uses a <code>GET</code> request to trigger cache purges. This design choice was made to provide <strong>maximum compatibility with all cache key formats</strong>, including those that include <code>$request_method</code> (e.g. <code>$scheme$request_method$host$request_uri</code>). When a <code>GET</code> request is sent to a dedicated purge location, Nginx bypasses method checks and purges the correct cache entry regardless of the key format.</p>
+                        <p><strong>Why a dedicated location is also a security best practice:</strong></p>
+                        <ul>
+                            <li><strong>Isolation:</strong> Purge requests are handled in a separate <code>location</code> block, completely separate from your normal PHP processing.</li>
+                            <li><strong>IP Restriction:</strong> You can (and should) restrict purge access to trusted IP addresses (e.g., your server's localhost or Docker network).</li>
+                            <li><strong>No Accidental Caching:</strong> A <code>GET</code> request to a dedicated purge location will never be cached or passed to PHP, eliminating any risk of warming the cache unintentionally.</li>
+                        </ul>
+                        <p>⚠️ <strong>Important:</strong> HTTP Purge will <strong>not</strong> work if you use the inline <code>fastcgi_cache_purge on;</code> directive inside your PHP location block. This is because the module's access handler expects the <code>PURGE</code> method for inline setups, while NPP sends <code>GET</code>. For this reason, we strongly recommend the dedicated location configuration shown below.</p>
 
                         <h4><strong>Required Nginx config</strong></h4>
                         <p>You need two things in your Nginx server block: a <code>fastcgi_cache_path</code> with a named zone, and a location block that handles purge requests using that zone. A minimal working example:</p>
@@ -235,32 +245,61 @@ fastcgi_cache_key "$scheme$request_method$host$request_uri";
 fastcgi_cache my_cache;
 fastcgi_cache_valid 200 301 302 60m;
 
-## Purge location — required for HTTP Purge fast-path:
+## Purge location — dedicated location required for NPP HTTP Purge
 location ~ /purge(/.*) {
-    allow 127.0.0.1;
-    deny all;
+    allow 127.0.0.1;        # Only allow local requests
+    # allow 172.16.0.0/12;  # Docker network (adjust as needed)
+    deny all;               # Deny everyone else
+
     fastcgi_cache_purge my_cache "$scheme$request_method$host$1";
 }</pre>
 
-                        <p>The location prefix (<code>/purge</code>) must match what NPP is configured to send purge requests to. The cache key in the purge block (<code>$scheme$request_method$host$1</code>) must match your <code>fastcgi_cache_key</code> exactly — with <code>$1</code> capturing the path after <code>/purge</code>.</p>
+                        <p><strong>Explanation:</strong></p>
+                        <ul>
+                            <li>The <code>location ~ /purge(/.*)</code> block captures any URL path starting with <code>/purge/</code>.</li>
+                            <li>The <code>$1</code> variable captures everything after <code>/purge</code> (e.g., <code>/my-page/</code>).</li>
+                            <li>The <code>fastcgi_cache_purge</code> directive uses the <strong>exact same cache key format</strong> as <code>fastcgi_cache_key</code>, with <code>$1</code> replacing the full request URI.</li>
+                        </ul>
+                        <p>🔒 <strong>Security Tip:</strong> Always restrict the <code>allow</code> directive to your server's internal IP addresses. Never expose the purge location to the public internet.</p>
 
                         <h4><strong>How NPP builds the purge URL</strong></h4>
-                        <p>When NPP purges <code>https://example.com/my-page/</code> it sends a GET request to <code>https://example.com/purge/my-page/</code>. Nginx matches the purge location, strips <code>/purge</code>, and deletes the cache entry for the remaining path. HTTP 200 = purge confirmed. Any other response = NPP falls through to filesystem.</p>
+                        <p>When NPP purges <code>https://example.com/my-page/</code>:</p>
+                        <ol>
+                            <li>It constructs the purge URL: <code>https://example.com/purge/my-page/</code></li>
+                            <li>It sends a <code>GET</code> request to that URL.</li>
+                            <li>Nginx matches the <code>/purge/</code> location, extracts <code>/my-page/</code> as <code>$1</code>, and deletes the corresponding cache file.</li>
+                            <li>Nginx returns <code>200</code> (purge successful) or another status code (see fallback behavior below).</li>
+                        </ol>
+                        <p>If the purge endpoint returns anything other than <code>200</code>, NPP automatically falls back to its filesystem-based purge, so your cache is still cleared – just a bit slower.</p>
 
                         <h4><strong>NPP settings for HTTP Purge</strong></h4>
-                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong>. Three options control how NPP builds the purge URL:</p>
+                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and enable <strong>HTTP Purge</strong>. Three additional options let you customize the purge URL:</p>
 
-                        <p><strong>HTTP Purge URL Suffix</strong> (default: <code>purge</code>)<br>
-                        The path prefix NPP prepends when building purge requests. Change this if your Nginx purge location uses a different prefix — for example if your location is <code>~ /cache-purge(/.*)</code> set this to <code>cache-purge</code>. NPP will then send requests to <code>https://example.com/cache-purge/my-page/</code>.</p>
-
-                        <p><strong>HTTP Purge Custom Base URL</strong> (optional)<br>
-                        Overrides the suffix entirely. Use this when the purge endpoint is on a different host, port, or internal address — the most common case being Docker where the purge endpoint is not reachable via the public hostname. Examples:</p>
-                        <ul>
-                            <li><code>http://nginx/purge</code> — Docker service name</li>
-                            <li><code>http://127.0.0.1:8080/purge</code> — non-standard port</li>
-                            <li><code>http://localhost_/purge</code> — explicit localhost</li>
-                        </ul>
-                        <p>When a Custom Base URL is set the suffix field is ignored entirely.</p>
+                        <table class="responsive-table">
+                            <thead>
+                                <tr>
+                                    <th>Setting</th>
+                                    <th>Default</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>HTTP Purge URL Suffix</strong></td>
+                                    <td><code>purge</code></td>
+                                    <td>The path prefix prepended to the URL. Change this if your Nginx location uses a different prefix — for example if your location is <code>~ /cache-purge(/.*)</code> set this to <code>cache-purge</code>.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>HTTP Purge Custom Base URL</strong></td>
+                                    <td>(empty)</td>
+                                    <td>Overrides the entire base URL. Essential for Docker or reverse‑proxy setups where the purge endpoint is not reachable via the public site URL. Examples:<br>
+                                        • <code>http://nginx/purge</code> — Docker service name<br>
+                                        • <code>http://127.0.0.1:8080/purge</code> — non‑standard port<br>
+                                        When a Custom Base URL is set, the <strong>URL Suffix</strong> field is ignored.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
