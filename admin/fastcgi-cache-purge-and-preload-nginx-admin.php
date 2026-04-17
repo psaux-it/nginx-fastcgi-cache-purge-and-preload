@@ -212,18 +212,43 @@ add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_de
 add_action('wp_ajax_nppp_update_http_purge_option', 'nppp_update_http_purge_option');
 add_action('wp_ajax_nppp_update_rg_purge_option', 'nppp_update_rg_purge_option');
 if ($nppp_auto_purge) {
-    add_action('transition_post_status', 'nppp_purge_cache_on_update', 10, 3);
-    add_action('delete_post', 'nppp_purge_cache_on_delete_post', 10, 2);
-    add_action('wp_update_comment_count', 'nppp_purge_cache_on_comment_count', 10, 3);
-    add_action('upgrader_process_complete', 'nppp_purge_cache_on_theme_plugin_update', 10, 2);
-    add_action('automatic_updates_complete', 'nppp_purge_cache_on_auto_update');
-    add_action('switch_theme', 'nppp_purge_cache_on_theme_switch', 10, 3);
-    add_action('activated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
-    add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
-    add_action('created_term', 'nppp_purge_cache_on_term_change', 10, 3);
-    add_action('edited_term', 'nppp_purge_cache_on_term_change', 10, 3);
-    add_action('pre_delete_term', 'nppp_capture_term_url_pre_delete', 10, 2);
-    add_action('delete_term', 'nppp_purge_cache_on_term_delete',  10, 3);
+    // Posts, Pages & Comments sub-trigger.
+    $nppp_sub_posts = ($nppp_options['nppp_autopurge_posts'] ?? 'no') === 'yes';
+    if ($nppp_sub_posts) {
+        add_action('transition_post_status',  'nppp_purge_cache_on_update',        10, 3);
+        add_action('delete_post',             'nppp_purge_cache_on_delete_post',   10, 2);
+        add_action('wp_update_comment_count', 'nppp_purge_cache_on_comment_count', 10, 3);
+    }
+    $nppp_sub_plugins = ($nppp_options['nppp_autopurge_plugins'] ?? 'no') === 'yes';
+    if ($nppp_sub_plugins) {
+        add_action('activated_plugin',   'nppp_purge_cache_plugin_activation_deactivation');
+        add_action('deactivated_plugin', 'nppp_purge_cache_plugin_activation_deactivation');
+    }
+    $nppp_sub_themes = ($nppp_options['nppp_autopurge_themes'] ?? 'no') === 'yes';
+    if ($nppp_sub_themes) {
+        add_action('switch_theme', 'nppp_purge_cache_on_theme_switch', 10, 3);
+    }
+    if ($nppp_sub_plugins || $nppp_sub_themes) {
+        add_action('upgrader_process_complete', 'nppp_purge_cache_on_theme_plugin_update', 10, 2);
+    }
+    $nppp_sub_terms = ($nppp_options['nppp_autopurge_terms'] ?? 'no') === 'yes';
+    if ($nppp_sub_terms) {
+        add_action('created_term',    'nppp_purge_cache_on_term_change',  10, 3);
+        add_action('edited_term',     'nppp_purge_cache_on_term_change',  10, 3);
+        add_action('pre_delete_term', 'nppp_capture_term_url_pre_delete', 10, 2);
+        add_action('delete_term',     'nppp_purge_cache_on_term_delete',  10, 3);
+    }
+    $nppp_sub_3rdparty = ($nppp_options['nppp_autopurge_3rdparty'] ?? 'no') === 'yes';
+    if ($nppp_sub_3rdparty) {
+        add_action('automatic_updates_complete', 'nppp_purge_cache_on_auto_update');
+        array_map(
+            static function ( $purge_action ) { add_action( $purge_action, 'nppp_purge_callback' ); },
+            $nppp_page_cache_purge_actions
+        );
+        if (class_exists('autoptimizeCache')) {
+            add_action('autoptimize_action_cachepurged', 'nppp_purge_callback');
+        }
+    }
 }
 add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_preload_mobile_option');
 add_action('wp_ajax_nppp_update_watchdog_option', 'nppp_update_watchdog_option');
@@ -232,13 +257,6 @@ add_action('wp_ajax_nppp_update_enable_proxy_option', 'nppp_update_enable_proxy_
 add_action('wp_ajax_nppp_update_related_fields', 'nppp_update_related_fields');
 add_action('wp_ajax_nppp_update_pctnorm_mode', 'nppp_update_pctnorm_mode');
 add_action('wp_ajax_nppp_refresh_cache_ratio', 'nppp_refresh_cache_ratio_callback');
-$nppp_sub_3rdparty = $nppp_auto_purge && ( ( $nppp_options['nppp_autopurge_3rdparty'] ?? 'no' ) === 'yes' );
-$nppp_sub_3rdparty
-    ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $nppp_page_cache_purge_actions)
-    : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $nppp_page_cache_purge_actions);
-$nppp_sub_3rdparty
-    ? (class_exists('autoptimizeCache') && add_action('autoptimize_action_cachepurged', 'nppp_purge_callback'))
-    : (class_exists('autoptimizeCache') && remove_action('autoptimize_action_cachepurged', 'nppp_purge_callback'));
 add_action('nppp_plugin_admin_notices', function($type, $message, $log_message, $display_notice) {
     // Check if admin notice should be displayed
     if (!$display_notice) {
