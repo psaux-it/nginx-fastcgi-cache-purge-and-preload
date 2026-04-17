@@ -1056,6 +1056,9 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
     if (($nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no') !== 'yes') {
         return;
     }
+    if ( ($nginx_cache_settings['nppp_autopurge_posts'] ?? 'no') !== 'yes' ) {
+        return;
+    }
 
     // Avoid duplicate purge with Gutenberg + metabox second request.
     // When block editor saves legacy metaboxes it posts to post.php with this flag.
@@ -1214,24 +1217,28 @@ function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
         $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
         $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
-        // Check for the theme update
+        // Check for the theme update — respects themes sub-trigger
         if ( isset( $hook_extra['type'] ) && $hook_extra['type'] === 'theme' ) {
-            $active_theme   = wp_get_theme()->get_stylesheet();
-            $updated_themes = $hook_extra['themes']                                        // bulk
-                ?? ( isset( $hook_extra['theme'] ) ? [ $hook_extra['theme'] ] : [] );      // single
+            if ( ( $nginx_cache_settings['nppp_autopurge_themes'] ?? 'no' ) === 'yes' ) {
+                $active_theme   = wp_get_theme()->get_stylesheet();
+                $updated_themes = $hook_extra['themes']                                        // bulk
+                    ?? ( isset( $hook_extra['theme'] ) ? [ $hook_extra['theme'] ] : [] );      // single
 
-            if ( ! empty( $updated_themes ) && in_array( $active_theme, $updated_themes, true ) ) {
-                nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
+                if ( ! empty( $updated_themes ) && in_array( $active_theme, $updated_themes, true ) ) {
+                    nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
+                }
             }
         }
 
         // Check for the plugin update
         if ( isset( $hook_extra['type'] ) && $hook_extra['type'] === 'plugin' ) {
-            $updated_plugins = $hook_extra['plugins']                                      // bulk
-                ?? ( isset( $hook_extra['plugin'] ) ? [ $hook_extra['plugin'] ] : [] );    // single
+            if ( ( $nginx_cache_settings['nppp_autopurge_plugins'] ?? 'no' ) === 'yes' ) {
+                $updated_plugins = $hook_extra['plugins']                                      // bulk
+                    ?? ( isset( $hook_extra['plugin'] ) ? [ $hook_extra['plugin'] ] : [] );    // single
 
-            if ( ! empty( $updated_plugins ) ) {
-                nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
+                if ( ! empty( $updated_plugins ) ) {
+                    nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
+                }
             }
         }
     }
@@ -1243,6 +1250,9 @@ function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
 function nppp_purge_cache_on_auto_update( $results = [] ) {
     $nginx_cache_settings = get_option('nginx_cache_settings', []);
     if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
+    if ( ( $nginx_cache_settings['nppp_autopurge_3rdparty'] ?? 'no' ) !== 'yes' ) {
         return;
     }
 
@@ -1261,6 +1271,9 @@ function nppp_purge_cache_plugin_activation_deactivation() {
 
     // Check if auto-purge is enabled
     if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+        if ( ( $nginx_cache_settings['nppp_autopurge_plugins'] ?? 'no' ) !== 'yes' ) {
+            return;
+        }
         $default_cache_path = '/dev/shm/change-me-now';
         $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
         $this_script_path = dirname(plugin_dir_path(__FILE__));
@@ -1281,6 +1294,9 @@ function nppp_purge_cache_on_theme_switch($new_name, $new_theme, $old_theme) {
 
     // Check if auto-purge is enabled
     if (isset($nginx_cache_settings['nginx_cache_purge_on_update']) && $nginx_cache_settings['nginx_cache_purge_on_update'] === 'yes') {
+        if ( ( $nginx_cache_settings['nppp_autopurge_themes'] ?? 'no' ) !== 'yes' ) {
+            return;
+        }
         $default_cache_path = '/dev/shm/change-me-now';
         $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
         $this_script_path = dirname(plugin_dir_path(__FILE__));
@@ -1322,6 +1338,9 @@ function nppp_purge_cache_on_delete_post( $post_id, $post ) {
 
     $nginx_cache_settings = get_option('nginx_cache_settings', []);
     if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
+    if ( ( $nginx_cache_settings['nppp_autopurge_posts'] ?? 'no' ) !== 'yes' ) {
         return;
     }
 
@@ -1371,6 +1390,9 @@ function nppp_purge_cache_on_comment_count( $post_id, $new_count, $old_count ) {
     if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
         return;
     }
+    if ( ( $nginx_cache_settings['nppp_autopurge_posts'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
 
     $post_url = get_permalink( $post_id );
     if ( ! $post_url ) {
@@ -1402,6 +1424,9 @@ function nppp_purge_cache_on_term_change( $term_id, $tt_id, $taxonomy ) {
     // Perform the database read — only for viewable taxonomies.
     $nginx_cache_settings = get_option('nginx_cache_settings', []);
     if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
+    if ( ( $nginx_cache_settings['nppp_autopurge_terms'] ?? 'no' ) !== 'yes' ) {
         return;
     }
 
@@ -1452,6 +1477,9 @@ function nppp_purge_cache_on_term_delete( $term_id, $tt_id, $taxonomy ) {
 
     $nginx_cache_settings = get_option('nginx_cache_settings', []);
     if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
+    if ( ( $nginx_cache_settings['nppp_autopurge_terms'] ?? 'no' ) !== 'yes' ) {
         return;
     }
 
