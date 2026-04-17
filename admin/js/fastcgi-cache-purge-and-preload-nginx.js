@@ -1649,6 +1649,127 @@ $(document).ready(function() {
         }, 'json');
     });
 
+    // Auto Purge Triggers sub-options
+    (function npppSetupAutoPurgeTriggers() {
+        const $npppTrigFS = $('#nppp-autopurge-triggers-fieldset');
+        if (!$npppTrigFS.length || !window.nppp_admin_data) return;
+
+        // Inline status badge inserted after the fieldset wrapper div
+        const $npppTrigStatus = $('<span/>', {
+            'class': 'nppp-related-status',
+            'aria-live': 'polite',
+            'aria-atomic': 'true',
+            'role': 'status'
+        }).attr('data-state', 'idle').hide().insertAfter($npppTrigFS);
+
+        const npppTrigGet = () => ({
+            nppp_autopurge_posts:    $npppTrigFS.find('#nppp_autopurge_posts').is(':checked')    ? 'yes' : 'no',
+            nppp_autopurge_terms:    $npppTrigFS.find('#nppp_autopurge_terms').is(':checked')    ? 'yes' : 'no',
+            nppp_autopurge_plugins:  $npppTrigFS.find('#nppp_autopurge_plugins').is(':checked')  ? 'yes' : 'no',
+            nppp_autopurge_themes:   $npppTrigFS.find('#nppp_autopurge_themes').is(':checked')   ? 'yes' : 'no',
+            nppp_autopurge_3rdparty: $npppTrigFS.find('#nppp_autopurge_3rdparty').is(':checked') ? 'yes' : 'no'
+        });
+
+        const npppTrigDisable = (flag) => $npppTrigFS.find('input[type=checkbox]').prop('disabled', flag);
+        let npppTrigHideTimer;
+
+        function npppTrigSetStatus(state, html, ttlMs) {
+            clearTimeout(npppTrigHideTimer);
+            $npppTrigStatus.attr('data-state', state).html(html).show();
+            if (ttlMs) {
+                npppTrigHideTimer = setTimeout(() => {
+                    $npppTrigStatus.attr('data-state', 'idle').empty().hide();
+                }, ttlMs);
+            }
+        }
+
+        const npppTrigShowSaving = () => npppTrigSetStatus(
+            'saving',
+            '<span class="dashicons dashicons-update" aria-hidden="true"></span>' +
+            '<span class="nppp-sr-only">' + __('Saving', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+            '<span>' + __('Saving…', 'fastcgi-cache-purge-and-preload-nginx') + '</span>'
+        );
+        const npppTrigShowSaved = () => npppTrigSetStatus(
+            'saved',
+            '<span class="dashicons dashicons-yes" aria-hidden="true"></span>' +
+            '<span class="nppp-sr-only">' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+            '<span>' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>',
+            1000
+        );
+        const npppTrigShowError = (msg) => npppTrigSetStatus(
+            'error',
+            '<span class="dashicons dashicons-dismiss" aria-hidden="true"></span>' +
+            '<span class="nppp-sr-only">' + __('Error', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+            '<span>' + (msg || __('Failed to save', 'fastcgi-cache-purge-and-preload-nginx')) + '</span>',
+            2000
+        );
+
+        const npppTrigRevertTo = (v) => {
+            $npppTrigFS.find('#nppp_autopurge_posts').prop('checked',    v.nppp_autopurge_posts    === 'yes');
+            $npppTrigFS.find('#nppp_autopurge_terms').prop('checked',    v.nppp_autopurge_terms    === 'yes');
+            $npppTrigFS.find('#nppp_autopurge_plugins').prop('checked',  v.nppp_autopurge_plugins  === 'yes');
+            $npppTrigFS.find('#nppp_autopurge_themes').prop('checked',   v.nppp_autopurge_themes   === 'yes');
+            $npppTrigFS.find('#nppp_autopurge_3rdparty').prop('checked', v.nppp_autopurge_3rdparty === 'yes');
+        };
+
+        let npppTrigLast   = npppTrigGet();
+        let npppTrigSaving = false;
+
+        function npppTrigSaveNow() {
+            if (npppTrigSaving) return;
+
+            npppTrigSaving = true;
+            $npppTrigFS.addClass('is-saving');
+            npppTrigDisable(true);
+            npppTrigShowSaving();
+
+            const payload = npppTrigGet();
+
+            $.ajax({
+                url: nppp_admin_data.ajaxurl,
+                method: 'POST',
+                dataType: 'json',
+                timeout: 15000,
+                data: {
+                    action:    'nppp_update_autopurge_triggers',
+                    _wpnonce:  nppp_admin_data.autopurge_triggers_nonce,
+                    fields:    payload
+                }
+            }).done((res) => {
+                if (res && res.success) {
+                    const normalized =
+                        (res.data && (res.data.data || res.data.normalized || res.data)) || payload;
+                    npppTrigLast = normalized;
+                    npppTrigRevertTo(normalized);
+                    npppTrigShowSaved();
+                } else {
+                    npppTrigRevertTo(npppTrigLast);
+                    const msg = (res && (res.message || (res.data && res.data.message))) || 'Failed to save';
+                    npppTrigShowError(msg);
+                }
+            }).fail((xhr) => {
+                npppTrigRevertTo(npppTrigLast);
+                const j   = xhr && xhr.responseJSON;
+                const msg = (j && (j.message || (j.data && j.data.message))) || 'Network error';
+                npppTrigShowError(msg);
+            }).always(() => {
+                npppTrigSaving = false;
+                $npppTrigFS.removeClass('is-saving');
+                // Re-enable only when master is ON
+                const masterOn = $('#nginx_cache_purge_on_update').prop('checked');
+                npppTrigDisable(!masterOn);
+            });
+        }
+
+        const npppTrigDebounce = (fn, wait) => {
+            let t;
+            return function () { clearTimeout(t); t = setTimeout(fn, wait); };
+        };
+
+        // Debounce-save any checkbox change within this fieldset
+        $npppTrigFS.on('change', 'input[type=checkbox]', npppTrigDebounce(npppTrigSaveNow, 350));
+    })();
+
     // Update auto purge status when state changes
     $('#nginx_cache_purge_on_update').change(function() {
         // Calculate the notification position
@@ -1659,6 +1780,19 @@ $(document).ready(function() {
         var notificationTopAutoPurge = clickToCopySpanOffsetAutoPurge.top;
 
         var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        var masterIsOn = $(this).prop('checked');
+
+        // Sync the Auto Purge Triggers sub-options disabled state immediately
+        var $trigFS = $('#nppp-autopurge-triggers-fieldset');
+        if ($trigFS.length) {
+            $trigFS.find('input[type=checkbox]').prop('disabled', !masterIsOn);
+            if (masterIsOn) {
+                $trigFS.removeClass('nppp-autopurge-triggers-off');
+            } else {
+                $trigFS.addClass('nppp-autopurge-triggers-off');
+            }
+        }
+
         $.post(nppp_admin_data.ajaxurl, {
             action: 'nppp_update_auto_purge_option',
             auto_purge: isChecked,
@@ -1689,9 +1823,20 @@ $(document).ready(function() {
                         document.body.removeChild(notification);
                     }, 300);
                 }, 1000);
+                if (!masterIsOn) {
+                    $('#nppp-autopurge-triggers-fieldset').find('input[type=checkbox]').prop('checked', false);
+                }
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_purge_on_update').prop('checked', !$('#nginx_cache_purge_on_update').prop('checked'));
+
+                // Revert sub-options disabled state
+                var $trigFSErr = $('#nppp-autopurge-triggers-fieldset');
+                if ($trigFSErr.length) {
+                    var revertMasterOn = $('#nginx_cache_purge_on_update').prop('checked');
+                    $trigFSErr.find('input[type=checkbox]').prop('disabled', !revertMasterOn);
+                    revertMasterOn ? $trigFSErr.removeClass('nppp-autopurge-triggers-off') : $trigFSErr.addClass('nppp-autopurge-triggers-off');
+                }
                 npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
