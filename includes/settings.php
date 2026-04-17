@@ -2400,8 +2400,8 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
                 <label for="nppp_autopurge_posts">
                     <span class="nppp-toggle" aria-hidden="true"></span>
                     <span class="nppp-text">
-                        <span class="title"><?php esc_html_e( 'Posts &amp; Comments', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        <span class="desc"><?php esc_html_e( 'Purge on post/page publish, update, deletion, and approved comment count changes.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="title"><?php esc_html_e( 'Posts & Comments', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Auto Purge the post or page when published, updated, deleted, or when a comment is approved. (Archive pages are purged only if enabled under Purge Scope.)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     </span>
                 </label>
             </div>
@@ -2416,8 +2416,8 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
                 <label for="nppp_autopurge_terms">
                     <span class="nppp-toggle" aria-hidden="true"></span>
                     <span class="nppp-text">
-                        <span class="title"><?php esc_html_e( 'Taxonomy Terms', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        <span class="desc"><?php esc_html_e( 'Purge archive pages when a public taxonomy term is created, edited, or deleted.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="title"><?php esc_html_e( 'Categories, Tags & Taxonomies', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Auto Purge category, tag, and custom taxonomy archive pages when terms are created, edited, or removed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     </span>
                 </label>
             </div>
@@ -2432,8 +2432,8 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
                 <label for="nppp_autopurge_plugins">
                     <span class="nppp-toggle" aria-hidden="true"></span>
                     <span class="nppp-text">
-                        <span class="title"><?php esc_html_e( 'Plugin Events', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        <span class="desc"><?php esc_html_e( 'Purge entire cache on plugin activation, deactivation, or update.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="title"><?php esc_html_e( 'Plugin Activations & Updates', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Auto Purge the entire cache when any plugin is activated, deactivated, or updated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     </span>
                 </label>
             </div>
@@ -2448,8 +2448,8 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
                 <label for="nppp_autopurge_themes">
                     <span class="nppp-toggle" aria-hidden="true"></span>
                     <span class="nppp-text">
-                        <span class="title"><?php esc_html_e( 'Theme Events', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        <span class="desc"><?php esc_html_e( 'Purge entire cache when the active theme is switched or updated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="title"><?php esc_html_e( 'Theme Switches & Updates', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Auto Purge the entire cache when the active theme is switched or updated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     </span>
                 </label>
             </div>
@@ -2464,8 +2464,8 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
                 <label for="nppp_autopurge_3rdparty">
                     <span class="nppp-toggle" aria-hidden="true"></span>
                     <span class="nppp-text">
-                        <span class="title"><?php esc_html_e( '3rd-Party &amp; Auto-Updates', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        <span class="desc"><?php esc_html_e( 'Purge entire cache on WordPress automatic background updates and compatible caching-plugin purge hooks (WP Rocket, W3TC, LiteSpeed, etc.).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="title"><?php esc_html_e( 'WordPress Auto‑Updates & 3rd‑Party Plugins', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Auto Purge the entire cache during automatic WordPress background updates and when compatible caching plugins trigger a purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     </span>
                 </label>
             </div>
