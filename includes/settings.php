@@ -2398,7 +2398,7 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
                     <span class="nppp-toggle" aria-hidden="true"></span>
                     <span class="nppp-text">
                         <span class="title"><?php esc_html_e( 'Posts & Comments', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        <span class="desc"><?php esc_html_e( 'Auto Purge the post or page when published, updated, deleted, or when a comment is approved. (Archive pages are purged only if enabled under Purge Scope.)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Auto Purge any post, page, or WooCommerce product when published, updated, deleted, when a comment is approved, or when product stock changes (quantity, status, or order cancellation). (Archive pages are purged only if enabled under Purge Scope.)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     </span>
                 </label>
             </div>
@@ -2446,7 +2446,7 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
                     <span class="nppp-toggle" aria-hidden="true"></span>
                     <span class="nppp-text">
                         <span class="title"><?php esc_html_e( 'Theme Switches & Updates', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        <span class="desc"><?php esc_html_e( 'Auto Purge the entire cache when the active theme is switched or updated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Auto Purge the entire cache when the active theme is switched, updated, or when global theme templates (Elementor Header/Footer) or theme CSS are modified.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     </span>
                 </label>
             </div>
