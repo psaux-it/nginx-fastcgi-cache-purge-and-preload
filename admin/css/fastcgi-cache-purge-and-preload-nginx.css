@@ -4541,3 +4541,230 @@ div.updated.notice-nppp p,
         box-sizing: border-box !important;
     }
 }
+
+/* Auto Purge Triggers */
+.nppp-autopurge-triggers-fieldset {
+    --nppp-accent: var(--wp-admin-theme-color, #0073AA);
+    --nppp-border: #dcdcde;
+    --nppp-text: #1d2327;
+    --nppp-sub: #646970;
+    --nppp-bg: #fff;
+
+    margin: 10px 0 0;
+    padding: 0;
+    border: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.nppp-autopurge-triggers-fieldset .nppp-switch {
+    position: relative;
+    max-width: 525px;
+}
+
+.nppp-autopurge-triggers-fieldset .nppp-switch label {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--nppp-bg);
+    border: 1px solid var(--nppp-border);
+    line-height: 1.3;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+    border-left: 3px solid red;
+}
+
+.nppp-autopurge-triggers-fieldset .nppp-switch label:hover {
+    background: #f6f7f7;
+    border-color: #cfcfd3;
+}
+
+.nppp-autopurge-triggers-fieldset .nppp-switch input[type="checkbox"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+}
+
+.nppp-autopurge-triggers-fieldset .nppp-toggle {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid #bfc3c7;
+    background: #fff;
+    box-shadow: inset 0 0 0 2px transparent;
+    transition: border-color 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.nppp-autopurge-triggers-fieldset .nppp-toggle::after {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 4px;
+    width: 7px;
+    height: 4px;
+    border: 2px solid transparent;
+    border-top: 0;
+    border-right: 0;
+    transform: rotate(-45deg);
+    opacity: 0;
+    transition: opacity 0.1s ease;
+}
+
+.nppp-autopurge-triggers-fieldset input:checked + label .nppp-toggle {
+    background: var(--nppp-accent);
+    border-color: var(--nppp-accent);
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.nppp-autopurge-triggers-fieldset input:checked + label .nppp-toggle::after {
+    border-color: #fff;
+    opacity: 1;
+}
+
+.nppp-autopurge-triggers-fieldset input:checked + label {
+    border-color: color-mix(in oklab, var(--nppp-accent) 35%, #cfd5da);
+    border-left: 3px solid green;
+}
+
+.nppp-autopurge-triggers-fieldset input:focus-visible + label {
+    outline: 2px solid var(--nppp-accent);
+    outline-offset: 1px;
+}
+
+.nppp-autopurge-triggers-fieldset .nppp-text {
+    display: block;
+}
+
+.nppp-autopurge-triggers-fieldset .nppp-text .title {
+    color: var(--nppp-text);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.nppp-autopurge-triggers-fieldset .nppp-text .desc {
+    display: block;
+    margin-top: 2px;
+    color: var(--nppp-sub);
+    font-size: 11px;
+}
+
+.nppp-autopurge-triggers-fieldset input[disabled] + label {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.nppp-autopurge-triggers-fieldset input[disabled] + label .nppp-toggle {
+    background: #eef0f3;
+    border-color: #d7dbe0;
+}
+
+.nppp-autopurge-triggers-fieldset.is-saving input[disabled] + label {
+    opacity: 1;
+}
+
+.nppp-autopurge-triggers-fieldset.is-saving input[disabled]:checked + label .nppp-toggle {
+    background: var(--nppp-accent);
+    border-color: var(--nppp-accent);
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.nppp-autopurge-triggers-fieldset.is-saving input[disabled]:not(:checked) + label .nppp-toggle {
+    background: #fff;
+    border-color: #bfc3c7;
+    box-shadow: inset 0 0 0 2px transparent;
+}
+
+/* Master-OFF dimming */
+.nppp-autopurge-triggers-fieldset.nppp-autopurge-triggers-off {
+    opacity: 0.90;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Status badge (inserted by JS) */
+.nppp-autopurge-triggers-fieldset + .nppp-related-status {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: inline-block;
+    transition: opacity 0.25s;
+}
+
+.nppp-autopurge-triggers-fieldset + .nppp-related-status[data-state="saving"] {
+    color: #2271b1;
+    background: #f0f6fc;
+    border: 1px solid #c2d9f0;
+}
+
+.nppp-autopurge-triggers-fieldset + .nppp-related-status[data-state="saved"] {
+    color: #1a7e3f;
+    background: #f0faf3;
+    border: 1px solid #a3d9b5;
+}
+
+.nppp-autopurge-triggers-fieldset + .nppp-related-status[data-state="error"] {
+    color: #d63638;
+    background: #fdf1f1;
+    border: 1px solid #f5c0c0;
+}
+
+.nppp-autopurge-triggers-fieldset + .nppp-related-status[data-state="idle"],
+.nppp-autopurge-triggers-fieldset + .nppp-related-status:empty {
+    display: none;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+    .nppp-autopurge-triggers-fieldset {
+        --nppp-border: #2a2f36;
+        --nppp-bg: #1d2327;
+        --nppp-text: #f0f0f1;
+        --nppp-sub: #b7bcc5;
+    }
+
+    .nppp-autopurge-triggers-fieldset .nppp-switch label {
+        background: #20262b;
+    }
+
+    .nppp-autopurge-triggers-fieldset .nppp-switch label:hover {
+        background: #242b31;
+        border-color: #313842;
+    }
+
+    .nppp-autopurge-triggers-fieldset .nppp-toggle {
+        background: #2a3036;
+        border-color: #4b5260;
+    }
+
+    .nppp-autopurge-triggers-fieldset.is-saving input[disabled]:not(:checked) + label .nppp-toggle {
+        background: #2a3036;
+        border-color: #4b5260;
+    }
+
+    .nppp-autopurge-triggers-fieldset + .nppp-related-status {
+        background: #1e2a34;
+        border-color: #2b3a47;
+        color: #b9d5ef;
+    }
+
+    .nppp-autopurge-triggers-fieldset + .nppp-related-status[data-state="saving"] {
+        color: #72aee6;
+        background: #1e2a38;
+        border-color: #2b4a6b;
+    }
+
+    .nppp-autopurge-triggers-fieldset + .nppp-related-status[data-state="saved"] {
+        color: #68de7c;
+        background: #1a2e20;
+        border-color: #2d5a38;
+    }
+
+    .nppp-autopurge-triggers-fieldset + .nppp-related-status[data-state="error"] {
+        color: #f86368;
+        background: #301a1a;
+        border-color: #6b2929;
+    }
+}
