@@ -182,6 +182,7 @@ add_action('wp_ajax_nppp_get_nginx_cache_logs', 'nppp_get_nginx_cache_logs');
 add_action('wp_ajax_nppp_update_send_mail_option', 'nppp_update_send_mail_option');
 add_action('wp_ajax_nppp_update_auto_preload_option', 'nppp_update_auto_preload_option');
 add_action('wp_ajax_nppp_update_auto_purge_option', 'nppp_update_auto_purge_option');
+add_action('wp_ajax_nppp_update_autopurge_triggers', 'nppp_update_autopurge_triggers');
 add_action('wp_ajax_nppp_update_cloudflare_apo_sync_option', 'nppp_update_cloudflare_apo_sync_option');
 add_action('wp_ajax_nppp_update_redis_cache_sync_option', 'nppp_update_redis_cache_sync_option');
 add_action('wp_ajax_nppp_cache_status', 'nppp_cache_status_callback');
