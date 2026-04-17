@@ -232,10 +232,11 @@ add_action('wp_ajax_nppp_update_enable_proxy_option', 'nppp_update_enable_proxy_
 add_action('wp_ajax_nppp_update_related_fields', 'nppp_update_related_fields');
 add_action('wp_ajax_nppp_update_pctnorm_mode', 'nppp_update_pctnorm_mode');
 add_action('wp_ajax_nppp_refresh_cache_ratio', 'nppp_refresh_cache_ratio_callback');
-$nppp_auto_purge
+$nppp_sub_3rdparty = $nppp_auto_purge && ( ( $nppp_options['nppp_autopurge_3rdparty'] ?? 'no' ) === 'yes' );
+$nppp_sub_3rdparty
     ? array_map(function($purge_action) { add_action($purge_action, 'nppp_purge_callback'); }, $nppp_page_cache_purge_actions)
     : array_map(function($purge_action) { remove_action($purge_action, 'nppp_purge_callback'); }, $nppp_page_cache_purge_actions);
-$nppp_auto_purge
+$nppp_sub_3rdparty
     ? (class_exists('autoptimizeCache') && add_action('autoptimize_action_cachepurged', 'nppp_purge_callback'))
     : (class_exists('autoptimizeCache') && remove_action('autoptimize_action_cachepurged', 'nppp_purge_callback'));
 add_action('nppp_plugin_admin_notices', function($type, $message, $log_message, $display_notice) {
