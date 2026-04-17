@@ -333,30 +333,11 @@ function nppp_nginx_cache_settings_page() {
                                     <?php echo esc_html__( 'This setting does not warm cache by itself. To warm the cache after any purge, enable Auto Preload below.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <div class="cache-paths-info">
-                                    <h4><?php echo esc_html__( 'The entire cache is automatically purged when:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
-                                    <p>
-                                        <strong><?php echo esc_html__( 'Theme', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong> (<?php echo esc_html__( 'active', 'fastcgi-cache-purge-and-preload-nginx' ); ?>) <?php echo esc_html__( 'is switched or updated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
-                                        <strong><?php echo esc_html__( 'Plugin', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong> <?php echo esc_html__( 'is activated, updated, or deactivated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
-                                        <strong><?php echo esc_html__( 'Compatible Caching Plugins', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'trigger a cache purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
-                                        <strong><?php echo esc_html__( 'Elementor Theme Templates', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        (<?php echo esc_html__( 'Header / Footer / Single / Archive / Popup', 'fastcgi-cache-purge-and-preload-nginx' ); ?>)
-                                        <?php echo esc_html__( 'are saved.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
-                                        <strong><?php echo esc_html__( 'Elementor Files / CSS', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'are regenerated or cleared.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                    </p>
-                                    <br>
-                                    <h4><?php echo esc_html__( 'The cache for a single URL is automatically purged when:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
-                                    <p>
-                                        <strong><?php echo esc_html__( 'Post/Page', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'content is changed (publish/update).', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
-                                        <strong><?php echo esc_html__( 'Comment', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'is approved or its status is changed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                    </p><br>
                                     <p>
                                         <?php echo esc_html__( 'If Auto Preload is ON, any single-item purge (automatic or manual) will immediately preload the page and—if Related Pages are enabled—the Homepage, Shop Page and/or Category archives. Site-wide purges will trigger a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
                                 </div>
+                                <?php nppp_nginx_cache_autopurge_triggers_callback(); ?>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -1349,6 +1330,55 @@ function nppp_update_watchdog_option() {
     }
 }
 
+// AJAX callback to save all Auto Purge Trigger sub-options as a group.
+function nppp_update_autopurge_triggers() {
+    // Nonce & capability
+    if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'nppp-autopurge-triggers' ) ) {
+        wp_send_json_error( array( 'message' => __( 'Security check failed.', 'fastcgi-cache-purge-and-preload-nginx' ) ), 403 );
+    }
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( array( 'message' => __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ) ), 403 );
+    }
+
+    $allowed_keys = array(
+        'nppp_autopurge_posts',
+        'nppp_autopurge_terms',
+        'nppp_autopurge_plugins',
+        'nppp_autopurge_themes',
+        'nppp_autopurge_3rdparty',
+    );
+
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- intersected against allowed_keys, sanitized below
+    $posted = ( isset( $_POST['fields'] ) && is_array( $_POST['fields'] ) )
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- intersected against allowed_keys, sanitized below
+        ? array_intersect_key( wp_unslash( $_POST['fields'] ), array_flip( $allowed_keys ) )
+        : array();
+
+    foreach ( $posted as $k => $v ) {
+        $posted[ $k ] = is_string( $v ) ? sanitize_text_field( $v ) : $v;
+    }
+
+    $normalized = array();
+    foreach ( $allowed_keys as $key ) {
+        $raw                = isset( $posted[ $key ] ) ? $posted[ $key ] : null;
+        $normalized[ $key ] = in_array( $raw, array( 'yes', '1', 1, 'true', true, 'on' ), true ) ? 'yes' : 'no';
+    }
+
+    // No enforcement needed – master toggle handler already ensures sub‑options are 'no' when master is OFF.
+    $opts = get_option( 'nginx_cache_settings', array() );
+    if ( ! is_array( $opts ) ) {
+        $opts = array();
+    }
+
+    $opts = array_merge( $opts, $normalized );
+    update_option( 'nginx_cache_settings', $opts );
+
+    wp_send_json_success( array(
+        'message' => __( 'Auto Purge Triggers saved.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'data'    => $normalized,
+    ) );
+}
+
 // AJAX callback function to update auto purge option
 function nppp_update_auto_purge_option() {
     // Verify nonce
@@ -1374,6 +1404,20 @@ function nppp_update_auto_purge_option() {
 
     // Update the specific option within the array
     $current_options['nginx_cache_purge_on_update'] = $auto_purge;
+
+    // When master is turned OFF, also set all five sub‑options to 'no' in the database
+    if ($auto_purge !== 'yes') {
+        $sub_option_keys = array(
+            'nppp_autopurge_posts',
+            'nppp_autopurge_terms',
+            'nppp_autopurge_plugins',
+            'nppp_autopurge_themes',
+            'nppp_autopurge_3rdparty',
+        );
+        foreach ($sub_option_keys as $key) {
+            $current_options[$key] = 'no';
+        }
+    }
 
     // Save the updated options
     $updated = update_option('nginx_cache_settings', $current_options);
@@ -2325,6 +2369,112 @@ function nppp_nginx_cache_related_pages_callback() {
     <?php
 }
 
+// Callback function for the Auto Purge Triggers sub-options fieldset.
+function nppp_nginx_cache_autopurge_triggers_callback() {
+    $options   = get_option( 'nginx_cache_settings', array() );
+    $master_on = isset( $options['nginx_cache_purge_on_update'] ) && $options['nginx_cache_purge_on_update'] === 'yes';
+
+    $posts     = $options['nppp_autopurge_posts']     ?? 'no';
+    $terms     = $options['nppp_autopurge_terms']     ?? 'no';
+    $plugins   = $options['nppp_autopurge_plugins']   ?? 'no';
+    $themes    = $options['nppp_autopurge_themes']    ?? 'no';
+    $thirdpty  = $options['nppp_autopurge_3rdparty']  ?? 'no';
+
+    $disabled_attr    = $master_on ? '' : 'disabled="disabled"';
+    $aria_disabled    = $master_on ? 'false' : 'true';
+    $fieldset_class   = 'nppp-autopurge-triggers-fieldset' . ( $master_on ? '' : ' nppp-autopurge-triggers-off' );
+    ?>
+    <div class="nppp-autopurge-triggers-wrap">
+        <div class="nppp-autopurge-triggers-heading">
+        </div>
+
+        <fieldset class="<?php echo esc_attr( $fieldset_class ); ?>" id="nppp-autopurge-triggers-fieldset">
+
+            <div class="nppp-switch">
+                <input id="nppp_autopurge_posts" type="checkbox"
+                       name="nginx_cache_settings[nppp_autopurge_posts]"
+                       value="yes"
+                       <?php checked( 'yes', $posts ); ?>
+                       <?php echo esc_attr( $disabled_attr ); ?>
+                       aria-disabled="<?php echo esc_attr( $aria_disabled ); ?>" />
+                <label for="nppp_autopurge_posts">
+                    <span class="nppp-toggle" aria-hidden="true"></span>
+                    <span class="nppp-text">
+                        <span class="title"><?php esc_html_e( 'Posts &amp; Comments', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Purge on post/page publish, update, deletion, and approved comment count changes.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    </span>
+                </label>
+            </div>
+
+            <div class="nppp-switch">
+                <input id="nppp_autopurge_terms" type="checkbox"
+                       name="nginx_cache_settings[nppp_autopurge_terms]"
+                       value="yes"
+                       <?php checked( 'yes', $terms ); ?>
+                       <?php echo esc_attr( $disabled_attr ); ?>
+                       aria-disabled="<?php echo esc_attr( $aria_disabled ); ?>" />
+                <label for="nppp_autopurge_terms">
+                    <span class="nppp-toggle" aria-hidden="true"></span>
+                    <span class="nppp-text">
+                        <span class="title"><?php esc_html_e( 'Taxonomy Terms', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Purge archive pages when a public taxonomy term is created, edited, or deleted.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    </span>
+                </label>
+            </div>
+
+            <div class="nppp-switch">
+                <input id="nppp_autopurge_plugins" type="checkbox"
+                       name="nginx_cache_settings[nppp_autopurge_plugins]"
+                       value="yes"
+                       <?php checked( 'yes', $plugins ); ?>
+                       <?php echo esc_attr( $disabled_attr ); ?>
+                       aria-disabled="<?php echo esc_attr( $aria_disabled ); ?>" />
+                <label for="nppp_autopurge_plugins">
+                    <span class="nppp-toggle" aria-hidden="true"></span>
+                    <span class="nppp-text">
+                        <span class="title"><?php esc_html_e( 'Plugin Events', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Purge entire cache on plugin activation, deactivation, or update.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    </span>
+                </label>
+            </div>
+
+            <div class="nppp-switch">
+                <input id="nppp_autopurge_themes" type="checkbox"
+                       name="nginx_cache_settings[nppp_autopurge_themes]"
+                       value="yes"
+                       <?php checked( 'yes', $themes ); ?>
+                       <?php echo esc_attr( $disabled_attr ); ?>
+                       aria-disabled="<?php echo esc_attr( $aria_disabled ); ?>" />
+                <label for="nppp_autopurge_themes">
+                    <span class="nppp-toggle" aria-hidden="true"></span>
+                    <span class="nppp-text">
+                        <span class="title"><?php esc_html_e( 'Theme Events', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Purge entire cache when the active theme is switched or updated.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    </span>
+                </label>
+            </div>
+
+            <div class="nppp-switch">
+                <input id="nppp_autopurge_3rdparty" type="checkbox"
+                       name="nginx_cache_settings[nppp_autopurge_3rdparty]"
+                       value="yes"
+                       <?php checked( 'yes', $thirdpty ); ?>
+                       <?php echo esc_attr( $disabled_attr ); ?>
+                       aria-disabled="<?php echo esc_attr( $aria_disabled ); ?>" />
+                <label for="nppp_autopurge_3rdparty">
+                    <span class="nppp-toggle" aria-hidden="true"></span>
+                    <span class="nppp-text">
+                        <span class="title"><?php esc_html_e( '3rd-Party &amp; Auto-Updates', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Purge entire cache on WordPress automatic background updates and compatible caching-plugin purge hooks (WP Rocket, W3TC, LiteSpeed, etc.).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    </span>
+                </label>
+            </div>
+
+        </fieldset>
+    </div>
+    <?php
+}
+
 // Percent encode URL Normalization callback
 function nppp_nginx_cache_pctnorm_mode_callback() {
     $opts    = get_option('nginx_cache_settings', array());
@@ -3027,6 +3177,11 @@ function nppp_nginx_cache_settings_sanitize($input) {
     $sanitized_input['nginx_cache_auto_preload_mobile']    = isset($input['nginx_cache_auto_preload_mobile'])     && $input['nginx_cache_auto_preload_mobile'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nginx_cache_watchdog']               = isset($input['nginx_cache_watchdog'])                && $input['nginx_cache_watchdog'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nginx_cache_purge_on_update']        = isset($input['nginx_cache_purge_on_update'])         && $input['nginx_cache_purge_on_update'] === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nppp_autopurge_posts']               = ( isset( $input['nppp_autopurge_posts'] )            && $input['nppp_autopurge_posts']    === 'yes' ) ? 'yes' : 'no';
+    $sanitized_input['nppp_autopurge_terms']               = ( isset( $input['nppp_autopurge_terms'] )            && $input['nppp_autopurge_terms']    === 'yes' ) ? 'yes' : 'no';
+    $sanitized_input['nppp_autopurge_plugins']             = ( isset( $input['nppp_autopurge_plugins'] )          && $input['nppp_autopurge_plugins']  === 'yes' ) ? 'yes' : 'no';
+    $sanitized_input['nppp_autopurge_themes']              = ( isset( $input['nppp_autopurge_themes'] )           && $input['nppp_autopurge_themes']   === 'yes' ) ? 'yes' : 'no';
+    $sanitized_input['nppp_autopurge_3rdparty']            = ( isset( $input['nppp_autopurge_3rdparty'] )         && $input['nppp_autopurge_3rdparty'] === 'yes' ) ? 'yes' : 'no';
     $sanitized_input['nppp_cloudflare_apo_sync']           = isset($input['nppp_cloudflare_apo_sync'])            && $input['nppp_cloudflare_apo_sync'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nppp_redis_cache_sync']              = isset($input['nppp_redis_cache_sync'])               && $input['nppp_redis_cache_sync'] === 'yes' ? 'yes' : 'no';
     $sanitized_input['nginx_cache_schedule']               = isset($input['nginx_cache_schedule'])                && $input['nginx_cache_schedule'] === 'yes' ? 'yes' : 'no';
@@ -3405,6 +3560,11 @@ function nppp_defaults_on_plugin_activation() {
         'nppp_cloudflare_apo_sync'          => 'no',
         'nppp_redis_cache_sync'             => 'no',
         'nginx_cache_purge_on_update'       => 'no',
+        'nppp_autopurge_posts'              => 'no',
+        'nppp_autopurge_terms'              => 'no',
+        'nppp_autopurge_plugins'            => 'no',
+        'nppp_autopurge_themes'             => 'no',
+        'nppp_autopurge_3rdparty'           => 'no',
         'nginx_cache_auto_preload'          => 'no',
         'nginx_cache_auto_preload_mobile'   => 'no',
         'nginx_cache_watchdog'              => 'no',
