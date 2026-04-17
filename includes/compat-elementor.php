@@ -32,6 +32,7 @@ if ( defined('ELEMENTOR_VERSION') && $nppp_auto_purge ) {
 function nppp__el_after_save( $post_id, $editor_data ) {
     $opts = get_option('nginx_cache_settings') ?: [];
     if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
+    if ( ($opts['nppp_autopurge_posts'] ?? 'no') !== 'yes' ) return;
     if ( nppp__el_mark_purged() ) return;
 
     $cache_path = $opts['nginx_cache_path'] ?? '/dev/shm/change-me-now';
@@ -73,17 +74,21 @@ function nppp__el_document_after_save( $document, $data ) {
 
     // Theme parts (Header/Footer/Single/Archive…) => purge all
     if ( class_exists('\Elementor\Core\Theme\Documents\Theme_Document')
-         && $document instanceof \Elementor\Core\Theme\Documents\Theme_Document ) {
-        nppp_purge($cache_path, $pidfile, $tmp, false, false, true);
-        nppp__el_mark_purged(true);
-        return;
+        && $document instanceof \Elementor\Core\Theme\Documents\Theme_Document ) {
+        if ( ( $opts['nppp_autopurge_themes'] ?? 'no' ) === 'yes' ) {
+            nppp_purge($cache_path, $pidfile, $tmp, false, false, true);
+            nppp__el_mark_purged(true);
+            return;
+        }
     }
 
     if ($post_id) {
-        $url = get_permalink($post_id);
-        if ($url) {
-            nppp_purge_single($cache_path, $url, true);
-            nppp__el_mark_purged(true);
+        if ( ($opts['nppp_autopurge_posts'] ?? 'no') === 'yes' ) {
+            $url = get_permalink($post_id);
+            if ($url) {
+                nppp_purge_single($cache_path, $url, true);
+                nppp__el_mark_purged(true);
+            }
         }
     }
 }
@@ -91,6 +96,7 @@ function nppp__el_document_after_save( $document, $data ) {
 function nppp__el_clear_files() {
     $opts = get_option('nginx_cache_settings') ?: [];
     if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
+    if ( ($opts['nppp_autopurge_themes'] ?? 'no') !== 'yes' ) return;
 
     $cache_path = $opts['nginx_cache_path'] ?? '/dev/shm/change-me-now';
     $pidfile    = nppp_get_runtime_file('cache_preload.pid');
