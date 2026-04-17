@@ -78,6 +78,7 @@ function nppp__rest_after_insert( $post, $request, $creating ) {
 
     $opts = get_option('nginx_cache_settings') ?: [];
     if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
+    if ( ($opts['nppp_autopurge_posts'] ?? 'no') !== 'yes' ) return;
 
     $is_published = ( $post->post_status === 'publish' );
 
@@ -121,6 +122,7 @@ function nppp__rest_delete( $post, $response, $request ) {
 
     $opts = get_option('nginx_cache_settings') ?: [];
     if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
+    if ( ($opts['nppp_autopurge_posts'] ?? 'no') !== 'yes' ) return;
 
     $cache_path = $opts['nginx_cache_path'] ?? '/dev/shm/change-me-now';
 
