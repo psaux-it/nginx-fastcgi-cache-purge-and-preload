@@ -2385,9 +2385,6 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
     $fieldset_class   = 'nppp-autopurge-triggers-fieldset' . ( $master_on ? '' : ' nppp-autopurge-triggers-off' );
     ?>
     <div class="nppp-autopurge-triggers-wrap">
-        <div class="nppp-autopurge-triggers-heading">
-        </div>
-
         <fieldset class="<?php echo esc_attr( $fieldset_class ); ?>" id="nppp-autopurge-triggers-fieldset">
 
             <div class="nppp-switch">
