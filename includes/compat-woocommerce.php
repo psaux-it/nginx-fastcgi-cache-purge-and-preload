@@ -65,6 +65,10 @@ function nppp__wc_purge_product( $product ) {
     $cache_path = nppp__wc_get_cache_path();
     if ( ! $cache_path ) { return; }
 
+    // Respect the "Posts & Comments" auto purge sub-option
+    $opts = get_option( 'nginx_cache_settings' ) ?: [];
+    if ( ( $opts['nppp_autopurge_posts'] ?? 'no' ) !== 'yes' ) { return; }
+
     // For variations, purge the parent product page.
     $post_id = $product->is_type( 'variation' )
         ? $product->get_parent_id()
@@ -85,6 +89,11 @@ function nppp__wc_purge_stock_status( $product_id, $stock_status = null, $produc
         $product = wc_get_product( $product_id );
     }
     if ( ! $product ) { return; }
+
+    // Respect the "Posts & Comments" auto purge sub-option
+    $opts = get_option( 'nginx_cache_settings' ) ?: [];
+    if ( ( $opts['nppp_autopurge_posts'] ?? 'no' ) !== 'yes' ) { return; }
+
     nppp__wc_purge_product( $product );
 }
 
@@ -99,13 +108,21 @@ function nppp__wc_purge_stock_status( $product_id, $stock_status = null, $produc
 function nppp__wc_purge_order_products( $order_id ) {
     if ( ! function_exists( 'wc_get_order' ) ) { return; }
     $order = wc_get_order( $order_id );
+
     if ( ! $order ) { return; }
     $cache_path = nppp__wc_get_cache_path();
+
     if ( ! $cache_path ) { return; }
 
     $seen = [];
+
+    // Respect the "Posts & Comments" auto purge sub-option
+    $opts = get_option( 'nginx_cache_settings' ) ?: [];
+    if ( ( $opts['nppp_autopurge_posts'] ?? 'no' ) !== 'yes' ) { return; }
+
     foreach ( $order->get_items( 'line_item' ) as $item ) {
         $product = $item->get_product();
+
         // Only purge products with WooCommerce stock management enabled.
         if ( ! $product || ! $product->managing_stock() ) { continue; }
 
