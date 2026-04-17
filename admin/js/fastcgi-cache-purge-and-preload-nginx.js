@@ -1744,7 +1744,7 @@ $(document).ready(function() {
                     npppTrigShowSaved();
                 } else {
                     npppTrigRevertTo(npppTrigLast);
-                    const msg = (res && (res.message || (res.data && res.data.message))) || 'Failed to save';
+                    const msg = (res && res.data && res.data.message) || 'Failed to save';
                     npppTrigShowError(msg);
                 }
             }).fail((xhr) => {
@@ -1785,7 +1785,9 @@ $(document).ready(function() {
         // Sync the Auto Purge Triggers sub-options disabled state immediately
         var $trigFS = $('#nppp-autopurge-triggers-fieldset');
         if ($trigFS.length) {
-            $trigFS.find('input[type=checkbox]').prop('disabled', !masterIsOn);
+            $trigFS.find('input[type=checkbox]')
+                .prop('disabled', !masterIsOn)
+                .attr('aria-disabled', masterIsOn ? 'false' : 'true');
             if (masterIsOn) {
                 $trigFS.removeClass('nppp-autopurge-triggers-off');
             } else {
@@ -1834,7 +1836,9 @@ $(document).ready(function() {
                 var $trigFSErr = $('#nppp-autopurge-triggers-fieldset');
                 if ($trigFSErr.length) {
                     var revertMasterOn = $('#nginx_cache_purge_on_update').prop('checked');
-                    $trigFSErr.find('input[type=checkbox]').prop('disabled', !revertMasterOn);
+                    $trigFSErr.find('input[type=checkbox]')
+                        .prop('disabled', !revertMasterOn)
+                        .attr('aria-disabled', revertMasterOn ? 'false' : 'true');
                     revertMasterOn ? $trigFSErr.removeClass('nppp-autopurge-triggers-off') : $trigFSErr.addClass('nppp-autopurge-triggers-off');
                 }
                 npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
