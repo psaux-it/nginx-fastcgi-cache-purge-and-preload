@@ -199,7 +199,13 @@ function nppp__wc_purge_removed_term_archives( $object_id, $tt_ids ) {
     if ( ! $cache_path ) { return; }
 
     $opts = get_option( 'nginx_cache_settings' ) ?: [];
-    if ( ( $opts['nppp_autopurge_terms'] ?? 'no' ) !== 'yes' ) { return; }
+    // This function purges taxonomy archive pages (product_cat, product_tag) when
+    // a product's term relationships change. It is relevant to both the "posts" trigger
+    // (the product page content changed) and the "terms" trigger (a taxonomy archive is
+    // now stale). Allow purge when either sub-trigger is enabled.
+    $posts_enabled = ( $opts['nppp_autopurge_posts'] ?? 'no' ) === 'yes';
+    $terms_enabled = ( $opts['nppp_autopurge_terms'] ?? 'no' ) === 'yes';
+    if ( ! $posts_enabled && ! $terms_enabled ) { return; }
 
     // Collect the taxonomy names for publicly viewable WooCommerce product taxonomies.
     // get_object_taxonomies() is cached by WordPress after the first call.
