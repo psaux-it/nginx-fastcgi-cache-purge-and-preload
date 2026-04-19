@@ -1109,7 +1109,15 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
 
     // phpcs:ignore WordPress.Security.NonceVerification.Missing
     $current_ajax_action = isset( $_POST['action'] ) ? sanitize_key( wp_unslash( $_POST['action'] ) ) : '';
+    // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+    $current_get_action  = isset( $_GET['action'] )  ? sanitize_key( wp_unslash( $_GET['action'] ) )  : '';
 
+    // Elementor: block both the editor page load (GET action=elementor) and
+    // all Elementor AJAX calls (POST action=elementor_ajax).
+    // Real content saves are handled by compat-elementor.php.
+    if ( 'elementor_ajax' === $current_ajax_action || 'elementor' === $current_get_action ) {
+        return;
+    }
     if (
         ( ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) || ( defined( 'DOING_AJAX' ) && DOING_AJAX ) ) &&
         ! in_array( $current_ajax_action, $allowed_ajax_actions, true )
