@@ -1463,6 +1463,17 @@ function nppp_capture_term_url_pre_delete( $term_id, $taxonomy ) {
         return;
     }
 
+    // Guard early — only cache the URL if terms sub-trigger is actually enabled.
+    // nppp_purge_cache_on_term_delete() has its own guard but this avoids a wasted
+    // object-cache write and get_term_link() call when purging is disabled.
+    $nginx_cache_settings = get_option( 'nginx_cache_settings', [] );
+    if ( ( $nginx_cache_settings['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
+    if ( ( $nginx_cache_settings['nppp_autopurge_terms'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
+
     $term_link = get_term_link( (int) $term_id, $taxonomy );
     if ( ! is_wp_error( $term_link ) && filter_var( $term_link, FILTER_VALIDATE_URL ) ) {
         // Store in in-memory object cache (single-request lifetime, no DB hit).
