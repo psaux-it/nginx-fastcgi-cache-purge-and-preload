@@ -4,7 +4,7 @@
  * Description: Handles WooCommerce product stock changes, order completions/cancellations,
  *              direct product saves (WP‑CLI, programmatic), and taxonomy term reassignments
  *              to keep the Nginx cache synchronized. All purge operations respect the
- *              "Posts & Comments" auto‑purge sub‑option.
+ *              "Posts & Comments" and "Categories, Tags & Taxonomies" auto‑purge sub‑option.
  * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
@@ -199,7 +199,7 @@ function nppp__wc_purge_removed_term_archives( $object_id, $tt_ids ) {
     if ( ! $cache_path ) { return; }
 
     $opts = get_option( 'nginx_cache_settings' ) ?: [];
-    if ( ( $opts['nppp_autopurge_posts'] ?? 'no' ) !== 'yes' ) { return; }
+    if ( ( $opts['nppp_autopurge_terms'] ?? 'no' ) !== 'yes' ) { return; }
 
     // Collect the taxonomy names for publicly viewable WooCommerce product taxonomies.
     // get_object_taxonomies() is cached by WordPress after the first call.
