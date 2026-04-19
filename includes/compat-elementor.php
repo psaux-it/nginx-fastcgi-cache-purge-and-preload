@@ -32,7 +32,7 @@ if ( defined('ELEMENTOR_VERSION') && $nppp_auto_purge ) {
 function nppp__el_after_save( $post_id, $editor_data ) {
     $opts = get_option('nginx_cache_settings') ?: [];
     if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
-    if ( ($opts['nppp_autopurge_posts'] ?? 'no') !== 'yes' ) return;
+
     if ( nppp__el_mark_purged() ) return;
 
     $cache_path = $opts['nginx_cache_path'] ?? '/dev/shm/change-me-now';
@@ -43,25 +43,37 @@ function nppp__el_after_save( $post_id, $editor_data ) {
         return;
     }
 
-    // Elementor template type (header/footer/etc)
-    $tpl_type = get_post_meta($post_id, '_elementor_template_type', true);
+    // Elementor template type — covers both Free and Pro document types.
+    $tpl_type     = get_post_meta( $post_id, '_elementor_template_type', true );
+    $global_types = [ 'header', 'footer', 'single', 'archive', 'popup', 'search-results', '404', 'product', 'product-archive', 'loop-item' ];
 
-    // Global parts change => purge all
-    if ( in_array($tpl_type, ['header','footer','single','archive','popup'], true) ) {
-        nppp_purge($cache_path, $pidfile, $tmp, false, false, true);
-        nppp__el_mark_purged(true);
+    // Global theme parts => purge all cached pages (site-wide impact).
+    if ( in_array( $tpl_type, $global_types, true ) ) {
+        if ( ( $opts['nppp_autopurge_themes'] ?? 'no' ) === 'yes' ) {
+            nppp_purge( $cache_path, $pidfile, $tmp, false, false, true );
+            nppp__el_mark_purged( true );
+        }
         return;
     }
 
-    // Regular page => purge just that URL
-    $url = get_permalink($post_id);
-    if ($url) {
-        nppp_purge_single($cache_path, $url, true);
-        nppp__el_mark_purged(true);
+    // Regular page/post – only purge the specific URL.
+    if ( ( $opts['nppp_autopurge_posts'] ?? 'no' ) !== 'yes' ) {
+        return;
+    }
+
+    $url = get_permalink( $post_id );
+    if ( $url ) {
+        nppp_purge_single( $cache_path, $url, true );
+        nppp__el_mark_purged( true );
     }
 }
 
 function nppp__el_document_after_save( $document, $data ) {
+    // Skip Elementor background autosaves
+    if ( method_exists( $document, 'is_autosave' ) && $document->is_autosave() ) {
+        return;
+    }
+
     $opts = get_option('nginx_cache_settings') ?: [];
     if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
     if ( nppp__el_mark_purged() ) return;
@@ -72,23 +84,30 @@ function nppp__el_document_after_save( $document, $data ) {
 
     $post_id = method_exists($document, 'get_main_id') ? $document->get_main_id() : 0;
 
-    // Theme parts (Header/Footer/Single/Archive…) => purge all
-    if ( class_exists('\Elementor\Core\Theme\Documents\Theme_Document')
-        && $document instanceof \Elementor\Core\Theme\Documents\Theme_Document ) {
+    // Detect global theme parts via post meta (works with both Free & Pro).
+    $tpl_type     = $post_id ? get_post_meta( $post_id, '_elementor_template_type', true ) : '';
+    $global_types = [ 'header', 'footer', 'single', 'archive', 'popup', 'search-results', '404', 'product', 'product-archive', 'loop-item' ];
+    $is_theme_doc = in_array( $tpl_type, $global_types, true );
+
+    // For global theme parts: no publish check needed
+    if ( $is_theme_doc ) {
         if ( ( $opts['nppp_autopurge_themes'] ?? 'no' ) === 'yes' ) {
-            nppp_purge($cache_path, $pidfile, $tmp, false, false, true);
-            nppp__el_mark_purged(true);
-            return;
+            nppp_purge( $cache_path, $pidfile, $tmp, false, false, true );
+            nppp__el_mark_purged( true );
         }
+        return;
     }
 
-    if ($post_id) {
-        if ( ($opts['nppp_autopurge_posts'] ?? 'no') === 'yes' ) {
-            $url = get_permalink($post_id);
-            if ($url) {
-                nppp_purge_single($cache_path, $url, true);
-                nppp__el_mark_purged(true);
-            }
+    // Regular page/post: only purge when actually published.
+    if ( ! $post_id || get_post_status( $post_id ) !== 'publish' ) {
+        return;
+    }
+
+    if ( ( $opts['nppp_autopurge_posts'] ?? 'no' ) === 'yes' ) {
+        $url = get_permalink( $post_id );
+        if ( $url ) {
+            nppp_purge_single( $cache_path, $url, true );
+            nppp__el_mark_purged( true );
         }
     }
 }
