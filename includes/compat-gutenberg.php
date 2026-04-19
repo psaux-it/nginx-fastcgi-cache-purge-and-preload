@@ -19,6 +19,14 @@ if ( ! defined('ABSPATH') ) exit;
 //   - Move to Trash / Force Delete                          →  DELETE →  delete_item()  →  rest_delete_{type}
 
 if ( $nppp_auto_purge ) {
+    // Capture the pre-transition post status at priority 0 so it is always
+    // available when rest_after_insert fires later in the same request.
+    // This allows nppp__rest_after_insert to detect first-time publishes
+    // and skip the unnecessary purge (no cache entry exists yet).
+    add_action( 'transition_post_status', function ( $new_status, $old_status, $post ) {
+        nppp__gut_old_status( $post->ID, $old_status );
+    }, 0, 3 );
+
     $nppp_register_rest_hooks = function () {
         foreach ( get_post_types(['public' => true], 'objects') as $obj ) {
             if ( empty($obj->show_in_rest) ) continue;
@@ -37,6 +45,26 @@ if ( $nppp_auto_purge ) {
         // Wait for init so get_post_types() returns all registered post types.
         add_action('init', $nppp_register_rest_hooks, 20);
     }
+}
+
+/**
+ * Capture / retrieve the pre-transition post status for a given post ID.
+ *
+ * Call with both args to set (via the transition_post_status hook at priority 0).
+ * Call with only $post_id to retrieve. Set-once per post ID per request so a
+ * double-transition (e.g. future → pending → publish via cron) does not
+ * overwrite the truly original status.
+ *
+ * @param int         $post_id    Post ID.
+ * @param string|null $old_status Old status to store, or null to retrieve only.
+ * @return string|null Stored old status, or null if not yet captured.
+ */
+function nppp__gut_old_status( int $post_id, ?string $old_status = null ): ?string {
+    static $store = [];
+    if ( $old_status !== null && ! isset( $store[ $post_id ] ) ) {
+        $store[ $post_id ] = $old_status;
+    }
+    return $store[ $post_id ] ?? null;
 }
 
 /**
@@ -81,6 +109,32 @@ function nppp__rest_after_insert( $post, $request, $creating ) {
     if ( ($opts['nppp_autopurge_posts'] ?? 'no') !== 'yes' ) return;
 
     $is_published = ( $post->post_status === 'publish' );
+
+    // Skip purge when the post is being published for the very first time.
+    // No cache entry can exist yet for a URL that was never publicly served,
+    // so calling nppp_purge_single would be a no-op with unnecessary overhead.
+    //
+    // Two sub-cases handled:
+    //   $creating === true  → REST POST created the post directly as 'publish'.
+    //   $creating === false → REST PATCH changed status from a non-publish state
+    //                         (e.g. auto-draft → publish on the first "Publish" click
+    //                         in the Gutenberg editor).
+    //
+    // The pre-transition old_status is captured by the transition_post_status hook
+    // at priority 0, which fires inside wp_insert_post / wp_update_post — always
+    // before rest_after_insert in the same PHP request.
+    if ( $is_published ) {
+        if ( $creating ) {
+            // REST POST: brand-new post created directly as published. Nothing cached.
+            return;
+        }
+        $old_status = nppp__gut_old_status( $post->ID );
+        if ( $old_status !== null && $old_status !== 'publish' ) {
+            // First-time publish via PATCH (was auto-draft / draft / pending / future).
+            // The URL has never been served from cache. Nothing to purge.
+            return;
+        }
+    }
 
     if ( ! $is_published ) {
         // Purge when Gutenberg sends PATCH with status=draft/private/pending.
