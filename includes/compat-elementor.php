@@ -56,6 +56,12 @@ function nppp__el_after_save( $post_id, $editor_data ) {
         return;
     }
 
+    // Skip internal Elementor library types with no cacheable frontend URL.
+    $internal_types = [ 'kit', 'floating-buttons', 'section', 'container', 'page' ];
+    if ( in_array( $tpl_type, $internal_types, true ) ) {
+        return;
+    }
+
     // Regular page/post – only purge the specific URL.
     if ( ( $opts['nppp_autopurge_posts'] ?? 'no' ) !== 'yes' ) {
         return;
@@ -95,6 +101,12 @@ function nppp__el_document_after_save( $document, $data ) {
             nppp_purge( $cache_path, $pidfile, $tmp, false, false, true );
             nppp__el_mark_purged( true );
         }
+        return;
+    }
+
+    // Skip internal Elementor documents that have no cacheable frontend URL.
+    $internal_types = [ 'kit', 'floating-buttons', 'section', 'container', 'page' ];
+    if ( in_array( $tpl_type, $internal_types, true ) ) {
         return;
     }
 
