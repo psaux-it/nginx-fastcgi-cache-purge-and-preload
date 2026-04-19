@@ -1096,6 +1096,17 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
         ) {
             return;
         }
+
+        // For non-wp/v2 REST (e.g. WooCommerce wc/v3 Product Block Editor):
+        // compat-gutenberg does NOT cover this namespace, but compat-woocommerce
+        // handles WC products via woocommerce_update_product.  Any transition
+        // FROM a non-publish status (new / auto-draft / draft / pending / future)
+        // means the page has never been publicly served OR the cache was already
+        // cleared when it was un-published — nothing to purge here.
+        // publish → publish content updates fall through and purge normally.
+        if ( 'publish' !== $old_status ) {
+            return;
+        }
     }
 
     // Allow only specific AJAX save routes (Quick/Bulk Edit).
@@ -1148,6 +1159,14 @@ function nppp_purge_cache_on_update($new_status, $old_status, $post) {
       || $new_status === 'auto-draft'
       || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)
     ) {
+        return;
+    }
+
+    // Also marks $did_purge to prevent any subsequent in-request transition for
+    // this post ID (e.g. a programmatic $product->save() via wp_update_post() in
+    // non-admin contexts) from slipping through as a spurious publish→publish update.
+    if ( in_array( $old_status, [ 'auto-draft', 'new', 'draft', 'pending' ], true ) ) {
+        $did_purge[ $post->ID ] = true;
         return;
     }
 
