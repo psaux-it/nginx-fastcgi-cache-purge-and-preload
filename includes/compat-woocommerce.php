@@ -17,6 +17,14 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // Only register hooks when WooCommerce is active and NPP auto-purge is enabled.
 // $nppp_auto_purge is set in admin.php before this file is required.
 if ( class_exists( 'WooCommerce' ) && $nppp_auto_purge ) {
+    // Capture the pre-transition post status at priority 0 so every WooCommerce
+    // purge callback can detect first-time publishes and skip unnecessary purges.
+    // Fires inside wp_insert_post / wp_update_post, always before WC stock hooks
+    // and woocommerce_update_product in the same PHP request.
+    add_action( 'transition_post_status', function ( $new_status, $old_status, $post ) {
+        nppp__wc_old_status( $post->ID, $old_status );
+    }, 0, 3 );
+
     // Stock quantity change: fires from handle_updated_props() (PATH-A, explicit save)
     // or from wc_update_product_stock() after save() returns (PATH-B, order-triggered).
     add_action( 'woocommerce_product_set_stock',           'nppp__wc_purge_product',         10, 1 );
@@ -38,6 +46,28 @@ if ( class_exists( 'WooCommerce' ) && $nppp_auto_purge ) {
     // Term archive purge: fires BEFORE WordPress removes term rows. Bypasses dedup
     // intentionally — purging category/tag archive URLs (not the product URL).
     add_action( 'delete_term_relationships',               'nppp__wc_purge_removed_term_archives', 5, 2 );
+}
+
+/**
+ * Capture / retrieve the pre-transition post status for a given post ID.
+ *
+ * Hooked to transition_post_status at priority 0 (set in the registration
+ * block below). Detects first-time publishes so every purge path can bail out
+ * when no cache entry has ever been created for this product URL.
+ *
+ * Call with both args from the hook; call with only $post_id to retrieve.
+ * Set-once per post ID per request to preserve the truly original status.
+ *
+ * @param int         $post_id    Post / product ID.
+ * @param string|null $old_status Old status to store, or null to retrieve only.
+ * @return string|null Stored old status, or null if not yet captured this request.
+ */
+function nppp__wc_old_status( int $post_id, ?string $old_status = null ): ?string {
+    static $store = [];
+    if ( $old_status !== null && ! isset( $store[ $post_id ] ) ) {
+        $store[ $post_id ] = $old_status;
+    }
+    return $store[ $post_id ] ?? null;
 }
 
 /**
@@ -84,13 +114,16 @@ function nppp__wc_get_cache_path() {
 function nppp__wc_purge_product( $product ) {
     if ( ! ( $product instanceof WC_Product ) ) { return; }
 
-    // During a manual product save, transition_post_status already fired
-    // and purged this product URL. Skip to avoid a redundant second purge.
-    // We check doing_action('save_post') because WC fires stock hooks from
-    // inside the save_post callback chain during a full wp_update_post() save.
-    // Order placement, cancellation, and direct stock edits do NOT go through
-    // save_post, so those paths are unaffected by this guard.
-    if ( doing_action( 'save_post' ) || doing_action( 'save_post_product' ) ) { return; }
+    // During a manual product save (admin form POST or REST through WP_REST_Posts_Controller),
+    // NPP core (transition_post_status) or compat-gutenberg (rest_after_insert) already
+    // owns the purge slot for this request. Skip to avoid a redundant second scan.
+    // Stock hooks fired by order placement, cancellation, and direct stock edits do NOT
+    // go through save_post, so those paths are completely unaffected by this guard.
+    if (
+        doing_action( 'save_post' )                 ||
+        doing_action( 'save_post_product' )         ||
+        doing_action( 'save_post_product_variation' )
+    ) { return; }
 
     $cache_path = nppp__wc_get_cache_path();
     if ( ! $cache_path ) { return; }
@@ -195,6 +228,12 @@ function nppp__wc_purge_removed_term_archives( $object_id, $tt_ids ) {
     if ( empty( $tt_ids ) || ! is_array( $tt_ids ) ) { return; }
     if ( 'product' !== get_post_type( $object_id ) ) { return; }
 
+    // Skip when the product was never publicly published — the cached category
+    // archives never included this product, so there is nothing to invalidate.
+    // See nppp__wc_old_status() for the null-means-unknown / safe-default contract.
+    $old_status = nppp__wc_old_status( (int) $object_id );
+    if ( $old_status !== null && $old_status !== 'publish' ) { return; }
+
     $cache_path = nppp__wc_get_cache_path();
     if ( ! $cache_path ) { return; }
 
@@ -240,6 +279,23 @@ function nppp__wc_purge_removed_term_archives( $object_id, $tt_ids ) {
  * and product_tag archives per the user's Purge Scope settings.
  */
 function nppp__wc_purge_product_and_terms( $post_id, $cache_path ) {
+    // Skip purge when the product is being published for the very first time.
+    // A product that was never publicly served (was auto-draft / draft / pending)
+    // has no cache entry, so purging would be a no-op with unnecessary overhead.
+    //
+    // nppp__wc_old_status() returns the status captured by the transition_post_status
+    // hook (priority 0) that fires inside wp_update_post / wp_insert_post, always
+    // before handle_updated_props() and woocommerce_update_product in the same request.
+    //
+    // Null means no transition fired this request (e.g. order-triggered stock-only
+    // update on an already-published product) — in that case we must purge (safe default).
+    $old_status = nppp__wc_old_status( $post_id );
+    if ( $old_status !== null && $old_status !== 'publish' ) {
+        // First-time publish: was 'new' / 'auto-draft' / 'draft' / 'pending' / 'future'.
+        // Nothing cached yet. Skip.
+        return;
+    }
+
     // Single dedup gate: whichever hook reaches here first for this post_id
     // wins the purge slot; all subsequent hooks within this request are no-ops.
     // Covers: set_stock + woocommerce_update_product double-fire, stock_status
