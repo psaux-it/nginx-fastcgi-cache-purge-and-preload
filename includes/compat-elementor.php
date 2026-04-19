@@ -30,6 +30,11 @@ if ( defined('ELEMENTOR_VERSION') && $nppp_auto_purge ) {
 }
 
 function nppp__el_after_save( $post_id, $editor_data ) {
+    // Skip autosaves triggered on editor open.
+    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+        return;
+    }
+
     $opts = get_option('nginx_cache_settings') ?: [];
     if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
 
@@ -77,6 +82,16 @@ function nppp__el_after_save( $post_id, $editor_data ) {
 function nppp__el_document_after_save( $document, $data ) {
     // Skip Elementor background autosaves
     if ( method_exists( $document, 'is_autosave' ) && $document->is_autosave() ) {
+        return;
+    }
+
+    // Skip Elementor autosave saves triggered on editor open.
+    // Elementor calls document->save() on the parent post with post_status=autosave,
+    // so is_autosave() above returns false. Catch it via DOING_AUTOSAVE or data settings.
+    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+        return;
+    }
+    if ( isset( $data['settings']['post_status'] ) && 'autosave' === $data['settings']['post_status'] ) {
         return;
     }
 
