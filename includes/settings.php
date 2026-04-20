@@ -208,7 +208,7 @@ function nppp_nginx_cache_settings_page() {
                     echo esc_html(
                         sprintf(
                             /* translators: %s: safexec version number */
-                            __( 'safexec %s update', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            __( 'Update safexec to %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                             $nppp_safexec_latest_ver
                         )
                     );
