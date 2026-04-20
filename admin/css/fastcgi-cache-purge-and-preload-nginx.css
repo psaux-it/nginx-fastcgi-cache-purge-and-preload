@@ -3820,10 +3820,28 @@ body.has-sticky-submit .nppp-scrollfab{
     font-weight: 700;
 }
 
-/* Cache date column */
-#nppp-premium-table td.nppp-date-cell {
-    color: #6b7280;
+/* Variants column */
+#nppp-premium-table td.nppp-variant-cell {
+    white-space: nowrap;
+}
+.nppp-variant-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 11px;
     font-weight: 600;
+    letter-spacing: .2px;
+    vertical-align: middle;
+    line-height: 1.7;
+}
+.nppp-variant-single   { background: #f3f4f6; color: #008080; text-transform: uppercase; }
+.nppp-variant-multiple { background: #dbeafe; color: #1d4ed8; text-transform: uppercase; }
+.nppp-variant-miss     { background: transparent; color: #9ca3af; }
+.nppp-variant-count {
+    font-size: 13px;
+    color: #FF4500;
+    margin-left: 3px;
+    vertical-align: middle;
 }
 
 /* ── Advanced Tab: Preload-in-progress loading effect ── */
