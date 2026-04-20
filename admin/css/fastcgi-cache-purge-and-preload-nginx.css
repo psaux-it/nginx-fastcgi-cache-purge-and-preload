@@ -3834,8 +3834,8 @@ body.has-sticky-submit .nppp-scrollfab{
     vertical-align: middle;
     line-height: 1.7;
 }
-.nppp-variant-single   { background: #f3f4f6; color: #008080; text-transform: uppercase; }
-.nppp-variant-multiple { background: #dbeafe; color: #1d4ed8; text-transform: uppercase; }
+.nppp-variant-single   { background: #f3f4f6; color: #008080; text-transform: uppercase; font-weight: bold; }
+.nppp-variant-multiple { background: #dbeafe; color: #1d4ed8; text-transform: uppercase; font-weight: bold; }
 .nppp-variant-miss     { background: transparent; color: #9ca3af; }
 .nppp-variant-count {
     font-size: 13px;
