@@ -17,8 +17,7 @@
 ---
 
 <div align="center">
-🚀 <strong>Support this project!</strong> — If NPP has improved your workflow, consider giving it a ⭐
-
+❤️ <strong>Support NPP</strong> — ⭐ Star on GitHub &nbsp;|&nbsp; <strong><a href="https://github.com/sponsors/psaux-it">Sponsor</a></strong>
 </div>
 
 ---
@@ -57,9 +56,14 @@ The PHP `shell_exec()` function must be enabled and unrestricted, as NPP relies 
 
 NPP allows WordPress administrators to manage **Nginx cache purge and preload operations directly from the WordPress dashboard**.
 
-Instead of relying on special Nginx purge modules, NPP interacts with the **Nginx cache directory itself**, removing or warming cache files when needed. As long as the PHP process owner (**PHP-FPM-USER**) has the required permissions to the cache directory, NPP can manage cache operations without requiring direct Nginx integration.
+<img width="3995" height="1595" alt="Image" src="https://github.com/user-attachments/assets/33b0b0fc-05db-46be-99f1-a0ac1026fd03" />
+<br>
+
+Instead of purely relying on special Nginx purge modules, NPP interacts with the **Nginx cache directory itself**, removing or warming cache files when needed. As long as the PHP process owner (**PHP-FPM-USER**) has the required permissions to the cache directory, NPP can manage cache operations without requiring direct Nginx integration.
 
 This approach provides a flexible and architecture-agnostic way to control Nginx cache behavior, making it suitable for traditional servers as well as modern containerized environments.
+
+<img width="2254" height="1454" alt="Image" src="https://github.com/user-attachments/assets/3587bc8d-2394-4964-85e5-985dba05914d" />
 
 ### Features
 ---
@@ -121,6 +125,8 @@ Some server architectures run the **web server (WEBSERVER-USER)** and **PHP-FPM 
 To simplify setup in these cases, NPP provides a **pre-configured automation script** that helps resolve permission boundaries by creating a FUSE-based bindfs mount for the cache directory.
 
 This script is **only required in environments where user isolation prevents PHP from accessing the cache path**. In many setups—such as when Nginx and PHP-FPM run under the same user—it is **not required at all**.
+
+<img width="2254" height="1134" alt="Image" src="https://github.com/user-attachments/assets/38c8554a-fc6a-4175-9172-4980749bbd36" />
 
 ## Installation Instructions (All-in-One Monolithic Server)
 
