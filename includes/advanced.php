@@ -112,6 +112,24 @@ function nppp_wget_log_is_complete( $contents ) {
     return (bool) preg_match('~^FINISHED\s+--\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}--~m', (string) $contents);
 }
 
+/**
+ * Count how many cache files share each url_encoded key and store
+ * the total as 'variant_count' on every entry. O(n), no I/O.
+ *
+ * @param array<int,array<string,mixed>> &$urls
+ */
+function nppp_annotate_variant_counts( array &$urls ): void {
+    $counts = [];
+    foreach ( $urls as $entry ) {
+        $k = $entry['url_encoded'] ?? '';
+        $counts[ $k ] = ( $counts[ $k ] ?? 0 ) + 1;
+    }
+    foreach ( $urls as &$entry ) {
+        $entry['variant_count'] = $counts[ $entry['url_encoded'] ?? '' ] ?? 1;
+    }
+    unset( $entry );
+}
+
 /** Plugin root */
 function nppp_get_plugin_root_path() {
     return rtrim( dirname( plugin_dir_path( __FILE__ ) ), '/' );
@@ -269,12 +287,12 @@ function nppp_merge_cached_and_wget( $cached_urls, $wp_filesystem ) {
         $display_url = nppp_display_human_url( $item['url'] );
 
         $rows[] = [
-            'url'         => $display_url,
-            'url_encoded' => $item['url_encoded'],
-            'file_path'   => $item['file_path'],
-            'category'    => $item['category'],
-            'cache_date'  => $item['cache_date'],
-            'status'      => 'HIT',
+            'url'           => $display_url,
+            'url_encoded'   => $item['url_encoded'],
+            'file_path'     => $item['file_path'],
+            'category'      => $item['category'],
+            'variant_count' => $item['variant_count'] ?? 1,
+            'status'        => 'HIT',
         ];
     }
 
@@ -283,12 +301,12 @@ function nppp_merge_cached_and_wget( $cached_urls, $wp_filesystem ) {
     foreach ( $wget_map as $k => $item ) {
         if ( isset( $hit_map[ $k ] ) ) { continue; }
         $rows[] = [
-            'url'         => $item['url'],
-            'url_encoded' => $item['url_encoded'],
-            'file_path'   => '—',
-            'category'    => $item['category'],
-            'cache_date'  => isset($item['log_date']) ? $item['log_date'] : '—',
-            'status'      => 'MISS',
+            'url'           => $item['url'],
+            'url_encoded'   => $item['url_encoded'],
+            'file_path'     => '—',
+            'category'      => $item['category'],
+            'variant_count' => 0,
+            'status'        => 'MISS',
         ];
     }
 
@@ -519,7 +537,7 @@ function nppp_premium_html($nginx_cache_path) {
                 <th><?php esc_html_e( 'Cache Path', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Content', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                <th><?php esc_html_e( 'Cache Date', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Variants', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Action', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
             </tr>
             <tr class="nppp-filter-row">
@@ -552,7 +570,19 @@ function nppp_premium_html($nginx_cache_path) {
                     <td class="nppp-status <?php echo esc_attr($status_class); ?>">
                         <strong><?php echo esc_html($status_text); ?></strong>
                     </td>
-                    <td><?php echo esc_html( $row['cache_date'] ); ?></td>
+                    <?php
+                    $nppp_vc  = (int) ( $row['variant_count'] ?? 0 );
+                    $nppp_va  = $nppp_vc > 1 ? 'Multiple' : ( $nppp_vc === 1 ? 'Single' : '—' );
+                    $nppp_cls = 'nppp-variant-' . ( $nppp_va === '—' ? 'miss' : strtolower( $nppp_va ) );
+                    ?>
+                    <td class="nppp-variant-cell" data-variants="<?php echo esc_attr( $nppp_va ); ?>">
+                        <span class="nppp-variant-badge <?php echo esc_attr( $nppp_cls ); ?>">
+                            <?php echo esc_html( $nppp_va ); ?>
+                        </span>
+                        <?php if ( $nppp_vc > 1 ) : ?>
+                            <span class="nppp-variant-count">(<?php echo (int) $nppp_vc; ?>)</span>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <button type="button"
                                 class="nppp-purge-btn"
@@ -1140,11 +1170,17 @@ function nppp_extract_cached_urls_rg(
             'url'         => $url_decoded,
             'url_encoded' => $url_encoded,
             'category'    => nppp_categorize_url( $url_decoded ),
-            'cache_date'  => '—',
         ];
     }
 
-    return empty( $urls ) ? [ 'error' => 'NPPP_EMPTY_CACHE' ] : $urls;
+    if ( empty( $urls ) ) {
+        return [ 'error' => 'NPPP_EMPTY_CACHE' ];
+    }
+
+    // Calculate cache variants
+    nppp_annotate_variant_counts( $urls );
+
+    return $urls;
 }
 
 // Recursively traverses directories and extracts necessary data from files.
@@ -1372,10 +1408,6 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                     $constructed_url_decoded = $host . $decoded_uri;
                     $final_url = $https_enabled ? "https://$constructed_url_decoded" : "http://$constructed_url_decoded";
 
-                    // Get the file modification time for cache date
-                    $cache_timestamp = $file->getMTime();
-                    $cache_date = wp_date('Y-m-d H:i:s', $cache_timestamp);
-
                     // Categorize URLs
                     $category = nppp_categorize_url($final_url);
 
@@ -1385,7 +1417,6 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                         'url'         => $final_url,
                         'url_encoded' => $final_url_encoded,
                         'category'    => $category,
-                        'cache_date'  => $cache_date,
                     );
                 }
             }
@@ -1402,6 +1433,9 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             'error' => 'NPPP_EMPTY_CACHE',
         ];
     }
+
+    // Calculate cache variants
+    nppp_annotate_variant_counts( $urls );
 
     return $urls;
 }
