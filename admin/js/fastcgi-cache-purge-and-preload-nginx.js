@@ -429,8 +429,10 @@ $(document).ready(function() {
         setTimeout(() => t.remove(), 160);
     }
 
-    let npppPollActive = false;
-    let npppPollTimer  = null;
+    let npppPollActive       = false;
+    let npppPollTimer        = null;
+    let npppPollRetries      = 0;
+    const NPPP_MAX_RETRIES   = 4;
     let snapshotMissingCount = 0;
 
     // Preload progress status
@@ -467,6 +469,7 @@ $(document).ready(function() {
             return res.json();
         })
         .then(data => {
+            npppPollRetries = 0;
             if (!data.log_found) {
                 const preloadSection = document.getElementById("nppp-preload-progress-section");
                 if (preloadSection) preloadSection.style.display = "none";
@@ -491,6 +494,10 @@ $(document).ready(function() {
 
             if (data.status === "done" && !isInterrupted) {
                 pct = 100;
+            } else if (data.status === "running") {
+                // Hard-cap at 99 while process is alive — the estimate is imprecise,
+                // and hitting 100 mid-run would stop polling prematurely.
+                pct = Math.min(99, pct);
             }
 
             // Bar hidden — progress shown as table metric instead
@@ -624,7 +631,7 @@ $(document).ready(function() {
             let statusValue = '';
             if (isInterrupted) {
                 statusValue = `${icon('dashicons-warning', 'orange')}<span style="color:orange;font-weight:bold;">${__('Interrupted', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
-            } else if (pct >= 100 || data.status === "done") {
+            } else if (data.status === "done") {
                 statusValue = `${icon('dashicons-update', 'green')}<span style="color:green;font-weight:bold;">${__('Completed', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
             } else {
                 statusValue = `${icon('dashicons-clock', '#337AB7')}<span style="color:#337AB7;font-weight:bold;">${__('In Progress', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
@@ -800,7 +807,9 @@ $(document).ready(function() {
                 preloadStatusSpan.append(preloadStatusText);
             }
 
-            if (pct < 100 && data.status === "running") {
+            if (data.status === "running") {
+                // Polling is driven ONLY by process liveness — never by the estimated pct.
+                // The estimate can overshoot 100 before wget actually finishes.
                 if (npppPollTimer) clearTimeout(npppPollTimer);
                 npppPollTimer = setTimeout(fetchWgetProgress, 800);
             } else {
@@ -809,7 +818,17 @@ $(document).ready(function() {
         })
         .catch(err => {
             console.error('Fetch preload progress failed:', err);
-            npppStopWgetPolling();
+            if (npppPollRetries < NPPP_MAX_RETRIES) {
+                // Transient error — back off and retry rather than killing the poll.
+                const backoff = 1000 * Math.pow(2, npppPollRetries);
+                npppPollRetries++;
+                if (npppPollTimer) clearTimeout(npppPollTimer);
+                npppPollTimer = setTimeout(fetchWgetProgress, backoff);
+            } else {
+                // Persistent failure — give up cleanly.
+                npppPollRetries = 0;
+                npppStopWgetPolling();
+            }
         });
     }
 
