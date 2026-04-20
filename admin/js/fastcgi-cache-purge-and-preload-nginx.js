@@ -2874,7 +2874,7 @@ $(document).ready(function() {
      * Columns 1-4-5 (Action) is intentionally skipped.
      */
     function initColumnFilters(table) {
-        var FILTER_COLS  = [0, 2, 3];              // indices of filterable columns
+        var FILTER_COLS  = [0, 2, 3, 4];           // indices of filterable columns
         var EXACT_COLS   = [2, 3, 4];              // use ^(...)$ regex (discrete values)
         var $filterRow   = $('#nppp-premium-table thead tr.nppp-filter-row');
         var activeFilters = {};                    // colIdx → Set of selected raw values
@@ -2889,13 +2889,24 @@ $(document).ready(function() {
 
             // gather unique display values for this column
             var rawVals = [];
-            table.column(colIdx).data().each(function (cellData) {
-                // strip HTML tags to get display text
-                var txt = $('<span>').html(cellData).text().trim();
-                if (txt !== '' && rawVals.indexOf(txt) === -1) {
-                    rawVals.push(txt);
-                }
-            });
+            if (colIdx === 4) {
+                // Variants column: read data-variants attr ("Single"/"Multiple"/"—")
+                // to avoid parsing badge HTML with the count suffix.
+                table.column(colIdx).nodes().each(function (node) {
+                    var txt = $(node).attr('data-variants') || '';
+                    if (txt !== '' && rawVals.indexOf(txt) === -1) {
+                        rawVals.push(txt);
+                    }
+                });
+            } else {
+                table.column(colIdx).data().each(function (cellData) {
+                    // strip HTML tags to get display text
+                    var txt = $('<span>').html(cellData).text().trim();
+                    if (txt !== '' && rawVals.indexOf(txt) === -1) {
+                        rawVals.push(txt);
+                    }
+                });
+            }
             rawVals.sort();
 
             // initialise filter state: all selected
@@ -2988,8 +2999,14 @@ $(document).ready(function() {
                 var useExact  = (EXACT_COLS.indexOf(colIdx) !== -1);
                 var selSet    = selected.slice();
 
-                table.column(colIdx).search(function (value) {
-                    var text = $('<span>').html(value).text().trim();
+                table.column(colIdx).search(function (value, data, index) {
+                    var text;
+                    if (colIdx === 4) {
+                        // Variants column: filter on data-variants, not badge HTML.
+                        text = $(table.cell(index, colIdx).node()).attr('data-variants') || '';
+                    } else {
+                        text = $('<span>').html(value).text().trim();
+                    }
                     if (useExact) {
                         return selSet.indexOf(text) !== -1;
                     }
@@ -3106,7 +3123,7 @@ $(document).ready(function() {
                 { width: "37%", targets: 1, className: 'text-left' },                    // Cache Path
                 { width: "8%", targets: 2, className: 'text-left nppp-category-cell' },  // Content
                 { width: "5%", targets: 3, className: 'text-left' },                     // Status
-                { width: "12%", targets: 4, className: 'text-left nppp-date-cell' },     // Cache Date
+                { width: "12%", targets: 4, className: 'text-left nppp-variant-cell' },  // Variants
                 { width: "15%", targets: 5, className: 'text-left' },                    // Actions
                 { responsivePriority: 1, targets: 0 },                                   // Cached URL gets priority for responsiveness
                 { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] },                 // Collapse all in first row on mobile, hide actions always
