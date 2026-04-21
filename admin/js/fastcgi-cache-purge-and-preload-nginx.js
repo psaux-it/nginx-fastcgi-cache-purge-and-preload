@@ -3115,6 +3115,7 @@ $(document).ready(function() {
         $tbl.DataTable({
             autoWidth: false,
             responsive: true,
+            orderClasses: false,
             paging: true,
             ordering: true,
             orderCellsTop: true,
