@@ -914,8 +914,7 @@ $(document).ready(function() {
         });
     }
 
-    // Function to load content for the 'Premium' tab via AJAX
-    // Sends a POST request to the server to fetch the Advanced tab content
+    // Function to load content for the 'Advanced' tab via AJAX
     function loadPremiumTabContent() {
         // AJAX request for the "Premium" tab content
         $.ajax({
@@ -926,8 +925,8 @@ $(document).ready(function() {
                 _wpnonce: nppp_admin_data.premium_content_nonce
             },
             success: function(response) {
-                if (response.trim() !== '') {
-                    // Clean teardown if a previous DT exists (prevents lingering handlers)
+                if (response !== '') {
+                    // Clean teardown if a previous DT exists
                     var tblSel = '#nppp-premium-table';
                     if ($.fn.dataTable.isDataTable(tblSel)) {
                         $(tblSel).DataTable().destroy(true);
@@ -942,13 +941,6 @@ $(document).ready(function() {
 
                     // Init DT for the newly injected table
                     initializePremiumTable();
-
-                    // Recalculate column widths for responsive layout
-                    if ($.fn.dataTable.isDataTable(tblSel)) {
-                        var dtNow = $(tblSel).DataTable();
-                        dtNow.columns.adjust();
-                        if (dtNow.responsive) dtNow.responsive.recalc();
-                    }
 
                     // Hide the preloader now that content is loaded
                     hidePreloader();
@@ -2887,217 +2879,6 @@ $(document).ready(function() {
         });
     });
 
-    /**
-     * Build and wire the Excel-style per-column filter dropdowns.
-     * Columns 0-2-3 get a multi-select dropdown with search + Select-All.
-     * Columns 1-4-5 (Action) is intentionally skipped.
-     */
-    function initColumnFilters(table) {
-        var FILTER_COLS  = [0, 2, 3, 4];           // indices of filterable columns
-        var EXACT_COLS   = [2, 3, 4];              // use ^(...)$ regex (discrete values)
-        var $filterRow   = $('#nppp-premium-table thead tr.nppp-filter-row');
-        var activeFilters = {};                    // colIdx → Set of selected raw values
-
-        // Close every open dropdown when clicking outside
-        $(document).on('click.nppp-col-filter', function () {
-            $('.nppp-filter-dropdown').hide();
-        });
-
-        FILTER_COLS.forEach(function (colIdx) {
-            var $th = $filterRow.find('th').eq(colIdx);
-
-            // gather unique display values for this column
-            var rawVals = [];
-            if (colIdx === 4) {
-                // Variants column: read data-variants attr ("Single"/"Multiple"/"—")
-                // to avoid parsing badge HTML with the count suffix.
-                table.column(colIdx).nodes().each(function (node) {
-                    var txt = $(node).attr('data-variants') || '';
-                    if (txt !== '' && rawVals.indexOf(txt) === -1) {
-                        rawVals.push(txt);
-                    }
-                });
-            } else {
-                table.column(colIdx).data().each(function (cellData) {
-                    // strip HTML tags to get display text
-                    var txt = $('<span>').html(cellData).text().trim();
-                    if (txt !== '' && rawVals.indexOf(txt) === -1) {
-                        rawVals.push(txt);
-                    }
-                });
-            }
-            rawVals.sort();
-
-            // initialise filter state: all selected
-            activeFilters[colIdx] = new Set(rawVals);
-
-            // build DOM
-            var $wrapper  = $('<div class="nppp-filter-wrapper"></div>');
-            var $btn      = $('<button type="button" class="nppp-filter-btn" aria-expanded="false" title="Filter"></button>');
-            var $arrow    = $('<span class="nppp-filter-arrow">&#9660;</span>');
-            var $badge    = $('<span class="nppp-filter-badge" style="display:none">!</span>');
-            $btn.append($arrow).append($badge);
-
-            var $dropdown = $('<div class="nppp-filter-dropdown" role="dialog" aria-label="Column filter"></div>');
-            var $search   = $('<input type="text" class="nppp-filter-search" placeholder="&#128269; Search values…" autocomplete="off">');
-            var $listWrap = $('<div class="nppp-filter-list-wrap"></div>');
-            var $list     = $('<ul class="nppp-filter-list"></ul>');
-
-            // Select All row
-            var $allLi    = $('<li class="nppp-filter-all-row"></li>');
-            var $allLabel = $('<label></label>');
-            var $allChk   = $('<input type="checkbox" checked>');
-            $allLabel.append($allChk).append('<span>Select All</span>');
-            $allLi.append($allLabel);
-            $list.append($allLi);
-
-            // Value rows
-            rawVals.forEach(function (val) {
-                var $li    = $('<li></li>');
-                var $label = $('<label></label>');
-                var $chk   = $('<input type="checkbox" checked>');
-                $chk.attr('data-val', val);
-                $label.append($chk).append($('<span>').text(val));
-                $li.append($label);
-                $list.append($li);
-            });
-
-            $listWrap.append($list);
-
-            var $footer = $('<div class="nppp-filter-footer"></div>');
-            var $okBtn  = $('<button type="button" class="nppp-filter-ok">Apply</button>');
-            var $clrBtn = $('<button type="button" class="nppp-filter-clear">Reset</button>');
-            $footer.append($okBtn).append($clrBtn);
-
-            $dropdown.append($search).append($listWrap).append($footer);
-            $wrapper.append($btn).append($dropdown);
-            $th.append($wrapper);
-
-            // Helpers
-            function getCheckedVals() {
-                var vals = [];
-                $list.find('input[data-val]:checked').each(function () {
-                    vals.push($(this).attr('data-val'));
-                });
-                return vals;
-            }
-
-            function syncSelectAll() {
-                var total   = $list.find('input[data-val]:not(:hidden)').length;
-                var checked = $list.find('input[data-val]:not(:hidden):checked').length;
-                if (checked === 0) {
-                    $allChk.prop({ checked: false, indeterminate: false });
-                } else if (checked === total) {
-                    $allChk.prop({ checked: true, indeterminate: false });
-                } else {
-                    $allChk.prop({ checked: false, indeterminate: true });
-                }
-            }
-
-            function applyFilter() {
-                var selected = getCheckedVals();
-                activeFilters[colIdx] = new Set(selected);
-                var total = rawVals.length;
-                var isFiltered = (selected.length !== total);
-
-                // Update badge
-                $badge.toggle(isFiltered);
-                $btn.toggleClass('nppp-filter-btn--active', isFiltered);
-
-                if (selected.length === 0) {
-                    // Nothing selected — match nothing
-                    table.column(colIdx).search(function () { return false; }).draw();
-                    return;
-                }
-                if (!isFiltered) {
-                    // All selected — clear filter
-                    table.column(colIdx).search('').draw();
-                    return;
-                }
-
-                var useExact  = (EXACT_COLS.indexOf(colIdx) !== -1);
-                var selSet    = selected.slice();
-
-                table.column(colIdx).search(function (value, data, index) {
-                    var text;
-                    if (colIdx === 4) {
-                        // Variants column: filter on data-variants, not badge HTML.
-                        text = $(table.cell(index, colIdx).node()).attr('data-variants') || '';
-                    } else {
-                        text = $('<span>').html(value).text().trim();
-                    }
-                    if (useExact) {
-                        return selSet.indexOf(text) !== -1;
-                    }
-                    return selSet.some(function (v) { return text.indexOf(v) !== -1; });
-                }).draw();
-            }
-
-            // Toggle dropdown open/close
-            $btn.on('click', function (e) {
-                e.stopPropagation();
-                var isOpen = $dropdown.is(':visible');
-                // Close any sibling dropdowns
-                $('.nppp-filter-dropdown').hide();
-                $('.nppp-filter-btn').attr('aria-expanded', 'false');
-                if (!isOpen) {
-                    $dropdown.show();
-                    $btn.attr('aria-expanded', 'true');
-                    $search.val('').trigger('input').focus();
-                }
-            });
-
-            // Prevent dropdown clicks from bubbling to document
-            $dropdown.on('click', function (e) { e.stopPropagation(); });
-
-            // Live search within list
-            $search.on('input', function () {
-                var q = $(this).val().toLowerCase();
-                $list.find('li:not(.nppp-filter-all-row)').each(function () {
-                    var txt = $(this).find('span').text().toLowerCase();
-                    $(this).toggle(q === '' || txt.indexOf(q) !== -1);
-                });
-                syncSelectAll();
-            });
-
-            // Select All checkbox
-            $allChk.on('change', function () {
-                var doCheck = $(this).prop('checked');
-                $list.find('input[data-val]:not(:hidden)').prop('checked', doCheck);
-                $allChk.prop('indeterminate', false);
-            });
-
-            // Individual checkbox
-            $list.on('change', 'input[data-val]', function () {
-                syncSelectAll();
-            });
-
-            // Apply button
-            $okBtn.on('click', function () {
-                applyFilter();
-                $dropdown.hide();
-                $btn.attr('aria-expanded', 'false');
-            });
-
-            // Reset button
-            $clrBtn.on('click', function () {
-                $search.val('').trigger('input');
-                $list.find('input[data-val]').prop('checked', true);
-                $allChk.prop({ checked: true, indeterminate: false });
-                $list.find('li').show();
-                applyFilter();
-                $dropdown.hide();
-                $btn.attr('aria-expanded', 'false');
-            });
-
-            // Apply on Enter key within search
-            $search.on('keydown', function (e) {
-                if (e.key === 'Enter') { $okBtn.trigger('click'); }
-                if (e.key === 'Escape') { $dropdown.hide(); $btn.attr('aria-expanded', 'false'); }
-            });
-        });
-    }
-
     // Function to initialize DataTables.js for premium table
     function initializePremiumTable() {
         var $tbl = $('#nppp-premium-table');
@@ -3115,9 +2896,10 @@ $(document).ready(function() {
         $tbl.DataTable({
             autoWidth: false,
             responsive: true,
-            orderClasses: false,
+            orderClasses: false, // PERF
             paging: true,
             ordering: true,
+            order: [],
             orderCellsTop: true,
             searching: true,
             lengthMenu: [10, 25, 50, 100],
@@ -3147,7 +2929,9 @@ $(document).ready(function() {
                 { width: "15%", targets: 5, className: 'text-left' },                    // Actions
                 { responsivePriority: 1, targets: 0 },                                   // Cached URL gets priority for responsiveness
                 { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] },                 // Collapse all in first row on mobile, hide actions always
-                { defaultContent: "", targets: "_all" }                                  // Ensures all columns render even if empty
+                { defaultContent: "", targets: "_all" },                                 // Ensures all columns render even if empty
+                { searchable: false, targets: [1, 4, 5] },                               // PERF: searchable:false on cols 1+4+5
+                { orderable: false, targets: [5] }                                       // PERF: orderable:false on Actions skips
             ]
         });
 
@@ -3156,9 +2940,6 @@ $(document).ready(function() {
             .on('page.dt.nppp', function () {
                 $(this).find('tr.purged-row, tr.child.purged-row').removeClass('purged-row');
             });
-
-        // Initialize Excel-like column filter dropdowns
-        initColumnFilters($tbl.DataTable());
     }
 
     // Toggle switch rules for send mail
