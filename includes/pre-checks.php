@@ -718,11 +718,6 @@ function nppp_pre_checks() {
         return;
     }
 
-    // On a large cache (100 k+ files)
-    // on slow or network-attached storage this can easily exceed the default
-    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
-    // mid-operation.
-
     if (function_exists('set_time_limit')) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
@@ -773,38 +768,59 @@ function nppp_pre_checks() {
     $head_bytes_fallback = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
 
     // Check cache status
-    try {
-        $cache_iterator = new RecursiveIteratorIterator(
-                new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
-                RecursiveIteratorIterator::LEAVES_ONLY
-        );
-
+    // Fast path: use rg always if available
+    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+    if ( $rg_bin !== '' && is_executable( $rg_bin ) ) {
         $has_files = '';
-        foreach ($cache_iterator as $file) {
-            $pathname = $file->getPathname();
+        $escaped_path = escapeshellarg( $nginx_cache_path );
 
-            // Read only the head (binary-safe)
-            $content = nppp_read_head( $wp_filesystem, $pathname, $head_bytes_primary );
-            if ( $content === '' ) { continue; }
+        $cmd       = $rg_bin . ' -q --text --no-unicode --no-ignore --no-messages --no-config -e ' . escapeshellarg( '^KEY: ' ) . ' ' . $escaped_path . ' 2>/dev/null';
+        $dummy     = [];
+        $exit_code = null;
+        exec( $cmd, $dummy, $exit_code );
 
-            // Look for "KEY:" line in the head
-            if ( ! preg_match( '/^KEY:\s/m', $content ) ) {
-                // If we likely truncated at primary cap, try a larger head read once
-                if ( strlen( $content ) >= $head_bytes_primary ) {
-                    $content = nppp_read_head( $wp_filesystem, $pathname, $head_bytes_fallback );
-                    if ( $content === '' || ! preg_match( '/^KEY:\s/m', $content ) ) {
+        if ( $exit_code === 0 ) {
+            $has_files = 'found';
+        } elseif ( $exit_code === 1 ) {
+            $has_files = '';
+        } elseif ( $exit_code === 2 ) {
+            $has_files = 'error';
+        }
+    } else {
+        // Fallback: PHP recursive iterator (rg not available)
+        try {
+            $cache_iterator = new RecursiveIteratorIterator(
+                    new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
+                    RecursiveIteratorIterator::LEAVES_ONLY
+            );
+
+            $has_files = '';
+            foreach ($cache_iterator as $file) {
+                $pathname = $file->getPathname();
+
+                // Read only the head (binary-safe)
+                $content = nppp_read_head( $wp_filesystem, $pathname, $head_bytes_primary );
+                if ( $content === '' ) { continue; }
+
+                // Look for "KEY:" line in the head
+                if ( ! preg_match( '/^KEY:\s/m', $content ) ) {
+                    // If we likely truncated at primary cap, try a larger head read once
+                    if ( strlen( $content ) >= $head_bytes_primary ) {
+                        $content = nppp_read_head( $wp_filesystem, $pathname, $head_bytes_fallback );
+                        if ( $content === '' || ! preg_match( '/^KEY:\s/m', $content ) ) {
+                            continue;
+                        }
+                    } else {
                         continue;
                     }
-                } else {
-                    continue;
                 }
-            }
 
-            $has_files = 'found';
-            break;
+                $has_files = 'found';
+                break;
+            }
+        } catch (Exception $e) {
+            $has_files = 'error';
         }
-    } catch (Exception $e) {
-        $has_files = 'error';
     }
 
     // Warn about empty cache
