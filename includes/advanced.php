@@ -1471,12 +1471,6 @@ function nppp_categorize_url( $url ) {
                 set_transient('nppp_category_map', $bulk_map, WEEK_IN_SECONDS);
             }
         });
-
-        add_action('shutdown', function() use (&$bulk_map, &$needs_update) {
-            if ( $needs_update ) {
-                set_transient('nppp_category_map', $bulk_map, WEEK_IN_SECONDS);
-            }
-        });
     }
 
     $map_key = md5( $url );
