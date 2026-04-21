@@ -540,8 +540,6 @@ function nppp_get_in_cache_page_count() {
              ? $decoded
              : nppp_fetch_default_regex_for_cache_key();
 
-    $urls_count = 0;
-
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -568,9 +566,153 @@ function nppp_get_in_cache_page_count() {
         return 'Undetermined';
     }
 
-    // Head-only read sizes
+    // FP — ripgrep fast path, always use if available
+    nppp_prepare_request_env();
+    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+
+    if ( $rg_bin !== '' ) {
+        $rg_fuse_path   = $nginx_cache_path;
+        $rg_source_path = nppp_fuse_source_path( $rg_fuse_path );
+
+        // Mount table may list a FUSE source path that no longer exists on disk.
+        if ( $rg_source_path !== null && ! $wp_filesystem->is_dir( $rg_source_path ) ) {
+            $rg_source_path = null;
+        }
+
+        $rg_fuse_active = ( $rg_source_path !== null );
+        $rg_use_safexec = false;
+        $rg_safexec_bin = '';
+
+        if ( $rg_fuse_active ) {
+            // FUSE active — try to read real source path directly (faster, bypasses FUSE overhead).
+            // Read-only ops only here, so FUSE mount path is never needed for file operations.
+            $rg_scan_path = rtrim( $rg_source_path, '/' ) . '/';
+
+            $probe_out  = [];
+            $probe_exit = 0;
+            exec(
+                sprintf(
+                    '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
+                    escapeshellarg( $rg_bin ),
+                    escapeshellarg( $rg_scan_path )
+                ),
+                $probe_out,
+                $probe_exit
+            );
+
+            // PHP lacks read access to real source path — try safexec for elevated read.
+            if ( $probe_exit === 2 ) {
+                $sfx = nppp_find_safexec_path();
+                if ( $sfx && nppp_is_safexec_usable( $sfx, false ) ) {
+                    $rg_use_safexec = true;
+                    $rg_safexec_bin = $sfx;
+                } else {
+                    // safexec unavailable — fall back to FUSE mount path (slower)
+                    $rg_scan_path = $rg_fuse_path;
+                }
+            }
+        } else {
+            $rg_scan_path = $rg_fuse_path;
+        }
+
+        $rg_cmd_prefix = $rg_use_safexec ? escapeshellarg( $rg_safexec_bin ) . ' ' : '';
+
+        // Debug logs for decision taken
+        if ( $rg_fuse_active ) {
+            if ( $rg_scan_path === $rg_fuse_path ) {
+                nppp_display_admin_notice( 'info', sprintf(
+                    __( 'WARNING RG SCAN: FUSE mount detected, scanning FUSE mount path (safexec unavailable, install safexec for better performance): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $rg_scan_path
+                ), true, false );
+            } elseif ( $rg_use_safexec ) {
+                nppp_display_admin_notice( 'info', sprintf(
+                    __( 'INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $rg_scan_path
+                ), true, false );
+            }
+        }
+
+        // SCAN 1 — build redirect file set to exclude (warms Linux dcache for SCAN 2)
+        $redirect_cmd = sprintf(
+            '%s%s -F --text -l -m 1 -E none --no-unicode'
+            . ' --no-heading --no-ignore --no-config --no-messages -e %s -e %s %s 2>/dev/null',
+            $rg_cmd_prefix,
+            escapeshellarg( $rg_bin ),
+            escapeshellarg( 'Status: 301' ),
+            escapeshellarg( 'Status: 302' ),
+            escapeshellarg( $rg_scan_path )
+        );
+
+        $redirect_out  = [];
+        $redirect_exit = 0;
+        exec( $redirect_cmd, $redirect_out, $redirect_exit );
+
+        if ( $redirect_exit === 2 ) {
+            return 'Undetermined';
+        }
+
+        $redirect_set = array_flip( array_filter( array_map( 'trim', $redirect_out ), 'strlen' ) );
+        unset( $redirect_out );
+
+        // SCAN 2 — extract KEY: line per cache file
+        $key_cmd = sprintf(
+            '%s%s --text -m 1 -E none --no-unicode'
+            . ' --no-heading --no-ignore --no-config --no-messages %s %s 2>/dev/null',
+            $rg_cmd_prefix,
+            escapeshellarg( $rg_bin ),
+            escapeshellarg( '^KEY: [^\r\n]+' ),
+            escapeshellarg( $rg_scan_path )
+        );
+
+        $key_out  = [];
+        $key_exit = 0;
+        exec( $key_cmd, $key_out, $key_exit );
+
+        if ( $key_exit === 2 ) {
+            return 'Undetermined';
+        }
+        if ( $key_exit === 1 || empty( $key_out ) ) {
+            return 0;
+        }
+
+        $urls_count   = 0;
+        $regex_tested = false;
+
+        foreach ( $key_out as $raw_line ) {
+            $raw_line = trim( $raw_line );
+            if ( $raw_line === '' ) { continue; }
+
+            $sep = strpos( $raw_line, ':' );
+            if ( $sep === false ) { continue; }
+
+            $scan_filepath = substr( $raw_line, 0, $sep );
+            $key_line      = substr( $raw_line, $sep + 1 );
+            if ( $scan_filepath === '' || $key_line === '' ) { continue; }
+
+            if ( isset( $redirect_set[ $scan_filepath ] ) ) { continue; }
+
+            if ( ! $regex_tested ) {
+                if ( ! preg_match( $regex, $key_line, $m ) || ! isset( $m[1], $m[2] ) ) {
+                    return 'RegexError';
+                }
+                if ( filter_var( 'https://' . trim( $m[1] ) . trim( $m[2] ), FILTER_VALIDATE_URL ) === false ) {
+                    return 'RegexError';
+                }
+                $regex_tested = true;
+            } else {
+                if ( ! preg_match( $regex, $key_line ) ) { continue; }
+            }
+
+            $urls_count++;
+        }
+
+        return $urls_count;
+    }
+
+    // PHP fallback — RecursiveIterator when rg is unavailable
     $head_bytes_primary  = (int) apply_filters( 'nppp_locate_head_bytes', 4096 );
     $head_bytes_fallback = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
+    $urls_count          = 0;
 
     try {
         $cache_iterator = new RecursiveIteratorIterator(
@@ -608,21 +750,7 @@ function nppp_get_in_cache_page_count() {
                 continue;
             }
 
-            // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
-            $key_line = $match[1];
-            if (strpos($key_line, 'POST') !== false ||
-                strpos($key_line, 'HEAD') !== false ||
-                strpos($key_line, 'PUT') !== false ||
-                strpos($key_line, 'DELETE') !== false ||
-                strpos($key_line, 'PATCH') !== false ||
-                strpos($key_line, 'OPTIONS') !== false) {
-                continue;
-            }
-
             // Test regex only once
-            // Regex operations can be computationally expensive,
-            // especially when iterating over multiple files.
-            // So here we test cache key regex only once
             if (!$regex_tested) {
                 if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
                     // Build the URL
