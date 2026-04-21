@@ -214,8 +214,8 @@ function nppp_nginx_cache_settings_page() {
                     );
                     ?>
                 </strong>
-                <a href="#status" class="button button-small">
-                    <?php echo esc_html__( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                <a href="#help" class="button button-small">
+                    <?php echo esc_html__( 'Help', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                 </a>
             </div>
             <?php endif; ?>
