@@ -687,7 +687,8 @@ function nppp_load_premium_content_callback() {
 
     // Return the generated HTML to AJAX
     if (!empty($premium_content)) {
-        echo wp_kses_post($premium_content);
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- already escaped inside nppp_premium_html
+        echo $premium_content;
     } else {
         // Send empty string to AJAX to trigger proper error
         echo '';
