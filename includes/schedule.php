@@ -414,10 +414,11 @@ function nppp_create_scheduled_event_preload_status_callback() {
     // Initialize log-parsed values to safe defaults so they are always defined
     // even when the wget log is absent, incomplete, or contains unparseable data.
     // $elapsed_time_str feeds nppp_send_mail_now() and sprintf() unconditionally.
-    $final_total = 0;
+    $final_total       = 0;
     $elapsed_time_str  = '';
     $last_preload_time = '';
     $log_contents      = '';
+    $nppp_mail_hits    = null;
 
     // Parse log file using to get total processed URL
     if ($wp_filesystem->exists($log_path) && $wp_filesystem->is_readable($log_path)) {
@@ -473,6 +474,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
                 $nppp_index[ $nppp_key ] = $nppp_existing;
             }
             update_option( 'nppp_url_filepath_index', $nppp_index, false );
+            $nppp_mail_hits = count( $nppp_index_data );
             unset( $nppp_index_data, $nppp_index, $nppp_entry, $nppp_key, $nppp_existing );
         }
     }
@@ -535,13 +537,6 @@ function nppp_create_scheduled_event_preload_status_callback() {
         // Same pattern preload-progress.php uses for broken URL detection
         $error_count = preg_match_all( '/ERROR\s+404/i', $log_contents );
     }
-
-    // Send Mail — use the hit count we already have from the index scan above
-    $nppp_mail_hits = ( isset( $nppp_index_data )
-        && is_array( $nppp_index_data )
-        && ! isset( $nppp_index_data['error'] ) )
-        ? count( $nppp_index_data )
-        : null;
 
     if ( $nppp_mail_hits !== null ) {
         update_option( 'nppp_last_known_hits',      $nppp_mail_hits, false );
