@@ -756,10 +756,15 @@ function nppp_purge_cache_premium_callback() {
     // Reset severity tracker before capturing notices.
     $GLOBALS['nppp_last_notice_type'] = 'success';
 
+    // Tell the screen guard in log.php to skip the screen check
+    $GLOBALS['nppp_capturing_for_redirect'] = true;
+
     // Purge
     ob_start();
     nppp_purge_single($nginx_cache_path, $cache_url, false);
     $html_output = ob_get_clean();
+
+    unset( $GLOBALS['nppp_capturing_for_redirect'] );
 
     // Yields only primary-URL notices.
     $log_text = trim(wp_strip_all_tags($html_output));
@@ -874,6 +879,9 @@ function nppp_preload_cache_premium_callback() {
     // Reset tracker before buffering
     $GLOBALS['nppp_last_notice_type'] = 'success';
 
+    // Tell the screen guard in log.php to skip the screen check
+    $GLOBALS['nppp_capturing_for_redirect'] = true;
+
     // Start output buffering
     ob_start();
 
@@ -882,6 +890,8 @@ function nppp_preload_cache_premium_callback() {
 
     // Capture and clean the buffer
     $output = wp_strip_all_tags(ob_get_clean());
+
+    unset( $GLOBALS['nppp_capturing_for_redirect'] );
 
     if (($GLOBALS['nppp_last_notice_type'] ?? 'success') === 'error') {
         wp_send_json_error($output);
