@@ -42,7 +42,7 @@ if ( ! function_exists( 'nppp_redis_cache_is_available' ) ) {
 
 if ( ! function_exists( 'nppp_redis_cache_log' ) ) {
     /**
-     * Emits an admin notice through NPP's logging system.
+     * Writes to the NPP log file only — no admin notice is displayed.
      */
     function nppp_redis_cache_log( string $message, string $type = 'info' ): void {
         if ( function_exists( 'nppp_display_admin_notice' ) ) {
@@ -196,6 +196,22 @@ if ( ! function_exists( 'nppp_redis_cache_on_redis_flush' ) ) {
         // Direction 1 (nppp_purged_all) sees it and bails, preventing a
         // redundant second Redis flush during this same operation.
         $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] = 'nppp';
+
+        // Gate: don't purge if a preload is actively running — bail gracefully.
+        if ( function_exists( 'nppp_get_runtime_file' ) ) {
+            $pid_file = nppp_get_runtime_file( 'cache_preload.pid' );
+            $wp_fs    = function_exists( 'nppp_initialize_wp_filesystem' ) ? nppp_initialize_wp_filesystem() : false;
+            if ( $wp_fs && $wp_fs->exists( $pid_file ) ) {
+                $pid = intval( nppp_perform_file_operation( $pid_file, 'read' ) );
+                if ( $pid > 0 && nppp_is_process_alive( $pid ) ) {
+                    nppp_redis_cache_log(
+                        __( 'Redis flush: Nginx preload in progress — purge deferred until completion.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        'info'
+                    );
+                    return;
+                }
+            }
+        }
 
         nppp_redis_cache_log(
             __( 'Redis Object Cache was flushed — triggering Nginx cache purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
