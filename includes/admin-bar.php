@@ -393,6 +393,10 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     // request never bleeds into this one.
     $GLOBALS['nppp_last_notice_type'] = 'success';
 
+    // Signal to nppp_display_admin_notice() that we own this ob_start() buffer
+    // and that the screen guard must be skipped.
+    $GLOBALS['nppp_capturing_for_redirect'] = true;
+
     // Start output buffering to capture the output of the actions
     ob_start();
 
@@ -417,6 +421,9 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
 
     // Get the status message from the output buffer
     $status_message = wp_strip_all_tags(ob_get_clean());
+
+    // Release the capture flag — screen guard re-activates for all subsequent calls.
+    unset($GLOBALS['nppp_capturing_for_redirect']);
 
     // Read the type that nppp_display_admin_notice() recorded directly.
     $message_type = $GLOBALS['nppp_last_notice_type'] ?? 'success';
