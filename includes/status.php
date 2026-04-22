@@ -1363,15 +1363,15 @@ function nppp_cache_status_callback() {
     if (isset($_POST['_wpnonce'])) {
         $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
         if (!wp_verify_nonce($nonce, 'cache-status')) {
-            wp_die(esc_html__('Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx'));
+            wp_die('', '', ['response' => 403]);
         }
     } else {
-        wp_die(esc_html__('Nonce is missing.', 'fastcgi-cache-purge-and-preload-nginx'));
+        wp_die('', '', ['response' => 403]);
     }
 
     // Check user capability
     if (!current_user_can('manage_options')) {
-        wp_die(esc_html__('You do not have permission to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
+        wp_die('', '', ['response' => 403]);
     }
 
     // On a large cache (100 k+ files)
