@@ -228,23 +228,18 @@ function nppp_is_process_alive($pid) {
         return false;
     }
 
-    // Get the path to the 'ps' command
+    // Get the path
     $ps_path = trim(shell_exec('command -v ps'));
-
-    // Escape to avoid shell injection
-    $escaped_pid = escapeshellarg($pid);
+    if (empty($ps_path)) {
+        return false;
+    }
     $escaped_ps_path = escapeshellarg($ps_path);
 
     // Check for the process by PID
-    exec("$escaped_ps_path aux | grep -w $escaped_pid | grep -v 'grep'", $output);
+    exec($escaped_ps_path . ' -p ' . (int) $pid . ' -o pid=', $output, $return_var);
 
     // Process running
-    if (!empty($output)) {
-        return true;
-    }
-
-    // Process is not running
-    return false;
+    return $return_var === 0 && !empty($output);
 }
 
 // Tries to determine the nginx.conf path using 'nginx -V'.
