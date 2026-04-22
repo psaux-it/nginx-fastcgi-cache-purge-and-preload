@@ -1942,5 +1942,5 @@ function nppp_purge_callback() {
     $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
     // Call the main purge function
-    nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, false, false);
+    nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, false, true);
 }
