@@ -376,6 +376,7 @@ add_filter('rest_pre_dispatch', function($result, $server, $request) {
 add_action('automatic_updates_complete', function ( $results ): void {
     $opts = get_option('nginx_cache_settings', []);
     if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
+    if ( ($opts['nppp_autopurge_3rdparty'] ?? 'no') !== 'yes' ) return;
 
     nppp_load_bootstrap();
 }, 1);
