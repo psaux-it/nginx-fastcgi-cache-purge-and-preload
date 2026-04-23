@@ -22,6 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'NPPP_WATCHER_TOKEN_TTL',   12 * HOUR_IN_SECONDS );
 define( 'NPPP_WATCHER_TOKEN_KEY',   'nppp_ping_token_'   . md5( 'nppp' ) );
+define( 'NPPP_WATCHER_TOKEN_OPTION', 'nppp_ping_token_db' );
 define( 'NPPP_WATCHER_PID_FILE',    'preload_watcher.pid' );
 define( 'NPPP_WATCHER_AJAX_ACTION', 'nppp_cron_wake' );
 
@@ -79,6 +80,7 @@ function nppp_watchdog_rate_limit_check(): array {
 function nppp_watcher_generate_token(): string {
     $token = bin2hex( random_bytes( 16 ) );
     set_transient( NPPP_WATCHER_TOKEN_KEY, $token, NPPP_WATCHER_TOKEN_TTL );
+    update_option( NPPP_WATCHER_TOKEN_OPTION, $token, false );
     return $token;
 }
 
@@ -87,6 +89,9 @@ function nppp_watcher_generate_token(): string {
  */
 function nppp_watcher_get_token(): string {
     $token = get_transient( NPPP_WATCHER_TOKEN_KEY );
+    if ( ! is_string( $token ) || $token === '' ) {
+        $token = get_option( NPPP_WATCHER_TOKEN_OPTION, '' );
+    }
     return is_string( $token ) ? $token : '';
 }
 
@@ -103,6 +108,7 @@ function nppp_watcher_rotate_token(): string {
  */
 function nppp_watcher_delete_token(): void {
     delete_transient( NPPP_WATCHER_TOKEN_KEY );
+    delete_option( NPPP_WATCHER_TOKEN_OPTION );
 }
 
 // ---------------------------------------------------------------------------
