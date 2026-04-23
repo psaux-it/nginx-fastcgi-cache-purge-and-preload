@@ -75,11 +75,11 @@ if ( ! function_exists( 'nppp_redis_cache_sync_is_on' ) ) {
 //
 // Rationale:
 //   When auto-preload is ON, the sequence is:
-//     1. Nginx cache purged (all HTML pages removed)
+//     1. Nginx cache purged
 //     2. Redis object cache flushed  ← this hook
 //     3. NPP preload crawl starts
-//     4. Each crawl request hits WordPress → Redis is rebuilt from DB queries
-//     5. Fresh HTML is stored back into Nginx
+//     4. Each crawl request hits WordPress → Redis cache is rebuilt
+//     5. Nginx cache is populated back
 //   Both caches end up clean and consistent. The DB load spike during the
 //   crawl is bounded and expected — Redis warms itself back up as pages
 //   are rebuilt. This is the canonical "clean slate" deployment pattern.
@@ -90,7 +90,6 @@ if ( ! function_exists( 'nppp_redis_cache_sync_is_on' ) ) {
 //   a double cold-start penalty (empty Nginx + empty Redis) for no benefit.
 //
 // This hook does NOT fire for single-page purges (nppp_purge_single).
-// Those are granular operations where Redis remains valid for all other pages.
 if ( ! function_exists( 'nppp_redis_cache_on_nppp_purge_all' ) ) {
     function nppp_redis_cache_on_nppp_purge_all(): void {
         // Gate: redis cache sync enabled.
