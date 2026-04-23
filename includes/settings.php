@@ -352,10 +352,10 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Sync Cloudflare cache purges to keep both caches aligned.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Synchronize the Cloudflare cache purges to keep both caches aligned.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Independent of “Auto Purge”. When ON, the Cloudflare cache is purged whenever the Nginx cache is purged (whether for specific URLs or the entire cache).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Independent of "Auto Purge". When ON, the Cloudflare cache is purged whenever the Nginx cache is purged (whether for single URLs or the entire cache).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
                                     <?php echo esc_html__( 'Requires the official Cloudflare WordPress plugin with APO or PSC enabled and proper authentication.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
@@ -378,7 +378,13 @@ function nppp_nginx_cache_settings_page() {
                                     <?php echo esc_html__( 'Synchronize the Redis Object Cache with the Nginx cache to keep both layers aligned.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'When ON: Clearing the Nginx cache also flushes the Redis object cache. Flushing Redis will also purge the Nginx cache (requires Auto Purge to be enabled).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Independent of "Auto Purge". When ON: "Purge All" (Admin, REST) also flushes the Redis object cache, but only if "Auto Preload" is ON.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'When ON: "Preload All" (Admin, REST, Cron) always flushes the Redis object cache.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'Flushing Redis cache only makes sense as part of the Nginx Purge+Preload chain or direct Cache Preload actions. A purge-only operation (without Preload) should leave the Redis cache warm.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
                                     <?php echo esc_html__( 'Requires the Redis Object Cache plugin to be installed, configured, and connected.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
