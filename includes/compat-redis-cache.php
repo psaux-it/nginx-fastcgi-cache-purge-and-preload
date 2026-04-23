@@ -1,9 +1,14 @@
 <?php
 /**
  * Redis Object Cache compatibility for Nginx Cache Purge Preload
- * Description: Bidirectional sync between NPP Nginx Cache and Redis Object Cache.
- *              - NPP Purge-All   → Flushes Redis object cache (wp_cache_flush)
- *              - Redis Flush     → Purges all Nginx cache via NPP (when auto-purge is on)
+ * Description: Sync between NPP Nginx Cache and Redis Object Cache.
+ *              NPP Purge-All + Auto-Preload ON → Flushes Redis object cache
+ *              Direction (NPP → Redis) is intentionally gated on the auto-preload setting.
+ *              Flushing Redis only makes sense as part of the purge+preload pair: the preload
+ *              crawl rebuilds Redis from scratch, giving both caches a clean, consistent state.
+ *              A purge-only operation (Auto-Preload OFF) should leave Redis warm — it is still
+ *              valid and will serve DB queries faster when the next request rebuilds Nginx pages.
+ *
  * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
@@ -63,27 +68,39 @@ if ( ! function_exists( 'nppp_redis_cache_sync_is_on' ) ) {
     }
 }
 
-// Direction 1 – NPP Purge All → Flush Redis Object Cache
-//
 // Fired by NPP's nppp_purge() after every successful "Purge All" operation,
 // whether triggered manually, via admin bar, auto-purge, REST API, or schedule.
 //
-// Flushing the object cache here ensures PHP will regenerate fresh data from
-// the database on the next request, so pages rebuilt into Nginx cache will
-// contain up-to-date content.
+// GATE: Redis is flushed only when NPP's auto-preload feature is enabled.
 //
-// The NPPP_REDIS_FLUSH_ORIGIN global is set here and checked in Direction 2
-// to prevent an infinite loop:
-
+// Rationale:
+//   When auto-preload is ON, the sequence is:
+//     1. Nginx cache purged (all HTML pages removed)
+//     2. Redis object cache flushed  ← this hook
+//     3. NPP preload crawl starts
+//     4. Each crawl request hits WordPress → Redis is rebuilt from DB queries
+//     5. Fresh HTML is stored back into Nginx
+//   Both caches end up clean and consistent. The DB load spike during the
+//   crawl is bounded and expected — Redis warms itself back up as pages
+//   are rebuilt. This is the canonical "clean slate" deployment pattern.
+//
+//   When auto-preload is OFF, Nginx is empty after purge and the next real
+//   user request rebuilds each page. Redis is still warm and valid — it will
+//   serve DB queries faster during that rebuild. Flushing it here would cause
+//   a double cold-start penalty (empty Nginx + empty Redis) for no benefit.
+//
+// This hook does NOT fire for single-page purges (nppp_purge_single).
+// Those are granular operations where Redis remains valid for all other pages.
 if ( ! function_exists( 'nppp_redis_cache_on_nppp_purge_all' ) ) {
     function nppp_redis_cache_on_nppp_purge_all(): void {
-        // Loop prevention: bail if this purge was triggered by Direction 2.
-        if ( ! empty( $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] ) && $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] === 'nppp' ) {
+        // Gate: redis cache sync enabled.
+        if ( ! nppp_redis_cache_sync_is_on() ) {
             return;
         }
 
-        // Gate: toggle must be on.
-        if ( ! nppp_redis_cache_sync_is_on() ) {
+        // Gate: only flush Redis when auto-preload is enabled.
+        $options = get_option( 'nginx_cache_settings', [] );
+        if ( ( $options['nginx_cache_auto_preload'] ?? 'no' ) !== 'yes' ) {
             return;
         }
 
@@ -97,12 +114,8 @@ if ( ! function_exists( 'nppp_redis_cache_on_nppp_purge_all' ) ) {
             return;
         }
 
-        // Mark that this flush originates from NPP so Direction 2 can bail.
-        $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] = 'nppp';
-
+        // Flush redis cache
         $flushed = wp_cache_flush();
-
-        unset( $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] );
 
         if ( $flushed ) {
             nppp_redis_cache_log(
@@ -120,113 +133,6 @@ if ( ! function_exists( 'nppp_redis_cache_on_nppp_purge_all' ) ) {
 
 add_action( 'nppp_purged_all', 'nppp_redis_cache_on_nppp_purge_all' );
 
-// Direction 2 – Redis Object Cache Flush → Purge All Nginx cache
-//
-// Fires whenever wp_cache_flush() succeeds and Redis is connected.
-// This covers explicit flushes from the Redis Cache plugin dashboard,
-// WP-CLI (`wp cache flush`), and any plugin calling wp_cache_flush().
-//
-// We only act if NPP's auto-purge setting is enabled (nginx_cache_purge_on_update)
-// because:
-//  a) An Nginx page-cache purge is a heavyweight filesystem operation.
-//  b) It mirrors the existing $nppp_page_cache_purge_actions contract —
-//     those hooks are also only registered when auto-purge is on.
-//
-// Loop prevention: bail immediately when NPPP_REDIS_FLUSH_ORIGIN === 'nppp',
-// which Direction 1 sets before calling wp_cache_flush().
-
-if ( ! function_exists( 'nppp_redis_cache_on_redis_flush' ) ) {
-    /**
-     * @param array|null $results      Flush results from Redis.
-     * @param int        $deprecated   Unused (always 0).
-     * @param bool|null  $selective    True if WP_REDIS_SELECTIVE_FLUSH was used.
-     * @param string     $salt         WP_REDIS_PREFIX value (may be empty).
-     * @param float      $execute_time Seconds taken to flush.
-     */
-    function nppp_redis_cache_on_redis_flush(
-        $results,
-        int $deprecated,
-        $selective,
-        ?string $salt,
-        float $execute_time
-    ): void {
-
-        // Loop prevention: this flush was started by NPP itself (Direction 1).
-        if ( ! empty( $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] ) && $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] === 'nppp' ) {
-            return;
-        }
-
-        // Gate: only act if Redis actually completed the flush.
-        // The hook fires before the drop-in validates its own results, so we
-        // check here to avoid purging Nginx after a partial or failed Redis flush.
-        if ( empty( $results ) ) {
-            return;
-        }
-
-        foreach ( (array) $results as $result ) {
-            if ( $result === false ) {
-                return;
-            }
-        }
-
-        // Gate: toggle must be on.
-        if ( ! nppp_redis_cache_sync_is_on() ) {
-            return;
-        }
-
-        // Gate: honour the filter.
-        if ( ! apply_filters( 'nppp_sync_redis_cache_enabled', true, 'redis_to_nppp' ) ) {
-            return;
-        }
-
-        // Gate: NPP auto-purge must be enabled for this direction.
-        // This mirrors the $nppp_page_cache_purge_actions contract.
-        $nginx_options = get_option( 'nginx_cache_settings', [] );
-        if ( ( $nginx_options['nginx_cache_purge_on_update'] ?? 'no' ) !== 'yes' ) {
-            return;
-        }
-
-        // Gate: NPP purge function must be available (bootstrap may not be loaded
-        // in all execution contexts, e.g. WP-CLI without --url).
-        if ( ! function_exists( 'nppp_purge_callback' ) ) {
-            return;
-        }
-
-        // Set the origin flag BEFORE calling nppp_purge_callback() so that
-        // Direction 1 (nppp_purged_all) sees it and bails, preventing a
-        // redundant second Redis flush during this same operation.
-        $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] = 'nppp';
-
-        // Gate: don't purge if a preload is actively running — bail gracefully.
-        if ( function_exists( 'nppp_get_runtime_file' ) ) {
-            $pid_file = nppp_get_runtime_file( 'cache_preload.pid' );
-            $wp_fs    = function_exists( 'nppp_initialize_wp_filesystem' ) ? nppp_initialize_wp_filesystem() : false;
-            if ( $wp_fs && $wp_fs->exists( $pid_file ) ) {
-                $pid = intval( nppp_perform_file_operation( $pid_file, 'read' ) );
-                if ( $pid > 0 && nppp_is_process_alive( $pid ) ) {
-                    nppp_redis_cache_log(
-                        __( 'Redis flush: Nginx preload in progress — purge deferred until completion.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                        'info'
-                    );
-                    return;
-                }
-            }
-        }
-
-        nppp_redis_cache_log(
-            __( 'Redis Object Cache was flushed — triggering Nginx cache purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            'info'
-        );
-
-        nppp_purge_callback();
-        unset( $GLOBALS['NPPP_REDIS_FLUSH_ORIGIN'] );
-    }
-}
-
-// redis_object_cache_flush is fired by the drop-in after every successful flush().
-// Signature: ( array $results, int $deprecated, bool $selective, string $salt, float $execute_time )
-add_action( 'redis_object_cache_flush', 'nppp_redis_cache_on_redis_flush', 10, 5 );
-
 // Guard: auto-disable the toggle if Redis Cache is deactivated / disconnected
 // If the toggle is on but the dependency
 // is gone, flip it back to 'no' so the UI stays consistent.
@@ -236,7 +142,6 @@ if ( ! function_exists( 'nppp_redis_cache_sync_option_enabled' ) ) {
      * Filter callback for `nppp_sync_redis_cache_enabled`.
      *
      * @param bool   $enabled  Current enabled state.
-     * @param string $context  'nppp_to_redis' | 'redis_to_nppp'
      * @return bool
      */
     function nppp_redis_cache_sync_option_enabled( bool $enabled, string $context = '' ): bool {
