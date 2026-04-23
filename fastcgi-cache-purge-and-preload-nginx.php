@@ -432,6 +432,9 @@ add_action('init', function(): void {
 
     // Layer 1b
     $stored = get_transient('nppp_ping_token_' . md5('nppp'));
+    if ( empty( $stored ) ) {
+        $stored = get_option( 'nppp_ping_token_db', '' );
+    }
     if (empty($stored) || !hash_equals((string) $stored, $submitted)) {
         nppp_ep_gate_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ep8', 'nppp_cron_wake', 'ERROR 403 TOKEN MISMATCH OR EXPIRED');
         wp_die('', '', ['response' => 403]);
