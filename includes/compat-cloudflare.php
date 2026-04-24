@@ -563,5 +563,5 @@ if ( ! function_exists( 'nppp_cloudflare_apo_sync_option_enabled' ) ) {
 }
 
 add_filter( 'nppp_sync_cloudflare_apo_enabled', 'nppp_cloudflare_apo_sync_option_enabled', 10, 6 );
-add_action( 'nppp_purged_all', 'nppp_cloudflare_apo_purge_all' );
+add_action( 'nppp_purged_all', 'nppp_cloudflare_apo_purge_all', 10, 0 );
 add_action( 'nppp_purged_urls', 'nppp_cloudflare_apo_purge_urls', 10, 4 );
