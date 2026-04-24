@@ -132,6 +132,46 @@ if ( ! function_exists( 'nppp_redis_cache_on_nppp_purge_all' ) ) {
 
 add_action( 'nppp_purged_all', 'nppp_redis_cache_on_nppp_purge_all' );
 
+// Fired by nppp_preload() for all direct "Preload All" operations
+// (Admin button, Admin Bar, REST API, Cron)
+//
+// Unlike the Purge All handler above, this has NO auto-preload gate:
+if ( ! function_exists( 'nppp_redis_cache_on_nppp_preload_all' ) ) {
+    function nppp_redis_cache_on_nppp_preload_all(): void {
+        // Gate: redis cache sync enabled.
+        if ( ! nppp_redis_cache_sync_is_on() ) {
+            return;
+        }
+
+        // Gate: only act when Redis is actually reachable.
+        if ( ! nppp_redis_cache_is_available() ) {
+            return;
+        }
+
+        // Gate: honour the filter (allows third-party overrides).
+        if ( ! apply_filters( 'nppp_sync_redis_cache_enabled', true, 'nppp_to_redis' ) ) {
+            return;
+        }
+
+        // Flush redis cache before the preload crawl rebuilds it.
+        $flushed = wp_cache_flush();
+
+        if ( $flushed ) {
+            nppp_redis_cache_log(
+                __( 'Redis Object Cache flushed before Nginx cache preload.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'success'
+            );
+        } else {
+            nppp_redis_cache_log(
+                __( 'Redis Object Cache flush attempted before Nginx cache preload, but wp_cache_flush() returned false.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'error'
+            );
+        }
+    }
+}
+
+add_action( 'nppp_preload_all_started', 'nppp_redis_cache_on_nppp_preload_all' );
+
 // Guard: auto-disable the toggle if Redis Cache is deactivated / disconnected
 // If the toggle is on but the dependency
 // is gone, flip it back to 'no' so the UI stays consistent.
