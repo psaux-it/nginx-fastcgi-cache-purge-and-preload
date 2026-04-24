@@ -1888,7 +1888,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
     // Fire the 'nppp_purged' action, triggering any other plugin actions that are hooked into this event
     // If auto preload is enabled this hook will create both NPP cache and compatible plugin cache at the same time
-    do_action('nppp_purged_all');
+    do_action('nppp_purged_all', $auto_preload);
 
     // If set call preload immediately after purge
     if ($auto_preload) {
