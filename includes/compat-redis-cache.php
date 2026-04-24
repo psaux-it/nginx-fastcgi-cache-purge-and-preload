@@ -91,15 +91,17 @@ if ( ! function_exists( 'nppp_redis_cache_sync_is_on' ) ) {
 //
 // This hook does NOT fire for single-page purges (nppp_purge_single).
 if ( ! function_exists( 'nppp_redis_cache_on_nppp_purge_all' ) ) {
-    function nppp_redis_cache_on_nppp_purge_all(): void {
+    function nppp_redis_cache_on_nppp_purge_all( bool $will_preload = false ): void {
         // Gate: redis cache sync enabled.
         if ( ! nppp_redis_cache_sync_is_on() ) {
             return;
         }
 
-        // Gate: only flush Redis when auto-preload is enabled.
-        $options = get_option( 'nginx_cache_settings', [] );
-        if ( ( $options['nginx_cache_auto_preload'] ?? 'no' ) !== 'yes' ) {
+        // Gate: only flush Redis when a preload is actually going to follow.
+        // We use the runtime $will_preload flag passed by nppp_purge() rather than
+        // re-reading the DB option — purge() may have overridden it at runtime
+        // (e.g. when stopping a running preload to prevent a recursive loop).
+        if ( ! $will_preload ) {
             return;
         }
 
