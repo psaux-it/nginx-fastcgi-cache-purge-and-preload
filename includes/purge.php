@@ -406,6 +406,7 @@ function nppp_purge_fp2_index( array &$ctx ): bool {
         }
 
         $any_valid            = false;
+        $any_prefix_match     = false;
         $deleted              = 0;
         $perm_failure         = 0;
 
@@ -413,12 +414,13 @@ function nppp_purge_fp2_index( array &$ctx ): bool {
             if ( strpos( $path, $cache_path_prefix ) !== 0 ) {
                 continue;
             }
+            $any_prefix_match = true;
 
             if ( ! $wp_filesystem->exists( $path ) ) {
                 continue;
             }
-
             $any_valid = true;
+
             if ( $wp_filesystem->delete( $path ) ) {
                 $deleted++;
             } elseif ( $wp_filesystem->exists( $path ) ) {
@@ -426,7 +428,17 @@ function nppp_purge_fp2_index( array &$ctx ): bool {
             }
         }
 
-        // Confirmed miss
+        // No paths belong to the current cache directory at all —
+        // index only has entries from a different (old) cache path config.
+        // FP2 has no information about the current cache for this URL.
+        // Treat identically to key-absent: leave in pending for FP3/FP4.
+        if ( ! $any_prefix_match ) {
+            continue;
+        }
+
+        // Confirmed miss — at least one path matched the current prefix
+        // but the file is gone from disk. Path is deterministic so this
+        // is authoritative: page is genuinely not in the current cache.
         if ( ! $any_valid ) {
             if ( $target['is_primary'] ) {
                 if ( ! $ctx['chain_autopreload'] ) {
