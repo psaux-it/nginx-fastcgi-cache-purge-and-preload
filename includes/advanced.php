@@ -517,7 +517,7 @@ function nppp_premium_html($nginx_cache_path) {
     ?>
     <?php if ( ! empty( $mergedRows ) && ! $preload_running ) : ?>
     <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 5px; margin-bottom: 15px; max-width: max-content;">
-        <p style="margin: 0; display: flex; align-items: center;">
+        <p style="margin: 0; align-items: center;">
             <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
             <?php echo wp_kses_post( __( 'If the <strong>Cached URL\'s</strong> are incorrect, <strong>Preload</strong> will not work as expected. Please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section, ensure the regex is configured correctly, and try again.', 'fastcgi-cache-purge-and-preload-nginx' ) ); ?>
         </p>
