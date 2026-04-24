@@ -349,22 +349,6 @@ function nppp_detect_premature_process(
 
 // Preload operation
 function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nppp_is_auto_preload = false, $nppp_is_rest_api = false, $nppp_is_wp_cron = false, $nppp_is_admin_bar = false, $preload_mobile = false) {
-    // On a large cache (100 k+ files)
-    // on slow or network-attached storage this can easily exceed the default
-    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
-    // mid-operation and leaving the purge lock (stored as a wp_options row via
-    // WP_Upgrader::create_lock()) permanently orphaned until its TTL expires.
-
-    // set_time_limit(0) resets the countdown to "unlimited" for this request
-    // only — it has no effect on other processes or future requests.
-    // The @ suppressor silences the E_WARNING that some hardened hosts emit
-    // when the function appears in disable_functions; the call is otherwise
-    // a safe no-op in that environment.
-
-    // Note: this only disables PHP's own timer. PHP-FPM's independent
-    // request_terminate_timeout and Nginx's fastcgi_read_timeout are enforced
-    // by the FPM master process and the upstream proxy respectively and cannot
-    // be overridden from PHP at runtime.
     if (function_exists('set_time_limit')) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
@@ -598,7 +582,12 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 escapeshellarg($fdomain) . ' ' .
                 '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
 
-            // We are ready to call main command
+            // Flush Redis cache right before the crawl starts.
+            if ( ! $preload_mobile ) {
+                do_action( 'nppp_preload_all_started' );
+            }
+
+            // We are ready
             $output = shell_exec($command);
 
             // PHP 8.1+
