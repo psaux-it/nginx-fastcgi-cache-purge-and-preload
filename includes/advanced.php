@@ -1446,70 +1446,87 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
 /**
  * Categorize a URL into a human-readable content-type label.
  *
- * @param  string $url  Absolute URL to categorize.
- * @return string       Uppercase label (e.g. 'POST', 'PRODUCT', 'CATEGORY').
+ * @param string $url Absolute URL to classify.
+ * @return string     Uppercase label, e.g. 'POST', 'PRODUCT', 'CATEGORY' …
  */
-function nppp_categorize_url( $url ) {
-    // 0. Static per-request cache
-    static $url_cache    = [];
-    static $rewrite_rules = null;
-    static $bulk_map     = null;
-    static $needs_update  = false;
+function nppp_categorize_url( string $url ): string {
 
+    // Static caches
+    static $url_cache        = [];
+    static $bulk_map         = null;
+    static $needs_update     = false;
+    static $rewrite_rules    = null;
+    static $site_host        = null;
+    static $tax_qvar_map     = null;
+    static $show_on_front    = null;
+    static $pfp_id           = null;
+    static $pfp_path         = null;
+
+    // L1 hit
     if ( isset( $url_cache[ $url ] ) ) {
         return $url_cache[ $url ];
     }
 
-    // 1. Bulk transient
+    // L2 init + shutdown flush
     if ( $bulk_map === null ) {
         $bulk_map = get_transient( 'nppp_category_map' );
         $bulk_map = is_array( $bulk_map ) ? $bulk_map : [];
 
-        add_action('shutdown', function() use (&$bulk_map, &$needs_update) {
-            if ( $needs_update ) {
-                if ( count($bulk_map) > 20000 ) {
-                    $bulk_map = array_slice($bulk_map, -20000, 20000, true);
-                }
-                set_transient('nppp_category_map', $bulk_map, WEEK_IN_SECONDS);
+        // Ring-buffer flush: keep newest 20 k entries, persist weekly.
+        add_action( 'shutdown', static function () use ( &$bulk_map, &$needs_update ) {
+            if ( ! $needs_update ) {
+                return;
             }
-        });
+            if ( count( $bulk_map ) > 20000 ) {
+                $bulk_map = array_slice( $bulk_map, -20000, 20000, true );
+            }
+            set_transient( 'nppp_category_map', $bulk_map, WEEK_IN_SECONDS );
+        } );
     }
 
     $map_key = md5( $url );
 
+    // L2 hit
     if ( isset( $bulk_map[ $map_key ] ) ) {
         $url_cache[ $url ] = $bulk_map[ $map_key ];
         return $bulk_map[ $map_key ];
     }
 
-    // Shared finalize helper
-    $finish = function ( $label ) use ( $url, $map_key, &$url_cache, &$bulk_map, &$needs_update ) {
-        $label = (string) apply_filters( 'nppp_categorize_url_result', $label, $url );
-        $url_cache[ $url ]   = $label;
+    // Shared finalize closure
+    $finish = static function ( string $label ) use ( $url, $map_key, &$url_cache, &$bulk_map, &$needs_update ): string {
+        $label                = (string) apply_filters( 'nppp_categorize_url_result', $label, $url );
+        $url_cache[ $url ]    = $label;
         $bulk_map[ $map_key ] = $label;
-        $needs_update = true;
+        $needs_update         = true;
         return $label;
     };
 
-    // 2. Host guard
-    $site_host = (string) wp_parse_url( get_site_url(), PHP_URL_HOST );
-    $url_host  = (string) wp_parse_url( $url, PHP_URL_HOST );
+    // 1. HOST GUARD
+    if ( $site_host === null ) {
+        $site_host = (string) wp_parse_url( get_site_url(), PHP_URL_HOST );
+    }
+    $url_host = (string) wp_parse_url( $url, PHP_URL_HOST );
     if ( $url_host === '' || strcasecmp( $url_host, $site_host ) !== 0 ) {
         return $finish( 'EXTERNAL' );
     }
 
-    // 3. Normalize path
+    // 2. NORMALIZE PATH  (strip paged segments before any logic)
     $raw_path = (string) ( wp_parse_url( $url, PHP_URL_PATH ) ?? '/' );
     $path     = trim( rawurldecode( $raw_path ), '/' );
     $path     = (string) preg_replace( '#(?:^|/)page/\d+(?:/.*)?$#', '', $path );
     $path     = trim( $path, '/' );
 
-    // 4. Homepage early-exit
+    // 3. HOMEPAGE EARLY-EXIT
     if ( $path === '' ) {
         return $finish( 'HOMEPAGE' );
     }
 
-    // 5. Rewrite rules → query vars
+    // 4. FEED / EMBED EARLY-EXIT
+    if ( preg_match( '#(?:^|/)feed(?:/[^/]*)?/?$#', $path ) ) {
+        return $finish( 'FEED' );
+    }
+
+    // 5. REWRITE RULES → QUERY VARS
     global $wp_rewrite;
     if ( $rewrite_rules === null ) {
         $rewrite_rules = (array) $wp_rewrite->wp_rewrite_rules();
@@ -1517,37 +1534,52 @@ function nppp_categorize_url( $url ) {
 
     $query_vars = [];
     foreach ( $rewrite_rules as $match => $query ) {
-        if ( preg_match( "#^{$match}#", $path, $matches )
-             || preg_match( "#^{$match}#", rawurlencode( $path ), $matches ) ) {
-            $query = preg_replace( '!^.+\?!', '', $query );
+        if ( preg_match( "#^{$match}#", $path, $m )
+          || preg_match( "#^{$match}#", rawurlencode( $path ), $m ) ) {
+            $q = preg_replace( '!^.+\?!', '', $query );
             if ( class_exists( 'WP_MatchesMapRegex' ) ) {
-                $query = addslashes( WP_MatchesMapRegex::apply( $query, $matches ) );
+                $q = WP_MatchesMapRegex::apply( $q, $m );
             }
-            parse_str( $query, $query_vars );
+            parse_str( $q, $query_vars );
             break;
         }
     }
 
-    if ( empty( $query_vars ) ) {
-        $qs = (string) ( wp_parse_url( $url, PHP_URL_QUERY ) ?? '' );
-        if ( $qs !== '' ) {
-            parse_str( $qs, $query_vars );
-        }
+    // Plain permalink / query-string fallback.
+    $raw_qs = (string) ( wp_parse_url( $url, PHP_URL_QUERY ) ?? '' );
+    if ( empty( $query_vars ) && $raw_qs !== '' ) {
+        parse_str( $raw_qs, $query_vars );
     }
 
     if ( empty( $query_vars ) ) {
         return $finish( 'UNKNOWN' );
     }
 
-    // 5b. WooCommerce shortcut
-    if ( function_exists( 'wc_get_page_id' ) ) {
-        if ( ! empty( $query_vars['product'] ) )     { return $finish( 'PRODUCT' ); }
-        if ( ! empty( $query_vars['product_cat'] ) ) { return $finish( 'PRODUCT CATEGORY' ); }
-        if ( ! empty( $query_vars['product_tag'] ) ) { return $finish( 'PRODUCT TAG' ); }
+    // Feed / embed via query var (e.g. ?feed=rss2, ?embed=1).
+    if ( ! empty( $query_vars['feed'] ) || ! empty( $query_vars['embed'] ) ) {
+        return $finish( 'FEED' );
+    }
 
+    // 6. WOOCOMMERCE FAST-PATH
+    if ( function_exists( 'wc_get_page_id' ) ) {
+
+        // Singular product: ?product=slug
+        if ( ! empty( $query_vars['product'] ) ) {
+            return $finish( 'PRODUCT' );
+        }
+        // Product category archive: ?product_cat=slug
+        if ( ! empty( $query_vars['product_cat'] ) ) {
+            return $finish( 'PRODUCT CATEGORY' );
+        }
+        // Product tag archive: ?product_tag=slug
+        if ( ! empty( $query_vars['product_tag'] ) ) {
+            return $finish( 'PRODUCT TAG' );
+        }
+
+        // post_type=product without singular identifiers → shop or product.
         if ( isset( $query_vars['post_type'] ) ) {
-            $pt = (array) $query_vars['post_type'];
-            if ( in_array( 'product', $pt, true ) ) {
+            $wc_pt = (array) $query_vars['post_type'];
+            if ( in_array( 'product', $wc_pt, true ) ) {
                 return $finish(
                     ! empty( $query_vars['name'] ) || ! empty( $query_vars['p'] )
                         ? 'PRODUCT'
@@ -1556,58 +1588,179 @@ function nppp_categorize_url( $url ) {
             }
         }
 
-        foreach ( array_keys( $query_vars ) as $var ) {
-            if ( strpos( $var, 'pa_' ) === 0 && ! empty( $query_vars[ $var ] ) ) {
-                return $finish( 'PRODUCT ATTR: ' . strtoupper( substr( $var, 3 ) ) );
+        // Public product attribute archives: ?pa_color=red (str_starts_with PHP 8+)
+        foreach ( array_keys( $query_vars ) as $qv ) {
+            if ( strpos( $qv, 'pa_' ) === 0 && ! empty( $query_vars[ $qv ] ) ) {
+                return $finish( 'PRODUCT ATTR: ' . strtoupper( substr( $qv, 3 ) ) );
             }
         }
     }
 
-    // 6. WP_Query::parse_query()
-    $q = new WP_Query();
-    $q->parse_query( $query_vars );
-
-    // 7. is_* → label
-    if ( function_exists( 'wc_get_page_id' ) ) {
-        if ( $q->is_post_type_archive ) {
-            $pt = (array) $q->get( 'post_type' );
-            if ( in_array( 'product', $pt, true ) ) { return $finish( 'SHOP' ); }
-        }
-        if ( $q->is_tax ) {
-            $tax_name = (string) $q->get( 'taxonomy' );
-            if ( $tax_name === 'product_cat' )         { return $finish( 'PRODUCT CATEGORY' ); }
-            if ( $tax_name === 'product_tag' )         { return $finish( 'PRODUCT TAG' ); }
-            if ( strpos( $tax_name, 'pa_' ) === 0 )   { return $finish( 'PRODUCT ATTR: ' . strtoupper( substr( $tax_name, 3 ) ) ); }
+    // 7. TAXONOMY QUERY-VAR MAP
+    if ( $tax_qvar_map === null ) {
+        $tax_qvar_map = [];
+        foreach ( get_taxonomies( [], 'objects' ) as $tax_slug => $tax_obj ) {
+            // query_var may be a boolean false, 'is_admin()' result, or a string.
+            if ( ! $tax_obj->query_var ) {
+                continue;
+            }
+            $tax_qvar_map[ (string) $tax_obj->query_var ] = $tax_slug;
         }
     }
 
-    if ( $q->is_singular || $q->is_single ) {
-        $pt = (string) ( $q->get( 'post_type' ) ?: 'post' );
-        if ( function_exists( 'wc_get_page_id' ) && $pt === 'product' ) { return $finish( 'PRODUCT' ); }
-        if ( $pt === 'post' ) { return $finish( 'POST' ); }
-        if ( $pt === 'page' ) { return $finish( 'PAGE' ); }
+    // 8. FLAG CLASSIFICATION
+    $is_attachment = ( '' !== ( (string) ( $query_vars['attachment'] ?? '' ) ) )
+                  || ! empty( $query_vars['attachment_id'] );
+
+    $is_single = $is_attachment
+              || '' !== ( (string) ( $query_vars['name'] ?? '' ) )
+              || ! empty( $query_vars['p'] );
+
+    $is_page = ! $is_single
+            && ( '' !== ( (string) ( $query_vars['pagename'] ?? '' ) )
+              || ! empty( $query_vars['page_id'] ) );
+
+    $is_category  = false;
+    $is_tag       = false;
+    $is_tax       = false;
+    $detected_tax = '';
+
+    if ( ! $is_single && ! $is_page ) {
+
+        if ( ! empty( $query_vars['category_name'] )
+          || ( ! empty( $query_vars['cat'] ) && (int) $query_vars['cat'] > 0 ) ) {
+            $is_category  = true;
+            $detected_tax = 'category';
+        }
+
+        if ( ! $is_category
+          && ( ! empty( $query_vars['tag'] ) || ! empty( $query_vars['tag_id'] ) ) ) {
+            $is_tag       = true;
+            $detected_tax = 'post_tag';
+        }
+
+        if ( ! $is_category && ! $is_tag
+          && ! empty( $query_vars['taxonomy'] ) && ! empty( $query_vars['term'] ) ) {
+            $is_tax       = true;
+            $detected_tax = (string) $query_vars['taxonomy'];
+        }
+
+        if ( ! $is_category && ! $is_tag && ! $is_tax ) {
+            foreach ( $tax_qvar_map as $qvar => $tax_slug ) {
+                // category and post_tag already handled above.
+                if ( 'category' === $tax_slug || 'post_tag' === $tax_slug ) {
+                    continue;
+                }
+                if ( ! empty( $query_vars[ $qvar ] ) ) {
+                    $is_tax       = true;
+                    $detected_tax = $tax_slug;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Author / Date / Search
+    $is_author = ! $is_single && ! $is_page
+              && ( ! empty( $query_vars['author'] ) || ! empty( $query_vars['author_name'] ) );
+
+    $is_date = ! $is_single && ! $is_page && (
+           ( isset( $query_vars['second']   ) && '' !== (string) $query_vars['second'] )
+        || ( isset( $query_vars['minute']   ) && '' !== (string) $query_vars['minute'] )
+        || ( isset( $query_vars['hour']     ) && '' !== (string) $query_vars['hour'] )
+        || ! empty( $query_vars['day'] )
+        || ! empty( $query_vars['monthnum'] )
+        || ! empty( $query_vars['year'] )
+        || ! empty( $query_vars['m'] )
+        || ! empty( $query_vars['w'] )
+    );
+
+    $is_search = ! $is_single && ! $is_page
+              && isset( $query_vars['s'] ) && '' !== $query_vars['s'];
+
+    // Post-type archive
+    $is_pta = false;
+    $pta_pt  = '';
+    if ( ! $is_single && ! $is_page
+      && ! empty( $query_vars['post_type'] ) && ! is_array( $query_vars['post_type'] ) ) {
+        $pta_obj = get_post_type_object( $query_vars['post_type'] );
+        if ( $pta_obj && ! empty( $pta_obj->has_archive ) ) {
+            $is_pta = true;
+            $pta_pt = (string) $query_vars['post_type'];
+        }
+    }
+
+    // 9. FLAGS → LABEL
+    if ( function_exists( 'wc_get_page_id' ) ) {
+        if ( $is_pta && 'product' === $pta_pt ) {
+            return $finish( 'SHOP' );
+        }
+        if ( $is_tax || $is_category || $is_tag ) {
+            if ( 'product_cat' === $detected_tax )           { return $finish( 'PRODUCT CATEGORY' ); }
+            if ( 'product_tag' === $detected_tax )           { return $finish( 'PRODUCT TAG' ); }
+            if ( strpos( $detected_tax, 'pa_' ) === 0 )      { return $finish( 'PRODUCT ATTR: ' . strtoupper( substr( $detected_tax, 3 ) ) ); }
+        }
+    }
+
+    // Attachment singular
+    if ( $is_attachment ) {
+        return $finish( 'ATTACHMENT' );
+    }
+
+    // Singular posts / CPTs.
+    if ( $is_single ) {
+        $pt = (string) ( ! empty( $query_vars['post_type'] ) ? $query_vars['post_type'] : 'post' );
+        if ( function_exists( 'wc_get_page_id' ) && 'product' === $pt ) { return $finish( 'PRODUCT' ); }
+        if ( 'post' === $pt )  { return $finish( 'POST' ); }
+        if ( 'page' === $pt )  { return $finish( 'PAGE' ); } // CPT registered with post_type=page is edge-case
         $pt_obj = get_post_type_object( $pt );
         return $finish( $pt_obj ? strtoupper( $pt_obj->labels->singular_name ) : strtoupper( $pt ) );
     }
 
-    if ( $q->is_page )     { return $finish( 'PAGE' ); }
-    if ( $q->is_category ) { return $finish( 'CATEGORY' ); }
-    if ( $q->is_tag )      { return $finish( 'TAG' ); }
+    // Pages
+    if ( $is_page ) {
+        if ( $show_on_front === null ) {
+            $show_on_front = (string) get_option( 'show_on_front', 'posts' );
+            $pfp_id        = ( 'page' === $show_on_front )
+                ? (int) get_option( 'page_for_posts', 0 )
+                : 0;
+            if ( $pfp_id > 0 ) {
+                $pfp_post  = get_post( $pfp_id );
+                $pfp_path  = $pfp_post ? trim( (string) get_page_uri( $pfp_post ), '/' ) : '';
+            } else {
+                $pfp_path  = '';
+            }
+        }
 
-    if ( $q->is_tax ) {
-        $tax_name = (string) $q->get( 'taxonomy' );
-        $tax_obj  = $tax_name ? get_taxonomy( $tax_name ) : null;
+        if ( $pfp_id > 0 ) {
+            $req_pid = ! empty( $query_vars['page_id'] ) ? (int) $query_vars['page_id'] : 0;
+            if ( $req_pid > 0 && $req_pid === $pfp_id ) {
+                return $finish( 'BLOG' );
+            }
+
+            if ( $req_pid === 0 && $pfp_path !== ''
+              && trim( (string) ( $query_vars['pagename'] ?? '' ), '/' ) === $pfp_path ) {
+                return $finish( 'BLOG' );
+            }
+        }
+
+        return $finish( 'PAGE' );
+    }
+
+    // Standard taxonomy archives.
+    if ( $is_category ) { return $finish( 'CATEGORY' ); }
+    if ( $is_tag )      { return $finish( 'TAG' ); }
+    if ( $is_tax ) {
+        $tax_obj = $detected_tax !== '' ? get_taxonomy( $detected_tax ) : null;
         return $finish( $tax_obj ? strtoupper( $tax_obj->labels->singular_name ) : 'TAXONOMY' );
     }
 
-    if ( $q->is_author ) { return $finish( 'AUTHOR' ); }
-    if ( $q->is_date )   { return $finish( 'DATE_ARCHIVE' ); }
-    if ( $q->is_search ) { return $finish( 'SEARCH_RESULTS' ); }
-    if ( $q->is_home )   { return $finish( 'BLOG' ); }
+    if ( $is_author ) { return $finish( 'AUTHOR' ); }
+    if ( $is_date )   { return $finish( 'DATE_ARCHIVE' ); }
+    if ( $is_search ) { return $finish( 'SEARCH_RESULTS' ); }
 
-    if ( $q->is_post_type_archive ) {
-        $pt     = (string) $q->get( 'post_type' );
-        $pt_obj = $pt ? get_post_type_object( $pt ) : null;
+    if ( $is_pta ) {
+        $pt_obj = $pta_pt !== '' ? get_post_type_object( $pta_pt ) : null;
         return $finish( $pt_obj ? strtoupper( $pt_obj->labels->name ) : 'ARCHIVE' );
     }
 
