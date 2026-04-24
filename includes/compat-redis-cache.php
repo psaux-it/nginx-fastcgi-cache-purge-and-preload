@@ -132,7 +132,7 @@ if ( ! function_exists( 'nppp_redis_cache_on_nppp_purge_all' ) ) {
     }
 }
 
-add_action( 'nppp_purged_all', 'nppp_redis_cache_on_nppp_purge_all' );
+add_action( 'nppp_purged_all', 'nppp_redis_cache_on_nppp_purge_all', 10, 1 );
 
 // Fired by nppp_preload() for all direct "Preload All" operations
 // (Admin button, Admin Bar, REST API, Cron)
