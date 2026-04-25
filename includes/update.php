@@ -172,14 +172,15 @@ function nppp_migration_215() {
 // Backfill: if master auto-purge was already ON, set all new
 // sub-trigger keys to 'yes' so their existing behaviour is fully preserved.
 // Users who had auto-purge OFF get sub-triggers as 'no' (safe default).
+// Switch every 3 Hour cron for index updater
 function nppp_migration_216() {
     $options = get_option( 'nginx_cache_settings', array() );
     if ( ! is_array( $options ) ) {
         return;
     }
 
-    $master_was_on     = isset( $options['nginx_cache_purge_on_update'] )
-                         && $options['nginx_cache_purge_on_update'] === 'yes';
+    $master_was_on        = isset( $options['nginx_cache_purge_on_update'] )
+                                && $options['nginx_cache_purge_on_update'] === 'yes';
     $sub_triggers_missing = ! array_key_exists( 'nppp_autopurge_posts', $options );
 
     if ( $master_was_on && $sub_triggers_missing ) {
@@ -189,5 +190,10 @@ function nppp_migration_216() {
         $options['nppp_autopurge_themes']   = 'yes';
         $options['nppp_autopurge_3rdparty'] = 'yes';
         update_option( 'nginx_cache_settings', $options );
+    }
+
+    // Switch every 3 Hour cron for index updater
+    if ( function_exists( 'nppp_schedule_index_updater' ) ) {
+        nppp_schedule_index_updater();
     }
 }
