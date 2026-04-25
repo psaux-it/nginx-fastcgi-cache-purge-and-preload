@@ -72,6 +72,97 @@ function nppp_my_faq_html() {
                     </div>
                 </div>
 
+                <h3 class="nppp-question">Preloading fails with "ERROR COMMAND" or NPP cannot read nginx.conf — could open_basedir be the cause?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>PHP <code>open_basedir</code> and NPP</strong></h3>
+                        <p>Yes. If <code>open_basedir</code> is active in your PHP configuration, it silently restricts every filesystem and binary access PHP makes — including the paths NPP must reach to preload pages, read <code>nginx.conf</code>, detect FUSE mounts, and locate system binaries. The error surface is misleading: instead of an <code>open_basedir</code> violation message, you typically see:</p>
+                        <pre>ERROR COMMAND: Preloading failed for https://example.com. Please check Exclude Endpoints and Exclude File Extensions settings syntax.</pre>
+                        <p>This message means NPP could not execute a required system command — most commonly because <code>open_basedir</code> is blocking access to the <code>wget</code> binary, <code>nginx.conf</code>, the cache directory, or <code>/proc</code> (which NPP reads to detect FUSE mounts).</p>
+
+                        <h4><strong>What paths does NPP require access to?</strong></h4>
+                        <p>The following table lists every path category NPP needs and why. All of these must be reachable by the PHP-FPM process for NPP to work correctly:</p>
+                        <table class="responsive-table">
+                            <thead>
+                                <tr>
+                                    <th>Path</th>
+                                    <th>Why NPP needs it</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>{ABSPATH}/</code></td>
+                                    <td>WordPress installation root — plugin files, runtime files (PID, log, snapshot)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>{ABSPATH}/../</code></td>
+                                    <td>Parent of WordPress root — required by WP Filesystem API for uploads and adjacent paths</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/dev/shm/</code>, <code>/tmp/</code>, <code>/var/</code>, <code>/cache/</code></td>
+                                    <td>Nginx cache directory root — NPP reads, writes, and deletes cache files here</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/proc/</code></td>
+                                    <td>FUSE mount detection — NPP reads <code>/proc/self/mountinfo</code> and <code>/proc/mounts</code> to determine if the cache path is a FUSE (bindfs) mount</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/dev/null</code></td>
+                                    <td>Standard null device — used by shell command redirects</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/etc/nginx/</code></td>
+                                    <td>Default nginx.conf location — NPP reads it to extract cache key directives and verify cache zone configuration</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/usr/bin/</code>, <code>/usr/sbin/</code></td>
+                                    <td>System binaries — <code>wget</code> (preload), <code>rg</code> (ripgrep scan), <code>safexec</code>, <code>nginx -V</code> (conf path detection), <code>ps</code> (PID checks)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/usr/local/bin/</code>, <code>/usr/local/sbin/</code></td>
+                                    <td>Alternative binary locations — same binaries as above when installed outside <code>/usr/bin</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>/bin/</code>, <code>/sbin/</code></td>
+                                    <td>Core system utilities — <code>echo</code>, shell builtins used in command probes</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h4><strong>Recommended <code>open_basedir</code> configuration</strong></h4>
+                        <p>Add the following to your PHP-FPM pool configuration file (e.g., <code>/etc/php/8.x/fpm/pool.d/yoursite.conf</code>) or your server-wide <code>php.ini</code>. Adjust <code>{ABSPATH}</code> to your actual WordPress installation path and the cache root to match your <code>nginx_cache_path</code> setting:</p>
+                        <pre>php_admin_value[open_basedir] =
+    /var/www/yoursite.com/ :
+    /var/www/yoursite.com/../ :
+    /dev/shm/ :
+    /tmp/ :
+    /var/ :
+    /cache/ :
+    /proc/ :
+    /dev/null :
+    /etc/nginx/ :
+    /usr/bin/ :
+    /usr/sbin/ :
+    /usr/local/bin/ :
+    /usr/local/sbin/ :
+    /bin/ :
+    /sbin/</pre>
+                        <p>Reload PHP-FPM after saving: <code>systemctl reload php-fpm</code></p>
+
+                        <h4><strong>How to confirm <code>open_basedir</code> is the culprit</strong></h4>
+                        <ol>
+                            <li>Check the <strong>Status tab</strong> — NPP emits a <code>GLOBAL WARNING OPEN_BASEDIR</code> notice when it detects an active restriction.</li>
+                            <li>Temporarily set <code>open_basedir =</code> (empty) in your pool config, reload PHP-FPM, and re-test. If the error disappears, <code>open_basedir</code> was the cause.</li>
+                            <li>Re-enable <code>open_basedir</code> with the full path list above and confirm NPP works correctly.</li>
+                        </ol>
+
+                        <h4><strong>Important notes</strong></h4>
+                        <p>⚠️ Setting <code>open_basedir =</code> (completely empty) disables the restriction globally — do not leave it empty in production. Always re-enable it with the correct path list after testing.</p>
+                        <p>📌 On Docker-based deployments, binary paths may differ (e.g., <code>/usr/local/bin/wget</code> instead of <code>/usr/bin/wget</code>). Check actual binary locations with <code>which wget rg safexec nginx ps</code> inside the PHP-FPM container and add those directories to the list accordingly.</p>
+                        <p>📌 If your Nginx configuration is stored outside <code>/etc/nginx/</code> (e.g., <code>/usr/local/etc/nginx/</code> or <code>/opt/nginx/conf/</code>), add that directory as well. NPP probes all common nginx.conf locations — every directory in that probe list must be reachable.</p>
+                    </div>
+                </div>
+
                 <h3 class="nppp-question">How does NPP purge the cache and what is the HTTP Purge?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
@@ -400,6 +491,67 @@ location ~ /purge(/.*) {
 
                         <p><strong>Q: Does RG Purge work with Purge All?</strong><br>
                         A: No. Purge All always uses filesystem operations (recursive directory deletion). RG Purge applies only to single‑URL and related‑URL purges.</p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">Why is the Advanced tab slow to load when I have many cached URLs?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Advanced Tab Load Performance</strong></h3>
+                        <p>Every time you open the <strong>Advanced</strong> tab, NPP performs a full scan of your Nginx cache directory to build the cached-URL table — reading the <code>KEY:</code> header from every cache file to extract the URL, content type, and variant count. On large caches this scan is the dominant cost. The method NPP uses depends entirely on which tools are available on the host or container running WordPress/PHP-FPM.</p>
+
+                        <h4><strong>The three scanning paths</strong></h4>
+                        <p><strong>No ripgrep installed:</strong> NPP falls back to a PHP <code>RecursiveDirectoryIterator</code> loop — opening and reading each cache file one at a time from userland PHP. This is the slowest method and is heavily penalised by FUSE filesystem overhead in containerised environments.</p>
+                        <p><strong>ripgrep (<code>rg</code>) installed, no safexec:</strong> NPP delegates the scan to <code>rg</code>. ripgrep uses parallel, memory-mapped I/O and is significantly faster than the PHP loop. However, if your cache path is a FUSE mount (bindfs), <code>rg</code> still walks through the FUSE virtual filesystem — faster than PHP, but still subject to FUSE overhead.</p>
+                        <p><strong>ripgrep + safexec both installed (FUSE environment):</strong> NPP runs <code>rg</code> via safexec against the <strong>real source path on disk</strong>, completely bypassing the FUSE layer. This is the fastest possible scan path and the configuration that is <strong>strongly recommended</strong> for any containerised or FUSE-mounted deployment.</p>
+
+                        <h4><strong>Real-world benchmark — 8,000 cached URLs, containerised environment with FUSE mount (bindfs)</strong></h4>
+                        <table class="responsive-table">
+                            <thead>
+                                <tr>
+                                    <th>Setup</th>
+                                    <th>Scanning Method</th>
+                                    <th>Scanned Path</th>
+                                    <th>Advanced Tab Load Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>No ripgrep, no safexec</strong></td>
+                                    <td>PHP <code>RecursiveDirectoryIterator</code></td>
+                                    <td>FUSE mount (slow)</td>
+                                    <td>⚠️ ~21 seconds</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>ripgrep + safexec installed</strong></td>
+                                    <td><code>rg</code> via safexec</td>
+                                    <td>Real source path (FUSE bypassed)</td>
+                                    <td>✅ ~5 seconds</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p>Installing both tools reduces Advanced tab load time by <strong>~76%</strong> (from ~21 s to ~5 s) on a real containerised production stack with 8,000 cached URLs. The gains grow proportionally as cache size increases.</p>
+
+                        <h4><strong>Why FUSE makes it dramatically worse</strong></h4>
+                        <p>A FUSE mount (bindfs) introduces a per-syscall context-switch overhead because every file <code>open()</code> and <code>read()</code> is bridged through a userspace FUSE daemon. When PHP walks 8,000+ files via <code>RecursiveDirectoryIterator</code> over a FUSE mount, each individual file operation crosses the FUSE boundary — multiplying the I/O cost by orders of magnitude compared to reading the same files from the underlying native filesystem. <strong>ripgrep via safexec bypasses this entirely</strong> by scanning the real source directory, with zero FUSE crossings.</p>
+
+                        <h4><strong>How to get maximum performance</strong></h4>
+                        <ol>
+                            <li>
+                                Install <strong>ripgrep</strong> on the host or inside the container running PHP-FPM:
+                                <pre>apt install ripgrep       # Debian / Ubuntu
+dnf install ripgrep       # RHEL / Fedora
+apk add ripgrep           # Alpine Linux</pre>
+                            </li>
+                            <li>Install <strong>safexec</strong> (required to bypass FUSE overhead): see the <em>"What is safexec?"</em> FAQ entry below for package download links and the one-liner installer.</li>
+                            <li>Visit the <strong>Status tab</strong> to confirm both <code>rg</code> and <code>safexec</code> are detected — no further plugin configuration is required. NPP detects and uses both tools automatically.</li>
+                        </ol>
+
+                        <h4><strong>What if I cannot install safexec?</strong></h4>
+                        <p>ripgrep alone still helps in non-FUSE environments. If your cache path is a FUSE mount without safexec, NPP falls back to running <code>rg</code> directly against the FUSE mount — faster than the PHP loop, but not as fast as the full FUSE-bypass path. The ~76% improvement described above requires <strong>both</strong> ripgrep and safexec.</p>
+
+                        <h4><strong>Does this affect anything other than the Advanced tab?</strong></h4>
+                        <p>Yes — the same scanning chain is used during <strong>Scheduled Preload</strong> and <strong>Preload All</strong> completion to rebuild the URL→filepath index. The Advanced tab is simply the most visible and interactive place where the scan latency is felt directly by the administrator.</p>
                     </div>
                 </div>
 
