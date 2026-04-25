@@ -2345,13 +2345,18 @@ $(document).ready(function() {
                     }
                 });
             },
-            error: function(xhr, status, error) {
+            error: function(xhr) {
+                var message = ( xhr.responseJSON && xhr.responseJSON.data )
+                    ? xhr.responseJSON.data
+                    : __( 'An unexpected error occurred.', 'fastcgi-cache-purge-and-preload-nginx' );
+
                 $('.scheduled-events-list').empty();
-                var html = '<div class="nppp-scheduled-event">';
-                html += '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
-                html += '<div class="nppp-scheduled-event" style="padding-right: 45px;">Please set your Timezone in Wordpress - Options/General!</div>';
-                html += '</div>';
+                var html  = '<div class="nppp-scheduled-event">';
+                    html += '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
+                    html += '<div class="nppp-scheduled-event" style="padding-right: 45px;">' + message + '</div>';
+                    html += '</div>';
                 $('.scheduled-events-list').append(html);
+
                 console.error(xhr.responseText);
             }
         });
@@ -2412,24 +2417,13 @@ $(document).ready(function() {
                     }, 300);
                 }, 1000);
 
-                switch (response.data) {
-                    case 'Option updated successfully. Unschedule success.':
-                        $('.scheduled-events-list').empty();
-                        var html = '<div class="nppp-scheduled-event">';
-                        html += '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
-                        html += '<div class="nppp-scheduled-event" style="padding-right: 45px;">No active scheduled events found!</div>';
-                        html += '</div>';
-                        $('.scheduled-events-list').append(html);
-                        break;
-                    case 'Option updated successfully. No event found.':
-                        // Handle case where no existing event was found
-                        break;
-                    case 'Option updated successfully.':
-                        // Handle generic success case
-                        break;
-                    default:
-                        // Handle unknown response
-                        break;
+                if ( response.data && response.data.unscheduled ) {
+                    $('.scheduled-events-list').empty();
+                    var html = '<div class="nppp-scheduled-event">';
+                    html += '<h3 class="nppp-active-cron-heading">' + __('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') + '</h3>';
+                    html += '<div class="nppp-scheduled-event" style="padding-right: 45px;">' + __('No active scheduled events found!', 'fastcgi-cache-purge-and-preload-nginx') + '</div>';
+                    html += '</div>';
+                    $('.scheduled-events-list').append(html);
                 }
             } else {
                 // Error updating option, revert checkbox
@@ -2514,7 +2508,7 @@ $(document).ready(function() {
                 action: 'nppp_clear_nginx_cache_logs',
                 _wpnonce: nppp_admin_data.clear_logs_nonce
             },
-            success: function(response) {
+            success: function(clearResponse) {
                 // Logs cleared successfully
                 // Trigger polling to get latest content
                 $.ajax({
@@ -2526,16 +2520,34 @@ $(document).ready(function() {
                         _wpnonce: nppp_admin_data.clear_logs_nonce
                     },
                     success: function(response) {
-                        // Parse the timestamp and message from the response
-                        var data = response.data;
-                        var timestamp = data.substring(1, 20);
-                        var message = data.substring(23);
-                        // Construct HTML for logs container
-                        var html = '<div class="logs-container">' +
+                        var data   = response.data;
+                        var html;
+                        // Log file has a parseable entry (format: [YYYY-MM-DD HH:MM:SS] msg)
+                        if ( typeof data === 'string' && data.length > 23 ) {
+                            var timestamp = data.substring(1, 20);
+                            var message   = data.substring(23);
+                            html = '<div class="logs-container">' +
                                        '<div class="success-line"><span class="timestamp">' + timestamp + '</span> ' + message + '</div>' +
                                        '<div class="cursor blink">#</div>' +
                                    '</div>';
-
+                        } else {
+                            // Log is empty after clear — use the clear-action success message
+                            var now = new Date();
+                            var pad = function(n) { return String(n).padStart(2, '0'); };
+                            var ts  = now.getFullYear() + '-' +
+                                      pad(now.getMonth() + 1) + '-' +
+                                      pad(now.getDate()) + ' ' +
+                                      pad(now.getHours()) + ':' +
+                                      pad(now.getMinutes()) + ':' +
+                                      pad(now.getSeconds());
+                            var msg = ( clearResponse && clearResponse.data )
+                                        ? clearResponse.data
+                                        : 'Logs cleared successfully.';
+                            html = '<div class="logs-container">' +
+                                       '<div class="success-line"><span class="timestamp">' + ts + '</span> ' + msg + '</div>' +
+                                       '<div class="cursor blink">#</div>' +
+                                   '</div>';
+                        }
                         // Update the content area with the new logs HTML
                         $('.logs-container').html(html);
                     },
