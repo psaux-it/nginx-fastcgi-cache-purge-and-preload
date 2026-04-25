@@ -82,7 +82,7 @@ function nppp_nginx_cache_settings_page() {
             </div>
         </div>
         <?php
-        // Pre-compute all badge flags
+        // Pre-compute all badges
         $nppp_show_assume = nppp_is_assume_nginx_mode();
         $nppp_badge_opts  = get_option( 'nginx_cache_settings', [] );
         $nppp_badge_path  = isset( $nppp_badge_opts['nginx_cache_path'] ) ? $nppp_badge_opts['nginx_cache_path'] : '';
@@ -90,6 +90,7 @@ function nppp_nginx_cache_settings_page() {
                               ? nppp_get_cache_disk_size( $nppp_badge_path )
                               : null;
 
+        // Show cache disk warning over %90
         $nppp_show_cache_warn = (
             $nppp_badge_disk !== null &&
             $nppp_badge_disk['dedicated'] &&
@@ -97,6 +98,7 @@ function nppp_nginx_cache_settings_page() {
             ( $nppp_badge_disk['used'] / $nppp_badge_disk['total'] ) >= 0.90
         );
 
+        // safexec version update detection
         $nppp_show_safexec_warn = false;
         $nppp_safexec_latest_ver = '';
         if ( function_exists( 'nppp_check_safexec_version' ) ) {
@@ -109,53 +111,105 @@ function nppp_nginx_cache_settings_page() {
             }
         }
 
-        // Only renders when at least one badge is visible
-        if ( $nppp_show_assume || $nppp_show_cache_warn || $nppp_show_safexec_warn ) : ?>
-        <div id="nppp-badge-bar">
+        // ripgrep binary check
+        $nppp_rg_installed = false;
+        if ( function_exists( 'shell_exec' ) ) {
+            nppp_prepare_request_env();
+            $nppp_rg_bin       = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+            $nppp_rg_installed = $nppp_rg_bin !== '';
+        }
 
-            <?php if ( $nppp_show_assume ) : ?>
-            <div id="nppp-assume">
-                <span class="dashicons dashicons-warning" aria-hidden="true"></span>
-                <strong><?php echo esc_html__( 'Assume-Nginx Mode Active', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                <?php if ( class_exists( '\NPPP\Setup' ) ) : ?>
-                <a href="<?php echo esc_url( admin_url( 'admin.php?page=' . \NPPP\Setup::PAGE_SLUG ) ); ?>" class="button button-small">
-                    <?php echo esc_html__( 'Setup', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                </a>
+        // FUSE mount detection
+        $nppp_fuse_active = false;
+        if ( ! empty( $nppp_badge_path ) && function_exists( 'nppp_fuse_source_path' ) ) {
+            $nppp_fuse_active = nppp_fuse_source_path( $nppp_badge_path ) !== null;
+        }
+
+        // safexec usability for rg (only meaningful when FUSE is active).
+        $nppp_safexec_rg_ok = false;
+        if ( $nppp_fuse_active && function_exists( 'nppp_find_safexec_path' ) && function_exists( 'nppp_is_safexec_usable' ) ) {
+            $nppp_sfx_path      = nppp_find_safexec_path();
+            $nppp_safexec_rg_ok = $nppp_sfx_path && nppp_is_safexec_usable( $nppp_sfx_path, false );
+        }
+
+        // Display RG badge when missing. Providing a Resource Group significantly reduces
+        // load times for the Advanced tab and other expensive recursive operations.
+        // Highly recommended for performance optimization.
+        $nppp_show_rg_warn = ! $nppp_rg_installed;
+
+        // Show FUSE+safexec badge when rg is present but safexec is absent on a FUSE mount.
+        // rg alone on FUSE scans the slow mount path — safexec unlocks the original source path
+        $nppp_show_fuse_safexec_warn = $nppp_rg_installed && $nppp_fuse_active && ! $nppp_safexec_rg_ok;
+
+        // Only renders when at least one badge is visible
+        if ( $nppp_show_assume || $nppp_show_cache_warn || $nppp_show_safexec_warn || $nppp_show_rg_warn || $nppp_show_fuse_safexec_warn ) : ?>
+            <div id="nppp-badge-bar">
+                <?php if ( $nppp_show_assume ) : ?>
+                    <div id="nppp-assume">
+                        <span class="dashicons dashicons-warning" aria-hidden="true"></span>
+                        <strong><?php echo esc_html__( 'Assume-Nginx Mode Active', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                        <?php if ( class_exists( '\NPPP\Setup' ) ) : ?>
+                            <a href="<?php echo esc_url( admin_url( 'admin.php?page=' . \NPPP\Setup::PAGE_SLUG ) ); ?>" class="button button-small">
+                                <?php echo esc_html__( 'Setup', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+                <?php if ( $nppp_show_cache_warn ) : ?>
+                    <div id="nppp-cache-warn">
+                        <span class="dashicons dashicons-warning" aria-hidden="true"></span>
+                        <strong><?php echo esc_html__( 'Cache Storage Above 90%', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                        <a href="#status" class="button button-small">
+                            <?php echo esc_html__( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </a>
+                    </div>
+                <?php endif; ?>
+                <?php if ( $nppp_show_safexec_warn ) : ?>
+                    <div id="nppp-safexec-warn">
+                        <span class="dashicons dashicons-update" aria-hidden="true"></span>
+                        <strong>
+                            <?php
+                            echo esc_html(
+                                sprintf(
+                                    /* translators: %s: safexec version number */
+                                    __( 'Update safexec to %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                                    $nppp_safexec_latest_ver
+                                )
+                            );
+                            ?>
+                        </strong>
+                        <a href="#help" class="button button-small">
+                            <?php echo esc_html__( 'Help', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </a>
+                    </div>
+                <?php endif; ?>
+                <?php if ( $nppp_show_rg_warn ) : ?>
+                    <div id="nppp-rg-warn">
+                        <span class="dashicons dashicons-performance" aria-hidden="true"></span>
+                        <strong>
+                            <?php
+                            echo esc_html(
+                                $nppp_fuse_active
+                                    ? __( 'Install ripgrep + safexec (FUSE)', 'fastcgi-cache-purge-and-preload-nginx' )
+                                    : __( 'Install ripgrep for performance!', 'fastcgi-cache-purge-and-preload-nginx' )
+                            );
+                            ?>
+                        </strong>
+                        <a href="#help" class="button button-small">
+                            <?php echo esc_html__( 'Help', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </a>
+                    </div>
+                <?php endif; ?>
+                <?php if ( $nppp_show_fuse_safexec_warn ) : ?>
+                    <div id="nppp-fuse-safexec-warn">
+                        <span class="dashicons dashicons-performance" aria-hidden="true"></span>
+                        <strong><?php echo esc_html__( 'Install safexec for performance (FUSE)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                        <a href="#help" class="button button-small">
+                            <?php echo esc_html__( 'Help', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </a>
+                    </div>
                 <?php endif; ?>
             </div>
-            <?php endif; ?>
-
-            <?php if ( $nppp_show_cache_warn ) : ?>
-            <div id="nppp-cache-warn">
-                <span class="dashicons dashicons-warning" aria-hidden="true"></span>
-                <strong><?php echo esc_html__( 'Cache Storage Above 90%', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                <a href="#status" class="button button-small">
-                    <?php echo esc_html__( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                </a>
-            </div>
-            <?php endif; ?>
-
-            <?php if ( $nppp_show_safexec_warn ) : ?>
-            <div id="nppp-safexec-warn">
-                <span class="dashicons dashicons-update" aria-hidden="true"></span>
-                <strong>
-                    <?php
-                    echo esc_html(
-                        sprintf(
-                            /* translators: %s: safexec version number */
-                            __( 'Update safexec to %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-                            $nppp_safexec_latest_ver
-                        )
-                    );
-                    ?>
-                </strong>
-                <a href="#help" class="button button-small">
-                    <?php echo esc_html__( 'Help', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                </a>
-            </div>
-            <?php endif; ?>
-
-        </div>
         <?php endif; ?>
         <h2></h2>
         <div id="nppp-nginx-tabs">
