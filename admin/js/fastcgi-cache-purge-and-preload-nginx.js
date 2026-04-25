@@ -2417,7 +2417,7 @@ $(document).ready(function() {
                     }, 300);
                 }, 1000);
 
-                if ( response.data && response.data.unscheduled ) {
+                if ( isChecked === 'no' ) {
                     $('.scheduled-events-list').empty();
                     var html = '<div class="nppp-scheduled-event">';
                     html += '<h3 class="nppp-active-cron-heading">' + __('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') + '</h3>';
