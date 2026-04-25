@@ -14,15 +14,61 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Shared AJAX auth guard: nonce + capability check.
+function nppp_ajax_auth( string $nonce_action ): void {
+    check_ajax_referer( $nonce_action, '_wpnonce' );
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error(
+            __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            403
+        );
+    }
+}
+
+// Shared helper: sanitize POST field, persist it into settings, return success.
+function nppp_save_toggle_option( string $nonce_action, string $post_key, string $option_key, string $default = '' ): void {
+    nppp_ajax_auth( $nonce_action );
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    $value = isset( $_POST[ $post_key ] )
+        ? sanitize_text_field( wp_unslash( $_POST[ $post_key ] ) )
+        : $default;
+    $opts = get_option( 'nginx_cache_settings', [] );
+    if ( ! is_array( $opts ) ) {
+        $opts = [];
+    }
+    $opts[ $option_key ] = $value;
+    update_option( 'nginx_cache_settings', $opts );
+    wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+}
+
+// Shared helper: curl url copy
+function nppp_rest_api_url_copy( string $nonce_action, string $endpoint ): void {
+    nppp_ajax_auth( $nonce_action );
+    $options         = get_option( 'nginx_cache_settings', [] );
+    $default_api_key = bin2hex( random_bytes( 32 ) );
+    $api_key         = isset( $options['nginx_cache_api_key'] ) ? $options['nginx_cache_api_key'] : $default_api_key;
+    $curl_command    = sprintf(
+        'curl -k -X POST -H "Authorization: Bearer %s" -H "Accept: application/json" "%s"',
+        $api_key,
+        get_rest_url( null, $endpoint )
+    );
+    wp_send_json_success( $curl_command );
+}
+
+// Shared helper: default fetch
+function nppp_reset_default_option( string $nonce_action, string $option_key, callable $fetcher ): void {
+    nppp_ajax_auth( $nonce_action );
+    $value           = $fetcher();
+    $current_options = get_option( 'nginx_cache_settings', [] );
+    $current_options[ $option_key ] = $value;
+    update_option( 'nginx_cache_settings', $current_options );
+    wp_send_json_success( $value );
+}
+
 // AJAX callback function to clear logs
 function nppp_clear_nginx_cache_logs() {
     // Nonce check
-    check_ajax_referer('nppp-clear-nginx-cache-logs', '_wpnonce');
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
+    nppp_ajax_auth( 'nppp-clear-nginx-cache-logs' );
 
     $wp_filesystem = nppp_initialize_wp_filesystem();
     if ($wp_filesystem === false) {
@@ -41,12 +87,7 @@ function nppp_clear_nginx_cache_logs() {
 // Child AJAX callback function to retrieve log content after clear
 function nppp_get_nginx_cache_logs() {
     // Nonce check
-    check_ajax_referer('nppp-clear-nginx-cache-logs', '_wpnonce');
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
+    nppp_ajax_auth( 'nppp-clear-nginx-cache-logs' );
 
     $wp_filesystem = nppp_initialize_wp_filesystem();
     if ($wp_filesystem === false) {
@@ -63,38 +104,14 @@ function nppp_get_nginx_cache_logs() {
 }
 
 // AJAX callback function to update send mail option
-function nppp_update_send_mail_option() {
-    // Nonce check
-    check_ajax_referer( 'nppp-update-send-mail-option', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Sanitize the posted option value
-    $send_mail = isset($_POST['send_mail']) ? sanitize_text_field(wp_unslash($_POST['send_mail'])) : '';
-
-    // Get the current options
-    $current_options = get_option('nginx_cache_settings', array());
-
-    // Update the specific option within the array
-    $current_options['nginx_cache_send_mail'] = $send_mail;
-
-    // Update option
-    update_option( 'nginx_cache_settings', $current_options );
-    wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+function nppp_update_send_mail_option(): void {
+    nppp_save_toggle_option( 'nppp-update-send-mail-option', 'send_mail', 'nginx_cache_send_mail' );
 }
 
 // AJAX callback function to update related pages
 function nppp_update_related_fields() {
     // Nonce check
-    check_ajax_referer( 'nppp-related-posts-purge', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
+    nppp_ajax_auth( 'nppp-related-posts-purge' );
 
     $allowed_keys = [
         'nppp_related_include_home',
@@ -147,12 +164,7 @@ function nppp_update_related_fields() {
 // AJAX callback function to update percent-encode case
 function nppp_update_pctnorm_mode() {
     // Nonce check
-    check_ajax_referer( 'nppp-update-pctnorm-mode', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can('manage_options') ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
+    nppp_ajax_auth( 'nppp-update-pctnorm-mode' );
 
     $val = isset($_POST['mode']) ? sanitize_text_field( wp_unslash($_POST['mode']) ) : '';
     $allowed = array( 'off', 'upper', 'lower', 'preserve' );
@@ -174,110 +186,29 @@ function nppp_update_pctnorm_mode() {
 }
 
 // AJAX callback function to update auto preload option
-function nppp_update_auto_preload_option() {
-    // Verify nonce
-    check_ajax_referer( 'nppp-update-auto-preload-option', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Get the posted option value and sanitize it
-    $auto_preload = isset($_POST['auto_preload']) ? sanitize_text_field(wp_unslash($_POST['auto_preload'])) : '';
-
-    // Get the current options
-    $current_options = get_option('nginx_cache_settings', array());
-
-    // Update the specific option within the array
-    $current_options['nginx_cache_auto_preload'] = $auto_preload;
-
-    // Update option
-    update_option( 'nginx_cache_settings', $current_options );
-    wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+function nppp_update_auto_preload_option(): void {
+    nppp_save_toggle_option( 'nppp-update-auto-preload-option', 'auto_preload', 'nginx_cache_auto_preload' );
 }
 
 // AJAX callback function to update enable proxy option
-function nppp_update_enable_proxy_option() {
-    // Verify nonce
-    check_ajax_referer( 'nppp-update-enable-proxy-option', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Get the posted option value and sanitize it
-    $enable_proxy = isset($_POST['enable_proxy']) ? sanitize_text_field(wp_unslash($_POST['enable_proxy'])) : '';
-
-    // Get the current options
-    $current_options = get_option('nginx_cache_settings', array());
-
-    // Update the specific option within the array
-    $current_options['nginx_cache_preload_enable_proxy'] = $enable_proxy;
-
-    // Update option
-    update_option( 'nginx_cache_settings', $current_options );
-    wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+function nppp_update_enable_proxy_option(): void {
+    nppp_save_toggle_option( 'nppp-update-enable-proxy-option', 'enable_proxy', 'nginx_cache_preload_enable_proxy' );
 }
 
 // AJAX callback function to update preload mobile option
-function nppp_update_auto_preload_mobile_option() {
-    // Verify nonce
-    check_ajax_referer( 'nppp-update-auto-preload-mobile-option', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Get the posted option value and sanitize it
-    $preload_mobile = isset($_POST['preload_mobile']) ? sanitize_text_field(wp_unslash($_POST['preload_mobile'])) : '';
-
-    // Get the current options
-    $current_options = get_option('nginx_cache_settings', array());
-
-    // Update the specific option within the array
-    $current_options['nginx_cache_auto_preload_mobile'] = $preload_mobile;
-
-    // Update option
-    update_option( 'nginx_cache_settings', $current_options );
-    wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+function nppp_update_auto_preload_mobile_option(): void {
+    nppp_save_toggle_option( 'nppp-update-auto-preload-mobile-option', 'preload_mobile', 'nginx_cache_auto_preload_mobile' );
 }
 
 // AJAX callback function to update watchdog option
-function nppp_update_watchdog_option() {
-    // Verify nonce
-    check_ajax_referer( 'nppp-update-watchdog-option', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Get the posted option value and sanitize it
-    $watchdog = isset($_POST['watchdog']) ? sanitize_text_field(wp_unslash($_POST['watchdog'])) : '';
-
-    // Get the current options
-    $current_options = get_option('nginx_cache_settings', array());
-
-    // Update the specific option within the array
-    $current_options['nginx_cache_watchdog'] = $watchdog;
-
-    // Update option
-    update_option( 'nginx_cache_settings', $current_options );
-    wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+function nppp_update_watchdog_option(): void {
+    nppp_save_toggle_option( 'nppp-update-watchdog-option', 'watchdog', 'nginx_cache_watchdog' );
 }
 
 // AJAX callback to save all Auto Purge Trigger sub-options as a group.
 function nppp_update_autopurge_triggers() {
     // Verify nonce
-    check_ajax_referer( 'nppp-autopurge-triggers', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
+    nppp_ajax_auth( 'nppp-autopurge-triggers' );
 
     $allowed_keys = array(
         'nppp_autopurge_posts',
@@ -321,12 +252,7 @@ function nppp_update_autopurge_triggers() {
 // AJAX callback function to update auto purge option
 function nppp_update_auto_purge_option() {
     // Verify nonce
-    check_ajax_referer( 'nppp-update-auto-purge-option', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
+    nppp_ajax_auth( 'nppp-update-auto-purge-option' );
 
     // Get the posted option value and sanitize it
     $auto_purge = isset($_POST['auto_purge']) ? sanitize_text_field(wp_unslash($_POST['auto_purge'])) : '';
@@ -357,60 +283,19 @@ function nppp_update_auto_purge_option() {
 }
 
 // AJAX callback function to update Cloudflare APO sync option
-function nppp_update_cloudflare_apo_sync_option() {
-    // Verify nonce
-    check_ajax_referer( 'nppp-update-cloudflare-apo-sync-option', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Get the posted option value and sanitize it
-    $cloudflare_sync = isset($_POST['cloudflare_sync']) ? sanitize_text_field(wp_unslash($_POST['cloudflare_sync'])) : '';
-
-    // Get the current options
-    $current_options = get_option('nginx_cache_settings', array());
-
-    // Update the specific option within the array
-    $current_options['nppp_cloudflare_apo_sync'] = $cloudflare_sync;
-
-    // Update option
-    update_option( 'nginx_cache_settings', $current_options );
-    wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+function nppp_update_cloudflare_apo_sync_option(): void {
+    nppp_save_toggle_option( 'nppp-update-cloudflare-apo-sync-option', 'cloudflare_sync', 'nppp_cloudflare_apo_sync' );
 }
 
 // AJAX handler HTTP Purge
 function nppp_update_http_purge_option(): void {
-    // Verify nonce
-    check_ajax_referer( 'nppp-update-http-purge-option', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Whitelist to exactly 'yes' or 'no'
-    $raw        = sanitize_text_field( wp_unslash( $_POST['http_purge'] ?? '' ) );
-    $http_purge = ( $raw === 'yes' ) ? 'yes' : 'no';
-
-    $current_options = get_option( 'nginx_cache_settings', [] );
-    $current_options['nppp_http_purge_enabled'] = $http_purge;
-
-    // Update option
-    update_option( 'nginx_cache_settings', $current_options );
-    wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    nppp_save_toggle_option( 'nppp-update-http-purge-option', 'http_purge', 'nppp_http_purge_enabled' );
 }
 
 // AJAX handler RG Purge
 function nppp_update_rg_purge_option(): void {
     // Verify nonce
-    check_ajax_referer( 'nppp-update-rg-purge-option', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
+    nppp_ajax_auth( 'nppp-update-rg-purge-option' );
 
     $raw      = sanitize_text_field( wp_unslash( $_POST['rg_purge'] ?? '' ) );
     $rg_purge = ( $raw === 'yes' ) ? 'yes' : 'no';
@@ -432,36 +317,14 @@ function nppp_update_rg_purge_option(): void {
 }
 
 // AJAX handler — Redis Object Cache sync toggle
-function nppp_update_redis_cache_sync_option() {
-    // Verify nonce
-    check_ajax_referer( 'nppp-update-redis-cache-sync-option', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    $redis_sync = isset( $_POST['redis_cache_sync'] )
-        ? sanitize_text_field( wp_unslash( $_POST['redis_cache_sync'] ) )
-        : 'no';
-
-    $current_options = get_option( 'nginx_cache_settings', [] );
-    $current_options['nppp_redis_cache_sync'] = $redis_sync;
-
-    // Update option
-    update_option( 'nginx_cache_settings', $current_options );
-    wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+function nppp_update_redis_cache_sync_option(): void {
+    nppp_save_toggle_option( 'nppp-update-redis-cache-sync-option', 'redis_cache_sync', 'nppp_redis_cache_sync' );
 }
 
 // AJAX callback function to update cache schedule option
 function nppp_update_cache_schedule_option() {
     // Verify nonce
-    check_ajax_referer( 'nppp-update-cache-schedule-option', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
+    nppp_ajax_auth( 'nppp-update-cache-schedule-option' );
 
     // Get the posted option value and sanitize it
     $cache_schedule = isset($_POST['cache_schedule']) ? sanitize_text_field(wp_unslash($_POST['cache_schedule'])) : '';
@@ -487,12 +350,7 @@ function nppp_update_cache_schedule_option() {
 // AJAX callback function to update api key option
 function nppp_update_api_key_option() {
     // Verify nonce
-    check_ajax_referer('nppp-update-api-key-option', '_wpnonce');
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
+    nppp_ajax_auth( 'nppp-update-api-key-option' );
 
     // Generate new API key
     $new_api_key = bin2hex(random_bytes(32));
@@ -515,12 +373,7 @@ function nppp_update_api_key_option() {
 // AJAX callback function to copy api key
 function nppp_update_api_key_copy_value() {
     // Verify nonce
-    check_ajax_referer('nppp-update-api-key-copy-value', '_wpnonce');
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
+    nppp_ajax_auth( 'nppp-update-api-key-copy-value' );
 
     // Get the current options
     $options = get_option('nginx_cache_settings', []);
@@ -538,158 +391,39 @@ function nppp_update_api_key_copy_value() {
 }
 
 // AJAX callback function to update REST API option
-function nppp_update_api_option() {
-    // Verify nonce
-    check_ajax_referer( 'nppp-update-api-option', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Get the posted option value and sanitize it
-    $nppp_api = isset($_POST['nppp_api']) ? sanitize_text_field(wp_unslash($_POST['nppp_api'])) : '';
-
-    // Get the current options
-    $current_options = get_option('nginx_cache_settings', []);
-    $current_options['nginx_cache_api'] = $nppp_api;
-
-    // Update option
-    update_option( 'nginx_cache_settings', $current_options );
-    wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+function nppp_update_api_option(): void {
+    nppp_save_toggle_option( 'nppp-update-api-option', 'nppp_api', 'nginx_cache_api' );
 }
 
 // AJAX callback function to update default reject regex option
-function nppp_update_default_reject_regex_option() {
-    // Verify nonce
-    check_ajax_referer('nppp-update-default-reject-regex-option', '_wpnonce');
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Get default reject regex
-    $default_reject_regex = nppp_fetch_default_reject_regex();
-
-    // Get the current options
-    $current_options = get_option('nginx_cache_settings', []);
-    $current_options['nginx_cache_reject_regex'] = $default_reject_regex;
-
-    // Update option
-    update_option('nginx_cache_settings', $current_options);
-    wp_send_json_success($default_reject_regex);
+function nppp_update_default_reject_regex_option(): void {
+    nppp_reset_default_option( 'nppp-update-default-reject-regex-option', 'nginx_cache_reject_regex', 'nppp_fetch_default_reject_regex' );
 }
 
 // AJAX callback function to update default reject extension option
-function nppp_update_default_reject_extension_option() {
-    // Verify nonce
-    check_ajax_referer('nppp-update-default-reject-extension-option', '_wpnonce');
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Get default reject extension
-    $default_reject_extension = nppp_fetch_default_reject_extension();
-
-    // Get the current options
-    $current_options = get_option('nginx_cache_settings', []);
-    $current_options['nginx_cache_reject_extension'] = $default_reject_extension;
-
-    // Update option
-    update_option('nginx_cache_settings', $current_options);
-    wp_send_json_success($default_reject_extension);
+function nppp_update_default_reject_extension_option(): void {
+    nppp_reset_default_option( 'nppp-update-default-reject-extension-option', 'nginx_cache_reject_extension', 'nppp_fetch_default_reject_extension' );
 }
 
 // AJAX callback function to update default cache key regex option
-function nppp_update_default_cache_key_regex_option() {
-    // Verify nonce
-    check_ajax_referer('nppp-update-default-cache-key-regex-option', '_wpnonce');
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Get default reject extension
-    $default_cache_key_regex = nppp_fetch_default_regex_for_cache_key();
-
-    // Get the current options
-    $current_options = get_option('nginx_cache_settings', []);
-    $current_options['nginx_cache_key_custom_regex'] = $default_cache_key_regex;
-
-    // Update option
-    update_option('nginx_cache_settings', $current_options);
-    wp_send_json_success($default_cache_key_regex);
+function nppp_update_default_cache_key_regex_option(): void {
+    nppp_reset_default_option( 'nppp-update-default-cache-key-regex-option', 'nginx_cache_key_custom_regex', 'nppp_fetch_default_regex_for_cache_key' );
 }
 
 // AJAX callback function to copy rest api curl purge url
-function nppp_rest_api_purge_url_copy() {
-    // Verify nonce
-    check_ajax_referer('nppp-rest-api-purge-url-copy', '_wpnonce');
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Get API Key
-    $options         = get_option('nginx_cache_settings', []);
-    $default_api_key = bin2hex(random_bytes(32));
-    $api_key         = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : $default_api_key;
-
-    // Construct the REST API purge URL
-    $rest_url = get_rest_url(null, '/nppp_nginx_cache/v2/purge');
-
-    // Construct the CURL command
-    $curl_command = sprintf(
-        'curl -k -X POST -H "Authorization: Bearer %s" -H "Accept: application/json" "%s"',
-        $api_key,
-        $rest_url
-    );
-
-    wp_send_json_success($curl_command);
+function nppp_rest_api_purge_url_copy(): void {
+    nppp_rest_api_url_copy( 'nppp-rest-api-purge-url-copy', '/nppp_nginx_cache/v2/purge' );
 }
 
 // AJAX callback function to copy rest api curl preload url
-function nppp_rest_api_preload_url_copy() {
-    // Verify nonce
-    check_ajax_referer('nppp-rest-api-preload-url-copy', '_wpnonce');
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
-
-    // Get API Key
-    $options         = get_option('nginx_cache_settings', []);
-    $default_api_key = bin2hex(random_bytes(32));
-    $api_key         = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : $default_api_key;
-
-    // Construct the REST API purge URL
-    $rest_url = get_rest_url(null, '/nppp_nginx_cache/v2/preload');
-
-    // Construct the CURL command
-    $curl_command = sprintf(
-        'curl -k -X POST -H "Authorization: Bearer %s" -H "Accept: application/json" "%s"',
-        $api_key,
-        $rest_url
-    );
-
-    wp_send_json_success($curl_command);
+function nppp_rest_api_preload_url_copy(): void {
+    nppp_rest_api_url_copy( 'nppp-rest-api-preload-url-copy', '/nppp_nginx_cache/v2/preload' );
 }
 
 // Define the AJAX handler function to save the cron expression
 function nppp_get_save_cron_expression() {
     // Verify nonce
-    check_ajax_referer( 'nppp-get-save-cron-expression', '_wpnonce' );
-
-    // Check user capability
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to update this option.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
+    nppp_ajax_auth( 'nppp-get-save-cron-expression' );
 
     // Get the cron frequency and time from the AJAX request and sanitize them
     $cron_freq = isset($_POST['nppp_cron_freq']) ? sanitize_text_field(wp_unslash($_POST['nppp_cron_freq'])) : '';
