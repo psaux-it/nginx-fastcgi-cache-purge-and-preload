@@ -24,8 +24,14 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return void
  */
 function nppp_schedule_index_updater(): void {
+    if ( wp_next_scheduled( 'nppp_index_updater_event' )
+        && wp_get_schedule( 'nppp_index_updater_event' ) !== 'every_3hours_npp'
+    ) {
+        wp_clear_scheduled_hook( 'nppp_index_updater_event' );
+    }
+
     if ( ! wp_next_scheduled( 'nppp_index_updater_event' ) ) {
-        wp_schedule_event( time(), 'daily', 'nppp_index_updater_event' );
+        wp_schedule_event( time(), 'every_3hours_npp', 'nppp_index_updater_event' );
     }
 }
 
