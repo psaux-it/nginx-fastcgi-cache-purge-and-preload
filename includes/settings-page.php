@@ -918,95 +918,70 @@ function nppp_nginx_cache_settings_page() {
     <?php
 }
 
-// Processes the form submission, validates the nonce,
-// checks user permissions, sanitize & validate and save the plugin settings,
-// clear plugin cache if Nginx Cache Path updated,
-// redirects the user back to the settings page with a message
-// This function hooks into the 'admin_post'
+// Processes the form submission
 function nppp_handle_nginx_cache_settings_submission() {
-    // Check if the form has been submitted
-    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_nginx_cache_settings') {
-        // Check nonce exists
-        if (isset($_POST['nginx_cache_settings_nonce'])) {
-            // Sanitize the nonce
-            $nonce = sanitize_text_field(wp_unslash($_POST['nginx_cache_settings_nonce']));
+    // Verify nonce and check capability
+    check_admin_referer('nginx_cache_settings_nonce', 'nginx_cache_settings_nonce');
 
-            // Verify the nonce
-            if (wp_verify_nonce($nonce, 'nginx_cache_settings_nonce')) {
-                // Capability check
-                if (!current_user_can('manage_options')) {
-                    wp_die(esc_html__('You do not have sufficient permissions to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
-                }
+    if (!current_user_can('manage_options')) {
+        wp_die(esc_html__('You do not have sufficient permissions to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
+    }
 
-                // Check if 'nginx_cache_settings' is set in the POST data
-                if (isset($_POST['nginx_cache_settings'])) {
-                    // Retrieve existing options before sanitizing the input
-                    $existing_options = get_option('nginx_cache_settings', []);
+    // Check if 'nginx_cache_settings' is set in the POST data
+    if (isset($_POST['nginx_cache_settings'])) {
+        $existing_options = get_option('nginx_cache_settings', []);
 
-                    // Ignored PCP warning because we use custom sanitization via 'nppp_nginx_cache_settings_sanitize()'.
-                    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Already sanitized
-                    $nginx_cache_settings = wp_unslash($_POST['nginx_cache_settings']);
+        // Ignored PCP warning because we use custom sanitization via 'nppp_nginx_cache_settings_sanitize()'.
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Already sanitized
+        $nginx_cache_settings = wp_unslash($_POST['nginx_cache_settings']);
 
-                    // This is a pre-check to catch sanitization errors early, before calling update_option, to ensure proper redirection
-                    // 'nppp_nginx_cache_settings_sanitize' already registered for 'update_option' action via 'register_setting'
-                    // Note: If validation and sanitization are successful for the 'nginx_cache_key_custom_regex'
-                    // It menas we have a base_64 encoded 'nginx_cache_key_custom_regex' option now
-                    $new_settings = nppp_nginx_cache_settings_sanitize($nginx_cache_settings);
+        // This is a pre-check to catch sanitization errors early, before calling update_option, to ensure proper redirection
+        $new_settings = nppp_nginx_cache_settings_sanitize($nginx_cache_settings);
 
-                    // Check if there are any settings errors
-                    $errors = get_settings_errors('nppp_nginx_cache_settings_group');
+        // Check if there are any settings errors
+        $errors = get_settings_errors('nppp_nginx_cache_settings_group');
 
-                    // If there are no sanitize errors, proceed to update the settings
-                    if (empty($errors)) {
-                        // PRESERVE UNTOUCHED KEYS — merge sanitized with existing
-                        $existing_options = (array) $existing_options;
-                        $merged = wp_parse_args($new_settings, $existing_options);
+        // If there are no sanitize errors, proceed to update the settings
+        if (empty($errors)) {
+            // PRESERVE UNTOUCHED KEYS — merge sanitized with existing
+            $existing_options = (array) $existing_options;
+            $merged = wp_parse_args($new_settings, $existing_options);
 
-                        // Always delete the permission cache
-                        $static_key_base = 'nppp';
-                        $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
-                        delete_transient($transient_key_permissions_check);
+            // Always delete the permission cache
+            $static_key_base = 'nppp';
+            $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
+            delete_transient($transient_key_permissions_check);
 
-                        // Delete cache related binary checks
-                        delete_transient('nppp_safexec_ok');
-                        delete_transient('nppp_rg_ok');
+            // Delete cache related binary checks
+            delete_transient('nppp_safexec_ok');
+            delete_transient('nppp_rg_ok');
 
-                        // Update the settings
-                        // Note: This will re-encode 'nginx_cache_key_custom_regex' via sanitization
-                        update_option('nginx_cache_settings', $merged);
+            // Update the settings
+            update_option('nginx_cache_settings', $merged);
 
-                        // Redirect with success message
-                        wp_safe_redirect(add_query_arg(array(
-                            'status_message' => urlencode(__('Plugin cache (permission) cleared, settings saved successfully!', 'fastcgi-cache-purge-and-preload-nginx')),
-                            'message_type' => 'success',
-                            'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
-                        ), admin_url('options-general.php?page=nginx_cache_settings')));
-                        exit;
-                    } else {
-                        // Redirect with error messages
-                        $error_messages = array();
-                        foreach ($errors as $error) {
-                            $error_messages[] = esc_html($error['message']);
-                        }
-
-                        wp_safe_redirect(add_query_arg(array(
-                            'status_message' => urlencode(implode(', ', $error_messages)),
-                            'message_type' => 'error',
-                            'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
-                        ), admin_url('options-general.php?page=nginx_cache_settings')));
-                        exit;
-                    }
-                } else {
-                    // No settings submitted
-                    wp_die(esc_html__('No settings to save.', 'fastcgi-cache-purge-and-preload-nginx'));
-                }
-            } else {
-                // Nonce verification failed
-                wp_die(esc_html__('Nonce verification failed', 'fastcgi-cache-purge-and-preload-nginx'));
-            }
+            // Redirect with success message
+            wp_safe_redirect(add_query_arg(array(
+                'status_message' => urlencode(__('Plugin cache (permission) cleared, settings saved successfully!', 'fastcgi-cache-purge-and-preload-nginx')),
+                'message_type' => 'success',
+                'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
+            ), admin_url('options-general.php?page=nginx_cache_settings')));
+            exit;
         } else {
-            // Nonce verification failed
-            wp_die(esc_html__('Nonce not found', 'fastcgi-cache-purge-and-preload-nginx'));
+            // Redirect with error messages
+            $error_messages = array();
+            foreach ($errors as $error) {
+                $error_messages[] = esc_html($error['message']);
+            }
+
+            wp_safe_redirect(add_query_arg(array(
+                'status_message' => urlencode(implode(', ', $error_messages)),
+                'message_type' => 'error',
+                'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
+            ), admin_url('options-general.php?page=nginx_cache_settings')));
+            exit;
         }
+    } else {
+        // No settings submitted
+        wp_die(esc_html__('No settings to save.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 }
