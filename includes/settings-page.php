@@ -591,7 +591,8 @@ function nppp_nginx_cache_settings_page() {
                                  <p class="description"><?php echo esc_html__( 'Use of this option is recommended, as it lightens the server load by making the requests less frequent.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                  <p class="description"><?php echo esc_html__( 'Higher values dramatically increase cache preload times, while lowering the value can increase server load (CPU, Memory, Network).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                  <p class="description"><?php echo esc_html__( 'Adjust the values to find the optimal balance based on your desired server resource allocation.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                 <p class="description"><?php echo esc_html__( 'If you encounter unexpected permission issues or risk overwhelming your server, try setting it to 1 first and take small steps with each adjustment.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                 <p class="description"><?php echo esc_html__( 'If you are getting 502 Bad Gateway errors or service crashes, try setting it to 1 first and take small steps with each adjustment.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                 <p class="description"><?php echo esc_html__( 'On low-resource servers (limited RAM/CPU), setting this to 0 can trigger a Self-DDoS effect, potentially crashing your server or causing 502/504 errors', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                  <p class="description"><?php echo esc_html__( 'Default: 0 second, Disabled', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
