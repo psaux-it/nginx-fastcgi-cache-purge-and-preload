@@ -421,43 +421,7 @@ location ~ /purge(/.*) {
                             <li>The output is parsed, and each file path is validated and (if necessary) translated from a FUSE source path to a writable mount point.</li>
                             <li>All matching cache files are deleted in bulk, and their paths are written back to the URL→filepath index for future instant purges.</li>
                         </ol>
-                        <p>Because <code>rg</code> respects the Linux page cache, subsequent scans are even faster — often <strong>under 0.5 seconds</strong> for a warm cache directory.</p>
-
-                        <h4><strong>RG Purge vs. HTTP Purge vs. PHP recursive scan</strong></h4>
-                        <table class="responsive-table">
-                            <thead>
-                                <tr>
-                                    <th>Method</th>
-                                    <th>Speed (10k files)</th>
-                                    <th>Speed (100k files)</th>
-                                    <th>Requires</th>
-                                    <th>Works with FUSE/bindfs</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td><strong>HTTP Purge</strong></td>
-                                    <td>&lt;0.1s</td>
-                                    <td>&lt;0.1s</td>
-                                    <td><code>ngx_cache_purge</code> module + Nginx config</td>
-                                    <td>✅ Yes (purges via Nginx)</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>RG Purge</strong></td>
-                                    <td>~0.3s</td>
-                                    <td>~1.5s</td>
-                                    <td><code>rg</code> binary in PATH</td>
-                                    <td>✅ Yes (with safexec or direct access)</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>PHP recursive scan</strong></td>
-                                    <td>~8s</td>
-                                    <td>~50s+</td>
-                                    <td>None (built‑in)</td>
-                                    <td>⚠️ Slower, but always works</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <p>Because <code>rg</code> respects the Linux page cache, subsequent scans are even faster for a warm cache directory.</p>
 
                         <h4><strong>When should I enable RG Purge?</strong></h4>
                         <p>Enable RG Purge if <strong>any</strong> of the following apply to your site:</p>
