@@ -211,6 +211,11 @@ function nppp_sanitize_validate_proxy_host(string $raw, ?string &$err = null, ?s
 
 // Sanitize inputs
 function nppp_nginx_cache_settings_sanitize($input) {
+    // Guard against double/triple sanitization — WordPress core bug Trac #21989
+    static $pass_count = 0;
+    $pass_count++;
+    if ( $pass_count > 1 ) return $input;
+
     $sanitized_input = array();
 
     // Ensure input is an array
