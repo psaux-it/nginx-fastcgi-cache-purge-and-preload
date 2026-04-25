@@ -577,6 +577,15 @@ function nppp_custom_every_min_schedule($schedules) {
     return $schedules;
 }
 
+// Custom cron schedule for 3 hour recurrence
+function nppp_custom_every_3hours_schedule($schedules) {
+    $schedules['every_3hours_npp'] = array(
+        'interval' => 3 * HOUR_IN_SECONDS,
+        'display'  => 'Every 3 Hours-NPP'
+    );
+    return $schedules;
+}
+
 // Callback function for the scheduled event
 function nppp_create_scheduled_event_preload_callback() {
     // Get the plugin options
