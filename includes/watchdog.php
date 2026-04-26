@@ -197,7 +197,7 @@ function nppp_spawn_preload_watcher( int $wget_pid, string $token ): bool {
     nppp_display_admin_notice(
         'info',
         sprintf(
-            /* Translators: %d is the wget process PID being monitored */
+            /* translators: %d: wget process PID being monitored */
             __( 'INFO WATCHDOG: Spawned. Monitoring preload PID %d.', 'fastcgi-cache-purge-and-preload-nginx' ),
             $wget_pid
         ),
@@ -234,7 +234,7 @@ function nppp_kill_preload_watcher(): bool {
         nppp_display_admin_notice(
             'info',
             sprintf(
-                /* Translators: %d is the watcher process PID */
+                /* translators: %d: watcher process PID */
                 __( 'INFO WATCHDOG: Process (PID: %d) already gone. Nothing to kill.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $watcher_pid
             ),
@@ -267,7 +267,7 @@ function nppp_kill_preload_watcher(): bool {
         nppp_display_admin_notice(
             'info',
             sprintf(
-                /* Translators: %d is the watcher process PID */
+                /* translators: %d: watcher process PID */
                 __( 'INFO WATCHDOG: Process (PID: %d) terminated. Preload was interrupted, post-preload jobs will not run for this cycle.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $watcher_pid
             ),
@@ -278,7 +278,7 @@ function nppp_kill_preload_watcher(): bool {
         nppp_display_admin_notice(
             'error',
             sprintf(
-                /* Translators: %d is the watcher process PID */
+                /* translators: %d: watcher process PID */
                 __( 'ERROR WATCHDOG: Failed to terminate watchdog process (PID: %1$d) Manual kill required: kill -9 %1$d', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $watcher_pid
             ),
@@ -307,7 +307,7 @@ function nppp_cron_wake_handler(): void {
         nppp_display_admin_notice(
             'error',
             sprintf(
-                /* Translators: 1: masked IP address 2: request count in the current minute */
+                /* translators: 1: masked IP address 2: request count in the current minute */
                 __( 'ERROR WATCHDOG: Rate limit exceeded (IP: %1$s, %2$d req/min). Post-preload jobs will be handled by WP-Cron.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $rate['ip'],
                 $rate['count']
@@ -362,7 +362,7 @@ function nppp_cron_wake_handler(): void {
     nppp_display_admin_notice(
         'info',
         sprintf(
-            /* Translators: %s: masked IP address of the watchdog request */
+            /* translators: %s: masked IP address of the watchdog request */
             __( 'INFO WATCHDOG: Preload finished (IP: %s). Executing post-preload jobs.', 'fastcgi-cache-purge-and-preload-nginx' ),
             $rate['ip']
         ),
