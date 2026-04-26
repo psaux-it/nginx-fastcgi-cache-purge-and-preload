@@ -502,6 +502,21 @@ function nppp_nginx_cache_settings_sanitize($input) {
     $sanitized_input['nppp_related_apply_manual']          = (isset($input['nppp_related_apply_manual'])          && $input['nppp_related_apply_manual'] === 'yes') ? 'yes' : 'no';
     $sanitized_input['nppp_related_preload_after_manual']  = (isset($input['nppp_related_preload_after_manual'])  && $input['nppp_related_preload_after_manual'] === 'yes') ? 'yes' : 'no';
 
+    // Sanitize Mobile User Agent: strip tags, collapse whitespace, hard-cap at 512 chars.
+    if ( ! empty( $input['nginx_cache_mobile_user_agent'] ) ) {
+        $raw_mobile_ua = sanitize_text_field( wp_unslash( $input['nginx_cache_mobile_user_agent'] ) );
+        if ( strlen( $raw_mobile_ua ) > 512 ) {
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'invalid_mobile_user_agent',
+                __( 'ERROR: Mobile User Agent exceeds the maximum allowed length of 512 characters.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'error'
+            );
+        } else {
+            $sanitized_input['nginx_cache_mobile_user_agent'] = $raw_mobile_ua;
+        }
+    }
+
     // HTTP Purge
     // Toggle
     $sanitized_input['nppp_http_purge_enabled'] =
