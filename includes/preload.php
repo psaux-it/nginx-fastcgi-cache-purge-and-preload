@@ -329,7 +329,7 @@ function nppp_detect_premature_process(
 
             // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
             if (!defined('SIGTERM')) {
-                define('SIGTERM', 15);
+                define('SIGTERM', 15); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
             }
 
             // Fallback to hard SIGKILL
