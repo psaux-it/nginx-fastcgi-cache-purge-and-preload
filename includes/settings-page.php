@@ -468,10 +468,9 @@ function nppp_nginx_cache_settings_page() {
                             <td>
                                 <?php nppp_nginx_cache_mobile_user_agent_callback(); ?>
                                 <div class="key-regex-info">
-                                    <p class="description"><?php echo esc_html__( 'Define the User-Agent sent during the mobile preload pass. Must match the User-Agent your Nginx cache key uses to distinguish mobile from desktop variants.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p><br>
+                                    <p class="description"><?php echo esc_html__( 'Define the User-Agent sent during the mobile preload pass. Must match the User-Agent your Nginx cache key uses to distinguish mobile from desktop variants.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'Only relevant when Preload Mobile is enabled. If your cache key does not vary on User-Agent, leave this at the default value.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 </div>
-                                <br>
                                 <button type="button" id="nginx-mobile-ua-reset-defaults" class="button nginx-reset-mobile-ua-button">
                                     <?php echo esc_html__( 'Reset Default', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </button>
