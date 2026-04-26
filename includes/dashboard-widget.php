@@ -148,7 +148,7 @@ function nppp_get_active_cron_events_widget() {
                             echo '<td style="padding: 6px 15px; width: 75%;">';
                                 echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-right: 8px;"></span>';
                                 echo '<span class="nppp-next-run">' . sprintf(
-                                    /* Translators: %s is the formatted next run time */
+                                    /* translators: %s: formatted next run time */
                                     esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
                                     '<strong style="color: #2196f3; font-size: 12px;">' . esc_html($next_run_formatted) . '</strong>'
                                 ) . '</span>';
@@ -178,7 +178,7 @@ function nppp_get_active_cron_events_widget() {
                 echo '<td style="padding: 6px 15px; width: 75%;">';
                     echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-right: 8px;"></span>';
                     echo '<span class="nppp-next-run">' . sprintf(
-                        /* Translators: %s is the formatted next run time */
+                        /* translators: %s: formatted next run time */
                         esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
                         '<strong style="color: #2196f3; font-size: 12px;">' . esc_html__('No event found', 'fastcgi-cache-purge-and-preload-nginx') . '</strong>'
                     ) . '</span>';
@@ -510,7 +510,7 @@ function nppp_dashboard_widget() {
 
                                         // Display the preload complete date
                                         echo '<span class="nppp-preload-last-date">' . sprintf(
-                                            /* Translators: %s is the formatted preload last complete time */
+                                            /* translators: %s: formatted preload last complete time */
                                             esc_html__('Last Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
                                             '<strong style="color: #2196f3; font-size: 12px;">' . esc_html($last_preload_complete_date) . '</strong>'
                                             ) . '</span>';
@@ -556,7 +556,7 @@ function nppp_dashboard_widget() {
 function nppp_add_dashboard_widget() {
     wp_add_dashboard_widget(
         'nppp_dashboard_widget',
-        /* Translators: NPP is the short name of the plugin. */
+        /* translators: NPP is the plugin short name — do not translate. */
         __('NPP - Nginx Cache Status', 'fastcgi-cache-purge-and-preload-nginx'),
         'nppp_dashboard_widget'
     );
