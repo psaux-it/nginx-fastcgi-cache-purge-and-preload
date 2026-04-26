@@ -574,6 +574,11 @@ function nppp_nginx_cache_settings_sanitize($input) {
         $sanitized_input['nppp_http_purge_custom_url'] = '';
     }
 
+    // Sanitize bypass path restriction
+    $sanitized_input['nginx_cache_bypass_path_restriction'] =
+        ( isset( $input['nginx_cache_bypass_path_restriction'] ) && $input['nginx_cache_bypass_path_restriction'] === 'yes' )
+        ? 'yes' : 'no';
+
     // Sanitize pctnorm
     if (!empty($input['nginx_cache_pctnorm_mode']) ) {
         $mode = sanitize_text_field($input['nginx_cache_pctnorm_mode']);
