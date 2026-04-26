@@ -1029,7 +1029,7 @@ function nppp_my_status_html() {
             echo '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                      <p style="margin: 0; align-items: center;">
                          <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>' . sprintf(
-                             /* Translators: %1$s, %2$s are dynamic strings */
+                             /* translators: %1$s: Cache Key Regex option name, %2$s: Advanced Options section name */
                              wp_kses(__('Non-default <strong>_cache_key</strong> is active on this site. Update <strong>%1$s</strong> in <strong>%2$s</strong> to match your key format.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]),
                              wp_kses(__('Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'), []),
                              wp_kses(__('Advanced Options', 'fastcgi-cache-purge-and-preload-nginx'), [])
