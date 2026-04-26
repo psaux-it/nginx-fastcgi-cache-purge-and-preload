@@ -101,6 +101,7 @@ function nppp_defaults_on_plugin_activation() {
         'nppp_autopurge_3rdparty'           => 'no',
         'nginx_cache_auto_preload'          => 'no',
         'nginx_cache_auto_preload_mobile'   => 'no',
+        'nginx_cache_mobile_user_agent'     => nppp_fetch_default_mobile_user_agent(),
         'nginx_cache_watchdog'              => 'no',
         'nginx_cache_send_mail'             => 'no',
         'nginx_cache_preload_enable_proxy'  => 'no',
