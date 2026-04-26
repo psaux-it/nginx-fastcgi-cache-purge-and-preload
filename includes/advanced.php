@@ -741,7 +741,7 @@ function nppp_purge_cache_premium_callback() {
     nppp_perform_file_operation($log_file_path, 'create');
 
     // Get URL from POST — keep percent-encoding intact.
-    $cache_url = isset($_POST['cache_url']) ? trim(wp_unslash($_POST['cache_url'])) : '';
+    $cache_url = isset($_POST['cache_url']) ? esc_url_raw(trim(wp_unslash($_POST['cache_url']))) : '';
 
     if (!$cache_url || filter_var($cache_url, FILTER_VALIDATE_URL) === false) {
         nppp_log_and_send_error(
