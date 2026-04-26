@@ -410,6 +410,11 @@ function nppp_update_default_cache_key_regex_option(): void {
     nppp_reset_default_option( 'nppp-update-default-cache-key-regex-option', 'nginx_cache_key_custom_regex', 'nppp_fetch_default_regex_for_cache_key' );
 }
 
+// AJAX callback function to reset mobile user agent to default
+function nppp_update_default_mobile_user_agent_option(): void {
+    nppp_reset_default_option( 'nppp-update-default-mobile-user-agent-option', 'nginx_cache_mobile_user_agent', 'nppp_fetch_default_mobile_user_agent' );
+}
+
 // AJAX callback function to copy rest api curl purge url
 function nppp_rest_api_purge_url_copy(): void {
     nppp_rest_api_url_copy( 'nppp-rest-api-purge-url-copy', '/nppp_nginx_cache/v2/purge' );
