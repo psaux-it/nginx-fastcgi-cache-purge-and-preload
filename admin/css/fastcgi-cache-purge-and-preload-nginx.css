@@ -156,6 +156,11 @@
     margin-top: 10px !important;
 }
 
+/* Reset mobile user agent button styles */
+.nginx-reset-mobile-ua-button {
+    margin-top: 10px !important;
+}
+
 /* Reset extension button styles */
 .nginx-reset-extension-button {
     margin-top: 10px !important;
