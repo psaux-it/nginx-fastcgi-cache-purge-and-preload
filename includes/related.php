@@ -206,9 +206,13 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
 
         // Mobile (if enabled)
         if ($preload_mobile) {
+            $nppp_mobile_ua = ! empty( $settings['nginx_cache_mobile_user_agent'] )
+                ? $settings['nginx_cache_mobile_user_agent']
+                : NPPP_USER_AGENT_MOBILE;
+
             $cmd_mobile = $safexec_prefix .
                 'nohup wget ' . $common .
-                '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
+                '--user-agent=' . escapeshellarg($nppp_mobile_ua) . ' ' .
                 '-- ' . $url_arg . ' >/dev/null 2>&1 &';
             shell_exec($cmd_mobile);
         }
