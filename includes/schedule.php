@@ -72,12 +72,12 @@ function nppp_get_active_cron_events() {
                     echo '<h3 class="nppp-active-cron-heading">' . esc_html__('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') . '</h3>';
                     echo '<div class="nppp-cron-info">';
                     echo '<span class="nppp-hook-name">' . sprintf(
-                        /* Translators: %s is the cron hook name */
+                        /* translators: %s: cron hook name */
                         esc_html__('Cron Name: %s', 'fastcgi-cache-purge-and-preload-nginx'),
                         '<strong>' . esc_html($hook) . '</strong>'
                     ) . '</span> - ';
                     echo '<span class="nppp-next-run">' . sprintf(
-                        /* Translators: %s is the formatted next run time */
+                        /* translators: %s: formatted next run time */
                         esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
                         '<strong>' . esc_html($next_run_formatted) . '</strong>'
                     ) . '</span>';
@@ -548,10 +548,10 @@ function nppp_create_scheduled_event_preload_status_callback() {
 
     // Log the preload process status
     if ($mobile_enabled) {
-        // Translators: %s is the elapsed time.
+        /* translators: %s: elapsed preload time */
         nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed for both Mobile and Desktop in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
     } else {
-        // Translators: %s is the elapsed time.
+        /* translators: %s: elapsed preload time */
         nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
     }
 
