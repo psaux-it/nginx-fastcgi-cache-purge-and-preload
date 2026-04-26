@@ -487,7 +487,7 @@ function nppp_premium_html($nginx_cache_path) {
     $wget_notice_html = '';
 
     if ( ! $preload_running && ! $wp_filesystem->exists( $snapshot_path ) ) {
-        /* Translators: "MISS" is a cache status label. Keep the <strong> tags. */
+        /* translators: "MISS" is a cache status label. Keep the <strong> tags. */
         $wget_msg = __(
             'No completed <strong>crawl</strong> snapshot found. Run <strong>Preload All</strong> once to build the full snapshot — uncached <strong>MISS</strong> URLs will then appear here.',
             'fastcgi-cache-purge-and-preload-nginx'
@@ -971,11 +971,13 @@ function nppp_preload_cache_premium_callback() {
             if ($rg_fuse_active) {
                 if ($rg_cmd_prefix !== '') {
                     nppp_display_admin_notice('info', sprintf(
+                        /* translators: %s: Original Nginx cache filesystem path being scanned via safexec. */
                         __('INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx'),
                         $rg_scan_path
                     ), true, false);
                 } else {
                     nppp_display_admin_notice('info', sprintf(
+                        /* translators: %s: FUSE source directory path being scanned directly. */
                         __('INFO RG SCAN: FUSE mount detected, scanning source dir directly (rg has direct access): %s', 'fastcgi-cache-purge-and-preload-nginx'),
                         $rg_scan_path
                     ), true, false);
@@ -984,11 +986,13 @@ function nppp_preload_cache_premium_callback() {
         } elseif ($probe_exit === 2) {
             if ($rg_fuse_active) {
                 nppp_display_admin_notice('info', sprintf(
+                    /* translators: %s: Filesystem path that ripgrep could not scan due to missing safexec. */
                     __('WARNING RG SCAN: FUSE mount detected, rg scan skipped (install safexec to enable scan): %s', 'fastcgi-cache-purge-and-preload-nginx'),
                     $rg_scan_path
                 ), true, false);
             } else {
                 nppp_display_admin_notice('info', sprintf(
+                    /* translators: %s: Filesystem path that ripgrep could not access. */
                     __('WARNING RG SCAN: rg scan skipped (cannot access cache dir and safexec unavailable): %s', 'fastcgi-cache-purge-and-preload-nginx'),
                     $rg_scan_path
                 ), true, false);
@@ -1115,6 +1119,7 @@ function nppp_extract_cached_urls_rg(
             if ( ! preg_match( $regex, $key_line, $m ) || ! isset( $m[1], $m[2] ) ) {
                 return [
                     'error' => sprintf(
+                        /* translators: 1: Cache Key Regex option name. 2: Advanced Options section name. */
                         __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx' ),
                         __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx' ),
                         __( 'Advanced Options',  'fastcgi-cache-purge-and-preload-nginx' )
@@ -1124,6 +1129,7 @@ function nppp_extract_cached_urls_rg(
             if ( filter_var( 'https://' . trim( $m[1] ) . trim( $m[2] ), FILTER_VALIDATE_URL ) === false ) {
                 return [
                     'error' => sprintf(
+                        /* translators: 1: Cache Key Regex option name. 2: Advanced Options section name. */
                         __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is parsing the string <strong>\$host\$request_uri</strong> correctly.', 'fastcgi-cache-purge-and-preload-nginx' ),
                         __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx' ),
                         __( 'Advanced Options',  'fastcgi-cache-purge-and-preload-nginx' )
@@ -1155,6 +1161,7 @@ function nppp_extract_cached_urls_rg(
             $translated = nppp_translate_path_to_fuse( $scan_filepath, $scan_path, $fuse_path );
             if ( $translated === null ) {
                 nppp_display_admin_notice( 'error', sprintf(
+                    /* translators: 1: Decoded page URL. 2: Cache file path that failed translation. 3: Expected scan path prefix. */
                     __( 'WARNING PATH TRANSLATE: Purge failed for "%1$s". Failed path translation - "%2$s" does not start with "%3$s"', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $url_decoded,
                     $scan_filepath,
@@ -1238,6 +1245,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
         // Mount table may list a FUSE source path that no longer exists on disk.
         if ( $rg_source_path !== null && ! $wp_filesystem->is_dir( $rg_source_path ) ) {
             nppp_display_admin_notice( 'info', sprintf(
+                /* translators: %s: FUSE source directory path. */
                 __( 'WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $rg_source_path
             ), true, false );
@@ -1291,11 +1299,13 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
         if ( $rg_fuse_active ) {
             if ( $rg_scan_path === $rg_fuse_path ) {
                 nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: %s: Filesystem path being scanned via FUSE mount. */
                     __( 'WARNING RG SCAN: FUSE mount detected, scanning FUSE mount path (safexec unavailable, install safexec for better performance): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $rg_scan_path
                 ), true, false );
             } elseif ( $rg_use_safexec ) {
                 nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: %s: Original Nginx cache filesystem path being scanned via safexec. */
                     __( 'INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $rg_scan_path
                 ), true, false );
@@ -1374,7 +1384,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                     } else {
                         return [
                             'error' => sprintf(
-                                /* Translators: %1$s and %2$s are dynamic strings, $host$request_uri is string */
+                                /* translators: 1: Cache Key Regex option name. 2: Advanced Options section name. */
                                 __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is parsing the string <strong>\$host\$request_uri</strong> correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
                                 __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'),
                                 __( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx')
@@ -1384,7 +1394,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                 } else {
                     return [
                         'error' => sprintf(
-                            /* Translators: %1$s and %2$s are dynamic strings */
+                            /* translators: 1: Cache Key Regex option name. 2: Advanced Options section name. */
                             __( 'ERROR REGEX: Please check the <strong>%1$s</strong> option in the plugin <strong>%2$s</strong> section and ensure the <strong>regex</strong> is configured correctly.', 'fastcgi-cache-purge-and-preload-nginx'),
                             __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'),
                             __( 'Advanced Options', 'fastcgi-cache-purge-and-preload-nginx')
