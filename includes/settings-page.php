@@ -298,6 +298,7 @@ function nppp_nginx_cache_settings_page() {
                                         <?php echo esc_html__( 'Critical system paths are prohibited by default to ensure accuracy to avoid unintended deletions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
                                 </div>
+                                <?php nppp_nginx_cache_bypass_path_restriction_callback(); ?>
                             </td>
                         </tr>
                         <!-- Auto Purge Options Section -->
