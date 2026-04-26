@@ -471,7 +471,7 @@ function nppp_nginx_cache_settings_sanitize($input) {
         if ($bad) {
             $preview = implode(', ', array_slice($bad, 0, 3));
             $msg = sprintf(
-                // Translators: %s: a short, comma-separated preview (max 3) of invalid extension patterns.
+                /* translators: %s: short comma-separated preview (max 3) of invalid extension patterns */
                 __('ERROR OPTION: Invalid extension pattern(s): %s. Allowed examples: *.css, .css, css', 'fastcgi-cache-purge-and-preload-nginx'),
                 esc_html($preview) . (count($bad) > 3 ? '…' : '')
             );
