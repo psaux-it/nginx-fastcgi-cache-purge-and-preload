@@ -394,11 +394,16 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     $nginx_cache_read_timeout = isset($nginx_cache_settings['nginx_cache_read_timeout']) ? (int)$nginx_cache_settings['nginx_cache_read_timeout'] : 60;
     $log_path = nppp_get_runtime_file('nppp-wget.log');
 
+    // Resolve mobile UA from DB; constant is the compile-time fallback only.
+    $nppp_mobile_ua = ! empty( $nginx_cache_settings['nginx_cache_mobile_user_agent'] )
+        ? $nginx_cache_settings['nginx_cache_mobile_user_agent']
+        : NPPP_USER_AGENT_MOBILE;
+
     // Determine which USER_AGENT to use
     // Check Preload Mobile is enabled
     if ($preload_mobile) {
         // Use the mobile user agent
-        $NPPP_DYNAMIC_USER_AGENT = NPPP_USER_AGENT_MOBILE;
+        $NPPP_DYNAMIC_USER_AGENT = $nppp_mobile_ua;
     } else {
         // Use the desktop user agent
         $NPPP_DYNAMIC_USER_AGENT = NPPP_USER_AGENT;
@@ -1069,6 +1074,11 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 
     // Preload cache also for Mobile
     if ($preload_mobile) {
+        // Resolve mobile UA from DB; constant is the compile-time fallback only.
+        $nppp_mobile_ua = ! empty( $nginx_cache_settings['nginx_cache_mobile_user_agent'] )
+            ? $nginx_cache_settings['nginx_cache_mobile_user_agent']
+            : NPPP_USER_AGENT_MOBILE;
+
         // PATCH: CVE ID: CVE-2025-6213
         // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
         $command_mobile =
@@ -1085,7 +1095,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--domains=' . escapeshellarg($domain_list) . ' ' .
             '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-            '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
+            '--user-agent=' . escapeshellarg($nppp_mobile_ua) . ' ' .
             '-- ' .
             escapeshellarg($current_page_url) . ' ' .
             '>/dev/null 2>&1 & echo $!';
@@ -1354,6 +1364,11 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
 
     // Preload cache also for Mobile
     if ($preload_mobile) {
+        // Resolve mobile UA from DB; constant is the compile-time fallback only.
+        $nppp_mobile_ua = ! empty( $nginx_cache_settings['nginx_cache_mobile_user_agent'] )
+            ? $nginx_cache_settings['nginx_cache_mobile_user_agent']
+            : NPPP_USER_AGENT_MOBILE;
+
         // PATCH: CVE ID: CVE-2025-6213
         // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
         $command_mobile =
@@ -1370,7 +1385,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--domains=' . escapeshellarg($domain_list) . ' ' .
             '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-            '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
+            '--user-agent=' . escapeshellarg($nppp_mobile_ua) . ' ' .
             '-- ' .
             escapeshellarg($current_page_url) . ' ' .
             '>/dev/null 2>&1 & echo $!';
