@@ -3600,6 +3600,7 @@ $(document).ready(function() {
         '#nginx_cache_tracking_opt_in',
         '#nginx_cache_api_key',
         '#nginx_cache_key_custom_regex',
+        '#nginx_cache_mobile_user_agent',
         '#nginx_cache_preload_proxy_port',
         '#nginx_cache_preload_proxy_host',
         '#nppp_http_purge_suffix',
