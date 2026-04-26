@@ -657,7 +657,7 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     <p class="description"><?php echo esc_html__( 'Requirements: safexec installed (see the Help tab).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p><br>
     <p class="description">
         <strong><?php echo esc_html_x('OFF', 'toggle option', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong>
-        - <?php // Translators: %xx is a literal percent-encoded byte pattern (e.g., %2F). Keep it as-is. ?>
+        - <?php /* translators: %xx is a literal percent-encoded byte pattern, e.g. %2F — do not translate */ ?>
           <?php echo esc_html__( 'Use when your URLs are ASCII-only and you never see %xx bytes.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
     </p>
     <p class="description">
@@ -666,12 +666,12 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     </p>
     <p class="description">
         <strong><?php echo esc_html_x('UPPER', 'toggle option', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong>
-        - <?php // Translators: %xx is a literal percent-encoded byte pattern (e.g., %2F). Keep it as-is. ?>
+        - <?php /* translators: %xx is a literal percent-encoded byte pattern, e.g. %2F — do not translate */ ?>
           <?php echo esc_html__( 'Force %xx hex to uppercase during preloading to stay consistent with browser behaviour.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
     </p>
     <p class="description">
         <strong><?php echo esc_html_x('LOWER', 'toggle option', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong>
-        - <?php // Translators: %xx is a literal percent-encoded byte pattern (e.g., %2F). Keep it as-is. ?>
+        - <?php /* translators: %xx is a literal percent-encoded byte pattern, e.g. %2F — do not translate */ ?>
           <?php echo esc_html__( 'Force %xx hex to lowercase during preloading to stay consistent with browser behaviour.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
     </p>
     <?php
