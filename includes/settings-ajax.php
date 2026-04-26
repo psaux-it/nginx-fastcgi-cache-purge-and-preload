@@ -180,7 +180,7 @@ function nppp_update_pctnorm_mode() {
     wp_send_json_success( array(
         'saved'   => $val,
         'label'   => $label,
-        // Translators: %s: selected percent-encoding mode label (OFF, PRESERVE, UPPER, or LOWER)
+        /* translators: %s: selected percent-encoding mode label (OFF, PRESERVE, UPPER, or LOWER) */
         'message' => sprintf( __( 'Percent-encoding: %s', 'fastcgi-cache-purge-and-preload-nginx' ), $label ),
     ));
 }
