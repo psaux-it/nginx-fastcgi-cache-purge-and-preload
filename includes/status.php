@@ -621,11 +621,13 @@ function nppp_get_in_cache_page_count() {
         if ( $rg_fuse_active ) {
             if ( $rg_scan_path === $rg_fuse_path ) {
                 nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: %s: Filesystem path being scanned by ripgrep via FUSE mount. */
                     __( 'WARNING RG SCAN: FUSE mount detected, scanning FUSE mount path (safexec unavailable, install safexec for better performance): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $rg_scan_path
                 ), true, false );
             } elseif ( $rg_use_safexec ) {
                 nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: %s: Original Nginx cache filesystem path being scanned by ripgrep via safexec. */
                     __( 'INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $rg_scan_path
                 ), true, false );
