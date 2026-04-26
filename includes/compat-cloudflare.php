@@ -331,7 +331,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_exact_urls' ) ) {
         if ( empty( $urls ) ) {
             nppp_cloudflare_apo_log(
                 sprintf(
-                    /* translators: %d is input URL count. */
+                    /* translators: %d: input URL count */
                     __( 'Cloudflare cache purge skipped: no URLs matched the active zone (input=%d).', 'fastcgi-cache-purge-and-preload-nginx' ),
                     (int) $input_count
                 ),
@@ -426,7 +426,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_exact_urls' ) ) {
             if ( $failed === 0 ) {
                 nppp_cloudflare_apo_log(
                     sprintf(
-                        /* translators: %d is URL count */
+                        /* translators: %d: URL count */
                         __( 'Cloudflare mobile cache purge completed: %d URL(s).', 'fastcgi-cache-purge-and-preload-nginx' ),
                         (int) $total
                     ),
@@ -506,7 +506,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_all' ) ) {
         } catch ( \Throwable $e ) {
             nppp_cloudflare_apo_log(
                 sprintf(
-                    /* translators: %s is the error message returned by Cloudflare (or the Cloudflare plugin client). */
+                    /* translators: %s: error message returned by Cloudflare */
                     __( 'Cloudflare purge-all cache failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $e->getMessage()
                 ),
