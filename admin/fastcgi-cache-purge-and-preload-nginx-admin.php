@@ -210,6 +210,7 @@ add_action('wp_ajax_nppp_clear_plugin_cache', 'nppp_clear_plugin_cache_callback'
 add_action('wp_ajax_nppp_clear_url_index', 'nppp_clear_url_index_callback');
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
 add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_default_cache_key_regex_option');
+add_action('wp_ajax_nppp_update_default_mobile_user_agent_option', 'nppp_update_default_mobile_user_agent_option');
 add_action('wp_ajax_nppp_update_http_purge_option', 'nppp_update_http_purge_option');
 add_action('wp_ajax_nppp_update_rg_purge_option', 'nppp_update_rg_purge_option');
 if ($nppp_auto_purge) {
