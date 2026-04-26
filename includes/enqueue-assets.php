@@ -248,6 +248,11 @@ function nppp_disable_features($unsupported, $preload) {
             'nginx_cache_pctnorm_mode'           => 'off',
             'nppp_http_purge_enabled'            => 'no',
             'nppp_rg_purge_enabled'              => 'no',
+            'nppp_autopurge_posts'               => 'no',
+            'nppp_autopurge_terms'               => 'no',
+            'nppp_autopurge_plugins'             => 'no',
+            'nppp_autopurge_themes'              => 'no',
+            'nppp_autopurge_3rdparty'            => 'no',
         );
     } elseif ( $preload === true ) {
         // If preload feature not useable
