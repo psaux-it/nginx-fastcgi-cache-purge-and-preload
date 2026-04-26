@@ -28,9 +28,9 @@ function nppp_ajax_auth( string $nonce_action ): void {
 // Shared helper: sanitize POST field, persist it into settings, return success.
 function nppp_save_toggle_option( string $nonce_action, string $post_key, string $option_key, string $default = '' ): void {
     nppp_ajax_auth( $nonce_action );
-    // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth()
     $value = isset( $_POST[ $post_key ] )
-        ? sanitize_text_field( wp_unslash( $_POST[ $post_key ] ) )
+        ? sanitize_text_field( wp_unslash( $_POST[ $post_key ] ) ) // phpcs:ignore WordPress.Security.NonceVerification.Missing
         : $default;
     $opts = get_option( 'nginx_cache_settings', [] );
     if ( ! is_array( $opts ) ) {
@@ -120,9 +120,9 @@ function nppp_update_related_fields() {
         'nppp_related_preload_after_manual',
     ];
 
-    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- value is immediately unslashed, whitelisted by $allowed_keys, then sanitized below.
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce verified in nppp_ajax_auth(); value whitelisted and sanitized below.
     $posted = ( isset( $_POST['fields'] ) && is_array( $_POST['fields'] ) )
-        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- value is immediately unslashed, whitelisted by $allowed_keys, then sanitized below.
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce verified in nppp_ajax_auth(); value whitelisted and sanitized below.
         ? array_intersect_key( wp_unslash( $_POST['fields'] ), array_flip( $allowed_keys ) )
         : [];
 
@@ -166,7 +166,7 @@ function nppp_update_pctnorm_mode() {
     // Nonce check
     nppp_ajax_auth( 'nppp-update-pctnorm-mode' );
 
-    $val = isset($_POST['mode']) ? sanitize_text_field( wp_unslash($_POST['mode']) ) : '';
+    $val = isset($_POST['mode']) ? sanitize_text_field( wp_unslash($_POST['mode']) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth()
     $allowed = array( 'off', 'upper', 'lower', 'preserve' );
     if ( ! in_array( $val, $allowed, true ) ) {
         wp_send_json_error( __( 'Invalid mode.', 'fastcgi-cache-purge-and-preload-nginx' ), 400 );
@@ -218,9 +218,9 @@ function nppp_update_autopurge_triggers() {
         'nppp_autopurge_3rdparty',
     );
 
-    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- intersected against allowed_keys, sanitized below
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce verified in nppp_ajax_auth(); value whitelisted and sanitized below.
     $posted = ( isset( $_POST['fields'] ) && is_array( $_POST['fields'] ) )
-        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- intersected against allowed_keys, sanitized below
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce verified in nppp_ajax_auth(); value whitelisted and sanitized below.
         ? array_intersect_key( wp_unslash( $_POST['fields'] ), array_flip( $allowed_keys ) )
         : array();
 
@@ -255,7 +255,7 @@ function nppp_update_auto_purge_option() {
     nppp_ajax_auth( 'nppp-update-auto-purge-option' );
 
     // Get the posted option value and sanitize it
-    $auto_purge = isset($_POST['auto_purge']) ? sanitize_text_field(wp_unslash($_POST['auto_purge'])) : '';
+    $auto_purge = isset($_POST['auto_purge']) ? sanitize_text_field(wp_unslash($_POST['auto_purge'])) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth()
 
     // Get the current options
     $current_options = get_option('nginx_cache_settings', array());
@@ -297,7 +297,7 @@ function nppp_update_rg_purge_option(): void {
     // Verify nonce
     nppp_ajax_auth( 'nppp-update-rg-purge-option' );
 
-    $raw      = sanitize_text_field( wp_unslash( $_POST['rg_purge'] ?? '' ) );
+    $raw      = sanitize_text_field( wp_unslash( $_POST['rg_purge'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth()
     $rg_purge = ( $raw === 'yes' ) ? 'yes' : 'no';
 
     // If rg is not available, refuse to enable.
@@ -327,7 +327,7 @@ function nppp_update_cache_schedule_option() {
     nppp_ajax_auth( 'nppp-update-cache-schedule-option' );
 
     // Get the posted option value and sanitize it
-    $cache_schedule = isset($_POST['cache_schedule']) ? sanitize_text_field(wp_unslash($_POST['cache_schedule'])) : '';
+    $cache_schedule = isset($_POST['cache_schedule']) ? sanitize_text_field(wp_unslash($_POST['cache_schedule'])) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth()
     $unscheduled    = false;
 
     // When the schedule is being disabled, clear any existing cron event.
@@ -426,8 +426,8 @@ function nppp_get_save_cron_expression() {
     nppp_ajax_auth( 'nppp-get-save-cron-expression' );
 
     // Get the cron frequency and time from the AJAX request and sanitize them
-    $cron_freq = isset($_POST['nppp_cron_freq']) ? sanitize_text_field(wp_unslash($_POST['nppp_cron_freq'])) : '';
-    $time      = isset($_POST['nppp_time'])      ? sanitize_text_field(wp_unslash($_POST['nppp_time'])) : '';
+    $cron_freq = isset($_POST['nppp_cron_freq']) ? sanitize_text_field(wp_unslash($_POST['nppp_cron_freq'])) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth()
+    $time      = isset($_POST['nppp_time'])      ? sanitize_text_field(wp_unslash($_POST['nppp_time'])) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth()
 
     // Validate the cron frequency value before saving the option
     if (!in_array($cron_freq, array('daily', 'weekly', 'monthly'))) {
