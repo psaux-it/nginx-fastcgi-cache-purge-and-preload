@@ -468,6 +468,28 @@ function nppp_nginx_cache_related_pages_callback() {
     <?php
 }
 
+// Callback function for the Bypass Path Restriction single toggle card.
+function nppp_nginx_cache_bypass_path_restriction_callback() {
+    $opts    = get_option( 'nginx_cache_settings', array() );
+    $checked = isset( $opts['nginx_cache_bypass_path_restriction'] ) && $opts['nginx_cache_bypass_path_restriction'] === 'yes';
+    ?>
+    <fieldset class="nppp-bypass-pr-fieldset" id="nppp-bypass-pr-fieldset">
+        <div class="nppp-switch">
+            <input id="nginx_cache_bypass_path_restriction" type="checkbox"
+                   name="nginx_cache_settings[nginx_cache_bypass_path_restriction]"
+                   value="yes" <?php checked( true, $checked ); ?> />
+            <label for="nginx_cache_bypass_path_restriction">
+                <span class="nppp-toggle" aria-hidden="true"></span>
+                <span class="nppp-text">
+                    <span class="title"><?php esc_html_e( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="desc"><?php esc_html_e( 'When enabled, skips the allowed-root prefix check on the cache directory path.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                </span>
+            </label>
+        </div>
+    </fieldset>
+    <?php
+}
+
 // Callback function for the Auto Purge Triggers sub-options fieldset.
 function nppp_nginx_cache_autopurge_triggers_callback() {
     $options   = get_option( 'nginx_cache_settings', array() );
