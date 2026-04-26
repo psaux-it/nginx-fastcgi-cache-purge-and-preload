@@ -138,7 +138,7 @@ function nppp_log_api_request($endpoint, $status, $is_error = false) {
 
     // Check if the directory is valid and exists
     if ($sanitized_dir_path === false) {
-        // Translators: %s is the path to the log file.
+        /* translators: %s: path to the log file directory */
         nppp_custom_error_log(sprintf(__('Invalid or inaccessible log file directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $log_file_dir));
         return;
     }
@@ -154,7 +154,7 @@ function nppp_log_api_request($endpoint, $status, $is_error = false) {
 
     // Check the append log status
     if (!$append_result) {
-        // Translators: %s is the path to the log file.
+        /* translators: %s: path to the log file directory */
         nppp_custom_error_log(sprintf(__('Error appending to log file at %s', 'fastcgi-cache-purge-and-preload-nginx'), $sanitized_path));
         return;
     }
