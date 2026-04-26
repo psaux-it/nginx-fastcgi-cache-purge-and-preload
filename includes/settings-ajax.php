@@ -249,6 +249,41 @@ function nppp_update_autopurge_triggers() {
     ) );
 }
 
+// AJAX callback: Bypass Path Restriction single toggle card.
+function nppp_update_bypass_path_restriction(): void {
+    nppp_ajax_auth( 'nppp-update-bypass-path-restriction' );
+
+    $allowed_keys = array( 'nginx_cache_bypass_path_restriction' );
+
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce verified in nppp_ajax_auth(); value whitelisted and sanitized below.
+    $posted = ( isset( $_POST['fields'] ) && is_array( $_POST['fields'] ) )
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce verified in nppp_ajax_auth(); value whitelisted and sanitized below.
+        ? array_intersect_key( wp_unslash( $_POST['fields'] ), array_flip( $allowed_keys ) )
+        : array();
+
+    foreach ( $posted as $k => $v ) {
+        $posted[ $k ] = is_string( $v ) ? sanitize_text_field( $v ) : $v;
+    }
+
+    $normalized = array();
+    foreach ( $allowed_keys as $key ) {
+        $raw                = isset( $posted[ $key ] ) ? $posted[ $key ] : null;
+        $normalized[ $key ] = in_array( $raw, array( 'yes', '1', 1, 'true', true, 'on' ), true ) ? 'yes' : 'no';
+    }
+
+    $opts = get_option( 'nginx_cache_settings', array() );
+    if ( ! is_array( $opts ) ) {
+        $opts = array();
+    }
+    $opts = array_merge( $opts, $normalized );
+    update_option( 'nginx_cache_settings', $opts );
+
+    wp_send_json_success( array(
+        'message' => __( 'Bypass Path Restriction saved.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'data'    => $normalized,
+    ) );
+}
+
 // AJAX callback function to update auto purge option
 function nppp_update_auto_purge_option() {
     // Verify nonce
