@@ -2712,6 +2712,39 @@ $(document).ready(function() {
         });
     });
 
+    // Make AJAX request to update mobile user agent
+    $('#nginx-mobile-ua-reset-defaults').on('click', function(event) {
+        event.preventDefault();
+
+        const $btn  = $(this);
+        $btn.prop('disabled', true).addClass('disabled');
+        const $spin = $('<span class="nppp-inline-spinner" aria-hidden="true"></span>').appendTo($btn);
+
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'nppp_update_default_mobile_user_agent_option',
+                _wpnonce: nppp_admin_data.mobile_ua_nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('#nginx_cache_mobile_user_agent').val(response.data);
+                } else {
+                    console.error(response.data);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error(error);
+            },
+            complete: function() {
+                $spin.remove();
+                $btn.prop('disabled', false).removeClass('disabled');
+            }
+        });
+    });
+
     // Event handler for the clear url index button
     $(document).off('click', '#nppp-clear-url-index-btn').on('click', '#nppp-clear-url-index-btn', function(e) {
         e.preventDefault();
