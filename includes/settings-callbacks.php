@@ -240,6 +240,16 @@ function nppp_nginx_cache_key_custom_regex_callback() {
     echo "<textarea id='nginx_cache_key_custom_regex' name='nginx_cache_settings[nginx_cache_key_custom_regex]' rows='1' cols='50' class='large-text'>" . esc_textarea($cache_key_regex) . "</textarea>";
 }
 
+// Callback function to display the Mobile User Agent field
+function nppp_nginx_cache_mobile_user_agent_callback() {
+    $options            = get_option('nginx_cache_settings', []);
+    $default_mobile_ua  = nppp_fetch_default_mobile_user_agent();
+    $mobile_user_agent  = ! empty( $options['nginx_cache_mobile_user_agent'] )
+        ? $options['nginx_cache_mobile_user_agent']
+        : $default_mobile_ua;
+    echo "<textarea id='nginx_cache_mobile_user_agent' name='nginx_cache_settings[nginx_cache_mobile_user_agent]' rows='1' cols='50' class='large-text'>" . esc_textarea( $mobile_user_agent ) . "</textarea>";
+}
+
 // Callback function to display the Reject extension field
 function nppp_nginx_cache_reject_extension_callback() {
     $options = get_option('nginx_cache_settings', []);
@@ -350,6 +360,11 @@ function nppp_fetch_default_reject_regex(): string {
 // Get default regex for nginx cache key
 function nppp_fetch_default_regex_for_cache_key(): string {
     return nppp_get_preload_defaults()['cache_key_regex'] ?? '';
+}
+
+// Get default mobile user agent string
+function nppp_fetch_default_mobile_user_agent(): string {
+    return nppp_get_preload_defaults()['mobile_user_agent'] ?? '';
 }
 
 // Get default reject file extension rules for preload
