@@ -1,7 +1,7 @@
 /**
  * Admin interface scripts for Nginx Cache Purge Preload
  * Description: Handles interactive behavior for plugin settings, tabs, and admin actions.
- * Version: 2.1.6
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -807,7 +807,14 @@ $(document).ready(function() {
                 preloadStatusSpan.append(preloadStatusText);
             }
 
-            if (data.status === "running") {
+            // Keep polling during the desktop→mobile transition gap:
+            // PIDFILE is briefly absent between desktop completion and mobile
+            // PID being written, so status briefly returns "done" even though
+            // a mobile phase is still coming. Stopping here would make the
+            // mobile preload invisible in the Status tab.
+            const mobileTransitioning = data.status === "done" && data.preload_phase === "mobile";
+
+            if (data.status === "running" || mobileTransitioning) {
                 // Polling is driven ONLY by process liveness — never by the estimated pct.
                 // The estimate can overshoot 100 before wget actually finishes.
                 if (npppPollTimer) clearTimeout(npppPollTimer);
