@@ -2,7 +2,7 @@
 /**
  * Gutenberg cache purge integration for Nginx Cache Purge Preload
  * Description: Purges related Nginx cache entries when block editor content is saved, updated, unpublished, or trashed via REST.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
