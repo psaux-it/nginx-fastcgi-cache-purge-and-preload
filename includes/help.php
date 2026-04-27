@@ -762,25 +762,23 @@ safexec --kill=&lt;pid&gt;
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h3><strong>Redis Object Cache Sync</strong></h3>
-                        <p>NPP and Redis Object Cache are two separate caching layers. NPP manages the Nginx full-page cache (FastCGI cache on disk or in RAM). Redis Object Cache stores WordPress database query results and object data in memory. This sync feature keeps both layers consistent with each other through a bidirectional relationship.</p>
+                        <p>When enabled, NPP flushes the Redis object cache at the right point in the Nginx Purge+Preload chain, keeping both caching layers aligned. Flushing Redis only makes sense immediately before fresh content is pulled into the Nginx cache — so a purge-only operation (without preload) deliberately leaves Redis warm.</p>
 
                         <h4><strong>Requirements</strong></h4>
-                        <p>The <strong>Redis Object Cache</strong> plugin must be installed, active, and connected to a live Redis server. NPP checks for both the drop-in (<code>WP_REDIS_VERSION</code> constant) and a live connection (<code>redis_status() === true</code>) at runtime. If Redis is unreachable the toggle auto-disables itself.</p>
+                        <p>The <strong>Redis Object Cache</strong> plugin must be installed, active, and connected to a live Redis server. NPP checks for both the drop-in (<code>WP_REDIS_VERSION</code> constant) and a live connection (<code>redis_status() === true</code>) at runtime. If Redis is unreachable the toggle shows as <em>Unavailable</em>.</p>
 
                         <h4><strong>How to enable</strong></h4>
-                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and turn on <strong>Redis Object Cache Sync</strong>. The toggle shows as <em>Unavailable</em> in the dashboard widget when the Redis plugin is not installed or Redis is disconnected.</p>
+                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and turn on <strong>Redis Object Cache Sync</strong>.</p>
 
-                        <h4><strong>Direction 1 — NPP Purge All → Redis flush</strong></h4>
-                        <p>Whenever NPP's <strong>Purge All</strong> runs (manually, via admin bar, Auto Purge, REST API, or Schedule), NPP calls <code>wp_cache_flush()</code> immediately after clearing the Nginx cache. This ensures PHP regenerates fresh data from the database on the next request, so pages rebuilt into the Nginx cache contain up-to-date content rather than stale object-cached results.</p>
+                        <h4><strong>When Redis is flushed</strong></h4>
+                        <p><strong>Purge All + Auto Preload ON</strong> (Admin button, Admin Bar, REST API): NPP flushes Redis immediately after clearing the Nginx cache, just before the Preload All begins. This ensures PHP fetches fresh database content when pages are rebuilt into the Nginx cache. If Auto Preload is OFF, Purge All does not flush Redis — no preload means no rebuild, so there is no reason to invalidate the object cache.</p>
+                        <p><strong>Preload All</strong> (Admin button, Admin Bar, REST API, Scheduled Cron): NPP always flushes Redis at the start of every Preload All, regardless of whether a purge preceded it. This guarantees the preloader warms the Nginx cache with the freshest possible content.</p>
 
-                        <h4><strong>Direction 2 — Redis Flush → NPP Purge All</strong></h4>
-                        <p>Whenever Redis is flushed from outside NPP — via the Redis Object Cache plugin dashboard, WP-CLI (<code>wp cache flush</code>), or any plugin calling <code>wp_cache_flush()</code> — NPP automatically triggers a full Nginx cache purge in response. This direction only activates when NPP's <strong>Auto Purge</strong> setting is also enabled, since a full filesystem purge is a heavyweight operation.</p>
-
-                        <h4><strong>Loop prevention</strong></h4>
-                        <p>NPP sets an internal origin flag before triggering either direction. If Direction 1 causes a Redis flush, Direction 2 sees the flag and bails — and vice versa. This prevents an infinite purge loop between the two cache layers.</p>
+                        <h4><strong>What is never flushed</strong></h4>
+                        <p>Purge-only operations — including single-URL purges (Auto Purge, Admin Bar, Advanced Tab) and Purge All without Auto Preload — never touch Redis. The object cache stays warm so that any PHP requests served between purge and preload still benefit from cached database queries.</p>
 
                         <h4><strong>Important notes</strong></h4>
-                        <p>Direction 2 respects the <strong>Auto Purge</strong> toggle — if Auto Purge is off, a Redis flush from outside NPP will not trigger an Nginx purge. If you want full bidirectional sync, both <strong>Redis Object Cache Sync</strong> and <strong>Auto Purge</strong> must be enabled.</p>
+                        <p>Redis Object Cache Sync is independent of the <strong>Auto Purge</strong> setting — it activates based on whether a preload action is part of the operation, not on whether Auto Purge is enabled. There is no reverse direction: a Redis flush from outside NPP does not trigger an Nginx purge.</p>
                     </div>
                 </div>
 
