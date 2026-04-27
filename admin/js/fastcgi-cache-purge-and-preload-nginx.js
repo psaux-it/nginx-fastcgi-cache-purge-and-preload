@@ -1660,6 +1660,117 @@ $(document).ready(function() {
         }, 'json');
     });
 
+    // Bypass Path Restriction single toggle card
+    (function npppSetupBypassPr() {
+        const $npppBprFS = $('#nppp-bypass-pr-fieldset');
+        if (!$npppBprFS.length || !window.nppp_admin_data) return;
+
+        const $npppBprStatus = $('<span/>', {
+            'class': 'nppp-related-status',
+            'aria-live': 'polite',
+            'aria-atomic': 'true',
+            'role': 'status'
+        }).attr('data-state', 'idle').hide().insertAfter($npppBprFS);
+
+        const npppBprGet = () => ({
+            nginx_cache_bypass_path_restriction:
+                $npppBprFS.find('#nginx_cache_bypass_path_restriction').is(':checked') ? 'yes' : 'no'
+        });
+
+        const npppBprDisable = (flag) => $npppBprFS.find('input[type=checkbox]').prop('disabled', flag);
+        let npppBprHideTimer;
+
+        function npppBprSetStatus(state, html, ttlMs) {
+            clearTimeout(npppBprHideTimer);
+            $npppBprStatus.attr('data-state', state).html(html).show();
+            if (ttlMs) {
+                npppBprHideTimer = setTimeout(() => {
+                    $npppBprStatus.attr('data-state', 'idle').empty().hide();
+                }, ttlMs);
+            }
+        }
+
+        const npppBprShowSaving = () => npppBprSetStatus(
+            'saving',
+            '<span class="dashicons dashicons-update" aria-hidden="true"></span>' +
+            '<span class="nppp-sr-only">' + __('Saving', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+            '<span>' + __('Saving\u2026', 'fastcgi-cache-purge-and-preload-nginx') + '</span>'
+        );
+        const npppBprShowSaved = () => npppBprSetStatus(
+            'saved',
+            '<span class="dashicons dashicons-yes" aria-hidden="true"></span>' +
+            '<span class="nppp-sr-only">' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+            '<span>' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>',
+            1000
+        );
+        const npppBprShowError = (msg) => npppBprSetStatus(
+            'error',
+            '<span class="dashicons dashicons-dismiss" aria-hidden="true"></span>' +
+            '<span class="nppp-sr-only">' + __('Error', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+            '<span>' + (msg || __('Failed to save', 'fastcgi-cache-purge-and-preload-nginx')) + '</span>',
+            2000
+        );
+
+        const npppBprRevertTo = (v) => {
+            $npppBprFS.find('#nginx_cache_bypass_path_restriction')
+                .prop('checked', v.nginx_cache_bypass_path_restriction === 'yes');
+        };
+
+        let npppBprLast   = npppBprGet();
+        let npppBprSaving = false;
+
+        function npppBprSaveNow() {
+            if (npppBprSaving) return;
+
+            npppBprSaving = true;
+            $npppBprFS.addClass('is-saving');
+            npppBprDisable(true);
+            npppBprShowSaving();
+
+            const payload = npppBprGet();
+
+            $.ajax({
+                url: nppp_admin_data.ajaxurl,
+                method: 'POST',
+                dataType: 'json',
+                timeout: 15000,
+                data: {
+                    action:   'nppp_update_bypass_path_restriction',
+                    _wpnonce: nppp_admin_data.bypass_pr_nonce,
+                    fields:   payload
+                }
+            }).done((res) => {
+                if (res && res.success) {
+                    const normalized =
+                        (res.data && (res.data.data || res.data.normalized || res.data)) || payload;
+                    npppBprLast = normalized;
+                    npppBprRevertTo(normalized);
+                    npppBprShowSaved();
+                } else {
+                    npppBprRevertTo(npppBprLast);
+                    const msg = (res && res.data && res.data.message) || 'Failed to save';
+                    npppBprShowError(msg);
+                }
+            }).fail((xhr) => {
+                npppBprRevertTo(npppBprLast);
+                const j   = xhr && xhr.responseJSON;
+                const msg = (j && (j.message || (j.data && j.data.message))) || 'Network error';
+                npppBprShowError(msg);
+            }).always(() => {
+                npppBprSaving = false;
+                $npppBprFS.removeClass('is-saving');
+                npppBprDisable(false);
+            });
+        }
+
+        const npppBprDebounce = (fn, wait) => {
+            let t;
+            return function() { clearTimeout(t); t = setTimeout(fn, wait); };
+        };
+
+        $npppBprFS.on('change', 'input[type=checkbox]', npppBprDebounce(npppBprSaveNow, 350));
+    })();
+
     // Auto Purge Triggers sub-options
     (function npppSetupAutoPurgeTriggers() {
         const $npppTrigFS = $('#nppp-autopurge-triggers-fieldset');
