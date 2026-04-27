@@ -2,7 +2,7 @@
 /**
  * Environment pre-checks for Nginx Cache Purge Preload
  * Description: Validates required server, filesystem, and plugin runtime prerequisites.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -124,7 +124,7 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
                 'headers'     => array(
                     'Cache-Control' => 'no-cache, no-store, max-age=0',
                     'Pragma'        => 'no-cache',
-                    'User-Agent'    => 'NPPP-Precheck/2.1.5',
+                    'User-Agent'    => 'NPPP-Precheck/2.1.6',
                 ),
             ));
 
@@ -518,7 +518,7 @@ function nppp_pre_checks_critical() {
             'headers'     => array(
                 'Cache-Control' => 'no-cache, no-store, max-age=0',
                 'Pragma'        => 'no-cache',
-                'User-Agent'    => 'NPPP-Precheck/2.1.5',
+                'User-Agent'    => 'NPPP-Precheck/2.1.6',
             ),
         ));
 
