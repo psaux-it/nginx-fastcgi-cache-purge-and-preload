@@ -98,7 +98,7 @@ function nppp_run_pending_migrations( $old_version, $new_version ) {
         // Per-version changelog lines
         $migration_messages = array(
             '2.1.5' => __( 'Opt-in usage tracking has been completely removed. /opt/ removed from allowed Nginx cache path roots, if your Nginx cache was stored under /opt/, please move it to a supported location and re-save in Settings.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            '2.1.6' => __( 'Auto purge sub-triggers added. Your existing auto purge behaviour has been preserved automatically.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            '2.1.6' => __( 'Auto purge sub-triggers added. Your existing auto purge behaviour has been preserved automatically. Please Reset to Default the Cache Key Regex for the latest compatibility updates to take effect.', 'fastcgi-cache-purge-and-preload-nginx' ),
         );
 
         $lines = array();
