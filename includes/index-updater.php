@@ -3,7 +3,7 @@
  * Background URL index updater for Nginx Cache Purge Preload
  * Description: WP-Cron job that refreshes the persistent URL→filepath index
  *              by scanning the live cache directory every 3 Hour.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
