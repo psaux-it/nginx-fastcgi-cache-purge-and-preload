@@ -2,7 +2,7 @@
 /**
  * Help and FAQ renderer for Nginx Cache Purge Preload
  * Description: Outputs plugin documentation, onboarding guidance, and support information in admin.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
