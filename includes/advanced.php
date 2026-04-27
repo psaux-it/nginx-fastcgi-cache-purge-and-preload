@@ -2,7 +2,7 @@
 /**
  * Advanced tab handlers for Nginx Cache Purge Preload
  * Description: Implements advanced admin actions for targeted URL purge and preload tasks.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
