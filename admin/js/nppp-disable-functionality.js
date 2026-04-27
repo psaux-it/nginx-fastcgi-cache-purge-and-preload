@@ -51,6 +51,10 @@
         // Disable WP dashboard widget buttons
         $('.nppp-action-button').addClass('disabled').removeAttr('href');
 
+        // Disable dashboard widget refresh button
+        $('.nppp-ratio-refresh').prop('disabled', true).css({'cursor': 'not-allowed'});
+        $(document).off('click', '.nppp-ratio-refresh');
+
         // Check if we're on the plugin settings page and disable plugin functionality
         if ($('#nppp-nginx-tabs').length > 0) {
             // Disable Purge and Preload buttons on settings page
