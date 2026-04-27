@@ -318,10 +318,13 @@ function nppp_nginx_cache_settings_page() {
                                     <?php echo esc_html__( 'Automatically purges cache when content or site changes occur.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Single-item events purge the page and, if enabled under Related Pages, also purge the Homepage, Shop Page and/or Category. Site-wide events purge the entire cache.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Single-item events auto purge the page itself. Under Purge Scope, selected Related Pages are also auto purged.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'This setting does not warm cache by itself. To warm the cache after any purge, enable Auto Preload below.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Site-wide events purge the entire cache.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'This setting does not warm cache by itself. To warm the cache after Auto Purge, enable Auto Preload below.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <div class="cache-paths-info">
                                     <p>
@@ -375,7 +378,10 @@ function nppp_nginx_cache_settings_page() {
                                     <?php echo esc_html__( 'When ON: "Preload All" (Admin, REST, Cron) always flushes the Redis object cache.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Flushing Redis cache only makes sense as part of the Nginx Purge+Preload chain or direct Cache Preload actions. A purge-only operation (without Preload) should leave the Redis cache warm.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Flushing Redis cache only makes sense as part of the Nginx Purge+Preload chain or direct Cache Preload actions.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'A purge-only operation (without Preload) should leave the Redis cache warm.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
                                     <?php echo esc_html__( 'Requires the Redis Object Cache plugin to be installed, configured, and connected.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
@@ -390,6 +396,7 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_nginx_cache_related_pages_callback(); ?>
+                                <div class="cache-paths-info"><?php echo esc_html__( 'Extends single-URL purges only — has no effect on full cache purge (Purge All, REST API, or Scheduled Purge). Fires on every single-URL purge: automatically via Auto Purge events and manually via the Admin Bar on-page button, the Advanced Tab, or the front-end purge button.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></div>
                             </td>
                         </tr>
                         <!-- Start Preload Options Section -->
