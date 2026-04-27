@@ -2,7 +2,7 @@
 /**
  * Cron scheduling utilities for Nginx Cache Purge Preload
  * Description: Manages preload-related cron events and reports active plugin schedules.
- * Version: 2.1.6
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -389,6 +389,12 @@ function nppp_create_scheduled_event_preload_status_callback() {
 
         // Schedule next tick to monitor mobile PID
         wp_schedule_single_event(time() + 5, 'npp_cache_preload_status_event');
+
+        // Release the completion lock so mobile's post-preload cleanup can proceed.
+        // The lock was acquired above to prevent desktop's completion from running twice,
+        // but it must not carry over into the mobile phase — mobile finishes independently
+        // and needs its own uncontested completion run.
+        delete_transient($completion_lock_key);
         return;
     }
 
