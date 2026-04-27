@@ -1769,6 +1769,14 @@ $(document).ready(function() {
         };
 
         $npppBprFS.on('change', 'input[type=checkbox]', npppBprDebounce(npppBprSaveNow, 350));
+
+        // Caution banner visibility — fires on every raw change, before the debounced save.
+        const npppBprCaution = document.getElementById( 'nppp-bypass-pr-caution' );
+        if ( npppBprCaution ) {
+            $npppBprFS.on( 'change', '#nginx_cache_bypass_path_restriction', function () {
+                npppBprCaution.style.display = this.checked ? '' : 'none';
+            } );
+        }
     })();
 
     // Auto Purge Triggers sub-options
