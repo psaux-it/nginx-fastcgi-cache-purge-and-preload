@@ -2,7 +2,7 @@
 /**
  * Dashboard widget module for Nginx Cache Purge Preload
  * Description: Renders WordPress dashboard status widgets and recent preload/purge summaries.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
