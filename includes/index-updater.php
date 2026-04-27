@@ -55,7 +55,7 @@ function nppp_unschedule_index_updater(): void {
  */
 function nppp_run_index_updater(): void {
     // Settings not saved yet.
-    $options = get_option( 'nginx_cache_settings' );
+    $options = get_option( 'nginx_cache_settings', [] );
     if ( ! is_array( $options ) ) {
         return;
     }
@@ -78,7 +78,9 @@ function nppp_run_index_updater(): void {
     }
 
     // Path safety check
-    if ( nppp_validate_path( $nginx_cache_path ) !== true ) {
+    $bypass_restriction = isset( $options['nginx_cache_bypass_path_restriction'] )
+        && $options['nginx_cache_bypass_path_restriction'] === 'yes';
+    if ( nppp_validate_path( $nginx_cache_path, false, $bypass_restriction ) !== true ) {
         return;
     }
 
