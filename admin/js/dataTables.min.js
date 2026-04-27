@@ -4,7 +4,7 @@
  *
  * To rebuild or modify this file with the latest versions of the included
  * software please visit:
- *   https://datatables.net/download/#dt/dt-2.3.7/r-3.0.8 
+ *   https://datatables.net/download/#dt/dt-2.3.7/r-3.0.8
  *
  * Included libraries:
  *   DataTables 2.3.7, Responsive 3.0.8
