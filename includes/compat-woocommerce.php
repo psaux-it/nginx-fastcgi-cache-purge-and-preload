@@ -5,7 +5,7 @@
  *              direct product saves (WP‑CLI, programmatic), and taxonomy term reassignments
  *              to keep the Nginx cache synchronized. All purge operations respect the
  *              "Posts & Comments" and "Categories, Tags & Taxonomies" auto‑purge sub‑option.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
