@@ -155,6 +155,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'pctnorm_nonce'                => wp_create_nonce('nppp-update-pctnorm-mode'),
         'http_purge_nonce'             => $update_http_purge_option_nonce,
         'rg_purge_nonce'               => $update_rg_purge_option_nonce,
+        'bypass_pr_nonce'              => wp_create_nonce( 'nppp-update-bypass-path-restriction' ),
     ));
 }
 
