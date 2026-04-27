@@ -386,6 +386,13 @@ function nppp_get_nginx_info() {
 // Does NOT check filesystem existence — paths come from nginx.conf, not settings input.
 // Must be kept in sync with nppp_validate_path() in settings.php.
 function nppp_is_cache_path_display_supported(string $directive, string $value): bool {
+    // When the user has bypassed path restrictions, every syntactically valid
+    // path is display-supported.
+    $opts = get_option( 'nginx_cache_settings', [] );
+    if ( isset( $opts['nginx_cache_bypass_path_restriction'] ) && $opts['nginx_cache_bypass_path_restriction'] === 'yes' ) {
+        return true;
+    }
+
     $normalised = rtrim($value, '/');
 
     // Allowed roots — must match nppp_validate_path() $allowed_roots exactly
