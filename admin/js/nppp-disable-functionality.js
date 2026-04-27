@@ -243,7 +243,31 @@
                     .css({ opacity:.5, cursor:'not-allowed' });
             })();
 
-            // Disable Ripgrep Turbo Purge toggle
+            // Disable Bypass Path Restriction toggle
+            (function disableBypassPr(){
+                const $toggle = $('#nginx_cache_bypass_path_restriction');
+                if (!$toggle.length) return;
+
+                const $fs       = $('#nppp-bypass-pr-fieldset');
+                const $form     = $toggle.closest('form');
+                const name      = $toggle.attr('name');
+                const currentVal = $toggle.is(':checked') ? 'yes' : 'no';
+
+                $toggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                if ($fs.length) {
+                    $fs.css({ opacity:.5, cursor:'not-allowed' })
+                       .find('label').css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+                }
+
+                ensureHiddenMirror($form, name, currentVal);
+            })();
+
+            // Disable Ripgrep Purge toggle
             (function disableRgPurge(){
                 const $toggle = $('#nppp_rg_purge_enabled');
                 if (!$toggle.length) return;
