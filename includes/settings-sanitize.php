@@ -223,10 +223,14 @@ function nppp_nginx_cache_settings_sanitize($input) {
         return $sanitized_input;
     }
 
+    // Read bypass flag before path validation
+    $bypass_restriction = isset( $input['nginx_cache_bypass_path_restriction'] )
+        && $input['nginx_cache_bypass_path_restriction'] === 'yes';
+
     // Sanitize and validate cache path
     if (!empty($input['nginx_cache_path'])) {
         // Validate the path
-        $validation_result = nppp_validate_path($input['nginx_cache_path'], false);
+        $validation_result = nppp_validate_path($input['nginx_cache_path'], false, $bypass_restriction);
 
         // Check the validation result
         if ($validation_result === true) {
@@ -698,14 +702,14 @@ function nppp_nginx_cache_settings_sanitize($input) {
 }
 
 // Validate the cache path to prevent bad inputs
-function nppp_validate_path($path, $nppp_is_premium_purge = false) {
+function nppp_validate_path($path, $nppp_is_premium_purge = false, bool $nppp_bypass_restriction = false) {
     // Whitelist the default placeholder — directory mode only.
     if (!$nppp_is_premium_purge && $path === '/dev/shm/change-me-now') {
         return true;
     }
 
     // 1. Format check — rejects malformed input before any string ops.
-    $pattern = '/^\/(?:[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*)\/?$/';
+    $pattern = '/^\\/(?:[a-zA-Z0-9._-]+(?:\\/[a-zA-Z0-9._-]+)*)\\/?$/';
     if (!preg_match($pattern, $path)) {
         return 'critical_path';
     }
@@ -719,23 +723,9 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
     // 3. Normalise — strip trailing slash before prefix comparisons.
     $normalised = rtrim($path, '/');
 
-    // 4. Allowlist of safe cache roots.
+    // Hoisted here so both the raw-path checks (4+5) and the resolved-path
+    // re-checks (7) can reference them without redefining the arrays twice.
     $allowed_roots = ['/dev/shm/', '/tmp/', '/var/', '/cache/'];
-
-    $allowed = false;
-    foreach ($allowed_roots as $root) {
-        if (strpos($normalised, $root) === 0) {
-            $allowed = true;
-            break;
-        }
-    }
-
-    if (!$allowed) {
-        return 'critical_path';
-    }
-
-    // 5. Blocklist of dangerous subtrees within the allowed roots.
-    //    Exact match + trailing slash prevents false positives:
     $blocked_subdirs = [
         '/var/log',
         '/var/spool',
@@ -747,17 +737,34 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
         '/var/snap',
     ];
 
-    foreach ($blocked_subdirs as $blocked) {
-        if ($normalised === $blocked ||
-            strpos($normalised, $blocked . '/') === 0) {
+    if ( ! $nppp_bypass_restriction ) {
+        // 4. Allowlist of safe cache roots.
+        $allowed = false;
+        foreach ($allowed_roots as $root) {
+            if (strpos($normalised, $root) === 0) {
+                $allowed = true;
+                break;
+            }
+        }
+
+        if (!$allowed) {
             return 'critical_path';
         }
-    }
 
-    // 5b. Block /var/cache root only — subdirectories are allowed.
-    //     Using /var/cache directly would wipe all system cache data.
-    if ($normalised === '/var/cache' || $normalised === '/var/run' || $normalised === '/cache') {
-        return 'critical_path';
+        // 5. Blocklist of dangerous subtrees within the allowed roots.
+        //    Exact match + trailing slash prevents false positives:
+        foreach ($blocked_subdirs as $blocked) {
+            if ($normalised === $blocked ||
+                strpos($normalised, $blocked . '/') === 0) {
+                return 'critical_path';
+            }
+        }
+
+        // 5b. Block /var/cache root only — subdirectories are allowed.
+        //     Using /var/cache directly would wipe all system cache data.
+        if ($normalised === '/var/cache' || $normalised === '/var/run' || $normalised === '/cache') {
+            return 'critical_path';
+        }
     }
 
     // 6. Existence check — also required before realpath() is safe to call,
@@ -784,28 +791,30 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false) {
 
     $resolved_normalised = rtrim($resolved, '/');
 
-    $resolved_allowed = false;
-    foreach ($allowed_roots as $root) {
-        if (strpos($resolved_normalised, $root) === 0) {
-            $resolved_allowed = true;
-            break;
+    if ( ! $nppp_bypass_restriction ) {
+        $resolved_allowed = false;
+        foreach ($allowed_roots as $root) {
+            if (strpos($resolved_normalised, $root) === 0) {
+                $resolved_allowed = true;
+                break;
+            }
         }
-    }
 
-    if (!$resolved_allowed) {
-        return 'critical_path';
-    }
-
-    foreach ($blocked_subdirs as $blocked) {
-        if ($resolved_normalised === $blocked ||
-            strpos($resolved_normalised, $blocked . '/') === 0) {
+        if (!$resolved_allowed) {
             return 'critical_path';
         }
-    }
 
-    // 5b repeated on resolved path — catches symlinks pointing at /var/cache root
-    if ($resolved_normalised === '/var/cache' || $resolved_normalised === '/var/run' || $resolved_normalised === '/cache') {
-        return 'critical_path';
+        foreach ($blocked_subdirs as $blocked) {
+            if ($resolved_normalised === $blocked ||
+                strpos($resolved_normalised, $blocked . '/') === 0) {
+                return 'critical_path';
+            }
+        }
+
+        // 5b repeated on resolved path — catches symlinks pointing at /var/cache root
+        if ($resolved_normalised === '/var/cache' || $resolved_normalised === '/var/run' || $resolved_normalised === '/cache') {
+            return 'critical_path';
+        }
     }
 
     return true;
