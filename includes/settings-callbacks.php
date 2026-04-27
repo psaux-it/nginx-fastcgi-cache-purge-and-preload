@@ -482,9 +482,19 @@ function nppp_nginx_cache_bypass_path_restriction_callback() {
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
                     <span class="title"><?php esc_html_e( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                    <span class="desc"><?php esc_html_e( 'When enabled, skips the allowed-root prefix check on the cache directory path.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="desc"><?php esc_html_e( 'When enabled, it completely disables path restrictions and all built-in path safety guardrails.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                 </span>
             </label>
+        </div>
+        <div class="nppp-bypass-pr-caution" id="nppp-bypass-pr-caution" role="alert" aria-live="polite"
+            style="<?php echo $checked ? '' : 'display:none;'; ?>">
+            <p class="nppp-caution-header">
+                <span class="dashicons dashicons-warning" aria-hidden="true"></span>
+                <?php esc_html_e( 'CAUTION — You Are Solely Responsible', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            </p>
+            <p class="nppp-caution-body">
+                <?php esc_html_e( 'All built-in path safety guardrails are now disabled. The plugin will operate on ANY directory you configure as the Nginx cache path — including system-critical locations. Unintended, irreversible file deletions are possible. By enabling this feature, you explicitly accept full responsibility for any data loss or system damage that may result.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            </p>
         </div>
     </fieldset>
     <?php
