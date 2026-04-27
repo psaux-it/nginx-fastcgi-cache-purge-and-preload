@@ -3193,7 +3193,7 @@ p.description {
     display: block;
     margin-top: 2px;
     color: var(--nppp-sub);
-    font-size: 11px;
+    font-size: 12px;
 }
 .nppp-related-pages .nppp-text br{ display: none; }
 
@@ -4668,7 +4668,7 @@ div.updated.notice-nppp p,
     display: block;
     margin-top: 2px;
     color: var(--nppp-sub);
-    font-size: 11px;
+    font-size: 12px;
 }
 .nppp-bypass-pr-fieldset input[disabled] + label { opacity: .6; cursor: not-allowed; }
 .nppp-bypass-pr-fieldset input[disabled] + label .nppp-toggle { background: #eef0f3; border-color: #d7dbe0; }
@@ -4814,7 +4814,7 @@ div.updated.notice-nppp p,
     display: block;
     margin-top: 2px;
     color: var(--nppp-sub);
-    font-size: 11px;
+    font-size: 12px;
 }
 
 .nppp-autopurge-triggers-fieldset input[disabled] + label {
@@ -4971,7 +4971,7 @@ div.updated.notice-nppp p,
 
 .nppp-bypass-pr-caution .nppp-caution-body {
     margin: 0;
-    font-size: 12.5px;
+    font-size: 12px;
     line-height: 1.6;
     color: #50575e;
 }
