@@ -59,17 +59,21 @@ function nppp_run_update_routines( $old_version, $new_version ) {
 
 // Execute all migrations whose version is greater than the current DB version.
 function nppp_run_pending_migrations( $old_version, $new_version ) {
-    // Skip entirely for installs already on 2.1.6+.
-    // All pending migrations are gated individually by nppp_db_version below.
-    if ( version_compare( $old_version, '2.1.6', '>=' ) ) {
+    // No-op when there is no effective version transition.
+    if ( empty( $old_version ) || $old_version === $new_version ) {
         return;
     }
 
-    $db_version     = get_option( 'nppp_db_version', '0.0.0' );
+    $db_version = get_option( 'nppp_db_version', '0.0.0' );
+
+    // Use the higher of the stored DB version and the previous plugin version as
+    // the migration baseline.
+    $baseline = version_compare( $db_version, $old_version, '>' ) ? $db_version : $old_version;
+
     $ran_migrations = array();
 
     foreach ( nppp_get_db_migrations() as $version => $callbacks ) {
-        if ( version_compare( $db_version, $version, '<' ) ) {
+        if ( version_compare( $baseline, $version, '<' ) ) {
             foreach ( $callbacks as $callback ) {
                 if ( function_exists( $callback ) ) {
                     call_user_func( $callback );
@@ -82,7 +86,7 @@ function nppp_run_pending_migrations( $old_version, $new_version ) {
             // Stamp this version into the DB immediately after its callbacks finish.
             // If a later callback crashes, the completed version block is already safe.
             update_option( 'nppp_db_version', $version );
-            $db_version = $version;
+            $baseline = $version;
         }
     }
 
