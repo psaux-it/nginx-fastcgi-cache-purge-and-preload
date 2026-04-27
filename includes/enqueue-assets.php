@@ -2,7 +2,7 @@
 /**
  * Admin asset loading for Nginx Cache Purge Preload
  * Description: Enqueues plugin CSS and JavaScript assets required by admin pages and tabs.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -27,7 +27,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_style('nppp_tempus-dominus-css', plugins_url('../admin/css/tempus-dominus.min.css', __FILE__), array(), '6.9.4');
 
     // Enqueue CSS files for Nginx FastCGI Cache Purge and Preload Plugin
-    wp_enqueue_style('nppp_admin-css', plugins_url('../admin/css/fastcgi-cache-purge-and-preload-nginx.css', __FILE__), array(), '2.1.5');
+    wp_enqueue_style('nppp_admin-css', plugins_url('../admin/css/fastcgi-cache-purge-and-preload-nginx.min.css', __FILE__), array(), '2.1.6');
 
     // Enqueue jQuery UI core, jQuery UI Tabs, jQuery UI Accordion
     wp_enqueue_script('jquery-ui-core');
@@ -54,10 +54,10 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_script('nppp_tempus-dominus-js', plugins_url('../admin/js/tempus-dominus.min.js', __FILE__), array('nppp_popper-js'), '6.9.4', true);
 
     // Enqueue JavaScript (main) file for Nginx Cache Purge Preload Plugin
-    wp_enqueue_script('nppp_admin-js', plugins_url('../admin/js/fastcgi-cache-purge-and-preload-nginx.js', __FILE__), array('jquery', 'jquery-ui-core', 'jquery-ui-tabs', 'jquery-ui-accordion', 'nppp_datatables-js', 'nppp_tempus-dominus-js', 'wp-i18n'), '2.1.5', true);
+    wp_enqueue_script('nppp_admin-js', plugins_url('../admin/js/fastcgi-cache-purge-and-preload-nginx.min.js', __FILE__), array('jquery', 'jquery-ui-core', 'jquery-ui-tabs', 'jquery-ui-accordion', 'nppp_datatables-js', 'nppp_tempus-dominus-js', 'wp-i18n'), '2.1.6', true);
 
     // Enqueue JavaScript (header effect) file for Nginx Cache Purge Preload Plugin
-    wp_enqueue_script('nppp_aurora-canvas', plugins_url('../admin/js/nppp-header.js', __FILE__), array('jquery'), '2.1.5', true);
+    wp_enqueue_script('nppp_aurora-canvas', plugins_url('../admin/js/nppp-header.js', __FILE__), array('jquery'), '2.1.6', true);
 
     // Set script i18n translations
     wp_set_script_translations('nppp_admin-js', 'fastcgi-cache-purge-and-preload-nginx');
@@ -353,7 +353,7 @@ function nppp_plugin_requirements_met() {
                 'headers'     => array(
                     'Cache-Control' => 'no-cache, no-store, max-age=0',
                     'Pragma'        => 'no-cache',
-                    'User-Agent'    => 'NPPP-Precheck/2.1.5',
+                    'User-Agent'    => 'NPPP-Precheck/2.1.6',
                 ),
             ));
 
@@ -500,7 +500,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
     if ($current_screen->base === 'dashboard') {
         // Enqueue the NPP WP admin dashboard JS
         if (!wp_script_is('nppp-dashboard-widget-js', 'enqueued')) {
-            wp_enqueue_script('nppp-dashboard-widget-js', plugins_url('../admin/js/nppp-dashboard-widget.js', __FILE__), array('jquery', 'wp-i18n'), '2.1.5', true);
+            wp_enqueue_script('nppp-dashboard-widget-js', plugins_url('../admin/js/nppp-dashboard-widget.js', __FILE__), array('jquery', 'wp-i18n'), '2.1.6', true);
             wp_set_script_translations('nppp-dashboard-widget-js', 'fastcgi-cache-purge-and-preload-nginx');
             wp_localize_script('nppp-dashboard-widget-js', 'nppp_widget_data', array(
                 'ajaxurl'             => admin_url('admin-ajax.php'),
@@ -510,7 +510,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
 
         // Enqueue the NPP WP admin dashboard CSS
         if (!wp_style_is('nppp-dashboard-widget-css', 'enqueued')) {
-            wp_enqueue_style('nppp-dashboard-widget-css', plugins_url('../admin/css/nppp-dashboard-widget.css', __FILE__), array(), '2.1.5');
+            wp_enqueue_style('nppp-dashboard-widget-css', plugins_url('../admin/css/nppp-dashboard-widget.css', __FILE__), array(), '2.1.6');
         }
     } elseif ($current_screen->id === 'settings_page_nginx_cache_settings') {
         // Dequeue the NPP WP admin dashboard JS
@@ -527,14 +527,14 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
     // Disable/limit plugin functionality to prevent unexpected behaviors
     if ($nppp_met) {
         if (!nppp_shell_toolset_check(false, true)) {
-            wp_enqueue_script('nppp-disable-preload', plugins_url('../admin/js/nppp-disable-preload.js', __FILE__), array('jquery'), '2.1.5', true);
+            wp_enqueue_script('nppp-disable-preload', plugins_url('../admin/js/nppp-disable-preload.js', __FILE__), array('jquery'), '2.1.6', true);
             nppp_disable_features(false, true);
         } else {
             wp_dequeue_script('nppp-disable-preload');
         }
         wp_dequeue_script('nppp-disable-functionality');
     } else {
-        wp_enqueue_script('nppp-disable-functionality', plugins_url('../admin/js/nppp-disable-functionality.js', __FILE__), array('jquery'), '2.1.5', true);
+        wp_enqueue_script('nppp-disable-functionality', plugins_url('../admin/js/nppp-disable-functionality.js', __FILE__), array('jquery'), '2.1.6', true);
         nppp_disable_features(true, false);
     }
 }
@@ -553,13 +553,13 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
             'nppp-mobile-fab-css',
             plugins_url('../frontend/css/nppp-mobile-fab.css', __FILE__),
             array(),
-            '2.1.5'
+            '2.1.6'
         );
         wp_enqueue_script(
             'nppp-mobile-fab-js',
             plugins_url('../frontend/js/nppp-mobile-fab.js', __FILE__),
             array(),
-            '2.1.5',
+            '2.1.6',
             true
         );
     }
@@ -569,12 +569,12 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
         $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
         if (wp_verify_nonce($nonce, 'nppp_redirect_nonce')) {
             // Keep legacy frontend notice assets untouched for compatibility.
-            wp_enqueue_style('nppp_admin-front-css', plugins_url('../frontend/css/fastcgi-cache-purge-and-preload-nginx-front.css', __FILE__), array(), '2.1.5');
-            wp_enqueue_script('nppp_admin-front-js', plugins_url('../frontend/js/fastcgi-cache-purge-and-preload-nginx-front.js', __FILE__), array('jquery'), '2.1.5', true);
+            wp_enqueue_style('nppp_admin-front-css', plugins_url('../frontend/css/fastcgi-cache-purge-and-preload-nginx-front.css', __FILE__), array(), '2.1.6');
+            wp_enqueue_script('nppp_admin-front-js', plugins_url('../frontend/js/fastcgi-cache-purge-and-preload-nginx-front.js', __FILE__), array('jquery'), '2.1.6', true);
 
             // Enqueue isolated frontend toast assets for single-page action results.
-            wp_enqueue_style('nppp-front-toast-css', plugins_url('../frontend/css/nppp-front-toast.css', __FILE__), array(), '2.1.5');
-            wp_enqueue_script('nppp-front-toast-js', plugins_url('../frontend/js/nppp-front-toast.js', __FILE__), array(), '2.1.5', true);
+            wp_enqueue_style('nppp-front-toast-css', plugins_url('../frontend/css/nppp-front-toast.css', __FILE__), array(), '2.1.6');
+            wp_enqueue_script('nppp-front-toast-js', plugins_url('../frontend/js/nppp-front-toast.js', __FILE__), array(), '2.1.6', true);
 
             $status_message_key = sanitize_text_field(wp_unslash($_GET['nppp_front']));
             $status_message_data = get_transient($status_message_key);
@@ -598,7 +598,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
     // Check plugin requirements and limit the functionality accordingly on front-end
     $nppp_met = nppp_plugin_requirements_met();
     if (!$nppp_met) {
-        wp_enqueue_script('nppp-disable-functionality-front', plugins_url('../frontend/js/nppp-disable-functionality-front.js', __FILE__), array('jquery'), '2.1.5', true);
+        wp_enqueue_script('nppp-disable-functionality-front', plugins_url('../frontend/js/nppp-disable-functionality-front.js', __FILE__), array('jquery'), '2.1.6', true);
         // Make sure partial-preload disable is not also active
         wp_dequeue_script('nppp-disable-preload-front');
     } else {
@@ -606,7 +606,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
         // Extra gate: if shell/toolset missing, disable only preload actions on front-end
         $has_shell = function_exists('nppp_shell_toolset_check') ? nppp_shell_toolset_check(false, true) : false;
         if (! $has_shell) {
-            wp_enqueue_script('nppp-disable-preload-front', plugins_url('../frontend/js/nppp-disable-preload-front.js', __FILE__), array('jquery'), '2.1.5', true);
+            wp_enqueue_script('nppp-disable-preload-front', plugins_url('../frontend/js/nppp-disable-preload-front.js', __FILE__), array('jquery'), '2.1.6', true);
         } else {
             wp_dequeue_script('nppp-disable-preload-front');
         }
@@ -618,7 +618,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
 // are visible while on the plugin settings page.
 function nppp_manage_admin_notices() {
     // Register a dummy stylesheet
-    wp_register_style('nppp-manage-notices', false, array(), '2.1.5');
+    wp_register_style('nppp-manage-notices', false, array(), '2.1.6');
 
     // Enqueue the dummy stylesheet
     wp_enqueue_style('nppp-manage-notices');
