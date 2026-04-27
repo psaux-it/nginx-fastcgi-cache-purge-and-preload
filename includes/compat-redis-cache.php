@@ -9,7 +9,7 @@
  *              A purge-only operation (Auto-Preload OFF) should leave Redis warm — it is still
  *              valid and will serve DB queries faster when the next request rebuilds Nginx pages.
  *
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
