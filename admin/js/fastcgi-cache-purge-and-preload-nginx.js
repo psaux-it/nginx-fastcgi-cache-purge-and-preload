@@ -1771,10 +1771,15 @@ $(document).ready(function() {
         $npppBprFS.on('change', 'input[type=checkbox]', npppBprDebounce(npppBprSaveNow, 350));
 
         // Caution banner visibility — fires on every raw change, before the debounced save.
-        const npppBprCaution = document.getElementById( 'nppp-bypass-pr-caution' );
+        const npppBprCaution    = document.getElementById( 'nppp-bypass-pr-caution' );
+        const npppAllowedPaths  = document.getElementById( 'nppp-allowed-paths-info' );
         if ( npppBprCaution ) {
             $npppBprFS.on( 'change', '#nginx_cache_bypass_path_restriction', function () {
-                npppBprCaution.style.display = this.checked ? '' : 'none';
+                npppBprCaution.style.display   = this.checked ? '' : 'none';
+                // When bypass is ON the allowed-paths info block is misleading — hide it.
+                if ( npppAllowedPaths ) {
+                    npppAllowedPaths.style.display = this.checked ? 'none' : '';
+                }
             } );
         }
     })();
