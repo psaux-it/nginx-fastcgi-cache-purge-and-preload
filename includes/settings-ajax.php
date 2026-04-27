@@ -2,7 +2,7 @@
 /**
  * AJAX option handlers for Nginx Cache Purge Preload
  * Description: Handles all wp_ajax_* callbacks for toggle switches and live option updates.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
