@@ -2,7 +2,7 @@
 /**
  * Cloudflare APO compatibility for Nginx Cache Purge Preload
  * Description: Mirrors plugin purge actions to Cloudflare APO to keep edge cache synchronized.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * License: GPL-2.0+
  */
