@@ -709,7 +709,7 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false, bool $nppp_by
     }
 
     // 1. Format check — rejects malformed input before any string ops.
-    $pattern = '/^\\/(?:[a-zA-Z0-9._-]+(?:\\/[a-zA-Z0-9._-]+)*)\\/?$/';
+    $pattern = '/^\/(?:[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*)\/?$/';
     if (!preg_match($pattern, $path)) {
         return 'critical_path';
     }
