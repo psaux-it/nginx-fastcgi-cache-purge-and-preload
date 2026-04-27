@@ -2,7 +2,7 @@
 /**
  * Nginx configuration parser for Nginx Cache Purge Preload
  * Description: Reads server config fragments to detect cache paths, keys, and runtime settings.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
