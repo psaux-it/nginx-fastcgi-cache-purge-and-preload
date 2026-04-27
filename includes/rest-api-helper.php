@@ -2,7 +2,7 @@
 /**
  * REST API bootstrap helpers for Nginx Cache Purge Preload
  * Description: Loads and wires REST helper modules, including preload progress endpoints.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
