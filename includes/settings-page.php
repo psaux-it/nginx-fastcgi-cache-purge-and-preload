@@ -281,7 +281,8 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description"><?php echo esc_html__( 'Enter the full NGINX cache directory path for the plugin to operate.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'This directory must be configured in NGINX and be accessible by the PHP process.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Read and write permissions are required for purge and preload to function properly.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <div class="cache-paths-info">
+                                <div class="cache-paths-info" id="nppp-allowed-paths-info"
+                                    style="<?php echo ( isset( $nppp_badge_opts['nginx_cache_bypass_path_restriction'] ) && $nppp_badge_opts['nginx_cache_bypass_path_restriction'] === 'yes' ) ? 'display:none;' : ''; ?>">
                                     <h4><?php echo esc_html__( 'Allowed Cache Paths', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
                                     <p>
                                         <strong><?php echo esc_html__( 'For RAM-based:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
