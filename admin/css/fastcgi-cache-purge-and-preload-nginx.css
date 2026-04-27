@@ -4936,3 +4936,42 @@ div.updated.notice-nppp p,
         border-color: #6b2929;
     }
 }
+
+/* Cache path CAUTION */
+.nppp-bypass-pr-caution {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 14px;
+    padding: 12px 16px;
+    border-left: 4px solid #d63638;
+    background-color: #fcf0f1;
+    border-radius: 0 4px 4px 0;
+    max-width: 490px;
+}
+
+.nppp-bypass-pr-caution .nppp-caution-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-weight: 700;
+    font-size: 13px;
+    color: #d63638;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.nppp-bypass-pr-caution .nppp-caution-header .dashicons {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    color: #d63638;
+}
+
+.nppp-bypass-pr-caution .nppp-caution-body {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: #50575e;
+}
