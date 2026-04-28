@@ -231,9 +231,7 @@ msgstr ""
 msgid "INFO ADMIN: Nginx cache purge attempted for %s"
 msgstr ""
 
-#. translators: %s: The FUSE mount source directory.
-#. translators: %s: FUSE source directory path.
-#. translators: %s: FUSE source filesystem path that no longer exists on disk
+#. translators: %s: FUSE source filesystem path that no longer exists on disk.
 #: includes/advanced.php:934
 #: includes/advanced.php:1250
 #: includes/purge.php:562
@@ -241,8 +239,6 @@ msgstr ""
 msgid "WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s"
 msgstr ""
 
-#. translators: %s: Original Nginx cache filesystem path being scanned via safexec.
-#. translators: %s: Original Nginx cache filesystem path being scanned by ripgrep via safexec
 #. translators: %s: Original Nginx cache filesystem path being scanned by ripgrep via safexec.
 #: includes/advanced.php:976
 #: includes/advanced.php:1310
@@ -309,8 +305,6 @@ msgstr ""
 msgid "WARNING PATH TRANSLATE: Purge failed for \"%1$s\". Failed path translation - \"%2$s\" does not start with \"%3$s\""
 msgstr ""
 
-#. translators: %s: Filesystem path being scanned via FUSE mount.
-#. translators: %s: Filesystem path being scanned by ripgrep via FUSE mount
 #. translators: %s: Filesystem path being scanned by ripgrep via FUSE mount.
 #: includes/advanced.php:1304
 #: includes/purge.php:607
@@ -763,24 +757,24 @@ msgid "Not Mounted"
 msgstr ""
 
 #: includes/configuration-parser.php:731
-#: includes/help.php:1398
+#: includes/help.php:1400
 msgid "Hope you are enjoying NPP! If it saves you time, consider giving it a star or sponsoring its development."
 msgstr ""
 
 #: includes/configuration-parser.php:735
 #: includes/configuration-parser.php:742
-#: includes/help.php:1402
-#: includes/help.php:1409
+#: includes/help.php:1404
+#: includes/help.php:1411
 msgid "Give a Star"
 msgstr ""
 
 #: includes/configuration-parser.php:736
-#: includes/help.php:1403
+#: includes/help.php:1405
 msgid "Give a Star or Sponsor NPP"
 msgstr ""
 
 #: includes/configuration-parser.php:745
-#: includes/help.php:1412
+#: includes/help.php:1414
 msgid "Sponsor"
 msgstr ""
 
@@ -936,7 +930,6 @@ msgstr ""
 msgid "INFO INDEX UPDATER CRON: Completed — %1$d URLs scanned, %2$d new path entries merged to index."
 msgstr ""
 
-#. translators: %s: path to the log file
 #. translators: %s: path to the log file directory
 #: includes/log.php:68
 #: includes/rest-api.php:158
@@ -944,7 +937,6 @@ msgstr ""
 msgid "Error appending to log file at %s"
 msgstr ""
 
-#. translators: %s: path to the log file
 #. translators: %s: path to the log file directory
 #: includes/log.php:72
 #: includes/rest-api.php:142
@@ -1444,8 +1436,6 @@ msgstr ""
 msgid "SUCCESS ADMIN: Nginx cache purged for related page %s (INDEX)"
 msgstr ""
 
-#. translators: %s: Page URL whose cache file could not be deleted
-#. translators: %s: Primary page URL that rg could not scan due to permissions
 #. translators: %s: Page URL
 #: includes/purge.php:505
 #: includes/purge.php:639
