@@ -2,7 +2,7 @@
 /**
  * Elementor cache purge integration for Nginx Cache Purge Preload
  * Description: Triggers targeted Nginx cache purges when Elementor saves content or regenerates CSS.
- * Version: 2.1.6
+ * Version: 2.1.5
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -32,6 +32,14 @@ if ( defined('ELEMENTOR_VERSION') && $nppp_auto_purge ) {
 function nppp__el_after_save( $post_id, $editor_data ) {
     // Skip autosaves triggered on editor open.
     if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+        return;
+    }
+
+    // Skip the Elementor editor page load (GET action=elementor).
+    // phpcs:disable WordPress.Security.NonceVerification.Recommended
+    $get_action = isset( $_GET['action'] ) ? sanitize_key( wp_unslash( $_GET['action'] ) ) : '';
+    // phpcs:enable
+    if ( 'elementor' === $get_action ) {
         return;
     }
 
@@ -80,18 +88,44 @@ function nppp__el_after_save( $post_id, $editor_data ) {
 }
 
 function nppp__el_document_after_save( $document, $data ) {
-    // Skip Elementor background autosaves
+    // Skip Elementor autosave documents (child revisions created during editor open).
     if ( method_exists( $document, 'is_autosave' ) && $document->is_autosave() ) {
         return;
     }
 
-    // Skip Elementor autosave saves triggered on editor open.
-    // Elementor calls document->save() on the parent post with post_status=autosave,
-    // so is_autosave() above returns false. Catch it via DOING_AUTOSAVE or data settings.
+    // Skip when WordPress itself has defined the autosave constant.
     if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
         return;
     }
+
+    // Skip when the save data explicitly carries an autosave status.
     if ( isset( $data['settings']['post_status'] ) && 'autosave' === $data['settings']['post_status'] ) {
+        return;
+    }
+
+    // Skip when the save data carries NO settings and NO elements.
+    // This is a metadata-only save (save_template_type / save_version calls)
+    // triggered during editor initialisation, not a real user publish action.
+    if ( empty( $data['settings'] ) && empty( $data['elements'] ) ) {
+        return;
+    }
+
+    // Skip the Elementor editor page load (GET action=elementor).
+    // phpcs:disable WordPress.Security.NonceVerification.Recommended
+    $get_action = isset( $_GET['action'] ) ? sanitize_key( wp_unslash( $_GET['action'] ) ) : '';
+    // phpcs:enable
+    if ( 'elementor' === $get_action ) {
+        return;
+    }
+
+    // Skip saves arriving via any REST request — those are internal Elementor REST
+    // endpoints (e.g. elementor/v1/documents/{id}/media/import, CSS regeneration)
+    // that call document->save() for non-publish purposes. Real Gutenberg-style
+    // REST publishes are already handled by compat-gutenberg.php.
+    if (
+        ( function_exists( 'wp_is_serving_rest_request' ) && wp_is_serving_rest_request() ) ||
+        ( defined( 'REST_REQUEST' ) && REST_REQUEST )
+    ) {
         return;
     }
 
