@@ -110,7 +110,7 @@
  * Copyright
  * ---------
  * (C) 2025 Hasan Calisir <hasan.calisir@psauxit.com>
- * Version: 1.9.5 (2025)
+ * Version: 1.9.6 (2025)
  */
 
 
@@ -167,7 +167,7 @@
 
 // Metadata
 #define SAFEXEC_NAME     "safexec"
-#define SAFEXEC_VERSION  "1.9.5"
+#define SAFEXEC_VERSION  "1.9.6"
 #define SAFEXEC_AUTHOR   "Hasan Calisir"
 
 // Safe DIR
