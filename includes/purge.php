@@ -558,7 +558,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     // Mount table may list a FUSE source path that no longer exists on disk
     if ( $rg_source_path !== null && ! $wp_filesystem->is_dir( $rg_source_path ) ) {
         nppp_display_admin_notice( 'info', sprintf(
-            /* translators: %s: FUSE source filesystem path that no longer exists on disk */
+            /* translators: %s: FUSE source filesystem path that no longer exists on disk. */
             __( 'WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
             $rg_source_path
         ), true, false );
@@ -603,13 +603,13 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     if ( $rg_fuse_active ) {
         if ( $rg_scan_path === $rg_fuse_path ) {
             nppp_display_admin_notice( 'info', sprintf(
-                /* translators: %s: Filesystem path being scanned by ripgrep via FUSE mount */
+                /* translators: %s: Filesystem path being scanned by ripgrep via FUSE mount. */
                 __( 'WARNING RG SCAN: FUSE mount detected, scanning FUSE mount path (safexec unavailable, install safexec for better performance): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $rg_scan_path
             ), true, false );
         } elseif ( $rg_use_safexec ) {
             nppp_display_admin_notice( 'info', sprintf(
-                /* translators: %s: Original Nginx cache filesystem path being scanned by ripgrep via safexec */
+                /* translators: %s: Original Nginx cache filesystem path being scanned by ripgrep via safexec. */
                 __( 'INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $rg_scan_path
             ), true, false );
@@ -635,7 +635,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
 
     if ( $exit === 2 ) {
         nppp_display_admin_notice( 'error', sprintf(
-            /* translators: %s: Primary page URL that rg could not scan due to permissions */
+            /* translators: %s: Page URL */
             __( 'ERROR PERMISSION: Nginx cache purge for page %s was aborted due to a permission error. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ),
             $primary_decoded
         ) );
