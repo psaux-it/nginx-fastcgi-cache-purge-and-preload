@@ -501,7 +501,7 @@ function nppp_purge_fp2_index( array &$ctx ): bool {
             if ( $perm_failure > 0 ) {
                 if ( $target['is_primary'] ) {
                     nppp_display_admin_notice( 'error', sprintf(
-                        /* translators: %s: Page URL whose cache file could not be deleted */
+                        /* translators: %s: Page URL */
                         __( 'ERROR PERMISSION: Nginx cache purge for page %s was aborted due to a permission error. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ),
                         $target['decoded']
                     ) );
@@ -755,7 +755,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
             }
             if ( $target['is_primary'] ) {
                 nppp_display_admin_notice( 'error', sprintf(
-                    /* translators: %s: Page URL whose cache file could not be deleted */
+                    /* translators: %s: Page URL */
                     __( 'ERROR PERMISSION: Nginx cache purge for page %s was aborted due to a permission error. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $target['decoded']
                 ) );
@@ -952,7 +952,7 @@ function nppp_purge_fp4_scan( array &$ctx ): string {
             }
             if ( $target['is_primary'] ) {
                 nppp_display_admin_notice( 'error', sprintf(
-                    /* translators: %s: Page URL whose cache file could not be deleted */
+                    /* translators: %s: Page URL */
                     __( 'ERROR PERMISSION: Nginx cache purge for page %s was aborted due to a permission error. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $target['decoded']
                 ) );
