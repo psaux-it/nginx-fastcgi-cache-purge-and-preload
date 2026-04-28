@@ -64,11 +64,11 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
 
             if (!$append_result) {
-                /* translators: %s: path to the log file */
+                /* translators: %s: path to the log file directory */
                 nppp_custom_error_log(sprintf(__('Error appending to log file at %s', 'fastcgi-cache-purge-and-preload-nginx'), $sanitized_path));
             }
         } else {
-            /* translators: %s: path to the log file */
+            /* translators: %s: path to the log file directory */
             nppp_custom_error_log(sprintf(__('Invalid or inaccessible log file directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $log_file_dir));
         }
     }
