@@ -2,7 +2,7 @@
 /**
  * Environment pre-checks for Nginx Cache Purge Preload
  * Description: Validates required server, filesystem, and plugin runtime prerequisites.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -124,7 +124,7 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
                 'headers'     => array(
                     'Cache-Control' => 'no-cache, no-store, max-age=0',
                     'Pragma'        => 'no-cache',
-                    'User-Agent'    => 'NPPP-Precheck/2.1.5',
+                    'User-Agent'    => 'NPPP-Precheck/2.1.6',
                 ),
             ));
 
@@ -228,23 +228,18 @@ function nppp_is_process_alive($pid) {
         return false;
     }
 
-    // Get the path to the 'ps' command
+    // Get the path
     $ps_path = trim(shell_exec('command -v ps'));
-
-    // Escape to avoid shell injection
-    $escaped_pid = escapeshellarg($pid);
+    if (empty($ps_path)) {
+        return false;
+    }
     $escaped_ps_path = escapeshellarg($ps_path);
 
     // Check for the process by PID
-    exec("$escaped_ps_path aux | grep -w $escaped_pid | grep -v 'grep'", $output);
+    exec($escaped_ps_path . ' -p ' . (int) $pid . ' -o pid=', $output, $return_var);
 
     // Process running
-    if (!empty($output)) {
-        return true;
-    }
-
-    // Process is not running
-    return false;
+    return $return_var === 0 && !empty($output);
 }
 
 // Tries to determine the nginx.conf path using 'nginx -V'.
@@ -523,7 +518,7 @@ function nppp_pre_checks_critical() {
             'headers'     => array(
                 'Cache-Control' => 'no-cache, no-store, max-age=0',
                 'Pragma'        => 'no-cache',
-                'User-Agent'    => 'NPPP-Precheck/2.1.5',
+                'User-Agent'    => 'NPPP-Precheck/2.1.6',
             ),
         ));
 
@@ -650,7 +645,7 @@ function nppp_pre_checks_critical() {
         // If there are missing commands
         if (!empty($missing_commands)) {
             $missing_commands_str = implode(', ', $missing_commands);
-            // Translators: %s will be replaced with the list of missing commands
+            /* translators: %s: list of missing core shell commands */
             return sprintf(__('GLOBAL ERROR COMMAND: Plugin is not functional on your environment. The required core shell command(s) not found: %s', 'fastcgi-cache-purge-and-preload-nginx'), $missing_commands_str);
         }
     }
@@ -662,7 +657,7 @@ function nppp_pre_checks_critical() {
         // If there are missing commands
         if (!empty($missing_commands)) {
             $missing_commands_str = implode(', ', $missing_commands);
-            // Translators: %s will be replaced with the list of missing commands
+            /* translators: %s: list of missing core shell commands */
             return sprintf(__('GLOBAL ERROR COMMAND: Preload action is not functional on your environment. The required shell command(s) not found: %s', 'fastcgi-cache-purge-and-preload-nginx'), $missing_commands_str);
         }
 
@@ -702,6 +697,12 @@ function nppp_pre_checks_critical() {
 
 // Pre-checks and global warnings
 function nppp_pre_checks() {
+    // Exlude Advanced and Help Tab
+    $nppp_active_tab = isset( $_GET['nppp_tab'] ) ? sanitize_key( wp_unslash( $_GET['nppp_tab'] ) ) : 'settings'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+    if ( ! in_array( $nppp_active_tab, [ 'settings', 'status' ], true ) ) {
+        return;
+    }
+
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
@@ -711,11 +712,6 @@ function nppp_pre_checks() {
         );
         return;
     }
-
-    // On a large cache (100 k+ files)
-    // on slow or network-attached storage this can easily exceed the default
-    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
-    // mid-operation.
 
     if (function_exists('set_time_limit')) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
@@ -748,43 +744,78 @@ function nppp_pre_checks() {
         return;
     }
 
+    // open_basedir soft warning
+    if ( $nppp_active_tab === 'settings' ) {
+        $nppp_obd = trim( (string) ini_get( 'open_basedir' ) );
+        if ( $nppp_obd !== '' && strtolower( $nppp_obd ) !== 'none' ) {
+            $nppp_obd_key = 'nppp_obd_warned_' . md5( 'nppp' );
+            if ( ! get_transient( $nppp_obd_key ) ) {
+                set_transient( $nppp_obd_key, true, DAY_IN_SECONDS );
+                nppp_display_pre_check_warning(
+                    __( 'GLOBAL WARNING OPEN_BASEDIR: PHP open_basedir restriction is active on your environment. This can silently break preloading and nginx.conf reading. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' )
+                );
+            }
+        }
+    }
+
     // Head-only read sizes (once per call)
     $head_bytes_primary  = (int) apply_filters( 'nppp_locate_head_bytes', 4096 );
     $head_bytes_fallback = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
 
     // Check cache status
-    try {
-        $cache_iterator = new RecursiveIteratorIterator(
-                new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
-                RecursiveIteratorIterator::LEAVES_ONLY
-        );
-
+    // Fast path: use rg always if available
+    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+    if ( $rg_bin !== '' && is_executable( $rg_bin ) ) {
         $has_files = '';
-        foreach ($cache_iterator as $file) {
-            $pathname = $file->getPathname();
+        $escaped_path = escapeshellarg( $nginx_cache_path );
 
-            // Read only the head (binary-safe)
-            $content = nppp_read_head( $wp_filesystem, $pathname, $head_bytes_primary );
-            if ( $content === '' ) { continue; }
+        $cmd       = $rg_bin . ' -q --text --no-unicode --no-ignore --no-messages --no-config -e ' . escapeshellarg( '^KEY: ' ) . ' ' . $escaped_path . ' 2>/dev/null';
+        $dummy     = [];
+        $exit_code = null;
+        exec( $cmd, $dummy, $exit_code );
 
-            // Look for "KEY:" line in the head
-            if ( ! preg_match( '/^KEY:\s/m', $content ) ) {
-                // If we likely truncated at primary cap, try a larger head read once
-                if ( strlen( $content ) >= $head_bytes_primary ) {
-                    $content = nppp_read_head( $wp_filesystem, $pathname, $head_bytes_fallback );
-                    if ( $content === '' || ! preg_match( '/^KEY:\s/m', $content ) ) {
+        if ( $exit_code === 0 ) {
+            $has_files = 'found';
+        } elseif ( $exit_code === 1 ) {
+            $has_files = '';
+        } elseif ( $exit_code === 2 ) {
+            $has_files = 'error';
+        }
+    } else {
+        // Fallback: PHP recursive iterator (rg not available)
+        try {
+            $cache_iterator = new RecursiveIteratorIterator(
+                    new RecursiveDirectoryIterator($nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS),
+                    RecursiveIteratorIterator::LEAVES_ONLY
+            );
+
+            $has_files = '';
+            foreach ($cache_iterator as $file) {
+                $pathname = $file->getPathname();
+
+                // Read only the head (binary-safe)
+                $content = nppp_read_head( $wp_filesystem, $pathname, $head_bytes_primary );
+                if ( $content === '' ) { continue; }
+
+                // Look for "KEY:" line in the head
+                if ( ! preg_match( '/^KEY:\s/m', $content ) ) {
+                    // If we likely truncated at primary cap, try a larger head read once
+                    if ( strlen( $content ) >= $head_bytes_primary ) {
+                        $content = nppp_read_head( $wp_filesystem, $pathname, $head_bytes_fallback );
+                        if ( $content === '' || ! preg_match( '/^KEY:\s/m', $content ) ) {
+                            continue;
+                        }
+                    } else {
                         continue;
                     }
-                } else {
-                    continue;
                 }
-            }
 
-            $has_files = 'found';
-            break;
+                $has_files = 'found';
+                break;
+            }
+        } catch (Exception $e) {
+            $has_files = 'error';
         }
-    } catch (Exception $e) {
-        $has_files = 'error';
     }
 
     // Warn about empty cache

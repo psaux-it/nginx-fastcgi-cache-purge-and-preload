@@ -2,7 +2,7 @@
 /**
  * Update routines for Nginx Cache Purge Preload
  * Description: Runs version checks and applies plugin migration or maintenance updates.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -39,6 +39,7 @@ function nppp_check_for_plugin_update() {
 function nppp_get_db_migrations() {
     return array(
         '2.1.5' => array( 'nppp_migration_215' ),
+        '2.1.6' => array( 'nppp_migration_216' ),
     );
 }
 
@@ -58,17 +59,21 @@ function nppp_run_update_routines( $old_version, $new_version ) {
 
 // Execute all migrations whose version is greater than the current DB version.
 function nppp_run_pending_migrations( $old_version, $new_version ) {
-    // All 2.1.5 migrations target installs coming from 2.0.1–2.1.4.
-    // Users already on 2.1.5+ have already run them — skip entirely.
-    if ( version_compare( $old_version, '2.1.5', '>=' ) ) {
+    // No-op when there is no effective version transition.
+    if ( empty( $old_version ) || $old_version === $new_version ) {
         return;
     }
 
-    $db_version     = get_option( 'nppp_db_version', '0.0.0' );
+    $db_version = get_option( 'nppp_db_version', '0.0.0' );
+
+    // Use the higher of the stored DB version and the previous plugin version as
+    // the migration baseline.
+    $baseline = version_compare( $db_version, $old_version, '>' ) ? $db_version : $old_version;
+
     $ran_migrations = array();
 
     foreach ( nppp_get_db_migrations() as $version => $callbacks ) {
-        if ( version_compare( $db_version, $version, '<' ) ) {
+        if ( version_compare( $baseline, $version, '<' ) ) {
             foreach ( $callbacks as $callback ) {
                 if ( function_exists( $callback ) ) {
                     call_user_func( $callback );
@@ -81,25 +86,38 @@ function nppp_run_pending_migrations( $old_version, $new_version ) {
             // Stamp this version into the DB immediately after its callbacks finish.
             // If a later callback crashes, the completed version block is already safe.
             update_option( 'nppp_db_version', $version );
-            $db_version = $version;
+            $baseline = $version;
         }
     }
 
     // Set a short-lived transient so the admin_notices hook can display the
     // migration result on the next page load.
     if ( ! empty( $ran_migrations ) ) {
-        $versions_str = implode( ', ', array_unique( $ran_migrations ) );
-        set_transient(
-            'nppp_migration_notice',
-            sprintf(
-                /* translators: 1: migration version(s), 2: old version, 3: new version */
-                __( 'MIGRATION: Plugin updated from %2$s to %3$s. In version %1$s: Opt-in usage tracking has been completely removed. /opt/ removed from allowed Nginx cache path roots, if your Nginx cache was stored under /opt/, please move it to a supported location and re-save in Settings.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                $versions_str,
-                $old_version,
-                $new_version
-            ),
-            MINUTE_IN_SECONDS
+        $ran_unique = array_unique( $ran_migrations );
+
+        // Per-version changelog lines
+        $migration_messages = array(
+            '2.1.5' => __( 'Opt-in usage tracking has been completely removed. /opt/ removed from allowed Nginx cache path roots, if your Nginx cache was stored under /opt/, please move it to a supported location and re-save in Settings.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            '2.1.6' => __( 'Auto purge sub-triggers added. Your existing auto purge behaviour has been preserved automatically. Please Reset to Default the Cache Key Regex for the latest compatibility updates to take effect.', 'fastcgi-cache-purge-and-preload-nginx' ),
         );
+
+        $lines = array();
+        foreach ( $ran_unique as $v ) {
+            if ( isset( $migration_messages[ $v ] ) ) {
+                /* translators: 1: migration version, 2: changelog line */
+                $lines[] = sprintf( __( 'v%1$s: %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $v, $migration_messages[ $v ] );
+            }
+        }
+
+        $notice = sprintf(
+            /* translators: 1: old version, 2: new version, 3: changelog lines */
+            __( 'MIGRATION: Plugin updated from %1$s to %2$s. %3$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $old_version,
+            $new_version,
+            implode( ' ', $lines )
+        );
+
+        set_transient( 'nppp_migration_notice', $notice, MINUTE_IN_SECONDS );
     }
 }
 
@@ -149,6 +167,36 @@ function nppp_migration_215() {
     }
 
     // Backfill: schedule the daily index updater introduced in 2.1.5.
+    if ( function_exists( 'nppp_schedule_index_updater' ) ) {
+        nppp_schedule_index_updater();
+    }
+}
+
+// Migration 2.1.6:
+// Backfill: if master auto-purge was already ON, set all new
+// sub-trigger keys to 'yes' so their existing behaviour is fully preserved.
+// Users who had auto-purge OFF get sub-triggers as 'no' (safe default).
+// Switch every 3 Hour cron for index updater
+function nppp_migration_216() {
+    $options = get_option( 'nginx_cache_settings', array() );
+    if ( ! is_array( $options ) ) {
+        return;
+    }
+
+    $master_was_on        = isset( $options['nginx_cache_purge_on_update'] )
+                                && $options['nginx_cache_purge_on_update'] === 'yes';
+    $sub_triggers_missing = ! array_key_exists( 'nppp_autopurge_posts', $options );
+
+    if ( $master_was_on && $sub_triggers_missing ) {
+        $options['nppp_autopurge_posts']    = 'yes';
+        $options['nppp_autopurge_terms']    = 'yes';
+        $options['nppp_autopurge_plugins']  = 'yes';
+        $options['nppp_autopurge_themes']   = 'yes';
+        $options['nppp_autopurge_3rdparty'] = 'yes';
+        update_option( 'nginx_cache_settings', $options );
+    }
+
+    // Switch every 3 Hour cron for index updater
     if ( function_exists( 'nppp_schedule_index_updater' ) ) {
         nppp_schedule_index_updater();
     }

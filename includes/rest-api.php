@@ -2,7 +2,7 @@
 /**
  * REST API endpoints for Nginx Cache Purge Preload
  * Description: Registers API callbacks for cache purge and preload actions with request validation.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -138,7 +138,7 @@ function nppp_log_api_request($endpoint, $status, $is_error = false) {
 
     // Check if the directory is valid and exists
     if ($sanitized_dir_path === false) {
-        // Translators: %s is the path to the log file.
+        /* translators: %s: path to the log file directory */
         nppp_custom_error_log(sprintf(__('Invalid or inaccessible log file directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $log_file_dir));
         return;
     }
@@ -154,7 +154,7 @@ function nppp_log_api_request($endpoint, $status, $is_error = false) {
 
     // Check the append log status
     if (!$append_result) {
-        // Translators: %s is the path to the log file.
+        /* translators: %s: path to the log file directory */
         nppp_custom_error_log(sprintf(__('Error appending to log file at %s', 'fastcgi-cache-purge-and-preload-nginx'), $sanitized_path));
         return;
     }
@@ -223,8 +223,8 @@ function nppp_validate_and_rate_limit_endpoint($request) {
         $api_key = $request->get_header('X-Api-Key');
     }
 
-    // 3. Fallback to the request body 'api_key' if no header is found
-    if (empty($api_key)) {
+    // 3. Body-based API key is disabled — header-only prevents key leakage in logs.
+    if (empty($api_key) && defined('NPPP_ALLOW_BODY_API_KEY') && NPPP_ALLOW_BODY_API_KEY) {
         $api_key = $request->get_param('api_key');
     }
 
@@ -301,6 +301,10 @@ function nppp_nginx_cache_purge_endpoint($request) {
         return $rate_limit;
     }
 
+    // Record the buffer level BEFORE we start our own output buffer.
+    // This allows log.php to verify that the buffer being written to belongs to us.
+    $GLOBALS['nppp_rest_ob_level'] = ob_get_level();
+
     // Start output buffering for purge endpoint
     ob_start();
 
@@ -329,6 +333,9 @@ function nppp_nginx_cache_purge_endpoint($request) {
     // Get status message
     $status_message = wp_strip_all_tags(ob_get_clean());
 
+    // Clean up the global marker so it doesn't leak to other requests
+    unset($GLOBALS['nppp_rest_ob_level']);
+
     // Return status response
     return new WP_REST_Response(array(
         'success' => true,
@@ -343,6 +350,10 @@ function nppp_nginx_cache_preload_endpoint($request) {
     if ( is_wp_error( $rate_limit ) ) {
         return $rate_limit;
     }
+
+    // Record the buffer level BEFORE we start our own output buffer.
+    // This allows log.php to verify that the buffer being written to belongs to us.
+    $GLOBALS['nppp_rest_ob_level'] = ob_get_level();
 
     // Start output buffering for preload endpoint
     ob_start();
@@ -390,6 +401,9 @@ function nppp_nginx_cache_preload_endpoint($request) {
 
     // Get status message
     $status_message = wp_strip_all_tags(ob_get_clean());
+
+    // Clean up the global marker so it doesn't leak to other requests
+    unset($GLOBALS['nppp_rest_ob_level']);
 
     // Return status response.
     return new WP_REST_Response(array(

@@ -2,7 +2,7 @@
 /**
  * Cache preload handlers for Nginx Cache Purge Preload
  * Description: Builds URL queues and executes preload requests for Nginx cache warming.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -148,7 +148,7 @@ function nppp_is_safexec_usable($path, $notify = true) {
 
     if ($info === false) {
         if ($notify) {
-            // Translators: %s = safexec path
+            /* translators: %s: Safexec binary filesystem path */
             nppp_display_admin_notice('info', sprintf(__('INFO SAFEXEC: safexec at %s is not accessible. Starting preload as the PHP-FPM user.', 'fastcgi-cache-purge-and-preload-nginx'), $p), true, false);
         }
         return false;
@@ -160,7 +160,7 @@ function nppp_is_safexec_usable($path, $notify = true) {
     if (!($is_root_owner && $has_suid)) {
         if ($notify) {
             $euid = function_exists('posix_geteuid') ? (int)@posix_geteuid() : -1;
-            // Translators: 1 = user id of fpm user (integer)
+            /* translators: %d: Effective UID of the PHP-FPM process */
             nppp_display_admin_notice('info', sprintf(__('INFO SAFEXEC: safexec is in pass-through mode (euid=%1$d). Starting preload as the PHP-FPM user. To fix it, see the Help Tab', 'fastcgi-cache-purge-and-preload-nginx'), $euid), true, false);
         }
         return false;
@@ -171,7 +171,7 @@ function nppp_is_safexec_usable($path, $notify = true) {
 
 // PATCH: CVE ID: CVE-2025-6213
 // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
-function nppp_referer_is_allowed(string $url): bool {
+function nppp_is_internal_url(string $url): bool {
     $ref  = wp_parse_url($url);
     $home = wp_parse_url(home_url());
 
@@ -268,9 +268,10 @@ function nppp_detect_premature_process(
     $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', false);
 
     $testCommand =
+        'exec ' .
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'wget ' .
-        '--quiet --recursive -l inf --no-cache --no-config --no-cookies --no-directories --delete-after ' .
+        '--quiet --recursive -l inf --no-cache --no-config --no-cookies --delete-after ' .
         '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
         '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --ignore-case ' .
         '-e robots=off ' .
@@ -326,9 +327,9 @@ function nppp_detect_premature_process(
                 $output = shell_exec($kill_cmd);
             }
 
-            // Terminate softly
+            // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
             if (!defined('SIGTERM')) {
-                define('SIGTERM', 15);
+                define('SIGTERM', 15); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
             }
 
             // Fallback to hard SIGKILL
@@ -348,22 +349,6 @@ function nppp_detect_premature_process(
 
 // Preload operation
 function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nppp_is_auto_preload = false, $nppp_is_rest_api = false, $nppp_is_wp_cron = false, $nppp_is_admin_bar = false, $preload_mobile = false) {
-    // On a large cache (100 k+ files)
-    // on slow or network-attached storage this can easily exceed the default
-    // 30-second ceiling that most PHP-FPM pools ship with, killing the process
-    // mid-operation and leaving the purge lock (stored as a wp_options row via
-    // WP_Upgrader::create_lock()) permanently orphaned until its TTL expires.
-
-    // set_time_limit(0) resets the countdown to "unlimited" for this request
-    // only — it has no effect on other processes or future requests.
-    // The @ suppressor silences the E_WARNING that some hardened hosts emit
-    // when the function appears in disable_functions; the call is otherwise
-    // a safe no-op in that environment.
-
-    // Note: this only disables PHP's own timer. PHP-FPM's independent
-    // request_terminate_timeout and Nginx's fastcgi_read_timeout are enforced
-    // by the FPM master process and the upstream proxy respectively and cannot
-    // be overridden from PHP at runtime.
     if (function_exists('set_time_limit')) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
@@ -409,11 +394,16 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     $nginx_cache_read_timeout = isset($nginx_cache_settings['nginx_cache_read_timeout']) ? (int)$nginx_cache_settings['nginx_cache_read_timeout'] : 60;
     $log_path = nppp_get_runtime_file('nppp-wget.log');
 
+    // Resolve mobile UA from DB; constant is the compile-time fallback only.
+    $nppp_mobile_ua = ! empty( $nginx_cache_settings['nginx_cache_mobile_user_agent'] )
+        ? $nginx_cache_settings['nginx_cache_mobile_user_agent']
+        : NPPP_USER_AGENT_MOBILE;
+
     // Determine which USER_AGENT to use
     // Check Preload Mobile is enabled
     if ($preload_mobile) {
         // Use the mobile user agent
-        $NPPP_DYNAMIC_USER_AGENT = NPPP_USER_AGENT_MOBILE;
+        $NPPP_DYNAMIC_USER_AGENT = $nppp_mobile_ua;
     } else {
         // Use the desktop user agent
         $NPPP_DYNAMIC_USER_AGENT = NPPP_USER_AGENT;
@@ -504,13 +494,13 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                             break;
 
                         case 'proxy_dns_fail':
-                            // Translators: %s = proxy host
+                            /* translators: %s: Proxy hostname that could not be resolved */
                             nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
                             break;
 
                         case 'proxy_unreachable':
                         default:
-                            // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                            /* translators: 1: Domain URL 2: Proxy host 3: Proxy port number */
                             nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
                             break;
                     }
@@ -520,11 +510,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                         ? __('Could not parse site host from URL.', 'fastcgi-cache-purge-and-preload-nginx')
                         : __('Please check Exclude Endpoints and Exclude File Extensions settings syntax.', 'fastcgi-cache-purge-and-preload-nginx');
 
-                    // Translators: 1: domain URL, 2: failure reason
+                    /* translators: 1: Domain URL 2: Reason for preload failure */
                     nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %1$s. %2$s', 'fastcgi-cache-purge-and-preload-nginx'), esc_html($fdomain), esc_html($reason)));
                     return;
                 } elseif ($test_result !== true) {
-                    // Translators: %s = domain name
+                    /* translators: %s: Domain URL where the unknown preload error occurred */
                     nppp_display_admin_notice('error', sprintf(__('ERROR UNKNOWN: Preloading failed for %s. Unknown error occurred.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
                 }
             } else {
@@ -549,13 +539,13 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                                 break;
 
                             case 'proxy_dns_fail':
-                                // Translators: %s = proxy host
+                                /* translators: %s: Proxy hostname that could not be resolved */
                                 nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
                                 break;
 
                             case 'proxy_unreachable':
                             default:
-                                // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                                /* translators: 1: Domain URL 2: Proxy host 3: Proxy port number */
                                 nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
                                 break;
                         }
@@ -578,7 +568,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             $command =
                 ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
                 'nohup wget ' .
-                '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
+                '--no-verbose --recursive -l inf --no-config --no-cookies --delete-after ' .
                 '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
                 '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case ' .
                 '-e robots=off ' .
@@ -597,8 +587,19 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 escapeshellarg($fdomain) . ' ' .
                 '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
 
-            // We are ready to call main command
+            // Flush Redis cache right before the crawl starts.
+            if ( ! $preload_mobile ) {
+                do_action( 'nppp_preload_all_started' );
+            }
+
+            // We are ready
             $output = shell_exec($command);
+
+            // PHP 8.1+
+            if ($output === null || $output === false) {
+                nppp_display_admin_notice('error', __( 'FATAL ERROR: Failed to start preload process.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                return;
+            }
 
             // Get the process ID
             $parts = explode(" ", $output);
@@ -676,7 +677,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         } elseif ($status === 1) {
             nppp_display_admin_notice('error', __( 'ERROR PERMISSION: Cannot Purge Nginx cache to start cache Preloading. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ));
         } elseif ($status === 3) {
-            // Translators: %s is the Nginx cache path
+            /* translators: %s: Nginx cache filesystem path that could not be found */
             nppp_display_admin_notice('error', sprintf( __( 'ERROR PATH: Nginx cache path (%s) was not found. Please check your cache path.', 'fastcgi-cache-purge-and-preload-nginx' ), $nginx_cache_path ));
         } else {
             nppp_display_admin_notice('error', __( 'ERROR UNKNOWN: An unexpected error occurred while Preloading the Nginx cache. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ));
@@ -730,13 +731,13 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                         break;
 
                     case 'proxy_dns_fail':
-                        // Translators: %s = proxy host
+                        /* translators: %s: Proxy hostname that could not be resolved */
                         nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
                         break;
 
                     case 'proxy_unreachable':
                     default:
-                        // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                        /* translators: 1: Domain URL 2: Proxy host 3: Proxy port number */
                         nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
                         break;
                 }
@@ -746,11 +747,11 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                     ? __('Could not parse site host from URL.', 'fastcgi-cache-purge-and-preload-nginx')
                     : __('Please check Exclude Endpoints and Exclude File Extensions settings syntax.', 'fastcgi-cache-purge-and-preload-nginx');
 
-                // Translators: 1: domain URL, 2: failure reason
+                /* translators: 1: Domain URL 2: Reason for preload failure */
                 nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %1$s. %2$s', 'fastcgi-cache-purge-and-preload-nginx'), esc_html($fdomain), esc_html($reason)));
                 return;
             } elseif ($test_result !== true) {
-                // Translators: %s = domain name
+                /* translators: %s: Domain URL where the unknown preload error occurred */
                 nppp_display_admin_notice('error', sprintf(__('ERROR UNKNOWN: Preloading failed for %s. Unknown error occurred.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
             }
         } else {
@@ -775,13 +776,13 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                             break;
 
                         case 'proxy_dns_fail':
-                            // Translators: %s = proxy host
+                            /* translators: %s: Proxy hostname that could not be resolved */
                             nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
                             break;
 
                         case 'proxy_unreachable':
                         default:
-                            // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                            /* translators: 1: Domain URL 2: Proxy host 3: Proxy port number */
                             nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
                             break;
                     }
@@ -804,7 +805,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         $command =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--no-verbose --recursive -l inf --no-config --no-cookies --no-directories --delete-after ' .
+            '--no-verbose --recursive -l inf --no-config --no-cookies --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
             '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case ' .
             '-e robots=off ' .
@@ -825,6 +826,12 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
         // We are ready to call main command
         $output = shell_exec($command);
+
+        // PHP 8.1+
+        if ($output === null || $output === false) {
+            nppp_display_admin_notice('error', __( 'FATAL ERROR: Failed to start preload process.', 'fastcgi-cache-purge-and-preload-nginx' ));
+            return;
+        }
 
         // Get the process ID
         $parts = explode(" ", $output);
@@ -917,13 +924,13 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 
     // PATCH: CVE ID: CVE-2025-6213
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) === false) {
-        nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        nppp_display_admin_notice('error', __( 'ERROR SECURITY: The provided URL is invalid.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
 
     // PATCH: CVE ID: CVE-2025-6213
-    if (!nppp_referer_is_allowed($current_page_url)) {
-        nppp_display_admin_notice('error', __('ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx'));
+    if (!nppp_is_internal_url($current_page_url)) {
+        nppp_display_admin_notice('error', __('ERROR SECURITY: Preloading is only allowed for internal website URLs.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
@@ -932,12 +939,12 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 
     // Check for any permisson issue softly
     if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
-        // Translators: %s: Current page URL
+        /* translators: %s: Current page URL being preloaded */
         nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
         return;
     // Ask cached Recusive status for permission issues deeply
     } elseif (nppp_check_permissions_recursive_with_cache() !== 'true') {
-        // Translators: %s: Current page URL
+        /* translators: %s: Current page URL being preloaded */
         nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
         return;
     }
@@ -997,13 +1004,13 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
                     break;
 
                 case 'proxy_dns_fail':
-                    // Translators: %s = proxy host
+                    /* translators: %s: Proxy hostname that could not be resolved */
                     nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
                     break;
 
                 case 'proxy_unreachable':
                 default:
-                    // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                    /* translators: 1: Domain URL 2: Proxy host 3: Proxy port number */
                     nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $current_page_url_decoded, $proxy_host, $proxy_port));
                     break;
             }
@@ -1030,7 +1037,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $command_desktop =
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'nohup wget ' .
-        '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+        '--quiet --no-config --no-cookies --delete-after ' .
         '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
         '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
         '-e robots=off ' .
@@ -1067,12 +1074,17 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 
     // Preload cache also for Mobile
     if ($preload_mobile) {
+        // Resolve mobile UA from DB; constant is the compile-time fallback only.
+        $nppp_mobile_ua = ! empty( $nginx_cache_settings['nginx_cache_mobile_user_agent'] )
+            ? $nginx_cache_settings['nginx_cache_mobile_user_agent']
+            : NPPP_USER_AGENT_MOBILE;
+
         // PATCH: CVE ID: CVE-2025-6213
         // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
         $command_mobile =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+            '--quiet --no-config --no-cookies --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
             '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
             '-e robots=off ' .
@@ -1083,7 +1095,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--domains=' . escapeshellarg($domain_list) . ' ' .
             '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-            '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
+            '--user-agent=' . escapeshellarg($nppp_mobile_ua) . ' ' .
             '-- ' .
             escapeshellarg($current_page_url) . ' ' .
             '>/dev/null 2>&1 & echo $!';
@@ -1120,15 +1132,15 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     if ($desktop_pid_exists || $mobile_pid_exists) {
         if ($desktop_pid_exists && !$mobile_pid_exists) {
             // Only desktop PID exists
-            // Translators: %s: Current page URL
+            /* translators: %s: Current page URL being preloaded */
             $message = sprintf( __( 'SUCCESS ADMIN: Nginx cache preloading has started in the background for the desktop version of page %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded );
         } elseif (!$desktop_pid_exists && $mobile_pid_exists) {
             // Only mobile PID exists
-            // Translators: %s: Current page URL
+            /* translators: %s: Current page URL being preloaded */
             $message = sprintf( __( 'SUCCESS ADMIN: Nginx cache preloading has started in the background for the mobile version of page %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded );
         } elseif ($desktop_pid_exists && $mobile_pid_exists) {
             // Both desktop and mobile PIDs exist
-            // Translators: %s: Current page URL
+            /* translators: %s: Current page URL being preloaded */
             $message = sprintf( __( 'SUCCESS ADMIN: Nginx cache preloading has started in the background for both desktop and mobile versions of page %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded );
         }
 
@@ -1137,22 +1149,22 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     } else {
         if (!$desktop_pid_exists && !$mobile_pid_exists) {
             if ($preload_mobile) {
-                // Translators: %s: Current page URL
+                /* translators: %s: Current page URL being preloaded */
                 $message = sprintf( __( 'ERROR COMMAND: Nginx cache preloading failed for both desktop and mobile versions of page %s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded );
             } else {
-                // Translators: %s: Current page URL
+                /* translators: %s: Current page URL being preloaded */
                 $message = sprintf( __( 'ERROR COMMAND: Nginx cache preloading failed for desktop version of page %s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded );
             }
         } else {
             // Neither desktop nor mobile PID exists
             if (!$desktop_pid_exists) {
-                // Translators: %s: Current page URL
+                /* translators: %s: Current page URL being preloaded */
                 $message = sprintf( __( 'ERROR COMMAND: Nginx cache preloading failed for desktop version of page %s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded );
             }
 
             if (!$mobile_pid_exists) {
                 if ($preload_mobile) {
-                    // Translators: %s: Current page URL
+                    /* translators: %s: Current page URL being preloaded */
                     $message = sprintf( __( 'ERROR COMMAND: Nginx cache preloading failed for mobile version of page %s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded );
                 }
             }
@@ -1171,7 +1183,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 // Only triggers conditionally if Auto Purge & Auto Preload enabled at the same time
 // Only preloads cache for single post/page if Auto Purge triggered before for this modified/updated post/page
 // This functions not trgiggers after On-Page purge actions
-function nppp_preload_cache_on_update($current_page_url, $found = false) {
+function nppp_preload_cache_on_update($current_page_url, $found = false, $is_manual = false) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
@@ -1185,14 +1197,14 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     // PATCH: CVE ID: CVE-2025-6213
     // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
     if (filter_var($current_page_url, FILTER_VALIDATE_URL) === false) {
-        nppp_display_admin_notice('error', __( 'ERROR SECURITY: HTTP_REFERER URL cannot be validated.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        nppp_display_admin_notice('error', __( 'ERROR SECURITY: The provided URL is invalid.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
 
     // PATCH: CVE ID: CVE-2025-6213
     // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
-    if (!nppp_referer_is_allowed($current_page_url)) {
-        nppp_display_admin_notice('error', __('ERROR SECURITY: HTTP_REFERER URL is not from the allowed domain.', 'fastcgi-cache-purge-and-preload-nginx'));
+    if (!nppp_is_internal_url($current_page_url)) {
+        nppp_display_admin_notice('error', __('ERROR SECURITY: Preloading is only allowed for internal website URLs.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
 
@@ -1282,13 +1294,13 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
                     break;
 
                 case 'proxy_dns_fail':
-                    // Translators: %s = proxy host
+                    /* translators: %s: Proxy hostname that could not be resolved */
                     nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
                     break;
 
                 case 'proxy_unreachable':
                 default:
-                    // Translators: %s = domain name, %s = proxy host, %d = proxy port
+                    /* translators: 1: Domain URL 2: Proxy host 3: Proxy port number */
                     nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $current_page_url_decoded, $proxy_host, $proxy_port));
                     break;
             }
@@ -1315,7 +1327,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
     $command_desktop =
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'nohup wget ' .
-        '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+        '--quiet --no-config --no-cookies --delete-after ' .
         '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
         '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
         '-e robots=off ' .
@@ -1352,12 +1364,17 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
 
     // Preload cache also for Mobile
     if ($preload_mobile) {
+        // Resolve mobile UA from DB; constant is the compile-time fallback only.
+        $nppp_mobile_ua = ! empty( $nginx_cache_settings['nginx_cache_mobile_user_agent'] )
+            ? $nginx_cache_settings['nginx_cache_mobile_user_agent']
+            : NPPP_USER_AGENT_MOBILE;
+
         // PATCH: CVE ID: CVE-2025-6213
         // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
         $command_mobile =
             ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
             'nohup wget ' .
-            '--quiet --no-config --no-cookies --no-directories --delete-after ' .
+            '--quiet --no-config --no-cookies --delete-after ' .
             '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
             '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
             '-e robots=off ' .
@@ -1368,7 +1385,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
             '--domains=' . escapeshellarg($domain_list) . ' ' .
             '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-            '--user-agent=' . escapeshellarg(NPPP_USER_AGENT_MOBILE) . ' ' .
+            '--user-agent=' . escapeshellarg($nppp_mobile_ua) . ' ' .
             '-- ' .
             escapeshellarg($current_page_url) . ' ' .
             '>/dev/null 2>&1 & echo $!';
@@ -1405,19 +1422,29 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             // Determine the success message based on auto purge status
             if ($found) {
                 if ($device === 'mobile') {
-                    // Translators: %s1: device type (desktop or mobile), %s2: current page URL
+                    /* translators: 1: Device type (desktop or mobile) 2: Current page URL */
                     $success_message = sprintf( __( 'SUCCESS ADMIN: Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                 } else {
-                    // Translators: %s1: device type (desktop or mobile), %s2: current page URL
-                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto purge cache completed, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                    if ($is_manual) {
+                        /* translators: 1: Device type (desktop or mobile) 2: Current page URL */
+                        $success_message = sprintf( __( 'SUCCESS ADMIN: Cache purged, preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                    } else {
+                        /* translators: 1: Device type (e.g. "desktop") 2: Current page URL */
+                        $success_message = sprintf( __( 'SUCCESS ADMIN: Auto purge cache completed, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                    }
                 }
             } else {
                 if ($device === 'mobile') {
-                    // Translators: %s1: device type (desktop or mobile), %s2: current page URL
+                    /* translators: 1: Device type (desktop or mobile) 2: Current page URL */
                     $success_message = sprintf( __( 'SUCCESS ADMIN: Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                 } else {
-                    // Translators: %s1: device type (desktop or mobile), %s2: current page URL
-                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto purge cache attempted but page not found in cache, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                    if ($is_manual) {
+                        /* translators: 1: Device type (e.g. "desktop") 2: Current page URL */
+                        $success_message = sprintf( __( 'SUCCESS ADMIN: Page not found in cache, preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                    } else {
+                        /* translators: 1: Device type (e.g. "desktop") 2: Current page URL */
+                        $success_message = sprintf( __( 'SUCCESS ADMIN: Auto purge cache attempted but page not found in cache, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                    }
                 }
             }
 
@@ -1430,21 +1457,21 @@ function nppp_preload_cache_on_update($current_page_url, $found = false) {
             if ($found) {
                 if ($device === 'mobile') {
                     if ($preload_mobile) {
-                        // Translators: %s1: device type (desktop or mobile), %s2: current page URL
+                        /* translators: 1: Device type (desktop or mobile) 2: Current page URL */
                         $error_message = sprintf( __( 'ERROR COMMAND: Unable to start Auto preload for %1$s version of %2$s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                     }
                 } else {
-                    // Translators: %s1: device type (desktop or mobile), %s2: current page URL
+                    /* translators: 1: Device type (desktop or mobile) 2: Current page URL */
                     $error_message = sprintf( __( 'ERROR COMMAND: Auto purge cache completed, but unable to start Auto preload for %1$s version of %2$s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
                 }
             } else {
                 if ($device === 'mobile') {
                     if ($preload_mobile) {
-                        // Translators: %s: device type (desktop or mobile)
+                        /* translators: %s: Device type (desktop or mobile) */
                         $error_message = sprintf( __( 'ERROR COMMAND: Unable to start Auto preload for %s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $device );
                     }
                 } else {
-                    // Translators: %s: device type (desktop or mobile)
+                    /* translators: %s: Device type (desktop or mobile) */
                     $error_message = sprintf( __( 'ERROR COMMAND: Auto purge cache attempted but page not found in cache, unable to start Auto preload for %s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $device );
                 }
             }

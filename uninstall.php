@@ -2,7 +2,7 @@
 /**
  * Uninstall cleanup routines for Nginx Cache Purge Preload
  * Description: Removes plugin options, transients, runtime artifacts, and scheduled events during uninstall.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -49,6 +49,12 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_http_purge_endpoint_broken',
         'nppp_wget_urls_cache_prev_key',
         'nppp_safexec_ok',
+        'nppp_category_map',
+        'nppp_rg_ok',
+        'nppp_wget_version_' . md5($static_key_base),
+        'nppp_rg_version_' . md5($static_key_base),
+        'nppp_pages_in_cache_' . md5($static_key_base),
+        'nppp_obd_warned_' . md5($static_key_base),
     );
 
     // Delete each transient
@@ -65,12 +71,20 @@ function nppp_clear_plugin_cache_on_uninstall() {
     $like_front_message_timeout = $wpdb->esc_like('_transient_timeout_nppp_front_message_') . '%';
     $like_wget_cache            = $wpdb->esc_like('_transient_nppp_wget_urls_cache_') . '%';
     $like_wget_cache_timeout    = $wpdb->esc_like('_transient_timeout_nppp_wget_urls_cache_') . '%';
+    $like_ep8_fail              = $wpdb->esc_like('_transient_nppp_ep8_fail_') . '%';
+    $like_ep8_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep8_fail_') . '%';
+    $like_ep3_fail              = $wpdb->esc_like('_transient_nppp_ep3_fail_') . '%';
+    $like_ep3_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep3_fail_') . '%';
 
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->query(
         $wpdb->prepare(
             "DELETE FROM {$wpdb->options}
             WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
@@ -85,7 +99,11 @@ function nppp_clear_plugin_cache_on_uninstall() {
             $like_front_message,
             $like_front_message_timeout,
             $like_wget_cache,
-            $like_wget_cache_timeout
+            $like_wget_cache_timeout,
+            $like_ep8_fail,
+            $like_ep8_fail_timeout,
+            $like_ep3_fail,
+            $like_ep3_fail_timeout
         )
     );
 }
@@ -105,6 +123,8 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_last_known_hits',                   // Dashboard cache hit ratio — hit count
         'nppp_last_hits_scanned_at',              // Dashboard cache hit ratio — scan timestamp
         'nppp_url_filepath_index',                // URL→filepath index for single/related purge fast-path
+        'nppp_ping_token_db',                     // Watchdog token DB fallback (nppp_watcher_generate_token)
+        'nppp_cache_purge.lock',                  // Purge operation lock (WP_Upgrader)
     );
 
     foreach ($option_keys as $option_key) {

@@ -4,7 +4,7 @@
  * Description: Monitors the preload server process and executes post-preload completion work.
  *              Ensures post-preload tasks run immediately after cache preloading finishes.
  *              Designed for low-traffic sites where WP-Cron delays can prevent timely execution.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -22,6 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'NPPP_WATCHER_TOKEN_TTL',   12 * HOUR_IN_SECONDS );
 define( 'NPPP_WATCHER_TOKEN_KEY',   'nppp_ping_token_'   . md5( 'nppp' ) );
+define( 'NPPP_WATCHER_TOKEN_OPTION', 'nppp_ping_token_db' );
 define( 'NPPP_WATCHER_PID_FILE',    'preload_watcher.pid' );
 define( 'NPPP_WATCHER_AJAX_ACTION', 'nppp_cron_wake' );
 
@@ -30,29 +31,41 @@ define( 'NPPP_WATCHER_AJAX_ACTION', 'nppp_cron_wake' );
 // ---------------------------------------------------------------------------
 
 /**
- * Check rate limit for the watchdog endpoint — max 3 requests per minute per IP.
+ * Check rate limit for the watchdog endpoint — max 10 requests per minute per IP.
  * Fires before token validation to stop brute-force probing at minimal cost.
  */
-function nppp_watchdog_rate_limit_check(): bool {
-    $ip = isset( $_SERVER['REMOTE_ADDR'] )
+function nppp_watchdog_rate_limit_check(): array {
+    $raw_ip = isset( $_SERVER['REMOTE_ADDR'] )
         ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) )
-        : 'unknown';
+        : '';
 
-    $transient_key = 'nppp_rate_limit_' . md5( 'watchdog|' . $ip );
+    if ( filter_var( $raw_ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 ) ) {
+        $parts     = explode( '.', $raw_ip );
+        $parts[3]  = '**';
+        $masked_ip = implode( '.', $parts );
+    } elseif ( filter_var( $raw_ip, FILTER_VALIDATE_IP ) ) {
+        $masked_ip = $raw_ip;
+    } else {
+        $raw_ip    = 'unknown';
+        $masked_ip = 'unknown';
+    }
+
+    $transient_key = 'nppp_rate_limit_' . md5( 'watchdog|' . $raw_ip );
     $count         = get_transient( $transient_key );
 
     if ( false === $count ) {
         set_transient( $transient_key, 1, 60 );
-        return true;
+        return [ 'allowed' => true, 'ip' => $masked_ip, 'count' => 1 ];
     }
 
-    $count++;
+    $count = (int) $count + 1;
+
     if ( $count > 10 ) {
-        return false;
+        return [ 'allowed' => false, 'ip' => $masked_ip, 'count' => $count ];
     }
 
     set_transient( $transient_key, $count, 60 );
-    return true;
+    return [ 'allowed' => true, 'ip' => $masked_ip, 'count' => $count ];
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +80,7 @@ function nppp_watchdog_rate_limit_check(): bool {
 function nppp_watcher_generate_token(): string {
     $token = bin2hex( random_bytes( 16 ) );
     set_transient( NPPP_WATCHER_TOKEN_KEY, $token, NPPP_WATCHER_TOKEN_TTL );
+    update_option( NPPP_WATCHER_TOKEN_OPTION, $token, false );
     return $token;
 }
 
@@ -75,6 +89,9 @@ function nppp_watcher_generate_token(): string {
  */
 function nppp_watcher_get_token(): string {
     $token = get_transient( NPPP_WATCHER_TOKEN_KEY );
+    if ( ! is_string( $token ) || $token === '' ) {
+        $token = get_option( NPPP_WATCHER_TOKEN_OPTION, '' );
+    }
     return is_string( $token ) ? $token : '';
 }
 
@@ -91,6 +108,7 @@ function nppp_watcher_rotate_token(): string {
  */
 function nppp_watcher_delete_token(): void {
     delete_transient( NPPP_WATCHER_TOKEN_KEY );
+    delete_option( NPPP_WATCHER_TOKEN_OPTION );
 }
 
 // ---------------------------------------------------------------------------
@@ -161,7 +179,7 @@ function nppp_spawn_preload_watcher( int $wget_pid, string $token ): bool {
 
     // Build the watchdog
     $watchdog = sprintf(
-        'echo $$ > %s; while kill -0 %d 2>/dev/null; do sleep 5; done; '
+        'echo $$ > %s; while [ -d /proc/%d ]; do sleep 3; done; '
         . 'wget -q -O /dev/null --no-check-certificate '
         . '--no-config --no-cookies --prefer-family=IPv4 '
         . '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 '
@@ -179,7 +197,7 @@ function nppp_spawn_preload_watcher( int $wget_pid, string $token ): bool {
     nppp_display_admin_notice(
         'info',
         sprintf(
-            /* Translators: %d is the wget process PID being monitored */
+            /* translators: %d: wget process PID being monitored */
             __( 'INFO WATCHDOG: Spawned. Monitoring preload PID %d.', 'fastcgi-cache-purge-and-preload-nginx' ),
             $wget_pid
         ),
@@ -216,7 +234,7 @@ function nppp_kill_preload_watcher(): bool {
         nppp_display_admin_notice(
             'info',
             sprintf(
-                /* Translators: %d is the watcher process PID */
+                /* translators: %d: watcher process PID */
                 __( 'INFO WATCHDOG: Process (PID: %d) already gone. Nothing to kill.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $watcher_pid
             ),
@@ -249,7 +267,7 @@ function nppp_kill_preload_watcher(): bool {
         nppp_display_admin_notice(
             'info',
             sprintf(
-                /* Translators: %d is the watcher process PID */
+                /* translators: %d: watcher process PID */
                 __( 'INFO WATCHDOG: Process (PID: %d) terminated. Preload was interrupted, post-preload jobs will not run for this cycle.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $watcher_pid
             ),
@@ -260,7 +278,7 @@ function nppp_kill_preload_watcher(): bool {
         nppp_display_admin_notice(
             'error',
             sprintf(
-                /* Translators: %d is the watcher process PID */
+                /* translators: %d: watcher process PID */
                 __( 'ERROR WATCHDOG: Failed to terminate watchdog process (PID: %1$d) Manual kill required: kill -9 %1$d', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $watcher_pid
             ),
@@ -284,11 +302,16 @@ add_action( 'wp_ajax_'        . NPPP_WATCHER_AJAX_ACTION, 'nppp_cron_wake_handle
  */
 function nppp_cron_wake_handler(): void {
     // Rate limit — max 10 requests per minute per IP.
-    // Fires before token validation to stop brute-force probing cheaply.
-    if ( ! nppp_watchdog_rate_limit_check() ) {
+    $rate = nppp_watchdog_rate_limit_check();
+    if ( ! $rate['allowed'] ) {
         nppp_display_admin_notice(
             'error',
-            __( 'ERROR WATCHDOG: Rate limit exceeded. Post-preload jobs will be handled by WP-Cron.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            sprintf(
+                /* translators: 1: masked IP address 2: request count in the current minute */
+                __( 'ERROR WATCHDOG: Rate limit exceeded (IP: %1$s, %2$d req/min). Post-preload jobs will be handled by WP-Cron.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $rate['ip'],
+                $rate['count']
+            ),
             true,
             false
         );
@@ -338,13 +361,17 @@ function nppp_cron_wake_handler(): void {
     // Log the wake event — visible in plugin log (fastcgi_ops.log).
     nppp_display_admin_notice(
         'info',
-        __( 'INFO WATCHDOG: Preload finished. Executing post-preload jobs.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        sprintf(
+            /* translators: %s: masked IP address of the watchdog request */
+            __( 'INFO WATCHDOG: Preload finished (IP: %s). Executing post-preload jobs.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $rate['ip']
+        ),
         true,
         false
     );
 
     // Complete post-preload tasks
-    // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- legacy hook name stored in wp_options
+    // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
     do_action( 'npp_cache_preload_status_event' );
 
     // Respond and exit cleanly.

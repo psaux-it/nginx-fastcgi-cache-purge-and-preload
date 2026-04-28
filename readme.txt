@@ -5,7 +5,7 @@ Tags: nginx, cache, purge, preload, performance
 Requires at least: 6.5
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 2.1.5
+Stable tag: 2.1.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -140,6 +140,35 @@ NPP restricts cache paths to prevent accidental deletion of system files. Allowe
 8. Front-end Admin Bar
 
 == Changelog ==
+
+= 2.1.6 =
+
+Release date: 2026-04-27
+
+* Performance: MILESTONE: Replaced heavy recursive PHP iterators with ripgrep (rg) as the primary fast-path for cache lookups. This dramatically accelerates cache lookups and purges, tab load timings, specifically optimized for large-scale sites with over 10,000+ URLs. (See Help Tab for requirements)
+* Performance: Optimized permission checks by replacing recursive filesystem iteration with a lightweight targeted write/delete probe.
+* Performance: Eliminated redundant recursive PHP filesystem iterations across Purge and Preload processes.
+* Fixed: Resolved an long living issue where strict $request_method (GET) filtering caused NPP to only partially function on cache keys lacking a defined $request_method. (Huge thanks to Slava Shevchenko @kaganvmz)
+* Fixed: Auto Preload failing to trigger after manual single-URL purges on the front page and Advanced Tab.
+* Fixed: Added safeguards around GLOB_BRACE usage to ensure compatibility with Alpine Linux and musl libc environments.
+* Fixed: Resolved an issue that prevented the index updater cron job from running.
+* Fixed: Resolved a visual bug where the Preload Progress bar reached 100% while background preloading was still in progress.
+* Added: MILESTONE: Completely revamped the Auto Purge system. Replaced the single global Auto Purge toggle with a new suite of granular, event-based controls to give you precise management.
+* Added: MILESTONE: Provides power users the ability to override default cache directory restrictions. Use with CAUTION! 
+* Added: Support for custom Mobile User Agent.
+* Added: Important documentation and warnings regarding open_basedir restrictions. (Thanks to @tvarga77)
+* Added: Pre-bootstrap Abuse Logger for NPP endpoints.
+* Improved: Purge Single pipeline for performance (FP1-FP4) - RG Purge
+* Improved: Auto Purge compatibility with Gutenberg
+* Improved: Auto Purge compatibility with Elementor
+* Improved: Auto Purge compatibility with Classic Editor
+* Improved: Auto Purge compatibility with Redis Cache
+* Improved: Auto Purge compatibility with WooCommerce
+* Improved: compatibility with FUSE mount cache paths with safexec
+* Improved: Compatibility with diverse Nginx cache_key formats, including better handling of custom $request_method and URI structures.
+* Improved: Enhanced $request_method filtering; NPP now purges both GET and HEAD requests instead of being limited to GET only.
+* Improved: Significantly optimized Advanced and Status Tab load timings by refining background data retrieval and ripgrep.
+* Updated: safexec 1.9.6 - Update required!
 
 = 2.1.5 =
 
@@ -514,6 +543,9 @@ Release date: 2024-03-14
 * Initial release.
 
 == Upgrade Notice ==
+
+= 2.1.6 =
+Performance/functionality fixes included. Please Reset Default the Cache Key Regex. Upgrade immediately.
 
 = 2.1.5 =
 Security and data-safety fixes included. Upgrade immediately.

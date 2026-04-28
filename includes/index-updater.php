@@ -2,8 +2,8 @@
 /**
  * Background URL index updater for Nginx Cache Purge Preload
  * Description: WP-Cron job that refreshes the persistent URL→filepath index
- *              by scanning the live cache directory once per day.
- * Version: 2.1.5
+ *              by scanning the live cache directory every 3 Hour.
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -24,8 +24,14 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return void
  */
 function nppp_schedule_index_updater(): void {
+    if ( wp_next_scheduled( 'nppp_index_updater_event' )
+        && wp_get_schedule( 'nppp_index_updater_event' ) !== 'every_3hours_npp'
+    ) {
+        wp_clear_scheduled_hook( 'nppp_index_updater_event' );
+    }
+
     if ( ! wp_next_scheduled( 'nppp_index_updater_event' ) ) {
-        wp_schedule_event( time(), 'daily', 'nppp_index_updater_event' );
+        wp_schedule_event( time(), 'every_3hours_npp', 'nppp_index_updater_event' );
     }
 }
 
@@ -49,7 +55,7 @@ function nppp_unschedule_index_updater(): void {
  */
 function nppp_run_index_updater(): void {
     // Settings not saved yet.
-    $options = get_option( 'nginx_cache_settings' );
+    $options = get_option( 'nginx_cache_settings', [] );
     if ( ! is_array( $options ) ) {
         return;
     }
@@ -72,17 +78,21 @@ function nppp_run_index_updater(): void {
     }
 
     // Path safety check
-    if ( nppp_validate_path( $nginx_cache_path ) !== true ) {
+    $bypass_restriction = isset( $options['nginx_cache_bypass_path_restriction'] )
+        && $options['nginx_cache_bypass_path_restriction'] === 'yes';
+    if ( nppp_validate_path( $nginx_cache_path, false, $bypass_restriction ) !== true ) {
         return;
     }
 
     // Purge operation is in progress.
     if ( nppp_is_purge_lock_held() ) {
+        nppp_display_admin_notice( 'info', __( 'INFO INDEX UPDATER CRON: Skipped — purge lock is held.', 'fastcgi-cache-purge-and-preload-nginx' ), true, false );
         return;
     }
 
     // Preload process is in progress.
     if ( nppp_is_preload_running( $wp_filesystem ) ) {
+        nppp_display_admin_notice( 'info', __( 'INFO INDEX UPDATER CRON: Skipped — preload is running.', 'fastcgi-cache-purge-and-preload-nginx' ), true, false );
         return;
     }
 
@@ -103,18 +113,33 @@ function nppp_run_index_updater(): void {
     //   - Existing entries are preserved (never truncate).
     //   - New paths are appended; duplicate paths are deduplicated.
     //   - A single URL may map to multiple paths (Vary variants, mobile).
-    $nppp_index = get_option( 'nppp_url_filepath_index' );
-    $nppp_index = is_array( $nppp_index ) ? $nppp_index : [];
+    $nppp_index   = get_option( 'nppp_url_filepath_index' );
+    $nppp_index   = is_array( $nppp_index ) ? $nppp_index : [];
+    $nppp_new_cnt = 0;
 
     foreach ( $hits as $nppp_entry ) {
         $nppp_key      = preg_replace( '#^https?://#', '', $nppp_entry['url_encoded'] );
         $nppp_existing = $nppp_index[ $nppp_key ] ?? [];
         if ( ! in_array( $nppp_entry['file_path'], $nppp_existing, true ) ) {
             $nppp_existing[] = $nppp_entry['file_path'];
+            ++$nppp_new_cnt;
         }
         $nppp_index[ $nppp_key ] = $nppp_existing;
     }
 
     update_option( 'nppp_url_filepath_index', $nppp_index, false );
-    unset( $nppp_index, $nppp_entry, $nppp_key, $nppp_existing, $hits );
+
+    nppp_display_admin_notice(
+        'success',
+        sprintf(
+            /* translators: 1: total scanned entries, 2: newly merged path entries to index */
+            __( 'INFO INDEX UPDATER CRON: Completed — %1$d URLs scanned, %2$d new path entries merged to index.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            count( $hits ),
+            $nppp_new_cnt
+        ),
+        true,
+        false
+    );
+
+    unset( $nppp_index, $nppp_entry, $nppp_key, $nppp_existing, $hits, $nppp_new_cnt );
 }

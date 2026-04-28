@@ -3,7 +3,7 @@
  * Plugin Name:       Nginx Cache Purge Preload
  * Plugin URI:        https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload
  * Description:       The most comprehensive solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI) cache operations directly from your WordPress dashboard.
- * Version:           2.1.5
+ * Version:           2.1.6
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
  * License:           GPL-2.0+
@@ -60,7 +60,12 @@ if (!defined('NPPP_RUNTIME_SUBDIR')) {
 
 // Single source of truth for the plugin version
 if (!defined('NPPP_PLUGIN_VERSION')) {
-    define('NPPP_PLUGIN_VERSION', '2.1.5');
+    define('NPPP_PLUGIN_VERSION', '2.1.6');
+}
+
+// Single source of truth for the safexec version
+if (!defined('NPPP_SAFEXEC_VERSION')) {
+    define('NPPP_SAFEXEC_VERSION', '1.9.6');
 }
 
 // Loads runtime paths → SPL class autoloader → full admin bootstrap.
@@ -120,6 +125,115 @@ foreach ([
 unset($nppp_cron_event);
 
 // ---------------------------------------------------------------------------
+// Shared pre-bootstrap abuse logger — used by EP3 and EP8 gates.
+// Increments the per-IP fail counter and writes to the plugin log at
+// attempt #1 and every 5th attempt thereafter to avoid log flooding.
+// ---------------------------------------------------------------------------
+function nppp_ep_gate_log(
+    string $masked,
+    string $raw,
+    string $ep,
+    string $action,
+    string $status
+): void {
+    $rate_key   = 'nppp_' . $ep . '_fail_' . hash( 'sha256', $raw );
+    $fail_count = (int) get_transient($rate_key);
+    $fail_count++;
+    set_transient($rate_key, $fail_count, HOUR_IN_SECONDS);
+
+    if ($fail_count !== 1 && $fail_count % 5 !== 0) {
+        return;
+    }
+
+    if (!function_exists('nppp_get_runtime_file')) {
+        require_once plugin_dir_path(NPPP_PLUGIN_FILE) . 'includes/runtime-paths.php';
+    }
+
+    $entry = PHP_EOL . '[' . current_time('Y-m-d H:i:s') . '] ERROR ' . strtoupper($ep) . ':'
+           . ' IP: '     . $masked
+           . ' | Action: ' . $action
+           . ' | Status: ' . $status
+           . ' | Attempt: #' . $fail_count
+           . PHP_EOL;
+
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    file_put_contents(NGINX_CACHE_LOG_FILE, $entry, FILE_APPEND | LOCK_EX);
+}
+
+// ---------------------------------------------------------------------------
+// Shared pre-bootstrap Client IP resolver — used by EP3 and EP8 gates.
+// Resolves the real client IP, with optional trusted proxy header support.
+// Fallback is always REMOTE_ADDR — the plugin never trusts arbitrary headers.
+//
+// To enable proxy header support, define in wp-config.php:
+// define( 'NPPP_PROXY_IP_HEADER', 'HTTP_CF_CONNECTING_IP' );
+// ---------------------------------------------------------------------------
+function nppp_resolve_ip(): string {
+    $remote_addr = isset( $_SERVER['REMOTE_ADDR'] )
+        ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) )
+        : '';
+
+    if ( ! filter_var( $remote_addr, FILTER_VALIDATE_IP ) ) {
+        return 'unknown';
+    }
+
+    // No proxy header configured — safe default.
+    if ( ! defined( 'NPPP_PROXY_IP_HEADER' ) ) {
+        return $remote_addr;
+    }
+
+    // Strict whitelist — no arbitrary header injection.
+    $allowed = [
+        'HTTP_CF_CONNECTING_IP',
+        'HTTP_X_REAL_IP',
+        'HTTP_X_FORWARDED_FOR',
+    ];
+
+    $header = (string) NPPP_PROXY_IP_HEADER;
+
+    if ( ! in_array( $header, $allowed, true ) ) {
+        return $remote_addr;
+    }
+
+    $value = isset( $_SERVER[ $header ] )
+        ? sanitize_text_field( wp_unslash( $_SERVER[ $header ] ) )
+        : '';
+
+    if ( $value === '' ) {
+        return $remote_addr;
+    }
+
+    // XFF can be comma-separated; leftmost entry is the client
+    // as seen by the first (outermost) trusted proxy.
+    $candidate = trim( explode( ',', $value )[0] );
+
+    return filter_var( $candidate, FILTER_VALIDATE_IP )
+        ? $candidate
+        : $remote_addr;
+}
+
+// ---------------------------------------------------------------------------
+// Shared pre-bootstrap IP masker — used by EP3 and EP8 gates.
+// Masks the client IP before writing to the abuse log.
+// IPv4: masks last octet (x.x.x.**)
+// IPv6: zeros last 80 bits
+// ---------------------------------------------------------------------------
+function nppp_mask_ip( string $raw ): string {
+    if ( filter_var( $raw, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 ) ) {
+        $parts    = explode( '.', $raw );
+        $parts[3] = '**';
+        return implode( '.', $parts );
+    }
+
+    if ( filter_var( $raw, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ) {
+        $bin = inet_pton( $raw );
+        return inet_ntop( substr( $bin, 0, 6 ) . str_repeat( "\x00", 10 ) );
+    }
+
+    return 'unknown';
+}
+
+// ---------------------------------------------------------------------------
 // EP3 — NPP REST namespace (/nppp_nginx_cache/v2/)
 // Pre-screens all /nppp_nginx_cache/ traffic before bootstrap loads.
 // Invalid or missing keys bail immediately — zero plugin files load.
@@ -132,42 +246,58 @@ add_action('rest_api_init', function (): void {
         return;
     }
 
-    // Extract API key — Bearer header → X-Api-Key header → request body.
+    // Gate on REST API feature status before doing any further work.
+    $opts = get_option('nginx_cache_settings', []);
+    if (($opts['nginx_cache_api'] ?? 'no') !== 'yes') {
+        return;
+    }
+
+    // Get IP
+    $nppp_ep3_raw_ip = nppp_resolve_ip();
+
+    // Early block abusing IP
+    $nppp_ep3_rate_key = 'nppp_ep3_fail_' . hash( 'sha256', $nppp_ep3_raw_ip );
+    if ((int) get_transient($nppp_ep3_rate_key) >= 10) {
+        wp_die('', '', ['response' => 429]);
+    }
+
+    // Mask IP
+    $nppp_ep3_masked = nppp_mask_ip( $nppp_ep3_raw_ip );
+
+    // Extract the authorization header
     $api_key = '';
     $auth_header = sanitize_text_field(
         wp_unslash( $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '' )
     );
 
+    // Get the key from the 'Authorization: Bearer <key>' header.
     if (strpos($auth_header, 'Bearer ') === 0) $api_key = substr($auth_header, 7);
 
+    // Check for a custom 'X-API-KEY' header.
     if (empty($api_key)) {
         $api_key = sanitize_text_field(
             wp_unslash( $_SERVER['HTTP_X_API_KEY'] ?? '' )
         );
     }
 
-    if (empty($api_key)) {
-        $content_type = sanitize_text_field(
-            wp_unslash( $_SERVER['CONTENT_TYPE'] ?? '' )
-        );
+    // Final sanitization
+    $api_key = sanitize_text_field($api_key);
 
-        if (strpos($content_type, 'application/json') !== false) {
-            $body    = json_decode(file_get_contents('php://input'), true);
-            $api_key = isset($body['api_key']) && is_string($body['api_key']) ? $body['api_key'] : '';
-        } else {
-            // phpcs:ignore WordPress.Security.NonceVerification.Missing -- REST API bearer token prescreen, not a form submission
-            $api_key = isset($_POST['api_key']) ? sanitize_text_field( wp_unslash( $_POST['api_key'] ) ) : '';
-        }
+    // Empty key — silent.
+    if (empty($api_key)) return;
+
+    // Wrong format — log and penalise.
+    if (!preg_match('/^[a-f0-9]{64}$/i', $api_key)) {
+        nppp_ep_gate_log($nppp_ep3_masked, $nppp_ep3_raw_ip, 'ep3', 'nppp_nginx_cache', 'ERROR 403 MALFORMED API KEY');
+        return;
     }
 
-    // Reject invalid format before touching the database.
-    $api_key = sanitize_text_field($api_key);
-    if (empty($api_key) || !preg_match('/^[a-f0-9]{64}$/i', $api_key)) return;
-
-    // Validate against stored key.
-    $options    = get_option('nginx_cache_settings');
-    $stored_key = isset($options['nginx_cache_api_key']) ? $options['nginx_cache_api_key'] : '';
-    if (!is_string($stored_key) || !hash_equals($stored_key, $api_key)) return;
+    // Validation - log and penalise.
+    $stored_key = isset($opts['nginx_cache_api_key']) ? $opts['nginx_cache_api_key'] : '';
+    if (!is_string($stored_key) || !hash_equals($stored_key, $api_key)) {
+        nppp_ep_gate_log($nppp_ep3_masked, $nppp_ep3_raw_ip, 'ep3', 'nppp_nginx_cache', 'ERROR 403 API KEY MISMATCH OR INVALID');
+        return;
+    }
 
     nppp_load_bootstrap();
 }, 1);
@@ -226,7 +356,7 @@ add_filter('rest_pre_dispatch', function($result, $server, $request) {
 
     if (!is_user_logged_in()) return $result;
 
-    $opts = get_option('nginx_cache_settings');
+    $opts = get_option('nginx_cache_settings', []);
     if (($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes') return $result;
 
     // Admin or any user granted the custom purge capability (e.g. Editor).
@@ -244,8 +374,9 @@ add_filter('rest_pre_dispatch', function($result, $server, $request) {
 // automatic_updates_complete callback at priority 10.
 // ---------------------------------------------------------------------------
 add_action('automatic_updates_complete', function ( $results ): void {
-    $opts = get_option('nginx_cache_settings');
+    $opts = get_option('nginx_cache_settings', []);
     if ( ($opts['nginx_cache_purge_on_update'] ?? 'no') !== 'yes' ) return;
+    if ( ($opts['nppp_autopurge_3rdparty'] ?? 'no') !== 'yes' ) return;
 
     nppp_load_bootstrap();
 }, 1);
@@ -257,7 +388,7 @@ add_action('automatic_updates_complete', function ( $results ): void {
 // for this one action.
 //
 // Two-layer gate — bootstrap only loads when the token is genuinely valid:
-//   Layer 1 (here)   : format check + transient existence + hash_equals
+//   Layer 1 (here)   : format check + transient ext + hash_equals + abuse logs
 //   Layer 2 (handler): rate limit + same checks again as defense-in-depth
 // ---------------------------------------------------------------------------
 add_action('init', function(): void {
@@ -267,7 +398,7 @@ add_action('init', function(): void {
     $action = isset($_POST['action'])
         ? sanitize_key(wp_unslash($_POST['action']))
         : '';
-    // phpcs:enable WordPress.Security.NonceVerification.Missing
+    // phpcs:enable WordPress.Security.NonceVerification.Missing -- EP8 watchdog
     if ($action !== 'nppp_cron_wake') return;
 
     // Watchdog feature disabled — endpoint intentionally unreachable.
@@ -276,6 +407,18 @@ add_action('init', function(): void {
         wp_die('', '', ['response' => 403]);
     }
 
+    // Get IP
+    $nppp_ep8_raw_ip = nppp_resolve_ip();
+
+    // Early block abusing IP
+    $nppp_ep8_rate_key = 'nppp_ep8_fail_' . hash( 'sha256', $nppp_ep8_raw_ip );
+    if ((int)get_transient($nppp_ep8_rate_key) >= 10) {
+        wp_die('', '', ['response' => 429]);
+    }
+
+    // Mask IP
+    $nppp_ep8_masked = nppp_mask_ip( $nppp_ep8_raw_ip );
+
     // Layer 1a
     // phpcs:disable WordPress.Security.NonceVerification.Missing -- EP8 watchdog
     $submitted = isset($_POST['token'])
@@ -283,12 +426,17 @@ add_action('init', function(): void {
         : '';
     // phpcs:enable WordPress.Security.NonceVerification.Missing
     if (empty($submitted) || !preg_match('/^[a-f0-9]{32}$/i', $submitted)) {
+        nppp_ep_gate_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ep8', 'nppp_cron_wake', 'ERROR 403 MALFORMED OR MISSING TOKEN');
         wp_die('', '', ['response' => 403]);
     }
 
     // Layer 1b
     $stored = get_transient('nppp_ping_token_' . md5('nppp'));
+    if ( empty( $stored ) ) {
+        $stored = get_option( 'nppp_ping_token_db', '' );
+    }
     if (empty($stored) || !hash_equals((string) $stored, $submitted)) {
+        nppp_ep_gate_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ep8', 'nppp_cron_wake', 'ERROR 403 TOKEN MISMATCH OR EXPIRED');
         wp_die('', '', ['response' => 403]);
     }
 

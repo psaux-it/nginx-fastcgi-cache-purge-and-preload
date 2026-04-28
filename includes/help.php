@@ -2,7 +2,7 @@
 /**
  * Help and FAQ renderer for Nginx Cache Purge Preload
  * Description: Outputs plugin documentation, onboarding guidance, and support information in admin.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -69,6 +69,97 @@ function nppp_my_faq_html() {
                         <p style="font-size: 14px;">This WordPress plugin is compatible exclusively with Nginx web servers running on Linux-powered systems. Additionally, the <strong>shell_exec</strong> function must be enabled and unrestricted. Consequently, the plugin may not operate fully on shared hosting environments where native <strong>Linux commands</strong> are blocked from running via PHP.</p>
                         <p style="font-size: 14px;">Moreover, granting the correct permissions to the PHP process owner (<strong>PHP-FPM-USER</strong>) is essential for the proper functioning of the purge and preload operations. This is necessary in isolated user environments that have two distinct user roles: the <strong>WEBSERVER-USER</strong> (nginx or www-data) and the <strong>PHP-FPM-USER</strong>.</p>
                         <p style="font-size: 14px;">📌 If you see warnings or if any plugin settings or tabs are disabled, this could indicate permission issues, an unsupported environment, or missing dependencies that the plugin requires to function properly.</p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">Preloading fails with "ERROR COMMAND" or NPP cannot read nginx.conf — could open_basedir be the cause?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>PHP <code>open_basedir</code> and NPP</strong></h3>
+                        <p>Yes. If <code>open_basedir</code> is active in your PHP configuration, it silently restricts every filesystem and binary access PHP makes — including the paths NPP must reach to preload pages, read <code>nginx.conf</code>, detect FUSE mounts, and locate system binaries. The error surface is misleading: instead of an <code>open_basedir</code> violation message, you typically see:</p>
+                        <pre>ERROR COMMAND: Preloading failed for https://example.com. Please check Exclude Endpoints and Exclude File Extensions settings syntax.</pre>
+                        <p>This message means NPP could not execute a required system command — most commonly because <code>open_basedir</code> is blocking access to the <code>wget</code> binary, <code>nginx.conf</code>, the cache directory, or <code>/proc</code> (which NPP reads to detect FUSE mounts).</p>
+
+                        <h4><strong>What paths does NPP require access to?</strong></h4>
+                        <p>The following table lists every path category NPP needs and why. All of these must be reachable by the PHP-FPM process for NPP to work correctly:</p>
+                        <table class="responsive-table">
+                            <thead>
+                                <tr>
+                                    <th>Path</th>
+                                    <th>Why NPP needs it</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>{ABSPATH}/</code></td>
+                                    <td>WordPress installation root — plugin files, runtime files (PID, log, snapshot)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>{ABSPATH}/../</code></td>
+                                    <td>Parent of WordPress root — required by WP Filesystem API for uploads and adjacent paths</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/dev/shm/</code>, <code>/tmp/</code>, <code>/var/</code>, <code>/cache/</code></td>
+                                    <td>Nginx cache directory root — NPP reads, writes, and deletes cache files here</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/proc/</code></td>
+                                    <td>FUSE mount detection — NPP reads <code>/proc/self/mountinfo</code> and <code>/proc/mounts</code> to determine if the cache path is a FUSE (bindfs) mount</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/dev/null</code></td>
+                                    <td>Standard null device — used by shell command redirects</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/etc/nginx/</code></td>
+                                    <td>Default nginx.conf location — NPP reads it to extract cache key directives and verify cache zone configuration</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/usr/bin/</code>, <code>/usr/sbin/</code></td>
+                                    <td>System binaries — <code>wget</code> (preload), <code>rg</code> (ripgrep scan), <code>safexec</code>, <code>nginx -V</code> (conf path detection), <code>ps</code> (PID checks)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>/usr/local/bin/</code>, <code>/usr/local/sbin/</code></td>
+                                    <td>Alternative binary locations — same binaries as above when installed outside <code>/usr/bin</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>/bin/</code>, <code>/sbin/</code></td>
+                                    <td>Core system utilities — <code>echo</code>, shell builtins used in command probes</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h4><strong>Recommended <code>open_basedir</code> configuration</strong></h4>
+                        <p>Add the following to your PHP-FPM pool configuration file (e.g., <code>/etc/php/8.x/fpm/pool.d/yoursite.conf</code>) or your server-wide <code>php.ini</code>. Adjust <code>{ABSPATH}</code> to your actual WordPress installation path and the cache root to match your <code>nginx_cache_path</code> setting:</p>
+                        <pre>php_admin_value[open_basedir] =
+    /var/www/yoursite.com/ :
+    /var/www/yoursite.com/../ :
+    /dev/shm/ :
+    /tmp/ :
+    /var/ :
+    /cache/ :
+    /proc/ :
+    /dev/null :
+    /etc/nginx/ :
+    /usr/bin/ :
+    /usr/sbin/ :
+    /usr/local/bin/ :
+    /usr/local/sbin/ :
+    /bin/ :
+    /sbin/</pre>
+                        <p>Reload PHP-FPM after saving: <code>systemctl reload php-fpm</code></p>
+
+                        <h4><strong>How to confirm <code>open_basedir</code> is the culprit</strong></h4>
+                        <ol>
+                            <li>Check the <strong>Status tab</strong> — NPP emits a <code>GLOBAL WARNING OPEN_BASEDIR</code> notice when it detects an active restriction.</li>
+                            <li>Temporarily set <code>open_basedir =</code> (empty) in your pool config, reload PHP-FPM, and re-test. If the error disappears, <code>open_basedir</code> was the cause.</li>
+                            <li>Re-enable <code>open_basedir</code> with the full path list above and confirm NPP works correctly.</li>
+                        </ol>
+
+                        <h4><strong>Important notes</strong></h4>
+                        <p>⚠️ Setting <code>open_basedir =</code> (completely empty) disables the restriction globally — do not leave it empty in production. Always re-enable it with the correct path list after testing.</p>
+                        <p>📌 On Docker-based deployments, binary paths may differ (e.g., <code>/usr/local/bin/wget</code> instead of <code>/usr/bin/wget</code>). Check actual binary locations with <code>which wget rg safexec nginx ps</code> inside the PHP-FPM container and add those directories to the list accordingly.</p>
+                        <p>📌 If your Nginx configuration is stored outside <code>/etc/nginx/</code> (e.g., <code>/usr/local/etc/nginx/</code> or <code>/opt/nginx/conf/</code>), add that directory as well. NPP probes all common nginx.conf locations — every directory in that probe list must be reachable.</p>
                     </div>
                 </div>
 
@@ -222,7 +313,17 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h3><strong>Nginx Configuration for HTTP Purge</strong></h3>
-                        <p>HTTP Purge requires the <code>ngx_cache_purge</code> module to be compiled into Nginx and a dedicated purge location block added to your Nginx configuration. Without both, the feature cannot work — but NPP falls back to filesystem purge automatically so nothing breaks.</p>
+                        <p>HTTP Purge requires the <code>ngx_cache_purge</code> module to be compiled into Nginx and a <strong>dedicated purge location block</strong> added to your Nginx configuration. Without both, the feature cannot work — but NPP falls back to filesystem purge automatically so nothing breaks.</p>
+
+                        <h4><strong>Why a dedicated purge location?</strong></h4>
+                        <p>NPP uses a <code>GET</code> request to trigger cache purges. This design choice was made to provide <strong>maximum compatibility with all cache key formats</strong>, including those that include <code>$request_method</code> (e.g. <code>$scheme$request_method$host$request_uri</code>). When a <code>GET</code> request is sent to a dedicated purge location, Nginx bypasses method checks and purges the correct cache entry regardless of the key format.</p>
+                        <p><strong>Why a dedicated location is also a security best practice:</strong></p>
+                        <ul>
+                            <li><strong>Isolation:</strong> Purge requests are handled in a separate <code>location</code> block, completely separate from your normal PHP processing.</li>
+                            <li><strong>IP Restriction:</strong> You can (and should) restrict purge access to trusted IP addresses (e.g., your server's localhost or Docker network).</li>
+                            <li><strong>No Accidental Caching:</strong> A <code>GET</code> request to a dedicated purge location will never be cached or passed to PHP, eliminating any risk of warming the cache unintentionally.</li>
+                        </ul>
+                        <p>⚠️ <strong>Important:</strong> HTTP Purge will <strong>not</strong> work if you use the inline <code>fastcgi_cache_purge on;</code> directive inside your PHP location block. This is because the module's access handler expects the <code>PURGE</code> method for inline setups, while NPP sends <code>GET</code>. For this reason, we strongly recommend the dedicated location configuration shown below.</p>
 
                         <h4><strong>Required Nginx config</strong></h4>
                         <p>You need two things in your Nginx server block: a <code>fastcgi_cache_path</code> with a named zone, and a location block that handles purge requests using that zone. A minimal working example:</p>
@@ -235,32 +336,186 @@ fastcgi_cache_key "$scheme$request_method$host$request_uri";
 fastcgi_cache my_cache;
 fastcgi_cache_valid 200 301 302 60m;
 
-## Purge location — required for HTTP Purge fast-path:
+## Purge location — dedicated location required for NPP HTTP Purge
 location ~ /purge(/.*) {
-    allow 127.0.0.1;
-    deny all;
+    allow 127.0.0.1;        # Only allow local requests
+    # allow 172.16.0.0/12;  # Docker network (adjust as needed)
+    deny all;               # Deny everyone else
+
     fastcgi_cache_purge my_cache "$scheme$request_method$host$1";
 }</pre>
 
-                        <p>The location prefix (<code>/purge</code>) must match what NPP is configured to send purge requests to. The cache key in the purge block (<code>$scheme$request_method$host$1</code>) must match your <code>fastcgi_cache_key</code> exactly — with <code>$1</code> capturing the path after <code>/purge</code>.</p>
+                        <p><strong>Explanation:</strong></p>
+                        <ul>
+                            <li>The <code>location ~ /purge(/.*)</code> block captures any URL path starting with <code>/purge/</code>.</li>
+                            <li>The <code>$1</code> variable captures everything after <code>/purge</code> (e.g., <code>/my-page/</code>).</li>
+                            <li>The <code>fastcgi_cache_purge</code> directive uses the <strong>exact same cache key format</strong> as <code>fastcgi_cache_key</code>, with <code>$1</code> replacing the full request URI.</li>
+                        </ul>
+                        <p>🔒 <strong>Security Tip:</strong> Always restrict the <code>allow</code> directive to your server's internal IP addresses. Never expose the purge location to the public internet.</p>
 
                         <h4><strong>How NPP builds the purge URL</strong></h4>
-                        <p>When NPP purges <code>https://example.com/my-page/</code> it sends a GET request to <code>https://example.com/purge/my-page/</code>. Nginx matches the purge location, strips <code>/purge</code>, and deletes the cache entry for the remaining path. HTTP 200 = purge confirmed. Any other response = NPP falls through to filesystem.</p>
+                        <p>When NPP purges <code>https://example.com/my-page/</code>:</p>
+                        <ol>
+                            <li>It constructs the purge URL: <code>https://example.com/purge/my-page/</code></li>
+                            <li>It sends a <code>GET</code> request to that URL.</li>
+                            <li>Nginx matches the <code>/purge/</code> location, extracts <code>/my-page/</code> as <code>$1</code>, and deletes the corresponding cache file.</li>
+                            <li>Nginx returns <code>200</code> (purge successful) or another status code (see fallback behavior below).</li>
+                        </ol>
+                        <p>If the purge endpoint returns anything other than <code>200</code>, NPP automatically falls back to its filesystem-based purge, so your cache is still cleared – just a bit slower.</p>
 
                         <h4><strong>NPP settings for HTTP Purge</strong></h4>
-                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong>. Three options control how NPP builds the purge URL:</p>
+                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and enable <strong>HTTP Purge</strong>. Three additional options let you customize the purge URL:</p>
 
-                        <p><strong>HTTP Purge URL Suffix</strong> (default: <code>purge</code>)<br>
-                        The path prefix NPP prepends when building purge requests. Change this if your Nginx purge location uses a different prefix — for example if your location is <code>~ /cache-purge(/.*)</code> set this to <code>cache-purge</code>. NPP will then send requests to <code>https://example.com/cache-purge/my-page/</code>.</p>
+                        <table class="responsive-table">
+                            <thead>
+                                <tr>
+                                    <th>Setting</th>
+                                    <th>Default</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>HTTP Purge URL Suffix</strong></td>
+                                    <td><code>purge</code></td>
+                                    <td>The path prefix prepended to the URL. Change this if your Nginx location uses a different prefix — for example if your location is <code>~ /cache-purge(/.*)</code> set this to <code>cache-purge</code>.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>HTTP Purge Custom Base URL</strong></td>
+                                    <td>(empty)</td>
+                                    <td>Overrides the entire base URL. Essential for Docker or reverse‑proxy setups where the purge endpoint is not reachable via the public site URL. Examples:<br>
+                                        • <code>http://nginx/purge</code> — Docker service name<br>
+                                        • <code>http://127.0.0.1:8080/purge</code> — non‑standard port<br>
+                                        When a Custom Base URL is set, the <strong>URL Suffix</strong> field is ignored.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
 
-                        <p><strong>HTTP Purge Custom Base URL</strong> (optional)<br>
-                        Overrides the suffix entirely. Use this when the purge endpoint is on a different host, port, or internal address — the most common case being Docker where the purge endpoint is not reachable via the public hostname. Examples:</p>
+                <h3 class="nppp-question">What is RG Purge and how does it accelerate single‑URL purges?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>RG Purge – Turbocharged Cache Purging</strong></h3>
+                        <p><strong>RG Purge</strong> is an optional fast‑path that uses <strong>ripgrep (rg)</strong> — a blazing‑fast, line‑oriented search tool — to locate cache files on disk. It replaces the traditional recursive PHP directory scan (Fast‑Path 4) with a single, highly optimised system call, dramatically reducing the time and I/O required to find and delete cached pages.</p>
+
+                        <h4><strong>Why RG Purge matters</strong></h4>
+                        <p>In a standard Nginx cache, a single‑page purge must locate one or more cache files among potentially hundreds of thousands of files. The default PHP recursive iterator (Fast‑Path 4) walks the entire cache directory tree, calling <code>is_file()</code> and reading file headers one by one. On large caches, this can take <strong>30–60 seconds</strong> and consume substantial CPU and disk I/O.</p>
+                        <p><strong>RG Purge reduces this to 1–2 seconds</strong> regardless of cache size. It does this by delegating the search to <code>rg</code>, which is written in Rust and optimised for parallel directory traversal, memory‑mapped I/O, and early exit.</p>
+
+                        <h4><strong>Architecture – How RG Purge fits into the purge workflow</strong></h4>
+                        <p>NPP's single‑URL purge follows a layered fallback strategy. RG Purge sits at <strong>Fast‑Path 3</strong>:</p>
+                        <ol>
+                            <li><strong>FP1 – HTTP Purge</strong> (if enabled) – asks Nginx to purge via the <code>ngx_cache_purge</code> module.</li>
+                            <li><strong>FP2 – Index lookup</strong> – consults the persistent URL→filepath index built during preloading.</li>
+                            <li><strong>FP3 – RG Purge</strong> – uses <code>rg</code> to scan the cache directory for the target URL(s).</li>
+                            <li><strong>FP4 – PHP recursive scan</strong> – the original fallback, used only if RG Purge is unavailable or fails.</li>
+                        </ol>
+                        <p>RG Purge is <strong>entirely optional</strong>. If <code>rg</code> is not installed or the feature is disabled in settings, NPP seamlessly falls through to FP4. There is no change to the existing filesystem purge logic — RG Purge simply makes it faster when available.</p>
+
+                        <h4><strong>Technical workflow of RG Purge</strong></h4>
+                        <ol>
+                            <li>NPP builds a combined regular expression that matches the cache key lines of all pending URLs (primary + related).</li>
+                            <li>It executes a single <code>rg</code> command that scans the entire cache directory, printing only file paths where the <code>KEY:</code> header matches the pattern.</li>
+                            <li>The output is parsed, and each file path is validated and (if necessary) translated from a FUSE source path to a writable mount point.</li>
+                            <li>All matching cache files are deleted in bulk, and their paths are written back to the URL→filepath index for future instant purges.</li>
+                        </ol>
+                        <p>Because <code>rg</code> respects the Linux page cache, subsequent scans are even faster for a warm cache directory.</p>
+
+                        <h4><strong>When should I enable RG Purge?</strong></h4>
+                        <p>Enable RG Purge if <strong>any</strong> of the following apply to your site:</p>
                         <ul>
-                            <li><code>http://nginx/purge</code> — Docker service name</li>
-                            <li><code>http://127.0.0.1:8080/purge</code> — non-standard port</li>
-                            <li><code>http://localhost_/purge</code> — explicit localhost</li>
+                            <li>Your Nginx cache contains more than <strong>1,000 files</strong>.</li>
+                            <li>Single‑page purges (manual, auto‑purge, or front‑end actions) feel sluggish or time out.</li>
+                            <li>You are using a FUSE mount (bindfs) and want to avoid the overhead of PHP walking a virtual filesystem.</li>
+                            <li>You want to reduce CPU / I/O spikes caused by large directory scans.</li>
                         </ul>
-                        <p>When a Custom Base URL is set the suffix field is ignored entirely.</p>
+                        <p>RG Purge is <strong>highly recommended for any production site</strong> with a non‑trivial cache size. The performance gains are immediate and there is no downside — if <code>rg</code> is missing, NPP falls back silently to the standard PHP scan.</p>
+
+                        <h4><strong>How to enable RG Purge</strong></h4>
+                        <ol>
+                            <li>Install <strong>ripgrep</strong> on your server:<br>
+                                <code>apt install ripgrep</code> (Debian/Ubuntu) or <code>dnf install ripgrep</code> (RHEL/Fedora).
+                            </li>
+                            <li>Go to <strong>Settings → NPP Settings → Advanced</strong> and turn on <strong>RG Purge</strong>.</li>
+                            <li>The toggle will show <em>Unavailable</em> if <code>rg</code> is not detected. Once installed, refresh the page and enable it.</li>
+                        </ol>
+                        <p>After enabling, single‑page purges will automatically use RG Purge. No further configuration is required.</p>
+
+                        <h4><strong>RG Purge and safexec</strong></h4>
+                        <p>If your cache directory is a FUSE mount (e.g., bindfs) and the PHP process lacks read access to the underlying source directory, NPP will attempt to use <strong>safexec</strong> to run <code>rg</code> with elevated read privileges. This ensures RG Purge works even in isolated multi‑user environments. If safexec is not available, RG Purge gracefully falls back to scanning the FUSE mount directly (slower, but still faster than PHP).</p>
+
+                        <h4><strong>Troubleshooting</strong></h4>
+                        <p><strong>Q: The RG Purge toggle shows "Unavailable".</strong><br>
+                        A: The <code>rg</code> binary is not installed or not in the <code>PATH</code>. Install ripgrep via your package manager and refresh the page.</p>
+
+                        <p><strong>Q: Purges are still slow after enabling RG Purge.</strong><br>
+                        A: Check the <strong>Status</strong> tab to confirm <code>rg</code> is detected. If you are using a FUSE mount, ensure safexec is installed and SUID‑root (see the safexec FAQ). If neither is available, RG Purge will fall back to the PHP scan.</p>
+
+                        <p><strong>Q: Does RG Purge work with Purge All?</strong><br>
+                        A: No. Purge All always uses filesystem operations (recursive directory deletion). RG Purge applies only to single‑URL and related‑URL purges.</p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">Why is the Advanced tab slow to load when I have many cached URLs?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Advanced Tab Load Performance</strong></h3>
+                        <p>Every time you open the <strong>Advanced</strong> tab, NPP performs a full scan of your Nginx cache directory to build the cached-URL table — reading the <code>KEY:</code> header from every cache file to extract the URL, content type, and variant count. On large caches this scan is the dominant cost. The method NPP uses depends entirely on which tools are available on the host or container running WordPress/PHP-FPM.</p>
+
+                        <h4><strong>The three scanning paths</strong></h4>
+                        <p><strong>No ripgrep installed:</strong> NPP falls back to a PHP <code>RecursiveDirectoryIterator</code> loop — opening and reading each cache file one at a time from userland PHP. This is the slowest method and is heavily penalised by FUSE filesystem overhead in containerised environments.</p>
+                        <p><strong>ripgrep (<code>rg</code>) installed, no safexec:</strong> NPP delegates the scan to <code>rg</code>. ripgrep uses parallel, memory-mapped I/O and is significantly faster than the PHP loop. However, if your cache path is a FUSE mount (bindfs), <code>rg</code> still walks through the FUSE virtual filesystem — faster than PHP, but still subject to FUSE overhead.</p>
+                        <p><strong>ripgrep + safexec both installed (FUSE environment):</strong> NPP runs <code>rg</code> via safexec against the <strong>real source path on disk</strong>, completely bypassing the FUSE layer. This is the fastest possible scan path and the configuration that is <strong>strongly recommended</strong> for any containerised or FUSE-mounted deployment.</p>
+
+                        <h4><strong>Real-world benchmark — 8,000 cached URLs, containerised environment with FUSE mount (bindfs)</strong></h4>
+                        <table class="responsive-table">
+                            <thead>
+                                <tr>
+                                    <th>Setup</th>
+                                    <th>Scanning Method</th>
+                                    <th>Scanned Path</th>
+                                    <th>Advanced Tab Load Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>No ripgrep, no safexec</strong></td>
+                                    <td>PHP <code>RecursiveDirectoryIterator</code></td>
+                                    <td>FUSE mount (slow)</td>
+                                    <td>⚠️ ~21 seconds</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>ripgrep + safexec installed</strong></td>
+                                    <td><code>rg</code> via safexec</td>
+                                    <td>Real source path (FUSE bypassed)</td>
+                                    <td>✅ ~5 seconds</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p>Installing both tools reduces Advanced tab load time by <strong>~76%</strong> (from ~21 s to ~5 s) on a real containerised production stack with 8,000 cached URLs. The gains grow proportionally as cache size increases.</p>
+
+                        <h4><strong>Why FUSE makes it dramatically worse</strong></h4>
+                        <p>A FUSE mount (bindfs) introduces a per-syscall context-switch overhead because every file <code>open()</code> and <code>read()</code> is bridged through a userspace FUSE daemon. When PHP walks 8,000+ files via <code>RecursiveDirectoryIterator</code> over a FUSE mount, each individual file operation crosses the FUSE boundary — multiplying the I/O cost by orders of magnitude compared to reading the same files from the underlying native filesystem. <strong>ripgrep via safexec bypasses this entirely</strong> by scanning the real source directory, with zero FUSE crossings.</p>
+
+                        <h4><strong>How to get maximum performance</strong></h4>
+                        <ol>
+                            <li>
+                                Install <strong>ripgrep</strong> on the host or inside the container running PHP-FPM:
+                                <pre>apt install ripgrep       # Debian / Ubuntu
+dnf install ripgrep       # RHEL / Fedora
+apk add ripgrep           # Alpine Linux</pre>
+                            </li>
+                            <li>Install <strong>safexec</strong> (required to bypass FUSE overhead): see the <em>"What is safexec?"</em> FAQ entry below for package download links and the one-liner installer.</li>
+                            <li>Visit the <strong>Status tab</strong> to confirm both <code>rg</code> and <code>safexec</code> are detected — no further plugin configuration is required. NPP detects and uses both tools automatically.</li>
+                        </ol>
+
+                        <h4><strong>What if I cannot install safexec?</strong></h4>
+                        <p>ripgrep alone still helps in non-FUSE environments. If your cache path is a FUSE mount without safexec, NPP falls back to running <code>rg</code> directly against the FUSE mount — faster than the PHP loop, but not as fast as the full FUSE-bypass path. The ~76% improvement described above requires <strong>both</strong> ripgrep and safexec.</p>
+
+                        <h4><strong>Does this affect anything other than the Advanced tab?</strong></h4>
+                        <p>Yes — the same scanning chain is used during <strong>Scheduled Preload</strong> and <strong>Preload All</strong> completion to rebuild the URL→filepath index. The Advanced tab is simply the most visible and interactive place where the scan latency is felt directly by the administrator.</p>
                     </div>
                 </div>
 
@@ -413,47 +668,49 @@ location ~ /purge(/.*) {
                     <ol class="nginx-list" style="font-size: 14px;">
                         <li><strong> Debian / Ubuntu (.deb)</strong>
                             <pre># Download checksums
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/SHA256SUMS
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/SHA256SUMS
 
 # For x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/safexec_1.9.5-1_amd64.deb
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/safexec_<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1_amd64.deb
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apt install ./safexec_1.9.5-1_amd64.deb
+sudo apt install --reinstall ./safexec_<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1_amd64.deb
 
 # For AArch64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/safexec_1.9.5-1_arm64.deb
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/safexec_<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1_arm64.deb
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apt install ./safexec_1.9.5-1_arm64.deb</pre>
+sudo apt install --reinstall ./safexec_<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1_arm64.deb</pre>
                         </li>
 
                         <li><strong> RHEL / CentOS / Fedora (.rpm)</strong>
                             <pre># Download checksums
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/SHA256SUMS
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/SHA256SUMS
 
 # For x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/safexec-1.9.5-1.el10.x86_64.rpm
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.x86_64.rpm
 sha256sum -c SHA256SUMS --ignore-missing
-sudo dnf install ./safexec-1.9.5-1.el10.x86_64.rpm
+sudo dnf install ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.x86_64.rpm
+sudo dnf reinstall ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.x86_64.rpm
 
 # For AArch64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/safexec-1.9.5-1.el10.aarch64.rpm
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.aarch64.rpm
 sha256sum -c SHA256SUMS --ignore-missing
-sudo dnf install ./safexec-1.9.5-1.el10.aarch64.rpm</pre>
+sudo dnf install ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.aarch64.rpm
+sudo dnf reinstall ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.aarch64.rpm</pre>
                         </li>
 
                         <li><strong> Alpine Linux (.apk)</strong>
                             <pre># Download checksums
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/SHA256SUMS
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/SHA256SUMS
 
 # For x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/safexec-1.9.5-r1.x86_64.apk
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-r1.x86_64.apk
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apk add --allow-untrusted ./safexec-1.9.5-r1.x86_64.apk
+sudo apk add --allow-untrusted --force-overwrite ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-r1.x86_64.apk
 
 # For AArch64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.5/safexec-1.9.5-r1.aarch64.apk
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-r1.aarch64.apk
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apk add --allow-untrusted ./safexec-1.9.5-r1.aarch64.apk</pre>
+sudo apk add --allow-untrusted --force-overwrite ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-r1.aarch64.apk</pre>
                             <p style="font-size: 13px;"><em>Note: <code>--allow-untrusted</code> is required because the package is not signed with an Alpine trusted key. The SHA256 checksum above provides integrity verification.</em></p>
                         </li>
 
@@ -507,25 +764,23 @@ safexec --kill=&lt;pid&gt;
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h3><strong>Redis Object Cache Sync</strong></h3>
-                        <p>NPP and Redis Object Cache are two separate caching layers. NPP manages the Nginx full-page cache (FastCGI cache on disk or in RAM). Redis Object Cache stores WordPress database query results and object data in memory. This sync feature keeps both layers consistent with each other through a bidirectional relationship.</p>
+                        <p>When enabled, NPP flushes the Redis object cache at the right point in the Nginx Purge+Preload chain, keeping both caching layers aligned. Flushing Redis only makes sense immediately before fresh content is pulled into the Nginx cache — so a purge-only operation (without preload) deliberately leaves Redis warm.</p>
 
                         <h4><strong>Requirements</strong></h4>
-                        <p>The <strong>Redis Object Cache</strong> plugin must be installed, active, and connected to a live Redis server. NPP checks for both the drop-in (<code>WP_REDIS_VERSION</code> constant) and a live connection (<code>redis_status() === true</code>) at runtime. If Redis is unreachable the toggle auto-disables itself.</p>
+                        <p>The <strong>Redis Object Cache</strong> plugin must be installed, active, and connected to a live Redis server. NPP checks for both the drop-in (<code>WP_REDIS_VERSION</code> constant) and a live connection (<code>redis_status() === true</code>) at runtime. If Redis is unreachable the toggle shows as <em>Unavailable</em>.</p>
 
                         <h4><strong>How to enable</strong></h4>
-                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and turn on <strong>Redis Object Cache Sync</strong>. The toggle shows as <em>Unavailable</em> in the dashboard widget when the Redis plugin is not installed or Redis is disconnected.</p>
+                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and turn on <strong>Redis Object Cache Sync</strong>.</p>
 
-                        <h4><strong>Direction 1 — NPP Purge All → Redis flush</strong></h4>
-                        <p>Whenever NPP's <strong>Purge All</strong> runs (manually, via admin bar, Auto Purge, REST API, or Schedule), NPP calls <code>wp_cache_flush()</code> immediately after clearing the Nginx cache. This ensures PHP regenerates fresh data from the database on the next request, so pages rebuilt into the Nginx cache contain up-to-date content rather than stale object-cached results.</p>
+                        <h4><strong>When Redis is flushed</strong></h4>
+                        <p><strong>Purge All + Auto Preload ON</strong> (Admin button, Admin Bar, REST API): NPP flushes Redis immediately after clearing the Nginx cache, just before the Preload All begins. This ensures PHP fetches fresh database content when pages are rebuilt into the Nginx cache. If Auto Preload is OFF, Purge All does not flush Redis — no preload means no rebuild, so there is no reason to invalidate the object cache.</p>
+                        <p><strong>Preload All</strong> (Admin button, Admin Bar, REST API, Scheduled Cron): NPP always flushes Redis at the start of every Preload All, regardless of whether a purge preceded it. This guarantees the preloader warms the Nginx cache with the freshest possible content.</p>
 
-                        <h4><strong>Direction 2 — Redis Flush → NPP Purge All</strong></h4>
-                        <p>Whenever Redis is flushed from outside NPP — via the Redis Object Cache plugin dashboard, WP-CLI (<code>wp cache flush</code>), or any plugin calling <code>wp_cache_flush()</code> — NPP automatically triggers a full Nginx cache purge in response. This direction only activates when NPP's <strong>Auto Purge</strong> setting is also enabled, since a full filesystem purge is a heavyweight operation.</p>
-
-                        <h4><strong>Loop prevention</strong></h4>
-                        <p>NPP sets an internal origin flag before triggering either direction. If Direction 1 causes a Redis flush, Direction 2 sees the flag and bails — and vice versa. This prevents an infinite purge loop between the two cache layers.</p>
+                        <h4><strong>What is never flushed</strong></h4>
+                        <p>Purge-only operations — including single-URL purges (Auto Purge, Admin Bar, Advanced Tab) and Purge All without Auto Preload — never touch Redis. The object cache stays warm so that any PHP requests served between purge and preload still benefit from cached database queries.</p>
 
                         <h4><strong>Important notes</strong></h4>
-                        <p>Direction 2 respects the <strong>Auto Purge</strong> toggle — if Auto Purge is off, a Redis flush from outside NPP will not trigger an Nginx purge. If you want full bidirectional sync, both <strong>Redis Object Cache Sync</strong> and <strong>Auto Purge</strong> must be enabled.</p>
+                        <p>Redis Object Cache Sync is independent of the <strong>Auto Purge</strong> setting — it activates based on whether a preload action is part of the operation, not on whether Auto Purge is enabled. There is no reverse direction: a Redis flush from outside NPP does not trigger an Nginx purge.</p>
                     </div>
                 </div>
 

@@ -2,7 +2,7 @@
 /**
  * WordPress filesystem helpers for Nginx Cache Purge Preload
  * Description: Wraps WP_Filesystem operations, logging, and permission-safe file access utilities.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -384,7 +384,9 @@ function nppp_is_directory_readable($directory_path) {
     return true;
 }
 
-// Function to recursively check read and write permissions
+// Optimized in v2.1.6: Replaced expensive recursive iterator scanning with a
+// lightweight write/delete probe. The function name is retained for
+// backward compatibility, but it now performs a targeted permission test.
 function nppp_check_permissions_recursive($path) {
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -397,31 +399,43 @@ function nppp_check_permissions_recursive($path) {
         return;
     }
 
-    // Soft: First check if the main path is readable and writable
+    // FP1: First check if the main path is readable and writable
     if (!$wp_filesystem->is_readable($path) || !$wp_filesystem->is_writable($path)) {
         return false;
     }
 
-    // Hard:
-    // Recursively check read+write permissions for all files AND directories
-    // in the cache path. SELF_FIRST is intentional — purge deletes top-level
-    // subdirs recursively, so intermediate directories must be writable too.
-    // SPL isReadable()/isWritable() use the cached stat from the iterator —
-    // no extra syscalls vs the WP_Filesystem wrapper.
-    try {
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
-        );
+    // FP2 — Probe delete: write + unlink a sentinel file inside the deepest
+    // reachable cache subdirectory.
+    $probe_dir  = rtrim( $path, '/' );
+    $probe_ok   = false;
 
-        foreach ($iterator as $item) {
-            if (!$item->isReadable() || !$item->isWritable()) {
-                return false;
+    try {
+        $top = new DirectoryIterator( $probe_dir );
+        foreach ( $top as $d1 ) {
+            if ( $d1->isDot() || ! $d1->isDir() ) { continue; }
+            $d1_path = $d1->getPathname();
+            $mid     = new DirectoryIterator( $d1_path );
+            foreach ( $mid as $d2 ) {
+                if ( $d2->isDot() || ! $d2->isDir() ) { continue; }
+                $probe_dir = $d2->getPathname();
+                break 2;
             }
+            $probe_dir = $d1_path;
+            break;
         }
-        return true;
-    } catch (Exception $e) {
-        // Directory access issue — treat as permission failure
+    } catch ( Exception $e ) {
+        // Still perm issue
         return false;
     }
+
+    $probe_path = rtrim( $probe_dir, '/' ) . '/.nppp_probe_' . getmypid();
+
+    if ( $wp_filesystem->put_contents( $probe_path, '', FS_CHMOD_FILE ) ) {
+        $probe_ok = $wp_filesystem->delete( $probe_path );
+        if ( $wp_filesystem->exists( $probe_path ) ) {
+            $wp_filesystem->delete( $probe_path );
+        }
+    }
+
+    return $probe_ok;
 }

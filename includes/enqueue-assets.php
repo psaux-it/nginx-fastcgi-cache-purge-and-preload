@@ -2,7 +2,7 @@
 /**
  * Admin asset loading for Nginx Cache Purge Preload
  * Description: Enqueues plugin CSS and JavaScript assets required by admin pages and tabs.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -24,10 +24,10 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_style('nppp_datatables-css', plugins_url('../admin/css/dataTables.min.css', __FILE__), array(), '2.3.7');
 
     // Enqueue CSS files for Tempus Dominus Date/Time Picker
-    wp_enqueue_style('nppp_tempus-dominus-css', plugins_url('../admin/css/tempus-dominus.min.css', __FILE__), array(), '6.9.4');
+    wp_enqueue_style('nppp_tempus-dominus-css', plugins_url('../admin/css/tempus-dominus.min.css', __FILE__), array(), '6.10.4');
 
     // Enqueue CSS files for Nginx FastCGI Cache Purge and Preload Plugin
-    wp_enqueue_style('nppp_admin-css', plugins_url('../admin/css/fastcgi-cache-purge-and-preload-nginx.min.css', __FILE__), array(), '2.1.5');
+    wp_enqueue_style('nppp_admin-css', plugins_url('../admin/css/fastcgi-cache-purge-and-preload-nginx.css', __FILE__), array(), '2.1.6');
 
     // Enqueue jQuery UI core, jQuery UI Tabs, jQuery UI Accordion
     wp_enqueue_script('jquery-ui-core');
@@ -44,20 +44,20 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_script('nppp_datatables-js', plugins_url('../admin/js/dataTables.min.js', __FILE__), array('jquery'), '2.3.7', true);
 
     /*!
-    * Tempus Dominus Date Time Picker v6.9.4
+    * Tempus Dominus Date Time Picker v6.10.4
     * https://getdatepicker.com/
     * Copyright 2021 Tempus Dominus
     * License: MIT (https://github.com/Eonasdan/tempus-dominus/blob/master/LICENSE)
     */
     // Enqueue JavaScript files for Tempus Dominus Date/Time Picker
     wp_enqueue_script('nppp_popper-js', plugins_url('../admin/js/popper.min.js', __FILE__), array(), '2.11.8', true);
-    wp_enqueue_script('nppp_tempus-dominus-js', plugins_url('../admin/js/tempus-dominus.min.js', __FILE__), array('nppp_popper-js'), '6.9.4', true);
+    wp_enqueue_script('nppp_tempus-dominus-js', plugins_url('../admin/js/tempus-dominus.min.js', __FILE__), array('nppp_popper-js'), '6.10.4', true);
 
     // Enqueue JavaScript (main) file for Nginx Cache Purge Preload Plugin
-    wp_enqueue_script('nppp_admin-js', plugins_url('../admin/js/fastcgi-cache-purge-and-preload-nginx.min.js', __FILE__), array('jquery', 'jquery-ui-core', 'jquery-ui-tabs', 'jquery-ui-accordion', 'nppp_datatables-js', 'nppp_tempus-dominus-js', 'wp-i18n'), '2.1.5', true);
+    wp_enqueue_script('nppp_admin-js', plugins_url('../admin/js/fastcgi-cache-purge-and-preload-nginx.js', __FILE__), array('jquery', 'jquery-ui-core', 'jquery-ui-tabs', 'jquery-ui-accordion', 'nppp_datatables-js', 'nppp_tempus-dominus-js', 'wp-i18n'), '2.1.6', true);
 
     // Enqueue JavaScript (header effect) file for Nginx Cache Purge Preload Plugin
-    wp_enqueue_script('nppp_aurora-canvas', plugins_url('../admin/js/nppp-header.js', __FILE__), array('jquery'), '2.1.5', true);
+    wp_enqueue_script('nppp_aurora-canvas', plugins_url('../admin/js/nppp-header.js', __FILE__), array('jquery'), '2.1.6', true);
 
     // Set script i18n translations
     wp_set_script_translations('nppp_admin-js', 'fastcgi-cache-purge-and-preload-nginx');
@@ -106,50 +106,56 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     $update_default_cache_key_regex_option_nonce = wp_create_nonce('nppp-update-default-cache-key-regex-option');
     // Create a nonce for preload mobile option
     $update_auto_preload_mobile_option_nonce = wp_create_nonce('nppp-update-auto-preload-mobile-option');
+    // Create a nonce for mobile user agent reset
+    $update_default_mobile_user_agent_option_nonce = wp_create_nonce('nppp-update-default-mobile-user-agent-option');
     // Create a nonce for watchdog option
     $update_watchdog_option_nonce = wp_create_nonce('nppp-update-watchdog-option');
     // Create a nonce for enable proxy option
     $update_enable_proxy_option_nonce = wp_create_nonce('nppp-update-enable-proxy-option');
     // Create a nonce for HTTP purge fast-path toggle
     $update_http_purge_option_nonce = wp_create_nonce('nppp-update-http-purge-option');
+    // Create a nonce for Ripgrep Turbo Purge toggle
+    $update_rg_purge_option_nonce = wp_create_nonce('nppp-update-rg-purge-option');
 
     // Localize nonce values for plugin main js
     wp_localize_script('nppp_admin-js', 'nppp_admin_data', array(
-        'ajaxurl' => admin_url('admin-ajax.php'),
-        'clear_logs_nonce' => $clear_nginx_cache_logs_nonce,
-        'send_mail_nonce' => $update_send_mail_option_nonce,
-        'auto_preload_nonce' => $update_auto_preload_option_nonce,
-        'auto_preload_mobile_nonce' => $update_auto_preload_mobile_option_nonce,
-        'watchdog_nonce' => $update_watchdog_option_nonce,
-        'auto_purge_nonce' => $update_auto_purge_option_nonce,
-        'cloudflare_apo_sync_nonce' => $update_cloudflare_apo_sync_option_nonce,
-        'redis_cache_sync_nonce' => $update_redis_cache_sync_option_nonce,
-        'api_key_nonce' => $update_api_key_option_nonce,
-        'api_key_copy_nonce' => $update_api_key_copy_value_nonce,
-        'api_preload_url_copy_nonce' => $update_rest_api_preload_url_copy_nonce,
-        'api_purge_url_copy_nonce' => $update_rest_api_purge_url_copy_nonce,
-        'api_nonce' => $update_api_option_nonce,
-        'reject_regex_nonce' => $update_default_reject_regex_option_nonce,
-        'reject_extension_nonce' => $update_default_reject_extension_option_nonce,
-        'cache_status_nonce' => $cache_status_nonce,
-        'premium_nonce_purge' => wp_create_nonce('purge_cache_premium_nonce'),
-        'premium_nonce_preload' => wp_create_nonce('preload_cache_premium_nonce'),
-        'premium_content_nonce' => wp_create_nonce('load_premium_content_nonce'),
-        'get_save_cron_nonce' => $update_cron_expression_option_nonce,
-        'cache_schedule_nonce' => $update_cache_schedule_option_nonce,
+        'ajaxurl'                      => admin_url('admin-ajax.php'),
+        'clear_logs_nonce'             => $clear_nginx_cache_logs_nonce,
+        'send_mail_nonce'              => $update_send_mail_option_nonce,
+        'auto_preload_nonce'           => $update_auto_preload_option_nonce,
+        'auto_preload_mobile_nonce'    => $update_auto_preload_mobile_option_nonce,
+        'watchdog_nonce'               => $update_watchdog_option_nonce,
+        'auto_purge_nonce'             => $update_auto_purge_option_nonce,
+        'cloudflare_apo_sync_nonce'    => $update_cloudflare_apo_sync_option_nonce,
+        'redis_cache_sync_nonce'       => $update_redis_cache_sync_option_nonce,
+        'api_key_nonce'                => $update_api_key_option_nonce,
+        'api_key_copy_nonce'           => $update_api_key_copy_value_nonce,
+        'api_preload_url_copy_nonce'   => $update_rest_api_preload_url_copy_nonce,
+        'api_purge_url_copy_nonce'     => $update_rest_api_purge_url_copy_nonce,
+        'api_nonce'                    => $update_api_option_nonce,
+        'reject_regex_nonce'           => $update_default_reject_regex_option_nonce,
+        'reject_extension_nonce'       => $update_default_reject_extension_option_nonce,
+        'cache_status_nonce'           => $cache_status_nonce,
+        'premium_nonce_purge'          => wp_create_nonce('purge_cache_premium_nonce'),
+        'premium_nonce_preload'        => wp_create_nonce('preload_cache_premium_nonce'),
+        'premium_content_nonce'        => wp_create_nonce('load_premium_content_nonce'),
+        'get_save_cron_nonce'          => $update_cron_expression_option_nonce,
+        'cache_schedule_nonce'         => $update_cache_schedule_option_nonce,
         'cancel_scheduled_event_nonce' => $cancel_scheduled_event_nonce,
-        'plugin_cache_nonce' => $clear_plugin_cache_nonce,
-        'clear_url_index_nonce' => $clear_url_index_nonce,
-        'cache_key_regex_nonce' => $update_default_cache_key_regex_option_nonce,
-        'enable_proxy_nonce' => $update_enable_proxy_option_nonce,
-        'wget_progress_api' => esc_url(rest_url('nppp_nginx_cache/v2/preload-progress')),
-        'preload_progress_nonce' => wp_create_nonce('wp_rest'),
-        'related_purge_nonce' => wp_create_nonce('nppp-related-posts-purge'),
-        'premium_nonce_locate' => wp_create_nonce('locate_cache_file_nonce'),
-        'col_cache_path'   => __( 'Cache Path', 'fastcgi-cache-purge-and-preload-nginx' ),
-        'col_cache_status' => __( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ),
-        'pctnorm_nonce' => wp_create_nonce('nppp-update-pctnorm-mode'),
-        'http_purge_nonce' => $update_http_purge_option_nonce,
+        'plugin_cache_nonce'           => $clear_plugin_cache_nonce,
+        'clear_url_index_nonce'        => $clear_url_index_nonce,
+        'cache_key_regex_nonce'        => $update_default_cache_key_regex_option_nonce,
+        'mobile_ua_nonce'              => $update_default_mobile_user_agent_option_nonce,
+        'enable_proxy_nonce'           => $update_enable_proxy_option_nonce,
+        'wget_progress_api'            => esc_url(rest_url('nppp_nginx_cache/v2/preload-progress')),
+        'preload_progress_nonce'       => wp_create_nonce('wp_rest'),
+        'related_purge_nonce'          => wp_create_nonce('nppp-related-posts-purge'),
+        'autopurge_triggers_nonce'     => wp_create_nonce('nppp-autopurge-triggers'),
+        'col_cache_status'             => __( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'pctnorm_nonce'                => wp_create_nonce('nppp-update-pctnorm-mode'),
+        'http_purge_nonce'             => $update_http_purge_option_nonce,
+        'rg_purge_nonce'               => $update_rg_purge_option_nonce,
+        'bypass_pr_nonce'              => wp_create_nonce( 'nppp-update-bypass-path-restriction' ),
     ));
 }
 
@@ -229,22 +235,29 @@ function nppp_disable_features($unsupported, $preload) {
     if ( $unsupported === true ) {
         // If plugin completely unsupported
         $features = array(
-            'nginx_cache_purge_on_update'        => 'no',
-            'nginx_cache_auto_preload'           => 'no',
-            'nginx_cache_auto_preload_mobile'    => 'no',
-            'nginx_cache_watchdog'               => 'no',
-            'nginx_cache_schedule'               => 'no',
-            'nginx_cache_send_mail'              => 'no',
-            'nginx_cache_api'                    => 'no',
-            'nginx_cache_preload_enable_proxy'   => 'no',
-            'nppp_cloudflare_apo_sync'           => 'no',
-            'nppp_redis_cache_sync'              => 'no',
-            'nppp_related_include_home'          => 'no',
-            'nppp_related_include_category'      => 'no',
-            'nppp_related_apply_manual'          => 'no',
-            'nppp_related_preload_after_manual'  => 'no',
-            'nginx_cache_pctnorm_mode'           => 'off',
-            'nppp_http_purge_enabled'            => 'no',
+            'nginx_cache_purge_on_update'         => 'no',
+            'nginx_cache_auto_preload'            => 'no',
+            'nginx_cache_auto_preload_mobile'     => 'no',
+            'nginx_cache_watchdog'                => 'no',
+            'nginx_cache_schedule'                => 'no',
+            'nginx_cache_send_mail'               => 'no',
+            'nginx_cache_api'                     => 'no',
+            'nginx_cache_preload_enable_proxy'    => 'no',
+            'nppp_cloudflare_apo_sync'            => 'no',
+            'nppp_redis_cache_sync'               => 'no',
+            'nppp_related_include_home'           => 'no',
+            'nppp_related_include_category'       => 'no',
+            'nppp_related_apply_manual'           => 'no',
+            'nppp_related_preload_after_manual'   => 'no',
+            'nginx_cache_pctnorm_mode'            => 'off',
+            'nppp_http_purge_enabled'             => 'no',
+            'nppp_rg_purge_enabled'               => 'no',
+            'nppp_autopurge_posts'                => 'no',
+            'nppp_autopurge_terms'                => 'no',
+            'nppp_autopurge_plugins'              => 'no',
+            'nppp_autopurge_themes'               => 'no',
+            'nppp_autopurge_3rdparty'             => 'no',
+            'nginx_cache_bypass_path_restriction' => 'no',
         );
     } elseif ( $preload === true ) {
         // If preload feature not useable
@@ -340,7 +353,7 @@ function nppp_plugin_requirements_met() {
                 'headers'     => array(
                     'Cache-Control' => 'no-cache, no-store, max-age=0',
                     'Pragma'        => 'no-cache',
-                    'User-Agent'    => 'NPPP-Precheck/2.1.5',
+                    'User-Agent'    => 'NPPP-Precheck/2.1.6',
                 ),
             ));
 
@@ -487,7 +500,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
     if ($current_screen->base === 'dashboard') {
         // Enqueue the NPP WP admin dashboard JS
         if (!wp_script_is('nppp-dashboard-widget-js', 'enqueued')) {
-            wp_enqueue_script('nppp-dashboard-widget-js', plugins_url('../admin/js/nppp-dashboard-widget.js', __FILE__), array('jquery', 'wp-i18n'), '2.1.5', true);
+            wp_enqueue_script('nppp-dashboard-widget-js', plugins_url('../admin/js/nppp-dashboard-widget.js', __FILE__), array('jquery', 'wp-i18n'), '2.1.6', true);
             wp_set_script_translations('nppp-dashboard-widget-js', 'fastcgi-cache-purge-and-preload-nginx');
             wp_localize_script('nppp-dashboard-widget-js', 'nppp_widget_data', array(
                 'ajaxurl'             => admin_url('admin-ajax.php'),
@@ -497,7 +510,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
 
         // Enqueue the NPP WP admin dashboard CSS
         if (!wp_style_is('nppp-dashboard-widget-css', 'enqueued')) {
-            wp_enqueue_style('nppp-dashboard-widget-css', plugins_url('../admin/css/nppp-dashboard-widget.css', __FILE__), array(), '2.1.5');
+            wp_enqueue_style('nppp-dashboard-widget-css', plugins_url('../admin/css/nppp-dashboard-widget.css', __FILE__), array(), '2.1.6');
         }
     } elseif ($current_screen->id === 'settings_page_nginx_cache_settings') {
         // Dequeue the NPP WP admin dashboard JS
@@ -514,14 +527,14 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
     // Disable/limit plugin functionality to prevent unexpected behaviors
     if ($nppp_met) {
         if (!nppp_shell_toolset_check(false, true)) {
-            wp_enqueue_script('nppp-disable-preload', plugins_url('../admin/js/nppp-disable-preload.js', __FILE__), array('jquery'), '2.1.5', true);
+            wp_enqueue_script('nppp-disable-preload', plugins_url('../admin/js/nppp-disable-preload.js', __FILE__), array('jquery'), '2.1.6', true);
             nppp_disable_features(false, true);
         } else {
             wp_dequeue_script('nppp-disable-preload');
         }
         wp_dequeue_script('nppp-disable-functionality');
     } else {
-        wp_enqueue_script('nppp-disable-functionality', plugins_url('../admin/js/nppp-disable-functionality.js', __FILE__), array('jquery'), '2.1.5', true);
+        wp_enqueue_script('nppp-disable-functionality', plugins_url('../admin/js/nppp-disable-functionality.js', __FILE__), array('jquery'), '2.1.6', true);
         nppp_disable_features(true, false);
     }
 }
@@ -540,13 +553,13 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
             'nppp-mobile-fab-css',
             plugins_url('../frontend/css/nppp-mobile-fab.css', __FILE__),
             array(),
-            '2.1.5'
+            '2.1.6'
         );
         wp_enqueue_script(
             'nppp-mobile-fab-js',
             plugins_url('../frontend/js/nppp-mobile-fab.js', __FILE__),
             array(),
-            '2.1.5',
+            '2.1.6',
             true
         );
     }
@@ -556,12 +569,12 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
         $nonce = isset($_GET['redirect_nonce']) ? sanitize_text_field(wp_unslash($_GET['redirect_nonce'])) : '';
         if (wp_verify_nonce($nonce, 'nppp_redirect_nonce')) {
             // Keep legacy frontend notice assets untouched for compatibility.
-            wp_enqueue_style('nppp_admin-front-css', plugins_url('../frontend/css/fastcgi-cache-purge-and-preload-nginx-front.css', __FILE__), array(), '2.1.5');
-            wp_enqueue_script('nppp_admin-front-js', plugins_url('../frontend/js/fastcgi-cache-purge-and-preload-nginx-front.js', __FILE__), array('jquery'), '2.1.5', true);
+            wp_enqueue_style('nppp_admin-front-css', plugins_url('../frontend/css/fastcgi-cache-purge-and-preload-nginx-front.css', __FILE__), array(), '2.1.6');
+            wp_enqueue_script('nppp_admin-front-js', plugins_url('../frontend/js/fastcgi-cache-purge-and-preload-nginx-front.js', __FILE__), array('jquery'), '2.1.6', true);
 
             // Enqueue isolated frontend toast assets for single-page action results.
-            wp_enqueue_style('nppp-front-toast-css', plugins_url('../frontend/css/nppp-front-toast.css', __FILE__), array(), '2.1.5');
-            wp_enqueue_script('nppp-front-toast-js', plugins_url('../frontend/js/nppp-front-toast.js', __FILE__), array(), '2.1.5', true);
+            wp_enqueue_style('nppp-front-toast-css', plugins_url('../frontend/css/nppp-front-toast.css', __FILE__), array(), '2.1.6');
+            wp_enqueue_script('nppp-front-toast-js', plugins_url('../frontend/js/nppp-front-toast.js', __FILE__), array(), '2.1.6', true);
 
             $status_message_key = sanitize_text_field(wp_unslash($_GET['nppp_front']));
             $status_message_data = get_transient($status_message_key);
@@ -585,7 +598,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
     // Check plugin requirements and limit the functionality accordingly on front-end
     $nppp_met = nppp_plugin_requirements_met();
     if (!$nppp_met) {
-        wp_enqueue_script('nppp-disable-functionality-front', plugins_url('../frontend/js/nppp-disable-functionality-front.js', __FILE__), array('jquery'), '2.1.5', true);
+        wp_enqueue_script('nppp-disable-functionality-front', plugins_url('../frontend/js/nppp-disable-functionality-front.js', __FILE__), array('jquery'), '2.1.6', true);
         // Make sure partial-preload disable is not also active
         wp_dequeue_script('nppp-disable-preload-front');
     } else {
@@ -593,7 +606,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
         // Extra gate: if shell/toolset missing, disable only preload actions on front-end
         $has_shell = function_exists('nppp_shell_toolset_check') ? nppp_shell_toolset_check(false, true) : false;
         if (! $has_shell) {
-            wp_enqueue_script('nppp-disable-preload-front', plugins_url('../frontend/js/nppp-disable-preload-front.js', __FILE__), array('jquery'), '2.1.5', true);
+            wp_enqueue_script('nppp-disable-preload-front', plugins_url('../frontend/js/nppp-disable-preload-front.js', __FILE__), array('jquery'), '2.1.6', true);
         } else {
             wp_dequeue_script('nppp-disable-preload-front');
         }
@@ -605,7 +618,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
 // are visible while on the plugin settings page.
 function nppp_manage_admin_notices() {
     // Register a dummy stylesheet
-    wp_register_style('nppp-manage-notices', false, array(), '2.1.5');
+    wp_register_style('nppp-manage-notices', false, array(), '2.1.6');
 
     // Enqueue the dummy stylesheet
     wp_enqueue_style('nppp-manage-notices');

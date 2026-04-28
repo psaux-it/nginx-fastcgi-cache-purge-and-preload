@@ -1,7 +1,7 @@
 /**
  * Unsupported-environment guards for Nginx Cache Purge Preload
  * Description: Disables plugin actions in admin when required runtime conditions are not met.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -30,7 +30,6 @@
                 npppButton.find('a')
                     .removeAttr('href')
                     .css({
-                        'opacity': '0.5',
                         'cursor': 'not-allowed'
                     })
                     .on('click', function(event) {
@@ -51,6 +50,10 @@
 
         // Disable WP dashboard widget buttons
         $('.nppp-action-button').addClass('disabled').removeAttr('href');
+
+        // Disable dashboard widget refresh button
+        $('.nppp-ratio-refresh').prop('disabled', true).css({'cursor': 'not-allowed'});
+        $(document).off('click', '.nppp-ratio-refresh');
 
         // Check if we're on the plugin settings page and disable plugin functionality
         if ($('#nppp-nginx-tabs').length > 0) {
@@ -114,7 +117,7 @@
                     .on('click.npppLock change.npppLock', function(e){ e.preventDefault(); return false; });
 
                 // grey the label/row too (optional)
-                $cb.closest('label, .form-table tr, p').css({ opacity:.5, cursor:'not-allowed' });
+                $cb.closest('label, .form-table tr, p').css({ cursor:'not-allowed' });
 
                 // disabled inputs don't submit; ensure "yes" still posts
                 const $form = $cb.closest('form');
@@ -179,7 +182,7 @@
 
                 $cloudflareToggle
                     .closest('.nppp-onoffswitch-cloudflare')
-                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .css({ cursor:'not-allowed' })
                     .find('.nppp-onoffswitch-label-cloudflare')
                     .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
 
@@ -203,7 +206,7 @@
 
                 $redisToggle
                     .closest('.nppp-onoffswitch-redis')
-                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .css({ cursor:'not-allowed' })
                     .find('.nppp-onoffswitch-label-redis')
                     .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
 
@@ -227,20 +230,68 @@
 
                 $toggle
                     .closest('.nppp-onoffswitch-httppurge')
-                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .css({ cursor:'not-allowed' })
                     .find('.nppp-onoffswitch-label-httppurge')
                     .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
 
                 ensureHiddenMirror($form, name, currentVal);
 
                 // Disable Test Connection button
-                $('#nppp-test-http-purge').prop('disabled', true).css({ opacity:.5, cursor:'not-allowed' });
+                $('#nppp-test-http-purge').prop('disabled', true).css({ cursor:'not-allowed' });
 
                 // Disable sub-fields
                 $('#nppp_http_purge_suffix, #nppp_http_purge_custom_url')
                     .prop('disabled', true)
                     .attr('readonly', 'readonly')
-                    .css({ opacity:.5, cursor:'not-allowed' });
+                    .css({ cursor:'not-allowed' });
+            })();
+
+            // Disable Bypass Path Restriction toggle
+            (function disableBypassPr(){
+                const $toggle = $('#nginx_cache_bypass_path_restriction');
+                if (!$toggle.length) return;
+
+                const $fs       = $('#nppp-bypass-pr-fieldset');
+                const $form     = $toggle.closest('form');
+                const name      = $toggle.attr('name');
+                const currentVal = $toggle.is(':checked') ? 'yes' : 'no';
+
+                $toggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                if ($fs.length) {
+                    $fs.css({ cursor:'not-allowed' })
+                       .find('label').css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+                }
+
+                ensureHiddenMirror($form, name, currentVal);
+            })();
+
+            // Disable Ripgrep Purge toggle
+            (function disableRgPurge(){
+                const $toggle = $('#nppp_rg_purge_enabled');
+                if (!$toggle.length) return;
+
+                const $form      = $toggle.closest('form');
+                const name       = $toggle.attr('name');
+                const currentVal = $toggle.is(':checked') ? 'yes' : 'no';
+
+                $toggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                $toggle
+                    .closest('.nppp-onoffswitch-rgpurge')
+                    .css({ cursor:'not-allowed' })
+                    .find('.nppp-onoffswitch-label-rgpurge')
+                    .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+
+                ensureHiddenMirror($form, name, currentVal);
             })();
 
             // Disable watchdog toggle and preserve current value
@@ -260,7 +311,7 @@
 
                 $watchdogToggle
                     .closest('.nppp-onoffswitch-watchdog')
-                    .css({ opacity:.5, cursor:'not-allowed' })
+                    .css({ cursor:'not-allowed' })
                     .find('.nppp-onoffswitch-label-watchdog')
                     .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
 
@@ -269,7 +320,6 @@
 
             // Make REST API helper elements non-clickable.
             $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({
-                'opacity': '0.5',
                 'cursor': 'not-allowed'
             }).each(function() {
                 $(this).off('click');
@@ -277,7 +327,6 @@
 
             // Ensure parent <p> containers are also non-clickable.
             $('#nppp-api-key, #nppp-purge-url, #nppp-preload-url').css({
-                'opacity': '0.5',
                 'cursor': 'not-allowed'
             }).each(function() {
                 $(this).off('click');
@@ -285,7 +334,6 @@
 
             // style cron status heading
             $('.nppp-active-cron-heading').css({
-                'opacity': '0.5',
                 'cursor': 'not-allowed'
             });
 

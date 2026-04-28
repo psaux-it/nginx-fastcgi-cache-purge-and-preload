@@ -1,7 +1,7 @@
 /**
  * Admin interface scripts for Nginx Cache Purge Preload
  * Description: Handles interactive behavior for plugin settings, tabs, and admin actions.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -122,6 +122,16 @@ $(document).ready(function() {
         $premiumPlaceholder.hide();
         $helpPlaceholder.hide();
 
+        // Badge bar: settings tab only
+        var $badgeBar = $('#nppp-badge-bar');
+        if ($badgeBar.length) {
+            if (tabId === 'settings') {
+                $badgeBar.show();
+            } else {
+                $badgeBar.hide();
+            }
+        }
+
         // Handle specific tab actions
         switch (tabId) {
             case 'settings':
@@ -190,7 +200,10 @@ $(document).ready(function() {
                 if (!isTabChangeFromHash) {
                     const tabId = ui.newPanel.attr('id');
                     if (tabId) {
-                        window.history.replaceState(null, null, `#${tabId}`);
+                        const _npppTabUrl = new URL(window.location.href);
+                        _npppTabUrl.searchParams.set('nppp_tab', tabId);
+                        _npppTabUrl.hash = tabId;
+                        window.history.replaceState(null, null, _npppTabUrl.toString());
                         npppActivateTab(tabId);
                     }
                 }
@@ -223,7 +236,14 @@ $(document).ready(function() {
 
                 // Hash-driven activation path: activate callback intentionally skips
                 // npppActivateTab while isTabChangeFromHash is true.
-                npppActivateTab(hash.replace('#', ''));
+                const tabId = hash.replace('#', '');
+                npppActivateTab(tabId);
+
+                // Persist active tab as GET param so PHP can see it on next hard reload.
+                const _npppHashUrl = new URL(window.location.href);
+                _npppHashUrl.searchParams.set('nppp_tab', tabId);
+                _npppHashUrl.hash = tabId;
+                window.history.replaceState(null, null, _npppHashUrl.toString());
 
                 // Scroll to the top of the page
                 window.scrollTo(0, 0);
@@ -409,8 +429,10 @@ $(document).ready(function() {
         setTimeout(() => t.remove(), 160);
     }
 
-    let npppPollActive = false;
-    let npppPollTimer  = null;
+    let npppPollActive       = false;
+    let npppPollTimer        = null;
+    let npppPollRetries      = 0;
+    const NPPP_MAX_RETRIES   = 4;
     let snapshotMissingCount = 0;
 
     // Preload progress status
@@ -447,6 +469,7 @@ $(document).ready(function() {
             return res.json();
         })
         .then(data => {
+            npppPollRetries = 0;
             if (!data.log_found) {
                 const preloadSection = document.getElementById("nppp-preload-progress-section");
                 if (preloadSection) preloadSection.style.display = "none";
@@ -471,6 +494,10 @@ $(document).ready(function() {
 
             if (data.status === "done" && !isInterrupted) {
                 pct = 100;
+            } else if (data.status === "running") {
+                // Hard-cap at 99 while process is alive — the estimate is imprecise,
+                // and hitting 100 mid-run would stop polling prematurely.
+                pct = Math.min(99, pct);
             }
 
             // Bar hidden — progress shown as table metric instead
@@ -604,7 +631,7 @@ $(document).ready(function() {
             let statusValue = '';
             if (isInterrupted) {
                 statusValue = `${icon('dashicons-warning', 'orange')}<span style="color:orange;font-weight:bold;">${__('Interrupted', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
-            } else if (pct >= 100 || data.status === "done") {
+            } else if (data.status === "done") {
                 statusValue = `${icon('dashicons-update', 'green')}<span style="color:green;font-weight:bold;">${__('Completed', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
             } else {
                 statusValue = `${icon('dashicons-clock', '#337AB7')}<span style="color:#337AB7;font-weight:bold;">${__('In Progress', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
@@ -780,7 +807,16 @@ $(document).ready(function() {
                 preloadStatusSpan.append(preloadStatusText);
             }
 
-            if (pct < 100 && data.status === "running") {
+            // Keep polling during the desktop→mobile transition gap:
+            // PIDFILE is briefly absent between desktop completion and mobile
+            // PID being written, so status briefly returns "done" even though
+            // a mobile phase is still coming. Stopping here would make the
+            // mobile preload invisible in the Status tab.
+            const mobileTransitioning = data.status === "done" && data.preload_phase === "mobile";
+
+            if (data.status === "running" || mobileTransitioning) {
+                // Polling is driven ONLY by process liveness — never by the estimated pct.
+                // The estimate can overshoot 100 before wget actually finishes.
                 if (npppPollTimer) clearTimeout(npppPollTimer);
                 npppPollTimer = setTimeout(fetchWgetProgress, 800);
             } else {
@@ -789,7 +825,17 @@ $(document).ready(function() {
         })
         .catch(err => {
             console.error('Fetch preload progress failed:', err);
-            npppStopWgetPolling();
+            if (npppPollRetries < NPPP_MAX_RETRIES) {
+                // Transient error — back off and retry rather than killing the poll.
+                const backoff = 1000 * Math.pow(2, npppPollRetries);
+                npppPollRetries++;
+                if (npppPollTimer) clearTimeout(npppPollTimer);
+                npppPollTimer = setTimeout(fetchWgetProgress, backoff);
+            } else {
+                // Persistent failure — give up cleanly.
+                npppPollRetries = 0;
+                npppStopWgetPolling();
+            }
         });
     }
 
@@ -875,8 +921,7 @@ $(document).ready(function() {
         });
     }
 
-    // Function to load content for the 'Premium' tab via AJAX
-    // Sends a POST request to the server to fetch the Advanced tab content
+    // Function to load content for the 'Advanced' tab via AJAX
     function loadPremiumTabContent() {
         // AJAX request for the "Premium" tab content
         $.ajax({
@@ -887,8 +932,8 @@ $(document).ready(function() {
                 _wpnonce: nppp_admin_data.premium_content_nonce
             },
             success: function(response) {
-                if (response.trim() !== '') {
-                    // Clean teardown if a previous DT exists (prevents lingering handlers)
+                if (response !== '') {
+                    // Clean teardown if a previous DT exists
                     var tblSel = '#nppp-premium-table';
                     if ($.fn.dataTable.isDataTable(tblSel)) {
                         $(tblSel).DataTable().destroy(true);
@@ -903,13 +948,6 @@ $(document).ready(function() {
 
                     // Init DT for the newly injected table
                     initializePremiumTable();
-
-                    // Recalculate column widths for responsive layout
-                    if ($.fn.dataTable.isDataTable(tblSel)) {
-                        var dtNow = $(tblSel).DataTable();
-                        dtNow.columns.adjust();
-                        if (dtNow.responsive) dtNow.responsive.recalc();
-                    }
 
                     // Hide the preloader now that content is loaded
                     hidePreloader();
@@ -1009,31 +1047,6 @@ $(document).ready(function() {
         }
     }
 
-    // Change Cache Path on fly in table
-    function npppUpdateCachePath($row, pathText){
-        var $main = $row.hasClass('child') ? $row.prev('tr') : $row;
-
-        // main row cell
-        var $cell = $main.find('td.nppp-cache-path');
-        $cell.text(pathText);
-
-        // invalidate JUST this cell in DT cache (no redraw)
-        var dt = npppDT();
-        if (dt && $cell.length) dt.cell($cell[0]).invalidate('dom');
-
-        // responsive child: match by label text, update .dtr-data
-        var $child = $main.next('.child');
-        if ($child.length){
-            var label = (window.nppp_admin_data && nppp_admin_data.col_cache_path) ? nppp_admin_data.col_cache_path : __('Cache Path', 'fastcgi-cache-purge-and-preload-nginx');
-            $child.find('.dtr-details li').each(function(){
-                var $li = $(this);
-                if ($li.find('.dtr-title').text().trim() === label){
-                    $li.find('.dtr-data').text(pathText);
-                }
-            });
-        }
-    }
-
     // Extract a human message from a WP AJAX response
     function npppMsg(resp, fallback){
         if (!resp) return fallback || '';
@@ -1082,14 +1095,11 @@ $(document).ready(function() {
         // Status -> MISS
         npppSetStatus($main, false);
 
-        // Clear cache path + purge button
-        npppUpdateCachePath($main, '—');
-
         var $purgeBtn = $main.hasClass('dtr-expanded')
             ? $main.next('.child').find('.nppp-purge-btn')
             : $main.find('.nppp-purge-btn');
 
-        $purgeBtn.prop('disabled', true).addClass('disabled').removeAttr('data-file');
+        $purgeBtn.prop('disabled', true).addClass('disabled');
 
         // Make preload available (unless it’s the global preload button you gate elsewhere)
         var $preloadBtn = $main.hasClass('dtr-expanded')
@@ -1110,149 +1120,13 @@ $(document).ready(function() {
         }
     }
 
-    // Tiny helper to attach file path to purge button on the same row
-    function npppAttachPurgeFile(row, filePath) {
-        var mainRow = row.hasClass('child') ? row.prev('tr') : row;
-        var purgeBtn;
-
-        if (mainRow.hasClass('dtr-expanded')) {
-            purgeBtn = mainRow.next('.child').find('.nppp-purge-btn');
-        } else {
-            purgeBtn = mainRow.find('.nppp-purge-btn');
-        }
-
-        purgeBtn.attr('data-file', filePath);
-        purgeBtn.prop('disabled', false).removeClass('disabled');
-
-        npppUpdateCachePath(mainRow, filePath);
-    }
-
-    // Quick retry helper (backoff + UX polish + stale-response guard + optional initial delay)
-    function npppLocateCacheFile(row, url, attempt, opts) {
-        attempt = attempt || 1;
-        opts = opts || {};
-
-        var maxAttempts   = opts.maxAttempts   || 4;
-        var baseDelay     = opts.baseDelay     || 250;
-        var maxDelay      = opts.maxDelay      || 1500;
-        var initialDelay  = (attempt === 1)
-            ? (opts.initialDelay != null
-            ? opts.initialDelay
-            : (window.nppp_admin_data && +nppp_admin_data.locate_initial_delay) || 400)
-        : 0;
-
-        // compute exp backoff + a dash of jitter
-        var delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
-        delay += Math.floor(Math.random() * 60);
-
-        var $main = row.hasClass('child') ? row.prev('tr') : row;
-
-        function npppInDom($el) {
-            return $el && $el.length && document.contains($el[0]);
-        }
-
-        if (attempt === 1) {
-            var resolving = (window.nppp_admin_data && nppp_admin_data.str_resolving_path)
-                ? nppp_admin_data.str_resolving_path
-                : '(resolving path…)';
-            npppUpdateCachePath($main, resolving);
-            $main.find('td.nppp-cache-path').addClass('is-resolving spinner--arc');
-        }
-
-        // Tag this attempt; newer attempts win
-        var reqId = Date.now() + ':' + attempt;
-        $main.data('npppLocateReqId', reqId);
-
-        function doRequest() {
-            $.ajax({
-                url: nppp_admin_data.ajaxurl,
-                type: 'POST',
-                dataType: 'json',
-                data: {
-                    action: 'nppp_locate_cache_file',
-                    cache_url: url,
-                    _wpnonce: nppp_admin_data.premium_nonce_locate
-                }
-            }).done(function (r) {
-                if (!npppInDom($main)) return;
-                if ($main.data('npppLocateReqId') !== reqId) return;
-
-                if (r && r.success && r.data && r.data.file_path) {
-                    npppSetStatus($main, true);
-                    npppAttachPurgeFile($main, r.data.file_path);
-
-                    $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
-                    $main.removeData('npppLocateReqId');
-
-                    // Redraw to re-apply column filters against updated status
-                    var dtAfter = npppDT();
-                    if (dtAfter) {
-                        dtAfter.row($main[0]).invalidate('dom');
-                        dtAfter.draw(false);
-                    }
-
-                    // Release global lock + re-enable all preload buttons
-                    npppPreloadInProgress = false;
-                    $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
-                } else if (attempt < maxAttempts) {
-                    setTimeout(function () {
-                        npppLocateCacheFile($main, url, attempt + 1, opts);
-                    }, delay);
-                } else {
-                    // final fallback: keep HIT, clear cell, stop spinner
-                    npppUpdateCachePath($main, '—');
-                    $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
-                    var cleanUrl = String(url || '').trim();
-                    /* Translators: %s: the URL that failed cache verification */
-                    npppToast(
-                        sprintf(
-                            __(
-                                "Couldn't verify that the cache was warmed for %s. This URL may be bypassed by Nginx " +
-                                "or the cache hasn't warmed yet. Refresh to recheck.",
-                                'fastcgi-cache-purge-and-preload-nginx'
-                            ),
-                            cleanUrl
-                        ),
-                        'info'
-                    );
-
-                    // Release global lock
-                    npppPreloadInProgress = false;
-                    $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
-                }
-            }).fail(function () {
-                if (!npppInDom($main)) return;
-                if ($main.data('npppLocateReqId') !== reqId) return;
-
-                if (attempt < maxAttempts) {
-                    setTimeout(function () {
-                        if (npppInDom($main)) {
-                            npppLocateCacheFile($main, url, attempt + 1, opts);
-                        }
-                    }, delay);
-                } else {
-                    // final fail: clear cell, stop spinner
-                    npppUpdateCachePath($main, '—');
-                    $main.find('td.nppp-cache-path').removeClass('is-resolving spinner--arc');
-                }
-            });
-        }
-
-        // Small grace period before the very first probe
-        if (initialDelay > 0) {
-            setTimeout(doRequest, initialDelay);
-        } else {
-            doRequest();
-        }
-    }
-
     // Handle click event for purge buttons in advanced tab
     $(document).on('click', '.nppp-purge-btn', function(e) {
         e.preventDefault();
 
         // Get the data
         var btn = $(this);
-        var filePath = btn.data('file');
+        var cacheUrl = btn.data('url');
         var row = btn.closest('tr');
 
         // disable during request + inline spinner
@@ -1266,7 +1140,7 @@ $(document).ready(function() {
             dataType: 'json',
             data: {
                 action: 'nppp_purge_cache_premium',
-                file_path: filePath,
+                cache_url: cacheUrl,
                 _wpnonce: nppp_admin_data.premium_nonce_purge
             },
             success: function(response) {
@@ -1280,8 +1154,14 @@ $(document).ready(function() {
                         row = row.prev('tr');
                     }
 
-                    npppSetStatus(row, false);
-                    npppUpdateCachePath(row, '—');
+                    // Do not flip status to MISS when Auto Preload is enabled
+                    var primaryPreload = !!(response && response.data && response.data.primary_preload);
+                    if (!primaryPreload) {
+                        npppSetStatus(row, false);
+                    } else {
+                        // Status stays HIT — page re-warms immediately, keep purge button active.
+                        btn.prop('disabled', false).removeClass('disabled');
+                    }
 
                     // find the preload button
                     var preloadBtn;
@@ -1379,16 +1259,14 @@ $(document).ready(function() {
                 _wpnonce: nppp_admin_data.premium_nonce_preload
             },
             success: function(response) {
-                var msg  = (response && response.data) ? response.data : __('Preload queued.','fastcgi-cache-purge-and-preload-nginx');
+                // response.data is now { message: '...', cached: true/false }
+                var msg  = (response && response.data && response.data.message) ? response.data.message
+                         : (response && typeof response.data === 'string')      ? response.data
+                         : __('Preload queued.', 'fastcgi-cache-purge-and-preload-nginx');
                 var type = (response && response.success) ? 'success' : npppInferType(msg, 'error');
                 npppToast(msg, type);
 
                 if (response && response.success) {
-                    // Was MISS before flipping?
-                    var wasMiss =
-                        row.find('.nppp-status').hasClass('is-miss') ||
-                        (row.hasClass('child') && row.prev('tr').find('.nppp-status').hasClass('is-miss'));
-
                     // Check if the row is expanded on mobile
                     if (row.hasClass('child')) {
                         row = row.prev('tr');
@@ -1401,33 +1279,36 @@ $(document).ready(function() {
 
                     npppFlashRow(row);
 
-                    var filePath = (response && response.data && response.data.file_path) ? response.data.file_path : '';
-                    if (filePath){
+                    if (response.data && response.data.cached === true) {
                         npppSetStatus(row, true);
-                        npppAttachPurgeFile(row, filePath);
-
+                        purgeBtn.prop('disabled', false).removeClass('disabled');
                         purgeBtn.css('background-color', '#43A047');
-                        setTimeout(function(){ purgeBtn.css('background-color',''); }, 1200);
-
-                        npppPreloadInProgress = false;
-                        $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
-                    } else if (wasMiss) {
-                        // Keep MISS; show 'warming…' in cache-path cell and try to locate
-                        var resolving = (window.nppp_admin_data && nppp_admin_data.str_resolving_path)
-                            ? nppp_admin_data.str_resolving_path
-                            : '(Warming…)';
-                        npppUpdateCachePath(row, resolving);
-                        row.find('td.nppp-cache-path').addClass('is-resolving spinner--arc');
-
-                        // Let locator decide when to flip to HIT; it will also release the lock
-                        npppLocateCacheFile(row, cacheUrl, 1, { initialDelay: 300 });
+                        setTimeout(function(){ purgeBtn.css('background-color', ''); }, 1200);
+                    } else if (response.data && response.data.rg_used === true) {
+                        // not cached
+                        var cleanUrl = String(cacheUrl || '').trim();
+                        npppToast(
+                            sprintf(
+                                __(
+                                    "Couldn't verify that the cache was warmed for %s. This URL may be bypassed by Nginx " +
+                                    "or the cache hasn't warmed yet. Refresh to recheck.",
+                                    'fastcgi-cache-purge-and-preload-nginx'
+                                ),
+                                cleanUrl
+                            ),
+                            'info'
+                        );
                     } else {
-                        // also unlock in case nothing else runs
-                        npppPreloadInProgress = false;
-                        $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
+                        // optimistic HIT flip
+                        npppSetStatus(row, true);
+                        purgeBtn.prop('disabled', false).removeClass('disabled');
+                        purgeBtn.css('background-color', '#43A047');
+                        setTimeout(function(){ purgeBtn.css('background-color', ''); }, 1200);
                     }
+
+                    npppPreloadInProgress = false;
+                    $('.nppp-preload-btn').prop('disabled', false).removeClass('disabled');
                 } else {
-                    // on error
                     npppPreloadInProgress = false;
                     allBtns.prop('disabled', false).removeClass('disabled');
                     btn.prop('disabled', false).removeClass('disabled');
@@ -1786,6 +1667,251 @@ $(document).ready(function() {
         }, 'json');
     });
 
+    // Bypass Path Restriction single toggle card
+    (function npppSetupBypassPr() {
+        const $npppBprFS = $('#nppp-bypass-pr-fieldset');
+        if (!$npppBprFS.length || !window.nppp_admin_data) return;
+
+        const $npppBprStatus = $('<span/>', {
+            'class': 'nppp-related-status',
+            'aria-live': 'polite',
+            'aria-atomic': 'true',
+            'role': 'status'
+        }).attr('data-state', 'idle').hide().insertAfter($npppBprFS);
+
+        const npppBprGet = () => ({
+            nginx_cache_bypass_path_restriction:
+                $npppBprFS.find('#nginx_cache_bypass_path_restriction').is(':checked') ? 'yes' : 'no'
+        });
+
+        const npppBprDisable = (flag) => $npppBprFS.find('input[type=checkbox]').prop('disabled', flag);
+        let npppBprHideTimer;
+
+        function npppBprSetStatus(state, html, ttlMs) {
+            clearTimeout(npppBprHideTimer);
+            $npppBprStatus.attr('data-state', state).html(html).show();
+            if (ttlMs) {
+                npppBprHideTimer = setTimeout(() => {
+                    $npppBprStatus.attr('data-state', 'idle').empty().hide();
+                }, ttlMs);
+            }
+        }
+
+        const npppBprShowSaving = () => npppBprSetStatus(
+            'saving',
+            '<span class="dashicons dashicons-update" aria-hidden="true"></span>' +
+            '<span class="nppp-sr-only">' + __('Saving', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+            '<span>' + __('Saving\u2026', 'fastcgi-cache-purge-and-preload-nginx') + '</span>'
+        );
+        const npppBprShowSaved = () => npppBprSetStatus(
+            'saved',
+            '<span class="dashicons dashicons-yes" aria-hidden="true"></span>' +
+            '<span class="nppp-sr-only">' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+            '<span>' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>',
+            1000
+        );
+        const npppBprShowError = (msg) => npppBprSetStatus(
+            'error',
+            '<span class="dashicons dashicons-dismiss" aria-hidden="true"></span>' +
+            '<span class="nppp-sr-only">' + __('Error', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+            '<span>' + (msg || __('Failed to save', 'fastcgi-cache-purge-and-preload-nginx')) + '</span>',
+            2000
+        );
+
+        const npppBprRevertTo = (v) => {
+            $npppBprFS.find('#nginx_cache_bypass_path_restriction')
+                .prop('checked', v.nginx_cache_bypass_path_restriction === 'yes');
+        };
+
+        let npppBprLast   = npppBprGet();
+        let npppBprSaving = false;
+
+        function npppBprSaveNow() {
+            if (npppBprSaving) return;
+
+            npppBprSaving = true;
+            $npppBprFS.addClass('is-saving');
+            npppBprDisable(true);
+            npppBprShowSaving();
+
+            const payload = npppBprGet();
+
+            $.ajax({
+                url: nppp_admin_data.ajaxurl,
+                method: 'POST',
+                dataType: 'json',
+                timeout: 15000,
+                data: {
+                    action:   'nppp_update_bypass_path_restriction',
+                    _wpnonce: nppp_admin_data.bypass_pr_nonce,
+                    fields:   payload
+                }
+            }).done((res) => {
+                if (res && res.success) {
+                    const normalized =
+                        (res.data && (res.data.data || res.data.normalized || res.data)) || payload;
+                    npppBprLast = normalized;
+                    npppBprRevertTo(normalized);
+                    npppBprShowSaved();
+                } else {
+                    npppBprRevertTo(npppBprLast);
+                    const msg = (res && res.data && res.data.message) || 'Failed to save';
+                    npppBprShowError(msg);
+                }
+            }).fail((xhr) => {
+                npppBprRevertTo(npppBprLast);
+                const j   = xhr && xhr.responseJSON;
+                const msg = (j && (j.message || (j.data && j.data.message))) || 'Network error';
+                npppBprShowError(msg);
+            }).always(() => {
+                npppBprSaving = false;
+                $npppBprFS.removeClass('is-saving');
+                npppBprDisable(false);
+            });
+        }
+
+        const npppBprDebounce = (fn, wait) => {
+            let t;
+            return function() { clearTimeout(t); t = setTimeout(fn, wait); };
+        };
+
+        $npppBprFS.on('change', 'input[type=checkbox]', npppBprDebounce(npppBprSaveNow, 350));
+
+        // Caution banner visibility — fires on every raw change, before the debounced save.
+        const npppBprCaution    = document.getElementById( 'nppp-bypass-pr-caution' );
+        const npppAllowedPaths  = document.getElementById( 'nppp-allowed-paths-info' );
+        if ( npppBprCaution ) {
+            $npppBprFS.on( 'change', '#nginx_cache_bypass_path_restriction', function () {
+                npppBprCaution.style.display   = this.checked ? '' : 'none';
+                // When bypass is ON the allowed-paths info block is misleading — hide it.
+                if ( npppAllowedPaths ) {
+                    npppAllowedPaths.style.display = this.checked ? 'none' : '';
+                }
+            } );
+        }
+    })();
+
+    // Auto Purge Triggers sub-options
+    (function npppSetupAutoPurgeTriggers() {
+        const $npppTrigFS = $('#nppp-autopurge-triggers-fieldset');
+        if (!$npppTrigFS.length || !window.nppp_admin_data) return;
+
+        // Inline status badge inserted after the fieldset wrapper div
+        const $npppTrigStatus = $('<span/>', {
+            'class': 'nppp-related-status',
+            'aria-live': 'polite',
+            'aria-atomic': 'true',
+            'role': 'status'
+        }).attr('data-state', 'idle').hide().insertAfter($npppTrigFS);
+
+        const npppTrigGet = () => ({
+            nppp_autopurge_posts:    $npppTrigFS.find('#nppp_autopurge_posts').is(':checked')    ? 'yes' : 'no',
+            nppp_autopurge_terms:    $npppTrigFS.find('#nppp_autopurge_terms').is(':checked')    ? 'yes' : 'no',
+            nppp_autopurge_plugins:  $npppTrigFS.find('#nppp_autopurge_plugins').is(':checked')  ? 'yes' : 'no',
+            nppp_autopurge_themes:   $npppTrigFS.find('#nppp_autopurge_themes').is(':checked')   ? 'yes' : 'no',
+            nppp_autopurge_3rdparty: $npppTrigFS.find('#nppp_autopurge_3rdparty').is(':checked') ? 'yes' : 'no'
+        });
+
+        const npppTrigDisable = (flag) => $npppTrigFS.find('input[type=checkbox]').prop('disabled', flag);
+        let npppTrigHideTimer;
+
+        function npppTrigSetStatus(state, html, ttlMs) {
+            clearTimeout(npppTrigHideTimer);
+            $npppTrigStatus.attr('data-state', state).html(html).show();
+            if (ttlMs) {
+                npppTrigHideTimer = setTimeout(() => {
+                    $npppTrigStatus.attr('data-state', 'idle').empty().hide();
+                }, ttlMs);
+            }
+        }
+
+        const npppTrigShowSaving = () => npppTrigSetStatus(
+            'saving',
+            '<span class="dashicons dashicons-update" aria-hidden="true"></span>' +
+            '<span class="nppp-sr-only">' + __('Saving', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+            '<span>' + __('Saving…', 'fastcgi-cache-purge-and-preload-nginx') + '</span>'
+        );
+        const npppTrigShowSaved = () => npppTrigSetStatus(
+            'saved',
+            '<span class="dashicons dashicons-yes" aria-hidden="true"></span>' +
+            '<span class="nppp-sr-only">' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+            '<span>' + __('Saved', 'fastcgi-cache-purge-and-preload-nginx') + '</span>',
+            1000
+        );
+        const npppTrigShowError = (msg) => npppTrigSetStatus(
+            'error',
+            '<span class="dashicons dashicons-dismiss" aria-hidden="true"></span>' +
+            '<span class="nppp-sr-only">' + __('Error', 'fastcgi-cache-purge-and-preload-nginx') + '</span>' +
+            '<span>' + (msg || __('Failed to save', 'fastcgi-cache-purge-and-preload-nginx')) + '</span>',
+            2000
+        );
+
+        const npppTrigRevertTo = (v) => {
+            $npppTrigFS.find('#nppp_autopurge_posts').prop('checked',    v.nppp_autopurge_posts    === 'yes');
+            $npppTrigFS.find('#nppp_autopurge_terms').prop('checked',    v.nppp_autopurge_terms    === 'yes');
+            $npppTrigFS.find('#nppp_autopurge_plugins').prop('checked',  v.nppp_autopurge_plugins  === 'yes');
+            $npppTrigFS.find('#nppp_autopurge_themes').prop('checked',   v.nppp_autopurge_themes   === 'yes');
+            $npppTrigFS.find('#nppp_autopurge_3rdparty').prop('checked', v.nppp_autopurge_3rdparty === 'yes');
+        };
+
+        let npppTrigLast   = npppTrigGet();
+        let npppTrigSaving = false;
+
+        function npppTrigSaveNow() {
+            if (npppTrigSaving) return;
+
+            npppTrigSaving = true;
+            $npppTrigFS.addClass('is-saving');
+            npppTrigDisable(true);
+            npppTrigShowSaving();
+
+            const payload = npppTrigGet();
+
+            $.ajax({
+                url: nppp_admin_data.ajaxurl,
+                method: 'POST',
+                dataType: 'json',
+                timeout: 15000,
+                data: {
+                    action:    'nppp_update_autopurge_triggers',
+                    _wpnonce:  nppp_admin_data.autopurge_triggers_nonce,
+                    fields:    payload
+                }
+            }).done((res) => {
+                if (res && res.success) {
+                    const normalized =
+                        (res.data && (res.data.data || res.data.normalized || res.data)) || payload;
+                    npppTrigLast = normalized;
+                    npppTrigRevertTo(normalized);
+                    npppTrigShowSaved();
+                } else {
+                    npppTrigRevertTo(npppTrigLast);
+                    const msg = (res && res.data && res.data.message) || 'Failed to save';
+                    npppTrigShowError(msg);
+                }
+            }).fail((xhr) => {
+                npppTrigRevertTo(npppTrigLast);
+                const j   = xhr && xhr.responseJSON;
+                const msg = (j && (j.message || (j.data && j.data.message))) || 'Network error';
+                npppTrigShowError(msg);
+            }).always(() => {
+                npppTrigSaving = false;
+                $npppTrigFS.removeClass('is-saving');
+                // Re-enable only when master is ON
+                const masterOn = $('#nginx_cache_purge_on_update').prop('checked');
+                npppTrigDisable(!masterOn);
+            });
+        }
+
+        const npppTrigDebounce = (fn, wait) => {
+            let t;
+            return function () { clearTimeout(t); t = setTimeout(fn, wait); };
+        };
+
+        // Debounce-save any checkbox change within this fieldset
+        $npppTrigFS.on('change', 'input[type=checkbox]', npppTrigDebounce(npppTrigSaveNow, 350));
+    })();
+
     // Update auto purge status when state changes
     $('#nginx_cache_purge_on_update').change(function() {
         // Calculate the notification position
@@ -1796,6 +1922,21 @@ $(document).ready(function() {
         var notificationTopAutoPurge = clickToCopySpanOffsetAutoPurge.top;
 
         var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        var masterIsOn = $(this).prop('checked');
+
+        // Sync the Auto Purge Triggers sub-options disabled state immediately
+        var $trigFS = $('#nppp-autopurge-triggers-fieldset');
+        if ($trigFS.length) {
+            $trigFS.find('input[type=checkbox]')
+                .prop('disabled', !masterIsOn)
+                .attr('aria-disabled', masterIsOn ? 'false' : 'true');
+            if (masterIsOn) {
+                $trigFS.removeClass('nppp-autopurge-triggers-off');
+            } else {
+                $trigFS.addClass('nppp-autopurge-triggers-off');
+            }
+        }
+
         $.post(nppp_admin_data.ajaxurl, {
             action: 'nppp_update_auto_purge_option',
             auto_purge: isChecked,
@@ -1826,9 +1967,22 @@ $(document).ready(function() {
                         document.body.removeChild(notification);
                     }, 300);
                 }, 1000);
+                if (!masterIsOn) {
+                    $('#nppp-autopurge-triggers-fieldset').find('input[type=checkbox]').prop('checked', false);
+                }
             } else {
                 // Error updating option, revert checkbox
                 $('#nginx_cache_purge_on_update').prop('checked', !$('#nginx_cache_purge_on_update').prop('checked'));
+
+                // Revert sub-options disabled state
+                var $trigFSErr = $('#nppp-autopurge-triggers-fieldset');
+                if ($trigFSErr.length) {
+                    var revertMasterOn = $('#nginx_cache_purge_on_update').prop('checked');
+                    $trigFSErr.find('input[type=checkbox]')
+                        .prop('disabled', !revertMasterOn)
+                        .attr('aria-disabled', revertMasterOn ? 'false' : 'true');
+                    revertMasterOn ? $trigFSErr.removeClass('nppp-autopurge-triggers-off') : $trigFSErr.addClass('nppp-autopurge-triggers-off');
+                }
                 npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
@@ -1962,6 +2116,48 @@ $(document).ready(function() {
                 }, 1000);
             } else {
                 $('#nppp_http_purge_enabled').prop('checked', !$('#nppp_http_purge_enabled').prop('checked'));
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+            }
+        }, 'json');
+    });
+
+    // RG Purge toggle when state changes
+    $('#nppp_rg_purge_enabled').change(function() {
+        var rgPurgeElement = $(this);
+        var labelSpan      = rgPurgeElement.next('.nppp-onoffswitch-label-rgpurge');
+        var labelOffset    = labelSpan.offset();
+        var notifLeft      = labelOffset.left + labelSpan.outerWidth() + 10;
+        var notifTop       = labelOffset.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action:    'nppp_update_rg_purge_option',
+            rg_purge:  isChecked,
+            _wpnonce:  nppp_admin_data.rg_purge_nonce
+        }, function(response) {
+            if (response.success) {
+                var notification       = document.createElement('div');
+                notification.textContent = '\u2714';
+                notification.style.cssText = [
+                    'position:absolute',
+                    'left:'  + notifLeft + 'px',
+                    'top:'   + notifTop  + 'px',
+                    'background-color:#50C878',
+                    'color:#fff',
+                    'padding:8px 12px',
+                    'transition:opacity 0.3s ease-in-out',
+                    'opacity:1',
+                    'z-index:9999',
+                    'font-size:13px',
+                    'font-weight:700'
+                ].join(';');
+                document.body.appendChild(notification);
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() { document.body.removeChild(notification); }, 300);
+                }, 1000);
+            } else {
+                $('#nppp_rg_purge_enabled').prop('checked', !$('#nppp_rg_purge_enabled').prop('checked'));
                 npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
@@ -2280,13 +2476,18 @@ $(document).ready(function() {
                     }
                 });
             },
-            error: function(xhr, status, error) {
+            error: function(xhr) {
+                var message = ( xhr.responseJSON && xhr.responseJSON.data )
+                    ? xhr.responseJSON.data
+                    : __( 'An unexpected error occurred.', 'fastcgi-cache-purge-and-preload-nginx' );
+
                 $('.scheduled-events-list').empty();
-                var html = '<div class="nppp-scheduled-event">';
-                html += '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
-                html += '<div class="nppp-scheduled-event" style="padding-right: 45px;">Please set your Timezone in Wordpress - Options/General!</div>';
-                html += '</div>';
+                var html  = '<div class="nppp-scheduled-event">';
+                    html += '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
+                    html += '<div class="nppp-scheduled-event" style="padding-right: 45px;">' + message + '</div>';
+                    html += '</div>';
                 $('.scheduled-events-list').append(html);
+
                 console.error(xhr.responseText);
             }
         });
@@ -2347,24 +2548,13 @@ $(document).ready(function() {
                     }, 300);
                 }, 1000);
 
-                switch (response.data) {
-                    case 'Option updated successfully. Unschedule success.':
-                        $('.scheduled-events-list').empty();
-                        var html = '<div class="nppp-scheduled-event">';
-                        html += '<h3 class="nppp-active-cron-heading">Cron Status</h3>';
-                        html += '<div class="nppp-scheduled-event" style="padding-right: 45px;">No active scheduled events found!</div>';
-                        html += '</div>';
-                        $('.scheduled-events-list').append(html);
-                        break;
-                    case 'Option updated successfully. No event found.':
-                        // Handle case where no existing event was found
-                        break;
-                    case 'Option updated successfully.':
-                        // Handle generic success case
-                        break;
-                    default:
-                        // Handle unknown response
-                        break;
+                if ( isChecked === 'no' ) {
+                    $('.scheduled-events-list').empty();
+                    var html = '<div class="nppp-scheduled-event">';
+                    html += '<h3 class="nppp-active-cron-heading">' + __('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') + '</h3>';
+                    html += '<div class="nppp-scheduled-event" style="padding-right: 45px;">' + __('No active scheduled events found!', 'fastcgi-cache-purge-and-preload-nginx') + '</div>';
+                    html += '</div>';
+                    $('.scheduled-events-list').append(html);
                 }
             } else {
                 // Error updating option, revert checkbox
@@ -2449,7 +2639,7 @@ $(document).ready(function() {
                 action: 'nppp_clear_nginx_cache_logs',
                 _wpnonce: nppp_admin_data.clear_logs_nonce
             },
-            success: function(response) {
+            success: function(clearResponse) {
                 // Logs cleared successfully
                 // Trigger polling to get latest content
                 $.ajax({
@@ -2461,16 +2651,34 @@ $(document).ready(function() {
                         _wpnonce: nppp_admin_data.clear_logs_nonce
                     },
                     success: function(response) {
-                        // Parse the timestamp and message from the response
-                        var data = response.data;
-                        var timestamp = data.substring(1, 20);
-                        var message = data.substring(23);
-                        // Construct HTML for logs container
-                        var html = '<div class="logs-container">' +
+                        var data   = response.data;
+                        var html;
+                        // Log file has a parseable entry (format: [YYYY-MM-DD HH:MM:SS] msg)
+                        if ( typeof data === 'string' && data.length > 23 ) {
+                            var timestamp = data.substring(1, 20);
+                            var message   = data.substring(23);
+                            html = '<div class="logs-container">' +
                                        '<div class="success-line"><span class="timestamp">' + timestamp + '</span> ' + message + '</div>' +
                                        '<div class="cursor blink">#</div>' +
                                    '</div>';
-
+                        } else {
+                            // Log is empty after clear — use the clear-action success message
+                            var now = new Date();
+                            var pad = function(n) { return String(n).padStart(2, '0'); };
+                            var ts  = now.getFullYear() + '-' +
+                                      pad(now.getMonth() + 1) + '-' +
+                                      pad(now.getDate()) + ' ' +
+                                      pad(now.getHours()) + ':' +
+                                      pad(now.getMinutes()) + ':' +
+                                      pad(now.getSeconds());
+                            var msg = ( clearResponse && clearResponse.data )
+                                        ? clearResponse.data
+                                        : 'Logs cleared successfully.';
+                            html = '<div class="logs-container">' +
+                                       '<div class="success-line"><span class="timestamp">' + ts + '</span> ' + msg + '</div>' +
+                                       '<div class="cursor blink">#</div>' +
+                                   '</div>';
+                        }
                         // Update the content area with the new logs HTML
                         $('.logs-container').html(html);
                     },
@@ -2622,6 +2830,39 @@ $(document).ready(function() {
                     $('#nginx_cache_key_custom_regex').val(response.data);
                 } else {
                     // Display error message if AJAX request failed
+                    console.error(response.data);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error(error);
+            },
+            complete: function() {
+                $spin.remove();
+                $btn.prop('disabled', false).removeClass('disabled');
+            }
+        });
+    });
+
+    // Make AJAX request to update mobile user agent
+    $('#nginx-mobile-ua-reset-defaults').on('click', function(event) {
+        event.preventDefault();
+
+        const $btn  = $(this);
+        $btn.prop('disabled', true).addClass('disabled');
+        const $spin = $('<span class="nppp-inline-spinner" aria-hidden="true"></span>').appendTo($btn);
+
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'nppp_update_default_mobile_user_agent_option',
+                _wpnonce: nppp_admin_data.mobile_ua_nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('#nginx_cache_mobile_user_agent').val(response.data);
+                } else {
                     console.error(response.data);
                 }
             },
@@ -2814,200 +3055,6 @@ $(document).ready(function() {
         });
     });
 
-    /**
-     * Build and wire the Excel-style per-column filter dropdowns.
-     * Columns 0-2-3 get a multi-select dropdown with search + Select-All.
-     * Columns 1-4-5 (Action) is intentionally skipped.
-     */
-    function initColumnFilters(table) {
-        var FILTER_COLS  = [0, 2, 3];              // indices of filterable columns
-        var EXACT_COLS   = [2, 3, 4];              // use ^(...)$ regex (discrete values)
-        var $filterRow   = $('#nppp-premium-table thead tr.nppp-filter-row');
-        var activeFilters = {};                    // colIdx → Set of selected raw values
-
-        // Close every open dropdown when clicking outside
-        $(document).on('click.nppp-col-filter', function () {
-            $('.nppp-filter-dropdown').hide();
-        });
-
-        FILTER_COLS.forEach(function (colIdx) {
-            var $th = $filterRow.find('th').eq(colIdx);
-
-            // gather unique display values for this column
-            var rawVals = [];
-            table.column(colIdx).data().each(function (cellData) {
-                // strip HTML tags to get display text
-                var txt = $('<span>').html(cellData).text().trim();
-                if (txt !== '' && rawVals.indexOf(txt) === -1) {
-                    rawVals.push(txt);
-                }
-            });
-            rawVals.sort();
-
-            // initialise filter state: all selected
-            activeFilters[colIdx] = new Set(rawVals);
-
-            // build DOM
-            var $wrapper  = $('<div class="nppp-filter-wrapper"></div>');
-            var $btn      = $('<button type="button" class="nppp-filter-btn" aria-expanded="false" title="Filter"></button>');
-            var $arrow    = $('<span class="nppp-filter-arrow">&#9660;</span>');
-            var $badge    = $('<span class="nppp-filter-badge" style="display:none">!</span>');
-            $btn.append($arrow).append($badge);
-
-            var $dropdown = $('<div class="nppp-filter-dropdown" role="dialog" aria-label="Column filter"></div>');
-            var $search   = $('<input type="text" class="nppp-filter-search" placeholder="&#128269; Search values…" autocomplete="off">');
-            var $listWrap = $('<div class="nppp-filter-list-wrap"></div>');
-            var $list     = $('<ul class="nppp-filter-list"></ul>');
-
-            // Select All row
-            var $allLi    = $('<li class="nppp-filter-all-row"></li>');
-            var $allLabel = $('<label></label>');
-            var $allChk   = $('<input type="checkbox" checked>');
-            $allLabel.append($allChk).append('<span>Select All</span>');
-            $allLi.append($allLabel);
-            $list.append($allLi);
-
-            // Value rows
-            rawVals.forEach(function (val) {
-                var $li    = $('<li></li>');
-                var $label = $('<label></label>');
-                var $chk   = $('<input type="checkbox" checked>');
-                $chk.attr('data-val', val);
-                $label.append($chk).append($('<span>').text(val));
-                $li.append($label);
-                $list.append($li);
-            });
-
-            $listWrap.append($list);
-
-            var $footer = $('<div class="nppp-filter-footer"></div>');
-            var $okBtn  = $('<button type="button" class="nppp-filter-ok">Apply</button>');
-            var $clrBtn = $('<button type="button" class="nppp-filter-clear">Reset</button>');
-            $footer.append($okBtn).append($clrBtn);
-
-            $dropdown.append($search).append($listWrap).append($footer);
-            $wrapper.append($btn).append($dropdown);
-            $th.append($wrapper);
-
-            // Helpers
-            function getCheckedVals() {
-                var vals = [];
-                $list.find('input[data-val]:checked').each(function () {
-                    vals.push($(this).attr('data-val'));
-                });
-                return vals;
-            }
-
-            function syncSelectAll() {
-                var total   = $list.find('input[data-val]:not(:hidden)').length;
-                var checked = $list.find('input[data-val]:not(:hidden):checked').length;
-                if (checked === 0) {
-                    $allChk.prop({ checked: false, indeterminate: false });
-                } else if (checked === total) {
-                    $allChk.prop({ checked: true, indeterminate: false });
-                } else {
-                    $allChk.prop({ checked: false, indeterminate: true });
-                }
-            }
-
-            function applyFilter() {
-                var selected = getCheckedVals();
-                activeFilters[colIdx] = new Set(selected);
-                var total = rawVals.length;
-                var isFiltered = (selected.length !== total);
-
-                // Update badge
-                $badge.toggle(isFiltered);
-                $btn.toggleClass('nppp-filter-btn--active', isFiltered);
-
-                if (selected.length === 0) {
-                    // Nothing selected — match nothing
-                    table.column(colIdx).search(function () { return false; }).draw();
-                    return;
-                }
-                if (!isFiltered) {
-                    // All selected — clear filter
-                    table.column(colIdx).search('').draw();
-                    return;
-                }
-
-                var useExact  = (EXACT_COLS.indexOf(colIdx) !== -1);
-                var selSet    = selected.slice();
-
-                table.column(colIdx).search(function (value) {
-                    var text = $('<span>').html(value).text().trim();
-                    if (useExact) {
-                        return selSet.indexOf(text) !== -1;
-                    }
-                    return selSet.some(function (v) { return text.indexOf(v) !== -1; });
-                }).draw();
-            }
-
-            // Toggle dropdown open/close
-            $btn.on('click', function (e) {
-                e.stopPropagation();
-                var isOpen = $dropdown.is(':visible');
-                // Close any sibling dropdowns
-                $('.nppp-filter-dropdown').hide();
-                $('.nppp-filter-btn').attr('aria-expanded', 'false');
-                if (!isOpen) {
-                    $dropdown.show();
-                    $btn.attr('aria-expanded', 'true');
-                    $search.val('').trigger('input').focus();
-                }
-            });
-
-            // Prevent dropdown clicks from bubbling to document
-            $dropdown.on('click', function (e) { e.stopPropagation(); });
-
-            // Live search within list
-            $search.on('input', function () {
-                var q = $(this).val().toLowerCase();
-                $list.find('li:not(.nppp-filter-all-row)').each(function () {
-                    var txt = $(this).find('span').text().toLowerCase();
-                    $(this).toggle(q === '' || txt.indexOf(q) !== -1);
-                });
-                syncSelectAll();
-            });
-
-            // Select All checkbox
-            $allChk.on('change', function () {
-                var doCheck = $(this).prop('checked');
-                $list.find('input[data-val]:not(:hidden)').prop('checked', doCheck);
-                $allChk.prop('indeterminate', false);
-            });
-
-            // Individual checkbox
-            $list.on('change', 'input[data-val]', function () {
-                syncSelectAll();
-            });
-
-            // Apply button
-            $okBtn.on('click', function () {
-                applyFilter();
-                $dropdown.hide();
-                $btn.attr('aria-expanded', 'false');
-            });
-
-            // Reset button
-            $clrBtn.on('click', function () {
-                $search.val('').trigger('input');
-                $list.find('input[data-val]').prop('checked', true);
-                $allChk.prop({ checked: true, indeterminate: false });
-                $list.find('li').show();
-                applyFilter();
-                $dropdown.hide();
-                $btn.attr('aria-expanded', 'false');
-            });
-
-            // Apply on Enter key within search
-            $search.on('keydown', function (e) {
-                if (e.key === 'Enter') { $okBtn.trigger('click'); }
-                if (e.key === 'Escape') { $dropdown.hide(); $btn.attr('aria-expanded', 'false'); }
-            });
-        });
-    }
-
     // Function to initialize DataTables.js for premium table
     function initializePremiumTable() {
         var $tbl = $('#nppp-premium-table');
@@ -3025,8 +3072,10 @@ $(document).ready(function() {
         $tbl.DataTable({
             autoWidth: false,
             responsive: true,
+            orderClasses: false, // PERF
             paging: true,
             ordering: true,
+            order: [],
             orderCellsTop: true,
             searching: true,
             lengthMenu: [10, 25, 50, 100],
@@ -3048,15 +3097,17 @@ $(document).ready(function() {
 
             // Set column widths
             columnDefs: [
-                { width: "23%", targets: 0, className: 'text-left' },                    // Cached URL
-                { width: "37%", targets: 1, className: 'text-left' },                    // Cache Path
-                { width: "8%", targets: 2, className: 'text-left nppp-category-cell' },  // Content
-                { width: "5%", targets: 3, className: 'text-left' },                     // Status
-                { width: "12%", targets: 4, className: 'text-left nppp-date-cell' },     // Cache Date
+                { width: "25%", targets: 0, className: 'text-left' },                    // Cached URL
+                { width: "35%", targets: 1, className: 'text-left' },                    // Cache Path
+                { width: "9%", targets: 2, className: 'text-left nppp-category-cell' },  // Content
+                { width: "6%", targets: 3, className: 'text-left' },                     // Status
+                { width: "10%", targets: 4, className: 'text-left nppp-variant-cell' },  // Variants
                 { width: "15%", targets: 5, className: 'text-left' },                    // Actions
                 { responsivePriority: 1, targets: 0 },                                   // Cached URL gets priority for responsiveness
                 { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] },                 // Collapse all in first row on mobile, hide actions always
-                { defaultContent: "", targets: "_all" }                                  // Ensures all columns render even if empty
+                { defaultContent: "", targets: "_all" },                                 // Ensures all columns render even if empty
+                { searchable: false, targets: [1, 4, 5] },                               // PERF: searchable:false on cols 1+4+5
+                { orderable: false, targets: [5] }                                       // PERF: orderable:false on Actions skips
             ]
         });
 
@@ -3065,9 +3116,6 @@ $(document).ready(function() {
             .on('page.dt.nppp', function () {
                 $(this).find('tr.purged-row, tr.child.purged-row').removeClass('purged-row');
             });
-
-        // Initialize Excel-like column filter dropdowns
-        initColumnFilters($tbl.DataTable());
     }
 
     // Toggle switch rules for send mail
@@ -3186,6 +3234,31 @@ $(document).ready(function() {
             $('.nppp-onoffswitch-switch-httppurge').css('background', '#ea1919');
             $('.nppp-on-httppurge').css('color', '#000000');
             $('.nppp-off-httppurge').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for RG Purge
+    var isRgPurgeChecked = $('#nppp_rg_purge_enabled').prop('checked');
+    if (isRgPurgeChecked) {
+        $('.nppp-onoffswitch-switch-rgpurge').css('background', '#66b317');
+        $('.nppp-on-rgpurge').css('color', '#ffffff');
+        $('.nppp-off-rgpurge').css('color', '#000000');
+    } else {
+        $('.nppp-onoffswitch-switch-rgpurge').css('background', '#ea1919');
+        $('.nppp-on-rgpurge').css('color', '#000000');
+        $('.nppp-off-rgpurge').css('color', '#ffffff');
+    }
+
+    $('#nppp_rg_purge_enabled').change(function() {
+        var isRgPurgeChecked = $(this).prop('checked');
+        if (isRgPurgeChecked) {
+            $('.nppp-onoffswitch-switch-rgpurge').css('background', '#66b317');
+            $('.nppp-on-rgpurge').css('color', '#ffffff');
+            $('.nppp-off-rgpurge').css('color', '#000000');
+        } else {
+            $('.nppp-onoffswitch-switch-rgpurge').css('background', '#ea1919');
+            $('.nppp-on-rgpurge').css('color', '#000000');
+            $('.nppp-off-rgpurge').css('color', '#ffffff');
         }
     });
 
@@ -3658,6 +3731,7 @@ $(document).ready(function() {
         '#nginx_cache_tracking_opt_in',
         '#nginx_cache_api_key',
         '#nginx_cache_key_custom_regex',
+        '#nginx_cache_mobile_user_agent',
         '#nginx_cache_preload_proxy_port',
         '#nginx_cache_preload_proxy_host',
         '#nppp_http_purge_suffix',
@@ -3907,6 +3981,8 @@ function npppupdateStatus() {
         "#nppppermIsolation",
         "#npppcpulimitStatus",
         "#npppsafexecStatus",
+        "#npppSafexecVersion",
+        "#nppprgStatus",
         "#npppCacheDiskSize"
     ];
 
@@ -4450,6 +4526,77 @@ function npppupdateStatus() {
 
     npppsafexecStatusSpan.appendChild(iconSpanSafexec);
     npppsafexecStatusSpan.append(safexecStatusText);
+
+    var npppSafexecVersionSpan = document.getElementById("npppSafexecVersion");
+    var npppSafexecVersion = npppSafexecVersionSpan.textContent.trim();
+
+    npppSafexecVersionSpan.style.fontSize = "14px";
+    npppSafexecVersionSpan.style.fontWeight = "bold";
+    npppSafexecVersionSpan.textContent = '';
+
+    let iconSpanSafexecVersion = document.createElement('span');
+    let safexecVersionText = '';
+
+    if (npppSafexecVersion === "Not Installed" || npppSafexecVersion === "Unknown") {
+        npppSafexecVersionSpan.style.color = "orange";
+        iconSpanSafexecVersion.classList.add("dashicons", "dashicons-warning");
+        iconSpanSafexecVersion.style.fontSize = "18px";
+        iconSpanSafexecVersion.style.setProperty('font-weight', 'normal', 'important');
+        safexecVersionText = ' ' + npppSafexecVersion;
+    } else if (npppSafexecVersion.includes("(")) {
+        var versions = npppSafexecVersion.match(/(\d+\.\d+\.\d+)\s\((\d+\.\d+\.\d+)\)/);
+        if (versions) {
+            var installedVersion = versions[1];
+            var pluginVersion = versions[2];
+
+            if (installedVersion === pluginVersion) {
+                npppSafexecVersionSpan.style.color = "green";
+                iconSpanSafexecVersion.classList.add("dashicons", "dashicons-yes");
+                iconSpanSafexecVersion.style.fontSize = "20px";
+                iconSpanSafexecVersion.style.color = "green";
+                iconSpanSafexecVersion.style.setProperty('font-weight', 'normal', 'important');
+                safexecVersionText = ` ${installedVersion} (${pluginVersion})`;
+            } else {
+                iconSpanSafexecVersion.classList.add("dashicons", "dashicons-update");
+                iconSpanSafexecVersion.style.fontSize = "18px";
+                iconSpanSafexecVersion.style.color = "orange";
+                iconSpanSafexecVersion.style.setProperty('font-weight', 'normal', 'important');
+                safexecVersionText = `<span style="color:orange;">${installedVersion}</span> <span style="color:green;">(${pluginVersion})</span>`;
+            }
+        }
+    } else {
+        npppSafexecVersionSpan.style.color = "green";
+        iconSpanSafexecVersion.classList.add("dashicons", "dashicons-yes");
+        iconSpanSafexecVersion.style.fontSize = "20px";
+        iconSpanSafexecVersion.style.color = "green";
+        iconSpanSafexecVersion.style.setProperty('font-weight', 'normal', 'important');
+        safexecVersionText = ' ' + npppSafexecVersion;
+    }
+
+    npppSafexecVersionSpan.appendChild(iconSpanSafexecVersion);
+    npppSafexecVersionSpan.insertAdjacentHTML('beforeend', safexecVersionText);
+
+    // Fetch and update rg command status
+    var nppprgStatusSpan = document.getElementById("nppprgStatus");
+    var nppprgStatus = nppprgStatusSpan.textContent.trim();
+    nppprgStatusSpan.textContent = '';
+    nppprgStatusSpan.style.fontSize = "14px";
+
+    let iconSpanRg = document.createElement('span');
+    let rgStatusText = '';
+
+    if (nppprgStatus === "Installed") {
+        nppprgStatusSpan.style.color = "green";
+        iconSpanRg.classList.add("dashicons", "dashicons-yes");
+        rgStatusText = ' ' + __('Installed', 'fastcgi-cache-purge-and-preload-nginx');
+    } else if (nppprgStatus === "Not Installed") {
+        nppprgStatusSpan.style.color = "red";
+        iconSpanRg.classList.add("dashicons", "dashicons-no");
+        rgStatusText = ' ' + __('Not Installed', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    nppprgStatusSpan.appendChild(iconSpanRg);
+    nppprgStatusSpan.append(rgStatusText);
 
     // Add spin effect to icons
     document.querySelectorAll('.status').forEach(status => {

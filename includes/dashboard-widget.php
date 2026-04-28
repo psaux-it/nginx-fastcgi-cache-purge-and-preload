@@ -2,7 +2,7 @@
 /**
  * Dashboard widget module for Nginx Cache Purge Preload
  * Description: Renders WordPress dashboard status widgets and recent preload/purge summaries.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -148,7 +148,7 @@ function nppp_get_active_cron_events_widget() {
                             echo '<td style="padding: 6px 15px; width: 75%;">';
                                 echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-right: 8px;"></span>';
                                 echo '<span class="nppp-next-run">' . sprintf(
-                                    /* Translators: %s is the formatted next run time */
+                                    /* translators: %s: formatted next run time */
                                     esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
                                     '<strong style="color: #2196f3; font-size: 12px;">' . esc_html($next_run_formatted) . '</strong>'
                                 ) . '</span>';
@@ -178,7 +178,7 @@ function nppp_get_active_cron_events_widget() {
                 echo '<td style="padding: 6px 15px; width: 75%;">';
                     echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-right: 8px;"></span>';
                     echo '<span class="nppp-next-run">' . sprintf(
-                        /* Translators: %s is the formatted next run time */
+                        /* translators: %s: formatted next run time */
                         esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
                         '<strong style="color: #2196f3; font-size: 12px;">' . esc_html__('No event found', 'fastcgi-cache-purge-and-preload-nginx') . '</strong>'
                     ) . '</span>';
@@ -197,12 +197,27 @@ function nppp_dashboard_widget() {
     $settings = get_option('nginx_cache_settings', []);
 
     // URL Normalization
-    $pctnorm_mode = isset($settings['nginx_cache_pctnorm_mode']) ? $settings['nginx_cache_pctnorm_mode'] : 'off';
-    $pctnorm_enabled = $pctnorm_mode !== 'off';
+    $pctnorm_mode   = isset($settings['nginx_cache_pctnorm_mode']) ? $settings['nginx_cache_pctnorm_mode'] : 'off';
+    $safexec_cached = get_transient('nppp_safexec_ok');
+    if ($safexec_cached === false) {
+        if (function_exists('nppp_find_safexec_path') && function_exists('nppp_is_safexec_usable')) {
+            $_se_path           = nppp_find_safexec_path();
+            $_se_ok             = $_se_path && nppp_is_safexec_usable($_se_path, false);
+            set_transient('nppp_safexec_ok', ['path' => $_se_path, 'ok' => $_se_ok], HOUR_IN_SECONDS);
+            $pctnorm_available  = $_se_ok;
+        } else {
+            $pctnorm_available  = false;
+        }
+    } else {
+        $pctnorm_available = ! empty($safexec_cached['ok']);
+    }
 
-    if ($pctnorm_enabled && function_exists('nppp_find_safexec_path') && function_exists('nppp_is_safexec_usable')) {
-        $safexec_path = nppp_find_safexec_path();
-        $pctnorm_enabled = $safexec_path && nppp_is_safexec_usable($safexec_path, false);
+    if (!$pctnorm_available) {
+        $pctnorm_status = __('Unavailable', 'fastcgi-cache-purge-and-preload-nginx');
+    } elseif ($pctnorm_mode !== 'off') {
+        $pctnorm_status = __('Enabled', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        $pctnorm_status = __('Disabled', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Cloudflare APO Sync — three states: Enabled / Disabled / Unavailable
@@ -233,6 +248,19 @@ function nppp_dashboard_widget() {
         $redis_status = __( 'Disabled', 'fastcgi-cache-purge-and-preload-nginx' );
     }
 
+    // RG Purge
+    $rg_cached    = get_transient( 'nppp_rg_ok' );
+    $rg_available = is_array( $rg_cached ) ? (bool) $rg_cached['ok'] : false;
+    $rg_on        = isset( $settings['nppp_rg_purge_enabled'] ) && $settings['nppp_rg_purge_enabled'] === 'yes';
+
+    if ( ! $rg_available ) {
+        $rg_status = __( 'Unavailable', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $rg_on ) {
+        $rg_status = __( 'Enabled', 'fastcgi-cache-purge-and-preload-nginx' );
+    } else {
+        $rg_status = __( 'Disabled', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
     // Need setup
     $needs_setup = class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup();
     $setup_url   = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
@@ -254,7 +282,13 @@ function nppp_dashboard_widget() {
         'http_purge' => [
             'label' => __('HTTP Purge', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nppp_http_purge_enabled']) && $settings['nppp_http_purge_enabled'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
-            'icon' => 'dashicons-migrate'
+            'icon' => 'dashicons-rest-api'
+        ],
+        'rg_purge' => [
+            'label'       => __('RG Purge', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status'      => $rg_status,
+            'icon'        => 'dashicons-superhero',
+            'unavailable' => ! $rg_available,
         ],
         'auto_preload' => [
             'label' => __('Auto Preload', 'fastcgi-cache-purge-and-preload-nginx'),
@@ -277,9 +311,10 @@ function nppp_dashboard_widget() {
             'icon'   => 'dashicons-randomize'
         ],
         'url_normalization' => [
-            'label' => __('URL Normalization', 'fastcgi-cache-purge-and-preload-nginx'),
-            'status' => $pctnorm_enabled ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
-            'icon' => 'dashicons-admin-links'
+            'label'       => __('URL Normalization', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status'      => $pctnorm_status,
+            'icon'        => 'dashicons-admin-links',
+            'unavailable' => ! $pctnorm_available,
         ],
         'cloudflare_apo' => [
             'label'       => __('Cloudflare APO', 'fastcgi-cache-purge-and-preload-nginx'),
@@ -475,7 +510,7 @@ function nppp_dashboard_widget() {
 
                                         // Display the preload complete date
                                         echo '<span class="nppp-preload-last-date">' . sprintf(
-                                            /* Translators: %s is the formatted preload last complete time */
+                                            /* translators: %s: formatted preload last complete time */
                                             esc_html__('Last Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
                                             '<strong style="color: #2196f3; font-size: 12px;">' . esc_html($last_preload_complete_date) . '</strong>'
                                             ) . '</span>';
@@ -521,7 +556,7 @@ function nppp_dashboard_widget() {
 function nppp_add_dashboard_widget() {
     wp_add_dashboard_widget(
         'nppp_dashboard_widget',
-        /* Translators: NPP is the short name of the plugin. */
+        /* translators: NPP is the plugin short name — do not translate. */
         __('NPP - Nginx Cache Status', 'fastcgi-cache-purge-and-preload-nginx'),
         'nppp_dashboard_widget'
     );

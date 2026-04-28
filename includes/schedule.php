@@ -2,7 +2,7 @@
 /**
  * Cron scheduling utilities for Nginx Cache Purge Preload
  * Description: Manages preload-related cron events and reports active plugin schedules.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -72,12 +72,12 @@ function nppp_get_active_cron_events() {
                     echo '<h3 class="nppp-active-cron-heading">' . esc_html__('Cron Status', 'fastcgi-cache-purge-and-preload-nginx') . '</h3>';
                     echo '<div class="nppp-cron-info">';
                     echo '<span class="nppp-hook-name">' . sprintf(
-                        /* Translators: %s is the cron hook name */
+                        /* translators: %s: cron hook name */
                         esc_html__('Cron Name: %s', 'fastcgi-cache-purge-and-preload-nginx'),
                         '<strong>' . esc_html($hook) . '</strong>'
                     ) . '</span> - ';
                     echo '<span class="nppp-next-run">' . sprintf(
-                        /* Translators: %s is the formatted next run time */
+                        /* translators: %s: formatted next run time */
                         esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
                         '<strong>' . esc_html($next_run_formatted) . '</strong>'
                     ) . '</span>';
@@ -115,7 +115,7 @@ function nppp_get_active_cron_events_ajax() {
 
     // Check user capability
     if (!current_user_can('manage_options')) {
-        wp_die(esc_html__('You do not have permission to call this action.', 'fastcgi-cache-purge-and-preload-nginx'));
+        wp_send_json_error(__('You do not have permission to call this action.', 'fastcgi-cache-purge-and-preload-nginx'), 403);
     }
 
     // Get all scheduled events
@@ -311,7 +311,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
     }
 
     // Get the plugin options
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
 
     // Get preload pid file
     $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
@@ -339,6 +339,14 @@ function nppp_create_scheduled_event_preload_status_callback() {
         wp_schedule_single_event(time() + 5, 'npp_cache_preload_status_event');
         return;
     }
+
+    // Prevent duplicate execution when both watchdog and cron tick fire simultaneously.
+    $completion_lock_key = 'nppp_preload_completion_lock_' . md5('nppp');
+    if (get_transient($completion_lock_key)) {
+        // Another process is already handling post‑preload tasks.
+        return;
+    }
+    set_transient($completion_lock_key, 1, 30); // 30‑second lock
 
     // Process has finished.
     // If we just finished the desktop phase and mobile is enabled, start mobile now.
@@ -381,6 +389,12 @@ function nppp_create_scheduled_event_preload_status_callback() {
 
         // Schedule next tick to monitor mobile PID
         wp_schedule_single_event(time() + 5, 'npp_cache_preload_status_event');
+
+        // Release the completion lock so mobile's post-preload cleanup can proceed.
+        // The lock was acquired above to prevent desktop's completion from running twice,
+        // but it must not carry over into the mobile phase — mobile finishes independently
+        // and needs its own uncontested completion run.
+        delete_transient($completion_lock_key);
         return;
     }
 
@@ -406,10 +420,11 @@ function nppp_create_scheduled_event_preload_status_callback() {
     // Initialize log-parsed values to safe defaults so they are always defined
     // even when the wget log is absent, incomplete, or contains unparseable data.
     // $elapsed_time_str feeds nppp_send_mail_now() and sprintf() unconditionally.
-    $final_total = 0;
+    $final_total       = 0;
     $elapsed_time_str  = '';
     $last_preload_time = '';
     $log_contents      = '';
+    $nppp_mail_hits    = null;
 
     // Parse log file using to get total processed URL
     if ($wp_filesystem->exists($log_path) && $wp_filesystem->is_readable($log_path)) {
@@ -465,6 +480,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
                 $nppp_index[ $nppp_key ] = $nppp_existing;
             }
             update_option( 'nppp_url_filepath_index', $nppp_index, false );
+            $nppp_mail_hits = count( $nppp_index_data );
             unset( $nppp_index_data, $nppp_index, $nppp_entry, $nppp_key, $nppp_existing );
         }
     }
@@ -528,16 +544,20 @@ function nppp_create_scheduled_event_preload_status_callback() {
         $error_count = preg_match_all( '/ERROR\s+404/i', $log_contents );
     }
 
-    // Send Mail
+    if ( $nppp_mail_hits !== null ) {
+        update_option( 'nppp_last_known_hits',      $nppp_mail_hits, false );
+        update_option( 'nppp_last_hits_scanned_at', time(),          false );
+    }
+
     $mail_message = __('The Nginx cache preload operation has been completed', 'fastcgi-cache-purge-and-preload-nginx');
-    nppp_send_mail_now($mail_message, $elapsed_time_str, $final_total, $mobile_enabled, $last_preload_time, $download_size, $transfer_speed, $error_count);
+    nppp_send_mail_now($mail_message, $elapsed_time_str, $final_total, $mobile_enabled, $last_preload_time, $download_size, $transfer_speed, $error_count, $nppp_mail_hits);
 
     // Log the preload process status
     if ($mobile_enabled) {
-        // Translators: %s is the elapsed time.
+        /* translators: %s: elapsed preload time */
         nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed for both Mobile and Desktop in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
     } else {
-        // Translators: %s is the elapsed time.
+        /* translators: %s: elapsed preload time */
         nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
     }
 
@@ -563,10 +583,19 @@ function nppp_custom_every_min_schedule($schedules) {
     return $schedules;
 }
 
+// Custom cron schedule for 3 hour recurrence
+function nppp_custom_every_3hours_schedule($schedules) {
+    $schedules['every_3hours_npp'] = array(
+        'interval' => 3 * HOUR_IN_SECONDS,
+        'display'  => 'Every 3 Hours-NPP'
+    );
+    return $schedules;
+}
+
 // Callback function for the scheduled event
 function nppp_create_scheduled_event_preload_callback() {
     // Get the plugin options
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
 
     // Set default options to prevent any error
     $default_cache_path = '/dev/shm/change-me-now';

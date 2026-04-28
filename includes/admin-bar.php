@@ -2,7 +2,7 @@
 /**
  * Admin bar integration for Nginx Cache Purge Preload
  * Description: Adds admin-bar cache actions and routes them to plugin purge/preload workflows.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -100,8 +100,21 @@ function nppp_front_error_notice(string $msg, ?string $target_url = null, string
         }
     }
 
-    // 3) Nuke any previous output so headers can be sent
-    while (ob_get_level() > 0) { @ob_end_clean(); }
+    // 3) Clean ONLY output buffers that this plugin may have opened.
+    //    We use the level recorded at the start of the admin-bar handler.
+    //    If that variable is not set, fall back to cleaning just the topmost buffer.
+    $start_level = $GLOBALS['nppp_admin_bar_start_ob_level'] ?? null;
+    if ($start_level !== null) {
+        // Only drain down to the level that existed when we entered the handler.
+        while (ob_get_level() > $start_level) {
+            @ob_end_clean();
+        }
+    } else {
+        // Fallback: clean only the most recently opened buffer (if any).
+        if (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+    }
 
     // 4) Store the message and redirect
     $key   = 'nppp_front_message_' . uniqid('', true);
@@ -227,6 +240,9 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
 
 // Handle button clicks with actions
 function nppp_handle_fastcgi_cache_actions_admin_bar() {
+    // Record the output buffer level at the very start of this handler.
+    $GLOBALS['nppp_admin_bar_start_ob_level'] = ob_get_level();
+
     // Prevent interference with unrelated request contexts.
     if (
         // AJAX
@@ -241,9 +257,6 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         (defined('WP_CLI') && WP_CLI) ||
 
         // REST
-        (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request() ) ||
-        (function_exists('wp_doing_rest') && wp_doing_rest()) ||
-        (function_exists('wp_is_json_request') && wp_is_json_request()) ||
         (defined('REST_REQUEST') && REST_REQUEST)
     ) {
         return;
@@ -380,6 +393,10 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     // request never bleeds into this one.
     $GLOBALS['nppp_last_notice_type'] = 'success';
 
+    // Signal to nppp_display_admin_notice() that we own this ob_start() buffer
+    // and that the screen guard must be skipped.
+    $GLOBALS['nppp_capturing_for_redirect'] = true;
+
     // Start output buffering to capture the output of the actions
     ob_start();
 
@@ -404,6 +421,9 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
 
     // Get the status message from the output buffer
     $status_message = wp_strip_all_tags(ob_get_clean());
+
+    // Release the capture flag — screen guard re-activates for all subsequent calls.
+    unset($GLOBALS['nppp_capturing_for_redirect']);
 
     // Read the type that nppp_display_admin_notice() recorded directly.
     $message_type = $GLOBALS['nppp_last_notice_type'] ?? 'success';

@@ -2,7 +2,7 @@
 /**
  * Logging and admin notice helpers for Nginx Cache Purge Preload
  * Description: Centralizes plugin log writes and standardized WordPress admin notice rendering.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -64,11 +64,11 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             $append_result = nppp_perform_file_operation($sanitized_path, 'append', $log_entry);
 
             if (!$append_result) {
-                // Translators: %s is the path to the log file.
+                /* translators: %s: path to the log file directory */
                 nppp_custom_error_log(sprintf(__('Error appending to log file at %s', 'fastcgi-cache-purge-and-preload-nginx'), $sanitized_path));
             }
         } else {
-            // Translators: %s is the path to the log file.
+            /* translators: %s: path to the log file directory */
             nppp_custom_error_log(sprintf(__('Invalid or inaccessible log file directory: %s', 'fastcgi-cache-purge-and-preload-nginx'), $log_file_dir));
         }
     }
@@ -80,34 +80,22 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
      */
 
     // Bail out on *all* REST requests except our own purge/preload endpoints
-    if (
-        (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) ||
-        (function_exists('wp_doing_rest') && wp_doing_rest()) ||
-        (defined('REST_REQUEST') && REST_REQUEST)
-    ) {
-        $route = '';
+    if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+        // ONLY emit into a buffer that WE started.
+        // We track the ob level in $GLOBALS['nppp_rest_ob_level'] set in rest-api.php
+        // just before ob_start(). If the current level is exactly one above what we
+        // recorded, this is our buffer — safe to echo into.
+        // If it's anything else (0, or a different depth), another plugin owns the
+        // active buffer and we must not touch it.
+        $our_level = isset($GLOBALS['nppp_rest_ob_level'])
+            ? (int) $GLOBALS['nppp_rest_ob_level'] + 1
+            : -1;
 
-        // REST route can come from query args or the global WP query context.
-        // Guard all access because $wp can be null during some REST save flows.
-        if (isset($_REQUEST['rest_route'])) {
-            $route = '/' . ltrim(sanitize_text_field(wp_unslash($_REQUEST['rest_route'])), '/');
-        } elseif (isset($GLOBALS['wp']) && is_object($GLOBALS['wp']) && isset($GLOBALS['wp']->query_vars) && is_array($GLOBALS['wp']->query_vars) && isset($GLOBALS['wp']->query_vars['rest_route'])) {
-            $route = '/' . ltrim(sanitize_text_field($GLOBALS['wp']->query_vars['rest_route']), '/');
-        }
-
-        // Only echo for our two NPP routes.
-        // Prevent interference with core WordPress REST responses.
-        if (
-            in_array($route, [
-                '/nppp_nginx_cache/v2/purge',
-                '/nppp_nginx_cache/v2/preload',
-            ], true) &&
-            ob_get_level() > 0 &&
-            $display_notice
-        ) {
-            // Emit only when a caller intentionally started buffering (REST endpoint wrappers).
+        // Only echo if the current buffer level exactly matches the one we started.
+        if (ob_get_level() === $our_level && $display_notice) {
             echo '<p>' . esc_html(sanitize_text_field($message)) . '</p>';
         }
+
         return;
     }
 
@@ -116,38 +104,40 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     // Verify nonce for WP Admin Notices
     if (defined('DOING_AJAX') && DOING_AJAX) {
         $allowed_actions = [
-            'nppp_clear_nginx_cache_logs'                 => 'nppp-clear-nginx-cache-logs',
-            'nppp_get_nginx_cache_logs'                   => 'nppp-clear-nginx-cache-logs',
-            'nppp_update_send_mail_option'                => 'nppp-update-send-mail-option',
-            'nppp_update_auto_preload_option'             => 'nppp-update-auto-preload-option',
-            'nppp_refresh_cache_ratio'                    => 'nppp_refresh_cache_ratio',
-            'nppp_update_watchdog_option'                 => 'nppp-update-watchdog-option',
-            'nppp_update_auto_purge_option'               => 'nppp-update-auto-purge-option',
-            'nppp_update_cloudflare_apo_sync_option'      => 'nppp-update-cloudflare-apo-sync-option',
-            'nppp_update_redis_cache_sync_option'         => 'nppp-update-redis-cache-sync-option',
-            'nppp_cache_status'                           => 'cache-status',
-            'nppp_load_premium_content'                   => 'load_premium_content_nonce',
-            'nppp_purge_cache_premium'                    => 'purge_cache_premium_nonce',
-            'nppp_preload_cache_premium'                  => 'preload_cache_premium_nonce',
-            'nppp_update_api_key_option'                  => 'nppp-update-api-key-option',
-            'nppp_update_default_reject_regex_option'     => 'nppp-update-default-reject-regex-option',
-            'nppp_update_default_reject_extension_option' => 'nppp-update-default-reject-extension-option',
-            'nppp_update_api_option'                      => 'nppp-update-api-option',
-            'nppp_update_api_key_copy_value'              => 'nppp-update-api-key-copy-value',
-            'nppp_rest_api_purge_url_copy'                => 'nppp-rest-api-purge-url-copy',
-            'nppp_rest_api_preload_url_copy'              => 'nppp-rest-api-preload-url-copy',
-            'nppp_get_save_cron_expression'               => 'nppp-get-save-cron-expression',
-            'nppp_update_cache_schedule_option'           => 'nppp-update-cache-schedule-option',
-            'nppp_cancel_scheduled_event'                 => 'nppp-cancel-scheduled-event',
-            'nppp_get_active_cron_events_ajax'            => 'nppp-get-save-cron-expression',
-            'nppp_clear_plugin_cache'                     => 'nppp-clear-plugin-cache-action',
-            'nppp_update_default_cache_key_regex_option'  => 'nppp-update-default-cache-key-regex-option',
-            'nppp_update_auto_preload_mobile_option'      => 'nppp-update-auto-preload-mobile-option',
-            'nppp_update_enable_proxy_option'             => 'nppp-update-enable-proxy-option',
-            'nppp_update_related_fields'                  => 'nppp-related-posts-purge',
-            'nppp_locate_cache_file'                      => 'locate_cache_file_nonce',
-            'nppp_update_pctnorm_mode'                    => 'nppp-update-pctnorm-mode',
-            'nppp_update_http_purge_option'               => 'nppp-update-http-purge-option',
+            'nppp_clear_nginx_cache_logs'                  => 'nppp-clear-nginx-cache-logs',
+            'nppp_get_nginx_cache_logs'                    => 'nppp-clear-nginx-cache-logs',
+            'nppp_update_send_mail_option'                 => 'nppp-update-send-mail-option',
+            'nppp_update_auto_preload_option'              => 'nppp-update-auto-preload-option',
+            'nppp_refresh_cache_ratio'                     => 'nppp_refresh_cache_ratio',
+            'nppp_update_watchdog_option'                  => 'nppp-update-watchdog-option',
+            'nppp_update_auto_purge_option'                => 'nppp-update-auto-purge-option',
+            'nppp_update_cloudflare_apo_sync_option'       => 'nppp-update-cloudflare-apo-sync-option',
+            'nppp_update_redis_cache_sync_option'          => 'nppp-update-redis-cache-sync-option',
+            'nppp_cache_status'                            => 'cache-status',
+            'nppp_load_premium_content'                    => 'load_premium_content_nonce',
+            'nppp_purge_cache_premium'                     => 'purge_cache_premium_nonce',
+            'nppp_preload_cache_premium'                   => 'preload_cache_premium_nonce',
+            'nppp_update_api_key_option'                   => 'nppp-update-api-key-option',
+            'nppp_update_default_reject_regex_option'      => 'nppp-update-default-reject-regex-option',
+            'nppp_update_default_reject_extension_option'  => 'nppp-update-default-reject-extension-option',
+            'nppp_update_api_option'                       => 'nppp-update-api-option',
+            'nppp_update_api_key_copy_value'               => 'nppp-update-api-key-copy-value',
+            'nppp_rest_api_purge_url_copy'                 => 'nppp-rest-api-purge-url-copy',
+            'nppp_rest_api_preload_url_copy'               => 'nppp-rest-api-preload-url-copy',
+            'nppp_get_save_cron_expression'                => 'nppp-get-save-cron-expression',
+            'nppp_update_cache_schedule_option'            => 'nppp-update-cache-schedule-option',
+            'nppp_cancel_scheduled_event'                  => 'nppp-cancel-scheduled-event',
+            'nppp_get_active_cron_events_ajax'             => 'nppp-get-save-cron-expression',
+            'nppp_clear_plugin_cache'                      => 'nppp-clear-plugin-cache-action',
+            'nppp_update_default_cache_key_regex_option'   => 'nppp-update-default-cache-key-regex-option',
+            'nppp_update_default_mobile_user_agent_option' => 'nppp-update-default-mobile-user-agent-option',
+            'nppp_update_auto_preload_mobile_option'       => 'nppp-update-auto-preload-mobile-option',
+            'nppp_update_enable_proxy_option'              => 'nppp-update-enable-proxy-option',
+            'nppp_update_related_fields'                   => 'nppp-related-posts-purge',
+            'nppp_update_pctnorm_mode'                     => 'nppp-update-pctnorm-mode',
+            'nppp_update_http_purge_option'                => 'nppp-update-http-purge-option',
+            'nppp_update_rg_purge_option'                  => 'nppp-update-rg-purge-option',
+            'nppp_update_bypass_path_restriction'          => 'nppp-update-bypass-path-restriction',
         ];
 
         // Get the current AJAX action
@@ -158,8 +148,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         if (!empty($action) && array_key_exists($action, $allowed_actions)) {
             // Check if nonce is set and is valid
             if (!isset($_REQUEST['_wpnonce'])) {
-                // Translators: This message appears when a required nonce is missing.
-                wp_die(esc_html__('Nonce is missing.', 'fastcgi-cache-purge-and-preload-nginx'));
+                return;
             }
 
             // Sanitize nonce
@@ -168,14 +157,12 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
 
             // Verify nonce for WP Admin Notices
             if (!wp_verify_nonce($nonce, $expected_nonce)) {
-                // Translators: This message appears when the provided nonce is invalid.
-                wp_die(esc_html__('Invalid nonce. Request could not be verified.', 'fastcgi-cache-purge-and-preload-nginx'));
+                return;
             }
 
             // Further security check to verify the user’s capability
             if (!current_user_can('manage_options')) {
-                // Translators: This message appears when a user does not have the required permissions.
-                wp_die(esc_html__('Permission denied', 'fastcgi-cache-purge-and-preload-nginx'));
+                return;
             }
         } else {
             return;
@@ -195,44 +182,24 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         return;
     }
 
-    // Define the array of WP screen IDs
-    $screen_ids = array(
-        'dashboard',
-        'post',
-        'edit-post',
-        'page',
-        'edit-page',
-        'upload',
-        'edit-comments',
-        'themes',
-        'themes-network',
-        'widgets',
-        'menus',
-        'customize',
-        'plugins',
-        'plugin-install',
-        'users',
-        'tools',
-        'general',
-        'writing',
-        'reading',
-        'discussion',
-        'media',
-        'permalink',
-        'update',
-        'edit-category',
-        'edit-post_tag',
-        'import',
-        'export'
-    );
+    // Prevent blocking redirected messages generated by NPP
+    if ( ! empty( $GLOBALS['nppp_capturing_for_redirect'] ) ) {
+        do_action( 'nppp_plugin_admin_notices', $type, $sanitized_message, $log_message, $display_notice );
+        return;
+    }
 
-    // Prevent NPP admin notices interfere with core WP screens
-    if (function_exists('get_current_screen')) {
-        $screen = get_current_screen();
-        // Check if the current screen ID is in the array
-        if ($screen && in_array($screen->id, $screen_ids)) {
-            return;
-        }
+    // Allowlist: only emit admin notices on NPP's own screens.
+    $nppp_own_screens = [
+        'settings_page_nginx_cache_settings',
+        'admin_page_nppp-setup',
+    ];
+
+    if ( ! function_exists( 'get_current_screen' ) ) {
+        return;
+    }
+    $screen = get_current_screen();
+    if ( ! $screen || ! in_array( $screen->id, $nppp_own_screens, true ) ) {
+        return;
     }
 
     // All filters have passed, ready to display the admin notice

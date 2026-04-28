@@ -2,7 +2,7 @@
 /**
  * Cloudflare APO compatibility for Nginx Cache Purge Preload
  * Description: Mirrors plugin purge actions to Cloudflare APO to keep edge cache synchronized.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * License: GPL-2.0+
  */
@@ -331,7 +331,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_exact_urls' ) ) {
         if ( empty( $urls ) ) {
             nppp_cloudflare_apo_log(
                 sprintf(
-                    /* translators: %d is input URL count. */
+                    /* translators: %d: input URL count */
                     __( 'Cloudflare cache purge skipped: no URLs matched the active zone (input=%d).', 'fastcgi-cache-purge-and-preload-nginx' ),
                     (int) $input_count
                 ),
@@ -426,7 +426,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_exact_urls' ) ) {
             if ( $failed === 0 ) {
                 nppp_cloudflare_apo_log(
                     sprintf(
-                        /* translators: %d is URL count */
+                        /* translators: %d: URL count */
                         __( 'Cloudflare mobile cache purge completed: %d URL(s).', 'fastcgi-cache-purge-and-preload-nginx' ),
                         (int) $total
                     ),
@@ -506,7 +506,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_purge_all' ) ) {
         } catch ( \Throwable $e ) {
             nppp_cloudflare_apo_log(
                 sprintf(
-                    /* translators: %s is the error message returned by Cloudflare (or the Cloudflare plugin client). */
+                    /* translators: %s: error message returned by Cloudflare */
                     __( 'Cloudflare purge-all cache failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $e->getMessage()
                 ),
@@ -563,5 +563,5 @@ if ( ! function_exists( 'nppp_cloudflare_apo_sync_option_enabled' ) ) {
 }
 
 add_filter( 'nppp_sync_cloudflare_apo_enabled', 'nppp_cloudflare_apo_sync_option_enabled', 10, 6 );
-add_action( 'nppp_purged_all', 'nppp_cloudflare_apo_purge_all' );
+add_action( 'nppp_purged_all', 'nppp_cloudflare_apo_purge_all', 10, 0 );
 add_action( 'nppp_purged_urls', 'nppp_cloudflare_apo_purge_urls', 10, 4 );

@@ -2,7 +2,7 @@
 /**
  * Preload progress REST endpoint for Nginx Cache Purge Preload
  * Description: Exposes authenticated progress data for running preload jobs.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -58,12 +58,6 @@ function nppp_nginx_cache_preload_progress($request) {
         $pid = intval( trim( $wp_filesystem->get_contents( $pid_path ) ) );
         if ( $pid > 0 && nppp_is_process_alive( $pid ) ) {
             $is_running = true;
-        } else {
-            // Process just finished — fire the tick callback directly without
-            // going through WP-Cron at all. This is shortcut for snapshot creation
-            // if only user actively watching preload progress on Status tab.
-            // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- legacy hook name
-            do_action( 'npp_cache_preload_status_event' );
         }
     }
 
@@ -190,6 +184,12 @@ function nppp_nginx_cache_preload_progress($request) {
         }
     }
 
+    // Expose the current preload phase so the JS poller knows not to stop
+    // during the desktop→mobile transition gap (PIDFILE briefly absent).
+    $phase_transient_key = 'nppp_preload_phase_' . md5( 'nppp' );
+    $preload_phase       = get_transient( $phase_transient_key );
+    $preload_phase       = ( is_string( $preload_phase ) && $preload_phase !== '' ) ? $preload_phase : 'desktop';
+
     return new WP_REST_Response([
         'load_1'            => $load_1,
         'load_5'            => $load_5,
@@ -215,6 +215,7 @@ function nppp_nginx_cache_preload_progress($request) {
         'log_complete'      => $log_complete,
         'snapshot_exists'   => $snapshot_exists,
         'snapshot_time'     => $snapshot_time,
+        'preload_phase'     => $preload_phase,
     ]);
 }
 

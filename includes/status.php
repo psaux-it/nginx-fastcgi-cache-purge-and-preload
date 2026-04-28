@@ -2,7 +2,7 @@
 /**
  * Status page renderer for Nginx Cache Purge Preload
  * Description: Collects and displays runtime diagnostics, cache details, and health information.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -18,9 +18,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 // This technique stores the results of time-consuming (expensive) permission verifications for reuse.
 // The results are cached for to reduce performance overhead, especially useful when the Nginx cache path is extensive.
 function nppp_check_permissions_recursive_with_cache() {
-    $nginx_cache_settings = get_option('nginx_cache_settings');
-    $default_cache_path = '/dev/shm/change-me-now';
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
+    $default_cache_path   = '/dev/shm/change-me-now';
+    $nginx_cache_path     = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -45,8 +45,8 @@ function nppp_check_permissions_recursive_with_cache() {
         // Convert boolean result to string
         $result = $result ? 'true' : 'false';
 
-        // Cache the result for 1 hour
-        set_transient($transient_key, $result, 2 * HOUR_IN_SECONDS);
+        // Cache the result for 1 month
+        set_transient($transient_key, $result, 30 * DAY_IN_SECONDS);
     }
 
     return $result;
@@ -83,6 +83,12 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_http_purge_endpoint_broken',
         'nppp_wget_urls_cache_prev_key',
         'nppp_safexec_ok',
+        'nppp_category_map',
+        'nppp_rg_ok',
+        'nppp_wget_version_' . md5($static_key_base),
+        'nppp_rg_version_' . md5($static_key_base),
+        'nppp_pages_in_cache_' . md5($static_key_base),
+        'nppp_obd_warned_' . md5($static_key_base),
     );
 
     // Delete each known transient
@@ -108,7 +114,6 @@ function nppp_clear_plugin_cache($silent = false) {
     }
 
     // Safe clean up of dynamic transients directly in DB.
-    // Uses esc_like() + prepare() — same pattern as uninstall.php.
     $like_category              = $wpdb->esc_like('_transient_nppp_category_') . '%';
     $like_category_timeout      = $wpdb->esc_like('_transient_timeout_nppp_category_') . '%';
     $like_rate_limit            = $wpdb->esc_like('_transient_nppp_rate_limit_') . '%';
@@ -117,6 +122,10 @@ function nppp_clear_plugin_cache($silent = false) {
     $like_front_message_timeout = $wpdb->esc_like('_transient_timeout_nppp_front_message_') . '%';
     $like_wget_cache            = $wpdb->esc_like('_transient_nppp_wget_urls_cache_') . '%';
     $like_wget_cache_timeout    = $wpdb->esc_like('_transient_timeout_nppp_wget_urls_cache_') . '%';
+    $like_ep8_fail              = $wpdb->esc_like('_transient_nppp_ep8_fail_') . '%';
+    $like_ep8_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep8_fail_') . '%';
+    $like_ep3_fail              = $wpdb->esc_like('_transient_nppp_ep3_fail_') . '%';
+    $like_ep3_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep3_fail_') . '%';
 
     // Safe clean up transients directly in DB
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -124,6 +133,10 @@ function nppp_clear_plugin_cache($silent = false) {
         $wpdb->prepare(
             "DELETE FROM {$wpdb->options}
             WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
@@ -138,7 +151,11 @@ function nppp_clear_plugin_cache($silent = false) {
             $like_front_message,
             $like_front_message_timeout,
             $like_wget_cache,
-            $like_wget_cache_timeout
+            $like_wget_cache_timeout,
+            $like_ep8_fail,
+            $like_ep8_fail_timeout,
+            $like_ep3_fail,
+            $like_ep3_fail_timeout
         )
     );
 
@@ -257,9 +274,9 @@ function nppp_check_path() {
         return;
     }
 
-    $nginx_cache_settings = get_option('nginx_cache_settings');
-    $default_cache_path = '/dev/shm/change-me-now';
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
+    $default_cache_path   = '/dev/shm/change-me-now';
+    $nginx_cache_path     = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
      // Check if directory exists
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
@@ -510,16 +527,18 @@ function nppp_get_webserver_user() {
 
 // Function to get pages in cache count
 function nppp_get_in_cache_page_count() {
-    $nginx_cache_settings = get_option('nginx_cache_settings');
-    $default_cache_path = '/dev/shm/change-me-now';
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
+    $default_cache_path   = '/dev/shm/change-me-now';
+    $nginx_cache_path     = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
     // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
-    $regex = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
-             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'])
-             : nppp_fetch_default_regex_for_cache_key();
+    $decoded = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
+             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'], true)
+             : false;
 
-    $urls_count = 0;
+    $regex   = ($decoded !== false && $decoded !== '')
+             ? $decoded
+             : nppp_fetch_default_regex_for_cache_key();
 
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -547,9 +566,155 @@ function nppp_get_in_cache_page_count() {
         return 'Undetermined';
     }
 
-    // Head-only read sizes
+    // FP — ripgrep fast path, always use if available
+    nppp_prepare_request_env();
+    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+
+    if ( $rg_bin !== '' ) {
+        $rg_fuse_path   = $nginx_cache_path;
+        $rg_source_path = nppp_fuse_source_path( $rg_fuse_path );
+
+        // Mount table may list a FUSE source path that no longer exists on disk.
+        if ( $rg_source_path !== null && ! $wp_filesystem->is_dir( $rg_source_path ) ) {
+            $rg_source_path = null;
+        }
+
+        $rg_fuse_active = ( $rg_source_path !== null );
+        $rg_use_safexec = false;
+        $rg_safexec_bin = '';
+
+        if ( $rg_fuse_active ) {
+            // FUSE active — try to read real source path directly (faster, bypasses FUSE overhead).
+            // Read-only ops only here, so FUSE mount path is never needed for file operations.
+            $rg_scan_path = rtrim( $rg_source_path, '/' ) . '/';
+
+            $probe_out  = [];
+            $probe_exit = 0;
+            exec(
+                sprintf(
+                    '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
+                    escapeshellarg( $rg_bin ),
+                    escapeshellarg( $rg_scan_path )
+                ),
+                $probe_out,
+                $probe_exit
+            );
+
+            // PHP lacks read access to real source path — try safexec for elevated read.
+            if ( $probe_exit === 2 ) {
+                $sfx = nppp_find_safexec_path();
+                if ( $sfx && nppp_is_safexec_usable( $sfx, false ) ) {
+                    $rg_use_safexec = true;
+                    $rg_safexec_bin = $sfx;
+                } else {
+                    // safexec unavailable — fall back to FUSE mount path (slower)
+                    $rg_scan_path = $rg_fuse_path;
+                }
+            }
+        } else {
+            $rg_scan_path = $rg_fuse_path;
+        }
+
+        $rg_cmd_prefix = $rg_use_safexec ? escapeshellarg( $rg_safexec_bin ) . ' ' : '';
+
+        // Debug logs for decision taken
+        if ( $rg_fuse_active ) {
+            if ( $rg_scan_path === $rg_fuse_path ) {
+                nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: %s: Filesystem path being scanned by ripgrep via FUSE mount. */
+                    __( 'WARNING RG SCAN: FUSE mount detected, scanning FUSE mount path (safexec unavailable, install safexec for better performance): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $rg_scan_path
+                ), true, false );
+            } elseif ( $rg_use_safexec ) {
+                nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: %s: Original Nginx cache filesystem path being scanned by ripgrep via safexec. */
+                    __( 'INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $rg_scan_path
+                ), true, false );
+            }
+        }
+
+        // SCAN 1 — build redirect file set to exclude (warms Linux dcache for SCAN 2)
+        $redirect_cmd = sprintf(
+            '%s%s -F --text -l -m 1 -E none --no-unicode'
+            . ' --no-heading --no-ignore --no-config --no-messages -e %s -e %s %s 2>/dev/null',
+            $rg_cmd_prefix,
+            escapeshellarg( $rg_bin ),
+            escapeshellarg( 'Status: 301' ),
+            escapeshellarg( 'Status: 302' ),
+            escapeshellarg( $rg_scan_path )
+        );
+
+        $redirect_out  = [];
+        $redirect_exit = 0;
+        exec( $redirect_cmd, $redirect_out, $redirect_exit );
+
+        if ( $redirect_exit === 2 ) {
+            return 'Undetermined';
+        }
+
+        $redirect_set = array_flip( array_filter( array_map( 'trim', $redirect_out ), 'strlen' ) );
+        unset( $redirect_out );
+
+        // SCAN 2 — extract KEY: line per cache file
+        $key_cmd = sprintf(
+            '%s%s --text -m 1 -E none --no-unicode'
+            . ' --no-heading --no-ignore --no-config --no-messages %s %s 2>/dev/null',
+            $rg_cmd_prefix,
+            escapeshellarg( $rg_bin ),
+            escapeshellarg( '^KEY: [^\r\n]+' ),
+            escapeshellarg( $rg_scan_path )
+        );
+
+        $key_out  = [];
+        $key_exit = 0;
+        exec( $key_cmd, $key_out, $key_exit );
+
+        if ( $key_exit === 2 ) {
+            return 'Undetermined';
+        }
+        if ( $key_exit === 1 || empty( $key_out ) ) {
+            return 0;
+        }
+
+        $urls_count   = 0;
+        $regex_tested = false;
+
+        foreach ( $key_out as $raw_line ) {
+            $raw_line = trim( $raw_line );
+            if ( $raw_line === '' ) { continue; }
+
+            $sep = strpos( $raw_line, ':' );
+            if ( $sep === false ) { continue; }
+
+            $scan_filepath = substr( $raw_line, 0, $sep );
+            $key_line      = substr( $raw_line, $sep + 1 );
+            if ( $scan_filepath === '' || $key_line === '' ) { continue; }
+
+            if ( isset( $redirect_set[ $scan_filepath ] ) ) { continue; }
+
+            if ( ! $regex_tested ) {
+                if ( ! preg_match( $regex, $key_line, $m ) || ! isset( $m[1], $m[2] ) ) {
+                    return 'RegexError';
+                }
+                if ( filter_var( 'https://' . trim( $m[1] ) . trim( $m[2] ), FILTER_VALIDATE_URL ) === false ) {
+                    return 'RegexError';
+                }
+                $regex_tested = true;
+            } else {
+                if ( ! preg_match( $regex, $key_line ) ) { continue; }
+            }
+
+            $urls_count++;
+        }
+
+        return $urls_count;
+    }
+
+    // PHP fallback — RecursiveIterator when rg is unavailable
     $head_bytes_primary  = (int) apply_filters( 'nppp_locate_head_bytes', 4096 );
     $head_bytes_fallback = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
+    $urls_count          = 0;
 
     try {
         $cache_iterator = new RecursiveIteratorIterator(
@@ -587,16 +752,7 @@ function nppp_get_in_cache_page_count() {
                 continue;
             }
 
-            // Accept only GET entries (HEAD/POST/etc. are not cache targets here)
-            $key_line = $match[1];
-            if (strpos($key_line, 'GET') === false) {
-                continue;
-            }
-
             // Test regex only once
-            // Regex operations can be computationally expensive,
-            // especially when iterating over multiple files.
-            // So here we test cache key regex only once
             if (!$regex_tested) {
                 if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
                     // Build the URL
@@ -796,8 +952,8 @@ function nppp_my_status_html() {
                 </div>';
     }
 
-    $nginx_cache_settings = get_option('nginx_cache_settings');
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path'])
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
+    $nginx_cache_path     = isset($nginx_cache_settings['nginx_cache_path'])
         ? $nginx_cache_settings['nginx_cache_path']
         : '/dev/shm/change-me-now';
 
@@ -828,13 +984,11 @@ function nppp_my_status_html() {
     $config_file = $conf_paths[0];
     $duplicates = nppp_check_duplicate_nginx_cache_paths($config_file, $wp_filesystem);
 
-    // Pre-compute pages in cache count here — needed by warning logic below
-    // and reused in the Cache Status table. Single filesystem scan for both.
-    $nppp_pages_in_cache = nppp_get_in_cache_page_count();
-    if ( is_numeric( $nppp_pages_in_cache ) ) {
-        update_option( 'nppp_last_known_hits',      (int) $nppp_pages_in_cache, false );
-        update_option( 'nppp_last_hits_scanned_at', time(),                     false );
-    }
+    // Pages in cache — read from last known option, never scan on Status tab load.
+    // nppp_last_known_hits is updated at natural points: preload completion,
+    // purge all, advanced tab index scan, send-mail, dashboard widget.
+    $nppp_pages_in_cache  = get_option( 'nppp_last_known_hits',      false );
+    $nppp_hits_scanned_at = get_option( 'nppp_last_hits_scanned_at', false );
 
     // Warn about not found cache key
     if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
@@ -875,7 +1029,7 @@ function nppp_my_status_html() {
             echo '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
                      <p style="margin: 0; align-items: center;">
                          <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>' . sprintf(
-                             /* Translators: %1$s, %2$s are dynamic strings */
+                             /* translators: %1$s: Cache Key Regex option name, %2$s: Advanced Options section name */
                              wp_kses(__('Non-default <strong>_cache_key</strong> is active on this site. Update <strong>%1$s</strong> in <strong>%2$s</strong> to match your key format.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]),
                              wp_kses(__('Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'), []),
                              wp_kses(__('Advanced Options', 'fastcgi-cache-purge-and-preload-nginx'), [])
@@ -1062,6 +1216,13 @@ function nppp_my_status_html() {
                                 </td>
                             </tr>
                             <tr>
+                                <td class="check"><?php esc_html_e('rg (Recommended)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="status" id="nppprgStatus">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html(nppp_check_command_status('rg')); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
                                 <td class="check"><?php esc_html_e('cpulimit (Optional)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppcpulimitStatus">
                                     <span class="dashicons"></span>
@@ -1087,7 +1248,16 @@ function nppp_my_status_html() {
                                 <td class="check"><?php esc_html_e('Pages In Cache Count', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppphpPagesInCache">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html($nppp_pages_in_cache); ?></span>
+                                    <?php if ( $nppp_pages_in_cache !== false ): ?>
+                                        <span><?php echo esc_html( $nppp_pages_in_cache ); ?></span>
+                                        <?php if ( $nppp_hits_scanned_at ): ?>
+                                            <span style="font-size:11px; color:#888;">
+                                                (<?php echo esc_html( human_time_diff( $nppp_hits_scanned_at, time() ) ); ?> ago)
+                                            </span>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <span style="color:#888;"><?php esc_html_e( 'N/A — run a Preload to populate', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                             <tr>
@@ -1195,15 +1365,15 @@ function nppp_cache_status_callback() {
     if (isset($_POST['_wpnonce'])) {
         $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce']));
         if (!wp_verify_nonce($nonce, 'cache-status')) {
-            wp_die(esc_html__('Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx'));
+            wp_die('', '', ['response' => 403]);
         }
     } else {
-        wp_die(esc_html__('Nonce is missing.', 'fastcgi-cache-purge-and-preload-nginx'));
+        wp_die('', '', ['response' => 403]);
     }
 
     // Check user capability
     if (!current_user_can('manage_options')) {
-        wp_die(esc_html__('You do not have permission to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
+        wp_die('', '', ['response' => 403]);
     }
 
     // On a large cache (100 k+ files)

@@ -1,7 +1,7 @@
 /**
  * Aurora header effect script for Nginx Cache Purge Preload
  * Description: Renders animated admin-header ribbons tied to plugin action and preload status updates.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -465,7 +465,7 @@
 /**
  * Aurora Effects Patch (Drop-in)
  * Description: Feature-flagged overlay effects (sheen/crackle/flare) + tempo pulses
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * License: GPL-2.0+
  *

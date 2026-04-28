@@ -2,7 +2,7 @@
 /**
  * Nginx configuration parser for Nginx Cache Purge Preload
  * Description: Reads server config fragments to detect cache paths, keys, and runtime settings.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -20,31 +20,6 @@ function nppp_get_command_output($command) {
     return trim(shell_exec($command));
 }
 
-// Function to get the latest release from GitHub API using wp_remote_get
-function nppp_get_latest_version_git($url) {
-    $response = wp_remote_get($url, [
-        'timeout'   => 3,
-        'httpversion' => '1.1',
-        'user-agent' => 'PHP',
-    ]);
-
-    // Check if the response has an error
-    if (is_wp_error($response)) {
-        return 'Not Determined';
-    }
-
-    // Get the response body and decode the JSON
-    $body = wp_remote_retrieve_body($response);
-    $data = $body ? json_decode($body, true) : null;
-
-    // Ensure $data is an array before proceeding
-    if (is_array($data)) {
-        return $data;
-    } else {
-        return 'Not Determined';
-    }
-}
-
 // Function to check bindfs version
 function nppp_check_bindfs_version() {
     // Ask result in cache first
@@ -57,39 +32,15 @@ function nppp_check_bindfs_version() {
         return $cached_result;
     }
 
-    // Fetch latest version
-    $bindfs_repo_url = "https://api.github.com/repos/mpartel/bindfs/git/refs/tags";
-    $response = nppp_get_latest_version_git($bindfs_repo_url);
-
-    $latest_version = 'Not Determined';
-    if (is_array($response) && !empty($response)) {
-        $mapped_response = array_map(function($ref) {
-            return isset($ref['ref']) ? preg_replace('/^refs\/tags\//', '', $ref['ref']) : '';
-        }, $response);
-        // Filter out any empty results after the map
-        $mapped_response = array_filter($mapped_response);
-        $latest_version = !empty($mapped_response) ? end($mapped_response) : 'Not Determined';
-    }
-
-    // Check if bindfs is installed
+    // Check if bindfs is installed — no external API call
     if (nppp_get_command_output('command -v bindfs')) {
         $installed_version = nppp_get_command_output('bindfs --version | head -n1 | awk \'{print $2}\'');
+        $result = !empty($installed_version) ? $installed_version : 'Unknown';
     } else {
-        $installed_version = null;
+        $result = 'Not Installed';
     }
 
-    // Decide the result based on install status and API fetch success
-    if ($installed_version) {
-        if ($latest_version && version_compare($installed_version, $latest_version, '<')) {
-            $result = "$installed_version ($latest_version)";
-        } else {
-            $result = "$installed_version ($latest_version)";
-        }
-    } else {
-        $result = "Not Installed";
-    }
-
-    // Store the result in the cache 1 month
+    // Store the result in the cache for 1 month
     set_transient($transient_key, $result, MONTH_IN_SECONDS);
 
     return $result;
@@ -107,13 +58,6 @@ function nppp_check_libfuse_version() {
         return $cached_result;
     }
 
-    // Attempt to fetch the latest version
-    $libfuse_repo_url = "https://api.github.com/repos/libfuse/libfuse/releases/latest";
-    $response = nppp_get_latest_version_git($libfuse_repo_url);
-    $latest_version = is_array($response) && isset($response['tag_name'])
-                      ? str_replace('fuse-', '', $response['tag_name'])
-                      : 'Not Determined';
-
     // Check for FUSE 3 or FUSE 2
     if (nppp_get_command_output('command -v fusermount3')) {
         $installed_version = preg_replace('/version:\s*/', '', nppp_get_command_output('fusermount3 -V | grep -oP \'version:\s*\K[0-9.]+\''));
@@ -123,18 +67,11 @@ function nppp_check_libfuse_version() {
         $installed_version = null;
     }
 
-    // Decide the result based on API fetch success
-    if ($installed_version) {
-        if ($latest_version && version_compare($installed_version, $latest_version, '<')) {
-            $result = "$installed_version ($latest_version)";
-        } else {
-            $result = "$installed_version ($latest_version)";
-        }
-    } else {
-        $result = "Not Installed";
-    }
+    $result = ($installed_version !== null && $installed_version !== '')
+        ? $installed_version
+        : 'Not Installed';
 
-    // Store the result in the cache 1 month
+    // Store the result in the cache for 1 month
     set_transient($transient_key, $result, MONTH_IN_SECONDS);
 
     return $result;
@@ -148,11 +85,59 @@ function nppp_check_safexec_version() {
         return $cached;
     }
 
-    $installed_version = 'Unknown';
+    // Plugin's bundled/required safexec version
+    $plugin_safexec_version = defined('NPPP_SAFEXEC_VERSION') ? NPPP_SAFEXEC_VERSION : 'Unknown';
 
     // Check if safexec is in PATH
     if (nppp_get_command_output('command -v safexec')) {
         $line = nppp_get_command_output("safexec -v 2>&1 | awk 'NR==1{print \$2}'");
+        if (!empty($line)) {
+            $installed_version = trim($line);
+            $result = "$installed_version ($plugin_safexec_version)";
+        } else {
+            $result = "Unknown";
+        }
+    } else {
+        $result = "Not Installed";
+    }
+
+    set_transient($transient_key, $result, MONTH_IN_SECONDS);
+    return $result;
+}
+
+// Function to check wget version
+function nppp_check_wget_version() {
+    $transient_key = 'nppp_wget_version_' . md5('nppp');
+    $cached = get_transient($transient_key);
+    if ($cached !== false) {
+        return $cached;
+    }
+
+    $installed_version = 'Not Installed';
+
+    if (nppp_get_command_output('command -v wget')) {
+        $line = nppp_get_command_output("wget --version 2>&1 | head -n1 | awk '{print \$3}'");
+        if (!empty($line)) {
+            $installed_version = trim($line);
+        }
+    }
+
+    set_transient($transient_key, $installed_version, MONTH_IN_SECONDS);
+    return $installed_version;
+}
+
+// Function to check rg (ripgrep) version
+function nppp_check_rg_version() {
+    $transient_key = 'nppp_rg_version_' . md5('nppp');
+    $cached = get_transient($transient_key);
+    if ($cached !== false) {
+        return $cached;
+    }
+
+    $installed_version = 'Not Installed';
+
+    if (nppp_get_command_output('command -v rg')) {
+        $line = nppp_get_command_output("rg --version 2>&1 | head -n1 | awk '{print \$2}'");
         if (!empty($line)) {
             $installed_version = trim($line);
         }
@@ -170,7 +155,6 @@ function nppp_check_fuse_cache_paths($cache_paths) {
 
     // Return cached result if available
     $cached_result = get_transient($transient_key);
-    // Return cached result if available
     if ($cached_result !== false) {
         return $cached_result;
     }
@@ -181,21 +165,24 @@ function nppp_check_fuse_cache_paths($cache_paths) {
     $fuse_paths = [];
     $fuse_map   = [];
 
+    // Parse mount output once
+    $mount_output = shell_exec('mount 2>/dev/null') ?? '';
+    $mount_lines  = explode("\n", $mount_output);
+
     // Loop through the cache paths to check their mount points
     foreach ($cache_paths as $directive => $paths) {
         foreach ($paths as $path) {
-            if (!empty($path)) {
-                // Execute a shell command to get the mount point for the given path
-                $command = "mount | grep " . escapeshellarg($path);
-                $output = shell_exec($command);
+            if (empty($path)) {
+                continue;
+            }
 
-                // If a valid output is found, extract the fuse mount point
-                if ($output) {
-                    // Extract the FUSE mount point
-                    if (preg_match('/on\s+([^\s]+)\s+type\s+fuse/', $output, $matches)) {
-                        $fuse_paths[] = $matches[1];
-                        $fuse_map[rtrim($path, '/')] = rtrim($matches[1], '/');
-                    }
+            // Anchor the search to " on <path> type fuse" to avoid partial matches
+            $source = rtrim($path, '/');
+
+            foreach ($mount_lines as $line) {
+                if (preg_match('/^' . preg_quote($source, '/') . ' on (\S+) type fuse/', $line, $matches)) {
+                    $fuse_paths[] = $matches[1];
+                    $fuse_map[$source] = rtrim($matches[1], '/');
                 }
             }
         }
@@ -269,12 +256,12 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = t
     $included_files = [];
 
     // Regex to match cache path directives
-    preg_match_all('/^\s*(?!#\s*)(proxy_cache_path|fastcgi_cache_path|scgi_cache_path|uwsgi_cache_path)\s+([^;]+);/m', $config, $cache_directives, PREG_SET_ORDER);
+    preg_match_all('/^\s*(?!#\s*)(proxy_cache_path|fastcgi_cache_path|scgi_cache_path|uwsgi_cache_path)\s+(\S+)/m', $config, $cache_directives, PREG_SET_ORDER);
 
     foreach ($cache_directives as $cache_directive) {
         if (isset($cache_directive[1]) && isset($cache_directive[2])) {
             $directive = $cache_directive[1];
-            $value = trim(preg_replace('/\s.*$/', '', $cache_directive[2]));
+            $value = trim($cache_directive[2]);
 
             // Initialize an array for this directive if not already present
             if (!isset($cache_paths[$directive])) {
@@ -300,7 +287,7 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = t
 
             if (strpos($include_path, '*') !== false) {
                 // Expand wildcards safely
-                $files = glob($include_path, GLOB_BRACE) ?: [];
+                $files = glob($include_path, defined('GLOB_BRACE') ? GLOB_BRACE : 0) ?: [];
                 $included_files = array_merge($included_files, $files);
             } else {
                 // Handle single file includes
@@ -399,6 +386,13 @@ function nppp_get_nginx_info() {
 // Does NOT check filesystem existence — paths come from nginx.conf, not settings input.
 // Must be kept in sync with nppp_validate_path() in settings.php.
 function nppp_is_cache_path_display_supported(string $directive, string $value): bool {
+    // When the user has bypassed path restrictions, every syntactically valid
+    // path is display-supported.
+    $opts = get_option( 'nginx_cache_settings', [] );
+    if ( isset( $opts['nginx_cache_bypass_path_restriction'] ) && $opts['nginx_cache_bypass_path_restriction'] === 'yes' ) {
+        return true;
+    }
+
     $normalised = rtrim($value, '/');
 
     // Allowed roots — must match nppp_validate_path() $allowed_roots exactly
@@ -468,7 +462,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                 <tbody>
                     <!-- Section for Nginx Version -->
                     <tr>
-                        <td class="action"><?php esc_html_e('Nginx Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action"><?php esc_html_e('Nginx (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppNginxVersion">
                             <?php if ($nginx_info['nginx_version'] === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
@@ -483,7 +477,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     </tr>
                     <!-- Section for PHP Version -->
                     <tr>
-                        <td class="action"><?php esc_html_e('PHP Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action"><?php esc_html_e('PHP (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppOpenSSLVersion">
                             <?php if ($nginx_info['php_version'] === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
@@ -498,17 +492,40 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                     </tr>
                     <!-- Section for safexec Version -->
                     <tr>
-                        <td class="action"><?php esc_html_e('safexec Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action"><?php esc_html_e('safexec (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppSafexecVersion">
-                            <?php $safexec_version = nppp_check_safexec_version(); ?>
-                            <?php if ($safexec_version === 'Unknown'): ?>
+                            <?php echo esc_html(nppp_check_safexec_version()); ?>
+                        </td>
+                    </tr>
+                    <!-- Section for wget Version -->
+                    <tr>
+                        <td class="action"><?php esc_html_e('wget (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="status" id="npppWgetVersion">
+                            <?php $wget_version = nppp_check_wget_version(); ?>
+                            <?php if ($wget_version === 'Not Installed' || $wget_version === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span style="color: orange; font-size: 14px; font-weight: bold;">
-                                    <?php echo esc_html($safexec_version); ?>
+                                    <?php echo esc_html($wget_version); ?>
                                 </span>
                             <?php else: ?>
                                 <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
-                                <span><?php echo esc_html($safexec_version); ?></span>
+                                <span><?php echo esc_html($wget_version); ?></span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <!-- Section for rg Version -->
+                    <tr>
+                        <td class="action"><?php esc_html_e('rg (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="status" id="npppRgVersion">
+                            <?php $rg_version = nppp_check_rg_version(); ?>
+                            <?php if ($rg_version === 'Not Installed' || $rg_version === 'Unknown'): ?>
+                                <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: orange; font-size: 14px; font-weight: bold;">
+                                    <?php echo esc_html($rg_version); ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span><?php echo esc_html($rg_version); ?></span>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -670,7 +687,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
             <table>
                 <tbody>
                     <tr>
-                        <td class="action highlight-metric"><?php esc_html_e('libfuse Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action highlight-metric"><?php esc_html_e('libfuse (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status highlight-metric" id="npppLibfuseVersion">
                             <?php
                             echo esc_html(nppp_check_libfuse_version());
@@ -678,7 +695,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                         </td>
                     </tr>
                     <tr>
-                        <td class="action highlight-metric"><?php esc_html_e('bindfs Version', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action highlight-metric"><?php esc_html_e('bindfs (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status highlight-metric" id="npppBindfsVersion">
                             <?php
                             echo esc_html(nppp_check_bindfs_version());
