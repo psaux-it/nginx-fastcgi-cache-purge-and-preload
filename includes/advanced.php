@@ -930,7 +930,7 @@ function nppp_preload_cache_premium_callback() {
         // Mount table may list a source path that no longer exists on disk.
         if ($rg_source_path !== null && !$wp_filesystem->is_dir($rg_source_path)) {
             nppp_display_admin_notice('info', sprintf(
-                /* translators: %s: The FUSE mount source directory. */
+                /* translators: %s: FUSE source filesystem path that no longer exists on disk. */
                 __('WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx'),
                 $rg_source_path
             ), true, false);
@@ -972,7 +972,7 @@ function nppp_preload_cache_premium_callback() {
             if ($rg_fuse_active) {
                 if ($rg_cmd_prefix !== '') {
                     nppp_display_admin_notice('info', sprintf(
-                        /* translators: %s: Original Nginx cache filesystem path being scanned via safexec. */
+                        /* translators: %s: Original Nginx cache filesystem path being scanned by ripgrep via safexec. */
                         __('INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx'),
                         $rg_scan_path
                     ), true, false);
@@ -1246,7 +1246,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
         // Mount table may list a FUSE source path that no longer exists on disk.
         if ( $rg_source_path !== null && ! $wp_filesystem->is_dir( $rg_source_path ) ) {
             nppp_display_admin_notice( 'info', sprintf(
-                /* translators: %s: FUSE source directory path. */
+                /* translators: %s: FUSE source filesystem path that no longer exists on disk. */
                 __( 'WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $rg_source_path
             ), true, false );
@@ -1300,13 +1300,13 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
         if ( $rg_fuse_active ) {
             if ( $rg_scan_path === $rg_fuse_path ) {
                 nppp_display_admin_notice( 'info', sprintf(
-                    /* translators: %s: Filesystem path being scanned via FUSE mount. */
+                    /* translators: %s: Filesystem path being scanned by ripgrep via FUSE mount. */
                     __( 'WARNING RG SCAN: FUSE mount detected, scanning FUSE mount path (safexec unavailable, install safexec for better performance): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $rg_scan_path
                 ), true, false );
             } elseif ( $rg_use_safexec ) {
                 nppp_display_admin_notice( 'info', sprintf(
-                    /* translators: %s: Original Nginx cache filesystem path being scanned via safexec. */
+                    /* translators: %s: Original Nginx cache filesystem path being scanned by ripgrep via safexec. */
                     __( 'INFO RG SCAN: FUSE mount detected, scanning original Nginx Cache Path (safexec): %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $rg_scan_path
                 ), true, false );
