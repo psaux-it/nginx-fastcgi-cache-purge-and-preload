@@ -673,12 +673,12 @@ wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/
 # For x86_64
 wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/safexec_<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1_amd64.deb
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apt install ./safexec_<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1_amd64.deb
+sudo apt install --reinstall ./safexec_<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1_amd64.deb
 
 # For AArch64
 wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/safexec_<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1_arm64.deb
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apt install ./safexec_<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1_arm64.deb</pre>
+sudo apt install --reinstall ./safexec_<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1_arm64.deb</pre>
                         </li>
 
                         <li><strong> RHEL / CentOS / Fedora (.rpm)</strong>
@@ -689,11 +689,13 @@ wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/
 wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.x86_64.rpm
 sha256sum -c SHA256SUMS --ignore-missing
 sudo dnf install ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.x86_64.rpm
+sudo dnf reinstall ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.x86_64.rpm
 
 # For AArch64
 wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.aarch64.rpm
 sha256sum -c SHA256SUMS --ignore-missing
-sudo dnf install ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.aarch64.rpm</pre>
+sudo dnf install ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.aarch64.rpm
+sudo dnf reinstall ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-1.el10.aarch64.rpm</pre>
                         </li>
 
                         <li><strong> Alpine Linux (.apk)</strong>
@@ -703,12 +705,12 @@ wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/
 # For x86_64
 wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-r1.x86_64.apk
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apk add --allow-untrusted ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-r1.x86_64.apk
+sudo apk add --allow-untrusted --force-overwrite ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-r1.x86_64.apk
 
 # For AArch64
 wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v<?php echo esc_html(NPPP_PLUGIN_VERSION); ?>/safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-r1.aarch64.apk
 sha256sum -c SHA256SUMS --ignore-missing
-sudo apk add --allow-untrusted ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-r1.aarch64.apk</pre>
+sudo apk add --allow-untrusted --force-overwrite ./safexec-<?php echo esc_html(NPPP_SAFEXEC_VERSION); ?>-r1.aarch64.apk</pre>
                             <p style="font-size: 13px;"><em>Note: <code>--allow-untrusted</code> is required because the package is not signed with an Alpine trusted key. The SHA256 checksum above provides integrity verification.</em></p>
                         </li>
 
