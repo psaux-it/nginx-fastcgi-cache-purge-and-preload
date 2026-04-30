@@ -568,7 +568,7 @@ function nppp_get_in_cache_page_count() {
 
     // FP — ripgrep fast path, always use if available
     nppp_prepare_request_env();
-    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+    $rg_bin = function_exists('shell_exec') ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
 
     if ( $rg_bin !== '' ) {
         $rg_fuse_path   = $nginx_cache_path;
