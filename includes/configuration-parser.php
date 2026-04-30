@@ -16,6 +16,10 @@ if (!defined('ABSPATH')) {
 
 // Function to execute a shell command and get the output
 function nppp_get_command_output($command) {
+    if (!function_exists('shell_exec')) {
+        return '';
+    }
+
     nppp_prepare_request_env(true);
     return trim(shell_exec($command));
 }
@@ -166,8 +170,7 @@ function nppp_check_fuse_cache_paths($cache_paths) {
     $fuse_map   = [];
 
     // Parse mount output once
-    $mount_output = shell_exec('mount 2>/dev/null') ?? '';
-    $mount_lines  = explode("\n", $mount_output);
+    $mount_output = function_exists('shell_exec') ? ((string) shell_exec('mount 2>/dev/null')) : '';
 
     // Loop through the cache paths to check their mount points
     foreach ($cache_paths as $directive => $paths) {
@@ -342,7 +345,7 @@ function nppp_get_nginx_info() {
     $php_version = 'Unknown';
 
     // Get version directly via nginx binary
-    if (shell_exec('command -v nginx')) {
+    if (function_exists('shell_exec') && shell_exec('command -v nginx')) {
         $output = shell_exec('nginx -V 2>&1');
 
         // Extract Nginx version
