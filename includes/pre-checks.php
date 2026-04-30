@@ -24,6 +24,12 @@ if (! function_exists('nppp_get_wget_compatibility')) {
             return $cached;
         }
 
+        if (!function_exists('shell_exec')) {
+            $cached = ['ok' => false, 'reason' => 'missing'];
+            set_transient($transient_key, $cached, 300);
+            return $cached;
+        }
+
         $binary = trim((string) shell_exec('command -v wget 2>/dev/null'));
         if ($binary === '') {
             $cached = [
@@ -225,6 +231,11 @@ function nppp_is_process_alive($pid) {
 
     // Validate that $pid is a positive integer
     if (!is_numeric($pid) || $pid <= 0 || intval($pid) != $pid) {
+        return false;
+    }
+
+    // Guard: both shell_exec and exec must be available
+    if (!function_exists('shell_exec') || !function_exists('exec')) {
         return false;
     }
 
@@ -611,26 +622,21 @@ function nppp_pre_checks_critical() {
         return __('GLOBAL ERROR SERVER: The plugin is not functional on your environment. It requires an Nginx web server. If this detection is inaccurate, please refer to the Help tab for detailed instructions.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
-    // Check if either shell_exec or exec is enabled
-    if (function_exists('shell_exec') || function_exists('exec')) {
-        // Attempt to execute a harmless command with shell_exec if available
-        if (function_exists('shell_exec')) {
-            $output = shell_exec('echo "Test"');
-            if (trim($output) !== "Test") {
-                return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "shell_exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
-            }
-        }
+    // Check if both shell_exec and exec are enabled (both are required)
+    if (!function_exists('shell_exec') || !function_exists('exec')) {
+        return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. Both "shell_exec" and "exec" functions are required but one or both are not enabled. Please enable them in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
+    }
 
-        // Fallback: Attempt to execute with exec if shell_exec is not available
-        if (function_exists('exec')) {
-            $output = exec('echo "Test"');
-            if (trim($output) !== "Test") {
-                return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
-            }
-        }
-    } else {
-        // If neither shell_exec nor exec are available
-        return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "shell_exec" or "exec" functions are required but not enabled. Please enable them in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
+    // Verify shell_exec is not silently blocked
+    $output = shell_exec('echo "Test"');
+    if (trim($output) !== "Test") {
+        return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "shell_exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    // Verify exec is not silently blocked
+    $output = exec('echo "Test"');
+    if (trim($output) !== "Test") {
+        return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Check if POSIX extension functions are available
