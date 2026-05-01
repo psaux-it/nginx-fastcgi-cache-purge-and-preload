@@ -608,6 +608,8 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     $opts    = get_option('nginx_cache_settings', array());
     $current = isset($opts['nginx_cache_pctnorm_mode']) ? $opts['nginx_cache_pctnorm_mode'] : 'off';
 
+    $putenv_ok = function_exists('putenv') && function_exists('getenv');
+
     $cached = get_transient('nppp_safexec_ok');
     if ($cached === false) {
         $safexec_path = nppp_find_safexec_path();
@@ -617,7 +619,7 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
         $safexec_path = $cached['path'];
         $safexec_ok   = $cached['ok'];
     }
-    $is_disabled = ! $safexec_ok;
+    $is_disabled = ! $safexec_ok || ! $putenv_ok;
 
     if ($is_disabled && $current !== 'off') {
         $opts['nginx_cache_pctnorm_mode'] = 'off';
@@ -626,7 +628,9 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     }
 
     // Shown as native tooltip
-    if (!$safexec_path) {
+    if (!$putenv_ok) {
+        $status_note = esc_html__( 'Unavailable: putenv() or getenv() is restricted in PHP (check disable_functions in php.ini). URL Normalization requires both to manage the safexec environment.', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif (!$safexec_path) {
         $status_note = esc_html__( 'Unavailable: safexec not found. Install it to enable URL Normalization (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
     } elseif (!$safexec_ok) {
         // Distinguish: SUID failure vs SHA256 integrity failure
@@ -637,7 +641,9 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
                      && (($stat_info['mode'] & 04000) === 04000);
 
         if ($suid_ok) {
-            $status_note = esc_html__( 'Unavailable: safexec integrity check failed. Reinstall the correct version (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
+            $status_note = esc_html__( 'Unavailable: safexec status is cached. Permissions appear correct now — save settings again to refresh.', 'fastcgi-cache-purge-and-preload-nginx' );
+        } elseif (!$stat_info) {
+            $status_note = esc_html__( 'Unavailable: safexec is not accessible. Check file permissions (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
         } else {
             $status_note = esc_html__( 'Unavailable: safexec is not SUID/root-owned. Fix permissions (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
         }
