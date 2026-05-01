@@ -384,6 +384,15 @@ function nppp_create_scheduled_event_preload_status_callback() {
         $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
         $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
+        // Guard — shell_exec / exec must still be callable at tick time.
+        if ( ! function_exists( 'shell_exec' ) || ! function_exists( 'exec' ) ) {
+            nppp_custom_error_log(
+                __( 'ERROR ENV: WP-Cron mobile preload skipped — shell_exec or exec is disabled on this server.', 'fastcgi-cache-purge-and-preload-nginx' )
+            );
+            delete_transient($completion_lock_key);
+            return;
+        }
+
         // Start the preload action for Mobile
         nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, false, false, true, false, true);
 
@@ -594,6 +603,15 @@ function nppp_custom_every_3hours_schedule($schedules) {
 
 // Callback function for the scheduled event
 function nppp_create_scheduled_event_preload_callback() {
+    // Guard — abort early if shell_exec or exec are disabled on this server.
+    // Both functions are required to spawn and manage the background wget process.
+    if ( ! function_exists( 'shell_exec' ) || ! function_exists( 'exec' ) ) {
+        nppp_custom_error_log(
+            __( 'ERROR ENV: WP-Cron preload skipped — shell_exec or exec is disabled on this server.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
     // Get the plugin options
     $nginx_cache_settings = get_option('nginx_cache_settings', []);
 
