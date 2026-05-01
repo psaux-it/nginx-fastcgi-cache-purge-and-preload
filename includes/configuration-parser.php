@@ -20,8 +20,13 @@ function nppp_get_command_output($command) {
         return '';
     }
 
+    $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+    if (in_array('shell_exec', $disabled, true)) {
+        return '';
+    }
+
     nppp_prepare_request_env(true);
-    return trim(shell_exec($command));
+    return trim((string) shell_exec($command));
 }
 
 // Function to check bindfs version
@@ -171,6 +176,7 @@ function nppp_check_fuse_cache_paths($cache_paths) {
 
     // Parse mount output once
     $mount_output = function_exists('shell_exec') ? ((string) shell_exec('mount 2>/dev/null')) : '';
+    $mount_lines  = !empty($mount_output) ? explode("\n", $mount_output) : [];
 
     // Loop through the cache paths to check their mount points
     foreach ($cache_paths as $directive => $paths) {
