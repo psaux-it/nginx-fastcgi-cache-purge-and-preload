@@ -783,7 +783,12 @@ function nppp_rg_purge_enabled_callback(): void {
     // Check rg availability
     $cached = get_transient( 'nppp_rg_ok' );
     if ( $cached === false ) {
-        $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+        // shell_exec may be in disable_functions — calling it directly throws a fatal Error in PHP 8.x.
+        if ( function_exists( 'shell_exec' ) ) {
+            $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+        } else {
+            $rg_bin = '';
+        }
         $rg_ok  = $rg_bin !== '' && is_executable( $rg_bin );
         set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_ok ], HOUR_IN_SECONDS );
     } else {
