@@ -215,6 +215,10 @@ function nppp_check_command_status($command) {
     // Set env
     nppp_prepare_request_env(true);
 
+    if ( ! function_exists( 'shell_exec' ) ) {
+        return 'Not Installed';
+    }
+
     $output = shell_exec("command -v $command");
     return !empty($output) ? 'Installed' : 'Not Installed';
 }
@@ -345,7 +349,7 @@ function nppp_get_cache_disk_size( string $path ): ?array {
 
     // Shared partition — use du to get actual cache directory bytes only.
     // This prevents showing entire partition usage as "cache size".
-    $raw = shell_exec( 'du -sb ' . escapeshellarg( $path ) . ' 2>/dev/null' );
+    $raw = function_exists( 'shell_exec' ) ? shell_exec( 'du -sb ' . escapeshellarg( $path ) . ' 2>/dev/null' ) : null;
     if ( $raw ) {
         $parts = explode( "\t", trim( $raw ) );
         if ( isset( $parts[0] ) && ctype_digit( $parts[0] ) ) {
@@ -412,7 +416,7 @@ function nppp_get_website_user() {
         $command = "ls -ld " . escapeshellarg($wordpressRoot . '/index.php') . " | awk '{print $3}'";
 
         // Execute the shell command
-        $process_owner = shell_exec($command);
+        $process_owner = function_exists( 'shell_exec' ) ? shell_exec($command) : null;
 
         // Check the PHP process owner if not empty
         if (!empty($process_owner)) {
@@ -463,7 +467,9 @@ function nppp_get_webserver_user() {
     nppp_prepare_request_env(true);
 
     // Check the running processes for Nginx
-    $nginx_user_process = shell_exec("ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v 'root' | awk '{print $1}' | sort | uniq");
+    $nginx_user_process = function_exists( 'shell_exec' )
+        ? shell_exec("ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v 'root' | awk '{print $1}' | sort | uniq")
+        : null;
 
     // Convert the process output to an array and filter out empty values
     if ($nginx_user_process !== null && $nginx_user_process !== '') {
