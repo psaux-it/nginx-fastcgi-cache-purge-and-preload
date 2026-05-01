@@ -389,6 +389,16 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         $current_page_url = $candidate_ascii;
     }
 
+    // Environment check
+    // The JS only guards the UI; direct admin-bar GET requests bypass it completely.
+    if ( ! function_exists( 'shell_exec' ) || ! function_exists( 'exec' ) ) {
+        nppp_front_error_notice(
+            __( 'ERROR ENV: shell_exec or exec is disabled on this server. Plugin environment requirements are not met. Cache action cannot be performed.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            home_url( '/' )
+        );
+        return;
+    }
+
     // Reset tracker before buffering so a stale value from a previous
     // request never bleeds into this one.
     $GLOBALS['nppp_last_notice_type'] = 'success';
