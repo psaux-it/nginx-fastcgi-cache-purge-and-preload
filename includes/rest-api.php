@@ -301,6 +301,15 @@ function nppp_nginx_cache_purge_endpoint($request) {
         return $rate_limit;
     }
 
+    if ( ! function_exists( 'shell_exec' ) || ! function_exists( 'exec' ) ) {
+        nppp_log_api_request( 'purge', __( 'ERROR 503 ENV NOT MET', 'fastcgi-cache-purge-and-preload-nginx' ), true );
+        return new WP_Error(
+            'env_check_failed',
+            __( 'NPP REST API shell_exec or exec is disabled on this server.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            array( 'status' => 503 )
+        );
+    }
+
     // Record the buffer level BEFORE we start our own output buffer.
     // This allows log.php to verify that the buffer being written to belongs to us.
     $GLOBALS['nppp_rest_ob_level'] = ob_get_level();
@@ -349,6 +358,15 @@ function nppp_nginx_cache_preload_endpoint($request) {
     $rate_limit = nppp_enforce_rate_limit( $request, 'preload' );
     if ( is_wp_error( $rate_limit ) ) {
         return $rate_limit;
+    }
+
+    if ( ! function_exists( 'shell_exec' ) || ! function_exists( 'exec' ) ) {
+        nppp_log_api_request( 'preload', __( 'ERROR 503 ENV NOT MET', 'fastcgi-cache-purge-and-preload-nginx' ), true );
+        return new WP_Error(
+            'env_check_failed',
+            __( 'NPP REST API shell_exec or exec is disabled on this server.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            array( 'status' => 503 )
+        );
     }
 
     // Record the buffer level BEFORE we start our own output buffer.
