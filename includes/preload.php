@@ -118,7 +118,7 @@ function nppp_find_safexec_path() {
         return false;
     }
 
-    $detected = trim(shell_exec('command -v safexec 2>/dev/null'));
+    $detected = trim((string) shell_exec('command -v safexec 2>/dev/null'));
     return !empty($detected) ? $detected : false;
 }
 
