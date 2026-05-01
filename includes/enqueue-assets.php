@@ -204,7 +204,7 @@ function nppp_is_dockerized() {
         // Loop through each command and check if it exists
         foreach ($commands_to_check as $command) {
             // Execute 'command -v' to check if the command exists in the shell
-            $result = shell_exec("command -v {$command}");
+            $result = function_exists( 'shell_exec' ) ? shell_exec( "command -v {$command}" ) : null;
 
             // If the result is empty, the command doesn't exist
             if (empty($result)) {
