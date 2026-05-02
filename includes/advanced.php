@@ -912,7 +912,7 @@ function nppp_preload_cache_premium_callback() {
     $rg_used = false;
 
     nppp_prepare_request_env();
-    $rg_bin = trim( (string) shell_exec('command -v rg 2>/dev/null') );
+    $rg_bin = ( function_exists( 'shell_exec' ) && function_exists( 'exec' ) ) ? trim( (string) shell_exec('command -v rg 2>/dev/null') ) : '';
 
     if ($rg_bin !== '') {
         // Wait for wget to finish before scanning.
@@ -1236,7 +1236,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     */
 
     nppp_prepare_request_env();
-    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+    $rg_bin = ( function_exists( 'shell_exec' ) && function_exists( 'exec' ) ) ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
     if ( $rg_bin !== '' ) {
 
         // Resolve FUSE mount
