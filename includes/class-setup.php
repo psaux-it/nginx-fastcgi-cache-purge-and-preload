@@ -108,9 +108,12 @@ final class Setup {
         </style>';
 
         echo '<div class="wrap">';
-        $page_title = ($strict_detected || $assume_enabled)
+        $page_title = $strict_detected
             ? __('NPP • Setup Completed', 'fastcgi-cache-purge-and-preload-nginx')
-            : __('NPP • Complete Setup', 'fastcgi-cache-purge-and-preload-nginx');
+            : ( $assume_enabled
+                ? __('NPP • Assume-Nginx Mode Active', 'fastcgi-cache-purge-and-preload-nginx')
+                : __('NPP • Complete Setup', 'fastcgi-cache-purge-and-preload-nginx')
+            );
 
         // Logo
         $plugin_slug = basename( dirname( dirname( __FILE__ ) ) );
@@ -138,7 +141,7 @@ final class Setup {
 
         // Top notice: success vs. action needed
         if ($strict_detected) {
-            echo '<div class="notice notice-success"><p>'
+            echo '<div class="notice notice-success notice-nppp"><p>'
                . esc_html__('Nginx detected. You’re all set — continue to Settings.', 'fastcgi-cache-purge-and-preload-nginx')
                . '</p>';
 
@@ -151,33 +154,57 @@ final class Setup {
             echo '</div>';
 
         } elseif ($assume_enabled) {
-            echo '<div class="notice notice-info"><p>'
-               . esc_html__('Assume-Nginx mode is enabled. You can proceed to Settings. If you later bind the real nginx.conf, this mode will be disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx')
+            echo '<div class="notice notice-info notice-nppp"><p>'
+               . esc_html__('Assume-Nginx mode is enabled. When you solve the Nginx detection issue, this mode will be disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx')
                . '</p></div>';
         } elseif ($signals_detected) {
-            echo '<div class="notice notice-warning"><p>'
-                . esc_html__('Nginx likely detected (via headers/server signature), but the real nginx.conf is not visible. Bind your real nginx.conf (recommended) or enable Assume-Nginx mode to proceed.', 'fastcgi-cache-purge-and-preload-nginx')
+            echo '<div class="notice notice-warning notice-nppp"><p>'
+                . esc_html__('Nginx likely detected (via headers/server signature), but the real nginx.conf is not visible. Enable Assume-Nginx mode to proceed with workaround mode and access Settings, then review the Help tab.', 'fastcgi-cache-purge-and-preload-nginx')
                 . '</p></div>';
         } else {
-            echo '<div class="notice notice-error"><p>'
-               . esc_html__('Nginx was not detected. This can be a false positive in proxy, Docker, or chrooted environments.', 'fastcgi-cache-purge-and-preload-nginx')
+            echo '<div class="notice notice-error notice-nppp"><p>'
+               . esc_html__('Nginx could not be confirmed — neither nginx.conf nor any server signature or response header indicated Nginx. If you are certain your server runs Nginx (e.g. behind a strict proxy, CDN, or in a chrooted/containerized environment that strips headers), use Assume-Nginx mode below to proceed with workaround mode and access Settings, then review the Help tab.', 'fastcgi-cache-purge-and-preload-nginx')
+               . '</p></div>';
+        }
+
+        // Targeted open_basedir root-cause notice — shown only when strict detection failed and
+        // open_basedir is provably active, because this is the #1 silent killer of nginx.conf discovery.
+        if ( ! $strict_detected && self::nppp_is_open_basedir_active() ) {
+            echo '<div class="notice notice-warning notice-nppp"><p>'
+               . '<strong>' . esc_html__( 'PHP open_basedir restriction is active.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</strong> '
+               . esc_html__(
+                   'open_basedir silently prevents PHP from reading nginx.conf at all standard probe paths (/etc/nginx/, /usr/local/etc/nginx/, etc.). This is why NPP cannot confirm Nginx — nginx.conf may exist but PHP cannot see it.',
+                   'fastcgi-cache-purge-and-preload-nginx'
+               )
+               . ' '
+               . esc_html__(
+                   'Add all required directories to open_basedir in your PHP-FPM pool config: WordPress root (ABSPATH), its parent directory, your Nginx Cache Path, nginx.conf Directory, /proc/, /dev/null, /tmp/, and system binary paths (/usr/bin/, /usr/local/bin/, /bin/ and their sbin equivalents).',
+                   'fastcgi-cache-purge-and-preload-nginx'
+               )
                . '</p></div>';
         }
 
         // Why am I seeing this?
-        echo '<div class="notice notice-info"><p><strong>'
+        if ( $needs_setup || $assume_enabled ) {
+        echo '<div class="notice notice-info notice-nppp"><p><strong>'
             . esc_html__('Why am I seeing this page?', 'fastcgi-cache-purge-and-preload-nginx')
             . '</strong> '
             . esc_html__(
-                'We couldn’t reliably confirm Nginx from within WordPress. This often happens when your site runs behind a proxy (Cloudflare, CDN, load balancer), in containers/VMs, in chroot/jail setups, on Plesk or cPanel, or when nginx.conf is not found.',
+                    'NPP is a plugin built exclusively for Nginx-powered servers — it purges and preloads the Nginx cache. Before enabling its features, it must confirm your server is actually running Nginx.',
+                    'fastcgi-cache-purge-and-preload-nginx'
+                  )
+            . ' '
+            . esc_html__(
+                'NPP could not find nginx.conf at any standard path. This is the only reason you are seeing this page. Common causes: nginx.conf is at a non-standard location, PHP open_basedir restrictions are blocking access to it, or your site runs behind a proxy, CDN, container, or Panel where the config is not directly accessible to PHP.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . ' '
             . esc_html__(
-                'NPP does not directly interact with Nginx. For informational metrics (especially the Status tab), it only reads nginx.conf (read-only).',
+                'NPP reads nginx.conf (read-only) to extract cache paths, cache key, Nginx worker user, and cache zone names. These drive purge operations, preload targeting, cache directory permission checks, duplicate zone detection, and all Status tab metrics. Without nginx.conf, the Status tab cannot render at all.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . '</p></div>';
+        }
 
         echo '<div class="metabox-holder nppp-grid">';
 
@@ -185,6 +212,7 @@ final class Setup {
         echo '<div>';
 
         // Recommended path (bind/sync nginx.conf)
+        if ( $needs_setup || $assume_enabled ) :
         echo '<div class="postbox nppp-card">';
         echo '  <h2 class="hndle"><span>' . esc_html__('Recommended: Bind your live nginx.conf', 'fastcgi-cache-purge-and-preload-nginx') . '</span></h2>';
         echo '  <div class="inside">';
@@ -220,6 +248,7 @@ services:
             . '</p>';
         echo '  </div>';
         echo '</div>';
+        endif;
 
         // Quick enable (Assume-Nginx) card
         echo '<div class="postbox nppp-card">';
@@ -285,6 +314,7 @@ services:
         echo '  </div>';
 
         // Dummy nginx.conf viewer
+        if ( $needs_setup || $assume_enabled ) :
         echo '  <div class="postbox nppp-card">';
         echo '    <h2 class="hndle"><span>' . esc_html__('Dummy nginx.conf (fallback)', 'fastcgi-cache-purge-and-preload-nginx') . '</span></h2>';
         echo '    <div class="inside">';
@@ -305,9 +335,9 @@ services:
         }
         echo '    </div>';
         echo '  </div>';
+        endif;
 
         echo '</div>';
-
         echo '</div>';
         echo '</div>';
     }
@@ -336,6 +366,16 @@ services:
             esc_html__('Assume-Nginx Mode:', 'fastcgi-cache-purge-and-preload-nginx'),
             $assume_enabled ? '<span class="dashicons dashicons-yes"></span> ' . esc_html__('Enabled', 'fastcgi-cache-purge-and-preload-nginx')
                             : '<span class="dashicons dashicons-no"></span> ' . esc_html__('Disabled', 'fastcgi-cache-purge-and-preload-nginx')
+        );
+
+        $obd_active = self::nppp_is_open_basedir_active();
+        $bits[] = sprintf( '<p><strong>%s</strong> %s</p>',
+            esc_html__( 'PHP open_basedir active:', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $obd_active
+                ? '<span class="dashicons dashicons-warning" style="color:#d63638;"></span> '
+                  . esc_html__( 'Yes — may block nginx.conf detection', 'fastcgi-cache-purge-and-preload-nginx' )
+                : '<span class="dashicons dashicons-yes" style="color:#00a32a;"></span> '
+                  . esc_html__( 'No', 'fastcgi-cache-purge-and-preload-nginx' )
         );
 
         // Quick hints the detector uses (keep generic to avoid leaking env specifics)
@@ -474,6 +514,12 @@ services:
         }
 
        return false;
+    }
+
+    // Single source of truth for open_basedir state — avoids repeating ini_get() across callers.
+    private static function nppp_is_open_basedir_active(): bool {
+        $obd = trim((string) ini_get('open_basedir'));
+        return $obd !== '' && strtolower($obd) !== 'none';
     }
 
     // Insert of the define into wp-config.php
