@@ -37,6 +37,10 @@ function nppp_get_proxy_settings() {
 
 // Simple outbound HTTP check
 function nppp_check_network_env(): array {
+    if ( ! function_exists( 'shell_exec' ) ) {
+        return [ 'dns_ok' => false, 'outbound_ok' => false ];
+    }
+
     nppp_prepare_request_env(true);
 
     $url = add_query_arg('nppp_probe', wp_generate_password(8, false), home_url('/'));
@@ -1348,6 +1352,11 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
         '>/dev/null 2>&1 & echo $!';
 
     // Trigger desktop preload and get PID
+    // Guard — shell_exec must be available to spawn wget
+    if ( ! function_exists( 'shell_exec' ) ) {
+        nppp_display_admin_notice( 'error', __( 'ERROR ENV: Auto preload skipped — shell_exec is disabled on this server.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        return;
+    }
     $output_desktop = shell_exec($command_desktop);
 
     // Extract the PID and store it in the array for desktop
