@@ -316,7 +316,7 @@ function nppp_shell_exec() {
 // dedicated=true  → path is its own mount (tmpfs, bindfs, etc.) — disk stats are exact for cache.
 // dedicated=false → path is a directory on a shared partition — du gives actual cache bytes only.
 function nppp_get_cache_disk_size( string $path ): ?array {
-    if ( empty( $path ) || ! is_dir( $path ) ) {
+    if ( empty( $path ) || ! @is_dir( $path ) ) {
         return null;
     }
 
