@@ -542,6 +542,9 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     }
 
     nppp_prepare_request_env();
+    if ( ! function_exists( 'shell_exec' ) || ! function_exists( 'exec' ) ) {
+        return 'skip';
+    }
     $rg_bin          = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
     if ( $rg_bin === '' ) {
         return 'skip';
@@ -1614,7 +1617,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
         // Check if the preload process is alive
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            $process_user = trim(shell_exec("ps -o user= -p " . escapeshellarg($pid)));
+            $process_user = function_exists( 'shell_exec' ) ? trim(shell_exec("ps -o user= -p " . escapeshellarg($pid))) : '';
             $killed_by_safexec = false;
 
             if ($process_user === 'nobody') {
@@ -1677,7 +1680,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
                 if (nppp_is_process_alive($pid)) {
                     // Process still alive, try kill -9
-                    $kill_path = trim(shell_exec('command -v kill'));
+                    $kill_path = function_exists( 'shell_exec' ) ? trim(shell_exec('command -v kill')) : '';
                     if (!empty($kill_path)) {
                         shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $pid);
                         usleep(300000);
