@@ -177,6 +177,7 @@ add_action('admin_init', 'nppp_nginx_cache_settings_init');
 add_action('admin_menu', 'nppp_add_nginx_cache_settings_page');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_pre_checks');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_manage_admin_notices');
+add_action('load-admin_page_nppp-setup', 'nppp_manage_admin_notices');
 add_action('wp_ajax_nppp_clear_nginx_cache_logs', 'nppp_clear_nginx_cache_logs');
 add_action('wp_ajax_nppp_get_nginx_cache_logs', 'nppp_get_nginx_cache_logs');
 add_action('wp_ajax_nppp_update_send_mail_option', 'nppp_update_send_mail_option');
