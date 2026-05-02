@@ -489,6 +489,134 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
     return ['cache_keys' => $cache_keys];
 }
 
+/**
+ * Parses open_basedir into a normalised path array.
+ * Returns [] when OBD is inactive or set to "none".
+ */
+function nppp_open_basedir_paths(): array {
+    $raw = trim( (string) ini_get( 'open_basedir' ) );
+    if ( $raw === '' || strtolower( $raw ) === 'none' ) {
+        return [];
+    }
+    return array_values( array_filter(
+        array_map( 'trim', explode( PATH_SEPARATOR, $raw ) ),
+        static fn( $p ) => $p !== '' && $p !== '.'
+    ) );
+}
+
+/**
+ * Returns true when open_basedir is active.
+ */
+function nppp_is_open_basedir_active(): bool {
+    return ! empty( nppp_open_basedir_paths() );
+}
+
+/**
+ * Tests whether $path is reachable under at least one open_basedir entry
+ * using the same prefix-walk PHP performs internally.
+ */
+function nppp_obd_path_covered( string $path, array $obd_paths ): bool {
+    if ( $path === '' || empty( $obd_paths ) ) {
+        return false;
+    }
+    $norm = rtrim( $path, '/' );
+    foreach ( $obd_paths as $entry ) {
+        $entry = rtrim( (string) $entry, '/' );
+        if ( $entry === '' ) {
+            continue;
+        }
+        if ( $norm === $entry || strpos( $norm . '/', $entry . '/' ) === 0 ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Master OBD compatibility check for NPP.
+ *
+ * Only warn when OBD is active AND at least one PHP-level file I/O path is
+ * uncovered.
+ */
+function nppp_open_basedir_compat_check(): array {
+    $result = [ 'active' => false, 'compatible' => true, 'missing' => [] ];
+
+    $obd = nppp_open_basedir_paths();
+    if ( empty( $obd ) ) {
+        return $result;
+    }
+    $result['active'] = true;
+
+    $options    = get_option( 'nginx_cache_settings', [] );
+    $cache_path = isset( $options['nginx_cache_path'] ) ? (string) $options['nginx_cache_path'] : '';
+    $uploads    = wp_upload_dir();
+
+    // PHP file I/O paths NPP actually reads/writes directly.
+    $required = [];
+
+    if ( defined( 'ABSPATH' ) ) {
+        $required['WordPress root (ABSPATH)'] = rtrim( ABSPATH, '/' );
+        $parent = dirname( rtrim( ABSPATH, '/' ) );
+
+        if ( $parent !== rtrim( ABSPATH, '/' ) ) {
+            $required['ABSPATH parent (wp-config.php)'] = $parent;
+        }
+    }
+    if ( defined( 'WP_CONTENT_DIR' ) ) {
+        $required['WP_CONTENT_DIR'] = WP_CONTENT_DIR;
+    }
+    if ( ! empty( $uploads['basedir'] ) ) {
+        $required['Uploads dir (runtime files)'] = (string) $uploads['basedir'];
+    }
+    if ( $cache_path !== '' && $cache_path !== '/dev/shm/change-me-now' ) {
+        $required['Nginx cache path'] = rtrim( $cache_path, '/' );
+    }
+    // PHP reads /proc/cpuinfo, /proc/meminfo, /proc/self/mountinfo, /proc/mounts directly.
+    $required['/proc'] = '/proc';
+
+    // proc_open() opens /dev/null as a file descriptor — OBD applies.
+    $required['/dev/null'] = '/dev/null';
+
+    // binary paths
+    $required['/usr/bin']       = '/usr/bin';
+    $required['/usr/local/bin'] = '/usr/local/bin';
+    $required['/bin']           = '/bin';
+
+    // safexec, WordPress core and WP_Filesystem use /tmp for temp file operations.
+    $required['/tmp'] = '/tmp';
+
+    $missing = [];
+
+    foreach ( $required as $label => $path ) {
+        if ( ! nppp_obd_path_covered( $path, $obd ) ) {
+            $missing[] = $label . ' (' . $path . ')';
+        }
+    }
+
+    // nginx.conf: group check
+    $nginx_dirs = [
+        '/etc/nginx', '/usr/local/etc/nginx', '/etc/nginx/conf',
+        '/usr/local/nginx/conf', '/usr/local/etc/nginx/conf',
+        '/usr/local/etc', '/opt/nginx/conf', '/www/server/nginx/conf',
+        '/etc/nginx/conf.d', '/usr/local/openresty/nginx/conf',
+    ];
+    $nginx_covered = false;
+    foreach ( $nginx_dirs as $dir ) {
+        if ( nppp_obd_path_covered( $dir, $obd ) ) {
+            $nginx_covered = true;
+            break;
+        }
+    }
+    if ( ! $nginx_covered ) {
+        $missing[] = 'nginx.conf directory (e.g. /etc/nginx)';
+    }
+
+    $result['compatible'] = empty( $missing );
+    $result['missing']    = $missing;
+
+    return $result;
+}
+
 // Function to check if plugin critical requirements are met
 function nppp_pre_checks_critical() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -709,6 +837,23 @@ function nppp_pre_checks() {
         return;
     }
 
+    // OBD check MUST run before any early return — open_basedir is the #1 silent
+    // killer that *causes* those early returns (is_dir on cache path returns false,
+    // nginx.conf probes all fail, etc).  Only warn when paths are actually missing;
+    // if the user already configured OBD correctly the notice is noise.
+    if ( $nppp_active_tab === 'settings' ) {
+        $obd_check = nppp_open_basedir_compat_check();
+        if ( $obd_check['active'] && ! $obd_check['compatible'] ) {
+            nppp_display_pre_check_warning(
+                sprintf(
+                    /* translators: %s: comma-separated list of missing path descriptions */
+                    __( 'GLOBAL WARNING OPEN_BASEDIR: PHP open_basedir is active but is missing paths required by NPP: %s. Refer to the "Help" tab for the correct open_basedir configuration.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    implode( ', ', $obd_check['missing'] )
+                )
+            );
+        }
+    }
+
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
@@ -723,13 +868,9 @@ function nppp_pre_checks() {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
-    // Optimize performance by caching results of recursive permission checks
-    $permission_check_result = nppp_check_permissions_recursive_with_cache();
-    $nppp_permissions_check_result = $permission_check_result;
-
     $nginx_cache_settings = get_option('nginx_cache_settings');
-    $default_cache_path = '/dev/shm/change-me-now';
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+    $default_cache_path   = '/dev/shm/change-me-now';
+    $nginx_cache_path     = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
     // Check if plugin critical requirements are met
     $requirements_met = nppp_pre_checks_critical();
@@ -744,24 +885,14 @@ function nppp_pre_checks() {
         return;
     }
 
+    // Permission check only after cache path is confirmed to exist — transient-cached
+    // so cold-miss recursive walk only happens when it's actually needed.
+    $nppp_permissions_check_result = nppp_check_permissions_recursive_with_cache();
+
     // Check permissions are sufficient
     if ($nppp_permissions_check_result === 'false') {
         nppp_display_pre_check_warning(__('GLOBAL ERROR PERMISSION: Insufficient permissions for Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
-    }
-
-    // open_basedir soft warning
-    if ( $nppp_active_tab === 'settings' ) {
-        $nppp_obd = trim( (string) ini_get( 'open_basedir' ) );
-        if ( $nppp_obd !== '' && strtolower( $nppp_obd ) !== 'none' ) {
-            $nppp_obd_key = 'nppp_obd_warned_' . md5( 'nppp' );
-            if ( ! get_transient( $nppp_obd_key ) ) {
-                set_transient( $nppp_obd_key, true, DAY_IN_SECONDS );
-                nppp_display_pre_check_warning(
-                    __( 'GLOBAL WARNING OPEN_BASEDIR: PHP open_basedir restriction is active on your environment. This can silently break preloading and nginx.conf reading. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' )
-                );
-            }
-        }
     }
 
     // Head-only read sizes (once per call)
