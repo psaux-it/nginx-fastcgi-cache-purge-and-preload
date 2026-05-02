@@ -417,15 +417,41 @@ function nppp_nginx_cache_settings_page() {
                                 <?php esc_html_e( 'Vary: Accept-Encoding', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </th>
                             <td>
+                                <?php
+                                $nppp_vary = function_exists('nppp_detect_vary_issue') ? nppp_detect_vary_issue() : null;
+                                if ($nppp_vary !== null && $nppp_vary['issue']) :
+                                ?>
+                                <div style="background:#fef2f2; border-left:4px solid #dc2626; padding:10px 14px; max-width:500px;">
+                                    <strong style="color:#991b1b;"><?php esc_html_e( '⚠ Active: Double Cache Issue Detected', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
+                                    <span style="font-size:13px; color:#7f1d1d;">
+                                        <?php
+                                        if (!empty($nppp_vary['zlib_on'])) {
+                                            esc_html_e('PHP zlib.output_compression is On. Nginx is creating per-client variant cache files.', 'fastcgi-cache-purge-and-preload-nginx');
+                                        } else {
+                                            esc_html_e('An upstream component is emitting Vary: Accept-Encoding. Nginx is creating per-client variant cache files.', 'fastcgi-cache-purge-and-preload-nginx');
+                                        }
+                                        ?>
+                                        <a href="?page=fastcgi-cache-purge-and-preload-nginx&nppp_tab=help#vary-issue" style="font-size:13px; color:#991b1b; font-weight:600; text-decoration:none; display:block; margin-top:4px;">
+                                            <?php esc_html_e( '→ See Help tab for the required two-step fix', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        </a>
+                                    </span>
+                                </div>
+                                <?php elseif ($nppp_vary !== null && !$nppp_vary['issue']) : ?>
+                                <div style="background:#f0fdf4; border-left:4px solid #16a34a; padding:10px 14px; max-width:500px;">
+                                    <strong style="color:#14532d;"><?php esc_html_e( '✔ Not Affected', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
+                                    <span style="font-size:13px; color:#166534;"><?php esc_html_e( 'No upstream Vary: Accept-Encoding source detected. Single cache file per URL confirmed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                                </div>
+                                <?php else : ?>
                                 <div style="background:#fff8e1; border-left:4px solid #f0ad4e; padding:10px 14px; max-width:500px;">
                                     <strong style="color:#7a4f00;"><?php esc_html_e( 'Double Cache Issue', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
                                     <span style="font-size:13px; color:#5a3800;">
-                                        <?php esc_html_e( 'If you encounter this issue ', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                        <a href="#help" style="font-size:13px; color:#7a4f00; font-weight:600; text-decoration:none;">
+                                        <?php esc_html_e( 'Could not verify. ', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <a href="?page=fastcgi-cache-purge-and-preload-nginx&nppp_tab=help#vary-issue" style="font-size:13px; color:#7a4f00; font-weight:600; text-decoration:none;">
                                             <?php esc_html_e( '→ See Help tab for fix and full explanation', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                         </a>
                                     </span>
                                 </div>
+                                <?php endif; ?>
                             </td>
                         </tr>
                         <tr valign="top">
