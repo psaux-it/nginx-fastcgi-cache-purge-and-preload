@@ -490,6 +490,25 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
 }
 
 /**
+ * Detect aaPanel environment.
+ * 'bt' is aaPanel's exclusive CLI tool — nothing else installs it.
+ * /etc/init.d/bt covers edge cases where bt was removed from PATH.
+ */
+function nppp_is_aapanel(): bool {
+    if ( ! function_exists( 'shell_exec' ) ) {
+        return false;
+    }
+
+    $bt_bin = trim( (string) shell_exec( 'command -v bt 2>/dev/null' ) );
+    if ( $bt_bin !== '' ) {
+        return true;
+    }
+
+    $bt_init = trim( (string) shell_exec( 'test -f /etc/init.d/bt && echo 1' ) );
+    return $bt_init === '1';
+}
+
+/**
  * Parses open_basedir into a normalised path array.
  * Returns [] when OBD is inactive or set to "none".
  */
@@ -555,21 +574,23 @@ function nppp_open_basedir_compat_check(): array {
     $required = [];
 
     if ( defined( 'ABSPATH' ) ) {
-        $required['WordPress root (ABSPATH)'] = rtrim( ABSPATH, '/' );
+        $required[rtrim( ABSPATH, '/' )] = rtrim( ABSPATH, '/' );
         $parent = dirname( rtrim( ABSPATH, '/' ) );
 
         if ( $parent !== rtrim( ABSPATH, '/' ) ) {
-            $required['ABSPATH parent (wp-config.php)'] = $parent;
+            $required[$parent] = $parent;
         }
     }
     if ( defined( 'WP_CONTENT_DIR' ) ) {
-        $required['WP_CONTENT_DIR'] = WP_CONTENT_DIR;
+        $required[WP_CONTENT_DIR] = WP_CONTENT_DIR;
     }
     if ( ! empty( $uploads['basedir'] ) ) {
-        $required['Uploads dir (runtime files)'] = (string) $uploads['basedir'];
+        $required[(string) $uploads['basedir']] = (string) $uploads['basedir'];
     }
-    if ( $cache_path !== '' && $cache_path !== '/dev/shm/change-me-now' ) {
-        $required['Nginx cache path'] = rtrim( $cache_path, '/' );
+    if ( $cache_path === '' || $cache_path === '/dev/shm/change-me-now' ) {
+        $required['<your-nginx-cache-path> (not configured yet)'] = '<your-nginx-cache-path> (not configured yet)';
+    } else {
+        $required[rtrim( $cache_path, '/' )] = rtrim( $cache_path, '/' );
     }
     // PHP reads /proc/cpuinfo, /proc/meminfo, /proc/self/mountinfo, /proc/mounts directly.
     $required['/proc'] = '/proc';
@@ -585,11 +606,16 @@ function nppp_open_basedir_compat_check(): array {
     // safexec, WordPress core and WP_Filesystem use /tmp for temp file operations.
     $required['/tmp'] = '/tmp';
 
+    // aaPanel keeps all configs, cache under /www/server
+    if ( nppp_is_aapanel() ) {
+        $required['/www/server'] = '/www/server';
+    }
+
     $missing = [];
 
     foreach ( $required as $label => $path ) {
         if ( ! nppp_obd_path_covered( $path, $obd ) ) {
-            $missing[] = $label . ' (' . $path . ')';
+            $missing[] = $label !== $path ? $label . ' (' . $path . ')' : $path;
         }
     }
 
@@ -599,6 +625,17 @@ function nppp_open_basedir_compat_check(): array {
         '/usr/local/nginx/conf', '/usr/local/etc/nginx/conf',
         '/usr/local/etc', '/opt/nginx/conf', '/www/server/nginx/conf',
         '/etc/nginx/conf.d', '/usr/local/openresty/nginx/conf',
+        // full file paths — covers when open_basedir lists the .conf file directly
+        '/etc/nginx/nginx.conf',
+        '/usr/local/etc/nginx/nginx.conf',
+        '/etc/nginx/conf/nginx.conf',
+        '/usr/local/nginx/conf/nginx.conf',
+        '/usr/local/etc/nginx/conf/nginx.conf',
+        '/usr/local/etc/nginx.conf',
+        '/opt/nginx/conf/nginx.conf',
+        '/www/server/nginx/conf/nginx.conf',
+        '/etc/nginx/conf.d/ea-nginx.conf',
+        '/usr/local/openresty/nginx/conf/nginx.conf',
     ];
     $nginx_covered = false;
     foreach ( $nginx_dirs as $dir ) {
@@ -844,12 +881,16 @@ function nppp_pre_checks() {
     if ( $nppp_active_tab === 'settings' ) {
         $obd_check = nppp_open_basedir_compat_check();
         if ( $obd_check['active'] && ! $obd_check['compatible'] ) {
+            $missing_list = '<ul style="margin: 6px 0 6px 20px; list-style: disc;">';
+            foreach ( $obd_check['missing'] as $item ) {
+                $missing_list .= '<li>' . esc_html( $item ) . '</li>';
+            }
+            $missing_list .= '</ul>';
+
             nppp_display_pre_check_warning(
-                sprintf(
-                    /* translators: %s: comma-separated list of missing path descriptions */
-                    __( 'GLOBAL WARNING OPEN_BASEDIR: PHP open_basedir is active but is missing paths required by NPP: %s. Refer to the "Help" tab for the correct open_basedir configuration.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                    implode( ', ', $obd_check['missing'] )
-                )
+                __( 'GLOBAL WARNING OPEN_BASEDIR: PHP <code>open_basedir</code> is active but is missing paths required by NPP:', 'fastcgi-cache-purge-and-preload-nginx' )
+                . $missing_list
+                . __( '<strong>Plugin functionality may be broken until this is resolved.</strong>', 'fastcgi-cache-purge-and-preload-nginx' )
             );
         }
     }
@@ -1116,7 +1157,7 @@ function nppp_display_pre_check_warning($error_message = '') {
         add_action('admin_notices', function() use ($error_message) {
             ?>
             <div class="notice notice-error is-dismissible notice-nppp">
-                <p><?php echo esc_html($error_message); ?></p>
+                <div style="padding: 8px 0;"><?php echo wp_kses_post($error_message); ?></div>
             </div>
             <?php
         });
