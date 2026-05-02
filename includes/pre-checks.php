@@ -895,6 +895,13 @@ function nppp_pre_checks() {
         return;
     }
 
+    // Vary: Accept-Encoding double-cache detection
+    // BETA v2.1.7
+    $nppp_vary = nppp_detect_vary_issue();
+    if ($nppp_vary['issue']) {
+        nppp_display_pre_check_warning(__('GLOBAL WARNING VARY: PHP zlib.output_compression is On and Nginx is writing per-client variant cache files, breaking NPP\'s cache warming. Preloaded entries will never be served to real visitors. See the Help tab for the required two-step fix.', 'fastcgi-cache-purge-and-preload-nginx'));
+    }
+
     // Head-only read sizes (once per call)
     $head_bytes_primary  = (int) apply_filters( 'nppp_locate_head_bytes', 4096 );
     $head_bytes_fallback = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
@@ -975,6 +982,131 @@ function nppp_pre_checks() {
     if ($has_files !== 'found' && $has_files !== 'error' && !$preload_running) {
         nppp_display_pre_check_warning(__('GLOBAL WARNING CACHE: The Nginx cache is empty. Consider preloading the Nginx cache now!', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
+    }
+}
+
+// Detect the Vary:Accept-Encoding double-cache issue.
+// Note: BETA-False Positive possible. Need to clarify -gzip vary on- further
+//
+//  1. ini_get('zlib.output_compression') — reads the PHP *runtime* value, which
+//     reflects php.ini, .user.ini, PHP_VALUE in fastcgi_param, and php_admin_value.
+//     Truthy means PHP will add Vary: Accept-Encoding to upstream responses when
+//     the client accepts gzip, triggering nginx variant-file creation.
+//
+//  2. Two HTTP probes (gzip vs identity Accept-Encoding):
+//     - nginx gzip_vary sets r->gzip_vary=1 based on content-type, BEFORE the
+//       Accept-Encoding capability check (ngx_http_gzip_ok). It fires for ALL
+//       requests including identity, so Vary: Accept-Encoding appears in BOTH probes.
+//     - PHP zlib only adds Vary: Accept-Encoding when it actually compresses, which
+//       only happens when the client sends Accept-Encoding: gzip/deflate.
+//     → If Vary is present with gzip but ABSENT with identity → PHP is the source.
+//
+// Result is transient-cached for 1 hour; cleared by nppp_clear_plugin_cache().
+if (! function_exists('nppp_detect_vary_issue')) {
+    function nppp_detect_vary_issue(): array {
+        $transient_key = 'nppp_vary_issue_' . md5('nppp');
+        $cached        = get_transient($transient_key);
+        if (is_array($cached) && array_key_exists('issue', $cached)) {
+            return $cached;
+        }
+
+        // Signal 1: PHP runtime ini value
+        $raw     = (string) ini_get('zlib.output_compression');
+        $zlib_on = ($raw !== '' && $raw !== '0' && strtolower($raw) !== 'off');
+
+        // Signal 2: two-probe header fingerprint
+        $vary_gzip     = false;
+        $vary_identity = false;
+
+        if (function_exists('wp_remote_head') && function_exists('home_url') && function_exists('add_query_arg')) {
+            $token    = substr(dechex(hrtime(true)), -10);
+            $bust_url = add_query_arg(['s' => 'nppp-vary-' . $token, '_nppp' => $token], home_url('/'));
+
+            $common_args = [
+                'timeout'     => 3,
+                'redirection' => 0,
+                'blocking'    => true,
+                'sslverify'   => false,
+            ];
+
+            // Probe A: client advertises gzip — PHP will compress → adds Vary
+            $resp_gzip = wp_remote_head($bust_url, array_merge($common_args, [
+                'headers' => [
+                    'Cache-Control'   => 'no-cache, no-store',
+                    'Pragma'          => 'no-cache',
+                    'Accept-Encoding' => 'gzip, deflate',
+                    'User-Agent'      => 'NPPP-VaryProbe-Gzip/2.1.7',
+                ],
+            ]));
+
+            // Probe B: identity — PHP skips compression → skips Vary
+            //          nginx gzip_vary STILL writes Vary (flag set before gzip_ok check)
+            $resp_identity = wp_remote_head($bust_url, array_merge($common_args, [
+                'headers' => [
+                    'Cache-Control'   => 'no-cache, no-store',
+                    'Pragma'          => 'no-cache',
+                    'Accept-Encoding' => 'identity',
+                    'User-Agent'      => 'NPPP-VaryProbe-Identity/2.1.7',
+                ],
+            ]));
+
+            if (! is_wp_error($resp_gzip)) {
+                $vary_gzip = nppp_probe_has_vary_accept_encoding($resp_gzip);
+            }
+            if (! is_wp_error($resp_identity)) {
+                $vary_identity = nppp_probe_has_vary_accept_encoding($resp_identity);
+            }
+        }
+
+        // Vary disappears with identity → PHP upstream is the source → issue active.
+        // If both probes show Vary → nginx gzip_vary is responsible → safe, not our issue.
+        $vary_from_upstream = ($vary_gzip && ! $vary_identity);
+
+        $result = [
+            'zlib_on'            => $zlib_on,
+            'vary_from_upstream' => $vary_from_upstream,
+            'issue'              => $zlib_on || $vary_from_upstream,
+        ];
+
+        set_transient($transient_key, $result, HOUR_IN_SECONDS);
+
+        return $result;
+    }
+}
+
+// Extract and normalise response headers, then check whether Vary contains Accept-Encoding.
+if (! function_exists('nppp_probe_has_vary_accept_encoding')) {
+    function nppp_probe_has_vary_accept_encoding($response): bool {
+        $headers = wp_remote_retrieve_headers($response);
+
+        if (is_object($headers)) {
+            if (method_exists($headers, 'getAll')) {
+                $headers = $headers->getAll();
+            } elseif ($headers instanceof Traversable) {
+                $headers = iterator_to_array($headers);
+            } else {
+                $maybe   = (array) $headers;
+                $headers = (isset($maybe['data']) && is_array($maybe['data'])) ? $maybe['data'] : $maybe;
+            }
+        } else {
+            $headers = (array) $headers;
+        }
+
+        if (empty($headers)) {
+            return false;
+        }
+
+        $headers = array_change_key_case($headers, CASE_LOWER);
+
+        if (! isset($headers['vary'])) {
+            return false;
+        }
+
+        $vary = is_array($headers['vary'])
+            ? implode(', ', array_map('strval', $headers['vary']))
+            : (string) $headers['vary'];
+
+        return (stripos($vary, 'accept-encoding') !== false);
     }
 }
 
