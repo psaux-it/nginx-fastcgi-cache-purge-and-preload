@@ -55,6 +55,7 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_rg_version_' . md5($static_key_base),
         'nppp_pages_in_cache_' . md5($static_key_base),
         'nppp_obd_warned_' . md5($static_key_base),
+        'nppp_vary_issue_' . md5($static_key_base),
     );
 
     // Delete each transient
