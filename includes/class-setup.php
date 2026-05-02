@@ -173,12 +173,12 @@ final class Setup {
             echo '<div class="notice notice-warning notice-nppp"><p>'
                . '<strong>' . esc_html__( 'PHP open_basedir restriction is active.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</strong> '
                . esc_html__(
-                   'open_basedir silently prevents PHP from reading nginx.conf at all standard probe paths (/etc/nginx/, /usr/local/etc/nginx/, etc.). This is why NPP cannot confirm Nginx — nginx.conf may exist but PHP cannot see it.',
+                   'open_basedir silently prevents PHP from reading nginx.conf at all standard probe paths. This is why NPP cannot confirm Nginx — nginx.conf may exist but PHP cannot see it.',
                    'fastcgi-cache-purge-and-preload-nginx'
                )
                . ' '
                . esc_html__(
-                   'Add all required directories to open_basedir in your PHP-FPM pool config: WordPress root (ABSPATH), its parent directory, your Nginx Cache Path, nginx.conf Directory, /proc/, /dev/null, /tmp/, and system binary paths (/usr/bin/, /usr/local/bin/, /bin/ and their sbin equivalents).',
+                   'Add all required directories to open_basedir in your PHP-FPM pool config. Visit Settings page to see which paths you need to add. ',
                    'fastcgi-cache-purge-and-preload-nginx'
                )
                . '</p></div>';
