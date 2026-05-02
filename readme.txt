@@ -146,10 +146,11 @@ NPP restricts cache paths to prevent accidental deletion of system files. Allowe
 Release date: 2026-05-02
 
 * Fixed: Unprotected shell_exec and exec calls in REST API, WP Cron, Dashboard Widget and all possible roots.
-* Fixed: Missing check for getenv / putenv in URL Normalization.
+* Fixed: Missing check for getenv / putenv for URL Normalization.
 * Improved: Setup (Assume Nginx Mode) process.
-* Changed: Hard dependency extended to require both shell_exec and exec
-* Add: Proper open_basedir compatibility detection and admin warning for missing required paths.
+* Changed: Hard dependency extended to require both shell_exec and exec !
+* Added: Proper open_basedir compatibility detection and admin warning for missing required paths.
+* Added: BETA detection for Vary: Accept-Encoding double‑cache issue (may produce false positives).
 
 = 2.1.6 =
 
