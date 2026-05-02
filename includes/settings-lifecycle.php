@@ -49,7 +49,7 @@ function nppp_reset_plugin_settings_on_deactivation() {
 
             // Fall back to SIGKILL if still alive.
             if (nppp_is_process_alive($pid)) {
-                $kill_path = trim((string) shell_exec('command -v kill'));
+                $kill_path = function_exists( 'shell_exec' ) ? trim((string) shell_exec('command -v kill')) : '';
                 if (!empty($kill_path)) {
                     shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $pid);
                     usleep(300000);
