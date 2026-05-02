@@ -151,6 +151,7 @@ function nppp_get_related_urls_for_single(string $primary_url): array {
 // Fire-and-forget
 function nppp_preload_urls_fire_and_forget(array $urls): void {
     if (empty($urls)) return;
+    if ( ! function_exists( 'shell_exec' ) ) return;
 
     $settings                 = get_option('nginx_cache_settings');
     $preload_mobile           = !empty($settings['nginx_cache_auto_preload_mobile']) && $settings['nginx_cache_auto_preload_mobile'] === 'yes';
