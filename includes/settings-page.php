@@ -426,9 +426,9 @@ function nppp_nginx_cache_settings_page() {
                                     <span style="font-size:13px; color:#7f1d1d;">
                                         <?php
                                         if (!empty($nppp_vary['zlib_on'])) {
-                                            esc_html_e('PHP zlib.output_compression is On. Nginx is creating per-client variant cache files.', 'fastcgi-cache-purge-and-preload-nginx');
+                                            esc_html_e('PHP zlib.output_compression is On and emitting Vary: Accept-Encoding for compressed requests. Nginx is creating per-client variant cache files.', 'fastcgi-cache-purge-and-preload-nginx');
                                         } else {
-                                            esc_html_e('An upstream component is emitting Vary: Accept-Encoding. Nginx is creating per-client variant cache files.', 'fastcgi-cache-purge-and-preload-nginx');
+                                            esc_html_e('An upstream plugin or middleware is emitting Vary: Accept-Encoding only for compressed requests. Nginx is creating per-client variant cache files.', 'fastcgi-cache-purge-and-preload-nginx');
                                         }
                                         ?>
                                         <a href="?page=fastcgi-cache-purge-and-preload-nginx&nppp_tab=help#vary-issue" style="font-size:13px; color:#991b1b; font-weight:600; text-decoration:none; display:block; margin-top:4px;">
