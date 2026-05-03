@@ -953,11 +953,7 @@ function nppp_pre_checks() {
     // BETA v2.1.7
     $nppp_vary = nppp_detect_vary_issue();
     if ($nppp_vary['issue']) {
-        if (!empty($nppp_vary['vary_from_nginx'])) {
-            nppp_display_pre_check_warning(__('GLOBAL WARNING VARY: nginx gzip_vary is adding Vary: Accept-Encoding to cached responses. Nginx is writing per-client variant cache files, breaking NPP\'s cache warming. Populated cache will never be served to real visitors. See the Help tab for the required fix.', 'fastcgi-cache-purge-and-preload-nginx'));
-        } else {
-            nppp_display_pre_check_warning(__('GLOBAL WARNING VARY: PHP zlib.output_compression is On and Nginx is writing per-client variant cache files, breaking NPP\'s cache warming. Populated cache will never be served to real visitors. See the Help tab for the required two-step fix.', 'fastcgi-cache-purge-and-preload-nginx'));
-        }
+        nppp_display_pre_check_warning(__('GLOBAL WARNING VARY: PHP zlib.output_compression or an upstream plugin is emitting Vary: Accept-Encoding only for compressed requests. Nginx is creating per-client variant cache files — NPP\'s preloaded cache will never be served to real visitors. See the Help tab for the required fix.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
     // Head-only read sizes (once per call)
@@ -1119,18 +1115,16 @@ if (! function_exists('nppp_detect_vary_issue')) {
             }
         }
 
-        // Vary disappears with identity → PHP/zlib is the source.
-        // Vary in BOTH probes → nginx gzip_vary is the source.
-        // Either way nginx creates secondary cache files per Accept-Encoding — issue active.
+        // Vary on gzip probe ONLY → definite issue: PHP/zlib or conditional upstream plugin.
+        // Vary in BOTH probes → ambiguous: harmless gzip_vary on (never writes r->cache->vary,
         $vary_from_upstream = ($vary_gzip && ! $vary_identity);
-        $vary_from_nginx    = ($vary_gzip && $vary_identity);
-        $vary_in_any        = ($vary_gzip || $vary_identity);
+        $vary_in_both       = ($vary_gzip && $vary_identity);
 
         $result = [
             'zlib_on'            => $zlib_on,
             'vary_from_upstream' => $vary_from_upstream,
-            'vary_from_nginx'    => $vary_from_nginx,
-            'issue'              => $vary_in_any,
+            'vary_from_nginx'    => $vary_in_both,
+            'issue'              => $vary_from_upstream,
         ];
 
         set_transient($transient_key, $result, HOUR_IN_SECONDS);
