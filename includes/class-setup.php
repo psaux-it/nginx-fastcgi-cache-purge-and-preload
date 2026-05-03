@@ -429,9 +429,8 @@ services:
         exit;
     }
 
-    // Do we need to block settings and run setup?
+    // Do we need to block settings and go into setup
     public static function nppp_needs_setup(): bool {
-        // memoize per request
         static $memo = null;
         if ($memo !== null) {
             return $memo;
@@ -439,46 +438,12 @@ services:
 
         // If Assume-Nginx is enabled, never gate.
         if (self::nppp_assume_nginx_enabled()) {
-            $memo = false;
-            return $memo;
+            return $memo = false;
         }
 
-        // Linux check
-        $linux_ok =
-            (PHP_OS === 'Linux') ||
-            (defined('PHP_OS_FAMILY') && PHP_OS_FAMILY === 'Linux') ||
-            (stripos(php_uname(), 'Linux') !== false);
-
-        // Require function availability
-        $shell_ok = function_exists('shell_exec');
-        $exec_ok  = function_exists('exec');
-        $posix_ok = function_exists('posix_kill');
-
-        // Commands check
-        $tools_ok = false;
-        if ($shell_ok) {
-            // Ensure PATH etc. is sane for shell lookups
-            if (function_exists('\\nppp_prepare_request_env')) {
-                \nppp_prepare_request_env(true);
-            }
-
-            $missing = [];
-            foreach (['ps','grep','awk','sort','uniq','sed','nohup','wget'] as $cmd) {
-                // "command -v <cmd>" -> non-empty output if present
-                $out = @shell_exec('command -v ' . escapeshellarg($cmd));
-                if (empty($out)) {
-                    $missing[] = $cmd;
-                }
-            }
-            $tools_ok = empty($missing);
-        }
-
-        // All minimal criticals must be true
-        $env_ok = ($linux_ok && $shell_ok && $exec_ok && $posix_ok && $tools_ok);
-
-        // Gate to Setup only when criticals are OK AND strict nginx.conf is missing AND Assume is off
-        $memo = $env_ok && (! self::nppp_is_nginx_detected_strict()) && (! self::nppp_assume_nginx_enabled());
-        return $memo;
+        // Gate to Setup when nginx.conf is not found AND Assume Nginx mode is off
+        // We never trust signals and strictly check nginx.conf
+        return $memo = ! self::nppp_is_nginx_detected_strict();
     }
 
     private static function nppp_assume_nginx_enabled(): bool {
