@@ -490,15 +490,27 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
 }
 
 /**
- * Detect aaPanel environment.
+ * Detect aaPanel environment, for open_basedir required paths forwarding
  * 'bt' is aaPanel's exclusive CLI tool — nothing else installs it.
  * /etc/init.d/bt covers edge cases where bt was removed from PATH.
  */
 function nppp_is_aapanel(): bool {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    // WP_Filesystem path (preferred)
+    if ( $wp_filesystem && $wp_filesystem->exists( '/etc/init.d/bt' ) ) {
+        return true;
+    }
+    if ( $wp_filesystem && $wp_filesystem->exists( '/usr/bin/bt' ) ) {
+        return true;
+    }
+
+    // Guard
     if ( ! function_exists( 'shell_exec' ) ) {
         return false;
     }
 
+    // Shell path — also serves as fallback when WP_Filesystem failed to init
     $bt_bin = trim( (string) shell_exec( 'command -v bt 2>/dev/null' ) );
     if ( $bt_bin !== '' ) {
         return true;
@@ -789,19 +801,19 @@ function nppp_pre_checks_critical() {
 
     // Check if both shell_exec and exec are enabled (both are required)
     if (!function_exists('shell_exec') || !function_exists('exec')) {
-        return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. Both "shell_exec" and "exec" functions are required but one or both are not enabled. Please enable them in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
+        return __('GLOBAL ERROR PHP: Plugin is not functional on your environment. Both "shell_exec" and "exec" functions are required but one or both are not enabled. Please enable them in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Verify shell_exec is not silently blocked
     $output = shell_exec('echo "Test"');
     if (trim($output) !== "Test") {
-        return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "shell_exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
+        return __('GLOBAL ERROR PHP: Plugin is not functional on your environment. The "shell_exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Verify exec is not silently blocked
     $output = exec('echo "Test"');
     if (trim($output) !== "Test") {
-        return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
+        return __('GLOBAL ERROR PHP: Plugin is not functional on your environment. The "exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Check if POSIX extension functions are available
@@ -888,7 +900,8 @@ function nppp_pre_checks() {
             $missing_list .= '</ul>';
 
             nppp_display_pre_check_warning(
-                __( 'GLOBAL WARNING OPEN_BASEDIR: PHP <code>open_basedir</code> is active but is missing paths required by NPP:', 'fastcgi-cache-purge-and-preload-nginx' )
+                /* translators: %s: list of missing open_basedir paths as an HTML <ul> */
+                __( 'GLOBAL ERROR PHP: <code>open_basedir</code> is active, but required paths for NPP are missing. See the list below.', 'fastcgi-cache-purge-and-preload-nginx' )
                 . $missing_list
                 . __( '<strong>Plugin functionality may be broken until this is resolved.</strong>', 'fastcgi-cache-purge-and-preload-nginx' )
             );
