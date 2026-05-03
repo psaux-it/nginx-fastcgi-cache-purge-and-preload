@@ -953,7 +953,11 @@ function nppp_pre_checks() {
     // BETA v2.1.7
     $nppp_vary = nppp_detect_vary_issue();
     if ($nppp_vary['issue']) {
-        nppp_display_pre_check_warning(__('GLOBAL WARNING VARY: PHP zlib.output_compression is On and Nginx is writing per-client variant cache files, breaking NPP\'s cache warming. Preloaded entries will never be served to real visitors. See the Help tab for the required two-step fix.', 'fastcgi-cache-purge-and-preload-nginx'));
+        if (!empty($nppp_vary['vary_from_nginx'])) {
+            nppp_display_pre_check_warning(__('GLOBAL WARNING VARY: nginx gzip_vary is adding Vary: Accept-Encoding to cached responses. Nginx is writing per-client variant cache files, breaking NPP\'s cache warming. Populated cache will never be served to real visitors. See the Help tab for the required fix.', 'fastcgi-cache-purge-and-preload-nginx'));
+        } else {
+            nppp_display_pre_check_warning(__('GLOBAL WARNING VARY: PHP zlib.output_compression is On and Nginx is writing per-client variant cache files, breaking NPP\'s cache warming. Populated cache will never be served to real visitors. See the Help tab for the required two-step fix.', 'fastcgi-cache-purge-and-preload-nginx'));
+        }
     }
 
     // Head-only read sizes (once per call)
@@ -1053,7 +1057,10 @@ function nppp_pre_checks() {
 //       requests including identity, so Vary: Accept-Encoding appears in BOTH probes.
 //     - PHP zlib only adds Vary: Accept-Encoding when it actually compresses, which
 //       only happens when the client sends Accept-Encoding: gzip/deflate.
-//     → If Vary is present with gzip but ABSENT with identity → PHP is the source.
+//     → If Vary is present with gzip but ABSENT with identity → PHP/zlib is the source.
+//     → If Vary is present in BOTH probes → nginx gzip_vary is the source.
+//     Both cases trigger nginx secondary cache files per Accept-Encoding value
+//     and break NPP preload. _ignore_headers Vary fixes both.
 //
 // Result is transient-cached for 1 hour; cleared by nppp_clear_plugin_cache().
 if (! function_exists('nppp_detect_vary_issue')) {
@@ -1112,14 +1119,18 @@ if (! function_exists('nppp_detect_vary_issue')) {
             }
         }
 
-        // Vary disappears with identity → PHP upstream is the source → issue active.
-        // If both probes show Vary → nginx gzip_vary is responsible → safe, not our issue.
+        // Vary disappears with identity → PHP/zlib is the source.
+        // Vary in BOTH probes → nginx gzip_vary is the source.
+        // Either way nginx creates secondary cache files per Accept-Encoding — issue active.
         $vary_from_upstream = ($vary_gzip && ! $vary_identity);
+        $vary_from_nginx    = ($vary_gzip && $vary_identity);
+        $vary_in_any        = ($vary_gzip || $vary_identity);
 
         $result = [
             'zlib_on'            => $zlib_on,
             'vary_from_upstream' => $vary_from_upstream,
-            'issue'              => $zlib_on || $vary_from_upstream,
+            'vary_from_nginx'    => $vary_from_nginx,
+            'issue'              => $vary_in_any,
         ];
 
         set_transient($transient_key, $result, HOUR_IN_SECONDS);
