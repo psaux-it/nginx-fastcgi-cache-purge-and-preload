@@ -175,7 +175,7 @@ function nppp_my_faq_html() {
                         <h4><strong>Fast-Path 2 — Index lookup</strong></h4>
                         <p>NPP maintains a persistent URL→Filepath index built during Preloading. If the URL is found in the index and the file still exists, NPP deletes it directly with no directory scan needed.</p>
 
-                        <h4><strong>Fast-Path 3 — Recursive filesystem scan</strong></h4>
+                        <h4><strong>Fast-Path 3|4 — Recursive filesystem scan (PHP and RG)</strong></h4>
                         <p>If neither fast-path succeeds, NPP walks the entire Nginx cache directory, reads each file's cache key header, and deletes the matching entry. This is the original workflow and remains the fallback for all environments.</p>
 
                         <h4><strong>Purge All</strong></h4>
@@ -195,35 +195,67 @@ function nppp_my_faq_html() {
                         <h3><strong>The Problem: NPP Warms Cache, Visitors Create Another, Cache MISS</strong></h3>
 
                         <p style="font-size: 14px;">
-                            If <strong>PHP compresses output itself</strong> (via <code>zlib.output_compression = On</code> in <code>php.ini</code>),
-                            it adds a <code>Vary: Accept-Encoding</code> response header. Nginx's cache engine
-                            then computes an MD5 <em>variant hash</em> from the request's <code>Accept-Encoding</code> value
-                            and writes a separate cache file for each distinct value.
+                            When a response cached by Nginx contains a <code>Vary: Accept-Encoding</code> header,
+                            Nginx's cache engine computes an MD5 <em>variant hash</em> from the request's <code>Accept-Encoding</code> value
+                            and writes a <strong>separate cache file for each distinct value</strong>.
                         </p>
                         <p style="font-size: 14px;">
                             NPP's preloader sends <code>Accept-Encoding: identity</code> by default — requesting plain, uncompressed content.
-                            Real browsers always send one, so their variant hash never matches the preloaded entry and Nginx writes a second cache file,
-                            bypassing the warm cache entirely. Note that what the NPPs preloader sends is not the real issue —
-                            even if it mimicked a browser exactly, different browsers send different values
-                            (Chrome adds <code>zstd</code>, Safari omits <code>br</code>, older clients send only <code>gzip</code>),
-                            making it impossible to warm a single entry that serves all visitors. This breaks Nginx cache managing logic by NPP.
-                            This effectively breaks NPP's cache warming — preloaded entries are never served to real visitors. The only correct fix is on the Nginx/PHP side.
+                            Real browsers always send a different value (Chrome adds <code>zstd</code>, Safari omits <code>br</code>, older clients send only <code>gzip</code>),
+                            so their variant hash never matches the preloaded entry. Nginx writes a second cache file,
+                            bypassing the warm cache entirely. Even if NPP mimicked a browser exactly, it is impossible to warm a single entry
+                            that serves all visitors because every browser sends a different <code>Accept-Encoding</code> value.
+                            This breaks NPP's cache warming — preloaded entries are never served to real visitors.
+                            The only correct fix is on the Nginx/PHP side.
                         </p>
-
                         <p style="font-size: 14px;">
                             This affects <strong>fastcgi_cache, proxy_cache, uwsgi_cache, and scgi_cache</strong> equally.
                         </p>
 
-                        <h3><strong>The Fix: Two Required Changes</strong></h3>
+                        <h3><strong>Root Causes</strong></h3>
+
+                        <p style="font-size: 14px;">There are two independent sources that can cause <code>Vary: Accept-Encoding</code> to appear in cached responses:</p>
+
+                        <h4><strong>Root Cause 1 — PHP <code>zlib.output_compression = On</code></strong></h4>
+                        <p style="font-size: 14px;">
+                            When PHP compresses output itself, it adds <code>Vary: Accept-Encoding</code> to the response
+                            <strong>only when the client sends <code>Accept-Encoding: gzip</code> or <code>deflate</code></strong>.
+                            For <code>Accept-Encoding: identity</code> (what NPP sends), PHP does not add it.
+                            This means the first real browser request after NPP's warmup triggers a cache MISS,
+                            fetches from PHP, and creates a second cache file with Vary stored.
+                            From that point, all identity-warmed entries are permanently bypassed.
+                        </p>
+
+                        <h4><strong>Root Cause 2 — nginx <code>gzip on; gzip_vary on;</code></strong></h4>
+                        <p style="font-size: 14px;">
+                            When nginx's own gzip module is active, it sets the internal <code>r-&gt;gzip_vary</code> flag
+                            based purely on the response <strong>content-type</strong> match with <code>gzip_types</code> —
+                            <strong>before</strong> it checks whether the client actually supports gzip (<code>ngx_http_gzip_ok()</code>).
+                            This means <code>Vary: Accept-Encoding</code> is added to <strong>all</strong> responses for matching content types,
+                            regardless of whether the request sent <code>Accept-Encoding: identity</code> or <code>gzip</code>.
+                            The variant hash stored by NPP (based on <code>identity</code>) will never match a real browser's hash
+                            (based on <code>gzip, deflate, br</code>), causing a secondary cache MISS for every visitor.
+                        </p>
+
+                        <h3><strong>The Fix</strong></h3>
 
                         <h4><strong>Step 1 — Disable PHP-level compression (php.ini)</strong></h4>
                         <p style="font-size: 14px;">PHP must not compress output or add <code>Vary: Accept-Encoding</code>. Let Nginx handle all compression.</p>
                         <pre>; /etc/php/fpm-phpX.Y/php.ini
 zlib.output_compression = Off</pre>
                         <p style="font-size: 14px;">Reload PHP-FPM after saving: <code>systemctl reload php-fpm</code></p>
+                        <p style="font-size: 14px;">
+                            📌 <strong>This step is only required if Root Cause 1 applies to you.</strong>
+                            If NPP's detection shows the source is nginx <code>gzip_vary</code> only, you may skip this step.
+                            However, disabling it is always the safer and architecturally correct choice.
+                        </p>
 
-                        <h4><strong>Step 2 — Add fastcgi_ignore_headers Vary to your Nginx PHP block</strong></h4>
-                        <p style="font-size: 14px;">Even with PHP compression off, other upstream components may still emit a <code>Vary</code> header. This directive tells Nginx to ignore it completely during cache operations:</p>
+                        <h4><strong>Step 2 — Add <code>fastcgi_ignore_headers Vary</code> to your Nginx PHP block</strong></h4>
+                        <p style="font-size: 14px;">
+                            This directive tells Nginx to ignore the <code>Vary</code> header completely during cache operations,
+                            preventing secondary cache file creation regardless of where <code>Vary: Accept-Encoding</code> originates —
+                            whether from PHP, nginx's own <code>gzip_vary</code>, or any other upstream component.
+                        </p>
 
 <pre>location ~ \.php$ {
     fastcgi_cache_key "$scheme$request_method$host$request_uri";
@@ -242,10 +274,13 @@ zlib.output_compression = Off</pre>
 }</pre>
 
                         <p style="font-size: 14px;">
-                            <strong>Why both?</strong> <code>fastcgi_param HTTP_ACCEPT_ENCODING ""</code> prevents PHP from ever seeing the client's
-                            <code>Accept-Encoding</code> value — so PHP cannot produce compressed output or emit <code>Vary: Accept-Encoding</code>
-                            in the first place. <code>fastcgi_ignore_headers Vary</code> is the second line of defence: even if a <code>Vary</code>
-                            header arrives from any upstream source, Nginx will not act on it during cache operations.
+                            <strong>Why both directives?</strong> <code>fastcgi_param HTTP_ACCEPT_ENCODING ""</code> strips the
+                            <code>Accept-Encoding</code> header before it reaches PHP — so PHP cannot produce compressed output
+                            or emit <code>Vary: Accept-Encoding</code> in the first place.
+                            <code>fastcgi_ignore_headers Vary</code> is the universal second line of defence:
+                            even if a <code>Vary</code> header arrives from <strong>any</strong> source
+                            (PHP, nginx <code>gzip_vary</code>, a plugin, or a proxy layer),
+                            Nginx will not store it in the cache file and will not activate the secondary cache key mechanism.
                             Together they guarantee a single cache file per URL regardless of what the client sends.
                         </p>
                         <p style="font-size: 14px;">
@@ -265,11 +300,14 @@ gzip_proxied any;
 gzip_types text/plain text/css application/javascript application/json text/xml application/xml text/javascript;</pre>
 
                         <p style="font-size: 14px;">
-                            <code>gzip_vary on</code> adds <code>Vary: Accept-Encoding</code> to responses served from Nginx — but this does <strong>not</strong> affect cache file creation
-                            because it fires <em>after</em> the cache lookup, not before. The cache key is already resolved by then.
+                            <code>gzip_vary on</code> adds <code>Vary: Accept-Encoding</code> to responses sent to clients —
+                            but with <code>fastcgi_ignore_headers Vary</code> in place, this header is <strong>not stored</strong>
+                            in the cache file and does <strong>not</strong> activate the secondary cache key mechanism.
+                            Nginx compresses responses on the fly per-client from a single cached uncompressed entry.
+                            One cache file, served correctly to all clients.
                         </p>
 
-                        <h3><strong>Why fastcgi_ignore_headers Vary is Safe Here</strong></h3>
+                        <h3><strong>Why <code>fastcgi_ignore_headers Vary</code> is Safe Here</strong></h3>
                         <p style="font-size: 14px;">
                             Normally suppressing <code>Vary</code> would risk serving gzip-compressed content to clients that cannot decompress it.
                             But with <code>zlib.output_compression = Off</code>, PHP never produces compressed output — so there is only one content variant.
@@ -289,6 +327,12 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                             <tbody>
                                 <tr>
                                     <td><code>zlib.output_compression = On</code>, no fix</td>
+                                    <td>2 (primary + secondary)</td>
+                                    <td>❌ Miss — visitor gets secondary file</td>
+                                    <td>Wasted RAM/disk, NPP preload ineffective</td>
+                                </tr>
+                                <tr>
+                                    <td><code>gzip on; gzip_vary on;</code> without <code>fastcgi_ignore_headers Vary</code></td>
                                     <td>2 (primary + secondary)</td>
                                     <td>❌ Miss — visitor gets secondary file</td>
                                     <td>Wasted RAM/disk, NPP preload ineffective</td>
