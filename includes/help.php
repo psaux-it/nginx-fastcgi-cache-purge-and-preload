@@ -214,7 +214,12 @@ function nppp_my_faq_html() {
 
                         <h3><strong>Root Causes</strong></h3>
 
-                        <p style="font-size: 14px;">There are two independent sources that can cause <code>Vary: Accept-Encoding</code> to appear in cached responses:</p>
+                        <p style="font-size: 14px;">
+                            The secondary cache file mechanism is triggered exclusively when the <strong>upstream response</strong>
+                            contains a <code>Vary: Accept-Encoding</code> header that Nginx's cache engine stores.
+                            Nginx processes this in <code>ngx_http_upstream_process_vary()</code>, which writes to <code>r-&gt;cache-&gt;vary</code> —
+                            the only field that feeds the variant hash engine. There are two independent upstream-side sources:
+                        </p>
 
                         <h4><strong>Root Cause 1 — PHP <code>zlib.output_compression = On</code></strong></h4>
                         <p style="font-size: 14px;">
@@ -226,35 +231,46 @@ function nppp_my_faq_html() {
                             From that point, all identity-warmed entries are permanently bypassed.
                         </p>
 
-                        <h4><strong>Root Cause 2 — nginx <code>gzip on; gzip_vary on;</code></strong></h4>
+                        <h4><strong>Root Cause 2 — An upstream component emitting <code>Vary: Accept-Encoding</code> unconditionally</strong></h4>
                         <p style="font-size: 14px;">
-                            When nginx's own gzip module is active, it sets the internal <code>r-&gt;gzip_vary</code> flag
-                            based purely on the response <strong>content-type</strong> match with <code>gzip_types</code> —
-                            <strong>before</strong> it checks whether the client actually supports gzip (<code>ngx_http_gzip_ok()</code>).
-                            This means <code>Vary: Accept-Encoding</code> is added to <strong>all</strong> responses for matching content types,
-                            regardless of whether the request sent <code>Accept-Encoding: identity</code> or <code>gzip</code>.
-                            The variant hash stored by NPP (based on <code>identity</code>) will never match a real browser's hash
-                            (based on <code>gzip, deflate, br</code>), causing a secondary cache MISS for every visitor.
+                            Any component running <strong>upstream of Nginx's cache engine</strong> — such as a WordPress plugin,
+                            a PHP middleware, or an intermediate proxy — that adds <code>Vary: Accept-Encoding</code> to every response
+                            regardless of the client's <code>Accept-Encoding</code> value will cause secondary cache files.
+                            Unlike Root Cause 1, where the header is only present when the client advertises gzip support,
+                            this source adds it unconditionally — including for NPP's <code>identity</code> probe —
+                            so the variant hash stored by NPP will never match a real browser's hash.
+                        </p>
+                        <p style="font-size: 14px;">
+                            📌 <strong>Note on <code>gzip_vary on</code>:</strong> Nginx's own <code>gzip_vary on</code> directive
+                            does <strong>not</strong> cause secondary cache files. It sets the internal <code>r-&gt;gzip_vary</code> flag,
+                            which only instructs <code>ngx_http_header_filter_module</code> to write
+                            <code>Vary: Accept-Encoding</code> into the raw bytes sent to the client.
+                            It never touches <code>r-&gt;cache-&gt;vary</code> — the field that controls the variant hash mechanism.
+                            <code>gzip_vary on</code> is a client-facing correctness signal for browsers and downstream proxies,
+                            not an instruction to Nginx's own cache engine.
                         </p>
 
                         <h3><strong>The Fix</strong></h3>
 
                         <h4><strong>Step 1 — Disable PHP-level compression (php.ini)</strong></h4>
                         <p style="font-size: 14px;">PHP must not compress output or add <code>Vary: Accept-Encoding</code>. Let Nginx handle all compression.</p>
-                        <pre>; /etc/php/fpm-phpX.Y/php.ini
+        <pre>; /etc/php/fpm-phpX.Y/php.ini
 zlib.output_compression = Off</pre>
                         <p style="font-size: 14px;">Reload PHP-FPM after saving: <code>systemctl reload php-fpm</code></p>
                         <p style="font-size: 14px;">
                             📌 <strong>This step is only required if Root Cause 1 applies to you.</strong>
-                            If NPP's detection shows the source is nginx <code>gzip_vary</code> only, you may skip this step.
-                            However, disabling it is always the safer and architecturally correct choice.
+                            However, disabling it is always the safer and architecturally correct choice,
+                            as it ensures PHP never produces compressed output or emits <code>Vary: Accept-Encoding</code>
+                            regardless of how the client request is constructed.
                         </p>
 
                         <h4><strong>Step 2 — Add <code>fastcgi_ignore_headers Vary</code> to your Nginx PHP block</strong></h4>
                         <p style="font-size: 14px;">
-                            This directive tells Nginx to ignore the <code>Vary</code> header completely during cache operations,
-                            preventing secondary cache file creation regardless of where <code>Vary: Accept-Encoding</code> originates —
-                            whether from PHP, nginx's own <code>gzip_vary</code>, or any other upstream component.
+                            This directive tells Nginx to ignore the <code>Vary</code> header completely during cache operations.
+                            When set, <code>ngx_http_upstream_process_vary()</code> returns immediately without writing to
+                            <code>r-&gt;cache-&gt;vary</code>, preventing secondary cache file creation regardless of whether
+                            <code>Vary: Accept-Encoding</code> originates from PHP <code>zlib.output_compression</code>,
+                            a plugin, or any other upstream component.
                         </p>
 
 <pre>location ~ \.php$ {
@@ -278,8 +294,8 @@ zlib.output_compression = Off</pre>
                             <code>Accept-Encoding</code> header before it reaches PHP — so PHP cannot produce compressed output
                             or emit <code>Vary: Accept-Encoding</code> in the first place.
                             <code>fastcgi_ignore_headers Vary</code> is the universal second line of defence:
-                            even if a <code>Vary</code> header arrives from <strong>any</strong> source
-                            (PHP, nginx <code>gzip_vary</code>, a plugin, or a proxy layer),
+                            even if a <code>Vary</code> header arrives from any upstream source
+                            (PHP, a plugin, or a proxy layer),
                             Nginx will not store it in the cache file and will not activate the secondary cache key mechanism.
                             Together they guarantee a single cache file per URL regardless of what the client sends.
                         </p>
@@ -301,8 +317,10 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
 
                         <p style="font-size: 14px;">
                             <code>gzip_vary on</code> adds <code>Vary: Accept-Encoding</code> to responses sent to clients —
-                            but with <code>fastcgi_ignore_headers Vary</code> in place, this header is <strong>not stored</strong>
-                            in the cache file and does <strong>not</strong> activate the secondary cache key mechanism.
+                            informing browsers and downstream proxies that the response content varies by encoding.
+                            This does <strong>not</strong> affect Nginx's own cache file variant mechanism:
+                            <code>gzip_vary on</code> writes only to the client-facing response bytes via <code>r-&gt;gzip_vary</code>,
+                            and never writes to <code>r-&gt;cache-&gt;vary</code> which controls secondary cache file creation.
                             Nginx compresses responses on the fly per-client from a single cached uncompressed entry.
                             One cache file, served correctly to all clients.
                         </p>
@@ -332,10 +350,16 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                                     <td>Wasted RAM/disk, NPP preload ineffective</td>
                                 </tr>
                                 <tr>
-                                    <td><code>gzip on; gzip_vary on;</code> without <code>fastcgi_ignore_headers Vary</code></td>
+                                    <td>Plugin or upstream proxy emitting <code>Vary: Accept-Encoding</code> unconditionally, no fix</td>
                                     <td>2 (primary + secondary)</td>
                                     <td>❌ Miss — visitor gets secondary file</td>
                                     <td>Wasted RAM/disk, NPP preload ineffective</td>
+                                </tr>
+                                <tr>
+                                    <td><code>gzip on; gzip_vary on;</code> (nginx-side only, no upstream Vary)</td>
+                                    <td>1 ✅</td>
+                                    <td>✅ HIT — NPP warmed entry is served</td>
+                                    <td>None — <code>gzip_vary</code> does not affect cache variant engine</td>
                                 </tr>
                                 <tr>
                                     <td><code>zlib.output_compression = Off</code> + <code>fastcgi_ignore_headers Vary</code></td>
