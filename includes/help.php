@@ -189,23 +189,21 @@ function nppp_my_faq_html() {
                     </div>
                 </div>
 
-                <h3 class="nppp-question">Why does NPP's cache warm get bypassed by real visitors? (Accept-Encoding / Double Cache File)</h3>
+                <h3 class="nppp-question">Why does NPP's cache warm get bypassed by real visitors? (Accept-Encoding / Vary Cache Issue)</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
-                        <h3><strong>The Problem: NPP Warms Cache, Visitors Create Another, Cache MISS</strong></h3>
+                        <h3><strong>The Problem: NPP Warms Cache, But Cache Get Overwritten, Bypassed or Secondary Cache Generated</strong></h3>
 
                         <p style="font-size: 14px;">
                             When a response cached by Nginx contains a <code>Vary: Accept-Encoding</code> header,
-                            Nginx's cache engine computes an MD5 <em>variant hash</em> from the request's <code>Accept-Encoding</code> value
-                            and writes a <strong>separate cache file for each distinct value</strong>.
+                            Nginx's cache engine computes an MD5 <em>variant hash</em> from the request's <code>Accept-Encoding</code> value.
+                            On a variant hash mismatch, Nginx attempts to open a secondary cache file.
+                            If the secondary fetch returns no <code>Vary</code> header, Nginx falls back and
+                            <strong>overwrites the primary cache</strong> with the new response — destroying the previously warmed cache.
                         </p>
                         <p style="font-size: 14px;">
-                            NPP's preloader sends <code>Accept-Encoding: identity</code> by default — requesting plain, uncompressed content.
-                            Real browsers always send a different value (Chrome adds <code>zstd</code>, Safari omits <code>br</code>, older clients send only <code>gzip</code>),
-                            so their variant hash never matches the preloaded entry. Nginx writes a second cache file,
-                            bypassing the warm cache entirely. Even if NPP mimicked a browser exactly, it is impossible to warm a single entry
-                            that serves all visitors because every browser sends a different <code>Accept-Encoding</code> value.
-                            This breaks NPP's cache warming — preloaded entries are never served to real visitors.
+                            This means warmed cache entries can be silently destroyed by subsequent requests with a different
+                            <code>Accept-Encoding</code> value, causing unnecessary PHP backend hits and cache thrashing.
                             The only correct fix is on the Nginx/PHP side.
                         </p>
                         <p style="font-size: 14px;">
@@ -215,7 +213,7 @@ function nppp_my_faq_html() {
                         <h3><strong>Root Causes</strong></h3>
 
                         <p style="font-size: 14px;">
-                            The secondary cache file mechanism is triggered exclusively when the <strong>upstream response</strong>
+                            The variant hash mismatch mechanism is triggered exclusively when the <strong>upstream response</strong>
                             contains a <code>Vary: Accept-Encoding</code> header that Nginx's cache engine stores.
                             Nginx processes this in <code>ngx_http_upstream_process_vary()</code>, which writes to <code>r-&gt;cache-&gt;vary</code> —
                             the only field that feeds the variant hash engine. There are two independent upstream-side sources:
@@ -225,24 +223,43 @@ function nppp_my_faq_html() {
                         <p style="font-size: 14px;">
                             When PHP compresses output itself, it adds <code>Vary: Accept-Encoding</code> to the response
                             <strong>only when the client sends <code>Accept-Encoding: gzip</code> or <code>deflate</code></strong>.
-                            For <code>Accept-Encoding: identity</code> (what NPP sends), PHP does not add it.
-                            This means the first real browser request after NPP's warmup triggers a cache MISS,
-                            fetches from PHP, and creates a second cache file with Vary stored.
-                            From that point, all identity-warmed entries are permanently bypassed.
+                            For requests without <code>Accept-Encoding</code> (such as NPP's preloader), PHP does not add it.
+                        </p>
+                        <p style="font-size: 14px;">
+                            This creates a <strong>cache thrashing</strong> scenario when a real browser reaches a URL before NPP does:
+                            the browser's gzip request causes PHP to emit <code>Vary: Accept-Encoding</code>, which Nginx stores in the cache file
+                            along with a gzip variant hash. When NPP subsequently warms that URL, its request (no <code>Accept-Encoding</code>)
+                            mismatches the stored variant hash, triggers a secondary cache lookup, fetches uncompressed content from PHP
+                            (which now emits no <code>Vary</code>), and <strong>overwrites the primary cache file</strong> with
+                            uncompressed, Vary-free content — destroying the browser-warmed cache unnecessarily.
+                            This cycle repeats on every browser/NPP alternation, causing perpetual cache churn.
+                        </p>
+                        <p style="font-size: 14px;">
+                            📌 <strong>Note:</strong> If NPP always warms a URL before any real browser, Root Cause 1 does not trigger —
+                            because PHP never emits <code>Vary: Accept-Encoding</code> for NPP's request, so no variant hash is stored,
+                            and browsers receive a clean HIT. The problem only manifests when a browser reaches a URL first.
                         </p>
 
                         <h4><strong>Root Cause 2 — An upstream component emitting <code>Vary: Accept-Encoding</code> unconditionally</strong></h4>
                         <p style="font-size: 14px;">
                             Any component running <strong>upstream of Nginx's cache engine</strong> — such as a WordPress plugin,
                             a PHP middleware, or an intermediate proxy — that adds <code>Vary: Accept-Encoding</code> to every response
-                            regardless of the client's <code>Accept-Encoding</code> value will cause secondary cache files.
-                            Unlike Root Cause 1, where the header is only present when the client advertises gzip support,
-                            this source adds it unconditionally — including for NPP's <code>identity</code> probe —
-                            so the variant hash stored by NPP will never match a real browser's hash.
+                            regardless of the client's <code>Accept-Encoding</code> value will cause variant hash mismatches for every request.
+                            Unlike Root Cause 1, where the header is conditional on the client advertising gzip support,
+                            this source adds it unconditionally — including for NPP's requests.
+                        </p>
+                        <p style="font-size: 14px;">
+                            Because NPP's preloader sends no <code>Accept-Encoding</code> header, the variant hash stored
+                            during the warm pass is computed from an empty value. When a real browser subsequently requests
+                            the same URL with <code>Accept-Encoding: gzip, deflate, br</code>, Nginx computes a different
+                            variant hash, finds no matching cache file, and creates a <strong>second independent cache file</strong>
+                            for the same URL — going to PHP instead of serving the NPP-warmed cache.
+                            The result is two separate cache files on disk for the same URL, and the NPP-warmed cache
+                            is never served to real visitors regardless of warm order.
                         </p>
                         <p style="font-size: 14px;">
                             📌 <strong>Note on <code>gzip_vary on</code>:</strong> Nginx's own <code>gzip_vary on</code> directive
-                            does <strong>not</strong> cause secondary cache files. It sets the internal <code>r-&gt;gzip_vary</code> flag,
+                            does <strong>not</strong> cause variant hash mismatches. It sets the internal <code>r-&gt;gzip_vary</code> flag,
                             which only instructs <code>ngx_http_header_filter_module</code> to write
                             <code>Vary: Accept-Encoding</code> into the raw bytes sent to the client.
                             It never touches <code>r-&gt;cache-&gt;vary</code> — the field that controls the variant hash mechanism.
@@ -261,15 +278,15 @@ zlib.output_compression = Off</pre>
                             📌 <strong>This step is only required if Root Cause 1 applies to you.</strong>
                             However, disabling it is always the safer and architecturally correct choice,
                             as it ensures PHP never produces compressed output or emits <code>Vary: Accept-Encoding</code>
-                            regardless of how the client request is constructed.
+                            regardless of request order or client type.
                         </p>
 
                         <h4><strong>Step 2 — Add <code>fastcgi_ignore_headers Vary</code> to your Nginx PHP block</strong></h4>
                         <p style="font-size: 14px;">
                             This directive tells Nginx to ignore the <code>Vary</code> header completely during cache operations.
                             When set, <code>ngx_http_upstream_process_vary()</code> returns immediately without writing to
-                            <code>r-&gt;cache-&gt;vary</code>, preventing secondary cache file creation regardless of whether
-                            <code>Vary: Accept-Encoding</code> originates from PHP <code>zlib.output_compression</code>,
+                            <code>r-&gt;cache-&gt;vary</code>, preventing variant hash storage and all resulting cache overwrites
+                            regardless of whether <code>Vary: Accept-Encoding</code> originates from PHP <code>zlib.output_compression</code>,
                             a plugin, or any other upstream component.
                         </p>
 
@@ -279,7 +296,7 @@ zlib.output_compression = Off</pre>
     include /etc/nginx/fastcgi_params;
 
     fastcgi_param  HTTP_ACCEPT_ENCODING  "";  # ← strip Accept-Encoding before it reaches PHP
-    fastcgi_ignore_headers Vary;              # ← prevents secondary cache file creation
+    fastcgi_ignore_headers Vary;              # ← prevents variant hash storage and cache overwrites
 
     fastcgi_cache YOUR_ZONE;
     fastcgi_cache_valid 30d;
@@ -296,8 +313,9 @@ zlib.output_compression = Off</pre>
                             <code>fastcgi_ignore_headers Vary</code> is the universal second line of defence:
                             even if a <code>Vary</code> header arrives from any upstream source
                             (PHP, a plugin, or a proxy layer),
-                            Nginx will not store it in the cache file and will not activate the secondary cache key mechanism.
-                            Together they guarantee a single cache file per URL regardless of what the client sends.
+                            Nginx will not store it in the cache file and will not activate the variant hash mechanism.
+                            Together they guarantee a single stable cache file per URL regardless of what the client sends
+                            or which request arrives first.
                         </p>
                         <p style="font-size: 14px;">
                             📌 If you already set <code>fastcgi_param HTTP_ACCEPT_ENCODING ""</code> in your shared
@@ -318,9 +336,9 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                         <p style="font-size: 14px;">
                             <code>gzip_vary on</code> adds <code>Vary: Accept-Encoding</code> to responses sent to clients —
                             informing browsers and downstream proxies that the response content varies by encoding.
-                            This does <strong>not</strong> affect Nginx's own cache file variant mechanism:
+                            This does <strong>not</strong> affect Nginx's own cache variant mechanism:
                             <code>gzip_vary on</code> writes only to the client-facing response bytes via <code>r-&gt;gzip_vary</code>,
-                            and never writes to <code>r-&gt;cache-&gt;vary</code> which controls secondary cache file creation.
+                            and never writes to <code>r-&gt;cache-&gt;vary</code> which controls variant hash storage.
                             Nginx compresses responses on the fly per-client from a single cached uncompressed entry.
                             One cache file, served correctly to all clients.
                         </p>
@@ -345,26 +363,26 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                             <tbody>
                                 <tr>
                                     <td><code>zlib.output_compression = On</code>, no fix</td>
-                                    <td>2 (primary + secondary)</td>
-                                    <td>❌ Miss — visitor gets secondary file</td>
-                                    <td>Wasted RAM/disk, NPP preload ineffective</td>
+                                    <td>1 (thrashing — overwritten on encoding mismatch)</td>
+                                    <td>⚠️ Unstable — warmed cache overwritten when browser hits first</td>
+                                    <td>Cache churn, unnecessary PHP hits, warm entries silently destroyed</td>
                                 </tr>
                                 <tr>
                                     <td>Plugin or upstream proxy emitting <code>Vary: Accept-Encoding</code> unconditionally, no fix</td>
-                                    <td>2 (primary + secondary)</td>
-                                    <td>❌ Miss — visitor gets secondary file</td>
-                                    <td>Wasted RAM/disk, NPP preload ineffective</td>
+                                    <td>2 (secondary file created — NPP warm and browser request produce separate cache entries for the same URL)</td>
+                                    <td>❌ Miss — browser request computes a different variant hash and bypasses the NPP-warmed cache entirely, going to PHP instead</td>
+                                    <td>NPP preload permanently ineffective; real visitors always trigger a PHP backend hit regardless of warm order</td>
                                 </tr>
                                 <tr>
                                     <td><code>gzip on; gzip_vary on;</code> (nginx-side only, no upstream Vary)</td>
                                     <td>1 ✅</td>
-                                    <td>✅ HIT — NPP warmed entry is served</td>
+                                    <td>✅ HIT — NPP warmed cache is served</td>
                                     <td>None — <code>gzip_vary</code> does not affect cache variant engine</td>
                                 </tr>
                                 <tr>
                                     <td><code>zlib.output_compression = Off</code> + <code>fastcgi_ignore_headers Vary</code></td>
                                     <td>1 ✅</td>
-                                    <td>✅ HIT — NPP warmed entry is served</td>
+                                    <td>✅ HIT — NPP warmed cache is served</td>
                                     <td>None</td>
                                 </tr>
                             </tbody>
