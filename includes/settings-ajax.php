@@ -494,3 +494,16 @@ function nppp_get_save_cron_expression() {
 
     wp_send_json_success( __( 'New cron event scheduled successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
 }
+
+// Permanently dismiss the Vary: Accept-Encoding row.
+// Stores a simple boolean option; pre-checks and settings-page both gate on it.
+function nppp_dismiss_vary_notice(): void {
+    nppp_ajax_auth( 'nppp-dismiss-vary-notice' );
+
+    update_option( 'nppp_vary_notice_dismissed', 1, false );
+
+    // Purge the detection transient so it is not re-evaluated unnecessarily.
+    delete_transient( 'nppp_vary_issue_' . md5( 'nppp' ) );
+
+    wp_send_json_success();
+}
