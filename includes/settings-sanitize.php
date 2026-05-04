@@ -774,7 +774,8 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false, bool $nppp_by
             return 'file_not_found_or_not_readable';
         }
     } else {
-        if (!is_dir($path)) {
+        // supress open_basedir related PHP warnings
+        if (!@is_dir($path)) {
             return 'directory_not_exist_or_readable';
         }
     }
