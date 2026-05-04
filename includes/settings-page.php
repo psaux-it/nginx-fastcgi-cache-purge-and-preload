@@ -418,35 +418,46 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php
-                                $nppp_vary = function_exists('nppp_detect_vary_issue') ? nppp_detect_vary_issue() : null;
-                                if ($nppp_vary !== null && $nppp_vary['issue']) :
+                                $nppp_vary = function_exists( 'nppp_detect_vary_issue' ) ? nppp_detect_vary_issue() : null;
+                                if ( $nppp_vary !== null && ! empty( $nppp_vary['rc1'] ) ) :
                                 ?>
                                 <div style="background:#fef2f2; border-left:4px solid #dc2626; padding:10px 14px; max-width:500px;">
-                                    <strong style="color:#991b1b;"><?php esc_html_e( '⚠ Active: Double Cache Issue Detected', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
+                                    <strong style="color:#991b1b;"><?php esc_html_e( '⚠ RC1 Detected: Cache Thrashing Risk', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
                                     <span style="font-size:13px; color:#7f1d1d;">
                                         <?php
-                                        if (!empty($nppp_vary['zlib_on'])) {
-                                            esc_html_e('PHP zlib.output_compression is On and emitting Vary: Accept-Encoding for compressed requests. Nginx is creating per-client variant cache files.', 'fastcgi-cache-purge-and-preload-nginx');
+                                        if ( ! empty( $nppp_vary['zlib_on'] ) ) {
+                                            esc_html_e( 'PHP zlib.output_compression is On — PHP emits Vary: Accept-Encoding for gzip-capable requests, causing Nginx to thrash the cache file when NPP and browser requests alternate.', 'fastcgi-cache-purge-and-preload-nginx' );
                                         } else {
-                                            esc_html_e('An upstream plugin or middleware is emitting Vary: Accept-Encoding only for compressed requests. Nginx is creating per-client variant cache files.', 'fastcgi-cache-purge-and-preload-nginx');
+                                            esc_html_e( 'A plugin or middleware proxy is conditionally emitting Vary: Accept-Encoding for gzip-capable requests, causing Nginx to thrash the cache file when NPP and browser requests alternate.', 'fastcgi-cache-purge-and-preload-nginx' );
                                         }
                                         ?>
-                                        <a href="?page=fastcgi-cache-purge-and-preload-nginx&nppp_tab=help#vary-issue" style="font-size:13px; color:#991b1b; font-weight:600; text-decoration:none; display:block; margin-top:4px;">
-                                            <?php esc_html_e( '→ See Help tab for the required two-step fix', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <a href="?page=nginx_cache_settings&nppp_tab=help#help" style="font-size:13px; color:#991b1b; font-weight:600; text-decoration:none; display:block; margin-top:4px;">
+                                            <?php esc_html_e( '→ See Help tab for the required fix', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                         </a>
                                     </span>
                                 </div>
-                                <?php elseif ($nppp_vary !== null && !$nppp_vary['issue']) : ?>
+                                <?php elseif ( $nppp_vary !== null && ! empty( $nppp_vary['rc2'] ) ) : ?>
+                                <div style="background:#fef2f2; border-left:4px solid #dc2626; padding:10px 14px; max-width:500px;">
+                                    <strong style="color:#991b1b;"><?php esc_html_e( '⚠ RC2 Potential: Double Cache Risk', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
+                                    <span style="font-size:13px; color:#7f1d1d;">
+                                        <?php esc_html_e( 'Vary: Accept-Encoding is present in responses to requests without encoding preference. A plugin or upstream proxy may be emitting this unconditionally — Nginx creates a second cache per URL and NPP-warmed cache are never reached by real visitors.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <br><em style="font-size:12.5px; color:#06402B;"><?php esc_html_e( 'Note: If nginx gzip_vary on is your only Vary source, this detection is a false positive and no action is needed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></em>
+                                        <a href="?page=nginx_cache_settings&nppp_tab=help#help" style="font-size:13px; color:#991b1b; font-weight:600; text-decoration:none; display:block; margin-top:4px;">
+                                            <?php esc_html_e( '→ See Help tab for the required fix', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        </a>
+                                    </span>
+                                </div>
+                                <?php elseif ( $nppp_vary !== null && empty( $nppp_vary['issue'] ) ) : ?>
                                 <div style="background:#f0fdf4; border-left:4px solid #16a34a; padding:10px 14px; max-width:500px;">
                                     <strong style="color:#14532d;"><?php esc_html_e( '✔ Not Affected', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
-                                    <span style="font-size:13px; color:#166534;"><?php esc_html_e( 'No upstream Vary: Accept-Encoding source detected. Single cache file per URL confirmed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                                    <span style="font-size:13px; color:#166534;"><?php esc_html_e( 'No upstream Vary: Accept-Encoding source detected. Single cache  per URL confirmed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                                 </div>
                                 <?php else : ?>
                                 <div style="background:#fff8e1; border-left:4px solid #f0ad4e; padding:10px 14px; max-width:500px;">
-                                    <strong style="color:#7a4f00;"><?php esc_html_e( 'Double Cache Issue', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
+                                    <strong style="color:#7a4f00;"><?php esc_html_e( 'Vary Cache Issue', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
                                     <span style="font-size:13px; color:#5a3800;">
                                         <?php esc_html_e( 'Could not verify. ', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                        <a href="?page=fastcgi-cache-purge-and-preload-nginx&nppp_tab=help#vary-issue" style="font-size:13px; color:#7a4f00; font-weight:600; text-decoration:none;">
+                                        <a href="?page=nginx_cache_settings&nppp_tab=help#help" style="font-size:13px; color:#7a4f00; font-weight:600; text-decoration:none;">
                                             <?php esc_html_e( '→ See Help tab for fix and full explanation', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                         </a>
                                     </span>
