@@ -949,13 +949,6 @@ function nppp_pre_checks() {
         return;
     }
 
-    // Vary: Accept-Encoding double-cache detection
-    // BETA v2.1.7
-    $nppp_vary = nppp_detect_vary_issue();
-    if ($nppp_vary['issue']) {
-        nppp_display_pre_check_warning(__('GLOBAL WARNING VARY: PHP zlib.output_compression or an upstream plugin is emitting Vary: Accept-Encoding only for compressed requests. Nginx is creating per-client variant cache files — NPP\'s preloaded cache will never be served to real visitors. See the Help tab for the required fix.', 'fastcgi-cache-purge-and-preload-nginx'));
-    }
-
     // Head-only read sizes (once per call)
     $head_bytes_primary  = (int) apply_filters( 'nppp_locate_head_bytes', 4096 );
     $head_bytes_fallback = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
@@ -1039,26 +1032,20 @@ function nppp_pre_checks() {
     }
 }
 
-// Detect the Vary:Accept-Encoding double-cache issue.
-// Note: BETA-False Positive possible. Need to clarify -gzip vary on- further
+// Detect the Vary: Accept-Encoding cache issue.
 //
-//  1. ini_get('zlib.output_compression') — reads the PHP *runtime* value, which
-//     reflects php.ini, .user.ini, PHP_VALUE in fastcgi_param, and php_admin_value.
-//     Truthy means PHP will add Vary: Accept-Encoding to upstream responses when
-//     the client accepts gzip, triggering nginx variant-file creation.
+//  RC1 — Conditional upstream Vary (PHP zlib or a plugin that only emits
+//         Vary: Accept-Encoding when the client advertises gzip/deflate):
+//         · Definitive signal: zlib.output_compression ini = On.
+//         · Probe signal: Vary present with gzip-AE probe, absent with no-AE probe.
+//         · Effect: cache thrashing — NPP-warmed entry overwritten on encoding mismatch.
 //
-//  2. Two HTTP probes (gzip vs identity Accept-Encoding):
-//     - nginx gzip_vary sets r->gzip_vary=1 based on content-type, BEFORE the
-//       Accept-Encoding capability check (ngx_http_gzip_ok). It fires for ALL
-//       requests including identity, so Vary: Accept-Encoding appears in BOTH probes.
-//     - PHP zlib only adds Vary: Accept-Encoding when it actually compresses, which
-//       only happens when the client sends Accept-Encoding: gzip/deflate.
-//     → If Vary is present with gzip but ABSENT with identity → PHP/zlib is the source.
-//     → If Vary is present in BOTH probes → nginx gzip_vary is the source.
-//     Both cases trigger nginx secondary cache files per Accept-Encoding value
-//     and break NPP preload. _ignore_headers Vary fixes both.
-//
-// Result is transient-cached for 1 hour; cleared by nppp_clear_plugin_cache().
+//  RC2 — Unconditional upstream Vary (a plugin or middleware that always emits
+//         Vary: Accept-Encoding regardless of the client's Accept-Encoding value):
+//         · Probe signal: Vary present in no-AE probe AND zlib is Off.
+//         · Caveat: nginx gzip_vary on also produces Vary in the no-AE probe but is SAFE
+//           (writes only r->gzip_vary, never r->cache->vary). UI message clarifies.
+//         · Effect: second independent cache file per URL — NPP-warmed entry bypassed.
 if (! function_exists('nppp_detect_vary_issue')) {
     function nppp_detect_vary_issue(): array {
         $transient_key = 'nppp_vary_issue_' . md5('nppp');
@@ -1115,16 +1102,19 @@ if (! function_exists('nppp_detect_vary_issue')) {
             }
         }
 
-        // Vary on gzip probe ONLY → definite issue: PHP/zlib or conditional upstream plugin.
-        // Vary in BOTH probes → ambiguous: harmless gzip_vary on (never writes r->cache->vary,
-        $vary_from_upstream = ($vary_gzip && ! $vary_identity);
-        $vary_in_both       = ($vary_gzip && $vary_identity);
+        // RC1: conditional Vary — PHP zlib (ini) or a plugin firing only for gzip-capable clients.
+        $rc1 = $zlib_on || ( $vary_gzip && ! $vary_identity );
+
+        // RC2 potential: Vary present even for a no-encoding-preference request.
+        // Upstream plugin emitting unconditionally = issue (creates second cache file per URL).
+        // nginx gzip_vary on = safe (r->gzip_vary only, never r->cache->vary). UI clarifies.
+        $rc2 = $vary_identity && ! $zlib_on;
 
         $result = [
-            'zlib_on'            => $zlib_on,
-            'vary_from_upstream' => $vary_from_upstream,
-            'vary_from_nginx'    => $vary_in_both,
-            'issue'              => $vary_from_upstream,
+            'zlib_on' => $zlib_on,
+            'rc1'     => $rc1,
+            'rc2'     => $rc2,
+            'issue'   => $rc1 || $rc2,
         ];
 
         set_transient($transient_key, $result, HOUR_IN_SECONDS);
