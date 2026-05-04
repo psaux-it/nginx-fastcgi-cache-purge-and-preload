@@ -1048,6 +1048,12 @@ function nppp_pre_checks() {
 //         · Effect: second independent cache file per URL — NPP-warmed entry bypassed.
 if (! function_exists('nppp_detect_vary_issue')) {
     function nppp_detect_vary_issue(): array {
+        // When the admin has permanently dismissed the Vary notice, skip all
+        // probing.
+        if ( get_option( 'nppp_vary_notice_dismissed' ) ) {
+            return [ 'zlib_on' => false, 'rc1' => false, 'rc2' => false, 'issue' => false ];
+        }
+
         $transient_key = 'nppp_vary_issue_' . md5('nppp');
         $cached        = get_transient($transient_key);
         if (is_array($cached) && array_key_exists('issue', $cached)) {
