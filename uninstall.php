@@ -126,6 +126,7 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_url_filepath_index',                // URL→filepath index for single/related purge fast-path
         'nppp_ping_token_db',                     // Watchdog token DB fallback (nppp_watcher_generate_token)
         'nppp_cache_purge.lock',                  // Purge operation lock (WP_Upgrader)
+        'nppp_vary_notice_dismissed',             // Vary: Accept-Encoding probe dismiss flag
     );
 
     foreach ($option_keys as $option_key) {
