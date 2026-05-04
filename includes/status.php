@@ -97,6 +97,10 @@ function nppp_clear_plugin_cache($silent = false) {
         delete_transient($transient);
     }
 
+    // Re-arm the Vary: Accept-Encoding probe and its notice row so the
+    // detection runs fresh on the next settings page load.
+    delete_option( 'nppp_vary_notice_dismissed' );
+
     // Transients that must not be cleared while a preload is running:
     //   nppp_preload_phase_        — tick monitor reads this every 5s to track desktop/mobile phase
     //   nppp_preload_cycle_start_  — needed at completion to calculate total elapsed time
