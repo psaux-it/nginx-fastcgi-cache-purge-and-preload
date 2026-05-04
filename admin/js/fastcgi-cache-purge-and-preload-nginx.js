@@ -1667,6 +1667,29 @@ $(document).ready(function() {
         }, 'json');
     });
 
+    // Permanently dismiss the Vary: Accept-Encoding row
+    $(document).on('click', '#nppp-dismiss-vary', function () {
+        var $btn = $(this);
+        $btn.prop('disabled', true);
+
+        $.post(nppp_admin_data.ajaxurl, {
+            action:   'nppp_dismiss_vary_notice',
+            _wpnonce: nppp_admin_data.dismiss_vary_nonce
+        })
+        .done(function (response) {
+            if (response && response.success) {
+                $('#nppp-vary-row').fadeOut(300, function () {
+                    $(this).remove();
+                });
+            } else {
+                $btn.prop('disabled', false);
+            }
+        })
+        .fail(function () {
+            $btn.prop('disabled', false);
+        });
+    });
+
     // Bypass Path Restriction single toggle card
     (function npppSetupBypassPr() {
         const $npppBprFS = $('#nppp-bypass-pr-fieldset');
