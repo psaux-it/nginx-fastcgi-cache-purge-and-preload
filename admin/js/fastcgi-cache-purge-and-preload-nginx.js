@@ -3121,11 +3121,11 @@ $(document).ready(function() {
             // Set column widths
             columnDefs: [
                 { width: "25%", targets: 0, className: 'text-left' },                    // Cached URL
-                { width: "35%", targets: 1, className: 'text-left' },                    // Cache Path
+                { width: "33%", targets: 1, className: 'text-left' },                    // Cache Path
                 { width: "9%", targets: 2, className: 'text-left nppp-category-cell' },  // Content
                 { width: "6%", targets: 3, className: 'text-left' },                     // Status
                 { width: "10%", targets: 4, className: 'text-left nppp-variant-cell' },  // Variants
-                { width: "15%", targets: 5, className: 'text-left' },                    // Actions
+                { width: "17%", targets: 5, className: 'text-left' },                    // Actions
                 { responsivePriority: 1, targets: 0 },                                   // Cached URL gets priority for responsiveness
                 { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] },                 // Collapse all in first row on mobile, hide actions always
                 { defaultContent: "", targets: "_all" },                                 // Ensures all columns render even if empty
