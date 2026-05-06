@@ -310,46 +310,60 @@ function nppp_nginx_cache_purge_endpoint($request) {
         );
     }
 
+    // Reset severity tracker before the operation
+    // Without this, a stale nppp_last_notice_type value from any earlier same-request call would poison
+    // the final status type even if the purge itself succeeds.
+    $GLOBALS['nppp_last_notice_type'] = 'success';
+
     // Record the buffer level BEFORE we start our own output buffer.
     // This allows log.php to verify that the buffer being written to belongs to us.
     $GLOBALS['nppp_rest_ob_level'] = ob_get_level();
 
-    // Start output buffering for purge endpoint
-    ob_start();
+    $ob_started = false;
+    try {
+        // Start output buffering for purge endpoint
+        ob_start();
+        $ob_started = true;
 
-    // Log the successful purge API call
-    // Not hit the rate limit, authentication errors
-    nppp_log_api_request('purge', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'), false);
+        // Log the successful purge API call
+        // Not hit the rate limit, authentication errors
+        nppp_log_api_request('purge', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'), false);
 
-    // Necessary data for purge action
-    $nginx_cache_settings = get_option('nginx_cache_settings');
-    $default_cache_path = '/dev/shm/change-me-now';
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
-    $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
-    $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+        // Necessary data for purge action
+        $nginx_cache_settings = get_option('nginx_cache_settings');
+        $default_cache_path = '/dev/shm/change-me-now';
+        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+        $this_script_path = dirname(plugin_dir_path(__FILE__));
+        $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
+        $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
-    // Call purge action
-    nppp_purge(
-        $nginx_cache_path,
-        $PIDFILE,
-        $tmp_path,
-        true,  // $nppp_is_rest_api
-        false, // $nppp_is_admin_bar
-        false  // $nppp_is_auto_purge
-    );
+        // Call purge action
+        nppp_purge(
+            $nginx_cache_path,
+            $PIDFILE,
+            $tmp_path,
+            true,  // $nppp_is_rest_api
+            false, // $nppp_is_admin_bar
+            false  // $nppp_is_auto_purge
+        );
 
-    // Get status message
-    $status_message = wp_strip_all_tags(ob_get_clean());
+        // Get status message
+        $status_message = wp_strip_all_tags(ob_get_clean());
+        $ob_started = false;
 
-    // Clean up the global marker so it doesn't leak to other requests
-    unset($GLOBALS['nppp_rest_ob_level']);
-
-    // Return status response
-    return new WP_REST_Response(array(
-        'success' => true,
-        'message' => $status_message
-    ), 200);
+        // Return status response
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => $status_message
+        ), 200);
+    } finally {
+        // Guaranteed cleanup regardless of any future early-return paths.
+        if ( $ob_started ) {
+            ob_end_clean();
+        }
+        unset( $GLOBALS['nppp_rest_ob_level'] );
+        unset( $GLOBALS['nppp_last_notice_type'] );
+    }
 }
 
 // Handle the REST API request for preload action.
@@ -369,63 +383,77 @@ function nppp_nginx_cache_preload_endpoint($request) {
         );
     }
 
+    // Reset severity tracker before the operation
+    // Without this, a stale nppp_last_notice_type value from any earlier same-request call would poison
+    // the final status type even if the preload itself succeeds.
+    $GLOBALS['nppp_last_notice_type'] = 'success';
+
     // Record the buffer level BEFORE we start our own output buffer.
     // This allows log.php to verify that the buffer being written to belongs to us.
     $GLOBALS['nppp_rest_ob_level'] = ob_get_level();
 
-    // Start output buffering for preload endpoint
-    ob_start();
+    $ob_started = false;
+    try {
+        // Start output buffering for preload endpoint
+        ob_start();
+        $ob_started = true;
 
-    // Log the successful preload API call
-    // Not hit the rate limit, authentication errors
-    nppp_log_api_request('preload', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'), false);
+        // Log the successful preload API call
+        // Not hit the rate limit, authentication errors
+        nppp_log_api_request('preload', __('SUCCESS 200 OK', 'fastcgi-cache-purge-and-preload-nginx'), false);
 
-    // Get the plugin options
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+        // Get the plugin options
+        $nginx_cache_settings = get_option('nginx_cache_settings');
 
-    // Set default options to prevent any error
-    $default_cache_path = '/dev/shm/change-me-now';
-    $default_limit_rate = 1280;
-    $default_cpu_limit = 100;
-    $default_reject_regex = nppp_fetch_default_reject_regex();
+        // Set default options to prevent any error
+        $default_cache_path = '/dev/shm/change-me-now';
+        $default_limit_rate = 5120;
+        $default_cpu_limit = 100;
+        $default_reject_regex = nppp_fetch_default_reject_regex();
 
-    // Get the necessary data for preload action from plugin options
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
-    $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
-    $nginx_cache_cpu_limit = isset($nginx_cache_settings['nginx_cache_cpu_limit']) ? $nginx_cache_settings['nginx_cache_cpu_limit'] : $default_cpu_limit;
-    $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
+        // Get the necessary data for preload action from plugin options
+        $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+        $nginx_cache_limit_rate = isset($nginx_cache_settings['nginx_cache_limit_rate']) ? $nginx_cache_settings['nginx_cache_limit_rate'] : $default_limit_rate;
+        $nginx_cache_cpu_limit = isset($nginx_cache_settings['nginx_cache_cpu_limit']) ? $nginx_cache_settings['nginx_cache_cpu_limit'] : $default_cpu_limit;
+        $nginx_cache_reject_regex = isset($nginx_cache_settings['nginx_cache_reject_regex']) ? $nginx_cache_settings['nginx_cache_reject_regex'] : $default_reject_regex;
 
-    // Extra data for preload action
-    $fdomain = get_site_url();
-    $this_script_path = dirname(plugin_dir_path(__FILE__));
-    $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
-    $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
+        // Extra data for preload action
+        $fdomain = get_site_url();
+        $this_script_path = dirname(plugin_dir_path(__FILE__));
+        $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
+        $tmp_path = rtrim($nginx_cache_path, '/') . "/tmp";
 
-    // Call preload action
-    nppp_preload(
-        $nginx_cache_path,
-        $this_script_path,
-        $tmp_path,
-        $fdomain,
-        $PIDFILE,
-        $nginx_cache_reject_regex,
-        $nginx_cache_limit_rate,
-        $nginx_cache_cpu_limit,
-        false, // $nppp_is_auto_preload
-        true,  // $nppp_is_rest_api
-        false, // $nppp_is_wp_cron
-        false  // $nppp_is_admin_bar
-    );
+        // Call preload action
+        nppp_preload(
+            $nginx_cache_path,
+            $this_script_path,
+            $tmp_path,
+            $fdomain,
+            $PIDFILE,
+            $nginx_cache_reject_regex,
+            $nginx_cache_limit_rate,
+            $nginx_cache_cpu_limit,
+            false, // $nppp_is_auto_preload
+            true,  // $nppp_is_rest_api
+            false, // $nppp_is_wp_cron
+            false  // $nppp_is_admin_bar
+        );
 
-    // Get status message
-    $status_message = wp_strip_all_tags(ob_get_clean());
+        // Get status message
+        $status_message = wp_strip_all_tags(ob_get_clean());
+        $ob_started = false;
 
-    // Clean up the global marker so it doesn't leak to other requests
-    unset($GLOBALS['nppp_rest_ob_level']);
-
-    // Return status response.
-    return new WP_REST_Response(array(
-        'success' => true,
-        'message' => $status_message
-    ), 200);
+        // Return status response.
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => $status_message
+        ), 200);
+    } finally {
+        // Guaranteed cleanup regardless of any future early-return paths.
+        if ( $ob_started ) {
+            ob_end_clean();
+        }
+        unset( $GLOBALS['nppp_rest_ob_level'] );
+        unset( $GLOBALS['nppp_last_notice_type'] );
+    }
 }
