@@ -115,11 +115,10 @@ function nppp_perform_file_operation($file_path, $operation, $data = null) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        nppp_display_admin_notice(
-            'error',
+        nppp_custom_error_log(
             __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
         );
-        return;
+        return false;
     }
 
     switch ($operation) {
