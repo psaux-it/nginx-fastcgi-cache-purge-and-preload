@@ -181,8 +181,12 @@ function nppp_check_perm_in_cache($check_path = false, $check_perm = false, $che
 
     // Normalize: callers compare against string 'true'/'false'
     if ($result === false) {
-        $computed = nppp_check_permissions_recursive_with_cache();
-        $result   = ($computed === 'true') ? 'true' : 'false';
+        if (nppp_check_path() === 'Found') {
+            $computed = nppp_check_permissions_recursive_with_cache();
+            $result   = ($computed === 'true') ? 'true' : 'false';
+        } else {
+            $result = 'false';
+        }
     } else {
         // Be defensive in case something else was stored
         $result = ($result === 'true') ? 'true' : 'false';
