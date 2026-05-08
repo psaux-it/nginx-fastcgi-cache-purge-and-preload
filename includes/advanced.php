@@ -947,7 +947,7 @@ function nppp_preload_cache_premium_callback() {
         $probe_exit = 0;
         exec(
             sprintf(
-                '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
+                '%s -q \'.\' --text --no-ignore --no-config --no-mmap -m 1 %s 2>/dev/null',
                 escapeshellarg($rg_bin),
                 escapeshellarg($rg_scan_path)
             ),
@@ -1004,7 +1004,7 @@ function nppp_preload_cache_premium_callback() {
             $url_key = preg_replace('#^https?://#', '', $cache_url);
 
             $rg_cmd = sprintf(
-                '%s%s -l -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config %s %s',
+                '%s%s -l -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config --no-mmap %s %s',
                 $rg_cmd_prefix,
                 escapeshellarg($rg_bin),
                 escapeshellarg('^KEY: .*' . preg_quote($url_key, '/') . '$'),
@@ -1045,7 +1045,7 @@ function nppp_extract_cached_urls_rg(
     // Linux Page Cache Warm‑Up (Dentry Cache) for SCAN 2
     $redirect_cmd = sprintf(
         '%s%s -F --text -l -m 1 -E none --no-unicode'
-        . ' --no-heading --no-ignore --no-config --no-messages -e %s -e %s %s 2>/dev/null',
+        . ' --no-heading --no-ignore --no-config --no-messages --no-mmap -e %s -e %s %s 2>/dev/null',
         $rg_cmd_prefix,
         escapeshellarg( $rg_bin ),
         escapeshellarg( 'Status: 301' ),
@@ -1068,7 +1068,7 @@ function nppp_extract_cached_urls_rg(
     // Linux dcache already warmed here
     $key_cmd = sprintf(
         '%s%s --text -m 1 -E none --no-unicode'
-        . ' --no-heading --no-ignore --no-config --no-messages %s %s 2>/dev/null',
+        . ' --no-heading --no-ignore --no-config --no-messages --no-mmap %s %s 2>/dev/null',
         $rg_cmd_prefix,
         escapeshellarg( $rg_bin ),
         escapeshellarg( '^KEY: [^\r\n]+' ),
@@ -1270,7 +1270,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             $probe_exit = 0;
             exec(
                 sprintf(
-                    '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
+                    '%s -q \'.\' --text --no-ignore --no-config --no-mmap -m 1 %s 2>/dev/null',
                     escapeshellarg( $rg_bin ),
                     escapeshellarg( $rg_scan_path )
                 ),
