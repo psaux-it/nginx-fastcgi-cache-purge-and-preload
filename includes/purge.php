@@ -580,7 +580,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
         $probe_exit = 0;
         exec(
             sprintf(
-                '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
+                '%s -q \'.\' --text --no-ignore --no-config --no-mmap -m 1 %s 2>/dev/null',
                 escapeshellarg( $rg_bin ),
                 escapeshellarg( $rg_scan_path )
             ),
@@ -625,7 +625,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     ) );
 
     $cmd = sprintf(
-        '%s%s -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config %s %s',
+        '%s%s -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config --no-mmap --no-heading %s %s',
         $rg_cmd_prefix,
         escapeshellarg( $rg_bin ),
         escapeshellarg( '^KEY: .*(' . $url_alts . ')' ),
