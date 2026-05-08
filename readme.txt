@@ -145,12 +145,16 @@ NPP restricts cache paths to prevent accidental deletion of system files. Allowe
 
 Release date: 2026-05-02
 
-* Fixed: Unprotected shell_exec and exec calls in REST API, WP Cron, Dashboard Widget and all possible roots.
-* Fixed: Missing check for getenv / putenv for URL Normalization.
-* Improved: Setup (Assume Nginx Mode) process.
-* Changed: Hard dependency extended to require both shell_exec and exec !
+Minor Release: Mainly focus compatibility issues on various panels. No regression.
+
+* Fixed: Unprotected (function_exists) shell_exec and exec calls across the REST API, WP Cron, Dashboard Widget, and all other relevant execution paths.
+* Fixed: Missing check for getenv / putenv for URL Normalization (safexec).
+* Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
+* Improved: Nginx detection and Setup (Assume Nginx Mode) process on panels. Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
+* Improved: Compatibility on aaPanel. Tested and fully functional with proper panel settings. See https://github.com/aaPanel/aaPanel/issues/270 for ongoing issue. (Thanks to @neikoloves)
+* Changed: Hard dependency extended to require both shell_exec and exec (rg).
 * Added: Proper open_basedir compatibility detection and admin warning for missing required paths.
-* Added: BETA detection for Vary: Accept-Encoding double‑cache issue (may produce false positives).
+* Added: Detection for Vary: Accept-Encoding may cause double‑cache issue (dismissable completely).
 
 = 2.1.6 =
 
