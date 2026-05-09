@@ -960,7 +960,7 @@ function nppp_pre_checks() {
         $has_files = '';
         $escaped_path = escapeshellarg( $nginx_cache_path );
 
-        $cmd       = $rg_bin . ' -q --text --no-unicode --no-ignore --no-messages --no-config -e ' . escapeshellarg( '^KEY: ' ) . ' ' . $escaped_path . ' 2>/dev/null';
+        $cmd       = $rg_bin . ' -q --text --no-unicode --no-ignore --no-messages --no-mmap --no-config -e ' . escapeshellarg( '^KEY: ' ) . ' ' . $escaped_path . ' 2>/dev/null';
         $dummy     = [];
         $exit_code = null;
         exec( $cmd, $dummy, $exit_code );
