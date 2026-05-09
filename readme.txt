@@ -90,7 +90,7 @@ Automatic Installation
 
 = Does this plugin require Nginx? =
 
-Yes. NPP is designed exclusively for Nginx web servers running on Linux. It does not work on Apache, shared hosting, or environments where `shell_exec` is disabled.
+Yes. NPP is designed exclusively for Nginx web servers running on Linux. It does not work on Apache, shared hosting, or environments where `shell_exec` and `exec` are disabled.
 
 = Does it require the ngx_cache_purge Nginx module? =
 
@@ -98,15 +98,15 @@ No. The `ngx_cache_purge` module is optional. When available, NPP uses it as the
 
 = What server dependencies are required? =
 
-Mostly basic, built-in shell tools are required. **wget** is required for cache preloading. For hardened shell execution, **safexec** is highly recommended — see the Help tab for installation instructions.
+Mostly basic, built-in shell tools are required. **wget** is required for cache preloading. For hardened shell execution, **safexec** is highly recommended — see the Help tab for installation instructions. For large cache-heavy websites, especially when Nginx cache paths are located on FUSE-based mounts (such as bindfs to solve permission issues), **ripgrep (rg)** is strongly recommended for significantly faster cache purge performance.
 
 = Why is the plugin not working on my environment? =
 
-The most common reasons are: `shell_exec` is disabled, the PHP-FPM user lacks write permission to the Nginx cache directory, or `nginx.conf` is not detected. See the **Help tab** for a full environment checklist and solutions.
+The most common reasons are: `shell_exec` or `exec` is disabled, `open_basedir` restrictions prevent required filesystem access, the PHP-FPM user lacks write permission to the Nginx cache directory, or automatic Nginx detection fails (for example, `nginx.conf` cannot be located). See the **Help tab** for a full environment checklist and solutions.
 
 = I am getting permission errors. What should I do? =
 
-This is the most common issue in environments where the WEBSERVER-USER (nginx/www-data) and PHP-FPM-USER are different. NPP provides a one-liner bash script to automate the fix using bindfs on monolithic servers. For containerized environments, users can review the full configuration setup via [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) See the **Help tab → Permission Issues** section or the [GitHub repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload) for details.
+This is the most common issue in environments where the WEBSERVER-USER (nginx/www-data) and PHP-FPM-USER are different. NPP provides a one-liner bash script to automate the fix using **bindfs** on monolithic servers. For containerized environments, users can review the full configuration setup via [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) See the **Help tab → Permission Issues** section or the [GitHub repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload) for details.
 
 = Does it work with Cloudflare? =
 
@@ -114,7 +114,7 @@ Yes. NPP has built-in Cloudflare APO Sync that mirrors every purge to Cloudflare
 
 = Does it work with Redis Object Cache? =
 
-Yes. NPP supports bidirectional sync with the Redis Object Cache plugin. A Purge All in NPP flushes Redis, and a Redis flush triggers a full Nginx cache purge. Enable it under **Settings**.
+Yes. NPP supports **Redis Object Cache** Sync, which keeps Redis and the Nginx cache aligned during purge and preload operations. When enabled, NPP flushes the Redis object cache at the correct point in the Nginx Purge + Preload chain to ensure fresh content is used when rebuilding cache. Enable it under **Settings**.
 
 = Is it compatible with WooCommerce? =
 
@@ -126,7 +126,7 @@ Yes, but disable page caching in other plugins to avoid conflicts. You can keep 
 
 = Where can I find the allowed Nginx cache paths? =
 
-NPP restricts cache paths to prevent accidental deletion of system files. Allowed roots are `/dev/shm/`, `/tmp/`, `/var/`, and `/cache/`. The path must be at least one level deep (e.g. `/var/cache/nginx`). Full details in the **Help tab**.
+NPP restricts cache paths by default to prevent accidental deletion of system files. Allowed roots are `/dev/shm/`, `/tmp/`, `/var/`, and `/cache/`. The path must be at least one level deep (e.g. `/var/cache/nginx`). These restrictions can be completely disabled using the **Bypass Path Restriction** feature, which removes all path safety guardrails and allows any directory to be used as the Nginx cache path. Full details in the **Help tab**.
 
 == Screenshots ==
 
@@ -145,13 +145,11 @@ NPP restricts cache paths to prevent accidental deletion of system files. Allowe
 
 Release date: 2026-05-02
 
-Minor Release: Mainly focus compatibility issues on various panels. No regression.
-
 * Fixed: Unprotected (function_exists) shell_exec and exec calls across the REST API, WP Cron, Dashboard Widget, and all other relevant execution paths.
 * Fixed: Missing check for getenv / putenv for URL Normalization (safexec).
 * Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
 * Improved: Nginx detection and Setup (Assume Nginx Mode) process on panels. Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
-* Improved: Compatibility on aaPanel. Tested and fully functional with proper panel settings. See https://github.com/aaPanel/aaPanel/issues/270 for ongoing issue. (Thanks to @neikoloves)
+* Improved: Compatibility on aaPanel. Fully tested and functional when the panel is correctly configured. See aaPanel/issues/270 for ongoing issue. (Thanks to @neikoloves)
 * Changed: Hard dependency extended to require both shell_exec and exec (rg).
 * Added: Proper open_basedir compatibility detection and admin warning for missing required paths.
 * Added: Detection for Vary: Accept-Encoding may cause double‑cache issue (dismissable completely).
