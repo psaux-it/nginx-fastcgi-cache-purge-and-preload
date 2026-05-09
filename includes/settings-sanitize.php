@@ -211,17 +211,23 @@ function nppp_sanitize_validate_proxy_host(string $raw, ?string &$err = null, ?s
 
 // Sanitize inputs
 function nppp_nginx_cache_settings_sanitize($input) {
-    // Guard against double/triple sanitization — WordPress core bug Trac #21989
-    static $pass_count = 0;
-    $pass_count++;
-    if ( $pass_count > 1 ) return $input;
-
     $sanitized_input = array();
 
     // Ensure input is an array
     if (!is_array($input)) {
         return $sanitized_input;
     }
+
+    // Guard against re-entrant sanitization (WP Trac #21989).
+    // Using a per-input hash instead of a linear counter so that independent
+    // update_option() calls in the same request (e.g. activation + settings
+    // save) each get their own pass and never accidentally block each other.
+    static $seen = [];
+    $nppp_guard_key = md5( maybe_serialize( $input ) );
+    if ( isset( $seen[ $nppp_guard_key ] ) ) {
+        return $input;
+    }
+    $seen[ $nppp_guard_key ] = true;
 
     // Read bypass flag before path validation
     $bypass_restriction = isset( $input['nginx_cache_bypass_path_restriction'] )
