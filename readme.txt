@@ -157,7 +157,7 @@ Release date: 2026-05-02
 * Changed: Hard dependency extended to require both shell_exec and exec (rg).
 * Added: Proper open_basedir compatibility detection and admin warning for missing required paths.
 * Added: Detection for Vary: Accept-Encoding may cause double‑cache issue (dismissable completely).
-* Added: nppp_purged_all action hook — fired after every successful full Nginx cache purge, enabling third-party plugins to trigger their own cache flush in sync.
+* Developer: nppp_purged_all action hook — fired after every successful full Nginx cache purge, enabling third-party plugins to trigger their own cache flush in sync.
 
 = 2.1.6 =
 
