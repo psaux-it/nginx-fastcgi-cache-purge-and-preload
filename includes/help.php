@@ -715,6 +715,18 @@ apk add ripgrep           # Alpine Linux</pre>
                             <li>Paths outside the allowed roots — including <code>/home</code>, <code>/opt</code>, <code>/srv</code>, <code>/etc</code>, and the WordPress installation directory — are always rejected.</li>
                             <li>Symlinks are resolved and the destination is validated against the same rules.</li>
                         </ul>
+
+                        <h4>Bypass Path Restriction <span style="font-size: 12px; font-weight: normal;">(available since v2.1.6)</span></h4>
+                        <p style="font-size: 14px;">If your environment requires a cache path that falls outside the allowed roots above — for example a custom mount point, a non-standard directory layout, an environment managed by web panels, managed hosting configurations, or a containerised setup — you can enable <strong>Bypass Path Restriction</strong> in the Nginx Cache Directory settings.</p>
+                        <p style="font-size: 14px;">When enabled, <strong>all built-in path safety guardrails are disabled</strong>. NPP will operate on any directory you configure as the Nginx cache path, including locations it would normally reject.</p>
+
+                        <p style="font-size: 14px;">⚠️ <strong>CAUTION — read before enabling:</strong></p>
+                        <ul style="font-size: 14px;">
+                            <li>The plugin will perform purge operations — including <strong>recursive deletion</strong> — on whatever path you supply, with no further validation.</li>
+                            <li>Configuring a system-critical path (e.g., <code>/var/www</code>, <code>/home</code>) by mistake will cause <strong>irreversible data loss</strong> if the <strong>PHP process owner</strong> has write/delete permissions for that directory and the path is not restricted by <code>open_basedir</code>.</li>
+                            <li>By enabling this feature you explicitly accept full responsibility for any data loss or system damage that may result.</li>
+                        </ul>
+                        <p style="font-size: 14px;">Only enable Bypass Path Restriction if you are certain of the nginx cache path you are entering and understand the consequences. For all standard deployments, the built-in allowed-path list is the safer and recommended choice.</p>
                     </div>
                 </div>
 
