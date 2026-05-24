@@ -134,30 +134,41 @@ NPP restricts cache paths by default to prevent accidental deletion of system fi
 
 == Screenshots ==
 
-1. Settings Tab Purge
-2. Settings Tab Preload
-3. Settings Tab Schedule
-4. Settings Tab Mail & Logging
-5. Status Tab
-6. Advanced Tab
-7. Help Tab
-8. Front-end Admin Bar
+1. Purge Options (Cache Path Settings)
+2. Purge Options (Auto Purge - Cloudflare - Redis)
+3. Purge Scope (Related Page Purge)
+4. Preload Options (Auto Preload, Preload Mobile, Mobile User Agent)
+5. Preload Options (Preload Watchdog, Proxy, URL Normalization, CPU Limit)
+6. Preload Options (Exclude Endpoints, Exclude Extensions, Limit Rate, Wait Time)
+7. Schedule Options (WP-Cron, REST API)
+8. Advanced Options (Cache Key Regex)
+9. Advanced Options (HTTP Purge, RG Purge)
+10. Mail Options - Logging Options
+11. Status Tab (Clear Plugin Cache, Clear URL Index)
+12. Status Tab (Live Preload Progress, Nginx FUSE Status)
+13. Status Tab (System Checks, Cache Status)
+14. Advanced Tab
+15. Help Tab
+16. Dashboard Widget
+17. Setup Page
 
 == Changelog ==
 
 = 2.1.7 =
 
-Release date: 2026-05-02
+Release date: 2026-05-25
 
 * Fixed: Unprotected (function_exists) shell_exec and exec calls across the REST API, WP Cron, Dashboard Widget, and all other relevant execution paths.
 * Fixed: Missing check for getenv / putenv for URL Normalization (safexec).
 * Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
-* Improved: Nginx detection and Setup (Assume Nginx Mode) process on panels. Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
-* Improved: Compatibility on aaPanel. Fully tested and functional when the panel is correctly configured. See aaPanel/issues/270 for ongoing issue. (Thanks to @neikoloves)
+* Improved: Nginx detection and Setup (Assume Nginx Mode). Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
+* Improved: Compatibility on aaPanel. Fully tested and functional. See aaPanel/issues/270 for ongoing issue. (Thanks to @neikoloves)
 * Changed: Hard dependency extended to require both shell_exec and exec (rg).
 * Added: Proper open_basedir compatibility detection and admin warning for missing required paths.
 * Added: Detection for Vary: Accept-Encoding may cause double‑cache issue (dismissable completely).
 * Developer: nppp_purged_all action hook — fired after every successful full Nginx cache purge, enabling third-party plugins to trigger their own cache flush in sync.
+* Updated: Tested up to WordPress 7.0
+* Updated: Tested up to Nginx 1.31.1
 
 = 2.1.6 =
 
