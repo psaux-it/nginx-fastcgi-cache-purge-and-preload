@@ -113,9 +113,18 @@ final class Setup {
             .nppp-img-container img{width:90px;height:auto}
             .nppp-header-text{display:flex;flex-direction:column;gap:5px}
             .nppp-header-eyebrow{display:flex;align-items:center;gap:10px;margin:0}
-            .nppp-wordmark{font-size:15px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;font-family:monospace;color:#fff;background:rgba(255,255,255,0.10);padding:3px 9px;border-radius:4px;border:1px solid rgba(255,255,255,0.18);line-height:1.6;flex-shrink:0}
-            .nppp-header-state{color:#e6ebf2;font-size:18px;font-weight:400;letter-spacing:-0.2px;line-height:1.3}
-            .nppp-header-subtitle{color:#56657f;margin:0;font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase}
+            .nppp-wordmark{font-size:13px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;font-family:monospace;color:#fff;background:rgba(255,255,255,0.10);padding:3px 9px;border-radius:4px;border:1px solid rgba(255,255,255,0.18);line-height:1.6;flex-shrink:0}
+            .nppp-header-state{display:inline-block;font-size:18px;font-weight:400;letter-spacing:-0.2px;line-height:1.3;padding:3px 12px;border-radius:6px;background:rgba(255,255,255,0.07)}
+            .nppp-header-state--pass{color:#4ade80;background:rgba(74,222,128,0.10)}
+            .nppp-header-state--info{color:#93c5fd;background:rgba(99,179,237,0.10)}
+            .nppp-header-state--warn{color:#fcd34d;background:rgba(251,191,36,0.10)}
+            .nppp-header-subtitle{color:#ffffff;margin:0;font-size:11px;font-weight:500;letter-spacing:1px;text-transform:uppercase}
+            .nppp-wordmark--pass{background:rgba(74,222,128,0.15);border-color:rgba(74,222,128,0.35);color:#4ade80}
+            .nppp-wordmark--info{background:rgba(99,179,237,0.15);border-color:rgba(99,179,237,0.35);color:#63b3ed}
+            .nppp-wordmark--warn{background:rgba(251,191,36,0.15);border-color:rgba(251,191,36,0.35);color:#fbbf24}
+            .nppp-header-state--pass{color:#4ade80}
+            .nppp-header-state--info{color:#93c5fd}
+            .nppp-header-state--warn{color:#fcd34d}
             @media(prefers-reduced-motion:reduce){.nppp-aurora-canvas,.nppp-aurora-overlay{display:none}}
             @media(prefers-color-scheme:dark){.nppp-header-content{background:#0b0e12;color:#e6ebf2}}
             @media(max-width:782px){.nppp-img-container img{width:60px}}
@@ -143,15 +152,12 @@ final class Setup {
         </style>';
 
         echo '<div class="wrap">';
-        $page_title = $strict_detected
-            ? __( 'NPP • Setup Completed', 'fastcgi-cache-purge-and-preload-nginx' )
-            : ( $assume_enabled
-                ? __( 'NPP • Assume-Nginx Mode Active', 'fastcgi-cache-purge-and-preload-nginx' )
-                : __( 'NPP • Complete Setup', 'fastcgi-cache-purge-and-preload-nginx' )
-            );
 
         $plugin_slug = basename( dirname( dirname( __FILE__ ) ) );
         $logo_url    = trailingslashit( content_url( 'plugins/' . $plugin_slug ) ) . 'admin/img/logo.png';
+
+        // Derive state modifier class for badge + text coloring.
+        $state_mod = $strict_detected ? 'pass' : ( $assume_enabled ? 'info' : 'warn' );
 
         // State-only label
         $state_text = $strict_detected
@@ -169,10 +175,13 @@ final class Setup {
         echo '  <div class="nppp-buttons-wrapper">';
         echo '    <div class="nppp-header-text">';
         echo '      <div class="nppp-header-eyebrow">';
-        echo '        <span class="nppp-wordmark">NPP</span>';
-        echo '        <span class="nppp-header-state">' . esc_html( $state_text ) . '</span>';
+        echo '        <span class="nppp-wordmark nppp-wordmark--' . esc_attr( $state_mod ) . '">NPP</span>';
+        echo '        <span class="nppp-header-state nppp-header-state--' . esc_attr( $state_mod ) . '">' . esc_html( $state_text ) . '</span>';
         echo '      </div>';
-        echo '      <p class="nppp-header-subtitle">' . esc_html__( 'Nginx Cache Purge &amp; Preload', 'fastcgi-cache-purge-and-preload-nginx' ) . '</p>';
+        echo '      <p class="nppp-header-subtitle">'
+            . esc_html__( 'Nginx Cache Purge Preload', 'fastcgi-cache-purge-and-preload-nginx' )
+            . ' <span style="color:#2dd4bf;font-weight:400;letter-spacing:0">v' . esc_html( NPPP_PLUGIN_VERSION ) . '</span>'
+            . '</p>';
         echo '    </div>';
         echo '  </div>';
         echo '</div>';
@@ -200,7 +209,7 @@ final class Setup {
                . '</p></div>';
         } elseif ($signals_detected) {
             echo '<div class="notice notice-warning notice-nppp"><p>'
-                . esc_html__('Nginx likely detected (via headers/server signature), but the real nginx.conf is not visible. Enable Assume-Nginx mode to proceed with workaround mode and access Settings, then review the Help tab.', 'fastcgi-cache-purge-and-preload-nginx')
+                . esc_html__('Nginx likely detected (via headers/server signature), but the real nginx.conf is not found. Enable Assume-Nginx mode to proceed with workaround mode and access Settings, then review the Help tab.', 'fastcgi-cache-purge-and-preload-nginx')
                 . '</p></div>';
         } else {
             echo '<div class="notice notice-error notice-nppp"><p>'
@@ -297,12 +306,12 @@ services:
         echo '  <div class="inside">';
         echo '    <p>'
             . esc_html__(
-                'Turn on Assume-Nginx mode to enable all plugin features immediately in non-standard or opaque environments.',
+                'Turn on Assume-Nginx mode to enable all plugin features immediately.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . ' '
             . esc_html__(
-                'This sets a runtime option; you can also persist it to wp-config.php for extra safety.',
+                'This sets a runtime option; you can also persist it to wp-config.php.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . '</p>';
@@ -416,9 +425,9 @@ services:
 
         // Heuristic server signals.
         $rows .= '<tr>'
-            . '<td class="nppp-st-label">' . esc_html__( 'Nginx signature', 'fastcgi-cache-purge-and-preload-nginx' ) . '</td>'
+            . '<td class="nppp-st-label">' . esc_html__( 'Nginx signature found', 'fastcgi-cache-purge-and-preload-nginx' ) . '</td>'
             . '<td>' . ( $signals
-                ? $badge( 'pass', __( 'Yes',  'fastcgi-cache-purge-and-preload-nginx' ) )
+                ? $badge( 'info', __( 'Yes',  'fastcgi-cache-purge-and-preload-nginx' ) )
                 : $badge( 'warn', __( 'None', 'fastcgi-cache-purge-and-preload-nginx' ) ) )
             . '</td></tr>';
 
