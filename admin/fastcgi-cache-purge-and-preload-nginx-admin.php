@@ -169,6 +169,7 @@ $nppp_page_cache_purge_actions = array(
 
 // Add actions and filters
 add_action('load-settings_page_nginx_cache_settings', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets');
+add_action('load-admin_page_nppp-setup', 'nppp_enqueue_setup_page_assets');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_check_for_plugin_update');
 add_action('admin_enqueue_scripts', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets');
 add_action('admin_bar_menu', 'nppp_add_fastcgi_cache_buttons_admin_bar', 100);
