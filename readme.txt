@@ -161,7 +161,8 @@ Release date: 2026-05-25
 * Fixed: Unprotected (function_exists) shell_exec and exec calls across the REST API, WP Cron, Dashboard Widget, and all other relevant execution paths.
 * Fixed: Missing check for getenv / putenv for URL Normalization (safexec).
 * Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
-* Improved: Nginx detection and Setup (Assume Nginx Mode). Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
+* Improved: Nginx detection and Setup (Assume Nginx Mode) process. Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
+* Improved: UI/UX on Setup Page.
 * Improved: Compatibility on aaPanel. Fully tested and functional. See aaPanel/issues/270 for ongoing issue. (Thanks to @neikoloves)
 * Changed: Hard dependency extended to require both shell_exec and exec (rg).
 * Added: Proper open_basedir compatibility detection and admin warning for missing required paths.
