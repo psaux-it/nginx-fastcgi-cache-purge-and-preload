@@ -160,6 +160,17 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     ));
 }
 
+// Enqueue only the aurora header script on the setup page.
+function nppp_enqueue_setup_page_assets() {
+    wp_enqueue_script(
+        'nppp_aurora-canvas',
+        plugins_url( '../admin/js/nppp-header.js', __FILE__ ),
+        array( 'jquery' ),
+        '2.1.6',
+        true
+    );
+}
+
 // Checks if the plugin requirements are met, specifically if the server
 // is running on a Linux environment.
 function nppp_is_linux() {
