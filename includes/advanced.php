@@ -932,7 +932,7 @@ function nppp_preload_cache_premium_callback() {
             nppp_display_admin_notice('info', sprintf(
                 /* translators: %s: FUSE source filesystem path that no longer exists on disk. */
                 __('WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                $rg_source_path
+                $nginx_cache_path
             ), true, false);
             $rg_source_path = null;
             $rg_fuse_active = false;
@@ -1248,7 +1248,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             nppp_display_admin_notice( 'info', sprintf(
                 /* translators: %s: FUSE source filesystem path that no longer exists on disk. */
                 __( 'WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-                $rg_source_path
+                $rg_fuse_path
             ), true, false );
             $rg_source_path = null;
         }
