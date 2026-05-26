@@ -603,6 +603,15 @@ function nppp_open_basedir_compat_check(): array {
         $required['<your-nginx-cache-path> (not configured yet)'] = '<your-nginx-cache-path> (not configured yet)';
     } else {
         $required[rtrim( $cache_path, '/' )] = rtrim( $cache_path, '/' );
+
+        // When FUSE/bindfs is active we also need the real nginx cache directory.
+        if ( function_exists( 'nppp_fuse_source_path' ) ) {
+            $fuse_source = nppp_fuse_source_path( rtrim( $cache_path, '/' ) );
+            if ( $fuse_source !== null ) {
+                $fuse_source = rtrim( $fuse_source, '/' );
+                $required[ $fuse_source ] = $fuse_source;
+            }
+        }
     }
     // PHP reads /proc/cpuinfo, /proc/meminfo, /proc/self/mountinfo, /proc/mounts directly.
     $required['/proc'] = '/proc';
