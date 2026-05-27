@@ -224,8 +224,8 @@ function nppp_is_dockerized() {
             }
         }
 
-        // Save missing commands in a transient for 10 seconds
-        set_transient($transient_key, $missing_commands, 10);
+        // Cache for 1 hour — matches nppp_rg_ok / nppp_safexec_ok pattern.
+        set_transient($transient_key, $missing_commands, HOUR_IN_SECONDS);
 
         // Keep wget compatibility cache in sync with command availability refresh.
         delete_transient('nppp_wget_compatibility_' . md5($static_key_base));
