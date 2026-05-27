@@ -337,8 +337,102 @@
                 'cursor': 'not-allowed'
             });
 
-            // disable main form submit button
-            $('input[type="submit"][name="nppp_submit"].button-primary').prop('disabled', true);
+            // In fully-disabled mode the Status tab is inaccessible, so the user
+            // cannot reach the "Clear Plugin Cache" button that lives there.
+            (function npppInjectCacheClearFallback() {
+                var $submit = $('input[type="submit"][name="nppp_submit"].button-primary');
+                if (!$submit.length) { return; }
+
+                if (typeof window.nppp_admin_data === 'undefined') { return; }
+
+                // 1. Capture exact computed dimensions BEFORE hide() — layout is live here.
+                var cs          = window.getComputedStyle($submit[0]);
+                var csHeight    = cs.height;
+                var csLineH     = cs.lineHeight;
+                var csPadTop    = cs.paddingTop;
+                var csPadBottom = cs.paddingBottom;
+                var csFontSize  = cs.fontSize;
+                var csFontWt    = cs.fontWeight;
+                var csFontFam   = cs.fontFamily;
+                var csBoxSizing = cs.boxSizing;
+
+                // 2. Remove original submit from .submit flex layout.
+                $submit.hide();
+
+                // 3. Build pixel-perfect replacement input.
+                var btnLabel = window.nppp_admin_data.clear_cache_btn_label
+                    ? window.nppp_admin_data.clear_cache_btn_label
+                    : 'Clear Plugin Cache';
+
+                var $clearBtn = $('<input>', {
+                    type:  'button',
+                    id:    'nppp-disabled-clear-cache-btn',
+                    value: btnLabel
+                }).css({
+                    'box-sizing':    csBoxSizing,
+                    'height':        csHeight,
+                    'line-height':   csLineH,
+                    'padding-top':   csPadTop,
+                    'padding-bottom': csPadBottom,
+                    'padding-left':  '10px',
+                    'padding-right': '10px',
+                    'font-size':     csFontSize,
+                    'font-weight':   csFontWt,
+                    'font-family':   csFontFam,
+                    'width':             '100%',
+                    'background-color':  '#0073aa',
+                    'color':             '#fff',
+                    'border':            'none',
+                    'border-radius':     '0',
+                    'cursor':            'pointer',
+                    '-webkit-appearance': 'none',
+                    'appearance':        'none'
+                });
+
+                // 4. Hover / focus states via injected stylesheet.
+                if (!document.getElementById('nppp-ccf-style')) {
+                    var npppStyle = document.createElement('style');
+                    npppStyle.id = 'nppp-ccf-style';
+                    npppStyle.textContent =
+                        '#nppp-disabled-clear-cache-btn:hover{background-color:#006799!important;}' +
+                        '#nppp-disabled-clear-cache-btn:focus{box-shadow:none!important;outline:none!important;}' +
+                        '#nppp-disabled-clear-cache-btn[disabled]{opacity:.65;cursor:wait!important;}';
+                    document.head.appendChild(npppStyle);
+                }
+
+                // 5. Insert inside .submit flex container after the hidden submit.
+                $submit.after($clearBtn);
+
+                // 6. Silent AJAX handler — no spinner, no notification toast.
+                $clearBtn.on('click', function () {
+                    var $btn      = $(this);
+                    var origLabel = $btn.val();
+
+                    $btn.prop('disabled', true).val(
+                        origLabel + '\u2026'
+                    );
+
+                    $.ajax({
+                        url:      window.nppp_admin_data.ajaxurl,
+                        type:     'POST',
+                        dataType: 'json',
+                        data: {
+                            action:   'nppp_clear_plugin_cache',
+                            _wpnonce: window.nppp_admin_data.plugin_cache_nonce
+                        },
+                        success: function (response) {
+                            if (response && response.success) {
+                                location.reload();
+                            } else {
+                                $btn.prop('disabled', false).val(origLabel);
+                            }
+                        },
+                        error: function () {
+                            $btn.prop('disabled', false).val(origLabel);
+                        }
+                    });
+                });
+            })();
         }
     });
 })(jQuery);
