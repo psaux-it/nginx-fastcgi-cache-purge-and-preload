@@ -111,12 +111,17 @@ function nppp_nginx_cache_settings_page() {
             }
         }
 
-        // ripgrep binary check
+        // ripgrep binary check — read canonical transient, compute only on cold miss.
         $nppp_rg_installed = false;
-        if ( function_exists( 'shell_exec' ) ) {
+        $rg_cached = get_transient( 'nppp_rg_ok' );
+        if ( $rg_cached !== false ) {
+            $nppp_rg_installed = (bool) $rg_cached['ok'];
+            $nppp_rg_bin       = $rg_cached['path'];
+        } elseif ( function_exists( 'shell_exec' ) ) {
             nppp_prepare_request_env();
             $nppp_rg_bin       = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
-            $nppp_rg_installed = $nppp_rg_bin !== '';
+            $nppp_rg_installed = $nppp_rg_bin !== '' && is_executable( $nppp_rg_bin );
+            set_transient( 'nppp_rg_ok', [ 'path' => $nppp_rg_bin, 'ok' => $nppp_rg_installed ], HOUR_IN_SECONDS );
         }
 
         // FUSE mount detection
@@ -128,8 +133,15 @@ function nppp_nginx_cache_settings_page() {
         // safexec usability for rg (only meaningful when FUSE is active).
         $nppp_safexec_rg_ok = false;
         if ( $nppp_fuse_active && function_exists( 'nppp_find_safexec_path' ) && function_exists( 'nppp_is_safexec_usable' ) ) {
-            $nppp_sfx_path      = nppp_find_safexec_path();
-            $nppp_safexec_rg_ok = $nppp_sfx_path && nppp_is_safexec_usable( $nppp_sfx_path, false );
+            $sfx_cached = get_transient( 'nppp_safexec_ok' );
+            if ( $sfx_cached !== false ) {
+                $nppp_safexec_rg_ok = (bool) $sfx_cached['ok'];
+                $nppp_sfx_path      = $sfx_cached['path'];
+            } else {
+                $nppp_sfx_path      = nppp_find_safexec_path();
+                $nppp_safexec_rg_ok = (bool) ( $nppp_sfx_path && nppp_is_safexec_usable( $nppp_sfx_path, false ) );
+                set_transient( 'nppp_safexec_ok', [ 'path' => $nppp_sfx_path, 'ok' => $nppp_safexec_rg_ok ], HOUR_IN_SECONDS );
+            }
         }
 
         // Display RG badge when missing. Providing a Resource Group significantly reduces
