@@ -608,8 +608,36 @@ function nppp_open_basedir_compat_check(): array {
         if ( function_exists( 'nppp_fuse_source_path' ) ) {
             $fuse_source = nppp_fuse_source_path( rtrim( $cache_path, '/' ) );
             if ( $fuse_source !== null ) {
-                $fuse_source = rtrim( $fuse_source, '/' );
-                $required[ $fuse_source ] = $fuse_source;
+                // Source path is only PHP-touched when rg scans it through safexec.
+                $rg_cached = get_transient( 'nppp_rg_ok' );
+                if ( $rg_cached === false ) {
+                    $rg_bin = function_exists( 'shell_exec' )
+                        ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) )
+                        : '';
+                    $rg_ok  = $rg_bin !== '' && is_executable( $rg_bin );
+                    set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_ok ], HOUR_IN_SECONDS );
+                } else {
+                    $rg_ok = (bool) $rg_cached['ok'];
+                }
+
+                $sfx_usable = false;
+                if ( $rg_ok
+                    && function_exists( 'nppp_find_safexec_path' )
+                    && function_exists( 'nppp_is_safexec_usable' )
+                ) {
+                    $sfx_cached = get_transient( 'nppp_safexec_ok' );
+                    if ( $sfx_cached === false ) {
+                        $sfx_path   = nppp_find_safexec_path();
+                        $sfx_usable = (bool) ( $sfx_path && nppp_is_safexec_usable( $sfx_path, false ) );
+                        set_transient( 'nppp_safexec_ok', [ 'path' => $sfx_path, 'ok' => $sfx_usable ], HOUR_IN_SECONDS );
+                    } else {
+                        $sfx_usable = (bool) $sfx_cached['ok'];
+                    }
+                }
+
+                if ( $sfx_usable ) {
+                    $required[ rtrim( $fuse_source, '/' ) ] = rtrim( $fuse_source, '/' );
+                }
             }
         }
     }
