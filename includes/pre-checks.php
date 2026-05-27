@@ -992,8 +992,16 @@ function nppp_pre_checks() {
 
     // Check cache status
     // Fast path: use rg always if available
-    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
-    if ( $rg_bin !== '' && is_executable( $rg_bin ) ) {
+    $rg_cached = get_transient( 'nppp_rg_ok' );
+    if ( $rg_cached === false ) {
+        $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+        $rg_ok  = $rg_bin !== '' && is_executable( $rg_bin );
+        set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_ok ], HOUR_IN_SECONDS );
+    } else {
+        $rg_bin = $rg_cached['path'];
+        $rg_ok  = (bool) $rg_cached['ok'];
+    }
+    if ( $rg_ok ) {
         $has_files = '';
         $escaped_path = escapeshellarg( $nginx_cache_path );
 
