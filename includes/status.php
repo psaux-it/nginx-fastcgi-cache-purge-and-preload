@@ -584,9 +584,17 @@ function nppp_get_in_cache_page_count() {
 
     // FP — ripgrep fast path, always use if available
     nppp_prepare_request_env();
-    $rg_bin = function_exists('shell_exec') ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
+    $rg_cached = get_transient( 'nppp_rg_ok' );
+    if ( $rg_cached === false ) {
+        $rg_bin = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
+        $rg_ok  = $rg_bin !== '' && is_executable( $rg_bin );
+        set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_ok ], HOUR_IN_SECONDS );
+    } else {
+        $rg_bin = $rg_cached['path'];
+        $rg_ok  = (bool) $rg_cached['ok'];
+    }
 
-    if ( $rg_bin !== '' ) {
+    if ( $rg_ok ) {
         $rg_fuse_path   = $nginx_cache_path;
         $rg_source_path = nppp_fuse_source_path( $rg_fuse_path );
 
