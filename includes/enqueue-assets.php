@@ -349,9 +349,20 @@ function nppp_plugin_requirements_met() {
         // Initialize $server_software variable
         $server_software = '';
 
-        // Check SERVER_SOFTWARE
+        // Critical Proxy detection bug fix v2.1.7
+        // On Nginx+Apache reverse-proxy stacks the backend PHP process sees
+        // SERVER_SOFTWARE = "Apache/..." which is non-empty but non-nginx,
+        // silently short-circuiting every fallback detection path below
+        // and cause plugin disabled completely.
         if (isset($_SERVER['SERVER_SOFTWARE'])) {
-            $server_software = sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']));
+            $raw_sw = sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']));
+            if (
+                stripos($raw_sw, 'nginx')     !== false ||
+                stripos($raw_sw, 'openresty') !== false ||
+                stripos($raw_sw, 'tengine')   !== false
+            ) {
+                $server_software = $raw_sw;
+            }
         }
 
         // If no SERVER_SOFTWARE detected, check response headers
