@@ -348,10 +348,11 @@ function nppp_parse_nginx_cache_key() {
     $static_key_base = 'nppp';
     $transient_key = 'nppp_cache_keys_' . md5($static_key_base);
 
-    // Check for cached result first
+    // Check for cached result first.
+    // Require matched_keys key to be present — absent on pre-patch transients;
+    // if missing the transient is stale and we fall through to re-parse.
     $cached_result = get_transient($transient_key);
-    if ($cached_result !== false) {
-        // Return the cached result if available
+    if ($cached_result !== false && array_key_exists('matched_keys', $cached_result)) {
         return $cached_result;
     }
 
@@ -393,28 +394,37 @@ function nppp_parse_nginx_cache_key() {
         return ['cache_keys' => ['Not Found']];
     }
 
-    // Supported key format to be removed from array
-    $supported_key_format = '$scheme$request_method$host$request_uri';
+    // All natively supported cache key formats.
+    $supported_key_formats = [
+        '$scheme$request_method$host$request_uri',  // fastcgi_cache — most common WP/FPM stack
+        '$scheme$proxy_host$request_uri',           // proxy_cache nginx default (no request method)
+        '$scheme$host$request_uri',                 // scheme+host variant (no method, no proxy_host)
+    ];
 
-    // Remove all occurrences of the supported key format and re-index the array
-    $cache_keys = array_values(array_filter($cache_keys, function($key) use ($supported_key_format) {
-        // Remove surrounding quotes, if any
+    // Partition keys into matched (supported) and unsupported buckets.
+    $matched_keys = [];
+    $cache_keys = array_values(array_filter($cache_keys, function($key) use ($supported_key_formats, &$matched_keys) {
         $unquoted_value = trim($key, "'\"");
-
-        // Check if the unquoted value matches the supported key format
-        return $unquoted_value !== $supported_key_format;
+        if (in_array($unquoted_value, $supported_key_formats, true)) {
+            $matched_keys[] = $unquoted_value;
+            return false;
+        }
+        return true;
     }));
 
-    // Save the result to transient for future use
-    set_transient($transient_key, ['cache_keys' => $cache_keys], MONTH_IN_SECONDS);
+    // Deduplicate matched keys — same format on multiple vhosts counts once for display.
+    $matched_keys = array_values(array_unique($matched_keys));
+
+    // Save both buckets to transient for Status/Advanced tab display.
+    set_transient($transient_key, ['cache_keys' => $cache_keys, 'matched_keys' => $matched_keys], MONTH_IN_SECONDS);
 
     // Reset the error transients
     delete_transient('nppp_cache_keys_wpfilesystem_error');
     delete_transient('nppp_nginx_conf_not_found');
     delete_transient('nppp_cache_keys_not_found');
 
-    // Return only unsupported cache keys
-    return ['cache_keys' => $cache_keys];
+    // Return both buckets; callers consume what they need.
+    return ['cache_keys' => $cache_keys, 'matched_keys' => $matched_keys];
 }
 
 // Helper function to parse individual Nginx configuration files.
