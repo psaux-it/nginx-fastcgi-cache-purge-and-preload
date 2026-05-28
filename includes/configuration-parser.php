@@ -443,7 +443,7 @@ function nppp_is_cache_path_display_supported(string $directive, string $value):
 }
 
 // Function to generate HTML output
-function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths) {
+function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths, $matched_keys = []) {
     ob_start();
     //img url's
     $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
@@ -662,23 +662,25 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                             <?php elseif ($cache_keys === 'Key Not Found'): ?>
                                 <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span style="color: red; font-size: 13px; font-weight: bold;"><?php esc_html_e('Not Found', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-                            <?php elseif ($cache_keys === '$scheme$request_method$host$request_uri'): ?>
-                                <span class="dashicons dashicons-yes" style="color: green !important; font-size: 20px;"></span>
-                                <span style="color: teal; font-weight: bold; font-size: 13px;">
-                                    <?php $key_no_quotes = trim($cache_keys, '"'); echo esc_html($key_no_quotes); ?>
-                                </span>
                             <?php else: ?>
                                 <table class="nginx-config-table">
                                     <tbody>
+                                        <?php foreach ($matched_keys as $key): ?>
+                                            <tr>
+                                                <td>
+                                                    <span class="dashicons dashicons-yes" style="color: green !important; font-size: 18px !important;"></span>
+                                                    <span style="color: teal; font-size: 13px; font-weight: bold;">
+                                                        <?php echo esc_html(trim($key, '"')); ?>
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
                                         <?php foreach ($cache_keys as $key): ?>
                                             <tr>
                                                 <td>
                                                     <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
                                                     <span style="color: teal; font-size: 13px; font-weight: bold;">
-                                                        <?php
-                                                        $key_no_quotes = trim($key, '"');
-                                                        echo esc_html($key_no_quotes);
-                                                        ?>
+                                                        <?php echo esc_html(trim($key, '"')); ?>
                                                     </span>
                                                 </td>
                                             </tr>
@@ -822,19 +824,16 @@ function nppp_nginx_config_shortcode() {
             $cache_keys = 'Not Found';
         }
     } else {
-        // Case 2: Transient found
+        // Case 2: Transient found — extract both supported and unsupported buckets.
+        $cache_keys   = $cached_result['cache_keys']   ?? [];
+        $matched_keys = $cached_result['matched_keys'] ?? [];
 
-        // 2.1: Array is empty, return a default fastcgi_cache_key
-        if (empty($cached_result['cache_keys'])) {
-            $cache_keys = '$scheme$request_method$host$request_uri';
-        } else {
-            // Case 2.2: Unsupported Cache keys exist
-            $cache_keys = $cached_result['cache_keys'];
-
-            // Trim whitespace from all elements in the cache_keys array
-            if (is_array($cache_keys)) {
-                $cache_keys = array_map('trim', $cache_keys);
-            }
+        // Trim whitespace from all array elements.
+        if (is_array($cache_keys)) {
+            $cache_keys = array_map('trim', $cache_keys);
+        }
+        if (is_array($matched_keys)) {
+            $matched_keys = array_map('trim', $matched_keys);
         }
     }
 
@@ -845,5 +844,5 @@ function nppp_nginx_config_shortcode() {
     $fuse_paths = nppp_check_fuse_cache_paths($config_data['cache_paths']);
 
     // Generate HTML output based on parsed data and Nginx info
-    return nppp_generate_html($config_data['cache_paths'], $nginx_info, $cache_keys, $fuse_paths);
+    return nppp_generate_html($config_data['cache_paths'], $nginx_info, $cache_keys, $fuse_paths, $matched_keys ?? []);
 }
