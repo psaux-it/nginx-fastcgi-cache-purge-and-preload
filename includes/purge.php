@@ -545,8 +545,19 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     if ( ! function_exists( 'shell_exec' ) || ! function_exists( 'exec' ) ) {
         return 'skip';
     }
-    $rg_bin          = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
     if ( $rg_bin === '' ) {
+        return 'skip';
+    }
+    $rg_ver = nppp_check_rg_version();
+    if ( $rg_ver === 'Not Installed' ) {
+        return 'skip';
+    } elseif ( version_compare( $rg_ver, '14.0.0', '<' ) ) {
+        nppp_display_admin_notice( 'info', sprintf(
+            /* translators: %s: Installed ripgrep version. */
+            __( 'WARNING RG SCAN: Installed ripgrep (rg) version (%s) is lower than the required minimum (14.0.0). Falling back to PHP recursive scanner.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $rg_ver
+        ), true, false );
         return 'skip';
     }
     $wp_filesystem   = $ctx['wp_filesystem'];
