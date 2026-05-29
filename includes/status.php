@@ -1179,6 +1179,13 @@ function nppp_my_status_html() {
                                 </td>
                             </tr>
                             <tr>
+                                <td class="check"><?php esc_html_e('Cache Key Regex Test (Required)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="status" id="npppCacheKeyRegex">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html( nppp_probe_cache_key_regex() ); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
                                 <td class="check"><?php esc_html_e('Permission Isolation (Optional)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="nppppermIsolation">
                                     <span class="dashicons"></span>
