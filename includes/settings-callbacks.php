@@ -802,6 +802,16 @@ function nppp_rg_purge_enabled_callback(): void {
         $rg_ok  = $cached['ok'];
     }
 
+    // Enforce minimum rg version — treat lower versions as unavailable.
+    $rg_ver_low = false;
+    if ( $rg_ok && function_exists( 'nppp_check_rg_version' ) ) {
+        $rg_ver = nppp_check_rg_version();
+        if ( $rg_ver === 'Not Installed' || version_compare( $rg_ver, '14.0.0', '<' ) ) {
+            $rg_ok      = false;
+            $rg_ver_low = true;
+        }
+    }
+
     $is_disabled = ! $rg_ok;
     $is_checked  = ! $is_disabled && isset( $options['nppp_rg_purge_enabled'] ) && $options['nppp_rg_purge_enabled'] === 'yes';
 
@@ -814,6 +824,12 @@ function nppp_rg_purge_enabled_callback(): void {
 
     if ( ! $rg_bin ) {
         $status_note = esc_html__( 'Unavailable: ripgrep (rg) not found. Install it to enable RG Purge (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $rg_ver_low ) {
+        $status_note = sprintf(
+            /* translators: %s: Installed ripgrep version. */
+            esc_html__( 'Unavailable: ripgrep (rg) version %s is below the required minimum (14.0.0). Upgrade rg to enable RG Purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            isset( $rg_ver ) ? esc_html( $rg_ver ) : esc_html__( 'unknown', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
     } elseif ( ! $rg_ok ) {
         $status_note = esc_html__( 'Unavailable: ripgrep (rg) binary is not executable. Check permissions.', 'fastcgi-cache-purge-and-preload-nginx' );
     } else {
