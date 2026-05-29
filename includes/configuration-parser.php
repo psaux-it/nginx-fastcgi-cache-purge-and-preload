@@ -527,10 +527,17 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths,
                         <td class="action"><?php esc_html_e('rg (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppRgVersion">
                             <?php $rg_version = nppp_check_rg_version(); ?>
+                            <?php $rg_version_ok = ( $rg_version !== 'Not Installed' && $rg_version !== 'Unknown' && version_compare( $rg_version, '14.0.0', '>=' ) ); ?>
                             <?php if ($rg_version === 'Not Installed' || $rg_version === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span style="color: orange; font-size: 14px; font-weight: bold;">
                                     <?php echo esc_html($rg_version); ?>
+                                </span>
+                            <?php elseif ( ! $rg_version_ok ): ?>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 14px; font-weight: bold;">
+                                    <?php echo esc_html($rg_version); ?>
+                                    <?php esc_html_e( '(minimum 14.0.0 required)', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </span>
                             <?php else: ?>
                                 <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
