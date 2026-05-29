@@ -4006,6 +4006,7 @@ function npppupdateStatus() {
         "#npppLibfuseVersion",
         "#npppBindfsVersion",
         "#nppppermIsolation",
+        "#npppCacheKeyRegex",
         "#npppcpulimitStatus",
         "#npppsafexecStatus",
         "#npppSafexecVersion",
@@ -4509,6 +4510,33 @@ function npppupdateStatus() {
 
     nppppermIsolationSpan.appendChild(iconSpanPermIsolation);
     nppppermIsolationSpan.append(permIsolationStatusText);
+
+    // Fetch and update Cache Key Regex test status
+    var npppCacheKeyRegexSpan = document.getElementById("npppCacheKeyRegex");
+    var npppCacheKeyRegex = npppCacheKeyRegexSpan.textContent.trim();
+    npppCacheKeyRegexSpan.textContent = '';
+    npppCacheKeyRegexSpan.style.fontSize = "14px";
+
+    let iconSpanCacheKeyRegex = document.createElement('span');
+    iconSpanCacheKeyRegex.style.fontSize = "20px";
+    let cacheKeyRegexStatusText = '';
+
+    if (npppCacheKeyRegex === "ok") {
+        npppCacheKeyRegexSpan.style.color = "green";
+        iconSpanCacheKeyRegex.classList.add("dashicons", "dashicons-yes");
+        cacheKeyRegexStatusText = ' ' + __('Passed', 'fastcgi-cache-purge-and-preload-nginx');
+    } else if (npppCacheKeyRegex === "fail") {
+        npppCacheKeyRegexSpan.style.color = "red";
+        iconSpanCacheKeyRegex.classList.add("dashicons", "dashicons-no");
+        cacheKeyRegexStatusText = ' ' + __('Failed', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        npppCacheKeyRegexSpan.style.color = "orange";
+        iconSpanCacheKeyRegex.classList.add("dashicons", "dashicons-clock");
+        cacheKeyRegexStatusText = ' ' + __('Skipped', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    npppCacheKeyRegexSpan.appendChild(iconSpanCacheKeyRegex);
+    npppCacheKeyRegexSpan.append(cacheKeyRegexStatusText);
 
     // Fetch and update cpulimit command status
     var npppcpulimitStatusSpan = document.getElementById("npppcpulimitStatus");
