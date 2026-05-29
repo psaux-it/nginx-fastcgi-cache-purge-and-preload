@@ -329,21 +329,25 @@ function nppp_detect_premature_process(
                 $test_process = false;
             }
         } else {
-            // If safexec is available, kill nobody process
+            // Two strictly separate kill paths.
+            // safexec path: wget ran as nobody (SUID drop). Only safexec
+            // itself has the privilege to kill its own nobody child.
             if ($use_safexec) {
-                $kill_cmd = escapeshellarg($safexec_path) . ' --kill=' . (int) $test_pid . ' 2>&1';
-                $output = shell_exec($kill_cmd);
-            }
+                $kill_cmd = escapeshellarg($safexec_path) . ' --kill=' . (int) $test_pid . ' 2>/dev/null';
+                shell_exec($kill_cmd);
+            } else {
+                // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
+                if (!defined('SIGTERM')) {
+                    define('SIGTERM', 15); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
+                }
 
-            // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
-            if (!defined('SIGTERM')) {
-                define('SIGTERM', 15); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
-            }
-
-            // Fallback to hard SIGKILL
-            if (!@posix_kill($test_pid, SIGTERM)) {
-                $kill_path = trim(shell_exec('command -v kill'));
-                shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $test_pid);
+                // Fallback to hard SIGKILL
+                if (!@posix_kill($test_pid, SIGTERM)) {
+                    $kill_path = trim(shell_exec('command -v kill 2>/dev/null'));
+                    if ($kill_path !== '') {
+                        shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $test_pid . ' 2>/dev/null');
+                    }
+                }
             }
             $test_process = true;
         }
@@ -466,7 +470,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             }
 
             // Check cpulimit command exist
-            $cpulimitPath = shell_exec('type cpulimit');
+            $cpulimitPath = shell_exec('type cpulimit 2>/dev/null');
 
             if (!empty(trim($cpulimitPath))) {
                 $cpulimit = 1;
@@ -705,7 +709,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         }
 
         // Check cpulimit command exist
-        $cpulimitPath = shell_exec('type cpulimit');
+        $cpulimitPath = shell_exec('type cpulimit 2>/dev/null');
         if (!empty(trim($cpulimitPath))) {
             $cpulimit = 1;
         } else {
