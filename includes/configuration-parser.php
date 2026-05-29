@@ -582,10 +582,10 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths,
                                     if ($nppp_is_active_proxy && !$nppp_is_active_fastcgi):
                                 ?>
                                 <div style="margin-bottom:10px; padding:8px 12px; background:#fff8e1; border-left:4px solid #f0ad4e; border-radius:0;">
-                                    <span class="dashicons dashicons-warning" style="color:#e6a817; vertical-align:middle;"></span>
-                                    <strong style="color:#7a4f00;"><?php esc_html_e('Reverse-Proxy Cache Detected!', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong><br>
+                                    <span class="dashicons dashicons-randomize" style="color:#e6a817; vertical-align:middle;"></span>
+                                    <strong style="color:#7a4f00;"><?php esc_html_e('Nginx Proxy Caching Active', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong><br>
                                     <span style="font-size:13px; color:#5a3800;">
-                                        <?php esc_html_e('The plugin supports this setup, but you must verify that your Cache Key Regex option. Incorrect regex will cause purge operations to fail silently.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                                        <?php esc_html_e('NPP supports Nginx proxy cache purge.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
                                     </span>
                                 </div>
                                 <?php
