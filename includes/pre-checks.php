@@ -630,6 +630,14 @@ function nppp_open_basedir_compat_check(): array {
                     $rg_ok = (bool) $rg_cached['ok'];
                 }
 
+                // Enforce minimum rg version — treat lower versions as unavailable.
+                if ( $rg_ok && function_exists( 'nppp_check_rg_version' ) ) {
+                    $rg_ver = nppp_check_rg_version();
+                    if ( $rg_ver === 'Not Installed' || version_compare( $rg_ver, '14.0.0', '<' ) ) {
+                        $rg_ok = false;
+                    }
+                }
+
                 $sfx_usable = false;
                 if ( $rg_ok
                     && function_exists( 'nppp_find_safexec_path' )
@@ -1120,6 +1128,13 @@ function nppp_pre_checks() {
     } else {
         $rg_bin = $rg_cached['path'];
         $rg_ok  = (bool) $rg_cached['ok'];
+    }
+    // Enforce minimum rg version — treat lower versions as unavailable.
+    if ( $rg_ok && function_exists( 'nppp_check_rg_version' ) ) {
+        $rg_ver = nppp_check_rg_version();
+        if ( $rg_ver === 'Not Installed' || version_compare( $rg_ver, '14.0.0', '<' ) ) {
+            $rg_ok = false;
+        }
     }
     if ( $rg_ok ) {
         $has_files = '';
