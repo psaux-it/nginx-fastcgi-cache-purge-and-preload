@@ -460,24 +460,6 @@ function nppp_premium_html($nginx_cache_path) {
     // Merge HIT + MISS
     $mergedRows = nppp_merge_cached_and_wget($hits, $wp_filesystem);
 
-    // Warnings - only meaningful when table has data
-    if ( ! $preload_running ) {
-        if ( ! empty( $mergedRows ) && $config_data === false) {
-            echo '<div class="nppp-premium-wrap">
-                      <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: No <span style="color: #f0c36d;">_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
-                  </div>';
-        } elseif ( ! empty( $mergedRows ) && isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
-            echo '<div class="nppp-premium-wrap">
-                      <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: No <span style="color: #f0c36d;">_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
-                  </div>';
-        // Warn about the unsupported cache keys
-        } elseif ( ! empty( $mergedRows ) && isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
-            echo '<div class="nppp-premium-wrap">
-                      <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: <span style="color: #f0c36d;">Unsupported</span> cache key found!', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
-                  </div>';
-        }
-    }
-
     // Warn if no complete crawl snapshot exists yet.
     // The snapshot file (nppp-wget-snapshot.log) is only written when a
     // Preload All run finishes successfully. If it does not exist, the admin
