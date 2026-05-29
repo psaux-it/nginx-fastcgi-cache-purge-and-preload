@@ -124,6 +124,14 @@ function nppp_nginx_cache_settings_page() {
             set_transient( 'nppp_rg_ok', [ 'path' => $nppp_rg_bin, 'ok' => $nppp_rg_installed ], HOUR_IN_SECONDS );
         }
 
+        // Enforce minimum rg version — treat lower versions as unavailable.
+        if ( $nppp_rg_installed && function_exists( 'nppp_check_rg_version' ) ) {
+            $nppp_rg_ver = nppp_check_rg_version();
+            if ( $nppp_rg_ver === 'Not Installed' || version_compare( $nppp_rg_ver, '14.0.0', '<' ) ) {
+                $nppp_rg_installed = false;
+            }
+        }
+
         // FUSE mount detection
         $nppp_fuse_active = false;
         if ( ! empty( $nppp_badge_path ) && function_exists( 'nppp_fuse_source_path' ) ) {
