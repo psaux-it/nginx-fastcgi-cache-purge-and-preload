@@ -595,6 +595,14 @@ function nppp_get_in_cache_page_count() {
         $rg_ok  = (bool) $rg_cached['ok'];
     }
 
+    // Enforce minimum rg version — treat lower versions as unavailable.
+    if ( $rg_ok && function_exists( 'nppp_check_rg_version' ) ) {
+        $rg_ver = nppp_check_rg_version();
+        if ( $rg_ver === 'Not Installed' || version_compare( $rg_ver, '14.0.0', '<' ) ) {
+            $rg_ok = false;
+        }
+    }
+
     if ( $rg_ok ) {
         $rg_fuse_path   = $nginx_cache_path;
         $rg_source_path = nppp_fuse_source_path( $rg_fuse_path );
