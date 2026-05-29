@@ -4742,6 +4742,13 @@ div.updated.notice-nppp p,
     border-color: #cfcfd3;
 }
 
+/* tap UX + pointer hint */
+.nppp-autopurge-triggers-fieldset .nppp-switch label {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
 .nppp-autopurge-triggers-fieldset .nppp-switch input[type="checkbox"] {
     position: absolute;
     inset: 0;
