@@ -677,7 +677,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths,
                                         <?php foreach ($matched_keys as $key): ?>
                                             <tr>
                                                 <td>
-                                                    <span class="dashicons dashicons-yes" style="color: green !important; font-size: 18px !important;"></span>
+                                                    <span class="dashicons dashicons-yes" style="color: green !important; font-size: 20px !important;"></span>
                                                     <span style="color: teal; font-size: 13px; font-weight: bold;">
                                                         <?php echo esc_html(trim($key, '"')); ?>
                                                     </span>
@@ -687,7 +687,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths,
                                         <?php foreach ($cache_keys as $key): ?>
                                             <tr>
                                                 <td>
-                                                    <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
+                                                    <span class="dashicons dashicons-warning" style="color: orange; font-size: 20px !important;"></span>
                                                     <span style="color: teal; font-size: 13px; font-weight: bold;">
                                                         <?php echo esc_html(trim($key, '"')); ?>
                                                     </span>
