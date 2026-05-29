@@ -710,6 +710,88 @@ curl -v -X POST \
                     </div>
                 </div>
 
+                <h3 class="nppp-question">How do I clear the entire cache on every post update instead of just the updated page?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Full Cache Purge on Post Update — Developer Recipe</strong></h3>
+                        <p style="font-size: 14px;">
+                            By default, NPP's Auto Purge surgically clears only the updated post and its related URLs
+                            (homepage, category archives, tag archives). This is the correct behavior for most sites.
+                        </p>
+                        <p style="font-size: 14px;">
+                            However, if your site sorts content by modified date, uses a heavily interlinked layout, or
+                            has any other reason to invalidate the entire cache on every content update, you can override
+                            this behavior with the drop-in recipe below. Add it to your <strong>child theme's
+                            <code>functions.php</code></strong>.
+                        </p>
+
+                        <h4><strong>Recipe 1 — Full purge on publish → publish updates only</strong></h4>
+                        <p style="font-size: 14px;">
+                            Fires only when an already-published post is updated. New posts, drafts going live, and
+                            deletions are not affected.
+                        </p>
+                        <pre>// NPP Drop-in | Clear the entire cache when a post is updated
+add_action( 'transition_post_status', function ( string $new, string $old, WP_Post $post ): void {
+    if ( $new !== 'publish' || $old !== 'publish' ) return;
+    if ( ! function_exists( 'nppp_purge_callback' ) ) return;
+
+    // Gutenberg: second meta-box-loader request guard.
+    // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+    if ( isset( $_REQUEST['meta-box-loader'] ) ) return;
+
+    if ( defined( 'DOING_AUTOSAVE' ) &amp;&amp; DOING_AUTOSAVE ) return;
+    if ( ! is_post_type_viewable( $post->post_type ) ) return;
+
+    $options = get_option( 'nginx_cache_settings', [] );
+    if ( ( $options['nginx_cache_purge_on_update']  ?? 'no' ) !== 'yes' ) return;
+    if ( ( $options['nppp_autopurge_posts']         ?? 'no' ) !== 'yes' ) return;
+
+    // Cross-request dedup: Elementor fires multiple HTTP requests per save.
+    $dedup_key = 'nppp_fullpurge_recipe_' . $post->ID;
+    if ( get_transient( $dedup_key ) ) return;
+    set_transient( $dedup_key, 1, 10 );
+
+    nppp_purge_callback();
+}, 20, 3 );</pre>
+
+                        <h4><strong>Recipe 2 — Full purge on any transition to published</strong></h4>
+                        <p style="font-size: 14px;">
+                            Extends Recipe 1 to also fire when a new post is published, a draft goes live, or a
+                            scheduled post is released. Replace the single status guard line:
+                        </p>
+                        <p style="font-size: 14px;"><strong>Remove:</strong></p>
+                        <pre>if ( $new !== 'publish' || $old !== 'publish' ) return;</pre>
+                        <p style="font-size: 14px;"><strong>Replace with:</strong></p>
+                        <pre>if ( $new !== 'publish' ) return;</pre>
+                        <p style="font-size: 14px;">
+                            Everything else in the recipe stays the same. The hook now covers content updates,
+                            new publications, drafts going live, and scheduled posts becoming public.
+                        </p>
+
+                        <h4><strong>How it works</strong></h4>
+                        <p style="font-size: 14px;">
+                            The recipe hooks into WordPress's <code>transition_post_status</code> action and calls
+                            NPP's internal <code>nppp_purge_callback()</code> — the same function the Purge All
+                            button triggers. It respects your existing NPP settings:
+                        </p>
+                        <ul style="font-size: 14px;">
+                            <li>The <strong>Auto Purge master toggle</strong> (<code>nginx_cache_purge_on_update</code>) must be ON — the recipe is a no-op if Auto Purge is disabled.</li>
+                            <li>The <strong>Posts &amp; Comments sub-trigger</strong> (<code>nppp_autopurge_posts</code>) must be ON.</li>
+                            <li>Works correctly with <strong>Gutenberg</strong>, <strong>Elementor</strong>, and <strong>Classic Editor</strong> — a 10-second transient dedup guard prevents duplicate purges from editors that fire multiple HTTP requests per save.</li>
+                            <li>Only fires for <strong>publicly viewable post types</strong> — CPTs registered with <code>publicly_queryable = false</code> are skipped.</li>
+                            <li>Autosaves never trigger a purge.</li>
+                        </ul>
+
+                        <h4><strong>Important</strong></h4>
+                        <p style="font-size: 14px;">
+                            ⚠️ If <strong>Auto Preload</strong> is also ON in your NPP settings, every post save will
+                            trigger a <strong>full site crawl</strong> immediately after the purge. On large sites this
+                            is a significant server load event — use with caution or keep Auto Preload OFF and rely on
+                            Scheduled Preload instead.
+                        </p>
+                    </div>
+                </div>
+
                 <h3 class="nppp-question">What Linux commands are required for the preload action?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
