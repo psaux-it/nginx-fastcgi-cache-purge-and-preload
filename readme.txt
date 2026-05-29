@@ -167,14 +167,17 @@ Release date: 2026-05-25
 * Performance: Improve capability checks via transients.
 * Improved: Nginx detection and Setup (Assume Nginx Mode) process. Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
 * Improved: UI/UX on Setup Page.
-* Improved: Compatibility on aaPanel. Fully tested and functional (Single and Multi WebServer). See aaPanel/issues/270 for ongoing issue. (Thanks to @neikoloves)
-* Changed: Hard dependency extended to require both shell_exec and exec (rg).
+* Improved: Compatibility on aaPanel. Fully tested and functional (Single and Multi WebServer arches). See aaPanel/issues/270 for ongoing perm issue. (Thanks to @neikoloves)
+* Improved: Status tab diagnostic reporting to explicitly flag outdated ripgrep binaries.
+* Improved: Degrade into the PHP recursive scanner fallback if an outdated version of ripgrep is detected on FP3 Purge.
+* Changed: Hard dependency extended to require both shell_exec and exec (rg). REGRESSION!
 * Added: Proper open_basedir compatibility detection and admin warning for missing required paths.
 * Added: Detection for Vary: Accept-Encoding may cause double‑cache issue (dismissable completely).
+* Added: Strict minimum version requirement for ripgrep (`>= 14.0.0`)
+* Added: Cache Key Regex validation checks now trigger global warnings when custom or default regex fail.
 * Removed: False-positive and redundant warning messages on the Status and Advanced tab.
 * Developer: nppp_purged_all action hook — fired after every successful full Nginx cache purge, enabling third-party plugins to trigger their own cache flush in sync.
 * Updated: Tested up to WordPress 7.0
-* Updated: Tested up to Nginx 1.31.1
 
 = 2.1.6 =
 
