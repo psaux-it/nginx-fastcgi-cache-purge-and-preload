@@ -139,6 +139,8 @@ $(document).ready(function() {
                 $settingsPlaceholder.show();
                 nppphighlightSubmenu('.nppp-submenu ul li a', 900);
                 npppFabSet(false);
+                var $lc = $('.logs-container');
+                if ($lc.length) { $lc.scrollTop($lc[0].scrollHeight); }
                 break;
             case 'status':
                 showPreloader();
@@ -2703,7 +2705,9 @@ $(document).ready(function() {
                                    '</div>';
                         }
                         // Update the content area with the new logs HTML
-                        $('.logs-container').html(html);
+                        var $logsContainer = $('.logs-container');
+                        $logsContainer.html(html);
+                        $logsContainer.scrollTop($logsContainer[0].scrollHeight);
                     },
                     error: function(xhr, status, error) {
                         console.error('Error getting log content:', status, error);
