@@ -158,18 +158,20 @@ NPP restricts cache paths by default to prevent accidental deletion of system fi
 
 Release date: 2026-05-25
 
-* Fixed: A false-negative in Nginx detection on Nginx+Apache proxy stacks, which rendered the plugin completely non-functional even when Nginx was active as the front proxy server.
+* Fixed: A false-negative in Nginx detection on Nginx+Apache proxy stacks, which rendered the plugin completely non-functional even when Nginx was active as the front proxy.
 * Fixed: Unprotected (function_exists) shell_exec and exec calls across the REST API, WP Cron, Dashboard Widget, and all other relevant execution paths.
 * Fixed: Missing check for getenv / putenv for URL Normalization (safexec).
 * Fixed: An edgecase where users are locked out by the transient cache because the Status tab and "Clear Plugin Cache" button are inaccessible when plugin functionality is disabled.
+* Fixed: Broken Nginx cache keys listing in the Status tab. 
 * Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
 * Performance: Improve capability checks via transients.
 * Improved: Nginx detection and Setup (Assume Nginx Mode) process. Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
 * Improved: UI/UX on Setup Page.
-* Improved: Compatibility on aaPanel. Fully tested and functional. See aaPanel/issues/270 for ongoing issue. (Thanks to @neikoloves)
+* Improved: Compatibility on aaPanel. Fully tested and functional (Single and Multi WebServer). See aaPanel/issues/270 for ongoing issue. (Thanks to @neikoloves)
 * Changed: Hard dependency extended to require both shell_exec and exec (rg).
 * Added: Proper open_basedir compatibility detection and admin warning for missing required paths.
 * Added: Detection for Vary: Accept-Encoding may cause double‑cache issue (dismissable completely).
+* Removed: False-positive and redundant warning messages on the Status and Advanced tab.
 * Developer: nppp_purged_all action hook — fired after every successful full Nginx cache purge, enabling third-party plugins to trigger their own cache flush in sync.
 * Updated: Tested up to WordPress 7.0
 * Updated: Tested up to Nginx 1.31.1
