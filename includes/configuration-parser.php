@@ -621,20 +621,22 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths,
                                                             <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
                                                         <?php endif; ?>
                                                         <span style="color: <?php echo $is_supported ? 'teal' : 'orange'; ?>; font-size: 13px; font-weight: bold;"><?php echo esc_html($value); ?></span>
+                                                        <div class="nppp-cache-badges" style="display: block; margin-top: 4px; margin-left: 24px;">
                                                         <?php if ($is_active): ?>
-                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #e6f1fb; color: #0c447c;"><?php esc_html_e('Active', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-right: 4px; padding: 2px 7px; border-radius: 4px; background: #e6f1fb; color: #0c447c;"><?php esc_html_e('Active', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                                         <?php else: ?>
-                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #f1efe8; color: #5f5e5a;"><?php esc_html_e('Other vhost', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-right: 4px; padding: 2px 7px; border-radius: 4px; background: #f1efe8; color: #5f5e5a;"><?php esc_html_e('Other vhost', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                                         <?php endif; ?>
                                                         <?php if (!$is_supported): ?>
-                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #faeeda; color: #633806;"><?php esc_html_e('Path Blocked', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-right: 4px; padding: 2px 7px; border-radius: 4px; background: #faeeda; color: #633806;"><?php esc_html_e('Path Blocked', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                                         <?php endif; ?>
                                                         <?php
                                                         if (isset($nppp_directive_badges[$directive])):
                                                             [$nppp_badge_label, $nppp_badge_bg, $nppp_badge_color] = $nppp_directive_badges[$directive];
                                                         ?>
-                                                            <span style="font-size: 12px; font-weight: 600; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: <?php echo esc_attr($nppp_badge_bg); ?>; color: <?php echo esc_attr($nppp_badge_color); ?>; letter-spacing: 0.3px;"><?php echo esc_html($nppp_badge_label); ?></span>
+                                                            <span style="font-size: 12px; font-weight: 600; margin-right: 4px; padding: 2px 7px; border-radius: 4px; background: <?php echo esc_attr($nppp_badge_bg); ?>; color: <?php echo esc_attr($nppp_badge_color); ?>; letter-spacing: 0.3px;"><?php echo esc_html($nppp_badge_label); ?></span>
                                                         <?php endif; ?>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             <?php endforeach; ?>
