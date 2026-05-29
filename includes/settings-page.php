@@ -1043,6 +1043,8 @@ function nppp_handle_nginx_cache_settings_submission() {
             delete_transient('nppp_safexec_ok');
             delete_transient('nppp_rg_ok');
             delete_transient('nppp_cache_key_regex_probe');
+            delete_transient('nppp_wget_version_' . md5($static_key_base));
+            delete_transient('nppp_rg_version_' . md5($static_key_base));
 
             // Update the settings
             update_option('nginx_cache_settings', $merged);
