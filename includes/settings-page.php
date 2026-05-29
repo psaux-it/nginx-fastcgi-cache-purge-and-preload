@@ -1036,21 +1036,20 @@ function nppp_handle_nginx_cache_settings_submission() {
             $existing_options = (array) $existing_options;
             $merged = wp_parse_args($new_settings, $existing_options);
 
-            // Always delete the permission cache
+            // Delete transients partially
             $static_key_base = 'nppp';
             $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
             delete_transient($transient_key_permissions_check);
-
-            // Delete cache related binary checks
             delete_transient('nppp_safexec_ok');
             delete_transient('nppp_rg_ok');
+            delete_transient('nppp_cache_key_regex_probe');
 
             // Update the settings
             update_option('nginx_cache_settings', $merged);
 
             // Redirect with success message
             wp_safe_redirect(add_query_arg(array(
-                'status_message' => urlencode(__('Plugin cache (permission) cleared, settings saved successfully!', 'fastcgi-cache-purge-and-preload-nginx')),
+                'status_message' => urlencode(__('Plugin cache (partially) cleared, settings saved successfully!', 'fastcgi-cache-purge-and-preload-nginx')),
                 'message_type' => 'success',
                 'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
             ), admin_url('options-general.php?page=nginx_cache_settings')));
