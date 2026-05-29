@@ -896,6 +896,20 @@ function nppp_preload_cache_premium_callback() {
     nppp_prepare_request_env();
     $rg_bin = ( function_exists( 'shell_exec' ) && function_exists( 'exec' ) ) ? trim( (string) shell_exec('command -v rg 2>/dev/null') ) : '';
 
+    if ( $rg_bin !== '' ) {
+        $rg_ver = nppp_check_rg_version();
+        if ( $rg_ver === 'Not Installed' ) {
+            $rg_bin = '';
+        } elseif ( version_compare( $rg_ver, '14.0.0', '<' ) ) {
+            nppp_display_admin_notice( 'info', sprintf(
+                /* translators: %s: Installed ripgrep version. */
+                __( 'WARNING RG SCAN: Installed ripgrep (rg) version (%s) is lower than the required minimum (14.0.0). Skipped preload complete check.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $rg_ver
+            ), true, false );
+            $rg_bin = '';
+        }
+    }
+
     if ($rg_bin !== '') {
         // Wait for wget to finish before scanning.
         $pid      = intval( nppp_perform_file_operation($PIDFILE, 'read') );
@@ -1208,17 +1222,32 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     * Always use ripgrep (rg) if the binary is present on the system.
     *
     * PERFORMANCE BENCHMARK | Advanced Tab Load Times | ripgrep + safexec
-    * (5,000 cached URLs, containerised environment):
+    * (5,000 cached URLs, FUSE bindfs mounted Nginx cache path, containerised environment):
     * ---------------------------------------------------------------------
-    * | Method               | Cold dcache | Warm dcache |
-    * |----------------------|-------------|-------------|
-    * | ripgrep (rg)         | ~10 seconds | ~6 seconds  |
-    * | PHP RecursiveIterator| ~52 seconds | ~23 seconds |
+    * | Method               | Cold dcache(+DOM) | Warm dcache(+DOM) |
+    * |----------------------|------------------ |-------------------|
+    * | ripgrep (rg)         |    ~10 seconds    |     ~6 seconds    |
+    * | PHP RecursiveIterator|    ~52 seconds    |     ~23 seconds   |
     * ---------------------------------------------------------------------
     */
 
     nppp_prepare_request_env();
     $rg_bin = ( function_exists( 'shell_exec' ) && function_exists( 'exec' ) ) ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
+
+    if ( $rg_bin !== '' ) {
+        $rg_ver = nppp_check_rg_version();
+        if ( $rg_ver === 'Not Installed' ) {
+            $rg_bin = '';
+        } elseif ( version_compare( $rg_ver, '14.0.0', '<' ) ) {
+            nppp_display_admin_notice( 'info', sprintf(
+                /* translators: %s: Installed ripgrep version. */
+                __( 'WARNING RG SCAN: Installed ripgrep (rg) version (%s) is lower than the required minimum (14.0.0). Falling back to PHP recursive scanner.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $rg_ver
+            ), true, false );
+            $rg_bin = '';
+        }
+    }
+
     if ( $rg_bin !== '' ) {
 
         // Resolve FUSE mount
