@@ -335,11 +335,25 @@ function nppp_update_rg_purge_option(): void {
     $raw      = sanitize_text_field( wp_unslash( $_POST['rg_purge'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth()
     $rg_purge = ( $raw === 'yes' ) ? 'yes' : 'no';
 
-    // If rg is not available, refuse to enable.
+    // If rg is not available or version is too low, refuse to enable.
     if ( $rg_purge === 'yes' ) {
         $rg_bin = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
         if ( $rg_bin === '' || ! is_executable( $rg_bin ) ) {
             wp_send_json_error( __( 'ripgrep (rg) binary not found. Install it to enable RG Purge.', 'fastcgi-cache-purge-and-preload-nginx' ), 400 );
+        }
+        // Enforce minimum rg version requirement.
+        if ( function_exists( 'nppp_check_rg_version' ) ) {
+            $rg_ver = nppp_check_rg_version();
+            if ( $rg_ver === 'Not Installed' || version_compare( $rg_ver, '14.0.0', '<' ) ) {
+                wp_send_json_error(
+                    sprintf(
+                        /* translators: %s: Installed ripgrep version. */
+                        __( 'ripgrep (rg) version %s is below the required minimum (14.0.0). Upgrade rg to enable RG Purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        esc_html( $rg_ver )
+                    ),
+                    400
+                );
+            }
         }
     }
 
