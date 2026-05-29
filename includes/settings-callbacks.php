@@ -266,9 +266,9 @@ function nppp_nginx_cache_logs_callback() {
     if (file_exists($log_file_path) && is_readable($log_file_path)) {
         // Read the log file into an array of lines
         $lines = file($log_file_path);
-        // Get the latest 5 lines
+        // Get the latest 50 lines
         if (is_array($lines)) {
-            $latest_lines = array_slice($lines, -5);
+            $latest_lines = array_slice($lines, -50);
 
             // Remove leading tab spaces and spaces from each line
             $cleaned_lines = array_map(function($line) {
@@ -277,7 +277,7 @@ function nppp_nginx_cache_logs_callback() {
             ?>
             <div class="logs-container">
                 <?php
-                // Output the latest 5 lines
+                // Output the latest 50 lines
                 foreach ($cleaned_lines as $line) {
                     if (!empty($line)) {
                         // Extract timestamp and message
