@@ -4969,3 +4969,11 @@ div.updated.notice-nppp p,
     line-height: 1.6;
     color: #50575e;
 }
+
+/* Cache path badges — remove indent on mobile */
+@media (max-width: 768px) {
+    .nppp-cache-badges {
+        margin-left: 0 !important;
+    }
+}
+
