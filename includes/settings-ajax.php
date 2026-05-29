@@ -442,6 +442,7 @@ function nppp_update_default_reject_extension_option(): void {
 
 // AJAX callback function to update default cache key regex option
 function nppp_update_default_cache_key_regex_option(): void {
+    delete_transient( 'nppp_cache_key_regex_probe' );
     nppp_reset_default_option( 'nppp-update-default-cache-key-regex-option', 'nginx_cache_key_custom_regex', 'nppp_fetch_default_regex_for_cache_key' );
 }
 
