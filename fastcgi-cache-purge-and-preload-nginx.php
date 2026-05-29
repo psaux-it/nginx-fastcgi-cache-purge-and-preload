@@ -445,6 +445,20 @@ add_action('init', function(): void {
 }, 1);
 
 // ---------------------------------------------------------------------------
+// EP9 — WP-CLI (`wp npp …`)
+// Exposes cache purge, preload, status, log, settings, and scheduler to the
+// `wp npp` command group. Bootstrap loads the same file stack as EP1 so
+// every underlying PHP function is available without HTTP overhead or nonces.
+// The entire block is a no-op on every normal web request.
+// ---------------------------------------------------------------------------
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+    add_action( 'plugins_loaded', function (): void {
+        nppp_load_bootstrap();
+        require_once plugin_dir_path( __FILE__ ) . 'includes/wp-cli.php';
+    }, 10 );
+}
+
+// ---------------------------------------------------------------------------
 // ACTIVATION — generates API key, writes default settings, triggers setup wizard.
 // DEACTIVATION — clears scheduled cron events, terminates active preload process.
 // ---------------------------------------------------------------------------
