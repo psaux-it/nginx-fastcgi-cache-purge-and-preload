@@ -936,6 +936,105 @@ function nppp_pre_checks_critical() {
     return true;
 }
 
+// Probes one real Nginx cache file to verify the configured Cache Key Regex
+// can actually parse the KEY: line format used on this site.
+function nppp_probe_cache_key_regex(): string {
+    $transient_key = 'nppp_cache_key_regex_probe';
+    $cached        = get_transient( $transient_key );
+
+    if ( $cached !== false && in_array( $cached, [ 'ok', 'fail', 'skip' ], true ) ) {
+        return $cached;
+    }
+
+    $nginx_cache_settings = get_option( 'nginx_cache_settings', [] );
+    $nginx_cache_path     = $nginx_cache_settings['nginx_cache_path'] ?? '/dev/shm/change-me-now';
+
+    $decoded = isset( $nginx_cache_settings['nginx_cache_key_custom_regex'] )
+        ? base64_decode( $nginx_cache_settings['nginx_cache_key_custom_regex'], true )
+        : false;
+
+    $regex = ( $decoded !== false && $decoded !== '' )
+        ? $decoded
+        : ( function_exists( 'nppp_fetch_default_regex_for_cache_key' )
+            ? nppp_fetch_default_regex_for_cache_key()
+            : '/^KEY:\s+https?(?:GET|HEAD)?([^\/]+)(\/[^\s]*)/m' );
+
+    $wp_filesystem = function_exists( 'nppp_initialize_wp_filesystem' )
+        ? nppp_initialize_wp_filesystem()
+        : false;
+
+    if ( $wp_filesystem === false || ! $wp_filesystem->is_dir( $nginx_cache_path ) ) {
+        set_transient( $transient_key, 'skip', 10 * MINUTE_IN_SECONDS );
+        return 'skip';
+    }
+
+    $head_bytes    = (int) apply_filters( 'nppp_locate_head_bytes',          4096 );
+    $head_bytes_fb = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
+    $result        = 'skip';
+
+    try {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator( $nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS ),
+            RecursiveIteratorIterator::LEAVES_ONLY
+        );
+
+        foreach ( $iterator as $file ) {
+            if ( ! $file->isReadable() ) {
+                continue;
+            }
+
+            $pathname = $file->getPathname();
+            $content  = function_exists( 'nppp_read_head' )
+                ? nppp_read_head( $wp_filesystem, $pathname, $head_bytes )
+                : '';
+
+            if ( $content === '' ) {
+                continue;
+            }
+
+            // Verify this is a cache file with a KEY: header
+            if ( ! preg_match( '/^KEY:\s/m', $content ) ) {
+                if ( strlen( $content ) >= $head_bytes ) {
+                    $content = function_exists( 'nppp_read_head' )
+                        ? nppp_read_head( $wp_filesystem, $pathname, $head_bytes_fb )
+                        : '';
+                    if ( $content === '' || ! preg_match( '/^KEY:\s/m', $content ) ) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
+
+            // We have a real cache file — test the regex against it
+            $m = [];
+            if ( @preg_match( $regex, $content, $m ) === false ) {
+                $result = 'fail';
+                break;
+            }
+
+            if ( ! isset( $m[1], $m[2] ) ) {
+                $result = 'fail';
+                break;
+            }
+
+            if ( filter_var( 'https://' . trim( $m[1] ) . trim( $m[2] ), FILTER_VALIDATE_URL ) === false ) {
+                $result = 'fail';
+                break;
+            }
+
+            $result = 'ok';
+            break;
+        }
+    } catch ( \Exception $e ) {
+        $result = 'skip';
+    }
+
+    $ttl = (int) apply_filters( 'nppp_regex_probe_ttl', 10 * MINUTE_IN_SECONDS );
+    set_transient( $transient_key, $result, $ttl );
+    return $result;
+}
+
 // Pre-checks and global warnings
 function nppp_pre_checks() {
     // Exlude Advanced and Help Tab
@@ -1095,6 +1194,20 @@ function nppp_pre_checks() {
     if ($has_files !== 'found' && $has_files !== 'error' && !$preload_running) {
         nppp_display_pre_check_warning(__('GLOBAL WARNING CACHE: The Nginx cache is empty. Consider preloading the Nginx cache now!', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
+    }
+
+    // Regex probe — only meaningful when the cache populated to test against.
+    // Non-fatal: single url purge/advanced tab break but preload, purge all still work.
+    if ( $has_files === 'found' && !$preload_running) {
+        $regex_probe = nppp_probe_cache_key_regex();
+        if ( $regex_probe === 'fail' ) {
+            nppp_display_pre_check_warning(
+                wp_kses(
+                    __( 'GLOBAL WARNING REGEX: The <strong>Cache Key Regex</strong> does not match the Nginx cache key format on this site. <strong>Single URL Purge</strong> and Advanced Tab operations will fail until the regex is corrected. Please update the <strong>Cache Key Regex</strong> in the <strong>Advanced Options</strong> tab.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    [ 'strong' => [] ]
+                )
+            );
+        }
     }
 }
 
