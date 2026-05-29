@@ -177,6 +177,18 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
         return;
     }
 
+    // WP-CLI: route the message into the output buffer opened by
+    // capture_cli_output() in wp-cli.php.
+    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+        $our_level = isset( $GLOBALS['nppp_cli_ob_level'] )
+            ? (int) $GLOBALS['nppp_cli_ob_level'] + 1
+            : -1;
+        if ( ob_get_level() === $our_level && $display_notice ) {
+            echo esc_html( $sanitized_message ) . "\n";
+        }
+        return;
+    }
+
     // Perform the permission check for admin actions
     if (!current_user_can('manage_options')) {
         return;
