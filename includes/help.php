@@ -605,6 +605,111 @@ apk add ripgrep           # Alpine Linux</pre>
                     </div>
                 </div>
 
+                <h3 class="nppp-question">Why does the NPP REST API return 404 (rest_no_route) behind an Nginx → Apache reverse proxy?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>REST API 404 on Nginx + Apache Reverse Proxy Stacks</strong></h3>
+                        <p style="font-size: 14px;">
+                            On setups where <strong>Nginx acts as a reverse proxy in front of Apache</strong> (a common pattern in control panels such as aaPanel, HestiaCP, CyberPanel, and similar), NPP's REST API endpoints return a
+                            <code>rest_no_route</code> 404 even though the URL and method are correct:
+                        </p>
+                        <pre>{"code":"rest_no_route","message":"No route was found matching the URL and request method.","data":{"status":404}}</pre>
+                        <p style="font-size: 14px;">
+                            The root cause is a two-layer header suppression problem. First, Nginx does not forward the
+                            <code>Authorization</code> header to Apache by default. Second, even when Apache receives it,
+                            PHP does not automatically expose it as <code>$_SERVER['HTTP_AUTHORIZATION']</code> unless a
+                            <code>RewriteRule</code> explicitly sets the environment variable. WordPress reads
+                            <code>HTTP_AUTHORIZATION</code> to authenticate REST API requests — if it is absent, the
+                            Bearer token is never seen and the route resolver treats the request as unauthenticated or
+                            misrouted, returning 404.
+                        </p>
+
+                        <h4><strong>Fix 1 — Nginx: forward Authorization and X-Api-Key to Apache</strong></h4>
+                        <p style="font-size: 14px;">
+                            Inside your <code>location / { ... }</code> block that proxies to Apache, add the four
+                            highlighted lines. Both <code>proxy_pass_header</code> (copies the upstream response header
+                            downstream) and <code>proxy_set_header</code> (injects the client request header into the
+                            proxied request) are required together — <code>proxy_pass_header</code> alone is not
+                            sufficient for request-direction forwarding.
+                        </p>
+                        <pre>location / {
+    proxy_pass http://127.0.0.1:8288;  # your Apache backend port
+
+    proxy_pass_header Authorization;
+    proxy_pass_header X-Api-Key;
+    proxy_set_header Authorization $http_authorization;
+    proxy_set_header X-Api-Key $http_x_api_key;
+}</pre>
+                        <p style="font-size: 14px;">Reload Nginx after saving: <code>nginx -t &amp;&amp; systemctl reload nginx</code></p>
+
+                        <h4><strong>Fix 2 — Apache: expose the Authorization header to PHP</strong></h4>
+                        <p style="font-size: 14px;">
+                            Apache's <code>mod_php</code> and PHP-FPM via <code>mod_proxy_fcgi</code> do not populate
+                            <code>$_SERVER['HTTP_AUTHORIZATION']</code> from the incoming header automatically — it must
+                            be injected via <code>mod_rewrite</code>. Add the block below inside your WordPress
+                            <code>&lt;Directory&gt;</code> section. The critical line is the first
+                            <code>RewriteRule</code> that maps the raw HTTP header into the
+                            <code>HTTP_AUTHORIZATION</code> environment variable before any other rewrite logic runs.
+                            The standard WordPress router rules must follow it in the same block.
+                        </p>
+                        <pre>&lt;Directory "/www/wwwroot/yourdomain.com"&gt;
+    SetOutputFilter DEFLATE
+    Options FollowSymLinks
+    AllowOverride All
+    Require all granted
+    DirectoryIndex index.php index.html index.htm default.php default.html default.htm
+
+    RewriteEngine On
+    RewriteBase /
+    RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    RewriteRule ^index\.php$ - [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . /index.php [L]
+&lt;/Directory&gt;</pre>
+                        <p style="font-size: 14px;">
+                            Reload Apache after saving: <code>systemctl reload apache2</code> (Debian/Ubuntu) or
+                            <code>systemctl reload httpd</code> (RHEL/Fedora).
+                        </p>
+
+                        <h4><strong>Why the RewriteRule line is the key fix</strong></h4>
+                        <p style="font-size: 14px;">
+                            <code>RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]</code> matches every
+                            request (<code>^</code>), performs no URL rewrite (<code>-</code>), and sets the Apache
+                            environment variable <code>HTTP_AUTHORIZATION</code> to the value of the incoming
+                            <code>Authorization</code> HTTP header. PHP's CGI/FastCGI SAPI then picks up all
+                            <code>HTTP_*</code> environment variables and exposes them as <code>$_SERVER</code> keys,
+                            making the Bearer token visible to WordPress and NPP's REST authentication layer.
+                        </p>
+
+                        <h4><strong>Verification</strong></h4>
+                        <p style="font-size: 14px;">After applying both fixes, re-run your REST API call — a successful purge or preload returns HTTP 200 with a JSON body. If you still see 404, confirm with:</p>
+                        <pre># Test purge endpoint
+curl -v -X POST \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json" \
+  "https://yourdomain.com/wp-json/nppp_nginx_cache/v2/purge"
+
+# Test preload endpoint
+curl -v -X POST \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json" \
+  "https://yourdomain.com/wp-json/nppp_nginx_cache/v2/preload"</pre>
+                        <p style="font-size: 14px;">
+                            📌 The NPP API key is generated under <strong>Settings → NPP Settings → REST API</strong>.
+                            The <code>Authorization: Bearer</code> scheme and the <code>X-Api-Key</code> header are both
+                            accepted — use whichever your client supports.
+                        </p>
+                        <p style="font-size: 14px;">
+                            📌 This fix applies to any control panel that uses the Nginx → Apache proxy pattern,
+                            including <strong>aaPanel</strong>, <strong>HestiaCP</strong>,
+                            <strong>CyberPanel</strong>, and manually configured dual-stack servers. The Nginx and
+                            Apache config paths will differ per panel — consult your panel's vhost editor for the
+                            correct files to edit.
+                        </p>
+                    </div>
+                </div>
+
                 <h3 class="nppp-question">What Linux commands are required for the preload action?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
