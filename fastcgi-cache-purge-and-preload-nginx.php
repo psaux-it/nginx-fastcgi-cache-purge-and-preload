@@ -53,6 +53,29 @@ if (!defined('NPPP_PLUGIN_FILE')) {
     define('NPPP_PLUGIN_FILE', __FILE__);
 }
 
+// Register custom cron schedules unconditionally.
+add_filter( 'cron_schedules', static function ( array $schedules ): array {
+    if ( ! isset( $schedules['every_3hours_npp'] ) ) {
+        $schedules['every_3hours_npp'] = [
+            'interval' => 3 * HOUR_IN_SECONDS,
+            'display'  => 'Every 3 Hours-NPP',
+        ];
+    }
+    if ( ! isset( $schedules['monthly_npp'] ) ) {
+        $schedules['monthly_npp'] = [
+            'interval' => 30 * DAY_IN_SECONDS,
+            'display'  => 'Monthly-NPP',
+        ];
+    }
+    if ( ! isset( $schedules['every_min_npp'] ) ) {
+        $schedules['every_min_npp'] = [
+            'interval' => 60,
+            'display'  => 'Every Minute-NPP',
+        ];
+    }
+    return $schedules;
+} );
+
 // Single source of truth for the runtime directory
 if (!defined('NPPP_RUNTIME_SUBDIR')) {
     define('NPPP_RUNTIME_SUBDIR', 'nginx-cache-purge-preload-runtime');
