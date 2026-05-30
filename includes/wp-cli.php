@@ -207,8 +207,10 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             return;
         }
 
+        $preload_mobile = ( ( $settings['nginx_cache_auto_preload_mobile'] ?? 'no' ) === 'yes' );
+
         $result = $this->capture_cli_output(
-            function () use ( $cache_path, $plugin_dir, $tmp_path, $fdomain, $pid_file, $reject_regex, $limit_rate, $cpu_limit ): void {
+            function () use ( $cache_path, $plugin_dir, $tmp_path, $fdomain, $pid_file, $reject_regex, $limit_rate, $cpu_limit, $preload_mobile ): void {
                 nppp_preload(
                     $cache_path,
                     $plugin_dir,
@@ -218,10 +220,11 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                     $reject_regex,
                     $limit_rate,
                     $cpu_limit,
-                    false,  // $nppp_is_auto_preload
-                    false,  // $nppp_is_rest_api
-                    false,  // $nppp_is_wp_cron
-                    false   // $nppp_is_admin_bar
+                    false,           // $nppp_is_auto_preload
+                    false,           // $nppp_is_rest_api
+                    false,           // $nppp_is_wp_cron
+                    false,           // $nppp_is_admin_bar
+                    $preload_mobile  // honour nginx_cache_auto_preload_mobile setting
                 );
             }
         );
@@ -261,6 +264,24 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $action_server  = nppp_check_perm_in_cache( false, false, true );
         $action_purge   = nppp_check_perm_in_cache( true,  false, false );
         $action_preload = nppp_check_preload_status();
+
+        // Human-readable label helpers for raw internal return values.
+        $bool_label = static function ( ?string $v ): string {
+            return match ( $v ) {
+                'true'      => 'OK',
+                'false'     => 'Not Available',
+                'Not Found' => 'Cache Path Not Found',
+                default     => $v ?? 'N/A',
+            };
+        };
+        $preload_label = static function ( ?string $v ): string {
+            return match ( $v ) {
+                'progress' => 'Running',
+                'true'     => 'Ready',
+                'false'    => 'Not Available',
+                default    => $v ?? 'N/A',
+            };
+        };
 
         // ── System checks ─────────────────────────────────────────────────
         $php_owner    = (string) nppp_get_website_user();
@@ -329,9 +350,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         $rows = [
             $sep( 'ACTION READINESS' ),
-            [ 'Field' => 'Server Side Action',  'Value' => $action_server  !== null ? (string) $action_server  : 'N/A' ],
-            [ 'Field' => 'Purge Action',        'Value' => $action_purge   !== null ? (string) $action_purge   : 'N/A' ],
-            [ 'Field' => 'Preload Action',      'Value' => $action_preload !== null ? (string) $action_preload : 'N/A' ],
+            [ 'Field' => 'Server Side Action',  'Value' => $bool_label( $action_server ) ],
+            [ 'Field' => 'Purge Action',        'Value' => $bool_label( $action_purge ) ],
+            [ 'Field' => 'Preload Action',      'Value' => $preload_label( $action_preload ) ],
 
             $sep( 'SYSTEM CHECKS' ),
             [ 'Field' => 'PHP Process Owner',   'Value' => $php_owner ],
@@ -346,8 +367,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
             $sep( 'CACHE HEALTH' ),
             [ 'Field' => 'Cache Path',          'Value' => $cache_path ],
-            [ 'Field' => 'Path Status',         'Value' => $path_status !== null ? (string) $path_status : 'N/A' ],
-            [ 'Field' => 'Permissions OK',      'Value' => $perm_status !== null ? (string) $perm_status : 'N/A' ],
+            [ 'Field' => 'Path Status',         'Value' => ( $path_status !== null ? (string) $path_status : 'N/A' ) ],
+            [ 'Field' => 'Permissions OK',      'Value' => $bool_label( $perm_status ) ],
             [ 'Field' => 'Pages in Cache',      'Value' => $page_count_label ],
             [ 'Field' => 'Cache Coverage',      'Value' => $ratio_label ],
             [ 'Field' => 'Disk Used',           'Value' => $disk_label ],
@@ -362,11 +383,25 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             [ 'Field' => 'bindfs',              'Value' => $ver_bindfs ],
 
             $sep( 'SETTINGS' ),
-            [ 'Field' => 'Auto Purge',          'Value' => $settings['nginx_cache_purge_on_update'] ?? 'no' ],
-            [ 'Field' => 'Auto Preload',        'Value' => $settings['nginx_cache_auto_preload']    ?? 'no' ],
-            [ 'Field' => 'Watchdog',            'Value' => $settings['nginx_cache_watchdog']        ?? 'no' ],
-            [ 'Field' => 'REST API',            'Value' => $settings['nginx_cache_api']             ?? 'no' ],
-            [ 'Field' => 'Schedule',            'Value' => $settings['nginx_cache_schedule']        ?? 'no' ],
+            [ 'Field' => 'Auto Purge',              'Value' => $settings['nginx_cache_purge_on_update']        ?? 'no' ],
+            [ 'Field' => 'Auto Preload',            'Value' => $settings['nginx_cache_auto_preload']           ?? 'no' ],
+            [ 'Field' => 'Auto Preload Mobile',     'Value' => $settings['nginx_cache_auto_preload_mobile']    ?? 'no' ],
+            [ 'Field' => 'Watchdog',                'Value' => $settings['nginx_cache_watchdog']               ?? 'no' ],
+            [ 'Field' => 'REST API',                'Value' => $settings['nginx_cache_api']                    ?? 'no' ],
+            [ 'Field' => 'Schedule',                'Value' => $settings['nginx_cache_schedule']               ?? 'no' ],
+            [ 'Field' => 'Send Mail',               'Value' => $settings['nginx_cache_send_mail']              ?? 'no' ],
+            [ 'Field' => 'HTTP Purge',              'Value' => $settings['nppp_http_purge_enabled']            ?? 'no' ],
+            [ 'Field' => 'RG Purge',                'Value' => $settings['nppp_rg_purge_enabled']              ?? 'no' ],
+            [ 'Field' => 'Cloudflare APO Sync',     'Value' => $settings['nppp_cloudflare_apo_sync']           ?? 'no' ],
+            [ 'Field' => 'Redis Cache Sync',        'Value' => $settings['nppp_redis_cache_sync']              ?? 'no' ],
+            [ 'Field' => 'Proxy Preload',           'Value' => $settings['nginx_cache_preload_enable_proxy']   ?? 'no' ],
+            [ 'Field' => 'Bypass Path Restriction', 'Value' => $settings['nginx_cache_bypass_path_restriction'] ?? 'no' ],
+            [ 'Field' => 'Pct-Encoding Mode',       'Value' => $settings['nginx_cache_pctnorm_mode']           ?? 'off' ],
+            [ 'Field' => 'Auto-Purge Posts',        'Value' => $settings['nppp_autopurge_posts']               ?? 'no' ],
+            [ 'Field' => 'Auto-Purge Terms',        'Value' => $settings['nppp_autopurge_terms']               ?? 'no' ],
+            [ 'Field' => 'Auto-Purge Plugins',      'Value' => $settings['nppp_autopurge_plugins']             ?? 'no' ],
+            [ 'Field' => 'Auto-Purge Themes',       'Value' => $settings['nppp_autopurge_themes']              ?? 'no' ],
+            [ 'Field' => 'Auto-Purge 3rd Party',    'Value' => $settings['nppp_autopurge_3rdparty']            ?? 'no' ],
         ];
 
         $formatter = new \WP_CLI\Formatter( $assoc_args, [ 'Field', 'Value' ] );
@@ -520,25 +555,27 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      */
     public function schedule( array $args, array $assoc_args ): void {
         $events   = _get_cron_array();
-        $hook     = 'npp_cache_preload_event';
+        $hooks    = [ 'npp_cache_preload_event', 'nppp_index_updater_event' ];
         $timezone = wp_timezone_string();
         $found    = [];
 
         if ( ! empty( $events ) ) {
             foreach ( $events as $timestamp => $crons ) {
-                if ( ! isset( $crons[ $hook ] ) ) {
-                    continue;
-                }
-                foreach ( $crons[ $hook ] as $data ) {
-                    $next_run = ( new DateTime( '@' . $timestamp ) )
-                        ->setTimezone( new DateTimeZone( $timezone ) )
-                        ->format( 'Y-m-d H:i:s' );
-                    $found[] = [
-                        'Hook'     => $hook,
-                        'Next Run' => $next_run,
-                        'Interval' => (string) ( $data['interval'] ?? 'N/A' ),
-                        'Args'     => wp_json_encode( $data['args'] ?? [] ),
-                    ];
+                foreach ( $hooks as $hook ) {
+                    if ( ! isset( $crons[ $hook ] ) ) {
+                        continue;
+                    }
+                    foreach ( $crons[ $hook ] as $data ) {
+                        $next_run = ( new DateTime( '@' . $timestamp ) )
+                            ->setTimezone( new DateTimeZone( $timezone ) )
+                            ->format( 'Y-m-d H:i:s' );
+                        $found[] = [
+                            'Hook'     => $hook,
+                            'Next Run' => $next_run,
+                            'Interval' => (string) ( $data['interval'] ?? 'N/A' ),
+                            'Args'     => wp_json_encode( $data['args'] ?? [] ),
+                        ];
+                    }
                 }
             }
         }
@@ -631,8 +668,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         foreach ( $lines as $line ) {
             match ( $type ) {
-                'error', 'warning' => WP_CLI::warning( $line ),
-                default            => WP_CLI::success( $line ),
+                'error'   => WP_CLI::log( WP_CLI::colorize( '%rError:%n ' . $line ) ),
+                'warning' => WP_CLI::warning( $line ),
+                default   => WP_CLI::success( $line ),
             };
         }
 
@@ -745,7 +783,14 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         }
 
         // Keys that must never be mutated via CLI.
-        $protected = [ 'nginx_cache_api_key', 'nginx_cache_key_custom_regex' ];
+        // nginx_cache_reject_regex / reject_extension require shell-byte validation
+        // that only settings-sanitize.php performs — block them here to stay safe.
+        $protected = [
+            'nginx_cache_api_key',
+            'nginx_cache_key_custom_regex',
+            'nginx_cache_reject_regex',
+            'nginx_cache_reject_extension',
+        ];
         if ( in_array( $key, $protected, true ) ) {
             WP_CLI::error( sprintf( 'Setting "%s" is protected and cannot be changed via WP-CLI.', $key ) );
         }
@@ -799,6 +844,23 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 WP_CLI::error( sprintf( 'Value for "%s" must be a non-negative integer.', $key ) );
             }
             $sanitized = (int) $value;
+        } elseif ( $key === 'nginx_cache_email' ) {
+            $sanitized = sanitize_email( $value );
+            if ( ! is_email( $sanitized ) ) {
+                WP_CLI::error( sprintf( 'Value for "%s" must be a valid email address.', $key ) );
+            }
+        } elseif ( $key === 'nppp_http_purge_custom_url' ) {
+            // Must match the esc_url_raw + FILTER_VALIDATE_URL logic in settings-sanitize.php.
+            $sanitized = untrailingslashit( esc_url_raw( trim( $value ) ) );
+            $scheme    = strtolower( (string) wp_parse_url( $sanitized, PHP_URL_SCHEME ) );
+            if ( ! in_array( $scheme, [ 'http', 'https' ], true ) || ! filter_var( $sanitized, FILTER_VALIDATE_URL ) ) {
+                WP_CLI::error( sprintf( 'Value for "%s" must be a valid http:// or https:// URL.', $key ) );
+            }
+        } elseif ( $key === 'nginx_cache_path' ) {
+            $sanitized = sanitize_text_field( $value );
+            if ( $sanitized === '' || $sanitized[0] !== '/' ) {
+                WP_CLI::error( 'nginx_cache_path must be an absolute path starting with /.' );
+            }
         } else {
             $sanitized = sanitize_text_field( $value );
         }
