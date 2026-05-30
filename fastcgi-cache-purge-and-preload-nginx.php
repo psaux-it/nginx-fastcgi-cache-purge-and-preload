@@ -447,20 +447,31 @@ add_action('init', function(): void {
 // ---------------------------------------------------------------------------
 // EP9 — WP-CLI (`wp npp …`)
 // Exposes cache purge, preload, status, log, settings, and scheduler to the
-// `wp npp` command group. Bootstrap loads the same file stack as EP1 so
-// every underlying PHP function is available without HTTP overhead or nonces.
-// The entire block is a no-op on every normal web request AND on every other
-// WP-CLI command — bootstrap only loads for `wp npp ...` invocations.
+// `wp npp` command group.
+//
+//   1. Command REGISTRATION (require_once wp-cli.php) — always runs on any
+//      WP-CLI invocation so that `wp help npp`, tab-completion, and
+//      `--prompt` all work without the heavy bootstrap.
+//   2. BOOTSTRAP (nppp_load_bootstrap) — loaded only when the user is
+//      actually running `wp npp …`, so every other WP-CLI command pays
+//      zero cost. Still a no-op on all normal web requests.
 // ---------------------------------------------------------------------------
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
-    $nppp_cli_args = WP_CLI::get_runner()->arguments;
-    if ( ! empty( $nppp_cli_args ) && $nppp_cli_args[0] === 'npp' ) {
-        add_action( 'plugins_loaded', function (): void {
+    $nppp_cli_args      = WP_CLI::get_runner()->arguments;
+    $nppp_is_npp_invoke = ! empty( $nppp_cli_args ) && $nppp_cli_args[0] === 'npp';
+
+    add_action( 'plugins_loaded', function () use ( $nppp_is_npp_invoke ): void {
+        // Heavy bootstrap: only when actually running `wp npp …`
+        if ( $nppp_is_npp_invoke ) {
             nppp_load_bootstrap();
-            require_once plugin_dir_path( __FILE__ ) . 'includes/wp-cli.php';
-        }, 10 );
-    }
-    unset( $nppp_cli_args );
+        }
+        // Always register the command (cheap — just defines the class
+        // and calls WP_CLI::add_command). Required for help, completions,
+        // and --prompt on any WP-CLI invocation.
+        require_once plugin_dir_path( __FILE__ ) . 'includes/wp-cli.php';
+    }, 10 );
+
+    unset( $nppp_cli_args, $nppp_is_npp_invoke );
 }
 
 // ---------------------------------------------------------------------------
