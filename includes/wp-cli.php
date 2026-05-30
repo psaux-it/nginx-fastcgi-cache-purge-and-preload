@@ -891,6 +891,13 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             return;
         }
 
+        // Block all settings changes while an operation is active.
+        // Path / regex changes mid-purge or mid-preload leave the running
+        // process out of sync with the newly persisted options.
+        if ( function_exists( 'nppp_is_operation_active' ) && nppp_is_operation_active() ) {
+            WP_CLI::error( 'Settings cannot be changed while a purge or preload operation is running. Wait for it to finish and retry.' );
+        }
+
         // Keys that must never be mutated via CLI.
         // nginx_cache_reject_regex / reject_extension require shell-byte validation
         // that only settings-sanitize.php performs — block them here to stay safe.
