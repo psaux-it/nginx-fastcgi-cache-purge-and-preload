@@ -158,11 +158,15 @@ NPP restricts cache paths by default to prevent accidental deletion of system fi
 
 Release date: 2026-05-25
 
+* WP-CLI Support: MILESTONE: Introduced full CLI integration. You can now manage cache purges, preloading, status reporting, logging, settings updates, flush, and schedules directly from the terminal.
 * Fixed: A false-negative in Nginx detection on Nginx+Apache proxy stacks, which rendered the plugin completely non-functional even when Nginx was active as the front proxy.
 * Fixed: Unprotected (function_exists) shell_exec and exec calls across the REST API, WP Cron, Dashboard Widget, and all other relevant execution paths.
 * Fixed: Missing check for getenv / putenv for URL Normalization (safexec).
 * Fixed: An edgecase where users are locked out by the transient cache because the Status tab and "Clear Plugin Cache" button are inaccessible when plugin functionality is disabled.
-* Fixed: Broken Nginx cache keys listing in the Status tab. 
+* Fixed: Broken Nginx cache keys listing in the Status tab.
+* Fixed: Prevent settings/option updates (WP-CLI/UI) during active purge/preload operations to ensure process state consistency.
+* Fixed: Separated safexec and native kill paths to prevent redundant process-killing attempts in premature process detection logic.
+* Resolved: Multiple PHP 8+ deprecation warnings regarding passing null or false values to string and array functions (e.g., trim(), end()).
 * Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
 * Performance: Improve capability checks via transients.
 * Improved: Nginx detection and Setup (Assume Nginx Mode) process. Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
