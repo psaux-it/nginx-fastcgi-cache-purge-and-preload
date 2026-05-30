@@ -449,13 +449,18 @@ add_action('init', function(): void {
 // Exposes cache purge, preload, status, log, settings, and scheduler to the
 // `wp npp` command group. Bootstrap loads the same file stack as EP1 so
 // every underlying PHP function is available without HTTP overhead or nonces.
-// The entire block is a no-op on every normal web request.
+// The entire block is a no-op on every normal web request AND on every other
+// WP-CLI command — bootstrap only loads for `wp npp ...` invocations.
 // ---------------------------------------------------------------------------
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
-    add_action( 'plugins_loaded', function (): void {
-        nppp_load_bootstrap();
-        require_once plugin_dir_path( __FILE__ ) . 'includes/wp-cli.php';
-    }, 10 );
+    $nppp_cli_args = WP_CLI::get_runner()->arguments;
+    if ( ! empty( $nppp_cli_args ) && $nppp_cli_args[0] === 'npp' ) {
+        add_action( 'plugins_loaded', function (): void {
+            nppp_load_bootstrap();
+            require_once plugin_dir_path( __FILE__ ) . 'includes/wp-cli.php';
+        }, 10 );
+    }
+    unset( $nppp_cli_args );
 }
 
 // ---------------------------------------------------------------------------
