@@ -473,8 +473,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      * ---
      *
      * [<key>]
-     * : For 'get': a specific settings key (omit to list all).
-     * : For 'set': the settings key to update.
+     * : Settings key. For 'get': specific key to read (omit to list all). For 'set': the key to update (requires <value>).
      *
      * [<value>]
      * : For 'set': the new value.
@@ -732,8 +731,88 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             WP_CLI::line( $watcher_raw );
         }
 
-        // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec
-        exec( sprintf( 'kill -TERM %d 2>/dev/null', $pid ) );
+        // Kill the main preload process — safexec-aware.
+        // When safexec SUID drops wget to nobody, only safexec --kill can signal
+        // it. A plain kill/posix_kill from the PHP-FPM user returns EPERM silently.
+        $killed       = false;
+        $process_user = '';
+
+        if ( function_exists( 'shell_exec' ) ) {
+            $process_user = trim( (string) shell_exec(
+                'ps -o user= -p ' . escapeshellarg( (string) $pid ) . ' 2>/dev/null'
+            ) );
+        }
+
+        if ( $process_user === 'nobody' ) {
+            // Locate safexec
+            $sfx = '/usr/bin/safexec';
+            if ( ! file_exists( $sfx ) && function_exists( 'shell_exec' ) ) {
+                $detected = trim( (string) shell_exec( 'command -v safexec 2>/dev/null' ) );
+                $sfx      = $detected !== '' ? $detected : '';
+            }
+
+            if ( $sfx !== '' && function_exists( 'stat' ) ) {
+                $sfx_info = @stat( $sfx );
+                if ( $sfx_info
+                    && isset( $sfx_info['uid'], $sfx_info['mode'] )
+                    && $sfx_info['uid'] === 0
+                    && ( $sfx_info['mode'] & 04000 ) === 04000
+                ) {
+                    // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+                    $kill_out = (string) shell_exec( escapeshellarg( $sfx ) . ' --kill=' . (int) $pid . ' 2>&1' );
+                    usleep( 250000 );
+                    if ( ! nppp_is_process_alive( $pid ) ) {
+                        $killed = true;
+                    }
+                }
+            }
+
+            if ( ! $killed ) {
+                // safexec is the ONLY valid kill path for a nobody process.
+                // posix_kill / kill -9 from PHP-FPM user will return EPERM — do NOT attempt them.
+                $wp_filesystem->delete( $pid_file );
+                $porcelain
+                    ? WP_CLI::line( 'error' )
+                    : WP_CLI::error( sprintf(
+                        'Cannot stop PID %d (running as nobody via safexec): '
+                        . 'safexec not found, not SUID-root, or --kill failed. '
+                        . 'Run as root: safexec --kill=%d',
+                        $pid,
+                        $pid
+                    ) );
+                return;
+            }
+        } else {
+            // Standard (non-safexec) process — SIGTERM → verify → SIGKILL → verify.
+            // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec
+            exec( sprintf( 'kill -TERM %d 2>/dev/null', $pid ) );
+            usleep( 300000 );
+
+            if ( nppp_is_process_alive( $pid ) ) {
+                $kill_bin = function_exists( 'shell_exec' )
+                    ? trim( (string) shell_exec( 'command -v kill 2>/dev/null' ) )
+                    : '';
+                if ( $kill_bin !== '' ) {
+                    // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+                    shell_exec( escapeshellarg( $kill_bin ) . ' -9 ' . (int) $pid . ' 2>/dev/null' );
+                    usleep( 300000 );
+                }
+            }
+
+            if ( ! nppp_is_process_alive( $pid ) ) {
+                $killed = true;
+            }
+
+            if ( ! $killed ) {
+                $porcelain
+                    ? WP_CLI::line( 'error' )
+                    : WP_CLI::error( sprintf(
+                        'Failed to stop preload process (PID %d) — still alive after SIGTERM + SIGKILL.',
+                        $pid
+                    ) );
+                return;
+            }
+        }
 
         $wp_filesystem->delete( $pid_file );
 
@@ -763,12 +842,27 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                     $key
                 ) );
             }
-            WP_CLI::line( (string) $settings[ $key ] );
+            $val = (string) $settings[ $key ];
+            // nginx_cache_key_custom_regex is base64-encoded in the DB for safe storage.
+            if ( $key === 'nginx_cache_key_custom_regex' && $val !== '' ) {
+                $decoded = base64_decode( $val, true );
+                if ( $decoded !== false && $decoded !== '' ) {
+                    $val = $decoded;
+                }
+            }
+            WP_CLI::line( $val );
             return;
         }
 
         $rows = [];
         foreach ( $settings as $k => $v ) {
+            // nginx_cache_key_custom_regex is base64-encoded in the DB — decode for display.
+            if ( $k === 'nginx_cache_key_custom_regex' && $v !== '' ) {
+                $decoded_v = base64_decode( $v, true );
+                if ( $decoded_v !== false && $decoded_v !== '' ) {
+                    $v = $decoded_v;
+                }
+            }
             $rows[] = [ 'Key' => $k, 'Value' => (string) $v ];
         }
 
@@ -883,7 +977,7 @@ WP_CLI::add_command(
     'npp',
     'NPPP_CLI_Command',
     [
-        'shortdesc' => 'Manages Nginx FastCGI cache: purge, preload, status, log, settings, schedule.',
+        'shortdesc' => 'Manages Nginx Cache: purge, preload, status, log, settings, schedule.',
         'longdesc'  =>
             "## OVERVIEW\n\n"
             . "Direct CLI access to all Nginx Cache Purge Preload operations.\n"
