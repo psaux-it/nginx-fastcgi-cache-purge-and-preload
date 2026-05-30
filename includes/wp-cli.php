@@ -437,6 +437,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             $cleared = file_put_contents( $log_file, '' );
             if ( $cleared === false ) {
                 WP_CLI::error( sprintf( 'Failed to truncate log file: %s', $log_file ) );
+                return;
             }
             WP_CLI::success( 'Log file truncated.' );
             return;
@@ -617,6 +618,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             ob_end_clean();
             unset( $GLOBALS['nppp_cli_ob_level'], $GLOBALS['nppp_last_notice_type'] );
             WP_CLI::error( $e->getMessage() );
+            return [ 'message' => $e->getMessage(), 'type' => 'error' ];
         }
 
         $raw  = (string) ob_get_clean();
@@ -689,6 +691,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( $wp_filesystem === false ) {
             WP_CLI::error( 'Failed to initialize WP_Filesystem.' );
+            return;
         }
 
         if ( ! $wp_filesystem->exists( $pid_file ) ) {
@@ -751,6 +754,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         unset( $settings['nginx_cache_api_key'] );
 
         if ( $key !== '' ) {
+            if ( $key === 'nginx_cache_api_key' ) {
+                WP_CLI::error( 'The API key is protected and cannot be retrieved via WP-CLI.' );
+            }
             if ( ! array_key_exists( $key, $settings ) ) {
                 WP_CLI::error( sprintf(
                     'Unknown setting key: "%s". Run `wp npp settings get` to list all keys.',
@@ -780,6 +786,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( $key === '' || $value === '' ) {
             WP_CLI::error( 'Usage: wp npp settings set <key> <value>' );
+            return;
         }
 
         // Keys that must never be mutated via CLI.
