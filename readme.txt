@@ -168,6 +168,8 @@ Release date: 2026-05-25
 * Fixed: Broken Nginx cache keys listing in the Status tab.
 * Fixed: Prevent settings/option updates (WP-CLI/UI) during active purge/preload operations to ensure process state consistency.
 * Fixed: Separated safexec and native kill paths to prevent redundant process-killing attempts in premature process detection logic.
+* Fixed: Recurring cron events (nppp_index_updater_event, npp_cache_preload_event) silently dying after their first run.
+* Fixed: nppp_index_updater_event self-healing — event now auto-reschedules on next admin load if wiped externally by WP-CLI, a cron manager plugin, or a database import.
 * Resolved: Multiple PHP 8+ deprecation warnings regarding passing null or false values to string and array functions (e.g., trim(), end()).
 * Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
 * Performance: Improve capability checks via transients.
