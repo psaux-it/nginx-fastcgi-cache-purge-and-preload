@@ -45,7 +45,7 @@ function nppp_check_network_env(): array {
 
     $url = add_query_arg('nppp_probe', wp_generate_password(8, false), home_url('/'));
     $output = shell_exec('wget -q --no-check-certificate --server-response --spider ' . escapeshellarg($url) . ' 2>&1; echo $?');
-    $lines = explode("\n", trim($output));
+    $lines = explode("\n", trim((string) $output));
     $ok = trim(end($lines)) === '0';
     return [
         'dns_ok'      => $ok,
@@ -343,7 +343,7 @@ function nppp_detect_premature_process(
 
                 // Fallback to hard SIGKILL
                 if (!@posix_kill($test_pid, SIGTERM)) {
-                    $kill_path = trim(shell_exec('command -v kill 2>/dev/null'));
+                    $kill_path = trim((string) shell_exec('command -v kill 2>/dev/null'));
                     if ($kill_path !== '') {
                         shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $test_pid . ' 2>/dev/null');
                     }
@@ -472,7 +472,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             // Check cpulimit command exist
             $cpulimitPath = shell_exec('type cpulimit 2>/dev/null');
 
-            if (!empty(trim($cpulimitPath))) {
+            if (!empty(trim((string) $cpulimitPath))) {
                 $cpulimit = 1;
             } else {
                 $cpulimit = 0;
@@ -615,7 +615,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
             // Get the process ID
             $parts = explode(" ", $output);
-            $pid = trim(end($parts));
+            $pid = trim((string) end($parts));
             nppp_perform_file_operation($PIDFILE, 'write', $pid);
 
             // Call the function to schedule the status check event
@@ -710,7 +710,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
         // Check cpulimit command exist
         $cpulimitPath = shell_exec('type cpulimit 2>/dev/null');
-        if (!empty(trim($cpulimitPath))) {
+        if (!empty(trim((string) $cpulimitPath))) {
             $cpulimit = 1;
         } else {
             $cpulimit = 0;
@@ -847,7 +847,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
         // Get the process ID
         $parts = explode(" ", $output);
-        $pid   = trim(end($parts));
+        $pid   = trim((string) end($parts));
         nppp_perform_file_operation($PIDFILE, 'write', $pid);
 
         // Call the function to schedule the status check event
