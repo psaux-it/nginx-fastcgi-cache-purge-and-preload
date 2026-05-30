@@ -476,7 +476,7 @@ function nppp_plugin_requirements_met() {
                 $output = shell_exec('echo "Test"');
 
                 // Check if the command executed successfully
-                if (trim($output) !== "Test") {
+                if (trim((string) $output) !== "Test") {
                     $shell_functions_enabled = false;
                 }
             } else {
@@ -489,7 +489,7 @@ function nppp_plugin_requirements_met() {
                 $output = exec('echo "Test"');
 
                 // Check if the command executed successfully
-                if (trim($output) !== "Test") {
+                if (trim((string) $output) !== "Test") {
                     $shell_functions_enabled = false;
                 }
             } else {
