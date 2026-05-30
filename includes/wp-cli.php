@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) || ! defined( 'WP_CLI' ) || ! WP_CLI ) {
  *     wp npp purge
  *
  *     # Purge a single URL
- *     wp npp purge --url=https://example.com/blog/my-post/
+ *     wp npp purge --page-url=https://example.com/blog/my-post/
  *
  *     # Dry-run a full purge
  *     wp npp purge --dry-run
@@ -34,7 +34,7 @@ if ( ! defined( 'ABSPATH' ) || ! defined( 'WP_CLI' ) || ! WP_CLI ) {
  *     wp npp preload
  *
  *     # Preload a single URL
- *     wp npp preload --url=https://example.com/blog/my-post/
+ *     wp npp preload --page-url=https://example.com/blog/my-post/
  *
  *     # Kill a running preload (cache is NOT purged)
  *     wp npp preload --stop
@@ -76,7 +76,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      *
      * ## OPTIONS
      *
-     * [--url=<url>]
+     * [--page-url=<url>]
      * : Purge a single cached page instead of the entire cache.
      *
      * [--dry-run]
@@ -88,14 +88,14 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      * ## EXAMPLES
      *
      *     wp npp purge
-     *     wp npp purge --url=https://example.com/blog/my-post/
+     *     wp npp purge --page-url=https://example.com/blog/my-post/
      *     wp npp purge --dry-run
      *     wp npp purge --porcelain && echo "cache clear confirmed"
      *
      * @when after_wp_load
      */
     public function purge( array $args, array $assoc_args ): void {
-        $url       = (string) ( $assoc_args['url']       ?? '' );
+        $url       = (string) ( $assoc_args['page-url'] ?? '' );
         $dry_run   = array_key_exists( 'dry-run',   $assoc_args );
         $porcelain = array_key_exists( 'porcelain', $assoc_args );
 
@@ -138,7 +138,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      *
      * ## OPTIONS
      *
-     * [--url=<url>]
+     * [--page-url=<url>]
      * : Preload only a single URL instead of crawling the entire site.
      *
      * [--stop]
@@ -153,14 +153,14 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      * ## EXAMPLES
      *
      *     wp npp preload
-     *     wp npp preload --url=https://example.com/shop/
+     *     wp npp preload --page-url=https://example.com/shop/
      *     wp npp preload --stop
      *     wp npp preload --dry-run
      *
      * @when after_wp_load
      */
     public function preload( array $args, array $assoc_args ): void {
-        $url       = (string) ( $assoc_args['url']       ?? '' );
+        $url       = (string) ( $assoc_args['page-url'] ?? '' );
         $stop      = array_key_exists( 'stop',      $assoc_args );
         $dry_run   = array_key_exists( 'dry-run',   $assoc_args );
         $porcelain = array_key_exists( 'porcelain', $assoc_args );
@@ -257,25 +257,116 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $settings   = get_option( 'nginx_cache_settings', [] );
         $cache_path = (string) ( $settings['nginx_cache_path'] ?? '/dev/shm/change-me-now' );
 
-        $disk           = nppp_get_cache_disk_size( $cache_path );
-        $preload_status = nppp_check_preload_status();
-        $path_status    = nppp_check_path();
-        $perm_status    = nppp_check_permissions_recursive_with_cache();
-        $page_count     = nppp_get_in_cache_page_count();
+        // ── Action readiness ──────────────────────────────────────────────
+        $action_server  = nppp_check_perm_in_cache( false, false, true );
+        $action_purge   = nppp_check_perm_in_cache( true,  false, false );
+        $action_preload = nppp_check_preload_status();
+
+        // ── System checks ─────────────────────────────────────────────────
+        $php_owner    = (string) nppp_get_website_user();
+        $server_user  = (string) nppp_get_webserver_user();
+        $php_lc       = trim( strtolower( $php_owner ) );
+        $srv_lc       = trim( strtolower( $server_user ) );
+
+        if ( $php_lc === 'not determined' || $srv_lc === 'not determined' ) {
+            $isolation = 'Not Determined';
+        } else {
+            $isolation = ( $php_lc === $srv_lc ) ? 'Not Isolated' : 'Isolated';
+        }
+
+        $shell_exec    = (string) nppp_shell_exec();
+        $regex_probe   = (string) nppp_probe_cache_key_regex();
+        $cmd_wget      = (string) nppp_check_command_status( 'wget' );
+        $cmd_safexec   = (string) nppp_check_command_status( 'safexec' );
+        $cmd_rg        = (string) nppp_check_command_status( 'rg' );
+        $cmd_cpulimit  = (string) nppp_check_command_status( 'cpulimit' );
+
+        // ── Cache health ──────────────────────────────────────────────────
+        $path_status   = nppp_check_path();
+        $perm_status   = nppp_check_permissions_recursive_with_cache();
+
+        // Use pre-computed option — avoids slow live directory scan on large caches.
+        // Updated automatically at preload completion, purge-all, and advanced tab scan.
+        $page_count       = get_option( 'nppp_last_known_hits', false );
+        $scanned_at       = get_option( 'nppp_last_hits_scanned_at', false );
+        $page_count_label = $page_count !== false
+            ? ( (string) $page_count . ( $scanned_at ? '  (' . human_time_diff( (int) $scanned_at, time() ) . ' ago)' : '' ) )
+            : 'N/A — run a Preload to populate';
+
+        $ratio_raw   = nppp_get_cache_ratio( $page_count !== false ? $page_count : 'N/A' );
+        $ratio_label = is_array( $ratio_raw )
+            ? number_format( $ratio_raw['ratio'], 1 ) . '%'
+              . '  (' . $ratio_raw['hits']   . ' cached'
+              . ' / ' . $ratio_raw['misses'] . ' not cached'
+              . ' / ' . $ratio_raw['total']  . ' total)'
+            : (string) $ratio_raw;
+
+        $disk = nppp_get_cache_disk_size( $cache_path );
+        if ( $disk === null ) {
+            $disk_label = 'N/A';
+        } elseif ( $disk['dedicated'] ) {
+            $pct        = $disk['total'] > 0 ? number_format( ( $disk['used'] / $disk['total'] ) * 100, 1 ) : '0.0';
+            $disk_label = $pct . '%  ('
+                . nppp_format_cache_size( $disk['used'] ) . ' used'
+                . ' / ' . nppp_format_cache_size( $disk['total'] ) . ' total — dedicated fs)';
+        } else {
+            $disk_label = nppp_format_cache_size( $disk['used'] ) . ' used in cache dir'
+                . '  (' . nppp_format_cache_size( $disk['free'] ) . ' free on partition)';
+        }
+
+        // ── Binary versions ───────────────────────────────────────────────
+        $nginx_info     = nppp_get_nginx_info();
+        $ver_nginx      = (string) ( $nginx_info['nginx_version'] ?? 'Unknown' );
+        $ver_php        = (string) ( $nginx_info['php_version']   ?? 'Unknown' );
+        $ver_wget       = (string) nppp_check_wget_version();
+        $ver_safexec    = (string) nppp_check_safexec_version();
+        $ver_rg         = (string) nppp_check_rg_version();
+        $ver_libfuse    = (string) nppp_check_libfuse_version();
+        $ver_bindfs     = (string) nppp_check_bindfs_version();
+
+        // ── Build rows ────────────────────────────────────────────────────
+        $sep  = static fn( string $s ): array => [ 'Field' => "── $s ──", 'Value' => '' ];
 
         $rows = [
-            [ 'Field' => 'Cache Path',      'Value' => $cache_path ],
-            [ 'Field' => 'Path Status',     'Value' => (string) $path_status ],
-            [ 'Field' => 'Permissions OK',  'Value' => (string) $perm_status ],
-            [ 'Field' => 'Preload Status',  'Value' => (string) $preload_status ],
-            [ 'Field' => 'Disk Used',       'Value' => $disk['formatted']  ?? 'N/A' ],
-            [ 'Field' => 'Cached Files',    'Value' => (string) ( $disk['file_count'] ?? 0 ) ],
-            [ 'Field' => 'Pages in Cache',  'Value' => (string) ( $page_count ?? 'N/A' ) ],
-            [ 'Field' => 'Auto Purge',      'Value' => $settings['nginx_cache_purge_on_update'] ?? 'no' ],
-            [ 'Field' => 'Auto Preload',    'Value' => $settings['nginx_cache_auto_preload']    ?? 'no' ],
-            [ 'Field' => 'Watchdog',        'Value' => $settings['nginx_cache_watchdog']        ?? 'no' ],
-            [ 'Field' => 'REST API',        'Value' => $settings['nginx_cache_api']             ?? 'no' ],
-            [ 'Field' => 'Schedule',        'Value' => $settings['nginx_cache_schedule']        ?? 'no' ],
+            $sep( 'ACTION READINESS' ),
+            [ 'Field' => 'Server Side Action',  'Value' => $action_server  !== null ? (string) $action_server  : 'N/A' ],
+            [ 'Field' => 'Purge Action',        'Value' => $action_purge   !== null ? (string) $action_purge   : 'N/A' ],
+            [ 'Field' => 'Preload Action',      'Value' => $action_preload !== null ? (string) $action_preload : 'N/A' ],
+
+            $sep( 'SYSTEM CHECKS' ),
+            [ 'Field' => 'PHP Process Owner',   'Value' => $php_owner ],
+            [ 'Field' => 'Web Server User',     'Value' => $server_user ],
+            [ 'Field' => 'Process Isolation',   'Value' => $isolation ],
+            [ 'Field' => 'Shell Execution',     'Value' => $shell_exec ],
+            [ 'Field' => 'Cache Key Regex',     'Value' => $regex_probe ],
+            [ 'Field' => 'wget',                'Value' => $cmd_wget ],
+            [ 'Field' => 'safexec',             'Value' => $cmd_safexec ],
+            [ 'Field' => 'rg',                  'Value' => $cmd_rg ],
+            [ 'Field' => 'cpulimit',            'Value' => $cmd_cpulimit ],
+
+            $sep( 'CACHE HEALTH' ),
+            [ 'Field' => 'Cache Path',          'Value' => $cache_path ],
+            [ 'Field' => 'Path Status',         'Value' => $path_status !== null ? (string) $path_status : 'N/A' ],
+            [ 'Field' => 'Permissions OK',      'Value' => $perm_status !== null ? (string) $perm_status : 'N/A' ],
+            [ 'Field' => 'Pages in Cache',      'Value' => $page_count_label ],
+            [ 'Field' => 'Cache Coverage',      'Value' => $ratio_label ],
+            [ 'Field' => 'Disk Used',           'Value' => $disk_label ],
+
+            $sep( 'BINARY VERSIONS' ),
+            [ 'Field' => 'Nginx',               'Value' => $ver_nginx ],
+            [ 'Field' => 'PHP',                 'Value' => $ver_php ],
+            [ 'Field' => 'wget',                'Value' => $ver_wget ],
+            [ 'Field' => 'safexec',             'Value' => $ver_safexec ],
+            [ 'Field' => 'rg',                  'Value' => $ver_rg ],
+            [ 'Field' => 'libfuse',             'Value' => $ver_libfuse ],
+            [ 'Field' => 'bindfs',              'Value' => $ver_bindfs ],
+
+            $sep( 'SETTINGS' ),
+            [ 'Field' => 'Auto Purge',          'Value' => $settings['nginx_cache_purge_on_update'] ?? 'no' ],
+            [ 'Field' => 'Auto Preload',        'Value' => $settings['nginx_cache_auto_preload']    ?? 'no' ],
+            [ 'Field' => 'Watchdog',            'Value' => $settings['nginx_cache_watchdog']        ?? 'no' ],
+            [ 'Field' => 'REST API',            'Value' => $settings['nginx_cache_api']             ?? 'no' ],
+            [ 'Field' => 'Schedule',            'Value' => $settings['nginx_cache_schedule']        ?? 'no' ],
         ];
 
         $formatter = new \WP_CLI\Formatter( $assoc_args, [ 'Field', 'Value' ] );
@@ -308,7 +399,10 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( $clear ) {
             // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-            file_put_contents( $log_file, '' );
+            $cleared = file_put_contents( $log_file, '' );
+            if ( $cleared === false ) {
+                WP_CLI::error( sprintf( 'Failed to truncate log file: %s', $log_file ) );
+            }
             WP_CLI::success( 'Log file truncated.' );
             return;
         }
@@ -445,7 +539,6 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                         'Interval' => (string) ( $data['interval'] ?? 'N/A' ),
                         'Args'     => wp_json_encode( $data['args'] ?? [] ),
                     ];
-                    break;
                 }
             }
         }
@@ -586,7 +679,17 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         }
 
         // Terminate watchdog monitor before the main preload process.
+        // Capture any admin notices emitted by the watchdog killer.
+        $GLOBALS['nppp_last_notice_type'] = 'success';
+        $GLOBALS['nppp_cli_ob_level']     = ob_get_level();
+        ob_start();
         nppp_kill_preload_watcher();
+        $watcher_raw = trim( wp_strip_all_tags( (string) ob_get_clean() ) );
+        unset( $GLOBALS['nppp_cli_ob_level'], $GLOBALS['nppp_last_notice_type'] );
+
+        if ( $watcher_raw !== '' && ! $porcelain ) {
+            WP_CLI::line( $watcher_raw );
+        }
 
         // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec
         exec( sprintf( 'kill -TERM %d 2>/dev/null', $pid ) );
@@ -653,6 +756,18 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 'Unknown setting key: "%s". Run `wp npp settings get` to list valid keys.',
                 $key
             ) );
+        }
+
+        // Enum settings: pctnorm mode.
+        static $pctnorm_allowed = [ 'off', 'upper', 'lower', 'preserve' ];
+        if ( $key === 'nginx_cache_pctnorm_mode' ) {
+            if ( ! in_array( $value, $pctnorm_allowed, true ) ) {
+                WP_CLI::error( sprintf( 'Value for "%s" must be one of: %s.', $key, implode( ', ', $pctnorm_allowed ) ) );
+            }
+            $settings[ $key ] = $value;
+            update_option( 'nginx_cache_settings', $settings );
+            WP_CLI::success( sprintf( 'Updated "%s" → "%s".', $key, $value ) );
+            return;
         }
 
         // Boolean (yes/no) settings.
