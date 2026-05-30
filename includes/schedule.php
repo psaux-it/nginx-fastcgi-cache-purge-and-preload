@@ -574,33 +574,6 @@ function nppp_create_scheduled_event_preload_status_callback() {
     return;
 }
 
-// Custom cron schedule for monthly recurrence
-function nppp_custom_monthly_schedule($schedules) {
-    $schedules['monthly_npp'] = array(
-        'interval' => 30 * DAY_IN_SECONDS,
-        'display'  => 'Monthly-NPP'
-    );
-    return $schedules;
-}
-
-// Custom cron schedule for 1 min recurrence
-function nppp_custom_every_min_schedule($schedules) {
-    $schedules['every_min_npp'] = array(
-        'interval' => 60,
-        'display'  => 'Every Minute-NPP'
-    );
-    return $schedules;
-}
-
-// Custom cron schedule for 3 hour recurrence
-function nppp_custom_every_3hours_schedule($schedules) {
-    $schedules['every_3hours_npp'] = array(
-        'interval' => 3 * HOUR_IN_SECONDS,
-        'display'  => 'Every 3 Hours-NPP'
-    );
-    return $schedules;
-}
-
 // Callback function for the scheduled event
 function nppp_create_scheduled_event_preload_callback() {
     // Guard — abort early if shell_exec or exec are disabled on this server.
