@@ -1024,6 +1024,19 @@ function nppp_handle_nginx_cache_settings_submission() {
         wp_die(esc_html__('You do not have sufficient permissions to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
+    // Block settings changes while a purge or preload operation is running.
+    // A mid-operation path or regex change leaves the active process out of
+    // sync with the newly saved options, corrupting status monitoring and
+    // potentially the next auto-purge/preload cycle.
+    if ( function_exists( 'nppp_is_operation_active' ) && nppp_is_operation_active() ) {
+        wp_safe_redirect( add_query_arg( [
+            'status_message' => urlencode( __( 'Settings cannot be saved while a purge or preload operation is running. Please wait for it to finish and try again.', 'fastcgi-cache-purge-and-preload-nginx' ) ),
+            'message_type'   => 'error',
+            'redirect_nonce' => wp_create_nonce( 'nppp_redirect_nonce' ),
+        ], admin_url( 'options-general.php?page=nginx_cache_settings' ) ) );
+        exit;
+    }
+
     // Check if 'nginx_cache_settings' is set in the POST data
     if (isset($_POST['nginx_cache_settings'])) {
         $existing_options = get_option('nginx_cache_settings', []);
