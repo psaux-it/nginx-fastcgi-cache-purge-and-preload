@@ -335,6 +335,62 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 . '  (' . nppp_format_cache_size( $disk['free'] ) . ' free on partition)';
         }
 
+        // ── Nginx config paths ────────────────────────────────────────────
+        $nginx_cache_paths_rows = [];
+        $fuse_mounts_rows       = [];
+        $nginx_conf_paths       = [];
+
+        if ( function_exists( 'nppp_get_nginx_conf_paths' ) && function_exists( 'nppp_initialize_wp_filesystem' ) ) {
+            $wp_fs_status = nppp_initialize_wp_filesystem();
+            if ( $wp_fs_status !== false ) {
+                $nginx_conf_paths = (array) nppp_get_nginx_conf_paths( $wp_fs_status );
+            }
+        }
+
+        if ( ! empty( $nginx_conf_paths ) && function_exists( 'nppp_parse_nginx_config' ) ) {
+            $config_data = nppp_parse_nginx_config( $nginx_conf_paths[0] );
+            if ( is_array( $config_data ) && ! empty( $config_data['cache_paths'] ) ) {
+                $settings_path = (string) ( $settings['nginx_cache_path'] ?? '' );
+                $active_path   = rtrim( $settings_path, '/' );
+
+                // Build FUSE mount data first so we can annotate cache paths.
+                $fuse_data = [];
+                if ( function_exists( 'nppp_check_fuse_cache_paths' ) ) {
+                    $fuse_data = (array) nppp_check_fuse_cache_paths( $config_data['cache_paths'] );
+                }
+                $fuse_map = (array) ( $fuse_data['fuse_map'] ?? [] );
+
+                foreach ( $config_data['cache_paths'] as $directive => $paths ) {
+                    foreach ( (array) $paths as $path ) {
+                        $path_n    = rtrim( (string) $path, '/' );
+                        $fuse_dest = (string) ( $fuse_map[ $path_n ] ?? '' );
+                        $is_active = $active_path !== '' && (
+                            $path_n === $active_path || $fuse_dest === $active_path
+                        );
+                        $label     = $path_n;
+                        if ( $is_active ) {
+                            $label .= '  [active]';
+                        }
+                        if ( $fuse_dest !== '' ) {
+                            $label .= '  → ' . $fuse_dest . ' (FUSE)';
+                        }
+                        $nginx_cache_paths_rows[] = [
+                            'Field' => $directive,
+                            'Value' => $label,
+                        ];
+                    }
+                }
+
+                // FUSE mount rows.
+                foreach ( (array) ( $fuse_data['fuse_paths'] ?? [] ) as $mount ) {
+                    $fuse_mounts_rows[] = [
+                        'Field' => 'Mount',
+                        'Value' => (string) $mount,
+                    ];
+                }
+            }
+        }
+
         // ── Binary versions ───────────────────────────────────────────────
         $nginx_info     = nppp_get_nginx_info();
         $ver_nginx      = (string) ( $nginx_info['nginx_version'] ?? 'Unknown' );
@@ -372,45 +428,59 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             [ 'Field' => 'Pages in Cache',                  'Value' => $page_count_label ],
             [ 'Field' => 'Cache Coverage',                  'Value' => $ratio_label ],
             [ 'Field' => 'Disk Used',                       'Value' => $disk_label ],
-
-            $sep( 'BINARY VERSIONS' ),
-            [ 'Field' => 'Nginx',                           'Value' => $ver_nginx ],
-            [ 'Field' => 'PHP',                             'Value' => $ver_php ],
-            [ 'Field' => 'wget',                            'Value' => $ver_wget ],
-            [ 'Field' => 'safexec',                         'Value' => $ver_safexec ],
-            [ 'Field' => 'rg',                              'Value' => $ver_rg ],
-            [ 'Field' => 'libfuse',                         'Value' => $ver_libfuse ],
-            [ 'Field' => 'bindfs',                          'Value' => $ver_bindfs ],
-
-            $sep( 'SETTINGS' ),
-            [ 'Field' => 'Auto Purge',                      'Value' => $settings['nginx_cache_purge_on_update']        ?? 'no' ],
-            [ 'Field' => 'Auto Preload',                    'Value' => $settings['nginx_cache_auto_preload']           ?? 'no' ],
-            [ 'Field' => 'Preload Mobile',                  'Value' => $settings['nginx_cache_auto_preload_mobile']    ?? 'no' ],
-            [ 'Field' => 'Preload Watchdog',                'Value' => $settings['nginx_cache_watchdog']               ?? 'no' ],
-            [ 'Field' => 'REST API',                        'Value' => $settings['nginx_cache_api']                    ?? 'no' ],
-            [ 'Field' => 'Schedule',                        'Value' => $settings['nginx_cache_schedule']               ?? 'no' ],
-            [ 'Field' => 'Send Mail',                       'Value' => $settings['nginx_cache_send_mail']              ?? 'no' ],
-            [ 'Field' => 'HTTP Purge',                      'Value' => $settings['nppp_http_purge_enabled']            ?? 'no' ],
-            [ 'Field' => 'RG Purge',                        'Value' => $settings['nppp_rg_purge_enabled']              ?? 'no' ],
-            [ 'Field' => 'Cloudflare APO Sync',             'Value' => $settings['nppp_cloudflare_apo_sync']           ?? 'no' ],
-            [ 'Field' => 'Redis Cache Sync',                'Value' => $settings['nppp_redis_cache_sync']              ?? 'no' ],
-            [ 'Field' => 'Proxy Preload',                   'Value' => $settings['nginx_cache_preload_enable_proxy']   ?? 'no' ],
-            [ 'Field' => 'Bypass Path Restriction',         'Value' => $settings['nginx_cache_bypass_path_restriction'] ?? 'no' ],
-            [ 'Field' => 'URL Normalization',               'Value' => $settings['nginx_cache_pctnorm_mode']           ?? 'off' ],
-
-            $sep( 'AUTO-PURGE TRIGGERS' ),
-            [ 'Field' => 'Auto-Purge Posts',                'Value' => $settings['nppp_autopurge_posts']               ?? 'no' ],
-            [ 'Field' => 'Auto-Purge Terms',                'Value' => $settings['nppp_autopurge_terms']               ?? 'no' ],
-            [ 'Field' => 'Auto-Purge Plugins',              'Value' => $settings['nppp_autopurge_plugins']             ?? 'no' ],
-            [ 'Field' => 'Auto-Purge Themes',               'Value' => $settings['nppp_autopurge_themes']              ?? 'no' ],
-            [ 'Field' => 'Auto-Purge 3rd Party',            'Value' => $settings['nppp_autopurge_3rdparty']            ?? 'no' ],
-
-            $sep( 'RELATED PAGES' ),
-            [ 'Field' => 'Always Purge Homepage',           'Value' => $settings['nppp_related_include_home']          ?? 'no' ],
-            [ 'Field' => 'Always Purge Shop Page',          'Value' => $settings['nppp_related_apply_manual']          ?? 'no' ],
-            [ 'Field' => 'Always Purge Categories & Tags',  'Value' => $settings['nppp_related_include_category']      ?? 'no' ],
-            [ 'Field' => 'Preload Related Pages',           'Value' => $settings['nppp_related_preload_after_manual']  ?? 'no' ],
         ];
+
+        $rows = array_merge(
+            $rows,
+            [ $sep( 'NGINX CONFIG' ) ],
+            ! empty( $nginx_cache_paths_rows )
+                ? $nginx_cache_paths_rows
+                : [ [ 'Field' => 'Nginx Cache Paths', 'Value' => 'Not Found (nginx.conf not parsed)' ] ],
+            [ $sep( 'FUSE MOUNTS' ) ],
+            ! empty( $fuse_mounts_rows )
+                ? $fuse_mounts_rows
+                : [ [ 'Field' => 'FUSE Mounts', 'Value' => 'Not Mounted' ] ],
+            [
+
+                $sep( 'BINARY VERSIONS' ),
+                [ 'Field' => 'Nginx',                           'Value' => $ver_nginx ],
+                [ 'Field' => 'PHP',                             'Value' => $ver_php ],
+                [ 'Field' => 'wget',                            'Value' => $ver_wget ],
+                [ 'Field' => 'safexec',                         'Value' => $ver_safexec ],
+                [ 'Field' => 'rg',                              'Value' => $ver_rg ],
+                [ 'Field' => 'libfuse',                         'Value' => $ver_libfuse ],
+                [ 'Field' => 'bindfs',                          'Value' => $ver_bindfs ],
+
+                $sep( 'SETTINGS' ),
+                [ 'Field' => 'Auto Purge',                      'Value' => $settings['nginx_cache_purge_on_update']        ?? 'no' ],
+                [ 'Field' => 'Auto Preload',                    'Value' => $settings['nginx_cache_auto_preload']           ?? 'no' ],
+                [ 'Field' => 'Preload Mobile',                  'Value' => $settings['nginx_cache_auto_preload_mobile']    ?? 'no' ],
+                [ 'Field' => 'Preload Watchdog',                'Value' => $settings['nginx_cache_watchdog']               ?? 'no' ],
+                [ 'Field' => 'REST API',                        'Value' => $settings['nginx_cache_api']                    ?? 'no' ],
+                [ 'Field' => 'Schedule',                        'Value' => $settings['nginx_cache_schedule']               ?? 'no' ],
+                [ 'Field' => 'Send Mail',                       'Value' => $settings['nginx_cache_send_mail']              ?? 'no' ],
+                [ 'Field' => 'HTTP Purge',                      'Value' => $settings['nppp_http_purge_enabled']            ?? 'no' ],
+                [ 'Field' => 'RG Purge',                        'Value' => $settings['nppp_rg_purge_enabled']              ?? 'no' ],
+                [ 'Field' => 'Cloudflare APO Sync',             'Value' => $settings['nppp_cloudflare_apo_sync']           ?? 'no' ],
+                [ 'Field' => 'Redis Cache Sync',                'Value' => $settings['nppp_redis_cache_sync']              ?? 'no' ],
+                [ 'Field' => 'Proxy Preload',                   'Value' => $settings['nginx_cache_preload_enable_proxy']   ?? 'no' ],
+                [ 'Field' => 'Bypass Path Restriction',         'Value' => $settings['nginx_cache_bypass_path_restriction'] ?? 'no' ],
+                [ 'Field' => 'URL Normalization',               'Value' => $settings['nginx_cache_pctnorm_mode']           ?? 'off' ],
+
+                $sep( 'AUTO-PURGE TRIGGERS' ),
+                [ 'Field' => 'Auto-Purge Posts',                'Value' => $settings['nppp_autopurge_posts']               ?? 'no' ],
+                [ 'Field' => 'Auto-Purge Terms',                'Value' => $settings['nppp_autopurge_terms']               ?? 'no' ],
+                [ 'Field' => 'Auto-Purge Plugins',              'Value' => $settings['nppp_autopurge_plugins']             ?? 'no' ],
+                [ 'Field' => 'Auto-Purge Themes',               'Value' => $settings['nppp_autopurge_themes']              ?? 'no' ],
+                [ 'Field' => 'Auto-Purge 3rd Party',            'Value' => $settings['nppp_autopurge_3rdparty']            ?? 'no' ],
+
+                $sep( 'RELATED PAGES' ),
+                [ 'Field' => 'Always Purge Homepage',           'Value' => $settings['nppp_related_include_home']          ?? 'no' ],
+                [ 'Field' => 'Always Purge Shop Page',          'Value' => $settings['nppp_related_apply_manual']          ?? 'no' ],
+                [ 'Field' => 'Always Purge Categories & Tags',  'Value' => $settings['nppp_related_include_category']      ?? 'no' ],
+                [ 'Field' => 'Preload Related Pages',           'Value' => $settings['nppp_related_preload_after_manual']  ?? 'no' ],
+            ]
+        );
 
         $formatter = new \WP_CLI\Formatter( $assoc_args, [ 'Field', 'Value' ] );
         $formatter->display_items( $rows );
