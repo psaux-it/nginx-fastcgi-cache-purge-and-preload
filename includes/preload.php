@@ -46,7 +46,7 @@ function nppp_check_network_env(): array {
     $url = add_query_arg('nppp_probe', wp_generate_password(8, false), home_url('/'));
     $output = shell_exec('wget -q --no-check-certificate --server-response --spider ' . escapeshellarg($url) . ' 2>&1; echo $?');
     $lines = explode("\n", trim((string) $output));
-    $ok = trim(end($lines)) === '0';
+    $ok = trim((string) end($lines)) === '0';
     return [
         'dns_ok'      => $ok,
         'outbound_ok' => $ok,
@@ -1071,7 +1071,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     // Extract the PID and store it in the array for desktop
     if ($output_desktop !== null) {
         $parts_desktop = explode(" ", $output_desktop);
-        $pid_desktop = trim(end($parts_desktop));
+        $pid_desktop = trim((string) end($parts_desktop));
 
         // Check if the desktop process is still running
         $isRunning_desktop = nppp_is_process_alive($pid_desktop);
@@ -1118,7 +1118,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         // Extract the PID and store it in the array for mobile
         if ($output_mobile !== null) {
             $parts_mobile = explode(" ", $output_mobile);
-            $pid_mobile  = trim(end($parts_mobile));
+            $pid_mobile  = trim((string) end($parts_mobile));
 
             // Check if the mobile process is still running
             $isRunning_mobile = nppp_is_process_alive($pid_mobile);
@@ -1366,7 +1366,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
     // Extract the PID and store it in the array for desktop
     if ($output_desktop !== null) {
         $parts_desktop = explode(" ", $output_desktop);
-        $pid_desktop = trim(end($parts_desktop));
+        $pid_desktop = trim((string) end($parts_desktop));
 
         // Check if the desktop process is still running
         $isRunning_desktop = nppp_is_process_alive($pid_desktop);
@@ -1413,7 +1413,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
         // Extract the PID and store it in the array for mobile
         if ($output_mobile !== null) {
             $parts_mobile = explode(" ", $output_mobile);
-            $pid_mobile  = trim(end($parts_mobile));
+            $pid_mobile  = trim((string) end($parts_mobile));
 
             // Check if the mobile process is still running
             $isRunning_mobile = nppp_is_process_alive($pid_mobile);
