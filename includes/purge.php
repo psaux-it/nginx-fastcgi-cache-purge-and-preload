@@ -1628,7 +1628,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
         // Check if the preload process is alive
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            $process_user = function_exists( 'shell_exec' ) ? trim(shell_exec("ps -o user= -p " . escapeshellarg($pid))) : '';
+            $process_user = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( "ps -o user= -p " . escapeshellarg( $pid ) ) ) : '';
             $killed_by_safexec = false;
 
             if ($process_user === 'nobody') {
@@ -1636,7 +1636,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
                 // If not present at default location, try to discover via system path
                 if (!$wp_filesystem->exists($safexec_path)) {
-                    $detected = trim(shell_exec('command -v safexec 2>/dev/null'));
+                    $detected = trim( (string) shell_exec( 'command -v safexec 2>/dev/null' ) );
                     if (!empty($detected)) {
                         $safexec_path = $detected;
                     } else {
@@ -1691,7 +1691,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
                 if (nppp_is_process_alive($pid)) {
                     // Process still alive, try kill -9
-                    $kill_path = function_exists( 'shell_exec' ) ? trim(shell_exec('command -v kill')) : '';
+                    $kill_path = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( 'command -v kill' ) ) : '';
                     if (!empty($kill_path)) {
                         shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $pid);
                         usleep(300000);
