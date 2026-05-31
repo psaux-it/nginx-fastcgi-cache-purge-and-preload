@@ -276,12 +276,31 @@ function nppp_update_bypass_path_restriction(): void {
         $opts = array();
     }
     $opts = array_merge( $opts, $normalized );
+
+    // When bypass turns OFF, the stored cache path may have been set while
+    // bypass was ON (e.g. /root). Re-validate it without bypass and reset
+    // to the safe placeholder if it is now outside the allowed roots.
+    $path_was_reset = false;
+    if ( $normalized['nginx_cache_bypass_path_restriction'] === 'no' ) {
+        $current_path = isset( $opts['nginx_cache_path'] ) ? $opts['nginx_cache_path'] : '';
+        if ( $current_path !== '' && nppp_validate_path( $current_path, false, false ) !== true ) {
+            $opts['nginx_cache_path'] = '/dev/shm/change-me-now';
+            $path_was_reset = true;
+        }
+    }
+
     update_option( 'nginx_cache_settings', $opts );
 
-    wp_send_json_success( array(
+    $response = array(
         'message' => __( 'Bypass Path Restriction saved.', 'fastcgi-cache-purge-and-preload-nginx' ),
         'data'    => $normalized,
-    ) );
+    );
+    if ( $path_was_reset ) {
+        $response['path_reset']       = true;
+        $response['nginx_cache_path'] = '/dev/shm/change-me-now';
+        $response['message']         .= ' ' . __( 'Cache path was outside the allowed directories and has been reset to /dev/shm/change-me-now.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+    wp_send_json_success( $response );
 }
 
 // AJAX callback function to update auto purge option
