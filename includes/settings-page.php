@@ -349,7 +349,7 @@ function nppp_nginx_cache_settings_page() {
                                 </p>
                                 <div class="cache-paths-info">
                                     <p>
-                                        <?php echo esc_html__( 'If Auto Preload is ON, any single-item purge (automatic or manual) will immediately preload the page and—if Related Pages are enabled—the Homepage, Shop Page and/or Category archives. Site-wide purges will trigger a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <?php echo esc_html__( 'If Auto Preload is ON, any single-item purge (automatic or manual) will immediately preload the page and—if Related Pages are enabled—the Homepage, Shop Page, Category & Tag archives, Author archives, Date archives, and RSS feeds. Site-wide purges will trigger a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
                                 </div>
                                 <?php nppp_nginx_cache_autopurge_triggers_callback(); ?>
@@ -417,7 +417,7 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_nginx_cache_related_pages_callback(); ?>
-                                <div class="cache-paths-info"><?php echo esc_html__( 'Extends single-URL purges only — has no effect on full cache purge (Purge All, REST API, or Scheduled Purge). Fires on every single-URL purge: automatically via Auto Purge events and manually via the Admin Bar on-page button, the Advanced Tab, or the front-end purge button.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></div>
+                                <div class="cache-paths-info"><?php echo esc_html__( 'Extends single-URL purges only — has no effect on full cache purge (Purge All, REST API, or Scheduled Purge). Fires on every single-URL purge: automatically via Auto Purge events and manually via the Admin Bar on-page button, the Advanced Tab, or the front-end purge button. Per-post comment feed purges fire automatically whenever comments are open or present, regardless of these toggles.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></div>
                             </td>
                         </tr>
                         <!-- Start Preload Options Section -->
