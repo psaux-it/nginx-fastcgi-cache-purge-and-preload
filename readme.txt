@@ -181,6 +181,7 @@ Release date: 2026-05-25
 * Extended: Purge Scope now purges Author archives when a post is saved or updated.
 * Extended: Purge Scope now purges Date-based archives (year, month, day) when a post is saved or updated.
 * Extended: Purge Scope now purges RSS feeds on relevant purge events: main site feed on post publish/update, per-post comments feed when comments are open or present, and per-taxonomy RSS feeds alongside their archive pages.
+* Extended: Purge Scope now purges paginated comment URLs for posts when WordPress comment pagination is enabled, including both pretty-permalink and query-string comment page variants.
 * Extended: Purge Scope taxonomy archive purging now covers all public registered taxonomies generically (custom taxonomies, WooCommerce product attribute archives).
 * Changed: Hard dependency extended to require both shell_exec and exec (rg). REGRESSION!
 * Added: Proper open_basedir compatibility detection and admin warning for missing required paths.
