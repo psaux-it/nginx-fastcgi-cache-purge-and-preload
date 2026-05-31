@@ -559,8 +559,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
     /**
      * Gets or sets NPP plugin settings.
      *
-     * The API key is always redacted on `get` and blocked on `set`.
-     * Regex/base64 fields are read-only via CLI.
+     * All settings are readable and writable via CLI.
      *
      * ## OPTIONS
      *
