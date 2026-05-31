@@ -253,7 +253,8 @@ function nppp_get_related_urls_for_single(string $primary_url): array {
     return apply_filters('nppp_related_urls_for_single', $urls, $primary_url, $settings);
 }
 
-// Fire-and-forget
+// Fire-and-forget — collapses N×UA wget processes into max 2 total (1 per UA).
+// Optimized for high Related Preload situation for over 100 URL in v2.1.7
 function nppp_preload_urls_fire_and_forget(array $urls): void {
     if (empty($urls)) return;
     if ( ! function_exists( 'shell_exec' ) ) return;
@@ -275,52 +276,65 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
     $safexec_path = nppp_find_safexec_path();
     $use_safexec  = nppp_is_safexec_usable($safexec_path ?: '', false);
 
+    // Validate all URLs and collect pre-escaped shell args.
+    // URLs from nppp_get_related_urls_for_single() pass filter_var() upstream,
+    // but the nppp_related_urls_for_single filter is a public hook — third-party
+    // code can inject URLs that bypassed the nppp_is_internal_url() check.
+    // That check only runs here, making this the sole host-validation gate
+    // for every entry before it reaches shell_exec.
+    $valid_url_args = [];
     foreach ($urls as $u) {
-        if (false === wp_http_validate_url($u)) {
-            continue;
+        if (false !== wp_http_validate_url($u) && nppp_is_internal_url($u)) { // CVE-2025-6213
+            $valid_url_args[] = escapeshellarg($u);
         }
+    }
 
-        // Build per-URL domain allowlist
-        $parsed    = wp_parse_url($u);
-        $host      = strtolower($parsed['host'] ?? '');
-        if ($host === '') continue;
-        $base_host   = preg_replace('/^www\./i', '', $host);
-        $domain_list = escapeshellarg(implode(',', array_unique([$base_host, 'www.' . $base_host])));
+    if (empty($valid_url_args)) return;
 
-        $common =
-            '--quiet --no-config --no-cookies --delete-after ' .
-            '--no-dns-cache --no-check-certificate --prefer-family=IPv4 ' .
-            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=1 ' .
-            '-e robots=off ' .
-            '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
-            '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
-            '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
-            '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
-            '--limit-rate=' . $nginx_cache_limit_rate . 'k ' .
-            '--domains=' . $domain_list . ' ' .
-            '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ';
+    // Domain allowlist: restricts which redirect targets wget will follow.
+    $home_parsed = wp_parse_url(home_url('/'));
+    $home_host   = strtolower($home_parsed['host'] ?? '');
+    if ($home_host === '') return;
+    $base_host   = preg_replace('/^www\./i', '', $home_host);
+    $domain_list = escapeshellarg(implode(',', array_unique([$base_host, 'www.' . $base_host])));
 
-        $safexec_prefix = $use_safexec ? escapeshellarg($safexec_path) . ' ' : '';
-        $url_arg        = escapeshellarg($u);
+    // Common wget flags: built once, shared across both UA invocations.
+    $common =
+        '--quiet --no-config --no-cookies --delete-after ' .
+        '--no-dns-cache --no-check-certificate --prefer-family=IPv4 ' .
+        '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=1 ' .
+        '-e robots=off ' .
+        '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
+        '-e ' . escapeshellarg('http_proxy=' . $http_proxy) . ' ' .
+        '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
+        '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
+        '--limit-rate=' . $nginx_cache_limit_rate . 'k ' .
+        '--domains=' . $domain_list . ' ' .
+        '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ';
 
-        // Desktop
-        $cmd_desktop = $safexec_prefix .
+    $safexec_prefix = $use_safexec ? escapeshellarg($safexec_path) . ' ' : '';
+
+    // All URLs passed to a single wget invocation per UA.
+    // GNU wget fetches every command-line URL sequentially in one process.
+    $url_args_str = '-- ' . implode(' ', $valid_url_args);
+
+    // Desktop — 1 process total, regardless of how many related URLs.
+    $cmd_desktop = $safexec_prefix .
+        'nohup wget ' . $common .
+        '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
+        $url_args_str . ' >/dev/null 2>&1 &';
+    shell_exec($cmd_desktop);
+
+    // Mobile — 1 process total (if enabled).
+    if ($preload_mobile) {
+        $nppp_mobile_ua = ! empty($settings['nginx_cache_mobile_user_agent'])
+            ? $settings['nginx_cache_mobile_user_agent']
+            : NPPP_USER_AGENT_MOBILE;
+
+        $cmd_mobile = $safexec_prefix .
             'nohup wget ' . $common .
-            '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
-            '-- ' . $url_arg . ' >/dev/null 2>&1 &';
-        shell_exec($cmd_desktop);
-
-        // Mobile (if enabled)
-        if ($preload_mobile) {
-            $nppp_mobile_ua = ! empty( $settings['nginx_cache_mobile_user_agent'] )
-                ? $settings['nginx_cache_mobile_user_agent']
-                : NPPP_USER_AGENT_MOBILE;
-
-            $cmd_mobile = $safexec_prefix .
-                'nohup wget ' . $common .
-                '--user-agent=' . escapeshellarg($nppp_mobile_ua) . ' ' .
-                '-- ' . $url_arg . ' >/dev/null 2>&1 &';
-            shell_exec($cmd_mobile);
-        }
+            '--user-agent=' . escapeshellarg($nppp_mobile_ua) . ' ' .
+            $url_args_str . ' >/dev/null 2>&1 &';
+        shell_exec($cmd_mobile);
     }
 }
