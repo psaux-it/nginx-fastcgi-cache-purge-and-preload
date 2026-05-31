@@ -11,8 +11,13 @@
 
 declare( strict_types=1 );
 
-// Guard: only load inside a genuine WP-CLI invocation.
-if ( ! defined( 'ABSPATH' ) || ! defined( 'WP_CLI' ) || ! WP_CLI ) {
+// Guard against direct web access to this file
+if ( ! defined( 'ABSPATH' ) ) {
+    return;
+}
+
+// Guard against non-CLI environments
+if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
     return;
 }
 
@@ -60,6 +65,9 @@ if ( ! defined( 'ABSPATH' ) || ! defined( 'WP_CLI' ) || ! WP_CLI ) {
  *     # Clear all plugin transients
  *     wp npp flush
  *
+ *     # Clear the URL→filepath index (stale after cache dir move or key change)
+ *     wp npp index-clear
+ * 
  *     # List active preload schedule events
  *     wp npp schedule
  *
@@ -688,6 +696,171 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $formatter->display_items( $found );
     }
 
+    /**
+     * Configures or cancels the scheduled preload event.
+     *
+     * ## OPTIONS
+     *
+     * [--freq=<frequency>]
+     * : Recurrence frequency.
+     * ---
+     * options:
+     *   - daily
+     *   - weekly
+     *   - monthly
+     * ---
+     *
+     * [--time=<HH:MM>]
+     * : Time of day in 24-hour format, e.g. 02:30.
+     *
+     * [--cancel]
+     * : Cancel all active NPP scheduled events.
+     *
+     * ## EXAMPLES
+     *
+     *     wp npp schedule set --freq=daily --time=03:00
+     *     wp npp schedule set --freq=weekly --time=00:30
+     *     wp npp schedule set --cancel
+     *
+     * @subcommand schedule-set
+     * @when after_wp_load
+     */
+    public function schedule_set( array $args, array $assoc_args ): void {
+        $cancel = array_key_exists( 'cancel', $assoc_args );
+
+        if ( $cancel ) {
+            if ( function_exists( 'nppp_cancel_scheduled_events' ) ) {
+                nppp_cancel_scheduled_events();
+            } else {
+                // Fallback: clear via WP cron API directly.
+                wp_clear_scheduled_hook( 'npp_cache_preload_event' );
+                wp_clear_scheduled_hook( 'nppp_index_updater_event' );
+            }
+            WP_CLI::success( __( 'All NPP scheduled events cancelled.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            return;
+        }
+
+        $freq = (string) ( $assoc_args['freq'] ?? '' );
+        $time = (string) ( $assoc_args['time'] ?? '' );
+
+        if ( $freq === '' || $time === '' ) {
+            WP_CLI::error( __( 'Usage: wp npp schedule-set --freq=daily|weekly|monthly --time=HH:MM', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        }
+
+        if ( ! in_array( $freq, [ 'daily', 'weekly', 'monthly' ], true ) ) {
+            WP_CLI::error( __( 'Invalid frequency. Use: daily, weekly, or monthly.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        }
+
+        if ( ! preg_match( '/^([01]\d|2[0-3]):([0-5]\d)$/', $time ) ) {
+            WP_CLI::error( __( 'Invalid time format. Use HH:MM in 24-hour format, e.g. 02:30.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        }
+
+        $cron_expression = $freq . '|' . $time;
+        update_option( 'nginx_cache_schedule_value', $cron_expression );
+
+        if ( function_exists( 'nppp_create_scheduled_events' ) ) {
+            nppp_create_scheduled_events( $cron_expression );
+        }
+
+        /* translators: 1: Frequency e.g. "daily" 2: Time e.g. "03:00" */
+        WP_CLI::success( sprintf(
+            /* translators: 1: Frequency e.g. "daily" 2: Time e.g. "03:00" */
+            __( 'Schedule set: %1$s at %2$s.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $freq, $time
+        ) );
+    }
+
+    /**
+     * Resets a setting to its plugin default value.
+     *
+     * Supported keys: nginx_cache_reject_regex, nginx_cache_reject_extension,
+     * nginx_cache_key_custom_regex, nginx_cache_mobile_user_agent.
+     *
+     * ## OPTIONS
+     *
+     * <key>
+     * : Setting key to reset.
+     *
+     * ## EXAMPLES
+     *
+     *     wp npp settings-reset nginx_cache_reject_regex
+     *     wp npp settings-reset nginx_cache_reject_extension
+     *
+     * @subcommand settings-reset
+     * @when after_wp_load
+     */
+    public function settings_reset( array $args, array $assoc_args ): void {
+        $key = (string) ( $args[0] ?? '' );
+
+        $fetchers = [
+            'nginx_cache_reject_regex'     => 'nppp_fetch_default_reject_regex',
+            'nginx_cache_reject_extension' => 'nppp_fetch_default_reject_extension',
+            'nginx_cache_key_custom_regex' => 'nppp_fetch_default_cache_key_regex',
+            'nginx_cache_mobile_user_agent' => 'nppp_fetch_default_mobile_user_agent',
+        ];
+
+        if ( ! array_key_exists( $key, $fetchers ) ) {
+            WP_CLI::error( sprintf(
+                /* translators: %s: comma-separated list of resettable keys */
+                __( 'Unknown or non-resettable key. Resettable keys: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                implode( ', ', array_keys( $fetchers ) )
+            ) );
+        }
+
+        $fn = $fetchers[ $key ];
+        if ( ! function_exists( $fn ) ) {
+            WP_CLI::error( sprintf(
+                /* translators: %s: settings key name */
+                __( 'Default-value function not found for "%s". Cannot reset.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $key
+            ) );
+        }
+
+        $default = $fn();
+
+        // nginx_cache_key_custom_regex is base64-encoded in the DB.
+        $stored = ( $key === 'nginx_cache_key_custom_regex' ) ? base64_encode( (string) $default ) : $default;
+
+        $settings = get_option( 'nginx_cache_settings', [] );
+        $settings[ $key ] = $stored;
+        update_option( 'nginx_cache_settings', $settings );
+
+        /* translators: %s: settings key name */
+        WP_CLI::success( sprintf( __( '"%s" reset to plugin default.', 'fastcgi-cache-purge-and-preload-nginx' ), $key ) );
+    }
+
+    /**
+     * Clears the persistent URL→filepath index.
+     *
+     * The index maps cached URLs to their filesystem paths so that single-page
+     * purges can skip a full directory scan. Clear it when the index may hold
+     * stale entries — for example after moving the cache directory, changing
+     * the cache key, or when single-page purges are not working correctly.
+     *
+     * The index rebuilds automatically on the next purge or preload operation,
+     * and the background cron job (every 3 hours) also refreshes it.
+     *
+     * This is a separate operation from `wp npp flush`, which clears plugin
+     * transients. The URL index is persistent data, not a transient.
+     *
+     * ## EXAMPLES
+     *
+     *     wp npp index-clear
+     *
+     * @subcommand index-clear
+     * @when after_wp_load
+     */
+    public function index_clear( array $args, array $assoc_args ): void {
+        $existed = (bool) get_option( 'nppp_url_filepath_index' );
+        delete_option( 'nppp_url_filepath_index' );
+
+        if ( $existed ) {
+            WP_CLI::success( __( 'URL index cleared. It will rebuild automatically on the next purge or preload.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        } else {
+            WP_CLI::warning( __( 'URL index was already empty — nothing to clear.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        }
+    }
+
     // =========================================================================
     // Private helpers
     // =========================================================================
@@ -873,8 +1046,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 $wp_filesystem->delete( $pid_file );
                 $porcelain
                     ? WP_CLI::line( 'error' )
-                    /* translators: 1: Process ID that could not be stopped 2: Same process ID for the kill command example */
                     : WP_CLI::error( sprintf(
+                        /* translators: 1: Process ID that could not be stopped 2: Same process ID for the kill command example */
                         __( 'Cannot stop PID %1$d (running as nobody via safexec): safexec not found, not SUID-root, or --kill failed. Run as root: safexec --kill=%2$d', 'fastcgi-cache-purge-and-preload-nginx' ),
                         $pid,
                         $pid
@@ -905,8 +1078,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             if ( ! $killed ) {
                 $porcelain
                     ? WP_CLI::line( 'error' )
-                    /* translators: %d: Process ID that could not be killed */
                     : WP_CLI::error( sprintf(
+                        /* translators: %d: Process ID that could not be killed */
                         __( 'Failed to stop preload process (PID %d) — still alive after SIGTERM + SIGKILL.', 'fastcgi-cache-purge-and-preload-nginx' ),
                         $pid
                     ) );
@@ -932,8 +1105,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( $key !== '' ) {
             if ( ! array_key_exists( $key, $settings ) ) {
-                /* translators: %s: The unknown settings key name */
                 WP_CLI::error( sprintf(
+                    /* translators: %s: The unknown settings key name */
                     __( 'Unknown setting key: "%s". Run `wp npp settings get` to list all keys.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $key
                 ) );
@@ -988,8 +1161,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         $settings = get_option( 'nginx_cache_settings', [] );
         if ( ! array_key_exists( $key, $settings ) ) {
-            /* translators: %s: The unknown settings key name */
             WP_CLI::error( sprintf(
+                /* translators: %s: The unknown settings key name */
                 __( 'Unknown setting key: "%s". Run `wp npp settings get` to list valid keys.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $key
             ) );
@@ -1000,13 +1173,13 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         if ( $key === 'nginx_cache_pctnorm_mode' ) {
             if ( ! in_array( $value, $pctnorm_allowed, true ) ) {
                 /* translators: 1: Settings key name 2: Comma-separated list of allowed values */
-                WP_CLI::error( sprintf( __( 'Value for "%s" must be one of: %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $key, implode( ', ', $pctnorm_allowed ) ) );
+                WP_CLI::error( sprintf( __( 'Value for "%1$s" must be one of: %2$s.', 'fastcgi-cache-purge-and-preload-nginx' ), $key, implode( ', ', $pctnorm_allowed ) ) );
             }
             $settings[ $key ] = $value;
             update_option( 'nginx_cache_settings', $settings );
 
             /* translators: 1: Settings key name 2: New value */
-            WP_CLI::success( sprintf( __( 'Updated "%s" → "%s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, $value ) );
+            WP_CLI::success( sprintf( __( 'Updated "%1$s" → "%2$s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, $value ) );
             return;
         }
 
@@ -1022,7 +1195,14 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_related_apply_manual',   'nppp_related_preload_after_manual',
         ];
 
-        // Positive-integer settings.
+        // Positive-integer settings — ranges.
+        static $int_ranges = [
+            'nginx_cache_cpu_limit'          => [ 10,    100    ],
+            'nginx_cache_limit_rate'         => [ 1,     102400 ],
+            'nginx_cache_wait_request'       => [ 0,     60     ],
+            'nginx_cache_read_timeout'       => [ 10,    300    ],
+            'nginx_cache_preload_proxy_port' => [ 1,     65535  ],
+        ];
         static $int_keys = [
             'nginx_cache_cpu_limit',      'nginx_cache_limit_rate',
             'nginx_cache_wait_request',   'nginx_cache_read_timeout',
@@ -1041,6 +1221,14 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 WP_CLI::error( sprintf( __( 'Value for "%s" must be a non-negative integer.', 'fastcgi-cache-purge-and-preload-nginx' ), $key ) );
             }
             $sanitized = (int) $value;
+            [ $rmin, $rmax ] = $int_ranges[ $key ];
+            if ( $sanitized < $rmin || $sanitized > $rmax ) {
+                WP_CLI::error( sprintf(
+                    /* translators: 1: Settings key name 2: Minimum allowed value 3: Maximum allowed value */
+                    __( 'Value for "%1$s" must be between %2$d and %3$d.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $key, $rmin, $rmax
+                ) );
+            }
         } elseif ( $key === 'nginx_cache_email' ) {
             $sanitized = sanitize_email( $value );
             if ( ! is_email( $sanitized ) ) {
@@ -1105,8 +1293,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             }
             if ( ! empty( $bad ) ) {
                 $preview = implode( ', ', array_slice( $bad, 0, 3 ) ) . ( count( $bad ) > 3 ? '…' : '' );
-                /* translators: %s: short comma-separated preview (max 3) of invalid extension patterns */
                 WP_CLI::error( sprintf(
+                    /* translators: %s: short comma-separated preview (max 3) of invalid extension patterns */
                     __( 'ERROR OPTION: Invalid extension pattern(s): %s. Allowed examples: *.css, .css, css', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $preview
                 ) );
@@ -1137,15 +1325,64 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                     }
                 }
             }
+        } elseif ( $key === 'nginx_cache_preload_proxy_host' ) {
+            // Mirror settings-sanitize.php: full hostname/IPv4/IPv6 validation.
+            if ( function_exists( 'nppp_sanitize_validate_proxy_host' ) ) {
+                $err    = null;
+                $notice = null;
+                $host   = nppp_sanitize_validate_proxy_host( $value, $err, $notice );
+                if ( $host === null ) {
+                    WP_CLI::error( $err ?? __( 'ERROR OPTION: Invalid proxy host.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+                }
+                if ( $notice ) {
+                    WP_CLI::warning( $notice );
+                }
+                $sanitized = $host;
+            } else {
+                $sanitized = sanitize_text_field( $value );
+            }
+        } elseif ( $key === 'nginx_cache_mobile_user_agent' ) {
+            // Mirror settings-sanitize.php: max 512 chars.
+            $sanitized = sanitize_text_field( wp_unslash( $value ) );
+            if ( strlen( $sanitized ) > 512 ) {
+                WP_CLI::error( __( 'ERROR: Mobile User Agent exceeds the maximum allowed length of 512 characters.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+        } elseif ( $key === 'nppp_http_purge_suffix' ) {
+            // Mirror settings-sanitize.php: alphanumeric + hyphens/underscores only, non-empty.
+            $sanitized = trim( sanitize_text_field( $value ), '/' );
+            if ( $sanitized === '' ) {
+                WP_CLI::error( __( 'ERROR OPTION: HTTP Purge Suffix cannot be empty. Use e.g. "purge".', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+            if ( ! preg_match( '/^[a-zA-Z0-9_\-]+$/', $sanitized ) ) {
+                WP_CLI::error( __( 'ERROR OPTION: HTTP Purge Suffix must contain only letters, digits, hyphens, and underscores.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
         } else {
             $sanitized = sanitize_text_field( $value );
         }
 
         $settings[ $key ] = $sanitized;
+
+        // When bypass_path_restriction turns OFF, re-validate the stored cache path.
+        // If it is now outside the allowed roots, reset it to the safe placeholder.
+        $path_was_reset = false;
+        if ( $key === 'nginx_cache_bypass_path_restriction' && $sanitized === 'no' ) {
+            $stored_path = (string) ( $settings['nginx_cache_path'] ?? '' );
+            if ( $stored_path !== ''
+                && function_exists( 'nppp_validate_path' )
+                && nppp_validate_path( $stored_path, false, false ) !== true
+            ) {
+                $settings['nginx_cache_path'] = '/dev/shm/change-me-now';
+                $path_was_reset = true;
+            }
+        }
+
         update_option( 'nginx_cache_settings', $settings );
 
         /* translators: 1: Settings key name 2: New sanitized value */
-        WP_CLI::success( sprintf( __( 'Updated "%s" → "%s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, (string) $sanitized ) );
+        WP_CLI::success( sprintf( __( 'Updated "%1$s" → "%2$s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, (string) $sanitized ) );
+        if ( $path_was_reset ) {
+            WP_CLI::warning( __( 'Cache path was outside the allowed directories and has been reset to /dev/shm/change-me-now.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        }
     }
 }
 
