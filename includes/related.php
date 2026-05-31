@@ -47,51 +47,62 @@ function nppp_get_related_urls_for_single(string $primary_url): array {
             }
         }
 
-        // 3) Category and tag archives (posts => category + post_tag, products => product_cat + product_tag)
+        // 3) All public taxonomy archives registered on this post type.
+        //    Covers category + post_tag for posts, product_cat + product_tag for
+        //    WooCommerce products, and any custom taxonomy.
+        //    post_format is intentionally included: if the site uses post formats
+        //    and Nginx caches /type/video/ etc., those archives need purging too.
+        //    Taxonomies with rewrite=false have no archive URL and are skipped.
         if ( $include_cat ) {
-            $taxonomy = ( 'product' === $post_type ) ? 'product_cat' : 'category';
-
-            // Categories
-            $tax_obj = get_taxonomy( $taxonomy );
-            if ( $tax_obj && ! empty( $tax_obj->public ) && false !== $tax_obj->rewrite ) {
-                $terms = get_the_terms( $post_id, $taxonomy );
-                if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
-                    foreach ( $terms as $term ) {
-                        $link = get_term_link( $term, $taxonomy );
-                        if ( ! is_wp_error( $link ) && ! empty( $link ) ) {
-                            $urls[] = $link;
-                        }
+            $taxonomies = get_object_taxonomies( $post_type, 'objects' );
+            foreach ( $taxonomies as $tax_obj ) {
+                if ( empty( $tax_obj->public ) || false === $tax_obj->rewrite ) {
+                    continue;
+                }
+                $terms = get_the_terms( $post_id, $tax_obj->name );
+                if ( is_wp_error( $terms ) || empty( $terms ) ) {
+                    continue;
+                }
+                foreach ( $terms as $term ) {
+                    $link = get_term_link( $term, $tax_obj->name );
+                    if ( ! is_wp_error( $link ) && ! empty( $link ) ) {
+                        $urls[] = $link;
                     }
                 }
             }
+        }
 
-            // Product tag archives — WooCommerce products only.
-            if ( 'product' === $post_type ) {
-                $tag_obj = get_taxonomy( 'product_tag' );
-                if ( $tag_obj && ! empty( $tag_obj->public ) && false !== $tag_obj->rewrite ) {
-                    $tags = get_the_terms( $post_id, 'product_tag' );
-                    if ( ! is_wp_error( $tags ) && ! empty( $tags ) ) {
-                        foreach ( $tags as $tag ) {
-                            $link = get_term_link( $tag, 'product_tag' );
-                            if ( ! is_wp_error( $link ) && ! empty( $link ) ) {
-                                $urls[] = $link;
-                            }
-                        }
-                    }
+        // 4) Author archive.
+        //    get_author_posts_url() never returns false — it always returns a
+        //    string (pretty URL or ?author=ID fallback). Guard with
+        //    post_type_supports('author') so pages and author-less CPTs are
+        //    skipped: they have no author archive URL to invalidate.
+        if ( $include_cat && post_type_supports( $post_type, 'author' ) ) {
+            $author_id = (int) get_post_field( 'post_author', $post_id );
+            if ( $author_id > 0 ) {
+                $author_url = get_author_posts_url( $author_id );
+                if ( $author_url && wp_http_validate_url( $author_url ) ) {
+                    $urls[] = $author_url;
                 }
             }
+        }
 
-            // Post tag archives — standard WordPress posts only.
-            if ( 'post' === $post_type ) {
-                $tag_obj = get_taxonomy( 'post_tag' );
-                if ( $tag_obj && ! empty( $tag_obj->public ) && false !== $tag_obj->rewrite ) {
-                    $tags = get_the_terms( $post_id, 'post_tag' );
-                    if ( ! is_wp_error( $tags ) && ! empty( $tags ) ) {
-                        foreach ( $tags as $tag ) {
-                            $link = get_term_link( $tag, 'post_tag' );
-                            if ( ! is_wp_error( $link ) && ! empty( $link ) ) {
-                                $urls[] = $link;
-                            }
+        // 5) Date-based archives (year / month / day).
+        //    WP core only creates date archive pages for the built-in 'post'
+        //    post type — custom CPTs with has_archive do NOT get date archives.
+        //    These functions always return a URL string (never false/empty), so
+        //    no false-check is needed. Use date_parse() to safely extract the
+        //    year/month/day integers from the stored post_date value.
+        if ( $include_cat && 'post' === $post_type ) {
+            $post_date = (string) get_post_field( 'post_date', $post_id );
+            if ( $post_date !== '' ) {
+                $parsed = date_parse( $post_date );
+                if ( ! empty( $parsed ) && empty( $parsed['errors'] ) && ! empty( $parsed['year'] ) ) {
+                    $urls[] = get_year_link( $parsed['year'] );
+                    if ( ! empty( $parsed['month'] ) ) {
+                        $urls[] = get_month_link( $parsed['year'], $parsed['month'] );
+                        if ( ! empty( $parsed['day'] ) ) {
+                            $urls[] = get_day_link( $parsed['year'], $parsed['month'], $parsed['day'] );
                         }
                     }
                 }
@@ -123,6 +134,61 @@ function nppp_get_related_urls_for_single(string $primary_url): array {
                     $shop_url = get_permalink( $shop_id );
                     if ( $shop_url ) {
                         $urls[] = $shop_url;
+                    }
+                }
+            }
+        }
+    }
+
+    // 6) RSS / Atom feeds.
+    //
+    //    Main site feed — only for the built-in 'post' post type and only when
+    //    $include_home is enabled, since it represents the site-level feed.
+    //    get_feed_link() always returns a URL string; no false-check required.
+    //
+    //    Per-post comments feed — included when comments are open OR when the
+    //    post already has approved comments (published comments stay cached even
+    //    after comments are closed). get_post_comments_feed_link() returns an
+    //    empty string when the post does not exist — safe to check with !empty().
+    //
+    //    Taxonomy feeds — one RSS feed URL per assigned public taxonomy term.
+    //    get_term_feed_link() returns false on error; checked with if ($link).
+    //    Gate matches the taxonomy archive gate ($include_cat) so feed and
+    //    archive are always purged together.
+    if ( $post_id ) {
+        $post_type_for_feed = (string) get_post_type( $post_id );
+
+        // Main site feed (posts only, home-level setting).
+        if ( $include_home && 'post' === $post_type_for_feed ) {
+            $urls[] = get_feed_link( 'rss2' );
+        }
+
+        // Per-post comments feed.
+        // Only include when comments are open OR the post already has comments —
+        // an empty comment feed that was never cached does not need purging.
+        $has_comments = ( comments_open( $post_id ) || get_comments_number( $post_id ) > 0 );
+        if ( $has_comments ) {
+            $comment_feed = get_post_comments_feed_link( $post_id );
+            if ( ! empty( $comment_feed ) ) {
+                $urls[] = $comment_feed;
+            }
+        }
+
+        // Taxonomy RSS feeds — mirrors the taxonomy archive gate.
+        if ( $include_cat ) {
+            $tax_objects = get_object_taxonomies( $post_type_for_feed, 'objects' );
+            foreach ( $tax_objects as $tax_obj ) {
+                if ( empty( $tax_obj->public ) || false === $tax_obj->rewrite ) {
+                    continue;
+                }
+                $terms = get_the_terms( $post_id, $tax_obj->name );
+                if ( is_wp_error( $terms ) || empty( $terms ) ) {
+                    continue;
+                }
+                foreach ( $terms as $term ) {
+                    $feed_link = get_term_feed_link( $term->term_id, $tax_obj->name );
+                    if ( $feed_link && ! is_wp_error( $feed_link ) ) {
+                        $urls[] = $feed_link;
                     }
                 }
             }
