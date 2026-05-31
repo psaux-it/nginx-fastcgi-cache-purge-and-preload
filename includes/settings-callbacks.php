@@ -529,7 +529,7 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
                     <span class="nppp-toggle" aria-hidden="true"></span>
                     <span class="nppp-text">
                         <span class="title"><?php esc_html_e( 'Posts & Comments', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        <span class="desc"><?php esc_html_e( 'Auto Purge any post, page, or WooCommerce product when published, updated, deleted, when a comment is approved, or when product stock changes (quantity, status, or order cancellation). (Archive pages are purged only if enabled under Purge Scope.)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Auto Purge the cached page when a published post, page, or WooCommerce product is updated, taken offline (draft/trash/private), scheduled to go live, or restored from trash. First-time publishes are skipped — the page was never cached yet. Also fires on permanent deletion, when the approved comment count changes, or when WooCommerce product stock changes (quantity, status, or order cancellation). (Related pages are purged only if enabled under Purge Scope.)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     </span>
                 </label>
             </div>
@@ -545,7 +545,7 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
                     <span class="nppp-toggle" aria-hidden="true"></span>
                     <span class="nppp-text">
                         <span class="title"><?php esc_html_e( 'Categories, Tags & Taxonomies', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        <span class="desc"><?php esc_html_e( 'Auto Purge category, tag, and custom taxonomy archive pages when terms are created, edited, or removed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Auto Purge taxonomy archive pages when a term is edited (name or slug changed) or deleted. On term creation the archive was never cached yet, so no archive purge occurs; The Homepage is purged instead if enabled under Purge Scope.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     </span>
                 </label>
             </div>
