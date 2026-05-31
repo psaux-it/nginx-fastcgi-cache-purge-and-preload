@@ -106,15 +106,18 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( $dry_run ) {
             WP_CLI::line( $url !== ''
-                ? sprintf( '[dry-run] Would purge single URL: %s', $url )
-                : sprintf( '[dry-run] Would purge entire cache at: %s', $cache_path )
+                /* translators: %s: URL being dry-run purged */
+                ? sprintf( __( '[dry-run] Would purge single URL: %s', 'fastcgi-cache-purge-and-preload-nginx' ), $url )
+                /* translators: %s: Nginx cache path being dry-run purged */
+                : sprintf( __( '[dry-run] Would purge entire cache at: %s', 'fastcgi-cache-purge-and-preload-nginx' ), $cache_path )
             );
             return;
         }
 
         // Validate URL before entering the output buffer — WP_CLI::error() calls exit().
         if ( $url !== '' && filter_var( $url, FILTER_VALIDATE_URL ) === false ) {
-            WP_CLI::error( sprintf( 'Invalid URL: %s', $url ) );
+            /* translators: %s: The invalid URL provided */
+            WP_CLI::error( sprintf( __( 'Invalid URL: %s', 'fastcgi-cache-purge-and-preload-nginx' ), $url ) );
         }
 
         $result = $this->capture_cli_output(
@@ -178,11 +181,13 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( $dry_run ) {
             if ( $stop ) {
-                WP_CLI::line( '[dry-run] Would stop the active preload process (cache preserved).' );
+                WP_CLI::line( __( '[dry-run] Would stop the active preload process (cache preserved).', 'fastcgi-cache-purge-and-preload-nginx' ) );
             } elseif ( $url !== '' ) {
-                WP_CLI::line( sprintf( '[dry-run] Would preload single URL: %s', $url ) );
+                /* translators: %s: URL being dry-run preloaded */
+                WP_CLI::line( sprintf( __( '[dry-run] Would preload single URL: %s', 'fastcgi-cache-purge-and-preload-nginx' ), $url ) );
             } else {
-                WP_CLI::line( sprintf( '[dry-run] Would start full-site preload for: %s', $fdomain ) );
+                /* translators: %s: Site domain being dry-run preloaded */
+                WP_CLI::line( sprintf( __( '[dry-run] Would start full-site preload for: %s', 'fastcgi-cache-purge-and-preload-nginx' ), $fdomain ) );
             }
             return;
         }
@@ -194,7 +199,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         // Validate before entering the output buffer.
         if ( $url !== '' && filter_var( $url, FILTER_VALIDATE_URL ) === false ) {
-            WP_CLI::error( sprintf( 'Invalid URL: %s', $url ) );
+            /* translators: %s: The invalid URL provided */
+            WP_CLI::error( sprintf( __( 'Invalid URL: %s', 'fastcgi-cache-purge-and-preload-nginx' ), $url ) );
         }
 
         if ( $url !== '' ) {
@@ -268,18 +274,18 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         // Human-readable label helpers for raw internal return values.
         $bool_label = static function ( ?string $v ): string {
             return match ( $v ) {
-                'true'      => 'OK',
-                'false'     => 'Not Available',
-                'Not Found' => 'Cache Path Not Found',
-                default     => $v ?? 'N/A',
+                'true'      => __( 'OK', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'false'     => __( 'Not Available', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'Not Found' => __( 'Cache Path Not Found', 'fastcgi-cache-purge-and-preload-nginx' ),
+                default     => $v ?? __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' ),
             };
         };
         $preload_label = static function ( ?string $v ): string {
             return match ( $v ) {
-                'progress' => 'Running',
-                'true'     => 'Ready',
-                'false'    => 'Not Available',
-                default    => $v ?? 'N/A',
+                'progress' => __( 'Running', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'true'     => __( 'Ready', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'false'    => __( 'Not Available', 'fastcgi-cache-purge-and-preload-nginx' ),
+                default    => $v ?? __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' ),
             };
         };
 
@@ -290,9 +296,11 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $srv_lc       = trim( strtolower( $server_user ) );
 
         if ( $php_lc === 'not determined' || $srv_lc === 'not determined' ) {
-            $isolation = 'Not Determined';
+            $isolation = __( 'Not Determined', 'fastcgi-cache-purge-and-preload-nginx' );
         } else {
-            $isolation = ( $php_lc === $srv_lc ) ? 'Not Isolated' : 'Isolated';
+            $isolation = ( $php_lc === $srv_lc )
+                ? __( 'Not Isolated', 'fastcgi-cache-purge-and-preload-nginx' )
+                : __( 'Isolated', 'fastcgi-cache-purge-and-preload-nginx' );
         }
 
         $shell_exec    = (string) nppp_shell_exec();
@@ -311,28 +319,40 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $page_count       = get_option( 'nppp_last_known_hits', false );
         $scanned_at       = get_option( 'nppp_last_hits_scanned_at', false );
         $page_count_label = $page_count !== false
-            ? ( (string) $page_count . ( $scanned_at ? '  (' . human_time_diff( (int) $scanned_at, time() ) . ' ago)' : '' ) )
-            : 'N/A — run a Preload to populate';
+            ? ( (string) $page_count . ( $scanned_at
+                /* translators: %s: human-readable time difference, e.g. "5 minutes" */
+                ? '  (' . sprintf( __( '%s ago', 'fastcgi-cache-purge-and-preload-nginx' ), human_time_diff( (int) $scanned_at, time() ) ) . ')'
+                : '' ) )
+            : __( 'N/A — run a Preload to populate', 'fastcgi-cache-purge-and-preload-nginx' );
 
         $ratio_raw   = nppp_get_cache_ratio( $page_count !== false ? $page_count : 'N/A' );
         $ratio_label = is_array( $ratio_raw )
             ? number_format( $ratio_raw['ratio'], 1 ) . '%'
-              . '  (' . $ratio_raw['hits']   . ' cached'
-              . ' / ' . $ratio_raw['misses'] . ' not cached'
-              . ' / ' . $ratio_raw['total']  . ' total)'
+              /* translators: %d: Number of cached pages */
+              . '  (' . sprintf( __( '%d cached', 'fastcgi-cache-purge-and-preload-nginx' ), $ratio_raw['hits'] )
+              /* translators: %d: Number of uncached pages */
+              . ' / ' . sprintf( __( '%d not cached', 'fastcgi-cache-purge-and-preload-nginx' ), $ratio_raw['misses'] )
+              /* translators: %d: Total number of pages */
+              . ' / ' . sprintf( __( '%d total', 'fastcgi-cache-purge-and-preload-nginx' ), $ratio_raw['total'] ) . ')'
             : (string) $ratio_raw;
 
         $disk = nppp_get_cache_disk_size( $cache_path );
         if ( $disk === null ) {
-            $disk_label = 'N/A';
+            $disk_label = __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
         } elseif ( $disk['dedicated'] ) {
             $pct        = $disk['total'] > 0 ? number_format( ( $disk['used'] / $disk['total'] ) * 100, 1 ) : '0.0';
             $disk_label = $pct . '%  ('
-                . nppp_format_cache_size( $disk['used'] ) . ' used'
-                . ' / ' . nppp_format_cache_size( $disk['total'] ) . ' total — dedicated fs)';
+                /* translators: %s: Human-readable disk size used */
+                . sprintf( __( '%s used', 'fastcgi-cache-purge-and-preload-nginx' ), nppp_format_cache_size( $disk['used'] ) )
+                /* translators: %s: Human-readable total disk size on a dedicated filesystem */
+                . ' / ' . sprintf( __( '%s total — dedicated fs', 'fastcgi-cache-purge-and-preload-nginx' ), nppp_format_cache_size( $disk['total'] ) )
+                . ')';
         } else {
-            $disk_label = nppp_format_cache_size( $disk['used'] ) . ' used in cache dir'
-                . '  (' . nppp_format_cache_size( $disk['free'] ) . ' free on partition)';
+            /* translators: %s: Human-readable disk size used by cache directory */
+            $disk_label = sprintf( __( '%s used in cache dir', 'fastcgi-cache-purge-and-preload-nginx' ), nppp_format_cache_size( $disk['used'] ) )
+                /* translators: %s: Human-readable free disk space on partition */
+                . '  (' . sprintf( __( '%s free on partition', 'fastcgi-cache-purge-and-preload-nginx' ), nppp_format_cache_size( $disk['free'] ) )
+                . ')';
         }
 
         // ── Nginx config paths ────────────────────────────────────────────
@@ -369,10 +389,11 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                         );
                         $label     = $path_n;
                         if ( $is_active ) {
-                            $label .= '  [active]';
+                            $label .= '  ' . __( '[active]', 'fastcgi-cache-purge-and-preload-nginx' );
                         }
                         if ( $fuse_dest !== '' ) {
-                            $label .= '  → ' . $fuse_dest . ' (FUSE)';
+                            /* translators: %s: FUSE mount destination path */
+                            $label .= '  → ' . $fuse_dest . ' ' . __( '(FUSE)', 'fastcgi-cache-purge-and-preload-nginx' );
                         }
                         $nginx_cache_paths_rows[] = [
                             'Field' => $directive,
@@ -384,7 +405,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 // FUSE mount rows.
                 foreach ( (array) ( $fuse_data['fuse_paths'] ?? [] ) as $mount ) {
                     $fuse_mounts_rows[] = [
-                        'Field' => 'Mount',
+                        'Field' => __( 'Mount', 'fastcgi-cache-purge-and-preload-nginx' ),
                         'Value' => (string) $mount,
                     ];
                 }
@@ -393,8 +414,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         // ── Binary versions ───────────────────────────────────────────────
         $nginx_info     = nppp_get_nginx_info();
-        $ver_nginx      = (string) ( $nginx_info['nginx_version'] ?? 'Unknown' );
-        $ver_php        = (string) ( $nginx_info['php_version']   ?? 'Unknown' );
+        $ver_nginx      = (string) ( $nginx_info['nginx_version'] ?? __( 'Unknown', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        $ver_php        = (string) ( $nginx_info['php_version']   ?? __( 'Unknown', 'fastcgi-cache-purge-and-preload-nginx' ) );
         $ver_wget       = (string) nppp_check_wget_version();
         $ver_safexec    = (string) nppp_check_safexec_version();
         $ver_rg         = (string) nppp_check_rg_version();
@@ -405,80 +426,80 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $sep  = static fn( string $s ): array => [ 'Field' => "── $s ──", 'Value' => '' ];
 
         $rows = [
-            $sep( 'ACTION READINESS' ),
-            [ 'Field' => 'Server Side Action',              'Value' => $bool_label( $action_server ) ],
-            [ 'Field' => 'Purge Action',                    'Value' => $bool_label( $action_purge ) ],
-            [ 'Field' => 'Preload Action',                  'Value' => $preload_label( $action_preload ) ],
+            $sep( _x( 'ACTION READINESS', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ),
+            [ 'Field' => __( 'Server Side Action', 'fastcgi-cache-purge-and-preload-nginx' ),                                                 'Value' => $bool_label( $action_server ) ],
+            [ 'Field' => __( 'Purge Action', 'fastcgi-cache-purge-and-preload-nginx' ),                                                       'Value' => $bool_label( $action_purge ) ],
+            [ 'Field' => __( 'Preload Action', 'fastcgi-cache-purge-and-preload-nginx' ),                                                     'Value' => $preload_label( $action_preload ) ],
 
-            $sep( 'SYSTEM CHECKS' ),
-            [ 'Field' => 'PHP Process Owner',               'Value' => $php_owner ],
-            [ 'Field' => 'Web Server User',                 'Value' => $server_user ],
-            [ 'Field' => 'Process Isolation',               'Value' => $isolation ],
-            [ 'Field' => 'Shell Execution',                 'Value' => $shell_exec ],
-            [ 'Field' => 'Cache Key Regex',                 'Value' => $regex_probe ],
-            [ 'Field' => 'wget',                            'Value' => $cmd_wget ],
-            [ 'Field' => 'safexec',                         'Value' => $cmd_safexec ],
-            [ 'Field' => 'rg',                              'Value' => $cmd_rg ],
-            [ 'Field' => 'cpulimit',                        'Value' => $cmd_cpulimit ],
+            $sep( _x( 'SYSTEM CHECKS', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ),
+            [ 'Field' => __( 'PHP Process Owner (Website User)', 'fastcgi-cache-purge-and-preload-nginx' ),                                   'Value' => $php_owner ],
+            [ 'Field' => __( 'Web Server User (nginx | www-data)', 'fastcgi-cache-purge-and-preload-nginx' ),                                 'Value' => $server_user ],
+            [ 'Field' => __( 'Permission Isolation (Optional)', 'fastcgi-cache-purge-and-preload-nginx' ),                                    'Value' => $isolation ],
+            [ 'Field' => __( 'Shell Execution (Required)', 'fastcgi-cache-purge-and-preload-nginx' ),                                         'Value' => $shell_exec ],
+            [ 'Field' => __( 'Cache Key Regex Test (Required)', 'fastcgi-cache-purge-and-preload-nginx' ),                                    'Value' => $regex_probe ],
+            [ 'Field' => __( 'wget (Required)', 'fastcgi-cache-purge-and-preload-nginx' ),                                                    'Value' => $cmd_wget ],
+            [ 'Field' => __( 'safexec (Recommended)', 'fastcgi-cache-purge-and-preload-nginx' ),                                              'Value' => $cmd_safexec ],
+            [ 'Field' => __( 'rg (Recommended)', 'fastcgi-cache-purge-and-preload-nginx' ),                                                   'Value' => $cmd_rg ],
+            [ 'Field' => __( 'cpulimit (Optional)', 'fastcgi-cache-purge-and-preload-nginx' ),                                                'Value' => $cmd_cpulimit ],
 
-            $sep( 'CACHE HEALTH' ),
-            [ 'Field' => 'Cache Path',                      'Value' => $cache_path ],
-            [ 'Field' => 'Path Status',                     'Value' => ( $path_status !== null ? (string) $path_status : 'N/A' ) ],
-            [ 'Field' => 'Permissions',                     'Value' => $bool_label( $perm_status ) ],
-            [ 'Field' => 'Pages in Cache',                  'Value' => $page_count_label ],
-            [ 'Field' => 'Cache Coverage',                  'Value' => $ratio_label ],
-            [ 'Field' => 'Disk Used',                       'Value' => $disk_label ],
+            $sep( _x( 'CACHE HEALTH', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ),
+            [ 'Field' => __( 'Nginx Cache Path (Required)', 'fastcgi-cache-purge-and-preload-nginx' ),                                        'Value' => $cache_path ],
+            [ 'Field' => __( 'Nginx Cache Path Status', 'fastcgi-cache-purge-and-preload-nginx' ),                                            'Value' => ( $path_status !== null ? (string) $path_status : __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' ) ) ],
+            [ 'Field' => __( 'Cache Path Permission (Required)', 'fastcgi-cache-purge-and-preload-nginx' ),                                   'Value' => $bool_label( $perm_status ) ],
+            [ 'Field' => __( 'Pages In Cache Count', 'fastcgi-cache-purge-and-preload-nginx' ),                                               'Value' => $page_count_label ],
+            [ 'Field' => __( 'Cache Coverage', 'fastcgi-cache-purge-and-preload-nginx' ),                                                     'Value' => $ratio_label ],
+            [ 'Field' => __( 'Cache RAM/Disk Size', 'fastcgi-cache-purge-and-preload-nginx' ),                                                'Value' => $disk_label ],
         ];
 
         $rows = array_merge(
             $rows,
-            [ $sep( 'NGINX CONFIG' ) ],
+            [ $sep( _x( 'NGINX CONFIG', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ) ],
             ! empty( $nginx_cache_paths_rows )
                 ? $nginx_cache_paths_rows
-                : [ [ 'Field' => 'Nginx Cache Paths', 'Value' => 'Not Found (nginx.conf not parsed)' ] ],
-            [ $sep( 'FUSE MOUNTS' ) ],
+                : [ [ 'Field' => __( 'Nginx Cache Paths', 'fastcgi-cache-purge-and-preload-nginx' ), 'Value' => __( 'Not Found (nginx.conf not parsed)', 'fastcgi-cache-purge-and-preload-nginx' ) ] ],
+            [ $sep( _x( 'FUSE MOUNTS', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ) ],
             ! empty( $fuse_mounts_rows )
                 ? $fuse_mounts_rows
-                : [ [ 'Field' => 'FUSE Mounts', 'Value' => 'Not Mounted' ] ],
+                : [ [ 'Field' => __( 'FUSE Mounts', 'fastcgi-cache-purge-and-preload-nginx' ), 'Value' => __( 'Not Mounted', 'fastcgi-cache-purge-and-preload-nginx' ) ] ],
             [
 
-                $sep( 'BINARY VERSIONS' ),
-                [ 'Field' => 'Nginx',                           'Value' => $ver_nginx ],
-                [ 'Field' => 'PHP',                             'Value' => $ver_php ],
-                [ 'Field' => 'wget',                            'Value' => $ver_wget ],
-                [ 'Field' => 'safexec',                         'Value' => $ver_safexec ],
-                [ 'Field' => 'rg',                              'Value' => $ver_rg ],
-                [ 'Field' => 'libfuse',                         'Value' => $ver_libfuse ],
-                [ 'Field' => 'bindfs',                          'Value' => $ver_bindfs ],
+                $sep( _x( 'BINARY VERSIONS', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ),
+                [ 'Field' => 'nginx',                                                                                                         'Value' => $ver_nginx ],
+                [ 'Field' => 'php',                                                                                                           'Value' => $ver_php ],
+                [ 'Field' => 'wget',                                                                                                          'Value' => $ver_wget ],
+                [ 'Field' => 'safexec',                                                                                                       'Value' => $ver_safexec ],
+                [ 'Field' => 'rg',                                                                                                            'Value' => $ver_rg ],
+                [ 'Field' => 'libfuse',                                                                                                       'Value' => $ver_libfuse ],
+                [ 'Field' => 'bindfs',                                                                                                        'Value' => $ver_bindfs ],
 
-                $sep( 'SETTINGS' ),
-                [ 'Field' => 'Auto Purge',                      'Value' => $settings['nginx_cache_purge_on_update']        ?? 'no' ],
-                [ 'Field' => 'Auto Preload',                    'Value' => $settings['nginx_cache_auto_preload']           ?? 'no' ],
-                [ 'Field' => 'Preload Mobile',                  'Value' => $settings['nginx_cache_auto_preload_mobile']    ?? 'no' ],
-                [ 'Field' => 'Preload Watchdog',                'Value' => $settings['nginx_cache_watchdog']               ?? 'no' ],
-                [ 'Field' => 'REST API',                        'Value' => $settings['nginx_cache_api']                    ?? 'no' ],
-                [ 'Field' => 'Schedule',                        'Value' => $settings['nginx_cache_schedule']               ?? 'no' ],
-                [ 'Field' => 'Send Mail',                       'Value' => $settings['nginx_cache_send_mail']              ?? 'no' ],
-                [ 'Field' => 'HTTP Purge',                      'Value' => $settings['nppp_http_purge_enabled']            ?? 'no' ],
-                [ 'Field' => 'RG Purge',                        'Value' => $settings['nppp_rg_purge_enabled']              ?? 'no' ],
-                [ 'Field' => 'Cloudflare APO Sync',             'Value' => $settings['nppp_cloudflare_apo_sync']           ?? 'no' ],
-                [ 'Field' => 'Redis Cache Sync',                'Value' => $settings['nppp_redis_cache_sync']              ?? 'no' ],
-                [ 'Field' => 'Proxy Preload',                   'Value' => $settings['nginx_cache_preload_enable_proxy']   ?? 'no' ],
-                [ 'Field' => 'Bypass Path Restriction',         'Value' => $settings['nginx_cache_bypass_path_restriction'] ?? 'no' ],
-                [ 'Field' => 'URL Normalization',               'Value' => $settings['nginx_cache_pctnorm_mode']           ?? 'off' ],
+                $sep( _x( 'SETTINGS', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ),
+                [ 'Field' => __( 'Auto Purge', 'fastcgi-cache-purge-and-preload-nginx' ),                                                     'Value' => $settings['nginx_cache_purge_on_update']         ?? 'no' ],
+                [ 'Field' => __( 'Auto Preload', 'fastcgi-cache-purge-and-preload-nginx' ),                                                   'Value' => $settings['nginx_cache_auto_preload']            ?? 'no' ],
+                [ 'Field' => __( 'Preload Mobile', 'fastcgi-cache-purge-and-preload-nginx' ),                                                 'Value' => $settings['nginx_cache_auto_preload_mobile']     ?? 'no' ],
+                [ 'Field' => __( 'Preload Watchdog', 'fastcgi-cache-purge-and-preload-nginx' ),                                               'Value' => $settings['nginx_cache_watchdog']                ?? 'no' ],
+                [ 'Field' => __( 'REST API', 'fastcgi-cache-purge-and-preload-nginx' ),                                                       'Value' => $settings['nginx_cache_api']                     ?? 'no' ],
+                [ 'Field' => __( 'WP Schedule Cache', 'fastcgi-cache-purge-and-preload-nginx' ),                                              'Value' => $settings['nginx_cache_schedule']                ?? 'no' ],
+                [ 'Field' => __( 'Send Mail', 'fastcgi-cache-purge-and-preload-nginx' ),                                                      'Value' => $settings['nginx_cache_send_mail']               ?? 'no' ],
+                [ 'Field' => __( 'HTTP Purge', 'fastcgi-cache-purge-and-preload-nginx' ),                                                     'Value' => $settings['nppp_http_purge_enabled']             ?? 'no' ],
+                [ 'Field' => __( 'RG Purge', 'fastcgi-cache-purge-and-preload-nginx' ),                                                       'Value' => $settings['nppp_rg_purge_enabled']               ?? 'no' ],
+                [ 'Field' => __( 'Cloudflare Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),                                          'Value' => $settings['nppp_cloudflare_apo_sync']            ?? 'no' ],
+                [ 'Field' => __( 'Redis Object Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),                                        'Value' => $settings['nppp_redis_cache_sync']               ?? 'no' ],
+                [ 'Field' => __( 'Proxy', 'fastcgi-cache-purge-and-preload-nginx' ),                                                          'Value' => $settings['nginx_cache_preload_enable_proxy']    ?? 'no' ],
+                [ 'Field' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),                                        'Value' => $settings['nginx_cache_bypass_path_restriction'] ?? 'no' ],
+                [ 'Field' => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),                                              'Value' => $settings['nginx_cache_pctnorm_mode']            ?? 'off' ],
 
-                $sep( 'AUTO-PURGE TRIGGERS' ),
-                [ 'Field' => 'Auto-Purge Posts',                'Value' => $settings['nppp_autopurge_posts']               ?? 'no' ],
-                [ 'Field' => 'Auto-Purge Terms',                'Value' => $settings['nppp_autopurge_terms']               ?? 'no' ],
-                [ 'Field' => 'Auto-Purge Plugins',              'Value' => $settings['nppp_autopurge_plugins']             ?? 'no' ],
-                [ 'Field' => 'Auto-Purge Themes',               'Value' => $settings['nppp_autopurge_themes']              ?? 'no' ],
-                [ 'Field' => 'Auto-Purge 3rd Party',            'Value' => $settings['nppp_autopurge_3rdparty']            ?? 'no' ],
+                $sep( _x( 'AUTO-PURGE TRIGGERS', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ),
+                [ 'Field' => __( 'Auto-Purge Posts', 'fastcgi-cache-purge-and-preload-nginx' ),                                               'Value' => $settings['nppp_autopurge_posts']                ?? 'no' ],
+                [ 'Field' => __( 'Auto-Purge Terms', 'fastcgi-cache-purge-and-preload-nginx' ),                                               'Value' => $settings['nppp_autopurge_terms']                ?? 'no' ],
+                [ 'Field' => __( 'Auto-Purge Plugins', 'fastcgi-cache-purge-and-preload-nginx' ),                                             'Value' => $settings['nppp_autopurge_plugins']              ?? 'no' ],
+                [ 'Field' => __( 'Auto-Purge Themes', 'fastcgi-cache-purge-and-preload-nginx' ),                                              'Value' => $settings['nppp_autopurge_themes']               ?? 'no' ],
+                [ 'Field' => __( 'Auto-Purge 3rd Party', 'fastcgi-cache-purge-and-preload-nginx' ),                                           'Value' => $settings['nppp_autopurge_3rdparty']             ?? 'no' ],
 
-                $sep( 'RELATED PAGES' ),
-                [ 'Field' => 'Always Purge Homepage',           'Value' => $settings['nppp_related_include_home']          ?? 'no' ],
-                [ 'Field' => 'Always Purge Shop Page',          'Value' => $settings['nppp_related_apply_manual']          ?? 'no' ],
-                [ 'Field' => 'Always Purge Categories & Tags',  'Value' => $settings['nppp_related_include_category']      ?? 'no' ],
-                [ 'Field' => 'Preload Related Pages',           'Value' => $settings['nppp_related_preload_after_manual']  ?? 'no' ],
+                $sep( _x( 'RELATED PAGES', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ),
+                [ 'Field' => __( 'Always Purge the Homepage', 'fastcgi-cache-purge-and-preload-nginx' ),                                      'Value' => $settings['nppp_related_include_home']           ?? 'no' ],
+                [ 'Field' => __( 'Always Purge the Shop Page (WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ),                       'Value' => $settings['nppp_related_apply_manual']           ?? 'no' ],
+                [ 'Field' => __( 'Always Purge Archives & Related URLs (WordPress + WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ), 'Value' => $settings['nppp_related_include_category']       ?? 'no' ],
+                [ 'Field' => __( 'Preload Related Pages', 'fastcgi-cache-purge-and-preload-nginx' ),                                          'Value' => $settings['nppp_related_preload_after_manual']   ?? 'no' ],
             ]
         );
 
@@ -514,15 +535,16 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
             $cleared = file_put_contents( $log_file, '' );
             if ( $cleared === false ) {
-                WP_CLI::error( sprintf( 'Failed to truncate log file: %s', $log_file ) );
+                /* translators: %s: Path to the log file */
+                WP_CLI::error( sprintf( __( 'Failed to truncate log file: %s', 'fastcgi-cache-purge-and-preload-nginx' ), $log_file ) );
                 return;
             }
-            WP_CLI::success( 'Log file truncated.' );
+            WP_CLI::success( __( 'Log file truncated.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
 
         if ( ! file_exists( $log_file ) || filesize( $log_file ) === 0 ) {
-            WP_CLI::warning( 'Log file is empty or does not exist.' );
+            WP_CLI::warning( __( 'Log file is empty or does not exist.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
 
@@ -586,7 +608,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         } elseif ( $action === 'set' ) {
             $this->settings_set( $args );
         } else {
-            WP_CLI::error( 'Unknown action. Use: get or set.' );
+            WP_CLI::error( __( 'Unknown action. Use: get or set.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         }
     }
 
@@ -605,7 +627,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      */
     public function flush( array $args, array $assoc_args ): void {
         nppp_clear_plugin_cache( true );
-        WP_CLI::success( 'All NPP transient caches cleared.' );
+        WP_CLI::success( __( 'All NPP transient caches cleared.', 'fastcgi-cache-purge-and-preload-nginx' ) );
     }
 
     /**
@@ -650,7 +672,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                         $found[] = [
                             'Hook'     => $hook,
                             'Next Run' => $next_run,
-                            'Interval' => (string) ( $data['interval'] ?? 'N/A' ),
+                            'Interval' => (string) ( $data['interval'] ?? __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' ) ),
                             'Args'     => wp_json_encode( $data['args'] ?? [] ),
                         ];
                     }
@@ -659,7 +681,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         }
 
         if ( empty( $found ) ) {
-            WP_CLI::warning( 'No active NPP schedule events found.' );
+            WP_CLI::warning( __( 'No active NPP schedule events found.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
 
@@ -731,11 +753,11 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( $message === '' ) {
             if ( $type === 'error' ) {
-                WP_CLI::error( 'Operation failed — no status message captured. Check: wp npp log' );
+                WP_CLI::error( __( 'Operation failed — no status message captured. Check: wp npp log', 'fastcgi-cache-purge-and-preload-nginx' ) );
             } elseif ( $type === 'warning' ) {
-                WP_CLI::warning( 'Operation completed with warnings — no message captured.' );
+                WP_CLI::warning( __( 'Operation completed with warnings — no message captured.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             } else {
-                WP_CLI::success( 'Done.' );
+                WP_CLI::success( __( 'Done.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
             return;
         }
@@ -767,14 +789,14 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $wp_filesystem = nppp_initialize_wp_filesystem();
 
         if ( $wp_filesystem === false ) {
-            WP_CLI::error( 'Failed to initialize WP_Filesystem.' );
+            WP_CLI::error( __( 'Failed to initialize WP_Filesystem.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
 
         if ( ! $wp_filesystem->exists( $pid_file ) ) {
             $porcelain
                 ? WP_CLI::line( 'warning' )
-                : WP_CLI::warning( 'No active preload process found (PID file absent).' );
+                : WP_CLI::warning( __( 'No active preload process found (PID file absent).', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
 
@@ -784,7 +806,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             $wp_filesystem->delete( $pid_file );
             $porcelain
                 ? WP_CLI::line( 'warning' )
-                : WP_CLI::warning( 'Invalid PID in lock file. Stale lock removed.' );
+                : WP_CLI::warning( __( 'Invalid PID in lock file. Stale lock removed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
 
@@ -792,7 +814,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             $wp_filesystem->delete( $pid_file );
             $porcelain
                 ? WP_CLI::line( 'warning' )
-                : WP_CLI::warning( sprintf( 'PID %d is no longer alive. Stale lock removed.', $pid ) );
+                /* translators: %d: Process ID that is no longer alive */
+                : WP_CLI::warning( sprintf( __( 'PID %d is no longer alive. Stale lock removed.', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ) );
             return;
         }
 
@@ -837,7 +860,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                     && ( $sfx_info['mode'] & 04000 ) === 04000
                 ) {
                     // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
-                    $kill_out = (string) shell_exec( escapeshellarg( $sfx ) . ' --kill=' . (int) $pid . ' 2>&1' );
+                    shell_exec( escapeshellarg( $sfx ) . ' --kill=' . (int) $pid . ' 2>&1' );
                     usleep( 250000 );
                     if ( ! nppp_is_process_alive( $pid ) ) {
                         $killed = true;
@@ -851,10 +874,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 $wp_filesystem->delete( $pid_file );
                 $porcelain
                     ? WP_CLI::line( 'error' )
+                    /* translators: 1: Process ID that could not be stopped 2: Same process ID for the kill command example */
                     : WP_CLI::error( sprintf(
-                        'Cannot stop PID %d (running as nobody via safexec): '
-                        . 'safexec not found, not SUID-root, or --kill failed. '
-                        . 'Run as root: safexec --kill=%d',
+                        __( 'Cannot stop PID %1$d (running as nobody via safexec): safexec not found, not SUID-root, or --kill failed. Run as root: safexec --kill=%2$d', 'fastcgi-cache-purge-and-preload-nginx' ),
                         $pid,
                         $pid
                     ) );
@@ -884,8 +906,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             if ( ! $killed ) {
                 $porcelain
                     ? WP_CLI::line( 'error' )
+                    /* translators: %d: Process ID that could not be killed */
                     : WP_CLI::error( sprintf(
-                        'Failed to stop preload process (PID %d) — still alive after SIGTERM + SIGKILL.',
+                        __( 'Failed to stop preload process (PID %d) — still alive after SIGTERM + SIGKILL.', 'fastcgi-cache-purge-and-preload-nginx' ),
                         $pid
                     ) );
                 return;
@@ -896,7 +919,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         $porcelain
             ? WP_CLI::line( 'success' )
-            : WP_CLI::success( sprintf( 'Preload process (PID %d) terminated.', $pid ) );
+            /* translators: %d: Process ID that was terminated */
+            : WP_CLI::success( sprintf( __( 'Preload process (PID %d) terminated.', 'fastcgi-cache-purge-and-preload-nginx' ), $pid ) );
     }
 
     /**
@@ -912,11 +936,12 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( $key !== '' ) {
             if ( $key === 'nginx_cache_api_key' ) {
-                WP_CLI::error( 'The API key is protected and cannot be retrieved via WP-CLI.' );
+                WP_CLI::error( __( 'The API key is protected and cannot be retrieved via WP-CLI.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
             if ( ! array_key_exists( $key, $settings ) ) {
+                /* translators: %s: The unknown settings key name */
                 WP_CLI::error( sprintf(
-                    'Unknown setting key: "%s". Run `wp npp settings get` to list all keys.',
+                    __( 'Unknown setting key: "%s". Run `wp npp settings get` to list all keys.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $key
                 ) );
             }
@@ -957,7 +982,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $value = (string) ( $args[2] ?? '' );
 
         if ( $key === '' || $value === '' ) {
-            WP_CLI::error( 'Usage: wp npp settings set <key> <value>' );
+            WP_CLI::error( __( 'Usage: wp npp settings set <key> <value>', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
 
@@ -965,7 +990,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         // Path / regex changes mid-purge or mid-preload leave the running
         // process out of sync with the newly persisted options.
         if ( function_exists( 'nppp_is_operation_active' ) && nppp_is_operation_active() ) {
-            WP_CLI::error( 'Settings cannot be changed while a purge or preload operation is running. Wait for it to finish and retry.' );
+            WP_CLI::error( __( 'Settings cannot be changed while a purge or preload operation is running. Wait for it to finish and retry.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         }
 
         // Keys that must never be mutated via CLI.
@@ -978,13 +1003,15 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nginx_cache_reject_extension',
         ];
         if ( in_array( $key, $protected, true ) ) {
-            WP_CLI::error( sprintf( 'Setting "%s" is protected and cannot be changed via WP-CLI.', $key ) );
+            /* translators: %s: The protected settings key name */
+            WP_CLI::error( sprintf( __( 'Setting "%s" is protected and cannot be changed via WP-CLI.', 'fastcgi-cache-purge-and-preload-nginx' ), $key ) );
         }
 
         $settings = get_option( 'nginx_cache_settings', [] );
         if ( ! array_key_exists( $key, $settings ) ) {
+            /* translators: %s: The unknown settings key name */
             WP_CLI::error( sprintf(
-                'Unknown setting key: "%s". Run `wp npp settings get` to list valid keys.',
+                __( 'Unknown setting key: "%s". Run `wp npp settings get` to list valid keys.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $key
             ) );
         }
@@ -993,11 +1020,14 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         static $pctnorm_allowed = [ 'off', 'upper', 'lower', 'preserve' ];
         if ( $key === 'nginx_cache_pctnorm_mode' ) {
             if ( ! in_array( $value, $pctnorm_allowed, true ) ) {
-                WP_CLI::error( sprintf( 'Value for "%s" must be one of: %s.', $key, implode( ', ', $pctnorm_allowed ) ) );
+                /* translators: 1: Settings key name 2: Comma-separated list of allowed values */
+                WP_CLI::error( sprintf( __( 'Value for "%s" must be one of: %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $key, implode( ', ', $pctnorm_allowed ) ) );
             }
             $settings[ $key ] = $value;
             update_option( 'nginx_cache_settings', $settings );
-            WP_CLI::success( sprintf( 'Updated "%s" → "%s".', $key, $value ) );
+
+            /* translators: 1: Settings key name 2: New value */
+            WP_CLI::success( sprintf( __( 'Updated "%s" → "%s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, $value ) );
             return;
         }
 
@@ -1022,30 +1052,34 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( in_array( $key, $yes_no_keys, true ) ) {
             if ( ! in_array( $value, [ 'yes', 'no' ], true ) ) {
-                WP_CLI::error( sprintf( 'Value for "%s" must be "yes" or "no".', $key ) );
+                /* translators: %s: Settings key name */
+                WP_CLI::error( sprintf( __( 'Value for "%s" must be "yes" or "no".', 'fastcgi-cache-purge-and-preload-nginx' ), $key ) );
             }
             $sanitized = $value;
         } elseif ( in_array( $key, $int_keys, true ) ) {
             if ( ! ctype_digit( $value ) ) {
-                WP_CLI::error( sprintf( 'Value for "%s" must be a non-negative integer.', $key ) );
+                /* translators: %s: Settings key name */
+                WP_CLI::error( sprintf( __( 'Value for "%s" must be a non-negative integer.', 'fastcgi-cache-purge-and-preload-nginx' ), $key ) );
             }
             $sanitized = (int) $value;
         } elseif ( $key === 'nginx_cache_email' ) {
             $sanitized = sanitize_email( $value );
             if ( ! is_email( $sanitized ) ) {
-                WP_CLI::error( sprintf( 'Value for "%s" must be a valid email address.', $key ) );
+                /* translators: %s: Settings key name */
+                WP_CLI::error( sprintf( __( 'Value for "%s" must be a valid email address.', 'fastcgi-cache-purge-and-preload-nginx' ), $key ) );
             }
         } elseif ( $key === 'nppp_http_purge_custom_url' ) {
             // Must match the esc_url_raw + FILTER_VALIDATE_URL logic in settings-sanitize.php.
             $sanitized = untrailingslashit( esc_url_raw( trim( $value ) ) );
             $scheme    = strtolower( (string) wp_parse_url( $sanitized, PHP_URL_SCHEME ) );
             if ( ! in_array( $scheme, [ 'http', 'https' ], true ) || ! filter_var( $sanitized, FILTER_VALIDATE_URL ) ) {
-                WP_CLI::error( sprintf( 'Value for "%s" must be a valid http:// or https:// URL.', $key ) );
+                /* translators: %s: Settings key name */
+                WP_CLI::error( sprintf( __( 'Value for "%s" must be a valid http:// or https:// URL.', 'fastcgi-cache-purge-and-preload-nginx' ), $key ) );
             }
         } elseif ( $key === 'nginx_cache_path' ) {
             $sanitized = sanitize_text_field( $value );
             if ( $sanitized === '' || $sanitized[0] !== '/' ) {
-                WP_CLI::error( 'nginx_cache_path must be an absolute path starting with /.' );
+                WP_CLI::error( __( 'nginx_cache_path must be an absolute path starting with /.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
         } else {
             $sanitized = sanitize_text_field( $value );
@@ -1054,7 +1088,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $settings[ $key ] = $sanitized;
         update_option( 'nginx_cache_settings', $settings );
 
-        WP_CLI::success( sprintf( 'Updated "%s" → "%s".', $key, (string) $sanitized ) );
+        /* translators: 1: Settings key name 2: New sanitized value */
+        WP_CLI::success( sprintf( __( 'Updated "%s" → "%s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, (string) $sanitized ) );
     }
 }
 
