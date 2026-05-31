@@ -931,13 +931,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $key      = (string) ( $args[1] ?? '' );
         $settings = get_option( 'nginx_cache_settings', [] );
 
-        // API key is never exposed via CLI.
-        unset( $settings['nginx_cache_api_key'] );
-
         if ( $key !== '' ) {
-            if ( $key === 'nginx_cache_api_key' ) {
-                WP_CLI::error( __( 'The API key is protected and cannot be retrieved via WP-CLI.', 'fastcgi-cache-purge-and-preload-nginx' ) );
-            }
             if ( ! array_key_exists( $key, $settings ) ) {
                 /* translators: %s: The unknown settings key name */
                 WP_CLI::error( sprintf(
@@ -991,20 +985,6 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         // process out of sync with the newly persisted options.
         if ( function_exists( 'nppp_is_operation_active' ) && nppp_is_operation_active() ) {
             WP_CLI::error( __( 'Settings cannot be changed while a purge or preload operation is running. Wait for it to finish and retry.', 'fastcgi-cache-purge-and-preload-nginx' ) );
-        }
-
-        // Keys that must never be mutated via CLI.
-        // nginx_cache_reject_regex / reject_extension require shell-byte validation
-        // that only settings-sanitize.php performs — block them here to stay safe.
-        $protected = [
-            'nginx_cache_api_key',
-            'nginx_cache_key_custom_regex',
-            'nginx_cache_reject_regex',
-            'nginx_cache_reject_extension',
-        ];
-        if ( in_array( $key, $protected, true ) ) {
-            /* translators: %s: The protected settings key name */
-            WP_CLI::error( sprintf( __( 'Setting "%s" is protected and cannot be changed via WP-CLI.', 'fastcgi-cache-purge-and-preload-nginx' ), $key ) );
         }
 
         $settings = get_option( 'nginx_cache_settings', [] );
@@ -1069,17 +1049,94 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 WP_CLI::error( sprintf( __( 'Value for "%s" must be a valid email address.', 'fastcgi-cache-purge-and-preload-nginx' ), $key ) );
             }
         } elseif ( $key === 'nppp_http_purge_custom_url' ) {
-            // Must match the esc_url_raw + FILTER_VALIDATE_URL logic in settings-sanitize.php.
+            // esc_url_raw + FILTER_VALIDATE_URL logic.
             $sanitized = untrailingslashit( esc_url_raw( trim( $value ) ) );
             $scheme    = strtolower( (string) wp_parse_url( $sanitized, PHP_URL_SCHEME ) );
             if ( ! in_array( $scheme, [ 'http', 'https' ], true ) || ! filter_var( $sanitized, FILTER_VALIDATE_URL ) ) {
                 /* translators: %s: Settings key name */
                 WP_CLI::error( sprintf( __( 'Value for "%s" must be a valid http:// or https:// URL.', 'fastcgi-cache-purge-and-preload-nginx' ), $key ) );
             }
+        } elseif ( $key === 'nginx_cache_api_key' ) {
+            // must be a 64-character hexadecimal string.
+            if ( ! preg_match( '/^[0-9a-fA-F]{64}$/', $value ) ) {
+                WP_CLI::error( __( 'ERROR API KEY: Please enter a valid 64-character hexadecimal string for the API key.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+            $sanitized = $value;
+        } elseif ( $key === 'nginx_cache_key_custom_regex' ) {
+            // User supplies the raw regex; full ReDoS guard,
+            // then base64-encodes for DB storage
+            if ( @preg_match( $value, '' ) === false ) {
+                WP_CLI::error( __( 'ERROR REGEX: The custom cache key regex is invalid. Check the syntax and test it before use.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+            if ( preg_match_all( '/(\(\?=.*\))/i', $value ) > 3 ) {
+                WP_CLI::error( __( 'ERROR REGEX: The custom cache key regex contains more than 3 lookaheads and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+            if ( preg_match( '/\(\?=.*\.\*\)/', $value ) ) {
+                WP_CLI::error( __( 'ERROR REGEX: The custom cache key regex contains a greedy quantifier inside a lookahead and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+            if ( preg_match_all( '/\.\*/', $value ) > 1 ) {
+                WP_CLI::error( __( 'ERROR REGEX: The custom cache key regex contains more than one ".*" quantifier and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+            if ( strlen( $value ) > 300 ) {
+                WP_CLI::error( __( 'ERROR REGEX: The custom cache key regex exceeds the allowed length of 300 characters.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+            // Store as base64
+            $sanitized = base64_encode( $value );
+        } elseif ( $key === 'nginx_cache_reject_regex' ) {
+            // shell-byte guard first, then single-line sanitize.
+            if ( function_exists( 'nppp_forbidden_shell_bytes_reason' ) ) {
+                $reason = nppp_forbidden_shell_bytes_reason( $value );
+                if ( $reason ) {
+                    WP_CLI::error( $reason );
+                }
+            }
+            $sanitized = function_exists( 'nppp_sanitize_reject_regex' )
+                ? nppp_sanitize_reject_regex( $value )
+                : sanitize_text_field( $value );
+        } elseif ( $key === 'nginx_cache_reject_extension' ) {
+            // validate each token, then normalize globs.
+            $tokens = preg_split( '/[,\s]+/', $value, -1, PREG_SPLIT_NO_EMPTY );
+            $bad    = [];
+            foreach ( $tokens as $tok ) {
+                $ok = preg_match( '/^(?:\*\.)?[a-z0-9]+(?:\.[a-z0-9]+)*$/i', $tok )
+                    || preg_match( '/^\.[a-z0-9]+(?:\.[a-z0-9]+)*$/i', $tok );
+                if ( ! $ok ) {
+                    $bad[] = $tok;
+                }
+            }
+            if ( ! empty( $bad ) ) {
+                $preview = implode( ', ', array_slice( $bad, 0, 3 ) ) . ( count( $bad ) > 3 ? '…' : '' );
+                /* translators: %s: short comma-separated preview (max 3) of invalid extension patterns */
+                WP_CLI::error( sprintf(
+                    __( 'ERROR OPTION: Invalid extension pattern(s): %s. Allowed examples: *.css, .css, css', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $preview
+                ) );
+            }
+            $sanitized = function_exists( 'nppp_sanitize_reject_extension_globs' )
+                ? nppp_sanitize_reject_extension_globs( $value )
+                : sanitize_text_field( $value );
         } elseif ( $key === 'nginx_cache_path' ) {
             $sanitized = sanitize_text_field( $value );
             if ( $sanitized === '' || $sanitized[0] !== '/' ) {
                 WP_CLI::error( __( 'nginx_cache_path must be an absolute path starting with /.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+            // Read the bypass flag from current saved settings, then run the
+            // nppp_validate_path()
+            $bypass_restriction = ( ( $settings['nginx_cache_bypass_path_restriction'] ?? 'no' ) === 'yes' );
+            if ( function_exists( 'nppp_validate_path' ) ) {
+                $path_result = nppp_validate_path( $sanitized, false, $bypass_restriction );
+                if ( $path_result !== true ) {
+                    switch ( $path_result ) {
+                        case 'critical_path':
+                            WP_CLI::error( __( 'ERROR PATH: The specified Nginx Cache Directory is either a critical system directory or a top-level directory and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+                            break;
+                        case 'directory_not_exist_or_readable':
+                            WP_CLI::error( __( 'ERROR PATH: The specified Nginx Cache Directory does not exist. Please verify the Nginx Cache Directory.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+                            break;
+                        default:
+                            WP_CLI::error( __( 'ERROR PATH: An invalid path was provided for the Nginx Cache Directory. Please provide a valid directory path.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+                    }
+                }
             }
         } else {
             $sanitized = sanitize_text_field( $value );
