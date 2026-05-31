@@ -414,7 +414,7 @@ function nppp_nginx_cache_related_pages_callback() {
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
                     <span class="title"><?php esc_html_e( 'Always Purge the Homepage', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                    <span class="desc"><?php esc_html_e( 'When any single URL is purged (manual or auto), also purge the homepage.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
+                    <span class="desc"><?php esc_html_e( 'When any single URL is purged (manual or auto), also purge the homepage. For standard posts, also purges the main RSS feed (/feed/).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
                 </span>
             </label>
         </div>
@@ -439,8 +439,8 @@ function nppp_nginx_cache_related_pages_callback() {
             <label for="nppp_rel_cat">
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
-                    <span class="title"><?php esc_html_e( 'Always Purge Categories & Tags (WordPress + WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                    <span class="desc"><?php esc_html_e( 'When a post or product is purged (manual or auto), also purge its category and tag archives.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
+                    <span class="title"><?php esc_html_e( 'Always Purge Archives & Related URLs (WordPress + WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="desc"><?php esc_html_e( 'When a post or product is purged (manual or auto), also purge: all taxonomy archives (categories, tags, custom taxonomies, WooCommerce product attributes), author archive, date-based archives, and taxonomy RSS feeds. Per-post comment feeds are always purged automatically when comments are open or present.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
                 </span>
             </label>
         </div>
