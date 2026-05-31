@@ -170,7 +170,7 @@ Release date: 2026-05-25
 * Fixed: Separated safexec and native kill paths to prevent redundant process-killing attempts in premature process detection logic.
 * Fixed: Recurring cron events (nppp_index_updater_event, npp_cache_preload_event) silently dying after their first run.
 * Fixed: nppp_index_updater_event self-healing — event now auto-reschedules on next admin load if wiped externally by WP-CLI, a cron manager plugin, or a database import.
-* Resolved: Multiple PHP 8+ deprecation warnings regarding passing null or false values to string and array functions (e.g., trim(), end()).
+* Resolved: Multiple PHP 8+ deprecation warnings regarding passing null or false values to string and array functions (trim(), end()).
 * Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
 * Performance: Improve capability checks via transients.
 * Improved: Nginx detection and Setup (Assume Nginx Mode) process. Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
@@ -178,6 +178,10 @@ Release date: 2026-05-25
 * Improved: Compatibility on aaPanel. Fully tested and functional (Single and Multi WebServer arches). See aaPanel/issues/270 and aaPanel/issues/276 for ongoing issues reported. (Thanks to @neikoloves)
 * Improved: Status tab diagnostic reporting to explicitly flag outdated ripgrep binaries.
 * Improved: Degrade into the PHP recursive scanner fallback if an outdated version of ripgrep is detected on FP3 Purge.
+* Extended: Purge Scope now purges Author archives when a post is saved or updated.
+* Extended: Purge Scope now purges Date-based archives (year, month, day) when a post is saved or updated.
+* Extended: Purge Scope now purges RSS feeds on relevant purge events: main site feed on post publish/update, per-post comments feed when comments are open or present, and per-taxonomy RSS feeds alongside their archive pages.
+* Extended: Purge Scope taxonomy archive purging now covers all public registered taxonomies generically (custom taxonomies, WooCommerce product attribute archives).
 * Changed: Hard dependency extended to require both shell_exec and exec (rg). REGRESSION!
 * Added: Proper open_basedir compatibility detection and admin warning for missing required paths.
 * Added: Detection for Vary: Accept-Encoding may cause double‑cache issue (dismissable completely).
