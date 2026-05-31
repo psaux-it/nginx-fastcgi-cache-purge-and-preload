@@ -195,6 +195,45 @@ function nppp_get_related_urls_for_single(string $primary_url): array {
         }
     }
 
+    // 7) Comment pagination pages.
+    // Generated only when WordPress comment pagination is active (Settings >
+    // Discussion > "Break comments into pages").
+    if ( $post_id && get_option( 'page_comments' ) ) {
+        $nppp_cmt_per_page = (int) get_option( 'comments_per_page' );
+        if ( $nppp_cmt_per_page > 0 ) {
+            $nppp_cmt_total = (int) get_comments_number( $post_id );
+            $nppp_cmt_pages = (int) ceil( $nppp_cmt_total / $nppp_cmt_per_page );
+            if ( $nppp_cmt_pages > 1 ) {
+                $nppp_cmt_permalink = get_permalink( $post_id );
+                if ( $nppp_cmt_permalink ) {
+                    global $wp_rewrite;
+                    $nppp_cmt_newest = ( get_option( 'default_comments_page' ) === 'newest' );
+                    for ( $nppp_cmt_i = 1; $nppp_cmt_i <= $nppp_cmt_pages; $nppp_cmt_i++ ) {
+                        // Skip the page that maps to the base permalink — already in primary.
+                        $nppp_cmt_is_base = $nppp_cmt_newest
+                            ? ( $nppp_cmt_i === $nppp_cmt_pages )
+                            : ( $nppp_cmt_i === 1 );
+                        if ( $nppp_cmt_is_base ) {
+                            continue;
+                        }
+                        if ( $wp_rewrite->using_permalinks() ) {
+                            $nppp_cmt_url = user_trailingslashit(
+                                trailingslashit( $nppp_cmt_permalink )
+                                    . $wp_rewrite->comments_pagination_base . '-' . $nppp_cmt_i,
+                                'commentpaged'
+                            );
+                        } else {
+                            $nppp_cmt_url = add_query_arg( 'cpage', $nppp_cmt_i, $nppp_cmt_permalink );
+                        }
+                        if ( wp_http_validate_url( $nppp_cmt_url ) ) {
+                            $urls[] = $nppp_cmt_url;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Normalization
     $primary_norm = user_trailingslashit($primary_url, 'single');
 
