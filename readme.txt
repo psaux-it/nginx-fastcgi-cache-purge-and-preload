@@ -170,6 +170,8 @@ Release date: 2026-05-25
 * Fixed: Separated safexec and native kill paths to prevent redundant process-killing attempts in premature process detection logic.
 * Fixed: Recurring cron events (nppp_index_updater_event, npp_cache_preload_event) silently dying after their first run.
 * Fixed: nppp_index_updater_event self-healing — event now auto-reschedules on next admin load if wiped externally by WP-CLI, a cron manager plugin, or a database import.
+* Fixed: URL→Filepath index is now automatically flushed on WordPress permalink structure changes.
+* Fixed: URL→Filepath index is now automatically flushed when Nginx Cache Path changes.
 * Resolved: Multiple PHP 8+ deprecation warnings regarding passing null or false values to string and array functions (trim(), end()).
 * Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
 * Performance: Restructured the Related Preload engine into a single process, collapsing dozens of related URL preload into a maximum of 2 background operations (Desktop, Mobile).
