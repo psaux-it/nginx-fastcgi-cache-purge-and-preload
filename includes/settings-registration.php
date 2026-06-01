@@ -133,3 +133,38 @@ function nppp_before_settings_option_update( $new_value, $old_value ) {
 
     return $new_value;
 }
+
+/**
+ * Flushes the URL→filepath index and cache-key regex probe transient when
+ * the WordPress permalink structure changes.
+ *
+ * Nginx derives cache file paths from an MD5 of the full cache key string
+ * ($scheme$request_method$host$request_uri). A permalink structure change
+ * modifies $request_uri for every post, producing entirely new MD5 hashes
+ * and filesystem paths. Without this flush, FP2 finds old-path entries that
+ * pass the prefix check (any_prefix_match=true) but whose files have been
+ * evicted by nginx (any_valid=false), concludes "confirmed miss", removes
+ * the URL from pending, and never reaches FP3/FP4 — leaving new-permalink
+ * cached content permanently unpurged.
+ *
+ * @param string $old_permalink_structure  Previous permalink format string.
+ * @param string $new_permalink_structure  Newly saved permalink format string.
+ */
+function nppp_on_permalink_structure_changed( string $old_permalink_structure, string $new_permalink_structure ): void {
+    if ( $old_permalink_structure === $new_permalink_structure ) {
+        return;
+    }
+
+    delete_option( 'nppp_url_filepath_index' );
+    nppp_display_admin_notice(
+        'info',
+        sprintf(
+            /* translators: 1: old permalink structure 2: new permalink structure */
+            __( 'INFO INDEX CLEARED: URL→filepath index flushed — permalink structure changed from %1$s to %2$s. Cache entries have new filesystem paths.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $old_permalink_structure !== '' ? $old_permalink_structure : __( '(plain)', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $new_permalink_structure !== '' ? $new_permalink_structure : __( '(plain)', 'fastcgi-cache-purge-and-preload-nginx' )
+        ),
+        true,
+        false
+    );
+}
