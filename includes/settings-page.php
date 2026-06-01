@@ -1057,6 +1057,16 @@ function nppp_handle_nginx_cache_settings_submission() {
             $existing_options = (array) $existing_options;
             $merged = wp_parse_args($new_settings, $existing_options);
 
+            // Flush URL→filepath index when cache path changes, all entries are stale now.
+            $nppp_old_path_chk = isset( $existing_options['nginx_cache_path'] )
+                ? rtrim( $existing_options['nginx_cache_path'], '/' ) : '';
+            $nppp_new_path_chk = isset( $merged['nginx_cache_path'] )
+                ? rtrim( $merged['nginx_cache_path'], '/' ) : '';
+            if ( $nppp_old_path_chk !== '' && $nppp_new_path_chk !== ''
+                && $nppp_old_path_chk !== $nppp_new_path_chk ) {
+                delete_option( 'nppp_url_filepath_index' );
+            }
+
             // Delete transients partially
             $static_key_base = 'nppp';
             $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
