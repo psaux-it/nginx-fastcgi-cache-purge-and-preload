@@ -109,6 +109,17 @@ function nppp_before_settings_option_update( $new_value, $old_value ) {
 
     if ( $old_path !== '' && $new_path !== '' && $old_path !== $new_path ) {
         delete_option( 'nppp_url_filepath_index' );
+        nppp_display_admin_notice(
+            'info',
+            sprintf(
+                /* translators: 1: old cache path 2: new cache path */
+                __( 'INFO INDEX CLEARED: URL→filepath index flushed — cache path changed from %1$s to %2$s (pre-update option filter).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $old_path,
+                $new_path
+            ),
+            true,
+            false
+        );
         delete_transient( 'nppp_cache_key_regex_probe' );
     }
 
