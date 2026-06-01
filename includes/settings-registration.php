@@ -83,8 +83,7 @@ function nppp_is_assume_nginx_mode(): bool {
 
 /**
  * Fires before every update_option( 'nginx_cache_settings', ... ) call,
- * regardless of whether it comes from the main settings form, an AJAX
- * toggle handler, or WP-CLI. Flushes state that depends on the cache path
+ * an AJAX, and WP-CLI handler. Flushes state that depends on the cache path
  * or cache key regex when either value changes.
  *
  * Covers the eight direct update_option() calls in settings-ajax.php that
@@ -120,6 +119,9 @@ function nppp_before_settings_option_update( $new_value, $old_value ) {
             true,
             false
         );
+        $static_key_base = 'nppp';
+        $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
+        delete_transient($transient_key_permissions_check);
         delete_transient( 'nppp_cache_key_regex_probe' );
     }
 
