@@ -80,3 +80,43 @@ function nppp_is_assume_nginx_mode(): bool {
 
     return false;
 }
+
+/**
+ * Fires before every update_option( 'nginx_cache_settings', ... ) call,
+ * regardless of whether it comes from the main settings form, an AJAX
+ * toggle handler, or WP-CLI. Flushes state that depends on the cache path
+ * or cache key regex when either value changes.
+ *
+ * Covers the eight direct update_option() calls in settings-ajax.php that
+ * bypass nppp_nginx_cache_settings_sanitize() and would otherwise leave the
+ * URL index and regex probe transient stale.
+ *
+ * @param mixed $new_value  The new option value about to be saved.
+ * @param mixed $old_value  The current stored option value.
+ * @return mixed            $new_value unchanged.
+ */
+function nppp_before_settings_option_update( $new_value, $old_value ) {
+    if ( ! is_array( $new_value ) || ! is_array( $old_value ) ) {
+        return $new_value;
+    }
+
+    $old_path = isset( $old_value['nginx_cache_path'] )
+        ? rtrim( $old_value['nginx_cache_path'], '/' )
+        : '';
+    $new_path = isset( $new_value['nginx_cache_path'] )
+        ? rtrim( $new_value['nginx_cache_path'], '/' )
+        : '';
+
+    if ( $old_path !== '' && $new_path !== '' && $old_path !== $new_path ) {
+        delete_option( 'nppp_url_filepath_index' );
+        delete_transient( 'nppp_cache_key_regex_probe' );
+    }
+
+    $old_regex = $old_value['nginx_cache_key_custom_regex'] ?? '';
+    $new_regex = $new_value['nginx_cache_key_custom_regex'] ?? '';
+    if ( $old_regex !== $new_regex ) {
+        delete_transient( 'nppp_cache_key_regex_probe' );
+    }
+
+    return $new_value;
+}
