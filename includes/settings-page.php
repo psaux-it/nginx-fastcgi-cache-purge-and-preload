@@ -831,6 +831,12 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_nginx_cache_key_custom_regex_callback(); ?>
+                                <p>
+                                    <button type="button" id="nppp-test-regex-btn" class="button-secondary">
+                                        <?php esc_html_e( 'Test Regex', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    </button>
+                                    <span id="nppp-test-regex-result" style="display:inline-block; margin-left:12px; vertical-align:middle;"></span>
+                                </p>
                                 <div class="key-regex-info">
                                     <br><p class="description">⚡ <?php echo esc_html__('The default regex pattern parses the \'$host\' and \'$request_uri\' portions from nginx cache key lines and correctly handles all common standard formats automatically. Supported key formats:', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
                                     <p class="description">✅ <code>$scheme$request_method$host$request_uri</code> &mdash; <?php echo esc_html__('most widely used fastcgi format — all HTTP methods supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
