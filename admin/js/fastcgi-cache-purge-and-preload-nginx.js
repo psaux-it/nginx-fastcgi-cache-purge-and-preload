@@ -1226,6 +1226,58 @@ $(document).ready(function() {
         });
     });
 
+    $('#nppp-test-regex-btn').on('click', function(e) {
+        e.preventDefault();
+
+        const $btn  = $(this);
+        const $res  = $('#nppp-test-regex-result');
+
+        // Disable button + inline spinner
+        $btn.prop('disabled', true).addClass('disabled');
+        const $spin = $('<span class="nppp-inline-spinner" aria-hidden="true"></span>').appendTo($btn);
+        $res.html('');
+
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'nppp_test_cache_key_regex',
+                _wpnonce: nppp_admin_data.test_regex_nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    const status  = response.data.status;
+                    const message = response.data.message;
+                    let cls = 'notice notice-success inline';
+                    if (status === 'fail') {
+                        cls = 'notice notice-error inline';
+                    } else if (status === 'skip') {
+                        cls = 'notice notice-warning inline';
+                    }
+                    $res.html('<div class="' + cls + '"><p>' + message + '</p></div>');
+
+                    // Toast
+                    const type = status === 'ok' ? 'success' : (status === 'fail' ? 'error' : 'info');
+                    npppToast(message, type);
+                } else {
+                    const errMsg = response.data?.message || __('Unknown error', 'fastcgi-cache-purge-and-preload-nginx');
+                    $res.html('<div class="notice notice-error inline"><p>' + errMsg + '</p></div>');
+                    npppToast(errMsg, 'error');
+                }
+            },
+            error: function() {
+                const msg = __('AJAX request failed.', 'fastcgi-cache-purge-and-preload-nginx');
+                $res.html('<div class="notice notice-error inline"><p>' + msg + '</p></div>');
+                npppToast(msg, 'error');
+            },
+            complete: function() {
+                $spin.remove();
+                $btn.prop('disabled', false).removeClass('disabled');
+            }
+        });
+    });
+
     // Handle click event for preload buttons in advanced tab
     $(document).on('click', '.nppp-preload-btn', function(e) {
         e.preventDefault();
