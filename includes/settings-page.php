@@ -1065,6 +1065,17 @@ function nppp_handle_nginx_cache_settings_submission() {
             if ( $nppp_old_path_chk !== '' && $nppp_new_path_chk !== ''
                 && $nppp_old_path_chk !== $nppp_new_path_chk ) {
                 delete_option( 'nppp_url_filepath_index' );
+                nppp_display_admin_notice(
+                    'info',
+                    sprintf(
+                        /* translators: 1: old cache path 2: new cache path */
+                        __( 'INFO INDEX CLEARED: URL→filepath index flushed — cache path changed from %1$s to %2$s (settings form save).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $nppp_old_path_chk,
+                        $nppp_new_path_chk
+                    ),
+                    true,
+                    false
+                );
             }
 
             // Delete transients partially
