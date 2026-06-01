@@ -541,3 +541,27 @@ function nppp_dismiss_vary_notice(): void {
 
     wp_send_json_success();
 }
+
+// AJAX callback to probe the cache key regex against a real cache file.
+function nppp_ajax_test_cache_key_regex() {
+    nppp_ajax_auth( 'nppp_test_regex_nonce' );
+
+    if ( ! function_exists( 'nppp_probe_cache_key_regex' ) ) {
+        wp_send_json_error(
+            array( 'message' => __( 'Probe function not available.', 'fastcgi-cache-purge-and-preload-nginx' ) ),
+            500
+        );
+    }
+
+    $result = nppp_probe_cache_key_regex();
+    $messages = array(
+        'ok'   => __( 'Regex matched and extracted a valid URL.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'fail' => __( 'Regex did not match or produced an invalid URL.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'skip' => __( 'No cache available to test.', 'fastcgi-cache-purge-and-preload-nginx' ),
+    );
+
+    wp_send_json_success( array(
+        'status'  => $result,
+        'message' => $messages[ $result ] ?? __( 'Unknown result.', 'fastcgi-cache-purge-and-preload-nginx' ),
+    ) );
+}
