@@ -193,7 +193,9 @@ Release date: 2026-05-25
 * Added: Detection for Vary: Accept-Encoding may cause double‑cache issue (dismissable completely).
 * Added: Strict minimum version requirement for ripgrep (`>= 14.0.0`)
 * Added: Cache Key Regex validation checks now trigger global warnings when custom or default regex fail.
+* Added: "Test Regex" button to live-verify the cache key regex against a real cache file.
 * Removed: False-positive and redundant warning messages on the Status and Advanced tab.
+* Removed: /feed/ and comment-page- from the preload defaults; feeds and comment pages are now preloaded by default.
 * Developer: nppp_purged_all action hook — fired after every successful full Nginx cache purge, enabling third-party plugins to trigger their own cache flush in sync.
 * Updated: Tested up to WordPress 7.0
 
