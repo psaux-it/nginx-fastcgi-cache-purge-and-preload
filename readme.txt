@@ -172,13 +172,14 @@ Release date: 2026-05-25
 * Fixed: nppp_index_updater_event self-healing — event now auto-reschedules on next admin load if wiped externally by WP-CLI, a cron manager plugin, or a database import.
 * Fixed: URL→Filepath index is now automatically flushed on WordPress permalink structure changes.
 * Fixed: URL→Filepath index is now automatically flushed when Nginx Cache Path changes.
+* Fixed: Default Cache key regex no longer embeds non-GET/HEAD HTTP methods (POST, PUT, DELETE, PATCH, OPTIONS) into the host segment when parsing $scheme$request_method$host$request_uri keys caused silent purge failures.
 * Resolved: Multiple PHP 8+ deprecation warnings regarding passing null or false values to string and array functions (trim(), end()).
 * Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
 * Performance: Restructured the Related Preload engine into a single process, collapsing dozens of related URL preload into a maximum of 2 background operations (Desktop, Mobile).
 * Performance: Improve capability checks via transients.
 * Improved: Nginx detection and Setup (Assume Nginx Mode) process. Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
 * Improved: UI/UX on Setup Page.
-* Improved: Compatibility on aaPanel. Fully tested and functional (Single and Multi WebServer arches). See aaPanel/issues/270 and aaPanel/issues/276 for ongoing issues reported. (Thanks to @neikoloves)
+* Improved: Compatibility on aaPanel. Fully tested and functional (Single and Multi WebServer arches). See github aaPanel/issues/270 and aaPanel/issues/276 for ongoing issues reported. (Thanks to @neikoloves)
 * Improved: Status tab diagnostic reporting to explicitly flag outdated ripgrep binaries.
 * Improved: Degrade into the PHP recursive scanner fallback if an outdated version of ripgrep is detected on FP3 Purge.
 * Extended: Purge Scope now purges Author archives when a post is saved or updated.
@@ -186,6 +187,7 @@ Release date: 2026-05-25
 * Extended: Purge Scope now purges RSS feeds on relevant purge events: main site feed on post publish/update, per-post comments feed when comments are open or present, and per-taxonomy RSS feeds alongside their archive pages.
 * Extended: Purge Scope now purges paginated comment URLs for posts when WordPress comment pagination is enabled, including both pretty-permalink and query-string comment page variants.
 * Extended: Purge Scope taxonomy archive purging now covers all public registered taxonomies generically (custom taxonomies, WooCommerce product attribute archives).
+* Extended: Default Cache Key regex is now also support $scheme://$host$request_uri | $host$request_uri | $host$uri$is_args$args
 * Changed: Hard dependency extended to require both shell_exec and exec (rg). REGRESSION!
 * Added: Proper open_basedir compatibility detection and admin warning for missing required paths.
 * Added: Detection for Vary: Accept-Encoding may cause double‑cache issue (dismissable completely).
