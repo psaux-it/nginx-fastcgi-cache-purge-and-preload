@@ -406,7 +406,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     $nginx_cache_read_timeout = isset($nginx_cache_settings['nginx_cache_read_timeout']) ? (int)$nginx_cache_settings['nginx_cache_read_timeout'] : 60;
     $log_path = nppp_get_runtime_file('nppp-wget.log');
 
-    // Apply feed preload toggle to the reject regex.
+    // Apply preload feeds filter the reject regex.
     if ( function_exists( 'nppp_filter_reject_regex_for_feeds' ) ) {
         $nginx_cache_reject_regex = nppp_filter_reject_regex_for_feeds( $nginx_cache_reject_regex );
     }
@@ -1039,6 +1039,21 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $safexec_path = nppp_find_safexec_path();
     $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
 
+    // DYNAMIC FEED DISCOVERY FOR SINGLE PRELOAD
+    $preload_urls = [ $current_page_url ]; // Target list starts with the page itself
+    $preload_feeds_enabled = ! empty( $nginx_cache_settings['nginx_cache_preload_feeds'] ) && $nginx_cache_settings['nginx_cache_preload_feeds'] === 'yes';
+
+    if ( $preload_feeds_enabled ) {
+        $related_feeds = nppp_get_related_feed_urls_for_preload( $current_page_url );
+        $preload_urls  = array_merge( $preload_urls, $related_feeds );
+    }
+
+    // Clean and unique the collected URLs array (safety net)
+    $preload_urls = array_unique( array_filter( $preload_urls ) );
+
+    // Build space-separated shell arguments out of target URLs to prevent shell injections (CVE-2025-6213)
+    $url_shell_arguments = implode( ' ', array_map( 'escapeshellarg', $preload_urls ) );
+
     // Start cache preloading for single post/page (when manual On-page preload action triggers)
     // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
     // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
@@ -1067,7 +1082,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
         '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
         '-- ' .
-        escapeshellarg($current_page_url) . ' ' .
+        $url_shell_arguments . ' ' .
         '>/dev/null 2>&1 & echo $!';
 
     // Trigger desktop preload and get PID
@@ -1114,7 +1129,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
             '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
             '--user-agent=' . escapeshellarg($nppp_mobile_ua) . ' ' .
             '-- ' .
-            escapeshellarg($current_page_url) . ' ' .
+            $url_shell_arguments . ' ' .
             '>/dev/null 2>&1 & echo $!';
 
         // Trigger preload for mobile
