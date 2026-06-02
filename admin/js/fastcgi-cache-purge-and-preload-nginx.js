@@ -1002,6 +1002,31 @@ $(document).ready(function() {
         : null;
     }
 
+    // Row-index cache: URL string → jQuery <tr> element.
+    // Built lazily on first use, invalidated after every dt.draw() so it stays
+    // in sync with sort/filter/page changes.
+    var _npppRowIndex = null;
+
+    function _npppBuildRowIndex() {
+        _npppRowIndex = {};
+        var dt = npppDT();
+        if (!dt) return;
+        // dt.rows() covers ALL rows (all pages) in client-side mode.
+        dt.rows().every(function () {
+            var node = this.node();
+            if (!node) return;
+            var $row = $(node);
+            var url  = $row.find('td.nppp-url').text().trim();
+            if (url) _npppRowIndex[url] = $row;
+        });
+    }
+
+    // Invalidate on any draw so the index stays accurate after sort/search/page.
+    // Wired up inside initializePremiumTable() below.
+    function npppInvalidateRowIndex() {
+        _npppRowIndex = null;
+    }
+
     // Highlight row
     function npppFlashRow($row){
         var $main  = $row.hasClass('child') ? $row.prev('tr') : $row;
@@ -1061,27 +1086,20 @@ $(document).ready(function() {
         return fallback || '';
     }
 
-    // Find the main (non-child) row by its URL cell text
+    // Find the main (non-child) row by its URL cell text.
+    // O(1) via _npppRowIndex; falls back to DOM scan when DT is not ready.
     function npppFindRowByUrl(url){
         if (!url) return $();
         url = String(url).trim();
 
         var dt = npppDT();
         if (dt) {
-            var match = $();
-            dt.rows().every(function(){
-                var $row  = $(this.node());
-                var $main = $row.hasClass('child') ? $row.prev('tr') : $row;
-                var text  = $main.find('td.nppp-url').text().trim();
-                if (text === url) {
-                    match = $main;
-                    return false;
-                }
-            });
-            return match;
+            // Build the index lazily on first use after a draw/init.
+            if (_npppRowIndex === null) _npppBuildRowIndex();
+            return _npppRowIndex[url] || $();
         }
 
-        // Non-DataTables fallback (shouldn’t be needed)
+        // Non-DataTables fallback (shouldn't be needed)
         var $r = $('#nppp-premium-table tbody tr').filter(function(){
             var $main = $(this).hasClass('child') ? $(this).prev('tr') : $(this);
             return $main.find('td.nppp-url').text().trim() === url;
@@ -1118,7 +1136,6 @@ $(document).ready(function() {
         var dt = npppDT();
         if (dt) {
             dt.row($main[0]).invalidate('dom');
-            dt.draw(false);
         }
     }
 
@@ -1210,6 +1227,16 @@ $(document).ready(function() {
                                 npppApplyPurgedState($rel);
                             }
                         });
+                    }
+
+                    // Batch draw: one single dt.draw(false) after ALL row
+                    // invalidations above.
+                    // Also reset the row index so the next lookup rebuilds
+                    // it with accurate post-purge state.
+                    var _dtBatch = npppDT();
+                    if (_dtBatch) {
+                        _dtBatch.draw(false);
+                        npppInvalidateRowIndex();
                     }
                 } else {
                     // on error
@@ -3237,6 +3264,13 @@ $(document).ready(function() {
         $tbl.off('page.dt.nppp')
             .on('page.dt.nppp', function () {
                 $(this).find('tr.purged-row, tr.child.purged-row').removeClass('purged-row');
+            });
+
+        // Invalidate the URL→row index on every draw so npppFindRowByUrl
+        // always sees the current rows after sort/search/filter changes.
+        $tbl.off('draw.dt.nppp')
+            .on('draw.dt.nppp', function () {
+                npppInvalidateRowIndex();
             });
     }
 
