@@ -485,6 +485,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 [ 'Field' => __( 'Auto Preload', 'fastcgi-cache-purge-and-preload-nginx' ),                                                   'Value' => $settings['nginx_cache_auto_preload']            ?? 'no' ],
                 [ 'Field' => __( 'Preload Mobile', 'fastcgi-cache-purge-and-preload-nginx' ),                                                 'Value' => $settings['nginx_cache_auto_preload_mobile']     ?? 'no' ],
                 [ 'Field' => __( 'Preload Watchdog', 'fastcgi-cache-purge-and-preload-nginx' ),                                               'Value' => $settings['nginx_cache_watchdog']                ?? 'no' ],
+                [ 'Field' => __( 'Preload Feeds', 'fastcgi-cache-purge-and-preload-nginx' ),                                                  'Value' => $settings['nginx_cache_preload_feeds']           ?? 'no' ],
                 [ 'Field' => __( 'REST API', 'fastcgi-cache-purge-and-preload-nginx' ),                                                       'Value' => $settings['nginx_cache_api']                     ?? 'no' ],
                 [ 'Field' => __( 'WP Schedule Cache', 'fastcgi-cache-purge-and-preload-nginx' ),                                              'Value' => $settings['nginx_cache_schedule']                ?? 'no' ],
                 [ 'Field' => __( 'Send Mail', 'fastcgi-cache-purge-and-preload-nginx' ),                                                      'Value' => $settings['nginx_cache_send_mail']               ?? 'no' ],
@@ -1193,6 +1194,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_rg_purge_enabled',       'nginx_cache_bypass_path_restriction',
             'nppp_related_include_home',   'nppp_related_include_category',
             'nppp_related_apply_manual',   'nppp_related_preload_after_manual',
+            'nginx_cache_preload_feeds',
         ];
 
         // Positive-integer settings — ranges.
