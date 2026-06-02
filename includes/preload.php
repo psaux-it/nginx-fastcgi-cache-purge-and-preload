@@ -406,11 +406,6 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     $nginx_cache_read_timeout = isset($nginx_cache_settings['nginx_cache_read_timeout']) ? (int)$nginx_cache_settings['nginx_cache_read_timeout'] : 60;
     $log_path = nppp_get_runtime_file('nppp-wget.log');
 
-    // Apply preload feeds filter the reject regex.
-    if ( function_exists( 'nppp_filter_reject_regex_for_feeds' ) ) {
-        $nginx_cache_reject_regex = nppp_filter_reject_regex_for_feeds( $nginx_cache_reject_regex );
-    }
-
     // Resolve mobile UA from DB; constant is the compile-time fallback only.
     $nppp_mobile_ua = ! empty( $nginx_cache_settings['nginx_cache_mobile_user_agent'] )
         ? $nginx_cache_settings['nginx_cache_mobile_user_agent']
