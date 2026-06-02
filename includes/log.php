@@ -138,6 +138,11 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_update_http_purge_option'                => 'nppp-update-http-purge-option',
             'nppp_update_rg_purge_option'                  => 'nppp-update-rg-purge-option',
             'nppp_update_bypass_path_restriction'          => 'nppp-update-bypass-path-restriction',
+            'nppp_update_preload_feeds_option'             => 'nppp-update-preload-feeds-option',
+            'nppp_update_autopurge_triggers'               => 'nppp-autopurge-triggers',
+            'nppp_dismiss_vary_notice'                     => 'nppp-dismiss-vary-notice',
+            'nppp_clear_url_index'                         => 'nppp-clear-url-index',
+            'nppp_test_cache_key_regex'                    => 'nppp_test_regex_nonce',
         ];
 
         // Get the current AJAX action
