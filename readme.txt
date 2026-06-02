@@ -160,13 +160,14 @@ NPP restricts cache paths by default to prevent accidental deletion of system fi
 
 Release date: 2026-05-25
 
-* WP-CLI Support: MILESTONE: Introduced full CLI integration. You can now manage cache purges, preloading, status reporting, logging, settings updates, flush, and schedules directly from the terminal.
+* WP-CLI Support: (Milestone): Introduced full CLI integration. You can now manage cache purges, preloading, status reporting, logging, settings updates, flush, and schedules directly from the terminal.
+* NEW: Preload Feed – Users can now fully manage feed caching at both site‑wide and per‑URL levels. Feeds (main RSS/Atom, per‑post comment feeds, and taxonomy RSS feeds) are controlled via the Preload Feed option.
 * Fixed: A false-negative in Nginx detection on Nginx+Apache proxy stacks, which rendered the plugin completely non-functional even when Nginx was active as the front proxy.
 * Fixed: Unprotected (function_exists) shell_exec and exec calls across the REST API, WP Cron, Dashboard Widget, and all other relevant execution paths.
 * Fixed: Missing check for getenv / putenv for URL Normalization (safexec).
 * Fixed: An edgecase where users are locked out by the transient cache because the Status tab and "Clear Plugin Cache" button are inaccessible when plugin functionality is disabled.
 * Fixed: Broken Nginx cache keys listing in the Status tab.
-* Fixed: Prevent settings/option updates (WP-CLI/UI) during active purge/preload operations to ensure process state consistency.
+* Fixed: Prevent settings/option updates (REST/WP-CLI/UI) during active purge/preload operations to ensure process state consistency.
 * Fixed: Separated safexec and native kill paths to prevent redundant process-killing attempts in premature process detection logic.
 * Fixed: Recurring cron events (nppp_index_updater_event, npp_cache_preload_event) silently dying after their first run.
 * Fixed: nppp_index_updater_event self-healing — event now auto-reschedules on next admin load if wiped externally by WP-CLI, a cron manager plugin, or a database import.
@@ -174,6 +175,7 @@ Release date: 2026-05-25
 * Fixed: URL→Filepath index is now automatically flushed when Nginx Cache Path changes.
 * Fixed: Default Cache key regex no longer embeds non-GET/HEAD HTTP methods (POST, PUT, DELETE, PATCH, OPTIONS) into the host segment when parsing $scheme$request_method$host$request_uri keys caused silent purge failures.
 * Resolved: Multiple PHP 8+ deprecation warnings regarding passing null or false values to string and array functions (trim(), end()).
+* Performance (Critical Fix): Advanced Tab single Purge action no longer freezes the browser on large caches (30,000+ rows) when Purge Scope sub-triggers enabled. Replaced O(N) full‑table scans with an O(1) URL→row index cache, batched DataTable redraws.
 * Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
 * Performance: Restructured the Related Preload engine into a single process, collapsing dozens of related URL preload into a maximum of 2 background operations (Desktop, Mobile).
 * Performance: Improve capability checks via transients.
