@@ -1678,6 +1678,49 @@ $(document).ready(function() {
         }, 'json');
     });
 
+    // Update preload feeds status when state changes
+    $('#nginx_cache_preload_feeds').change(function() {
+        var feedsElement = $(this);
+        var clickToCopySpanFeeds = feedsElement.next('.nppp-onoffswitch-label-preload-feeds');
+        var clickToCopySpanOffsetFeeds = clickToCopySpanFeeds.offset();
+        var notificationLeftFeeds = clickToCopySpanOffsetFeeds.left + clickToCopySpanFeeds.outerWidth() + 10;
+        var notificationTopFeeds = clickToCopySpanOffsetFeeds.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action: 'nppp_update_preload_feeds_option',
+            preload_feeds: isChecked,
+            _wpnonce: nppp_admin_data.preload_feeds_nonce
+        }, function(response) {
+            if (response.success) {
+                var notification = document.createElement('div');
+                notification.textContent = '✔';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftFeeds + 'px';
+                notification.style.top = notificationTopFeeds + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
+            } else {
+                $('#nginx_cache_preload_feeds').prop('checked', !$('#nginx_cache_preload_feeds').prop('checked'));
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+            }
+        }, 'json');
+    });
+
     // Update watchdog status when state changes
     $('#nginx_cache_watchdog').change(function() {
         var watchdogElement = $(this);
@@ -3371,6 +3414,30 @@ $(document).ready(function() {
             $('.nppp-onoffswitch-switch-preload').css('background', '#ea1919');
             $('.nppp-on-preload').css('color', '#000000');
             $('.nppp-off-preload').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for preload feeds
+    var isFeedsChecked = $('#nginx_cache_preload_feeds').prop('checked');
+    if (isFeedsChecked) {
+        $('.nppp-onoffswitch-switch-preload-feeds').css('background', '#66b317');
+        $('.nppp-on-preload-feeds').css('color', '#ffffff');
+        $('.nppp-off-preload-feeds').css('color', '#000000');
+    } else {
+        $('.nppp-onoffswitch-switch-preload-feeds').css('background', '#ea1919');
+        $('.nppp-on-preload-feeds').css('color', '#000000');
+        $('.nppp-off-preload-feeds').css('color', '#ffffff');
+    }
+
+    $('#nginx_cache_preload_feeds').change(function() {
+        if ($(this).prop('checked')) {
+            $('.nppp-onoffswitch-switch-preload-feeds').css('background', '#66b317');
+            $('.nppp-on-preload-feeds').css('color', '#ffffff');
+            $('.nppp-off-preload-feeds').css('color', '#000000');
+        } else {
+            $('.nppp-onoffswitch-switch-preload-feeds').css('background', '#ea1919');
+            $('.nppp-on-preload-feeds').css('color', '#000000');
+            $('.nppp-off-preload-feeds').css('color', '#ffffff');
         }
     });
 
