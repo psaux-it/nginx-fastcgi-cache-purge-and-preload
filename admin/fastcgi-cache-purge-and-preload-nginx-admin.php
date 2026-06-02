@@ -131,6 +131,7 @@ require_once dirname(__DIR__) . '/includes/related.php';
 require_once dirname(__DIR__) . '/includes/purge.php';
 require_once dirname(__DIR__) . '/includes/purge-http.php';
 require_once dirname(__DIR__) . '/includes/preload.php';
+require_once dirname(__DIR__) . '/includes/preload-feeds.php';
 require_once dirname(__DIR__) . '/includes/help.php';
 require_once dirname(__DIR__) . '/includes/configuration-parser.php';
 require_once dirname(__DIR__) . '/includes/status.php';
@@ -254,6 +255,7 @@ if ($nppp_auto_purge) {
     }
 }
 add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_preload_mobile_option');
+add_action('wp_ajax_nppp_update_preload_feeds_option', 'nppp_update_preload_feeds_option');
 add_action('wp_ajax_nppp_update_watchdog_option', 'nppp_update_watchdog_option');
 add_action('wp_dashboard_setup', 'nppp_add_dashboard_widget');
 add_action('wp_ajax_nppp_update_enable_proxy_option', 'nppp_update_enable_proxy_option');
