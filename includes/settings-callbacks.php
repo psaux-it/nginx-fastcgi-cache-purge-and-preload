@@ -206,6 +206,23 @@ function nppp_nginx_cache_auto_preload_mobile_callback() {
     <?php
 }
 
+// Callback function for the nginx_cache_preload_feeds field
+function nppp_nginx_cache_preload_feeds_callback() {
+    $options = get_option('nginx_cache_settings', []);
+    $preload_feeds_checked = isset($options['nginx_cache_preload_feeds']) && $options['nginx_cache_preload_feeds'] === 'yes' ? 'checked="checked"' : '';
+
+    ?>
+    <input type="checkbox" name="nginx_cache_settings[nginx_cache_preload_feeds]" class="nppp-onoffswitch-checkbox-preload-feeds" value="yes" id="nginx_cache_preload_feeds" <?php echo esc_attr($preload_feeds_checked); ?>>
+    <label class="nppp-onoffswitch-label-preload-feeds" for="nginx_cache_preload_feeds">
+        <span class="nppp-onoffswitch-inner-preload-feeds">
+            <span class="nppp-off-preload-feeds"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-on-preload-feeds"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+        </span>
+        <span class="nppp-onoffswitch-switch-preload-feeds"></span>
+    </label>
+    <?php
+}
+
 // Callback function for the nginx_cache_watchdog field
 function nppp_nginx_cache_watchdog_callback() {
     $options = get_option('nginx_cache_settings', []);
