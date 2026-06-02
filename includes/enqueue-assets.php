@@ -275,6 +275,7 @@ function nppp_disable_features($unsupported, $preload) {
             'nppp_autopurge_themes'               => 'no',
             'nppp_autopurge_3rdparty'             => 'no',
             'nginx_cache_bypass_path_restriction' => 'no',
+            'nginx_cache_preload_feeds'           => 'no',
         );
     } elseif ( $preload === true ) {
         // If preload feature not useable
@@ -286,6 +287,7 @@ function nppp_disable_features($unsupported, $preload) {
             'nginx_cache_preload_enable_proxy'   => 'no',
             'nginx_cache_pctnorm_mode'           => 'off',
             'nginx_cache_send_mail'              => 'no',
+            'nginx_cache_preload_feeds'          => 'no',
         );
     } else {
         return;
