@@ -569,10 +569,12 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <div class="key-regex-info">
-                                    <p class="description"><?php echo esc_html__( 'Preload Nginx cache for all feed URLs. Covers the main RSS/Atom feed, every category, tag and custom taxonomy term feed, all author feeds, and comment feeds for recent posts.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'Preload Nginx cache for all feeds.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'Covers the main RSS/Atom feed, every category, tag and custom taxonomy term feed, all author feeds, and feeds for posts.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'This feature supports both entire site and single POST/PAGE preload events.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'If enabled, this feature always triggers automatically when Preload actions are called via REST, CLI, Cron or Admin, regardless of whether Auto Preload or Auto Purge are enabled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'When both Auto Purge and Auto Preload are enabled, it also fires on every single-URL purge event so feed caches stay consistent with fresh post content.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'Important: Ensure your Nginx configuration allows caching for feeds. If your server contains rules that bypass the cache for feed endpoints, caching will not work.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 </div>
                                 <div class="cache-paths-info">
                                     <h4><strong><?php echo esc_html__( 'Note:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong></h4>
