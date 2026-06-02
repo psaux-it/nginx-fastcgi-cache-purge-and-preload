@@ -200,6 +200,11 @@ function nppp_update_auto_preload_mobile_option(): void {
     nppp_save_toggle_option( 'nppp-update-auto-preload-mobile-option', 'preload_mobile', 'nginx_cache_auto_preload_mobile' );
 }
 
+// AJAX callback function to update preload feeds option
+function nppp_update_preload_feeds_option(): void {
+    nppp_save_toggle_option( 'nppp-update-preload-feeds-option', 'preload_feeds', 'nginx_cache_preload_feeds' );
+}
+
 // AJAX callback function to update watchdog option
 function nppp_update_watchdog_option(): void {
     nppp_save_toggle_option( 'nppp-update-watchdog-option', 'watchdog', 'nginx_cache_watchdog' );
