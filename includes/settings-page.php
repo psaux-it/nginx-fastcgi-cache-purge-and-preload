@@ -556,6 +556,30 @@ function nppp_nginx_cache_settings_page() {
                                 </div>
                             </td>
                         </tr>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row">
+                                <span class="dashicons dashicons-rss"></span>
+                                <?php echo esc_html__( 'Preload Feeds', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-preload-feeds">
+                                        <?php nppp_nginx_cache_preload_feeds_callback(); ?>
+                                    </div>
+                                </div>
+                                <div class="key-regex-info">
+                                    <p class="description"><?php echo esc_html__( 'Preload Nginx cache for all feed URLs. Covers the main RSS/Atom feed, every category, tag and custom taxonomy term feed, all author feeds, and comment feeds for recent posts.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'This feature supports both entire site and single POST/PAGE preload events.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'If enabled, this feature always triggers automatically when Preload actions are called via REST, CLI, Cron or Admin, regardless of whether Auto Preload or Auto Purge are enabled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'When both Auto Purge and Auto Preload are enabled, it also fires on every single-URL purge event so feed caches stay consistent with fresh post content.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                </div>
+                                <div class="cache-paths-info">
+                                    <h4><strong><?php echo esc_html__( 'Note:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong></h4>
+                                    <p><?php echo esc_html__( 'On large sites, preloading feeds can be substantial. Enabling this feature may double the crawl duration and server load because each post term multiplies the URLs to crawl.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                </div>
+                            </td>
+                        </tr>
                         <tr valign="top">
                             <th scope="row">
                                 <span class="dashicons dashicons-backup"></span>
