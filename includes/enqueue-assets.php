@@ -106,6 +106,8 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     $update_default_cache_key_regex_option_nonce = wp_create_nonce('nppp-update-default-cache-key-regex-option');
     // Create a nonce for preload mobile option
     $update_auto_preload_mobile_option_nonce = wp_create_nonce('nppp-update-auto-preload-mobile-option');
+    // Create a nonce for preload feeds option
+    $update_preload_feeds_option_nonce = wp_create_nonce('nppp-update-preload-feeds-option');
     // Create a nonce for mobile user agent reset
     $update_default_mobile_user_agent_option_nonce = wp_create_nonce('nppp-update-default-mobile-user-agent-option');
     // Create a nonce for watchdog option
@@ -124,6 +126,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'send_mail_nonce'              => $update_send_mail_option_nonce,
         'auto_preload_nonce'           => $update_auto_preload_option_nonce,
         'auto_preload_mobile_nonce'    => $update_auto_preload_mobile_option_nonce,
+        'preload_feeds_nonce'          => $update_preload_feeds_option_nonce,
         'watchdog_nonce'               => $update_watchdog_option_nonce,
         'auto_purge_nonce'             => $update_auto_purge_option_nonce,
         'cloudflare_apo_sync_nonce'    => $update_cloudflare_apo_sync_option_nonce,
