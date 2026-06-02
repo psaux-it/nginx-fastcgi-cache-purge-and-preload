@@ -470,7 +470,28 @@ function nppp_update_api_option(): void {
 
 // AJAX callback function to update default reject regex option
 function nppp_update_default_reject_regex_option(): void {
-    nppp_reset_default_option( 'nppp-update-default-reject-regex-option', 'nginx_cache_reject_regex', 'nppp_fetch_default_reject_regex' );
+    nppp_ajax_auth( 'nppp-update-default-reject-regex-option' );
+
+    // Get current settings once
+    $current_options = get_option( 'nginx_cache_settings', [] );
+
+    // Get the raw default regex (includes '/feed/')
+    $default_regex = nppp_fetch_default_reject_regex();
+
+    // If Preload Feeds is enabled, remove '/feed/'
+    $preload_feeds_enabled = ! empty( $current_options['nginx_cache_preload_feeds'] )
+                           && $current_options['nginx_cache_preload_feeds'] === 'yes';
+
+    if ( $preload_feeds_enabled ) {
+        $rules = explode( '|', $default_regex );
+        $rules = array_filter( $rules, fn( $rule ) => $rule !== '/feed/' );
+        $default_regex = implode( '|', $rules );
+    }
+
+    $current_options['nginx_cache_reject_regex'] = $default_regex;
+    update_option( 'nginx_cache_settings', $current_options );
+
+    wp_send_json_success( $default_regex );
 }
 
 // AJAX callback function to update default reject extension option
