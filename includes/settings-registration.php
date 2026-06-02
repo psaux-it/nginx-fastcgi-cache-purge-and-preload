@@ -132,6 +132,26 @@ function nppp_before_settings_option_update( $new_value, $old_value ) {
         delete_transient( 'nppp_cache_key_regex_probe' );
     }
 
+    // Update Reject Regex option when Preload Feeds options change
+    if ( isset( $new_value['nginx_cache_preload_feeds'], $old_value['nginx_cache_preload_feeds'] )
+        && $new_value['nginx_cache_preload_feeds'] !== $old_value['nginx_cache_preload_feeds'] ) {
+
+        // Get current reject regex
+        $reject_regex = $new_value['nginx_cache_reject_regex'] ?? nppp_fetch_default_reject_regex();
+        $rules = explode( '|', $reject_regex );
+
+        if ( $new_value['nginx_cache_preload_feeds'] === 'yes' ) {
+            $rules = array_filter( $rules, static fn( $rule ) => $rule !== '/feed/' );
+        } else {
+            if ( ! in_array( '/feed/', $rules, true ) ) {
+                $rules[] = '/feed/';
+            }
+        }
+
+        // Rebuild regex and update the new value
+        $new_value['nginx_cache_reject_regex'] = implode( '|', $rules );
+    }
+
     return $new_value;
 }
 
