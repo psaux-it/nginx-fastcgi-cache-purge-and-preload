@@ -2574,6 +2574,87 @@ p.description {
     }
 }
 
+/* ============================================================
+   Preload Feeds toggle switch
+   ============================================================ */
+.nppp-onoffswitch-preload-feeds {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+.nppp-onoffswitch-checkbox-preload-feeds {
+    display: none;
+}
+
+.nppp-onoffswitch-label-preload-feeds {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+.nppp-onoffswitch-inner-preload-feeds .nppp-on-preload-feeds,
+.nppp-onoffswitch-inner-preload-feeds .nppp-off-preload-feeds {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-preload-feeds .nppp-on-preload-feeds {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-preload-feeds .nppp-off-preload-feeds {
+    left: 20px;
+    color: #23282d;
+}
+
+.nppp-onoffswitch-switch-preload-feeds {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #66b317;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+#nginx_cache_preload_feeds:checked + .nppp-onoffswitch-label-preload-feeds .nppp-onoffswitch-inner-preload-feeds .nppp-on-preload-feeds {
+    color: #23282d;
+}
+
+#nginx_cache_preload_feeds:checked + .nppp-onoffswitch-label-preload-feeds .nppp-onoffswitch-switch-preload-feeds {
+    width: 55px;
+    transform: translateX(60px);
+    background: #ea1919;
+}
+
+.nppp-onoffswitch-checkbox-preload-feeds + .nppp-onoffswitch-label-preload-feeds .nppp-off-preload-feeds {
+    display: block;
+}
+
+#nginx_cache_preload_feeds {
+    position: absolute;
+    left: -99em;
+}
+
+.nppp-onoffswitch-checkbox-preload-feeds[disabled] + .nppp-onoffswitch-label-preload-feeds {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* Style for the toggle switch preload mobile container */
 .nppp-onoffswitch-preload-mobile {
     position: relative;
