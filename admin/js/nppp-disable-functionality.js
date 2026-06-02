@@ -318,6 +318,30 @@
                 ensureHiddenMirror($form, name, currentVal);
             })();
 
+            // Disable preload feeds toggle and preserve current value
+            (function disablePreloadFeeds(){
+                const $toggle = $('#nginx_cache_preload_feeds');
+                if (!$toggle.length) return;
+
+                const $form     = $toggle.closest('form');
+                const name      = $toggle.attr('name');
+                const currentVal = $toggle.is(':checked') ? 'yes' : 'no';
+
+                $toggle
+                    .prop('disabled', true)
+                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
+
+                $toggle
+                    .closest('.nppp-onoffswitch-preload-feeds')
+                    .css({ cursor:'not-allowed' })
+                    .find('.nppp-onoffswitch-label-preload-feeds')
+                    .css({ 'pointer-events':'none', 'cursor':'not-allowed' });
+
+                ensureHiddenMirror($form, name, currentVal);
+            })();
+
             // Make REST API helper elements non-clickable.
             $('#nppp-api-key .nppp-tooltip, #nppp-purge-url .nppp-tooltip, #nppp-preload-url .nppp-tooltip').css({
                 'cursor': 'not-allowed'
