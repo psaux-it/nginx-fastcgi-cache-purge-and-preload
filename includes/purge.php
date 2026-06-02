@@ -262,6 +262,13 @@ function nppp_purge_post_purge( array &$ctx ): void {
     // Trigger Preload related
     if ( $should_preload_related ) {
         if ( ! empty( $related_urls ) ) {
+            // Filter out feed URLs from related preload when Preload Feeds is OFF.
+            if ( ( $ctx['settings']['nginx_cache_preload_feeds'] ?? 'no' ) !== 'yes' ) {
+                $related_urls = array_values( array_filter( $related_urls, static function ( $url ) {
+                    $path = wp_parse_url( $url, PHP_URL_PATH ) ?? '';
+                    return ! preg_match( '#(?:^|/)feed(?:/[^/]*)?/?$#', $path );
+                } ) );
+            }
             nppp_display_admin_notice( 'info', sprintf(
                 /* translators: %d: Number of related pages queued for background preload */
                 _n(
