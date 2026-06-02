@@ -17,32 +17,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Filter the reject regex based on the Preload Feeds option on the fly.
- */
-function nppp_filter_reject_regex_for_feeds( string $reject_regex ): string {
-    $options = get_option( 'nginx_cache_settings', [] );
-    $preload_feeds_enabled = !empty( $options['nginx_cache_preload_feeds'] ) && $options['nginx_cache_preload_feeds'] === 'yes';
-
-    // 1. Split the regex string into an array
-    $rules = explode( '|', $reject_regex );
-
-    if ( $preload_feeds_enabled ) {
-        // 2a. If enabled, remove exactly '/feed/' from the array
-        $rules = array_filter( $rules, function( $rule ) {
-            return $rule !== '/feed/';
-        });
-    } else {
-        // 2b. If disabled, add '/feed/' to the array (if it doesn't already exist)
-        if ( ! in_array( '/feed/', $rules, true ) ) {
-            $rules[] = '/feed/';
-        }
-    }
-
-    // 3. Reassemble the array back into a pipe-separated
-    return implode( '|', $rules );
-}
-
-/**
  * Dynamically discover associated feed URLs for a given post/page URL.
  * Designed to be called during single-URL preloading events.
  *
