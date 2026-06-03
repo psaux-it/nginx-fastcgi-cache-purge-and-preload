@@ -67,7 +67,7 @@ if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
  *
  *     # Clear the URL→filepath index (stale after cache dir move or key change)
  *     wp npp index-clear
- * 
+ *
  *     # List active preload schedule events
  *     wp npp schedule
  *
@@ -722,34 +722,28 @@ class NPPP_CLI_Command extends WP_CLI_Command {
     }
 
     /**
-     * Configures or cancels the scheduled preload event.
-     *
-     * ## OPTIONS
-     *
-     * [--freq=<frequency>]
-     * : Recurrence frequency.
-     * ---
-     * options:
-     *   - daily
-     *   - weekly
-     *   - monthly
-     * ---
-     *
-     * [--time=<HH:MM>]
-     * : Time of day in 24-hour format, e.g. 02:30.
-     *
-     * [--cancel]
-     * : Cancel all active NPP scheduled events.
-     *
-     * ## EXAMPLES
-     *
-     *     wp npp schedule set --freq=daily --time=03:00
-     *     wp npp schedule set --freq=weekly --time=00:30
-     *     wp npp schedule set --cancel
-     *
-     * @subcommand schedule-set
-     * @when after_wp_load
-     */
+    * Configures or cancels the scheduled preload event.
+    *
+    * ## OPTIONS
+    *
+    * [--freq=<frequency>]
+    * : Recurrence frequency: daily, weekly, monthly.
+    *
+    * [--time=<time>]
+    * : Time of day in 24-hour format, e.g. 02:30.
+    *
+    * [--cancel]
+    * : Cancel all active NPP scheduled events.
+    *
+    * ## EXAMPLES
+    *
+    *     wp npp schedule-set --freq=daily  --time=03:00
+    *     wp npp schedule-set --freq=weekly --time=00:30
+    *     wp npp schedule-set --cancel
+    *
+    * @subcommand schedule-set
+    * @when after_wp_load
+    */
     public function schedule_set( array $args, array $assoc_args ): void {
         $cancel = array_key_exists( 'cancel', $assoc_args );
 
@@ -771,6 +765,13 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             }
             WP_CLI::success( __( 'All NPP scheduled events cancelled.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
+        }
+
+        $options = get_option( 'nginx_cache_settings', [] );
+        $schedule_enabled = isset( $options['nginx_cache_schedule'] ) && $options['nginx_cache_schedule'] === 'yes';
+
+        if ( ! $schedule_enabled ) {
+            WP_CLI::error( __( 'Schedule feature is disabled. Enable "WP Schedule Cache" Options first.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         }
 
         $freq = (string) ( $assoc_args['freq'] ?? '' );
@@ -1420,6 +1421,18 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         WP_CLI::success( sprintf( __( 'Updated "%1$s" → "%2$s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, (string) $sanitized ) );
         if ( $path_was_reset ) {
             WP_CLI::warning( __( 'Cache path was outside the allowed directories and has been reset to /dev/shm/change-me-now.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        }
+
+        // Inline schedule cancellation
+        if ( $key === 'nginx_cache_schedule' && $value === 'no' ) {
+            if ( function_exists( 'nppp_cancel_scheduled_events' ) ) {
+                nppp_cancel_scheduled_events();
+            } else {
+                // Fallback: clear via WP cron API directly.
+                wp_clear_scheduled_hook( 'npp_cache_preload_event' );
+                wp_clear_scheduled_hook( 'nppp_index_updater_event' );
+            }
+            WP_CLI::line( __( 'Schedule disabled, all preload crons cleared.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         }
     }
 
