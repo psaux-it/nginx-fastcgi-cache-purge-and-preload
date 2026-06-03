@@ -300,6 +300,11 @@ function nppp_dashboard_widget() {
             'status' => isset($settings['nginx_cache_auto_preload_mobile']) && $settings['nginx_cache_auto_preload_mobile'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon' => 'dashicons-smartphone'
         ],
+        'preload_feeds' => [
+            'label' => __('Preload Feeds', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status' => isset($settings['nginx_cache_preload_feeds']) && $settings['nginx_cache_preload_feeds'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
+            'icon' => 'dashicons-rss'
+        ],
         'preload_watchdog' => [
             'label' => __('Preload Watchdog', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nginx_cache_watchdog']) && $settings['nginx_cache_watchdog'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
@@ -342,6 +347,11 @@ function nppp_dashboard_widget() {
             'label' => __('Send Mail', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nginx_cache_send_mail']) && $settings['nginx_cache_send_mail'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon' => 'dashicons-email-alt'
+        ],
+        'bypass_path_restriction' => [
+            'label' => __('Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status' => isset($settings['nginx_cache_bypass_path_restriction']) && $settings['nginx_cache_bypass_path_restriction'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
+            'icon' => 'dashicons-shield-alt'
         ],
     ];
 
