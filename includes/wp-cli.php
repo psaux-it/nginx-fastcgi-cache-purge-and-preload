@@ -103,6 +103,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      * @when after_wp_load
      */
     public function purge( array $args, array $assoc_args ): void {
+        $this->check_environment( true, false );
+
         $url       = (string) ( $assoc_args['page-url'] ?? '' );
         $dry_run   = array_key_exists( 'dry-run',   $assoc_args );
         $porcelain = array_key_exists( 'porcelain', $assoc_args );
@@ -186,6 +188,14 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $tmp_path     = rtrim( $cache_path, '/' ) . '/tmp';
         $plugin_dir   = plugin_dir_path( NPPP_PLUGIN_FILE );
         $fdomain      = get_site_url();
+
+        // Stopping a preload only requires global prerequisites (shell_exec, Nginx, etc.)
+        if ( $stop ) {
+            $this->check_environment( true, false );
+        } else {
+            // Starting any preload (full or single) needs both global AND wget/nohup
+            $this->check_environment( true, true );
+        }
 
         if ( $dry_run ) {
             if ( $stop ) {
@@ -271,6 +281,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      * @when after_wp_load
      */
     public function status( array $args, array $assoc_args ): void {
+        $this->check_environment( false, false );
+
         $settings   = get_option( 'nginx_cache_settings', [] );
         $cache_path = (string) ( $settings['nginx_cache_path'] ?? '/dev/shm/change-me-now' );
 
@@ -536,6 +548,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      * @when after_wp_load
      */
     public function log( array $args, array $assoc_args ): void {
+        $this->check_environment( false, false );
+
         $log_file = NGINX_CACHE_LOG_FILE;
         $clear    = array_key_exists( 'clear', $assoc_args );
         $lines    = max( 1, (int) ( $assoc_args['lines'] ?? 50 ) );
@@ -611,6 +625,12 @@ class NPPP_CLI_Command extends WP_CLI_Command {
     public function settings( array $args, array $assoc_args ): void {
         $action = (string) ( $args[0] ?? '' );
 
+        if ( $action === 'set' ) {
+            $this->check_environment( true, false );
+        } else {
+            $this->check_environment( false, false );
+        }
+
         if ( $action === 'get' ) {
             $this->settings_get( $args, $assoc_args );
         } elseif ( $action === 'set' ) {
@@ -634,6 +654,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      * @when after_wp_load
      */
     public function flush( array $args, array $assoc_args ): void {
+        $this->check_environment( false, false );
+
         nppp_clear_plugin_cache( true );
         WP_CLI::success( __( 'All NPP transient caches cleared.', 'fastcgi-cache-purge-and-preload-nginx' ) );
     }
@@ -662,6 +684,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      * @when after_wp_load
      */
     public function schedule( array $args, array $assoc_args ): void {
+        $this->check_environment( false, false );
+
         $events   = _get_cron_array();
         $hooks    = [ 'npp_cache_preload_event', 'nppp_index_updater_event' ];
         $timezone = wp_timezone_string();
@@ -730,6 +754,14 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $cancel = array_key_exists( 'cancel', $assoc_args );
 
         if ( $cancel ) {
+            // Canceling a schedule does NOT require any environment checks.
+            $this->check_environment( false, false );
+        } else {
+            // Setting a schedule will eventually trigger a preload.
+            $this->check_environment( true, true );
+        }
+
+        if ( $cancel ) {
             if ( function_exists( 'nppp_cancel_scheduled_events' ) ) {
                 nppp_cancel_scheduled_events();
             } else {
@@ -791,6 +823,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      * @when after_wp_load
      */
     public function settings_reset( array $args, array $assoc_args ): void {
+        $this->check_environment( true, false );
+
         $key = (string) ( $args[0] ?? '' );
 
         $fetchers = [
@@ -852,6 +886,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      * @when after_wp_load
      */
     public function index_clear( array $args, array $assoc_args ): void {
+        $this->check_environment( false, false );
+
         $existed = (bool) get_option( 'nppp_url_filepath_index' );
         delete_option( 'nppp_url_filepath_index' );
 
@@ -1384,6 +1420,70 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         WP_CLI::success( sprintf( __( 'Updated "%1$s" → "%2$s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, (string) $sanitized ) );
         if ( $path_was_reset ) {
             WP_CLI::warning( __( 'Cache path was outside the allowed directories and has been reset to /dev/shm/change-me-now.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        }
+    }
+
+    /**
+    * Protects WP-CLI execution by checking global and preload environment prerequisites.
+    * Mirrors the exact restriction model of enqueue-assets.php and pre-checks.php.
+    *
+    * @param bool $require_global  True if the command mutates state/data (requires system baseline checks).
+    * @param bool $require_preload True if the command executes or initiates a background crawl loop.
+    * @return void
+    * @throws \WP_CLI\ExitException
+    */
+    private function check_environment( bool $require_global = true, bool $require_preload = false ): void {
+        // Read‑only diagnostic commands skip all checks.
+        if ( ! $require_global && ! $require_preload ) {
+            return;
+        }
+
+        // Global requirements.
+        if ( $require_global ) {
+            if ( ! function_exists( 'nppp_plugin_requirements_met' ) ) {
+                WP_CLI::error( __( 'NPP environment checker missing. Plugin incomplete.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+            if ( ! nppp_plugin_requirements_met() ) {
+                WP_CLI::error( __( 'CRITICAL ENVIRONMENT ERROR: Linux, Nginx, shell_exec/exec, or posix_kill requirements not met. State‑changing actions blocked. Run "wp npp status" for diagnosis.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+        }
+
+        // Preload‑specific requirements.
+        if ( $require_preload ) {
+            if ( function_exists( 'nppp_get_wget_compatibility' ) ) {
+                $wget_compat = nppp_get_wget_compatibility();
+                if ( empty( $wget_compat['ok'] ) ) {
+                    $reason = $wget_compat['reason'] ?? 'unknown';
+                    $reason_text = '';
+                    switch ( $reason ) {
+                        case 'missing':
+                            $reason_text = __( 'wget binary not found or shell_exec constrained.', 'fastcgi-cache-purge-and-preload-nginx' );
+                            break;
+                        case 'wget2':
+                            $reason_text = __( 'GNU Wget2 is incompatible with NPP background worker.', 'fastcgi-cache-purge-and-preload-nginx' );
+                            break;
+                        case 'busybox_toybox':
+                            $reason_text = __( 'BusyBox/ToyBox wget lacks required arguments.', 'fastcgi-cache-purge-and-preload-nginx' );
+                            break;
+                        case 'non_gnu':
+                            $reason_text = __( 'Non‑GNU wget detected.', 'fastcgi-cache-purge-and-preload-nginx' );
+                            break;
+                        case 'unsupported_version':
+                            $reason_text = __( 'GNU Wget version below 1.16.', 'fastcgi-cache-purge-and-preload-nginx' );
+                            break;
+                        default:
+                            $reason_text = __( 'Unknown wget compatibility issue.', 'fastcgi-cache-purge-and-preload-nginx' );
+                    }
+                    WP_CLI::error( sprintf( __( 'Preload Locked: %s GNU Wget 1.16+ required.', 'fastcgi-cache-purge-and-preload-nginx' ), $reason_text ) );
+                }
+            }
+
+            if ( ! function_exists( 'nppp_shell_toolset_check' ) ) {
+                WP_CLI::error( __( 'Shell toolset check missing.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+            if ( ! nppp_shell_toolset_check( false, true ) ) {
+                WP_CLI::error( __( 'Preload Locked: "nohup" missing or not executable.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
         }
     }
 }
