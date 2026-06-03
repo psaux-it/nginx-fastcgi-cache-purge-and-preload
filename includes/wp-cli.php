@@ -611,11 +611,15 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      *   - csv
      * ---
      *
+     * [--pretty]
+     * : When listing all settings, add a human‑readable "Pretty Name" column.
+     *
      * ## EXAMPLES
      *
      *     wp npp settings get
      *     wp npp settings get nginx_cache_path
      *     wp npp settings get --format=json
+     *     wp npp settings get --pretty
      *     wp npp settings set nginx_cache_purge_on_update yes
      *     wp npp settings set nginx_cache_limit_rate 2048
      *     wp npp settings set nginx_cache_path /var/cache/nginx/fastcgi
@@ -756,13 +760,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         }
 
         if ( $cancel ) {
-            if ( function_exists( 'nppp_cancel_scheduled_events' ) ) {
-                nppp_cancel_scheduled_events();
-            } else {
-                // Fallback: clear via WP cron API directly.
-                wp_clear_scheduled_hook( 'npp_cache_preload_event' );
-                wp_clear_scheduled_hook( 'nppp_index_updater_event' );
-            }
+            wp_clear_scheduled_hook( 'npp_cache_preload_event' );
+            wp_clear_scheduled_hook( 'npp_cache_preload_status_event' );
+            wp_clear_scheduled_hook( 'nppp_index_updater_event' );
             WP_CLI::success( __( 'All NPP scheduled events cancelled.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
@@ -829,9 +829,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $key = (string) ( $args[0] ?? '' );
 
         $fetchers = [
-            'nginx_cache_reject_regex'     => 'nppp_fetch_default_reject_regex',
-            'nginx_cache_reject_extension' => 'nppp_fetch_default_reject_extension',
-            'nginx_cache_key_custom_regex' => 'nppp_fetch_default_cache_key_regex',
+            'nginx_cache_reject_regex'      => 'nppp_fetch_default_reject_regex',
+            'nginx_cache_reject_extension'  => 'nppp_fetch_default_reject_extension',
+            'nginx_cache_key_custom_regex'  => 'nppp_fetch_default_regex_for_cache_key',
             'nginx_cache_mobile_user_agent' => 'nppp_fetch_default_mobile_user_agent',
         ];
 
@@ -1138,6 +1138,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      * Redacts the API key unconditionally.
      */
     private function settings_get( array $args, array $assoc_args ): void {
+        $pretty   = array_key_exists( 'pretty', $assoc_args );
         $key      = (string) ( $args[1] ?? '' );
         $settings = get_option( 'nginx_cache_settings', [] );
 
@@ -1162,6 +1163,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         }
 
         $rows = [];
+        $labels = $this->get_pretty_labels();
+
         foreach ( $settings as $k => $v ) {
             // nginx_cache_key_custom_regex is base64-encoded in the DB — decode for display.
             if ( $k === 'nginx_cache_key_custom_regex' && $v !== '' ) {
@@ -1170,10 +1173,16 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                     $v = $decoded_v;
                 }
             }
-            $rows[] = [ 'Key' => $k, 'Value' => (string) $v ];
+            if ( $pretty ) {
+                $pretty_name = $labels[ $k ] ?? $k;
+                $rows[] = [ 'Pretty Name' => $pretty_name, 'Key' => $k, 'Value' => (string) $v ];
+            } else {
+                $rows[] = [ 'Key' => $k, 'Value' => (string) $v ];
+            }
         }
 
-        $formatter = new \WP_CLI\Formatter( $assoc_args, [ 'Key', 'Value' ] );
+        $fields = $pretty ? [ 'Pretty Name', 'Key', 'Value' ] : [ 'Key', 'Value' ];
+        $formatter = new \WP_CLI\Formatter( $assoc_args, $fields );
         $formatter->display_items( $rows );
     }
 
@@ -1425,13 +1434,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         // Inline schedule cancellation
         if ( $key === 'nginx_cache_schedule' && $value === 'no' ) {
-            if ( function_exists( 'nppp_cancel_scheduled_events' ) ) {
-                nppp_cancel_scheduled_events();
-            } else {
-                // Fallback: clear via WP cron API directly.
-                wp_clear_scheduled_hook( 'npp_cache_preload_event' );
-                wp_clear_scheduled_hook( 'nppp_index_updater_event' );
-            }
+            wp_clear_scheduled_hook( 'npp_cache_preload_event' );
+            wp_clear_scheduled_hook( 'nppp_index_updater_event' );
+            wp_clear_scheduled_hook( 'npp_cache_preload_status_event' );
             WP_CLI::line( __( 'Schedule disabled, all preload crons cleared.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         }
     }
@@ -1498,6 +1503,55 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 WP_CLI::error( __( 'Preload Locked: "nohup" missing or not executable.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
         }
+    }
+
+    /**
+    * Returns a mapping of internal option keys to user‑friendly translated labels.
+    *
+    * @return array<string, string>
+    */
+    private function get_pretty_labels(): array {
+        return [
+            'nginx_cache_path'                    => __( 'Nginx Cache Directory', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_email'                   => __( 'Email Address', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_cpu_limit'               => __( 'CPU Usage Limit (%)', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_wait_request'            => __( 'Wait Time', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_read_timeout'            => __( 'PHP Response Timeout', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_reject_regex'            => __( 'Exclude Endpoints', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_key_custom_regex'        => __( 'Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_reject_extension'        => __( 'Exclude File Extensions', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_send_mail'               => __( 'Send Email Notification', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_auto_preload'            => __( 'Auto Preload', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_auto_preload_mobile'     => __( 'Preload Mobile', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_preload_feeds'           => __( 'Preload Feeds', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_watchdog'                => __( 'Preload Watchdog', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_purge_on_update'         => __( 'Auto Purge', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_autopurge_posts'                => __( 'Auto‑Purge Posts & Comments', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_autopurge_terms'                => __( 'Auto‑Purge Categories, Tags & Taxonomies', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_autopurge_plugins'              => __( 'Auto‑Purge Plugin Activations & Updates', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_autopurge_themes'               => __( 'Auto‑Purge Theme Switches & Updates', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_autopurge_3rdparty'             => __( 'Auto‑Purge WordPress Auto‑Updates & 3rd‑Party Plugins', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_cloudflare_apo_sync'            => __( 'Cloudflare Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_redis_cache_sync'               => __( 'Redis Object Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_schedule'                => __( 'WP Schedule Cache', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_api'                     => __( 'REST API', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_api_key'                 => __( 'REST API Key', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_related_include_home'           => __( 'Purge Scope: Always Purge the Homepage', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_related_include_category'       => __( 'Purge Scope: Always Purge Archives & Related URLs', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_related_apply_manual'           => __( 'Purge Scope: Always Purge the Shop Page (WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_related_preload_after_manual'   => __( 'Preload Related Pages', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_mobile_user_agent'       => __( 'Mobile User Agent', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_http_purge_enabled'             => __( 'HTTP Purge', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_http_purge_suffix'              => __( 'HTTP Purge URL Suffix', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_rg_purge_enabled'               => __( 'RG Purge', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_http_purge_custom_url'          => __( 'HTTP Purge Custom Base URL', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_bypass_path_restriction' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_pctnorm_mode'            => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_limit_rate'              => __( 'Limit Rate', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_preload_enable_proxy'    => __( 'Use Proxy', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_preload_proxy_host'      => __( 'Proxy Host', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_preload_proxy_port'      => __( 'Proxy Port', 'fastcgi-cache-purge-and-preload-nginx' ),
+        ];
     }
 }
 
