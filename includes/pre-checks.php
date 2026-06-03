@@ -240,7 +240,7 @@ function nppp_is_process_alive($pid) {
     }
 
     // Get the path
-    $ps_path = trim(shell_exec('command -v ps'));
+    $ps_path = trim((string) shell_exec('command -v ps'));
     if (empty($ps_path)) {
         return false;
     }
