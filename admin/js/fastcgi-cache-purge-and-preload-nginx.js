@@ -4749,6 +4749,7 @@ function npppupdateStatus() {
         npppSafexecVersionSpan.style.color = "orange";
         iconSpanSafexecVersion.classList.add("dashicons", "dashicons-arrow-right-alt");
         iconSpanSafexecVersion.style.fontSize = "18px";
+        iconSpanSafexecVersion.style.color = "orange";
         iconSpanSafexecVersion.style.setProperty('font-weight', 'normal', 'important');
         safexecVersionText = ' ' + npppSafexecVersion;
     } else if (npppSafexecVersion.includes("(")) {
