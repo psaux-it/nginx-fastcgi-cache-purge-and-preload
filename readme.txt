@@ -178,7 +178,6 @@ Release date: 2026-05-25
 * Performance (Critical Fix): Advanced Tab single Purge action no longer freezes the browser on large caches (30,000+ rows) when Purge Scope sub-triggers enabled. Replaced O(N) full‑table scans with an O(1) URL→row index cache, batched DataTable redraws.
 * Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
 * Performance: Restructured the Related Preload engine into a single process, collapsing dozens of related URL preload into a maximum of 2 background operations (Desktop, Mobile).
-* Performance: Improve capability checks via transients.
 * Improved: Nginx detection and Setup (Assume Nginx Mode) process. Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
 * Improved: UI/UX on Setup Page.
 * Improved: Compatibility on aaPanel. Fully tested and functional (Single and Multi WebServer arches). See github aaPanel/issues/270 and aaPanel/issues/276 for ongoing issues reported. (Thanks to @neikoloves)
@@ -198,9 +197,11 @@ Release date: 2026-05-25
 * Added: "Test Regex" button to live-verify the cache key regex against a real cache file.
 * Removed: False-positive and redundant warning messages on the Status and Advanced tab.
 * Removed: /feed/ and comment-page- from the preload defaults; feeds and comment pages are now preloaded by default.
-* Balanced: Lowered TTLs of several internal transients to make the UI reflect real server changes more quickly. Reduces the need for manual “Clear Plugin Cache” after configuration fixes. 
+* Balanced: Lowered TTLs of several internal plugin transients to make the UI reflect changes more quickly. Reduces the need for manual “Clear Plugin Cache” after configuration changes.
 * Developer: nppp_purged_all action hook — fired after every successful full Nginx cache purge, enabling third-party plugins to trigger their own cache flush in sync.
+* Updated: DataTables assets bump to version 2.3.8 for improved Advanced Tab rendering and stability.
 * Updated: Tested up to WordPress 7.0
+* Tested: Tested with Nginx (1.31.1), FUSE (3.18.2), safexec (1.9.6), ripgrep (15.1.0), wget (1.25.0) and bindfs (1.18.4)
 
 = 2.1.6 =
 
