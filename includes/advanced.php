@@ -1502,7 +1502,7 @@ function nppp_categorize_url( string $url ): string {
             if ( count( $bulk_map ) > 20000 ) {
                 $bulk_map = array_slice( $bulk_map, -20000, 20000, true );
             }
-            set_transient( 'nppp_category_map', $bulk_map, WEEK_IN_SECONDS );
+            set_transient( 'nppp_category_map', $bulk_map, DAY_IN_SECONDS );
         } );
     }
 
