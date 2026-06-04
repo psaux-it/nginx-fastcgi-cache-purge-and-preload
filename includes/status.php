@@ -472,7 +472,7 @@ function nppp_get_webserver_user() {
 
     // Check if the config file exists
     if (!$wp_filesystem->exists($config_file)) {
-        set_transient($transient_key, "Not Determined", MONTH_IN_SECONDS);
+        set_transient($transient_key, "Not Determined", HOUR_IN_SECONDS);
         return "Not Determined";
     }
 
@@ -521,26 +521,26 @@ function nppp_get_webserver_user() {
     if (!empty($nginx_user_conf) && !empty($process_users)) {
         // Check if the configuration user is among the process users
         if (in_array($nginx_user_conf, $process_users)) {
-            set_transient($transient_key, $nginx_user_conf, MONTH_IN_SECONDS);
+            set_transient($transient_key, $nginx_user_conf, HOUR_IN_SECONDS);
             return $nginx_user_conf;
         }
     }
 
     // If only the configuration user is found, return it
     if (!empty($nginx_user_conf)) {
-        set_transient($transient_key, $nginx_user_conf, MONTH_IN_SECONDS);
+        set_transient($transient_key, $nginx_user_conf, HOUR_IN_SECONDS);
         return $nginx_user_conf;
     }
 
     // If only the process user is found, return it
     if (!empty($process_users)) {
         $user = reset($process_users);
-        set_transient($transient_key, $user, MONTH_IN_SECONDS);
+        set_transient($transient_key, $user, HOUR_IN_SECONDS);
         return $user;
     }
 
     // If no user is found, return "Not Determined"
-    set_transient($transient_key, "Not Determined", MONTH_IN_SECONDS);
+    set_transient($transient_key, "Not Determined", HOUR_IN_SECONDS);
     return "Not Determined";
 }
 
