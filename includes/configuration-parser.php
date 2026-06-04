@@ -199,7 +199,7 @@ function nppp_check_fuse_cache_paths($cache_paths) {
 
     // If no fuse mount point found return empty array before setting transient
     if (empty($fuse_paths)) {
-        set_transient('nppp_fuse_path_not_found', true, MONTH_IN_SECONDS);
+        set_transient('nppp_fuse_path_not_found', true, 5 * MINUTE_IN_SECONDS);
         return ['fuse_paths' => [], 'fuse_map' => []];
     }
 
@@ -208,6 +208,7 @@ function nppp_check_fuse_cache_paths($cache_paths) {
 
     // Reset the error transients
     delete_transient('nppp_fuse_path_not_found');
+    delete_transient('nppp_cache_path_not_found');
 
     // Return the array of mount points
     return ['fuse_paths' => $fuse_paths, 'fuse_map' => $fuse_map];
@@ -328,13 +329,13 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = t
 
     // Return empty if no Nginx cache paths are found
     if (empty($cache_paths)) {
-        set_transient('nppp_cache_path_not_found', true, MONTH_IN_SECONDS);
+        set_transient('nppp_cache_path_not_found', true, 5 * MINUTE_IN_SECONDS);
         return ['cache_paths' => []];
     }
 
     // Store the result in the cache before returning (only on the top-level call)
     if ($is_top_level) {
-        set_transient($transient_key, ['cache_paths' => $cache_paths], MONTH_IN_SECONDS);
+        set_transient($transient_key, ['cache_paths' => $cache_paths], DAY_IN_SECONDS);
         delete_transient('nppp_cache_path_not_found');
     }
 
