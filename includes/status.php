@@ -17,6 +17,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 // To optimize performance and prevent redundancy, we use cached recursive permission checks.
 // This technique stores the results of time-consuming (expensive) permission verifications for reuse.
 // The results are cached for to reduce performance overhead, especially useful when the Nginx cache path is extensive.
+// With v2.1.6 replaced expensive recursive iterator scanning with a lightweight write/delete probe in nppp_check_permissions_recursive.
+// As a result with v2.1.7 transient cache duration lowered 1Month to 1min for accurate real time perm issue detection.
 function nppp_check_permissions_recursive_with_cache() {
     $nginx_cache_settings = get_option('nginx_cache_settings', []);
     $default_cache_path   = '/dev/shm/change-me-now';
@@ -46,7 +48,7 @@ function nppp_check_permissions_recursive_with_cache() {
         $result = $result ? 'true' : 'false';
 
         // Cache the result for 1 month
-        set_transient($transient_key, $result, 30 * DAY_IN_SECONDS);
+        set_transient($transient_key, $result, MINUTE_IN_SECONDS);
     }
 
     return $result;
