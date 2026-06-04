@@ -364,7 +364,7 @@ function nppp_parse_nginx_cache_key() {
             __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
         );
         // Store error state in cache also
-        set_transient('nppp_cache_keys_wpfilesystem_error', true, MONTH_IN_SECONDS);
+        set_transient('nppp_cache_keys_wpfilesystem_error', true, 5 * MINUTE_IN_SECONDS);
         return false;
     }
 
@@ -373,7 +373,7 @@ function nppp_parse_nginx_cache_key() {
     if (empty($conf_paths)) {
         // Could not find any nginx.conf files
         // Store error state in cache also
-        set_transient('nppp_nginx_conf_not_found', true, MONTH_IN_SECONDS);
+        set_transient('nppp_nginx_conf_not_found', true, 5 * MINUTE_IN_SECONDS);
         return false;
     }
 
@@ -390,7 +390,7 @@ function nppp_parse_nginx_cache_key() {
 
     // If no fastcgi_cache_key directives found
     if ($found_keys === 0) {
-        set_transient('nppp_cache_keys_not_found', true, MONTH_IN_SECONDS);
+        set_transient('nppp_cache_keys_not_found', true, 5 * MINUTE_IN_SECONDS);
         return ['cache_keys' => ['Not Found']];
     }
 
@@ -399,6 +399,9 @@ function nppp_parse_nginx_cache_key() {
         '$scheme$request_method$host$request_uri',  // fastcgi_cache — most common WP/FPM stack
         '$scheme$proxy_host$request_uri',           // proxy_cache nginx default (no request method)
         '$scheme$host$request_uri',                 // scheme+host variant (no method, no proxy_host)
+        '$scheme://$host$request_uri',              // scheme with protocol separator (common in proxy_cache setups)
+        '$host$request_uri',                        // host-only variant (no scheme, minimal key)
+        '$host$uri$is_args$args',                   // host+uri with query string args (WooCommerce / dynamic pages)
     ];
 
     // Partition keys into matched (supported) and unsupported buckets.
@@ -416,7 +419,7 @@ function nppp_parse_nginx_cache_key() {
     $matched_keys = array_values(array_unique($matched_keys));
 
     // Save both buckets to transient for Status/Advanced tab display.
-    set_transient($transient_key, ['cache_keys' => $cache_keys, 'matched_keys' => $matched_keys], MONTH_IN_SECONDS);
+    set_transient($transient_key, ['cache_keys' => $cache_keys, 'matched_keys' => $matched_keys], HOUR_IN_SECONDS);
 
     // Reset the error transients
     delete_transient('nppp_cache_keys_wpfilesystem_error');
