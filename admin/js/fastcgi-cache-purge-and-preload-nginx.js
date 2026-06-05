@@ -1423,10 +1423,13 @@ $(document).ready(function() {
             missRows = dt.rows(function (idx, data) {
                 return String(data[3]).indexOf('MISS') !== -1;
             });
-            // Bulk jQuery collection — one DOM traversal for all MISS rows
-            missRows.nodes().to$().find('.nppp-preload-btn').each(function () {
-                var url = $(this).data('url');
-                if (url) missUrls.push(String(url));
+            // Data-based URL extraction — works with deferRender (DataTables 2.x default).
+            // nodes().to$() only returns currently-rendered rows (current page).
+            // this.data()[5] is the stored innerHTML of the Actions cell for ALL rows,
+            // regardless of pagination or deferred rendering — guaranteed complete.
+            missRows.every(function () {
+                var m = /data-url="([^"]*)"/.exec(String(this.data()[5] || ''));
+                if (m && m[1]) missUrls.push(m[1]);
             });
         } else {
             // Fallback: DataTables not yet initialised
@@ -1449,7 +1452,7 @@ $(document).ready(function() {
 
         var total     = missUrls.length;
         var queued    = 0;
-        var batchSize = 50;
+        var batchSize = 200;
         var batches   = [];
         for (var bi = 0; bi < total; bi += batchSize) {
             batches.push(missUrls.slice(bi, bi + batchSize));
@@ -1487,25 +1490,35 @@ $(document).ready(function() {
                 // Flip all queued MISS rows to HIT in the table optimistically
                 if (dt && missRows) {
                     if (missRows.count()) {
-                        // Single jQuery collection — one bulk DOM operation for all MISS rows
-                        var $missNodes = missRows.nodes().to$();
-                        $missNodes.find('td.nppp-status')
+                        // 1. Optimistic DOM flip for currently-rendered rows only.
+                        //    Non-rendered rows are handled by the data update + draw below.
+                        missRows.nodes().to$().find('td.nppp-status')
                             .removeClass('is-miss').addClass('is-hit')
                             .html('<strong>HIT</strong>');
-                        $missNodes.find('.nppp-purge-btn')
-                            .prop('disabled', false)
-                            .removeAttr('aria-disabled title');
 
-                        // Write updated status directly into DT internal cache — no DOM re-read
+                        // 2. Write updated status into DT internal data cache for ALL rows
+                        //    (including deferred/unrendered ones) — no DOM re-read needed.
                         missRows.every(function () {
                             var d = this.data();
                             d[3] = '<strong>HIT</strong>';
                             this.data(d);
                         });
 
+                        // 3. Redraw from updated internal data.
                         dt.draw(false);
+
+                        // 4. Re-enable purge buttons AFTER draw.
+                        //    dt.draw() overwrites action-column innerHTML from data[5]
+                        //    which still contains the original disabled-button HTML,
+                        //    reverting any pre-draw DOM change. Re-select by is-hit class
+                        //    (DT preserves TD class attributes through a draw).
+                        $('#nppp-premium-table tbody .nppp-status.is-hit')
+                            .closest('tr').find('.nppp-purge-btn')
+                            .prop('disabled', false)
+                            .removeAttr('aria-disabled title');
                     }
                 } else {
+                    // Fallback: DataTables not initialised — all rows are in DOM.
                     $('#nppp-premium-table tbody tr').each(function () {
                         var $td = $(this).find('td.nppp-status.is-miss');
                         if ($td.length) {
@@ -1513,8 +1526,7 @@ $(document).ready(function() {
                                .html('<strong>HIT</strong>');
                             $(this).find('.nppp-purge-btn')
                                 .prop('disabled', false)
-                                .removeAttr('aria-disabled')
-                                .removeAttr('title');
+                                .removeAttr('aria-disabled title');
                         }
                     });
                 }
@@ -1539,7 +1551,28 @@ $(document).ready(function() {
                         queued += (parseInt(response.data.queued, 10) || 0);
                     }
                 },
-                complete: function () {
+                error: function (jqXHR, textStatus) {
+                    // Network or server error — stop the batch loop and notify user.
+                    $btn.prop('disabled', false).removeClass('disabled');
+                    $progress.text(
+                        sprintf(
+                            /* translators: 1: failed batch number 2: HTTP status text */
+                            __('Preload stopped — batch %1$d failed (%2$s).', 'fastcgi-cache-purge-and-preload-nginx'),
+                            idx + 1, textStatus
+                        )
+                    );
+                    npppToast(
+                        sprintf(
+                            /* translators: %d: batch number that failed */
+                            __('Preload MISS error on batch %d. Check your connection.', 'fastcgi-cache-purge-and-preload-nginx'),
+                            idx + 1
+                        ),
+                        'error',
+                        7000
+                    );
+                },
+                complete: function (jqXHR, textStatus) {
+                    if (textStatus === 'error') { return; }
                     $progress.text(
                         sprintf(
                             /* translators: 1: URLs queued so far, 2: total MISS URLs */
