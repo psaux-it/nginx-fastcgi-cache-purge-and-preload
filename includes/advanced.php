@@ -497,15 +497,28 @@ function nppp_premium_html($nginx_cache_path) {
         )
     );
     ?>
-    <?php if ( ! empty( $mergedRows ) && ! $preload_running ) : ?>
-    <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 5px; margin-bottom: 15px; max-width: max-content;">
-        <p style="margin: 0; align-items: center;">
-            <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-            <?php echo wp_kses_post( __( 'If the <strong>Cached URL\'s</strong> are incorrect, <strong>Preload</strong> will not work as expected. Please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section, ensure the regex is configured correctly, and try again.', 'fastcgi-cache-purge-and-preload-nginx' ) ); ?>
-        </p>
+    <h2></h2>
+    <?php
+    $nppp_miss_count  = 0;
+    $nppp_total_count = count( $mergedRows );
+    foreach ( $mergedRows as $nppp_r ) {
+        if ( $nppp_r['status'] === 'MISS' ) $nppp_miss_count++;
+    }
+    $nppp_hit_ratio = $nppp_total_count > 0 ? ( ( $nppp_total_count - $nppp_miss_count ) / $nppp_total_count ) : 0;
+    ?>
+    <?php if ( $nppp_miss_count > 0 && $nppp_hit_ratio >= 0.5 && ! $preload_running ) : ?>
+    <div class="nppp-preload-miss-wrap">
+        <button type="button" id="nppp-preload-miss-all" class="nppp-preload-miss-btn">
+            <span class="dashicons dashicons-update" style="font-size:16px;margin:0 4px 0 0;padding:0;vertical-align:middle;"></span>
+            <?php echo esc_html( sprintf(
+                /* translators: %d: number of MISS URLs in the table */
+                __( 'Preload All MISS (%d)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $nppp_miss_count
+            ) ); ?>
+        </button>
+        <span id="nppp-preload-miss-progress" style="display:none;font-size:13px;color:#646970;"></span>
     </div>
     <?php endif; ?>
-    <h2></h2>
     <?php if ($preload_running) : ?>
     <div class="nppp-table-loading-notice">
         <span class="dashicons dashicons-update-alt spin"></span>
@@ -806,6 +819,38 @@ function nppp_purge_cache_premium_callback() {
             $decoded_url
         )
     );
+}
+
+/**
+ * AJAX: Preload a batch of MISS URLs via the existing fire-and-forget method.
+ * Accepts up to 50 URLs per request; JS calls this in a loop for larger sets.
+ */
+function nppp_preload_miss_batch_callback() {
+    if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'nppp_preload_miss_batch_nonce' ) ) {
+        wp_send_json_error( 'Nonce verification failed.' );
+    }
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( 'Permission denied.', 403 );
+    }
+
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized inside fire_and_forget per URL
+    $raw_urls = ( isset( $_POST['urls'] ) && is_array( $_POST['urls'] ) )
+        ? array_slice( (array) wp_unslash( $_POST['urls'] ), 0, 50 )
+        : [];
+
+    if ( empty( $raw_urls ) ) {
+        wp_send_json_error( 'No URLs provided.' );
+    }
+
+    $urls = array_values( array_filter( array_map( 'esc_url_raw', array_map( 'trim', $raw_urls ) ) ) );
+
+    if ( empty( $urls ) ) {
+        wp_send_json_error( 'No valid URLs after sanitization.' );
+    }
+
+    nppp_preload_urls_fire_and_forget( $urls );
+
+    wp_send_json_success( array( 'queued' => count( $urls ) ) );
 }
 
 // Preload triggered from the Advanced tab
