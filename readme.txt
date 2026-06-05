@@ -9,7 +9,7 @@ Stable tag: 2.1.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-The most comprehensive solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI) cache operations directly from your WordPress dashboard.
+The most comprehensive free solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI) cache operations directly from your WordPress dashboard.
 
 == Description ==
 
@@ -82,6 +82,82 @@ The most comprehensive solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI)
 
 📧 **Email Notifications**: Receive email alerts upon completion of preload actions, with customizable templates to suit your needs.
 
+== 🖥️ WP-CLI ==
+
+Manage your Nginx cache entirely from the command line. Perfect for automation, cron jobs, and headless workflows.
+
+<strong>Purge</strong>
+
+Purge commands let you clear the Nginx cache.
+
+* `wp npp purge` – Flush the entire site cache
+* `wp npp purge --page-url=<url>` – Purge a single cached page (exact URL)
+* `wp npp purge --dry-run` – Show what would be purged without executing
+* `wp npp purge --porcelain` – Emit only success/warning/error for shell scripting
+
+<strong>Preload</strong>
+
+Preload commands warm the Nginx cache by crawling your site.
+
+* `wp npp preload` – Start full‑site preloading (background)
+* `wp npp preload --page-url=<url>` – Preload only a single URL
+* `wp npp preload --stop` – Stop the running preload (cache preserved)
+* `wp npp preload --dry-run` – Preview the operation
+* `wp npp preload --porcelain` – Machine‑readable output
+
+<strong>Status & Diagnostics</strong>
+
+Inspect your Nginx cache health and system readiness.
+
+* `wp npp status` – Display a detailed runtime status table
+* `wp npp status --format=json` – JSON output for scripting
+* `wp npp status --format=yaml` – YAML output
+* `wp npp status --format=csv` – CSV export
+
+<strong>Log Management</strong>
+
+View or clear the NPP operation log.
+
+* `wp npp log` – Show the last 50 log lines
+* `wp npp log --lines=<n>` – Show the last n lines (e.g., `--lines=200`)
+* `wp npp log --clear` – Truncate the log file
+
+<strong>Settings Management</strong>
+
+Get or change any plugin setting directly from the terminal.
+
+* `wp npp settings get` – List all settings (as a table)
+* `wp npp settings get <key>` – Show a single setting value
+* `wp npp settings get --format=json` – JSON output
+* `wp npp settings get --pretty` – Add a human‑readable "Pretty Name" column
+* `wp npp settings set <key> <value>` – Change a setting
+* `wp npp settings-reset <key>` – Reset a setting to its plugin default
+
+<strong>Flush & Index Management</strong>
+
+Clear internal plugin caches or rebuild the URL index.
+
+* `wp npp flush` – Clear all plugin transients
+* `wp npp index-clear` – Delete the persistent URL→filepath index
+
+<strong>Schedule Management</strong>
+
+List, set, or cancel automated nginx cache preload cron events.
+
+* `wp npp schedule` – Show active schedule events (table or JSON)
+* `wp npp schedule --format=json` – JSON output
+* `wp npp schedule-set --freq=<daily|weekly|monthly> --time=HH:MM` – Create a recurring preload schedule
+* `wp npp schedule-set --cancel` – Cancel all NPP scheduled events
+
+<strong>CLI Help</strong>
+
+Get detailed help for any CLI command.
+
+* `wp help npp`
+* `wp help npp purge`
+* `wp help npp preload`
+* `wp help npp status`
+
 == Installation ==
 
 Manual Installation
@@ -137,6 +213,14 @@ Yes, but disable page caching in other plugins to avoid conflicts. You can keep 
 = Where can I find the allowed Nginx cache paths? =
 
 NPP restricts cache paths by default to prevent accidental deletion of system files. Allowed roots are `/dev/shm/`, `/tmp/`, `/var/`, and `/cache/`. The path must be at least one level deep (e.g. `/var/cache/nginx`). These restrictions can be completely disabled using the **Bypass Path Restriction** feature, which removes all path safety guardrails and allows any directory to be used as the Nginx cache path. Full details in the **Help tab**.
+
+= Does it support WP-CLI? =
+
+Yes. NPP includes full WP-CLI integration. You can purge, preload, check status, view logs, update settings, flush transients, and manage scheduled events directly from the terminal — no admin dashboard access required. Run `wp help npp` and `wp help npp <subcommand>` to see all available commands.
+
+= What Nginx cache types are supported? =
+
+NPP supports **FastCGI**, **Proxy**, **SCGI**, and **UWSGI** cache methods. The plugin automatically applies the appropriate purge strategy (HTTP Purge, INDEX Purge, or RG Purge).
 
 == Screenshots ==
 
