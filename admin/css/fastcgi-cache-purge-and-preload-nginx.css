@@ -396,6 +396,41 @@ td.action, td.check {
     background-color: #2e8b57;
 }
 
+/* Preload All MISS — bulk action button and progress line */
+.nppp-preload-miss-wrap {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.nppp-preload-miss-btn {
+    background-color: #1e8cbe;
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0,0,0,.1);
+    font-weight: 500;
+    font-size: 13px;
+    transition: background-color 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.nppp-preload-miss-btn:hover {
+    background-color: #0073aa;
+}
+
+.nppp-preload-miss-btn[disabled],
+.nppp-preload-miss-btn.disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
 /* Style the length menu dropdown */
 #nppp-premium-table_wrapper .dt-length {
     margin-bottom: 10px;
