@@ -1407,7 +1407,115 @@ $(document).ready(function() {
         });
     });
 
-    // === Percent-encoding Case (pctnorm) autosave ===
+    // Preload All MISS (Advanced Tab)
+    $(document).on('click', '#nppp-preload-miss-all', function (e) {
+        e.preventDefault();
+
+        var $btn      = $(this);
+        var $progress = $('#nppp-preload-miss-progress');
+        if ($btn.prop('disabled')) return;
+
+        var missUrls = [];
+        var dt = npppDT();
+        if (dt) {
+            // Function selector scans DataTables internal data array — no full DOM traversal.
+            dt.rows(function (idx, data) {
+                return String(data[3]).indexOf('MISS') !== -1;
+            }).every(function () {
+                var node = this.node();
+                if (!node) return;
+                var url = $(node).find('.nppp-preload-btn').data('url');
+                if (url) missUrls.push(String(url));
+            });
+        } else {
+            // Fallback: DataTables not yet initialised
+            $('#nppp-premium-table tbody tr').each(function () {
+                var $tr = $(this);
+                if ($tr.find('td.nppp-status.is-miss').length) {
+                    var url = $tr.find('.nppp-preload-btn').data('url');
+                    if (url) missUrls.push(String(url));
+                }
+            });
+        }
+
+        if (!missUrls.length) {
+            npppToast(
+                __('No MISS URLs found in the table.', 'fastcgi-cache-purge-and-preload-nginx'),
+                'info'
+            );
+            return;
+        }
+
+        var total     = missUrls.length;
+        var queued    = 0;
+        var batchSize = 50;
+        var batches   = [];
+        for (var bi = 0; bi < total; bi += batchSize) {
+            batches.push(missUrls.slice(bi, bi + batchSize));
+        }
+
+        $btn.prop('disabled', true).addClass('disabled');
+        $progress.show().text(
+            sprintf(
+                /* translators: 1: URLs queued so far, 2: total MISS URLs */
+                __('Preloading MISS URLs: %1$d / %2$d\u2026', 'fastcgi-cache-purge-and-preload-nginx'),
+                0, total
+            )
+        );
+
+        function npppProcessMissBatch(idx) {
+            if (idx >= batches.length) {
+                $btn.prop('disabled', false).removeClass('disabled');
+                $progress.text(
+                    sprintf(
+                        /* translators: %d: total URLs sent for preloading */
+                        __('Done \u2014 %d MISS URLs sent for preloading.', 'fastcgi-cache-purge-and-preload-nginx'),
+                        queued
+                    )
+                );
+                npppToast(
+                    sprintf(
+                        /* translators: %d: total URLs sent for preloading */
+                        __('Preload All MISS complete. %d URLs preloading in the background.', 'fastcgi-cache-purge-and-preload-nginx'),
+                        queued
+                    ),
+                    'success',
+                    7000
+                );
+                return;
+            }
+
+            $.ajax({
+                url:      nppp_admin_data.ajaxurl,
+                type:     'POST',
+                dataType: 'json',
+                data: {
+                    action:   'nppp_preload_miss_batch',
+                    urls:     batches[idx],
+                    _wpnonce: nppp_admin_data.preload_miss_batch_nonce
+                },
+                success: function (response) {
+                    if (response && response.success && response.data) {
+                        queued += (parseInt(response.data.queued, 10) || 0);
+                    }
+                },
+                complete: function () {
+                    $progress.text(
+                        sprintf(
+                            /* translators: 1: URLs queued so far, 2: total MISS URLs */
+                            __('Preloading MISS URLs: %1$d / %2$d\u2026', 'fastcgi-cache-purge-and-preload-nginx'),
+                            queued, total
+                        )
+                    );
+                    npppProcessMissBatch(idx + 1);
+                }
+            });
+        }
+
+        npppProcessMissBatch(0);
+    });
+
+    // Percent-encoding Case (pctnorm) autosave
     (function npppPctnormAutoSave() {
         const $wrap = $('#nppp-pctnorm');
         if (!$wrap.length || !window.nppp_admin_data) return;
