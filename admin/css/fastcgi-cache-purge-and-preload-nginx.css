@@ -421,6 +421,26 @@ td.action, td.check {
     gap: 4px;
 }
 
+/* Reposition: Preload All MISS under the DataTables search field */
+#nppp-premium-table_wrapper .dt-search .nppp-preload-miss-wrap {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
+    margin-bottom: 0;
+}
+
+#nppp-premium-table_wrapper .dt-search .nppp-preload-miss-btn {
+    width: 200px;
+    box-sizing: border-box;
+    justify-content: center;
+}
+
+@media screen and (max-width: 767px) {
+    #nppp-premium-table_wrapper .dt-search .nppp-preload-miss-wrap {
+        justify-content: center;
+    }
+}
+
 .nppp-preload-miss-btn:hover {
     background-color: #0073aa;
 }
