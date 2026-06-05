@@ -3365,7 +3365,18 @@ $(document).ready(function() {
                 { defaultContent: "", targets: "_all" },                                 // Ensures all columns render even if empty
                 { searchable: false, targets: [1, 4, 5] },                               // PERF: searchable:false on cols 1+4+5
                 { orderable: false, targets: [5] }                                       // PERF: orderable:false on Actions skips
-            ]
+            ],
+
+            // Move "Preload All MISS" button under the DataTables search field
+            initComplete: function() {
+                var $missWrap = $('.nppp-preload-miss-wrap').first();
+                if ($missWrap.length) {
+                    var $dtSearch = $('#nppp-premium-table_wrapper .dt-search');
+                    if ($dtSearch.length) {
+                        $dtSearch.append($missWrap.detach());
+                    }
+                }
+            }
         });
 
         // clear one-shot highlight before any redraw
