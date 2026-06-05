@@ -143,6 +143,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_dismiss_vary_notice'                     => 'nppp-dismiss-vary-notice',
             'nppp_clear_url_index'                         => 'nppp-clear-url-index',
             'nppp_test_cache_key_regex'                    => 'nppp_test_regex_nonce',
+            'nppp_preload_miss_batch'                      => 'nppp_preload_miss_batch_nonce',
         ];
 
         // Get the current AJAX action
