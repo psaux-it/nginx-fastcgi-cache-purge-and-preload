@@ -192,6 +192,7 @@ add_action('wp_ajax_nppp_cache_status', 'nppp_cache_status_callback');
 add_action('wp_ajax_nppp_load_premium_content', 'nppp_load_premium_content_callback');
 add_action('wp_ajax_nppp_purge_cache_premium', 'nppp_purge_cache_premium_callback');
 add_action('wp_ajax_nppp_preload_cache_premium', 'nppp_preload_cache_premium_callback');
+add_action('wp_ajax_nppp_preload_miss_batch', 'nppp_preload_miss_batch_callback');
 add_action('wp_ajax_nppp_update_api_key_option', 'nppp_update_api_key_option');
 add_action('wp_ajax_nppp_update_default_reject_regex_option', 'nppp_update_default_reject_regex_option');
 add_action('wp_ajax_nppp_update_default_reject_extension_option', 'nppp_update_default_reject_extension_option');
