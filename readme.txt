@@ -157,6 +157,7 @@ NPP restricts cache paths by default to prevent accidental deletion of system fi
 15. Help Tab
 16. Dashboard Widget
 17. Setup Page
+18. Mail Template
 
 == Changelog ==
 
