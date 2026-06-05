@@ -1407,7 +1407,7 @@ $(document).ready(function() {
         });
     });
 
-    // Preload All MISS (Advanced Tab)
+    // Preload All MISS (Advanced tab)
     $(document).on('click', '#nppp-preload-miss-all', function (e) {
         e.preventDefault();
 
@@ -1416,15 +1416,16 @@ $(document).ready(function() {
         if ($btn.prop('disabled')) return;
 
         var missUrls = [];
-        var dt = npppDT();
+        var dt       = npppDT();
+        var missRows = null;
         if (dt) {
-            // Function selector scans DataTables internal data array — no full DOM traversal.
-            dt.rows(function (idx, data) {
+            // Compute once — reused for both URL collection and flip phase
+            missRows = dt.rows(function (idx, data) {
                 return String(data[3]).indexOf('MISS') !== -1;
-            }).every(function () {
-                var node = this.node();
-                if (!node) return;
-                var url = $(node).find('.nppp-preload-btn').data('url');
+            });
+            // Bulk jQuery collection — one DOM traversal for all MISS rows
+            missRows.nodes().to$().find('.nppp-preload-btn').each(function () {
+                var url = $(this).data('url');
                 if (url) missUrls.push(String(url));
             });
         } else {
@@ -1476,12 +1477,51 @@ $(document).ready(function() {
                 npppToast(
                     sprintf(
                         /* translators: %d: total URLs sent for preloading */
-                        __('Preload All MISS complete. %d URLs preloading in the background.', 'fastcgi-cache-purge-and-preload-nginx'),
+                        __('Preload All MISS complete. %d URLs queued.', 'fastcgi-cache-purge-and-preload-nginx'),
                         queued
                     ),
                     'success',
                     7000
                 );
+                // Hide button wrap after all batches sent — no MISS URLs remain to queue
+                // Flip all queued MISS rows to HIT in the table optimistically
+                if (dt && missRows) {
+                    if (missRows.count()) {
+                        // Single jQuery collection — one bulk DOM operation for all MISS rows
+                        var $missNodes = missRows.nodes().to$();
+                        $missNodes.find('td.nppp-status')
+                            .removeClass('is-miss').addClass('is-hit')
+                            .html('<strong>HIT</strong>');
+                        $missNodes.find('.nppp-purge-btn')
+                            .prop('disabled', false)
+                            .removeAttr('aria-disabled title');
+
+                        // Write updated status directly into DT internal cache — no DOM re-read
+                        missRows.every(function () {
+                            var d = this.data();
+                            d[3] = '<strong>HIT</strong>';
+                            this.data(d);
+                        });
+
+                        dt.draw(false);
+                    }
+                } else {
+                    $('#nppp-premium-table tbody tr').each(function () {
+                        var $td = $(this).find('td.nppp-status.is-miss');
+                        if ($td.length) {
+                            $td.removeClass('is-miss').addClass('is-hit')
+                               .html('<strong>HIT</strong>');
+                            $(this).find('.nppp-purge-btn')
+                                .prop('disabled', false)
+                                .removeAttr('aria-disabled')
+                                .removeAttr('title');
+                        }
+                    });
+                }
+                // Now no MISS rows remain — fade out the button wrap
+                setTimeout(function () {
+                    $btn.closest('.nppp-preload-miss-wrap').fadeOut(400);
+                }, 3000);
                 return;
             }
 
