@@ -823,7 +823,7 @@ function nppp_purge_cache_premium_callback() {
 
 /**
  * AJAX: Preload a batch of MISS URLs via the existing fire-and-forget method.
- * Accepts up to 50 URLs per request; JS calls this in a loop for larger sets.
+ * Accepts up to 200 URLs per request; JS calls this in a loop for larger sets.
  */
 function nppp_preload_miss_batch_callback() {
     if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'nppp_preload_miss_batch_nonce' ) ) {
@@ -835,7 +835,7 @@ function nppp_preload_miss_batch_callback() {
 
     // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized inside fire_and_forget per URL
     $raw_urls = ( isset( $_POST['urls'] ) && is_array( $_POST['urls'] ) )
-        ? array_slice( (array) wp_unslash( $_POST['urls'] ), 0, 50 )
+        ? array_slice( (array) wp_unslash( $_POST['urls'] ), 0, 200 )
         : [];
 
     if ( empty( $raw_urls ) ) {
