@@ -5120,3 +5120,59 @@ div.updated.notice-nppp p,
     }
 }
 
+/* Compatible nginx configurations */
+.nppp-nginx-align-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 12px 0 4px;
+    padding: 12px 14px;
+    background: #f0f6fc;
+    border-left: 4px solid orange;
+    border-radius: 0 4px 4px 0;
+    max-width: 950px;
+}
+
+.nppp-nginx-align-notice__icon {
+    color: #2271b1;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.nppp-nginx-align-notice__title {
+    color: #1d2327;
+    font-size: 13px;
+}
+
+.nppp-nginx-align-notice__text {
+    margin: 4px 0 0;
+    color: #50575e;
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+.nppp-nginx-align-notice__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 8px;
+    padding: 4px 10px;
+    background: skyblue;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 3px;
+    text-decoration: none;
+}
+
+.nppp-nginx-align-notice__btn:hover {
+    background: #135e96;
+    color: #fff;
+}
+
+.nppp-nginx-align-notice__btn .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    margin-top: 1px;
+}
