@@ -2,7 +2,7 @@
 /**
  * Update routines for Nginx Cache Purge Preload
  * Description: Runs version checks and applies plugin migration or maintenance updates.
- * Version: 2.1.7
+ * Version: 2.1.6
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -40,6 +40,7 @@ function nppp_get_db_migrations() {
     return array(
         '2.1.5' => array( 'nppp_migration_215' ),
         '2.1.6' => array( 'nppp_migration_216' ),
+        '2.1.7' => array( 'nppp_migration_217' ),
     );
 }
 
@@ -99,6 +100,7 @@ function nppp_run_pending_migrations( $old_version, $new_version ) {
         $migration_messages = array(
             '2.1.5' => __( 'Opt-in usage tracking has been completely removed. /opt/ removed from allowed Nginx cache path roots, if your Nginx cache was stored under /opt/, please move it to a supported location and re-save in Settings.', 'fastcgi-cache-purge-and-preload-nginx' ),
             '2.1.6' => __( 'Auto purge sub-triggers added. Your existing auto purge behaviour has been preserved automatically. Please Reset to Default the Cache Key Regex for the latest compatibility updates to take effect.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            '2.1.7' => __( 'Three things to review after this update: (1) Verify your Nginx skip-cache rules match the new preload regex approach and use "Reset Default" on the "Exclude Endpoints" setting. (2) Use "Reset Default" on "Cache Key Regex" to activate expanded cache key format support. (3) Confirm ripgrep >= 14.0.0 is installed and that both shell_exec and exec are enabled in your PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx' ),
         );
 
         $lines = array();
@@ -200,4 +202,12 @@ function nppp_migration_216() {
     if ( function_exists( 'nppp_schedule_index_updater' ) ) {
         nppp_schedule_index_updater();
     }
+}
+
+// Migration 2.1.7:
+// No changes required for this release.
+// This entry exists solely to surface the admin notice
+// prompting users to review the three post-upgrade action items.
+function nppp_migration_217() {
+    // Intentionally empty — notice is handled by nppp_run_pending_migrations().
 }
