@@ -2,7 +2,7 @@
 /**
  * Feed Preload control for Nginx Cache Purge and Preload
  * Description: Modifies the reject regex to include or exclude /feed endpoint based on the "Preload Feeds" toggle.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
