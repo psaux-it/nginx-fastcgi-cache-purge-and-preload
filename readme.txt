@@ -249,8 +249,8 @@ NPP supports **FastCGI**, **Proxy**, **SCGI**, and **UWSGI** cache methods. The 
 
 Release date: 2026-05-25
 
-* WP-CLI Support: (Milestone): Introduced full CLI integration. You can now manage cache purges, preloading, status reporting, logging, settings updates, flush, and schedules directly from the terminal.
-* NEW: "Preload Feeds" – Users can now fully manage feed caching at both site‑wide and per‑URL levels. Feeds (main RSS/Atom, per‑post comment feeds, and taxonomy RSS feeds) are controlled via the Preload Feed option.
+* WP-CLI Support (Milestone): Introduced full CLI integration. You can now manage cache purges, preloading, status reporting, logging, settings updates, flush, and schedules directly from the terminal.
+* NEW: "Preload Feeds" – Users can now fully manage feed caching at both site‑wide and per‑URL levels. Feeds (main RSS/Atom, per‑post comment feeds, and taxonomy RSS feeds) are controlled via the "Preload Feeds" option.
 * NEW: Advanced Tab "Preload All MISS" – A lighter alternative to "Preload All". When your cache is already mostly warm (>50%), it skips the expensive full‑purge step (Preload All always do full purge) and only preloads the cache that are currently missing. Ideal for high cache coverage sites where "Preload All" would be wasteful.
 * Fixed: A false-negative in Nginx detection on Nginx+Apache proxy stacks, which rendered the plugin completely non-functional even when Nginx was active as the front proxy.
 * Fixed: Unprotected (function_exists) shell_exec and exec calls across the REST API, WP Cron, Dashboard Widget, and all other relevant execution paths.
@@ -268,6 +268,7 @@ Release date: 2026-05-25
 * Performance (Critical Fix): Advanced Tab single Purge action no longer freezes the browser on large caches (30,000+ rows) when Purge Scope sub-triggers enabled. Replaced O(N) full‑table scans with an O(1) URL→row index cache, batched DataTable redraws.
 * Performance: Added --no-mmap flag to ripgrep cache scans for faster I/O on large directories of small binary cache files.
 * Performance: Restructured the Related Preload engine into a single process, collapsing dozens of related URL preload into a maximum of 2 background operations (Desktop, Mobile).
+* Improved (Requires Nginx Config Update): Overhauled the preload engine reject regex from a blanket query-string exclusion to a selective named-parameter denylist. Sites upgrading from prior versions will see a significant increase in preload scope and cache coverage. Verify your Nginx skip-cache rules are also compatible with new changes. To activate the new preload default rules, use the "Reset Default" button for "Exclude Endpoints" in plugin settings. Preload behavior changes significantly.
 * Improved: Nginx detection and Setup (Assume Nginx Mode) process. Nginx detection and setup page redirection is now prioritized before all other environment checks with clean instructions.
 * Improved: UI/UX on Setup Page.
 * Improved: Compatibility on aaPanel. Fully tested and functional (Single and Multi WebServer arches). See github aaPanel/issues/270 and aaPanel/issues/276 for ongoing issues reported. (Thanks to @neikoloves)
@@ -278,7 +279,7 @@ Release date: 2026-05-25
 * Extended: Purge Scope now purges RSS feeds on relevant purge events: main site feed on post publish/update, per-post comments feed when comments are open or present, and per-taxonomy RSS feeds alongside their archive pages.
 * Extended: Purge Scope now purges paginated comment URLs for posts when WordPress comment pagination is enabled, including both pretty-permalink and query-string comment page variants.
 * Extended: Purge Scope taxonomy archive purging now covers all public registered taxonomies generically (custom taxonomies, WooCommerce product attribute archives).
-* Extended: Default Cache Key regex is now also support $scheme://$host$request_uri | $host$request_uri | $host$uri$is_args$args
+* Extended: Default Cache Key regex is now also support "$scheme://$host$request_uri | $host$request_uri | $host$uri$is_args$args". To activate the new cache key regex rules, use the "Reset Default" button for "Cache Key Regex" in plugin settings.
 * Changed: Hard dependency extended to require both shell_exec and exec (rg). REGRESSION!
 * Added: Proper open_basedir compatibility detection and admin warning for missing required paths.
 * Added: Detection for Vary: Accept-Encoding may cause double‑cache issue (dismissable completely).
@@ -291,7 +292,7 @@ Release date: 2026-05-25
 * Developer: nppp_purged_all action hook — fired after every successful full Nginx cache purge, enabling third-party plugins to trigger their own cache flush in sync.
 * Updated: DataTables assets bump to version 2.3.8 for improved Advanced Tab rendering and stability.
 * Updated: Tested up to WordPress 7.0
-* Tested: Tested with Nginx (1.31.1), FUSE (3.18.2), safexec (1.9.6), ripgrep (15.1.0), wget (1.25.0) and bindfs (1.18.4)
+* Tested: Tested with Nginx (1.31.1), FUSE (3.18.2), bindfs (1.18.4), safexec (1.9.6), ripgrep (15.1.0), wget (1.25.0) and aaPanel (8.0.3).
 
 = 2.1.6 =
 
