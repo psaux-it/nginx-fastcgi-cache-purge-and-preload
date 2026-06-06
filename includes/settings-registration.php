@@ -138,18 +138,26 @@ function nppp_before_settings_option_update( $new_value, $old_value ) {
 
         // Get current reject regex
         $reject_regex = $new_value['nginx_cache_reject_regex'] ?? nppp_fetch_default_reject_regex();
-        $rules = explode( '|', $reject_regex );
 
         if ( $new_value['nginx_cache_preload_feeds'] === 'yes' ) {
-            $rules = array_filter( $rules, static fn( $rule ) => $rule !== '/feed/' );
+            // Remove both feed rules — try all possible positions
+            foreach ( [ '|/feed/', '/feed/|', '/feed/', '|[?&]feed=', '[?&]feed=|', '[?&]feed=' ] as $token ) {
+                $reject_regex = str_replace( $token, '', $reject_regex );
+            }
+            // Clean up any resulting double or orphan pipes
+            $reject_regex = preg_replace( '/\|{2,}/', '|', $reject_regex );
+            $reject_regex = trim( $reject_regex, '|' );
         } else {
-            if ( ! in_array( '/feed/', $rules, true ) ) {
-                $rules[] = '/feed/';
+            if ( strpos( $reject_regex, '/feed/' ) === false ) {
+                $reject_regex .= '|/feed/';
+            }
+            if ( strpos( $reject_regex, 'feed=' ) === false ) {
+                $reject_regex .= '|[?&]feed=';
             }
         }
 
-        // Rebuild regex and update the new value
-        $new_value['nginx_cache_reject_regex'] = implode( '|', $rules );
+        // update the new value
+        $new_value['nginx_cache_reject_regex'] = $reject_regex;
     }
 
     return $new_value;
