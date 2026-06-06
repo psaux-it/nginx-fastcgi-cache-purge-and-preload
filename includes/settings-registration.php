@@ -132,19 +132,25 @@ function nppp_before_settings_option_update( $new_value, $old_value ) {
         delete_transient( 'nppp_cache_key_regex_probe' );
     }
 
-    // Update Reject Regex option when Preload Feeds options change
-    if ( isset( $new_value['nginx_cache_preload_feeds'], $old_value['nginx_cache_preload_feeds'] )
-        && $new_value['nginx_cache_preload_feeds'] !== $old_value['nginx_cache_preload_feeds'] ) {
+    // Enforce feed exclusion rules in reject_regex whenever:
+    //   (a) the preload_feeds toggle itself changed, OR
+    //   (b) reject_regex was edited while preload_feeds stayed the same.
+    $preload_feeds_changed = isset( $new_value['nginx_cache_preload_feeds'], $old_value['nginx_cache_preload_feeds'] )
+        && $new_value['nginx_cache_preload_feeds'] !== $old_value['nginx_cache_preload_feeds'];
 
-        // Get current reject regex
-        $reject_regex = $new_value['nginx_cache_reject_regex'] ?? nppp_fetch_default_reject_regex();
+    $reject_regex_changed = ( $old_value['nginx_cache_reject_regex'] ?? '' )
+        !== ( $new_value['nginx_cache_reject_regex'] ?? '' );
 
-        if ( $new_value['nginx_cache_preload_feeds'] === 'yes' ) {
-            // Remove both feed rules — try all possible positions
+    if ( $preload_feeds_changed || $reject_regex_changed ) {
+        $reject_regex  = $new_value['nginx_cache_reject_regex'] ?? nppp_fetch_default_reject_regex();
+        $feeds_enabled = ( $new_value['nginx_cache_preload_feeds'] ?? 'no' ) === 'yes';
+
+        if ( $feeds_enabled ) {
+            // Remove both feed tokens in every possible position
             foreach ( [ '|/feed/', '/feed/|', '/feed/', '|[?&]feed=', '[?&]feed=|', '[?&]feed=' ] as $token ) {
                 $reject_regex = str_replace( $token, '', $reject_regex );
             }
-            // Clean up any resulting double or orphan pipes
+            // Collapse any double or orphan pipes left behind
             $reject_regex = preg_replace( '/\|{2,}/', '|', $reject_regex );
             $reject_regex = trim( $reject_regex, '|' );
         } else {
@@ -156,7 +162,6 @@ function nppp_before_settings_option_update( $new_value, $old_value ) {
             }
         }
 
-        // update the new value
         $new_value['nginx_cache_reject_regex'] = $reject_regex;
     }
 
