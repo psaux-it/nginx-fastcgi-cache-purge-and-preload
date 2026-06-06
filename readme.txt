@@ -124,7 +124,7 @@ View or clear the NPP operation log.
 
 <strong>Settings Management</strong>
 
-Get or change any plugin setting directly from the terminal.
+Get or set any plugin setting directly from the terminal.
 
 * `wp npp settings get` – List all settings (as a table)
 * `wp npp settings get <key>` – Show a single setting value
@@ -140,13 +140,13 @@ Clear internal plugin caches or rebuild the URL index.
 * `wp npp flush` – Clear all plugin transients
 * `wp npp index-clear` – Delete the persistent URL→filepath index
 
-<strong>Schedule Management</strong>
+<strong>Cron Management</strong>
 
 List, set, or cancel automated nginx cache preload cron events.
 
 * `wp npp schedule` – Show active schedule events (table or JSON)
 * `wp npp schedule --format=json` – JSON output
-* `wp npp schedule-set --freq=<daily|weekly|monthly> --time=HH:MM` – Create a recurring preload schedule
+* `wp npp schedule-set --freq=<daily|weekly|monthly> --time=HH:MM` – Create a recurring preload cron
 * `wp npp schedule-set --cancel` – Cancel all NPP scheduled events
 
 <strong>CLI Help</strong>
@@ -247,7 +247,24 @@ NPP supports **FastCGI**, **Proxy**, **SCGI**, and **UWSGI** cache methods. The 
 
 = 2.1.7 =
 
-Release date: 2026-05-25
+Release date: 2026-06-06
+
+2.1.7 is the cache coverage release. The core motivation: cache every URL 
+that is safe to cache — not blindly deny everything with a query string. 
+This release fixes that at both layers: the preload engine and the Nginx 
+skip-cache rules it complements, turning previously invisible URLs into 
+cache HITs.
+
+WP-CLI support lands as the headline milestone, making full cache 
+management available from the terminal for the first time.
+
+Before upgrading, three things to be aware of:
+  1. Verify your Nginx skip-cache rules match the new preload regex approach 
+     and use "Reset Default" on the "Exclude Endpoints" setting.
+  2. Use "Reset Default" on "Cache Key Regex" to activate expanded cache key 
+     format support.
+  3. Confirm ripgrep >= 14.0.0 and that both "shell_exec" and "exec" are 
+     enabled in your PHP configuration.
 
 * WP-CLI Support (Milestone): Introduced full CLI integration. You can now manage cache purges, preloading, status reporting, logging, settings updates, flush, and schedules directly from the terminal.
 * NEW: "Preload Feeds" – Users can now fully manage feed caching at both site‑wide and per‑URL levels. Feeds (main RSS/Atom, per‑post comment feeds, and taxonomy RSS feeds) are controlled via the "Preload Feeds" option.
@@ -638,64 +655,15 @@ Release date: 2024-05-24
 * Fix Out of Date Libraries
 * Fix Sanitize, Escape, and Validate
 
-= 2.0.0 =
-
-Release date: 2024-04-24
-
-* Add support on Auto Preload
-* Add support on WP Cron Scheduled Preload
-* Add support on REST API remote Purge and Preload
-* Add support on front-end on-page Purge and Preload
-* Add support on manual Purge and Preload actions in Advanced tab
-* New e-mail template for mail notifications
-* Improved status tab checks, added Nginx status summary, cache summary 
-* Style and typo fixes
-* Security optimizations
-* Tested up to Wordpress 6.5.3
-
-= 1.0.3 =
-
-Release date: 2024-03-28
-
-* Re-organize code structer for better readability
-* Security optimizations
-* Change plugin icon
-* Add admin bar icon
-* Fix nonce verification issue
-* Fix styling & typo
-* Improve plugin status tab, now also checks PHP-FPM user and setup
-* Tested up to Wordpress 6.5
-
-= 1.0.2 =
-
-Release date: 2024-03-20
-
-* Code optimizations
-* Security optimizations
-* Fix styling & typo
-* Add support on new plugin status tab
-* Add important note for purge operation
-* Better handle purge operations
-* Better handle ACLs checks
-* Use WP Filesystem to purge cache instead of shell find +delete
-* Remove temporary downloaded content after purge & preload operation
-* Escape shell commands properly
-* Better handle wp filesystem
-
-= 1.0.1 =
-
-Release date: 2024-03-15
-
-* Fix logs handling
-* Tested up to Wordpress 6.4
-
-= 1.0.0 =
-
-Release date: 2024-03-14
-
-* Initial release.
+For the complete changelog, see
+[changelog.txt](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/blob/main/changelog.txt).
 
 == Upgrade Notice ==
+
+= 2.1.7 =
+Cache coverage release. Preload behavior changes significantly.
+Reset Default on Exclude Endpoints and Cache Key Regex. Verify
+Nginx skip-cache rules accordingly.
 
 = 2.1.6 =
 Performance/functionality fixes included. Please Reset Default the Cache Key Regex. Upgrade immediately.
