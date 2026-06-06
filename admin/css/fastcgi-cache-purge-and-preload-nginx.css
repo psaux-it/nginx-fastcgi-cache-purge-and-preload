@@ -406,7 +406,7 @@ td.action, td.check {
 }
 
 .nppp-preload-miss-btn {
-    background-color: #1e8cbe;
+    background-color: #228B22;
     color: #fff;
     border: none;
     padding: 8px 14px;
@@ -430,7 +430,7 @@ td.action, td.check {
 }
 
 #nppp-premium-table_wrapper .dt-search .nppp-preload-miss-btn {
-    width: 200px;
+    width: 201px;
     box-sizing: border-box;
     justify-content: center;
 }
@@ -442,7 +442,7 @@ td.action, td.check {
 }
 
 .nppp-preload-miss-btn:hover {
-    background-color: #0073aa;
+    background-color: #1E7A1E;
 }
 
 .nppp-preload-miss-btn[disabled],
