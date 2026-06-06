@@ -245,9 +245,7 @@ NPP supports **FastCGI**, **Proxy**, **SCGI**, and **UWSGI** cache methods. The 
 
 == Changelog ==
 
-= 2.1.7 =
-
-Release date: 2026-06-06
+= 2.1.7 (2026-06-06) =
 
 2.1.7 is the cache coverage release. The core motivation: cache every URL 
 that is safe to cache — not blindly deny everything with a query string. 
@@ -311,9 +309,7 @@ Before upgrading, three things to be aware of:
 * Updated: Tested up to WordPress 7.0
 * Tested: Tested with Nginx (1.31.1), FUSE (3.18.2), bindfs (1.18.4), safexec (1.9.6), ripgrep (15.1.0), wget (1.25.0) and aaPanel (8.0.3).
 
-= 2.1.6 =
-
-Release date: 2026-04-27
+= 2.1.6 (2026-04-27) =
 
 * Performance: MILESTONE: Replaced heavy recursive PHP iterators with ripgrep (rg) as the primary fast-path for cache lookups. This dramatically accelerates cache lookups and purges, tab load timings, specifically optimized for large-scale sites with over 10,000+ URLs. (See Help Tab for requirements)
 * Performance: Optimized permission checks by replacing recursive filesystem iteration with a lightweight targeted write/delete probe.
@@ -340,9 +336,7 @@ Release date: 2026-04-27
 * Improved: Significantly optimized Advanced and Status Tab load timings by refining background data retrieval and ripgrep.
 * Updated: safexec 1.9.6 - Update required!
 
-= 2.1.5 =
-
-Release date: 2026-03-23
+= 2.1.5 (2026-03-23) =
 
 * Added: HTTP Purge via ngx_cache_purge module — fastest purge path when the Nginx module is present. Falls back to filesystem automatically when not available.
 * Added: MILESTONE: Index Purge — single-page purges now use a persistent URL index to skip full directory scans. The base index replicates the snapshot, and the index is automatically updated after each purge if the URL is not already indexed.
@@ -408,9 +402,7 @@ Release date: 2026-03-23
 * Removed: Systemd service management removed — the ability to restart the npp-wordpress FUSE mount service directly from the WordPress admin has been dropped. Use standard system tools to manage the service instead.
 * Compatibility: Tested with WordPress 6.9.4, PHP 8.4, Nginx 1.29.6, FUSE 3.18.2, safexec 1.9.3 and bindfs 1.18.4
 
-= 2.1.4 =
-
-Release date: 2025-10-04
+= 2.1.4 (2025-10-04) =
 
 * Major: Introduces Nginx Cache Analyzer
  * The Advanced tab is now a unified cache dashboard that makes cache status obvious and actionable.
@@ -435,9 +427,7 @@ Release date: 2025-10-04
 * Optimized Elementor and Gutenberg compatibility on Auto Purge.
 * Numerous polish updates and bug fixes, security updates, plus a new header animation that represents NPP.
 
-= 2.1.3 =
-
-Release date: 2025-07-22
+= 2.1.3 (2025-07-22) =
 
 * PATCHED: CVE-2025-6213 — Prevent command injection via ['HTTP_REFERER'] (Credit: @cynau1t)
 * Fixed: UTF-8 decoded URLs are now correctly displayed in the Advanced tab for improved readability (Credit: @XCJYO)
@@ -449,9 +439,7 @@ Release date: 2025-07-22
 * Added: Proxy support for preload operations, including validation and status checks
 * Compatibility: Tested with WordPress 6.8.2
 
-= 2.1.2 =
-
-Release date: 2025-06-23
+= 2.1.2 (2025-06-23) =
 
 * Fix leaking HTML into WP core API responses
 * Fix plugin name under Settings menu
@@ -462,16 +450,12 @@ Release date: 2025-06-23
 * Bump external assets to latest versions
 * Tested with WordPress 6.8.1
 
-= 2.1.1 =
-
-Release date: 2025-03-17
+= 2.1.1 (2025-03-17) =
 
 * Changed plugin name to "Nginx Cache Purge Preload"
 * Other minor improvements
 
-= 2.1.0 =
-
-Release date: 2025-02-23
+= 2.1.0 (2025-02-23) =
 
 Major Release: 46 files changed, 5,170 additions, 1,410 deletions.
 Now fully supports internationalization,
@@ -500,9 +484,7 @@ enabling complete translation for a global user base.
 * Updated Plugin logo and plugin header assets.
 * Updated plugin readme.txt
 
-= 2.0.9 =
-
-Release date: 2024-11-30
+= 2.0.9 (2024-11-30) =
 
 Milestone: Add support for preloading cache separately for Mobile devices
 Milestone: Resolved the long-standing issue prior to version 2.0.5,
@@ -520,17 +502,13 @@ where users encountered a "Not a valid JSON response" error.
 * Forced update of the default cache key regex to support the new structure
 * Update plugin feature descriptions on settings page
 
-= 2.0.8 =
-
-Release date: 2024-11-24
+= 2.0.8 (2024-11-24) =
 
 * Fix the plugin does not have a valid header error
 * Fix admin notices interfere with core WP screens
 * Add support for logging the Preload process handling
 
-= 2.0.7 =
-
-Release date: 2024-11-22
+= 2.0.7 (2024-11-22) =
 
 * Add support for a fallback mechanism to kill the ongoing preload process if SIGTERM is not defined (mrj0b)
 * Add support for auto purge entire cache on plugin activation and deactivation
@@ -546,9 +524,7 @@ Release date: 2024-11-22
 * Update Auto Purge feature description for clarity
 * Tested up to: 6.7.1
 
-= 2.0.6 =
-
-Release date: 2024-11-21
+= 2.0.6 (2024-11-21) =
 
 * Fix permission checks during cache purge
 * Resolve styling issue on the Status tab
@@ -558,9 +534,7 @@ Release date: 2024-11-21
 * Fix cache key regex validation
 * Improve compatibility with Autoptimize plugin
 
-= 2.0.5 =
-
-Release date: 2024-11-17
+= 2.0.5 (2024-11-17) =
 
 Now more powerful with custom fastcgi_cache_key support.
 Here's the short changelog for version 2.0.5, with contributors proudly mentioned.
@@ -583,9 +557,7 @@ Here's the short changelog for version 2.0.5, with contributors proudly mentione
 * Updated feature descriptions for clarity
 * Clear plugin cache on uninstall
 
-= 2.0.4 =
-
-Release date: 2024-10-10
+= 2.0.4 (2024-10-10) =
 
 This is a massive update: 39 changed files, 3,392 additions, and 1,063 deletions.
 Here the short changelog for version 2.0.4
@@ -613,9 +585,7 @@ Here the short changelog for version 2.0.4
 * Improved the Status tab to more effectively determine permission status
 * Prevent interfere with core wp and other plugin code
 
-= 2.0.3 =
-
-Release date: 2024-08-09
+= 2.0.3 (2024-08-09) =
 
 * Add support for Auto-Purging the Nginx cache based on comment events, such as comment approval or comment status changes
 * Optimized Status Tab, handling of finding active Nginx Cache Paths, PHP process owners and other metrics
@@ -625,9 +595,7 @@ Release date: 2024-08-09
 * Version bumps for external assets
 * Tested up to: 6.6.1
 
-= 2.0.2 =
-
-Release date: 2024-06-30
+= 2.0.2 (2024-06-30) =
 
 * Add support on Auto Purge (POST/PAGE whenever its content is updated)
 * Add support on new --wait option (Manage server load while cache preloading)
@@ -643,9 +611,7 @@ Release date: 2024-06-30
 * Style and typo fixes
 * Tested up to: 6.5.5
 
-= 2.0.1 =
-
-Release date: 2024-05-24
+= 2.0.1 (2024-05-24) =
 
 * Fix Generic function/class/define/namespace/option names
 * Fix Not permitted files
@@ -661,9 +627,7 @@ For the complete changelog, see
 == Upgrade Notice ==
 
 = 2.1.7 =
-Cache coverage release. Preload behavior changes significantly.
-Reset Default on Exclude Endpoints and Cache Key Regex. Verify
-Nginx skip-cache rules accordingly.
+Cache coverage release. Read Changelog for best results.
 
 = 2.1.6 =
 Performance/functionality fixes included. Please Reset Default the Cache Key Regex. Upgrade immediately.
