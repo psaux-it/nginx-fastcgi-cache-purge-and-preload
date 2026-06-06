@@ -660,10 +660,25 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_nginx_cache_reject_regex_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'Enter a regex pattern to exclude endpoints from being cached while Preloading. Use | as a delimiter for multiple patterns.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'The default regex patterns exclude dynamic endpoints to prevent caching of user-specific content such as wp-admin|my-account.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'These exclusions are better handled server-side using _cache_bypass, _no_cache, and skip_cache rules in your Nginx configuration.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Here, these patterns are used to prevent wget from making requests to these endpoints during the Preloading process to avoid unnecessary server load.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <div class="nppp-nginx-align-notice">
+                                    <span class="dashicons dashicons-align-left nppp-nginx-align-notice__icon"></span>
+                                    <div class="nppp-nginx-align-notice__body">
+                                        <strong class="nppp-nginx-align-notice__title">
+                                            <?php esc_html_e( 'Keep above rules in sync with your Nginx cache skip rules', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        </strong>
+                                        <p class="nppp-nginx-align-notice__text">
+                                            <?php esc_html_e( '', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        </p>
+                                        <a href="https://github.com/psaux-it/wordpress-nginx-cache-docker/tree/main/nginx" target="_blank" rel="noopener noreferrer" class="nppp-nginx-align-notice__btn">
+                                            <span class="dashicons dashicons-external"></span>
+                                            <?php esc_html_e( 'View Compatible Nginx Configuration', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        </a>
+                                    </div>
+                                </div>
+	                            <p class="description"><?php echo esc_html__( 'Enter a regex pattern to exclude endpoints from being cached while Preloading. Use | as a delimiter for multiple patterns.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'The default regex pattern optimized to exclude dynamic endpoints to prevent caching for WordPress and WooCommerce.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'These exclusions must handled server-side using _cache_bypass, _no_cache, and skip_cache rules in your Nginx configuration.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Here, the regex is just used to prevent preload engine from making requests to these endpoints during the process to avoid unnecessary server load.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <button type="button" id="nginx-regex-reset-defaults" class="button nginx-reset-regex-button">
                                     <?php echo esc_html__( 'Reset Default', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </button>
