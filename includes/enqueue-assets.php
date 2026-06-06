@@ -35,7 +35,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_script('jquery-ui-accordion');
 
     /*!
-    * DataTables v2.3.7
+    * DataTables v2.3.8
     * https://datatables.net/
     * Copyright 2008-2024, SpryMedia Ltd.
     * License: MIT (https://datatables.net/license/mit)
