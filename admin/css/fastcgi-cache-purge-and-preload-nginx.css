@@ -5176,3 +5176,28 @@ div.updated.notice-nppp p,
     height: 14px;
     margin-top: 1px;
 }
+
+/* ========== Preload All MISS loading animation ========== */
+
+/* Rotate the dashicon inside the button */
+.nppp-preload-miss-btn.nppp-preload-miss-loading .dashicons-update {
+    animation: nppp-spin 1s linear infinite;
+}
+
+@keyframes nppp-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+/* Subtle pulsing glow on the button */
+.nppp-preload-miss-btn.nppp-preload-miss-loading {
+    animation: nppp-btn-glow 1.5s ease-in-out infinite;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+@keyframes nppp-btn-glow {
+    0%   { box-shadow: 0 0 0 0 rgba(34, 113, 177, 0.4); }
+    50%  { box-shadow: 0 0 0 6px rgba(34, 113, 177, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(34, 113, 177, 0); }
+}
