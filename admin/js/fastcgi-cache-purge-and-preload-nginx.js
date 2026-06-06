@@ -1415,6 +1415,8 @@ $(document).ready(function() {
         var $progress = $('#nppp-preload-miss-progress');
         if ($btn.prop('disabled')) return;
 
+        showPreloader();
+
         var missUrls = [];
         var dt       = npppDT();
         var missRows = null;
@@ -1443,6 +1445,7 @@ $(document).ready(function() {
         }
 
         if (!missUrls.length) {
+            hidePreloader();
             npppToast(
                 __('No MISS URLs found in the table.', 'fastcgi-cache-purge-and-preload-nginx'),
                 'info'
@@ -1459,63 +1462,42 @@ $(document).ready(function() {
         }
 
         $btn.prop('disabled', true).addClass('disabled');
-        $progress.show().text(
-            sprintf(
-                /* translators: 1: URLs queued so far, 2: total MISS URLs */
-                __('Preloading MISS URLs: %1$d / %2$d\u2026', 'fastcgi-cache-purge-and-preload-nginx'),
-                0, total
-            )
-        );
+        $btn.addClass('nppp-preload-miss-loading');
 
         function npppProcessMissBatch(idx) {
             if (idx >= batches.length) {
+                hidePreloader();
+                $btn.removeClass('nppp-preload-miss-loading');
                 $btn.prop('disabled', false).removeClass('disabled');
-                $progress.text(
-                    sprintf(
-                        /* translators: %d: total URLs sent for preloading */
-                        __('Done \u2014 %d MISS URLs sent for preloading.', 'fastcgi-cache-purge-and-preload-nginx'),
-                        queued
-                    )
-                );
                 npppToast(
                     sprintf(
                         /* translators: %d: total URLs sent for preloading */
-                        __('Preload All MISS complete. %d URLs queued.', 'fastcgi-cache-purge-and-preload-nginx'),
+                        __('All %d MISS URLs sent to background preloader. Caching is in progress…', 'fastcgi-cache-purge-and-preload-nginx'),
                         queued
                     ),
                     'success',
                     7000
                 );
                 // Hide button wrap after all batches sent — no MISS URLs remain to queue
-                // Flip all queued MISS rows to HIT in the table optimistically
+                // Flip all queued MISS rows to IN PROGRESS in the table optimistically
                 if (dt && missRows) {
                     if (missRows.count()) {
                         // 1. Optimistic DOM flip for currently-rendered rows only.
                         //    Non-rendered rows are handled by the data update + draw below.
                         missRows.nodes().to$().find('td.nppp-status')
                             .removeClass('is-miss').addClass('is-hit')
-                            .html('<strong>HIT</strong>');
+                            .html('<strong>PROGRESS</strong>');
 
                         // 2. Write updated status into DT internal data cache for ALL rows
                         //    (including deferred/unrendered ones) — no DOM re-read needed.
                         missRows.every(function () {
                             var d = this.data();
-                            d[3] = '<strong>HIT</strong>';
+                            d[3] = '<strong>PROGRESS</strong>';
                             this.data(d);
                         });
 
                         // 3. Redraw from updated internal data.
                         dt.draw(false);
-
-                        // 4. Re-enable purge buttons AFTER draw.
-                        //    dt.draw() overwrites action-column innerHTML from data[5]
-                        //    which still contains the original disabled-button HTML,
-                        //    reverting any pre-draw DOM change. Re-select by is-hit class
-                        //    (DT preserves TD class attributes through a draw).
-                        $('#nppp-premium-table tbody .nppp-status.is-hit')
-                            .closest('tr').find('.nppp-purge-btn')
-                            .prop('disabled', false)
-                            .removeAttr('aria-disabled title');
                     }
                 } else {
                     // Fallback: DataTables not initialised — all rows are in DOM.
@@ -1523,10 +1505,7 @@ $(document).ready(function() {
                         var $td = $(this).find('td.nppp-status.is-miss');
                         if ($td.length) {
                             $td.removeClass('is-miss').addClass('is-hit')
-                               .html('<strong>HIT</strong>');
-                            $(this).find('.nppp-purge-btn')
-                                .prop('disabled', false)
-                                .removeAttr('aria-disabled title');
+                               .html('<strong>PROGRESS</strong>');
                         }
                     });
                 }
@@ -1553,18 +1532,13 @@ $(document).ready(function() {
                 },
                 error: function (jqXHR, textStatus) {
                     // Network or server error — stop the batch loop and notify user.
+                    hidePreloader();
+                    $btn.removeClass('nppp-preload-miss-loading');
                     $btn.prop('disabled', false).removeClass('disabled');
-                    $progress.text(
-                        sprintf(
-                            /* translators: 1: failed batch number 2: HTTP status text */
-                            __('Preload stopped — batch %1$d failed (%2$s).', 'fastcgi-cache-purge-and-preload-nginx'),
-                            idx + 1, textStatus
-                        )
-                    );
                     npppToast(
                         sprintf(
                             /* translators: %d: batch number that failed */
-                            __('Preload MISS error on batch %d. Check your connection.', 'fastcgi-cache-purge-and-preload-nginx'),
+                            __('Preload error on batch %d. Check your connection.', 'fastcgi-cache-purge-and-preload-nginx'),
                             idx + 1
                         ),
                         'error',
@@ -1573,13 +1547,6 @@ $(document).ready(function() {
                 },
                 complete: function (jqXHR, textStatus) {
                     if (textStatus === 'error') { return; }
-                    $progress.text(
-                        sprintf(
-                            /* translators: 1: URLs queued so far, 2: total MISS URLs */
-                            __('Preloading MISS URLs: %1$d / %2$d\u2026', 'fastcgi-cache-purge-and-preload-nginx'),
-                            queued, total
-                        )
-                    );
                     npppProcessMissBatch(idx + 1);
                 }
             });
