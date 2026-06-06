@@ -483,9 +483,13 @@ function nppp_update_default_reject_regex_option(): void {
                            && $current_options['nginx_cache_preload_feeds'] === 'yes';
 
     if ( $preload_feeds_enabled ) {
-        $rules = explode( '|', $default_regex );
-        $rules = array_filter( $rules, fn( $rule ) => $rule !== '/feed/' );
-        $default_regex = implode( '|', $rules );
+        // Remove both feed rules — try all possible positions
+        foreach ( [ '|/feed/', '/feed/|', '/feed/', '|[?&]feed=', '[?&]feed=|', '[?&]feed=' ] as $token ) {
+            $default_regex = str_replace( $token, '', $default_regex );
+        }
+        // Clean up any resulting double or orphan pipes
+        $default_regex = preg_replace( '/\|{2,}/', '|', $default_regex );
+        $default_regex = trim( $default_regex, '|' );
     }
 
     $current_options['nginx_cache_reject_regex'] = $default_regex;
