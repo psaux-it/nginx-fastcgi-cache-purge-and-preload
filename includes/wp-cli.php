@@ -2,7 +2,7 @@
 /**
  * WP-CLI commands for Nginx Cache Purge Preload
  * Description: Exposes cache purge, preload, status, log, settings, and scheduler to WP-CLI.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
