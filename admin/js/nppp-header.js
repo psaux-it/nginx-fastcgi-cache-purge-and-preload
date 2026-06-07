@@ -8,6 +8,17 @@
  * License: GPL-2.0+
  */
 
+/**
+ * Walkie is the official mascot of Nginx Cache Purge Preload.
+ * He lives in the plugin header, walks along the NPP ribbons, and keeps
+ * you company during long preloads. He is not a real AI assistant,
+ * but he fully believes he is.
+
+ * Walkie's character, design, and all his ridiculous cache jokes
+ * are original to this plugin. If you want your own tiny ribbon‑walker,
+ * please create your own – Walkie is taken.
+ */
+
 (function(){
   'use strict';
 
@@ -815,6 +826,7 @@
 
     // Speech lines per situation
     questions: [
+      'Hi! I’m Walkie, NPP’s official mascot.',
       'Don’t ask me! Help Tab below.',
       'Gluten‑free caches? Asking for me.',
       'Walk it off, they said. Still caching.',
@@ -1061,6 +1073,7 @@
     mouseNear:false, mouseOnWalkie:false,
     shyTimer:0, lastMouseSpeechAt:0,
     eyeOffsetX:0, eyeOffsetY:0,
+    introduced: false,
   };
 
   /* =====================================================================
@@ -1883,7 +1896,11 @@
       if (S.speechTimer <= 0) S.speechText = '';
     }
     if (S.state === 'walk' && !S.speechText) {
-      if (S.nextSpeech <= 0) {
+      if (!S.introduced) {
+        S.introduced = true;
+        say(CFG.questions[0], 4, true);
+        S.nextSpeech = CFG.speechIntervalMin + Math.random() * (CFG.speechIntervalMax - CFG.speechIntervalMin);
+      } else if (S.nextSpeech <= 0) {
         S.nextSpeech = CFG.speechIntervalMin + Math.random() * (CFG.speechIntervalMax - CFG.speechIntervalMin);
         say(pick(CFG.questions));
       } else {
