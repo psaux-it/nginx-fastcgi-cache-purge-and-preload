@@ -15,7 +15,7 @@ The most comprehensive free solution for managing Nginx (FastCGI, Proxy, SCGI, U
 
 **NPP** lets WordPress users manage **Nginx Cache Purge and Preload** (FastCGI, Proxy, SCGI, UWSGI) operations directly from the WordPress admin dashboard — actively warming the cache via site crawl, so your Nginx cache is always preloaded and ready.
 
-NPP is the only Nginx cache plugin that doesn’t just clear the table — it sets the whole banquet. No other Nginx cache plugin comes close to its feature list, purge architecture, preload intelligence, or security depth on WordPress.
+NPP is the only Nginx cache plugin that doesn’t just clear the table — it sets the whole banquet. No other Nginx cache plugin comes close to its feature list, purge architecture, preload intelligence on WordPress.
 
 == 🖥️ Quick WP-CLI ==
 
@@ -268,7 +268,7 @@ Before upgrading, three things to be aware of:
 * WP-CLI Support (Milestone): Introduced full CLI integration. You can now manage cache purges, preloading, status reporting, logging, settings updates, flush, and schedules directly from the terminal.
 * NEW: "Preload Feeds" – Users can now fully manage feed caching at both site‑wide and per‑URL levels. Feeds (main RSS/Atom, per‑post comment feeds, and taxonomy RSS feeds) are controlled via the "Preload Feeds" option.
 * NEW: Advanced Tab "Preload All MISS" – A lighter alternative to "Preload All". When your cache is already mostly warm (>50%), it skips the expensive full‑purge step (Preload All always do full purge) and only preloads the cache that are currently missing. Ideal for high cache coverage sites where "Preload All" would be wasteful.
-* NEW: Walkie – a tiny animated character that lives in the plugin header, walks along the ribbons, and cracks cache‑related jokes. Purely for fun during long preloads to company users – not a real AI assistant. (He fully believes he’s a real AI, though.)
+* NEW: Walkie – a tiny animated character that lives in the plugin header, walks along the ribbons, and cracks cache‑related jokes. Purely for fun during long preloads to keep users company – not a real AI assistant. (He fully believes he’s a real AI, though.)
 * Fixed: A false-negative in Nginx detection on Nginx+Apache proxy stacks, which rendered the plugin completely non-functional even when Nginx was active as the front proxy.
 * Fixed: Unprotected (function_exists) shell_exec and exec calls across the REST API, WP Cron, Dashboard Widget, and all other relevant execution paths.
 * Fixed: Missing check for getenv / putenv for URL Normalization (safexec).
