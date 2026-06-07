@@ -1736,7 +1736,7 @@
     if (st === 'stuck'      && S.stateTimer > 2.4) { S.state = 'walk'; S.stateTimer = 0; }
     if (st === 'sprint'     && S.stateTimer > 1.8) { S.state = 'walk'; S.stateTimer = 0; }
     if (st === 'glitch'     && S.stateTimer > 1.5) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'cors'       && S.stateTimer > 1.5) { S.state = 'walk'; S.stateTimer = 0; }
+    if (st === 'cors'       && S.stateTimer > 1.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
     if (st === 'timeout'    && S.stateTimer > 3.0) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
     if (st === 'deflate'    && S.stateTimer > 2.2) { S.state = 'walk'; S.stateTimer = 0; }
     if (st === 'trip') {
