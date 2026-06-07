@@ -826,7 +826,7 @@
 
     // Speech lines per situation
     questions: [
-      'Hi! I’m Walkie, NPP’s official mascot.',
+      'Hi! I’m Walkie, NPP’s official AI assistant. (Fully self‑certified.)',
       'Don’t ask me! Help Tab below.',
       'Gluten‑free caches? Asking for me.',
       'Walk it off, they said. Still caching.',
