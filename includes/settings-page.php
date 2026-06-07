@@ -667,7 +667,7 @@ function nppp_nginx_cache_settings_page() {
                                             <?php esc_html_e( 'Keep above rules in sync with your Nginx cache skip rules', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                         </strong>
                                         <p class="nppp-nginx-align-notice__text">
-                                            <?php esc_html_e( '', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                            <?php echo ''; ?>
                                         </p>
                                         <a href="https://github.com/psaux-it/wordpress-nginx-cache-docker/tree/main/nginx" target="_blank" rel="noopener noreferrer" class="nppp-nginx-align-notice__btn">
                                             <span class="dashicons dashicons-external"></span>
