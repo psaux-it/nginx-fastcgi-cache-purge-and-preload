@@ -1071,7 +1071,7 @@ function nppp_pre_checks() {
                 /* translators: %s: list of missing open_basedir paths as an HTML <ul> */
                 __( 'GLOBAL ERROR PHP: <code>open_basedir</code> is active, but required paths for NPP are missing. See the list below.', 'fastcgi-cache-purge-and-preload-nginx' )
                 . $missing_list
-                . __( '<strong>Plugin functionality may be broken until this is resolved.</strong>', 'fastcgi-cache-purge-and-preload-nginx' )
+                . '<strong>' . __( 'Plugin functionality may be broken until this is resolved.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</strong>'
             );
         }
     }
