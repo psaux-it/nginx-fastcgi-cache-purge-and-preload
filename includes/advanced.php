@@ -833,23 +833,17 @@ function nppp_preload_miss_batch_callback() {
         wp_send_json_error( 'Permission denied.', 403 );
     }
 
-    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized inside fire_and_forget per URL
-    $raw_urls = ( isset( $_POST['urls'] ) && is_array( $_POST['urls'] ) )
-        ? array_slice( (array) wp_unslash( $_POST['urls'] ), 0, 200 )
+    $sanitized = isset( $_POST['urls'] ) && is_array( $_POST['urls'] )
+        ? array_map( 'esc_url_raw', wp_unslash( $_POST['urls'] ) )
         : [];
 
-    if ( empty( $raw_urls ) ) {
+    $urls = array_values( array_slice( array_filter( $sanitized ), 0, 200 ) );
+
+    if ( empty( $urls ) ) {
         wp_send_json_error( 'No URLs provided.' );
     }
 
-    $urls = array_values( array_filter( array_map( 'esc_url_raw', array_map( 'trim', $raw_urls ) ) ) );
-
-    if ( empty( $urls ) ) {
-        wp_send_json_error( 'No valid URLs after sanitization.' );
-    }
-
     nppp_preload_urls_fire_and_forget( $urls );
-
     wp_send_json_success( array( 'queued' => count( $urls ) ) );
 }
 
