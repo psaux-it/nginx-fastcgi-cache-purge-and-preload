@@ -1492,6 +1492,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                         default:
                             $reason_text = __( 'Unknown wget compatibility issue.', 'fastcgi-cache-purge-and-preload-nginx' );
                     }
+                    /* translators: %s: reason why preload is locked (e.g., missing or outdated wget) */
                     WP_CLI::error( sprintf( __( 'Preload Locked: %s GNU Wget 1.16+ required.', 'fastcgi-cache-purge-and-preload-nginx' ), $reason_text ) );
                 }
             }
