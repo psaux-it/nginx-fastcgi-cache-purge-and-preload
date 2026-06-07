@@ -1855,7 +1855,7 @@
     ctx.clearRect(0, 0, S.W, S.H);
 
     // Speed based on progress; FLEE when the cursor lands on walkie
-    S.speed = CFG.baseSpeed + (CFG.maxSpeed - CFG.baseSpeed) * (S.pct / 100);
+    S.speed = CFG.baseSpeed + (S.running ? (CFG.maxSpeed - CFG.baseSpeed) * (S.pct / 100) : 0);
     if (S.mouseOnWalkie && S.state === 'walk')
       S.speed = Math.min(CFG.maxSpeed * 1.5, S.speed * 2.2);
     if (S.state === 'ghost')   S.speed *= 0.22;
