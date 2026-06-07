@@ -246,7 +246,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 
 == Changelog ==
 
-= 2.1.7 (2026-06-06) =
+= 2.1.7 (2026-06-08) =
 
 2.1.7 is the cache coverage release. The core motivation: cache every URL 
 that is safe to cache — not blindly deny everything with a query string. 
