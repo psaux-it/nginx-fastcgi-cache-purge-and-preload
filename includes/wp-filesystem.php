@@ -2,7 +2,7 @@
 /**
  * WordPress filesystem helpers for Nginx Cache Purge Preload
  * Description: Wraps WP_Filesystem operations, logging, and permission-safe file access utilities.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -115,11 +115,11 @@ function nppp_perform_file_operation($file_path, $operation, $data = null) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
-        nppp_display_admin_notice(
-            'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+        nppp_custom_error_log(
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            E_USER_ERROR
         );
-        return;
+        return false;
     }
 
     switch ($operation) {
@@ -137,9 +137,8 @@ function nppp_perform_file_operation($file_path, $operation, $data = null) {
             }
             return false;
         case 'append':
-            $current_content = $wp_filesystem->get_contents($file_path);
-            $updated_content = $current_content . "\n" . $data;
-            return $wp_filesystem->put_contents($file_path, $updated_content);
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+            return file_put_contents( $file_path, $data . "\n", FILE_APPEND | LOCK_EX );
         default:
             return false;
     }

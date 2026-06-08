@@ -1,7 +1,7 @@
 /**
  * Preload feature guards for Nginx Cache Purge Preload
  * Description: Disables preload-specific controls when required environment checks fail.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -133,6 +133,25 @@
                         e.preventDefault();
                         return false;
                     });
+            })();
+
+            // Disable preload feeds toggle
+            (function disablePreloadFeeds() {
+                var $toggle = $('#nginx_cache_preload_feeds');
+                if (!$toggle.length) { return; }
+
+                $toggle.prop('disabled', true)
+                    .attr({'aria-disabled': 'true', 'tabindex': '-1'})
+                    .off('.nppp')
+                    .on('click.nppp change.nppp', function(e) {
+                        e.preventDefault();
+                        return false;
+                    });
+
+                $toggle.closest('.nppp-onoffswitch-preload-feeds')
+                    .css({ opacity: '0.5', cursor: 'not-allowed' })
+                    .find('.nppp-onoffswitch-label-preload-feeds')
+                    .css({ 'pointer-events': 'none', 'cursor': 'not-allowed' });
             })();
 
             // Disable rest API preload stuff

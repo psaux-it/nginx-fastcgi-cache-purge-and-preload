@@ -2,7 +2,7 @@
 /**
  * Admin bar integration for Nginx Cache Purge Preload
  * Description: Adds admin-bar cache actions and routes them to plugin purge/preload workflows.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -387,6 +387,16 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
 
         // Ready to go
         $current_page_url = $candidate_ascii;
+    }
+
+    // Environment check
+    // The JS only guards the UI; direct admin-bar GET requests bypass it completely.
+    if ( ! function_exists( 'shell_exec' ) || ! function_exists( 'exec' ) ) {
+        nppp_front_error_notice(
+            __( 'ERROR ENV: shell_exec or exec is disabled on this server. Plugin environment requirements are not met. Cache action cannot be performed.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            home_url( '/' )
+        );
+        return;
     }
 
     // Reset tracker before buffering so a stale value from a previous

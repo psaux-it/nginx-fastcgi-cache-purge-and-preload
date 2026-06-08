@@ -2,7 +2,7 @@
 /**
  * Settings sanitization and validation for Nginx Cache Purge Preload
  * Description: Sanitizes and validates all settings inputs; validates the cache path.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -211,17 +211,23 @@ function nppp_sanitize_validate_proxy_host(string $raw, ?string &$err = null, ?s
 
 // Sanitize inputs
 function nppp_nginx_cache_settings_sanitize($input) {
-    // Guard against double/triple sanitization — WordPress core bug Trac #21989
-    static $pass_count = 0;
-    $pass_count++;
-    if ( $pass_count > 1 ) return $input;
-
     $sanitized_input = array();
 
     // Ensure input is an array
     if (!is_array($input)) {
         return $sanitized_input;
     }
+
+    // Guard against re-entrant sanitization (WP Trac #21989).
+    // Using a per-input hash instead of a linear counter so that independent
+    // update_option() calls in the same request (e.g. activation + settings
+    // save) each get their own pass and never accidentally block each other.
+    static $seen = [];
+    $nppp_guard_key = md5( maybe_serialize( $input ) );
+    if ( isset( $seen[ $nppp_guard_key ] ) ) {
+        return $input;
+    }
+    $seen[ $nppp_guard_key ] = true;
 
     // Read bypass flag before path validation
     $bypass_restriction = isset( $input['nginx_cache_bypass_path_restriction'] )
@@ -487,23 +493,24 @@ function nppp_nginx_cache_settings_sanitize($input) {
     }
 
     // Sanitize Send Mail, Auto Preload, Auto Preload Mobile, Auto Purge, Cache Schedule, REST API, Opt-in, Related Pages
-    $sanitized_input['nginx_cache_send_mail']              = isset($input['nginx_cache_send_mail'])               && $input['nginx_cache_send_mail'] === 'yes' ? 'yes' : 'no';
-    $sanitized_input['nginx_cache_auto_preload']           = isset($input['nginx_cache_auto_preload'])            && $input['nginx_cache_auto_preload'] === 'yes' ? 'yes' : 'no';
-    $sanitized_input['nginx_cache_auto_preload_mobile']    = isset($input['nginx_cache_auto_preload_mobile'])     && $input['nginx_cache_auto_preload_mobile'] === 'yes' ? 'yes' : 'no';
-    $sanitized_input['nginx_cache_watchdog']               = isset($input['nginx_cache_watchdog'])                && $input['nginx_cache_watchdog'] === 'yes' ? 'yes' : 'no';
-    $sanitized_input['nginx_cache_purge_on_update']        = isset($input['nginx_cache_purge_on_update'])         && $input['nginx_cache_purge_on_update'] === 'yes' ? 'yes' : 'no';
-    $sanitized_input['nppp_autopurge_posts']               = ( isset( $input['nppp_autopurge_posts'] )            && $input['nppp_autopurge_posts']    === 'yes' ) ? 'yes' : 'no';
-    $sanitized_input['nppp_autopurge_terms']               = ( isset( $input['nppp_autopurge_terms'] )            && $input['nppp_autopurge_terms']    === 'yes' ) ? 'yes' : 'no';
-    $sanitized_input['nppp_autopurge_plugins']             = ( isset( $input['nppp_autopurge_plugins'] )          && $input['nppp_autopurge_plugins']  === 'yes' ) ? 'yes' : 'no';
-    $sanitized_input['nppp_autopurge_themes']              = ( isset( $input['nppp_autopurge_themes'] )           && $input['nppp_autopurge_themes']   === 'yes' ) ? 'yes' : 'no';
-    $sanitized_input['nppp_autopurge_3rdparty']            = ( isset( $input['nppp_autopurge_3rdparty'] )         && $input['nppp_autopurge_3rdparty'] === 'yes' ) ? 'yes' : 'no';
-    $sanitized_input['nppp_cloudflare_apo_sync']           = isset($input['nppp_cloudflare_apo_sync'])            && $input['nppp_cloudflare_apo_sync'] === 'yes' ? 'yes' : 'no';
-    $sanitized_input['nppp_redis_cache_sync']              = isset($input['nppp_redis_cache_sync'])               && $input['nppp_redis_cache_sync'] === 'yes' ? 'yes' : 'no';
-    $sanitized_input['nginx_cache_schedule']               = isset($input['nginx_cache_schedule'])                && $input['nginx_cache_schedule'] === 'yes' ? 'yes' : 'no';
-    $sanitized_input['nginx_cache_api']                    = isset($input['nginx_cache_api'])                     && $input['nginx_cache_api'] === 'yes' ? 'yes' : 'no';
-    $sanitized_input['nppp_related_include_home']          = (isset($input['nppp_related_include_home'])          && $input['nppp_related_include_home'] === 'yes') ? 'yes' : 'no';
-    $sanitized_input['nppp_related_include_category']      = (isset($input['nppp_related_include_category'])      && $input['nppp_related_include_category'] === 'yes') ? 'yes' : 'no';
-    $sanitized_input['nppp_related_apply_manual']          = (isset($input['nppp_related_apply_manual'])          && $input['nppp_related_apply_manual'] === 'yes') ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_send_mail']              = isset($input['nginx_cache_send_mail'])               && $input['nginx_cache_send_mail']             === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_auto_preload']           = isset($input['nginx_cache_auto_preload'])            && $input['nginx_cache_auto_preload']          === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_auto_preload_mobile']    = isset($input['nginx_cache_auto_preload_mobile'])     && $input['nginx_cache_auto_preload_mobile']   === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_preload_feeds']          = isset($input['nginx_cache_preload_feeds'])           && $input['nginx_cache_preload_feeds']         === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_watchdog']               = isset($input['nginx_cache_watchdog'])                && $input['nginx_cache_watchdog']              === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_purge_on_update']        = isset($input['nginx_cache_purge_on_update'])         && $input['nginx_cache_purge_on_update']       === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nppp_autopurge_posts']               = ( isset( $input['nppp_autopurge_posts'] )            && $input['nppp_autopurge_posts']              === 'yes' ) ? 'yes' : 'no';
+    $sanitized_input['nppp_autopurge_terms']               = ( isset( $input['nppp_autopurge_terms'] )            && $input['nppp_autopurge_terms']              === 'yes' ) ? 'yes' : 'no';
+    $sanitized_input['nppp_autopurge_plugins']             = ( isset( $input['nppp_autopurge_plugins'] )          && $input['nppp_autopurge_plugins']            === 'yes' ) ? 'yes' : 'no';
+    $sanitized_input['nppp_autopurge_themes']              = ( isset( $input['nppp_autopurge_themes'] )           && $input['nppp_autopurge_themes']             === 'yes' ) ? 'yes' : 'no';
+    $sanitized_input['nppp_autopurge_3rdparty']            = ( isset( $input['nppp_autopurge_3rdparty'] )         && $input['nppp_autopurge_3rdparty']           === 'yes' ) ? 'yes' : 'no';
+    $sanitized_input['nppp_cloudflare_apo_sync']           = isset($input['nppp_cloudflare_apo_sync'])            && $input['nppp_cloudflare_apo_sync']          === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nppp_redis_cache_sync']              = isset($input['nppp_redis_cache_sync'])               && $input['nppp_redis_cache_sync']             === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_schedule']               = isset($input['nginx_cache_schedule'])                && $input['nginx_cache_schedule']              === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nginx_cache_api']                    = isset($input['nginx_cache_api'])                     && $input['nginx_cache_api']                   === 'yes' ? 'yes' : 'no';
+    $sanitized_input['nppp_related_include_home']          = (isset($input['nppp_related_include_home'])          && $input['nppp_related_include_home']         === 'yes') ? 'yes' : 'no';
+    $sanitized_input['nppp_related_include_category']      = (isset($input['nppp_related_include_category'])      && $input['nppp_related_include_category']     === 'yes') ? 'yes' : 'no';
+    $sanitized_input['nppp_related_apply_manual']          = (isset($input['nppp_related_apply_manual'])          && $input['nppp_related_apply_manual']         === 'yes') ? 'yes' : 'no';
     $sanitized_input['nppp_related_preload_after_manual']  = (isset($input['nppp_related_preload_after_manual'])  && $input['nppp_related_preload_after_manual'] === 'yes') ? 'yes' : 'no';
 
     // Sanitize Mobile User Agent: strip tags, collapse whitespace, hard-cap at 512 chars.
@@ -774,7 +781,8 @@ function nppp_validate_path($path, $nppp_is_premium_purge = false, bool $nppp_by
             return 'file_not_found_or_not_readable';
         }
     } else {
-        if (!is_dir($path)) {
+        // supress open_basedir related PHP warnings
+        if (!@is_dir($path)) {
             return 'directory_not_exist_or_readable';
         }
     }

@@ -2,7 +2,7 @@
 /**
  * Status page renderer for Nginx Cache Purge Preload
  * Description: Collects and displays runtime diagnostics, cache details, and health information.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -17,6 +17,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 // To optimize performance and prevent redundancy, we use cached recursive permission checks.
 // This technique stores the results of time-consuming (expensive) permission verifications for reuse.
 // The results are cached for to reduce performance overhead, especially useful when the Nginx cache path is extensive.
+// With v2.1.6 replaced expensive recursive iterator scanning with a lightweight write/delete probe in nppp_check_permissions_recursive.
+// As a result with v2.1.7 transient cache duration lowered 1Month to 1min for accurate real time perm issue detection.
 function nppp_check_permissions_recursive_with_cache() {
     $nginx_cache_settings = get_option('nginx_cache_settings', []);
     $default_cache_path   = '/dev/shm/change-me-now';
@@ -46,7 +48,7 @@ function nppp_check_permissions_recursive_with_cache() {
         $result = $result ? 'true' : 'false';
 
         // Cache the result for 1 month
-        set_transient($transient_key, $result, 30 * DAY_IN_SECONDS);
+        set_transient($transient_key, $result, MINUTE_IN_SECONDS);
     }
 
     return $result;
@@ -89,12 +91,18 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_rg_version_' . md5($static_key_base),
         'nppp_pages_in_cache_' . md5($static_key_base),
         'nppp_obd_warned_' . md5($static_key_base),
+        'nppp_vary_issue_' . md5($static_key_base),
+        'nppp_cache_key_regex_probe',
     );
 
     // Delete each known transient
     foreach ($transients as $transient) {
         delete_transient($transient);
     }
+
+    // Re-arm the Vary: Accept-Encoding probe and its notice row so the
+    // detection runs fresh on the next settings page load.
+    delete_option( 'nppp_vary_notice_dismissed' );
 
     // Transients that must not be cleared while a preload is running:
     //   nppp_preload_phase_        — tick monitor reads this every 5s to track desktop/mobile phase
@@ -176,7 +184,12 @@ function nppp_check_perm_in_cache($check_path = false, $check_perm = false, $che
 
     // Normalize: callers compare against string 'true'/'false'
     if ($result === false) {
-        $result = 'false';
+        if (nppp_check_path() === 'Found') {
+            $computed = nppp_check_permissions_recursive_with_cache();
+            $result   = ($computed === 'true') ? 'true' : 'false';
+        } else {
+            $result = 'false';
+        }
     } else {
         // Be defensive in case something else was stored
         $result = ($result === 'true') ? 'true' : 'false';
@@ -214,6 +227,10 @@ function nppp_check_perm_in_cache($check_path = false, $check_perm = false, $che
 function nppp_check_command_status($command) {
     // Set env
     nppp_prepare_request_env(true);
+
+    if ( ! function_exists( 'shell_exec' ) ) {
+        return 'Not Installed';
+    }
 
     $output = shell_exec("command -v $command");
     return !empty($output) ? 'Installed' : 'Not Installed';
@@ -311,7 +328,7 @@ function nppp_shell_exec() {
 // dedicated=true  → path is its own mount (tmpfs, bindfs, etc.) — disk stats are exact for cache.
 // dedicated=false → path is a directory on a shared partition — du gives actual cache bytes only.
 function nppp_get_cache_disk_size( string $path ): ?array {
-    if ( empty( $path ) || ! is_dir( $path ) ) {
+    if ( empty( $path ) || ! @is_dir( $path ) ) {
         return null;
     }
 
@@ -345,7 +362,7 @@ function nppp_get_cache_disk_size( string $path ): ?array {
 
     // Shared partition — use du to get actual cache directory bytes only.
     // This prevents showing entire partition usage as "cache size".
-    $raw = shell_exec( 'du -sb ' . escapeshellarg( $path ) . ' 2>/dev/null' );
+    $raw = function_exists( 'shell_exec' ) ? shell_exec( 'du -sb ' . escapeshellarg( $path ) . ' 2>/dev/null' ) : null;
     if ( $raw ) {
         $parts = explode( "\t", trim( $raw ) );
         if ( isset( $parts[0] ) && ctype_digit( $parts[0] ) ) {
@@ -412,7 +429,7 @@ function nppp_get_website_user() {
         $command = "ls -ld " . escapeshellarg($wordpressRoot . '/index.php') . " | awk '{print $3}'";
 
         // Execute the shell command
-        $process_owner = shell_exec($command);
+        $process_owner = function_exists( 'shell_exec' ) ? shell_exec($command) : null;
 
         // Check the PHP process owner if not empty
         if (!empty($process_owner)) {
@@ -455,7 +472,7 @@ function nppp_get_webserver_user() {
 
     // Check if the config file exists
     if (!$wp_filesystem->exists($config_file)) {
-        set_transient($transient_key, "Not Determined", MONTH_IN_SECONDS);
+        set_transient($transient_key, "Not Determined", HOUR_IN_SECONDS);
         return "Not Determined";
     }
 
@@ -463,7 +480,9 @@ function nppp_get_webserver_user() {
     nppp_prepare_request_env(true);
 
     // Check the running processes for Nginx
-    $nginx_user_process = shell_exec("ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v 'root' | awk '{print $1}' | sort | uniq");
+    $nginx_user_process = function_exists( 'shell_exec' )
+        ? shell_exec("ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v 'root' | awk '{print $1}' | sort | uniq")
+        : null;
 
     // Convert the process output to an array and filter out empty values
     if ($nginx_user_process !== null && $nginx_user_process !== '') {
@@ -502,26 +521,26 @@ function nppp_get_webserver_user() {
     if (!empty($nginx_user_conf) && !empty($process_users)) {
         // Check if the configuration user is among the process users
         if (in_array($nginx_user_conf, $process_users)) {
-            set_transient($transient_key, $nginx_user_conf, MONTH_IN_SECONDS);
+            set_transient($transient_key, $nginx_user_conf, HOUR_IN_SECONDS);
             return $nginx_user_conf;
         }
     }
 
     // If only the configuration user is found, return it
     if (!empty($nginx_user_conf)) {
-        set_transient($transient_key, $nginx_user_conf, MONTH_IN_SECONDS);
+        set_transient($transient_key, $nginx_user_conf, HOUR_IN_SECONDS);
         return $nginx_user_conf;
     }
 
     // If only the process user is found, return it
     if (!empty($process_users)) {
         $user = reset($process_users);
-        set_transient($transient_key, $user, MONTH_IN_SECONDS);
+        set_transient($transient_key, $user, HOUR_IN_SECONDS);
         return $user;
     }
 
     // If no user is found, return "Not Determined"
-    set_transient($transient_key, "Not Determined", MONTH_IN_SECONDS);
+    set_transient($transient_key, "Not Determined", HOUR_IN_SECONDS);
     return "Not Determined";
 }
 
@@ -568,9 +587,25 @@ function nppp_get_in_cache_page_count() {
 
     // FP — ripgrep fast path, always use if available
     nppp_prepare_request_env();
-    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+    $rg_cached = get_transient( 'nppp_rg_ok' );
+    if ( $rg_cached === false ) {
+        $rg_bin = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
+        $rg_ok  = $rg_bin !== '' && is_executable( $rg_bin );
+        set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_ok ], HOUR_IN_SECONDS );
+    } else {
+        $rg_bin = $rg_cached['path'];
+        $rg_ok  = (bool) $rg_cached['ok'];
+    }
 
-    if ( $rg_bin !== '' ) {
+    // Enforce minimum rg version — treat lower versions as unavailable.
+    if ( $rg_ok && function_exists( 'nppp_check_rg_version' ) ) {
+        $rg_ver = nppp_check_rg_version();
+        if ( $rg_ver === 'Not Installed' || version_compare( $rg_ver, '14.0.0', '<' ) ) {
+            $rg_ok = false;
+        }
+    }
+
+    if ( $rg_ok ) {
         $rg_fuse_path   = $nginx_cache_path;
         $rg_source_path = nppp_fuse_source_path( $rg_fuse_path );
 
@@ -990,60 +1025,11 @@ function nppp_my_status_html() {
     $nppp_pages_in_cache  = get_option( 'nppp_last_known_hits',      false );
     $nppp_hits_scanned_at = get_option( 'nppp_last_hits_scanned_at', false );
 
-    // Warn about not found cache key
-    if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
-        echo '<div class="nppp-status-wrap">
-                  <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: No <span style="color: #FFDEAD;">_cache_key</span> directive was found.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
-              </div>';
-    // Warn about non-default cache key — severity depends on whether it affects this site
-    } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
-        if ( $nppp_pages_in_cache === 'RegexError' ) {
-            echo '<div class="nppp-status-wrap">
-                      <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Non-default</span> cache key detected — Cache Key Regex update required.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
-                  </div>';
-        } else {
-            echo '<div class="nppp-status-wrap">
-                      <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Non-default</span> cache key found on server — not affecting this site.', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
-                  </div>';
-        }
-    }
-
     // Warn about same Nginx cache path for multiple instance
     if ($duplicates !== false) {
         echo '<div class="nppp-status-wrap">
                   <p class="nppp-advanced-error-message">' . wp_kses(__('INFO: <span style="color: #FFDEAD;">Same</span> Nginx cache path found!', 'fastcgi-cache-purge-and-preload-nginx'), ['span' => ['style' => true]]) . '</p>
               </div>';
-    }
-
-    // Details about not found cache key
-    if (isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
-        echo '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                 <p style="margin: 0; align-items: center;">
-                     <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>' . wp_kses(__('Please check your <strong>Nginx cache setup</strong> to ensure that the <strong>cache key</strong> directive is defined. If you continue to encounter this error, this may indicate a <strong>parsing error</strong> and can be safely ignored.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]) . '
-                 </p>
-             </div>';
-    // Details about the non-default cache key
-    } elseif (isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
-        if ( $nppp_pages_in_cache === 'RegexError' ) {
-            // Situation B — regex is failing on this site's actual cache files
-            echo '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                     <p style="margin: 0; align-items: center;">
-                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #721c24; margin-right: 8px;"></span>' . sprintf(
-                             /* translators: %1$s: Cache Key Regex option name, %2$s: Advanced Options section name */
-                             wp_kses(__('Non-default <strong>_cache_key</strong> is active on this site. Update <strong>%1$s</strong> in <strong>%2$s</strong> to match your key format.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]),
-                             wp_kses(__('Cache Key Regex', 'fastcgi-cache-purge-and-preload-nginx'), []),
-                             wp_kses(__('Advanced Options', 'fastcgi-cache-purge-and-preload-nginx'), [])
-                         ) . '
-                     </p>
-                 </div>';
-        } else {
-            // Situation A — non-default key exists on another vhost, not on this site
-            echo '<div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 10px; margin-bottom: 15px; max-width: max-content;">
-                     <p style="margin: 0; align-items: center;">
-                         <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>' . wp_kses(__('Non-default <strong>_cache_key</strong> found on another vhost — no action needed for this site.', 'fastcgi-cache-purge-and-preload-nginx'), ['strong' => []]) . '
-                     </p>
-                 </div>';
-        }
     }
 
     // Details about same Nginx cache path for multiple instance
@@ -1192,6 +1178,13 @@ function nppp_my_status_html() {
                                 <td class="status" id="npppaclStatus">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html($perm_status_message); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check"><?php esc_html_e('Cache Key Regex Test (Required)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="status" id="npppCacheKeyRegex">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html( nppp_probe_cache_key_regex() ); ?></span>
                                 </td>
                             </tr>
                             <tr>

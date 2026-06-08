@@ -2,7 +2,7 @@
 /**
  * Environment pre-checks for Nginx Cache Purge Preload
  * Description: Validates required server, filesystem, and plugin runtime prerequisites.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -21,6 +21,12 @@ if (! function_exists('nppp_get_wget_compatibility')) {
         $cached = get_transient($transient_key);
 
         if (is_array($cached) && array_key_exists('ok', $cached) && array_key_exists('reason', $cached)) {
+            return $cached;
+        }
+
+        if (!function_exists('shell_exec')) {
+            $cached = ['ok' => false, 'reason' => 'missing'];
+            set_transient($transient_key, $cached, 300);
             return $cached;
         }
 
@@ -124,7 +130,7 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
                 'headers'     => array(
                     'Cache-Control' => 'no-cache, no-store, max-age=0',
                     'Pragma'        => 'no-cache',
-                    'User-Agent'    => 'NPPP-Precheck/2.1.6',
+                    'User-Agent'    => 'NPPP-Precheck/2.1.7',
                 ),
             ));
 
@@ -228,8 +234,13 @@ function nppp_is_process_alive($pid) {
         return false;
     }
 
+    // Guard: both shell_exec and exec must be available
+    if (!function_exists('shell_exec') || !function_exists('exec')) {
+        return false;
+    }
+
     // Get the path
-    $ps_path = trim(shell_exec('command -v ps'));
+    $ps_path = trim((string) shell_exec('command -v ps'));
     if (empty($ps_path)) {
         return false;
     }
@@ -337,10 +348,11 @@ function nppp_parse_nginx_cache_key() {
     $static_key_base = 'nppp';
     $transient_key = 'nppp_cache_keys_' . md5($static_key_base);
 
-    // Check for cached result first
+    // Check for cached result first.
+    // Require matched_keys key to be present — absent on pre-patch transients;
+    // if missing the transient is stale and we fall through to re-parse.
     $cached_result = get_transient($transient_key);
-    if ($cached_result !== false) {
-        // Return the cached result if available
+    if ($cached_result !== false && array_key_exists('matched_keys', $cached_result)) {
         return $cached_result;
     }
 
@@ -352,7 +364,7 @@ function nppp_parse_nginx_cache_key() {
             __('Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx')
         );
         // Store error state in cache also
-        set_transient('nppp_cache_keys_wpfilesystem_error', true, MONTH_IN_SECONDS);
+        set_transient('nppp_cache_keys_wpfilesystem_error', true, 5 * MINUTE_IN_SECONDS);
         return false;
     }
 
@@ -361,7 +373,7 @@ function nppp_parse_nginx_cache_key() {
     if (empty($conf_paths)) {
         // Could not find any nginx.conf files
         // Store error state in cache also
-        set_transient('nppp_nginx_conf_not_found', true, MONTH_IN_SECONDS);
+        set_transient('nppp_nginx_conf_not_found', true, 5 * MINUTE_IN_SECONDS);
         return false;
     }
 
@@ -378,32 +390,44 @@ function nppp_parse_nginx_cache_key() {
 
     // If no fastcgi_cache_key directives found
     if ($found_keys === 0) {
-        set_transient('nppp_cache_keys_not_found', true, MONTH_IN_SECONDS);
+        set_transient('nppp_cache_keys_not_found', true, 5 * MINUTE_IN_SECONDS);
         return ['cache_keys' => ['Not Found']];
     }
 
-    // Supported key format to be removed from array
-    $supported_key_format = '$scheme$request_method$host$request_uri';
+    // All natively supported cache key formats.
+    $supported_key_formats = [
+        '$scheme$request_method$host$request_uri',  // fastcgi_cache — most common WP/FPM stack
+        '$scheme$proxy_host$request_uri',           // proxy_cache nginx default (no request method)
+        '$scheme$host$request_uri',                 // scheme+host variant (no method, no proxy_host)
+        '$scheme://$host$request_uri',              // scheme with protocol separator (common in proxy_cache setups)
+        '$host$request_uri',                        // host-only variant (no scheme, minimal key)
+        '$host$uri$is_args$args',                   // host+uri with query string args (WooCommerce / dynamic pages)
+    ];
 
-    // Remove all occurrences of the supported key format and re-index the array
-    $cache_keys = array_values(array_filter($cache_keys, function($key) use ($supported_key_format) {
-        // Remove surrounding quotes, if any
+    // Partition keys into matched (supported) and unsupported buckets.
+    $matched_keys = [];
+    $cache_keys = array_values(array_filter($cache_keys, function($key) use ($supported_key_formats, &$matched_keys) {
         $unquoted_value = trim($key, "'\"");
-
-        // Check if the unquoted value matches the supported key format
-        return $unquoted_value !== $supported_key_format;
+        if (in_array($unquoted_value, $supported_key_formats, true)) {
+            $matched_keys[] = $unquoted_value;
+            return false;
+        }
+        return true;
     }));
 
-    // Save the result to transient for future use
-    set_transient($transient_key, ['cache_keys' => $cache_keys], MONTH_IN_SECONDS);
+    // Deduplicate matched keys — same format on multiple vhosts counts once for display.
+    $matched_keys = array_values(array_unique($matched_keys));
+
+    // Save both buckets to transient for Status/Advanced tab display.
+    set_transient($transient_key, ['cache_keys' => $cache_keys, 'matched_keys' => $matched_keys], HOUR_IN_SECONDS);
 
     // Reset the error transients
     delete_transient('nppp_cache_keys_wpfilesystem_error');
     delete_transient('nppp_nginx_conf_not_found');
     delete_transient('nppp_cache_keys_not_found');
 
-    // Return only unsupported cache keys
-    return ['cache_keys' => $cache_keys];
+    // Return both buckets; callers consume what they need.
+    return ['cache_keys' => $cache_keys, 'matched_keys' => $matched_keys];
 }
 
 // Helper function to parse individual Nginx configuration files.
@@ -478,6 +502,228 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
     return ['cache_keys' => $cache_keys];
 }
 
+/**
+ * Detect aaPanel environment, for open_basedir required paths forwarding
+ * 'bt' is aaPanel's exclusive CLI tool — nothing else installs it.
+ * /etc/init.d/bt covers edge cases where bt was removed from PATH.
+ */
+function nppp_is_aapanel(): bool {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    // WP_Filesystem path (preferred)
+    if ( $wp_filesystem && $wp_filesystem->exists( '/etc/init.d/bt' ) ) {
+        return true;
+    }
+    if ( $wp_filesystem && $wp_filesystem->exists( '/usr/bin/bt' ) ) {
+        return true;
+    }
+
+    // Guard
+    if ( ! function_exists( 'shell_exec' ) ) {
+        return false;
+    }
+
+    // Shell path — also serves as fallback when WP_Filesystem failed to init
+    $bt_bin = trim( (string) shell_exec( 'command -v bt 2>/dev/null' ) );
+    if ( $bt_bin !== '' ) {
+        return true;
+    }
+
+    $bt_init = trim( (string) shell_exec( 'test -f /etc/init.d/bt && echo 1' ) );
+    return $bt_init === '1';
+}
+
+/**
+ * Parses open_basedir into a normalised path array.
+ * Returns [] when OBD is inactive or set to "none".
+ */
+function nppp_open_basedir_paths(): array {
+    $raw = trim( (string) ini_get( 'open_basedir' ) );
+    if ( $raw === '' || strtolower( $raw ) === 'none' ) {
+        return [];
+    }
+    return array_values( array_filter(
+        array_map( 'trim', explode( PATH_SEPARATOR, $raw ) ),
+        static fn( $p ) => $p !== '' && $p !== '.'
+    ) );
+}
+
+/**
+ * Returns true when open_basedir is active.
+ */
+function nppp_is_open_basedir_active(): bool {
+    return ! empty( nppp_open_basedir_paths() );
+}
+
+/**
+ * Tests whether $path is reachable under at least one open_basedir entry
+ * using the same prefix-walk PHP performs internally.
+ */
+function nppp_obd_path_covered( string $path, array $obd_paths ): bool {
+    if ( $path === '' || empty( $obd_paths ) ) {
+        return false;
+    }
+    $norm = rtrim( $path, '/' );
+    foreach ( $obd_paths as $entry ) {
+        $entry = rtrim( (string) $entry, '/' );
+        if ( $entry === '' ) {
+            continue;
+        }
+        if ( $norm === $entry || strpos( $norm . '/', $entry . '/' ) === 0 ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Master OBD compatibility check for NPP.
+ *
+ * Only warn when OBD is active AND at least one PHP-level file I/O path is
+ * uncovered.
+ */
+function nppp_open_basedir_compat_check(): array {
+    $result = [ 'active' => false, 'compatible' => true, 'missing' => [] ];
+
+    $obd = nppp_open_basedir_paths();
+    if ( empty( $obd ) ) {
+        return $result;
+    }
+    $result['active'] = true;
+
+    $options    = get_option( 'nginx_cache_settings', [] );
+    $cache_path = isset( $options['nginx_cache_path'] ) ? (string) $options['nginx_cache_path'] : '';
+    $uploads    = wp_upload_dir();
+
+    // PHP file I/O paths NPP actually reads/writes directly.
+    $required = [];
+
+    if ( defined( 'ABSPATH' ) ) {
+        $required[rtrim( ABSPATH, '/' )] = rtrim( ABSPATH, '/' );
+        $parent = dirname( rtrim( ABSPATH, '/' ) );
+
+        if ( $parent !== rtrim( ABSPATH, '/' ) ) {
+            $required[$parent] = $parent;
+        }
+    }
+    if ( defined( 'WP_CONTENT_DIR' ) ) {
+        $required[WP_CONTENT_DIR] = WP_CONTENT_DIR;
+    }
+    if ( ! empty( $uploads['basedir'] ) ) {
+        $required[(string) $uploads['basedir']] = (string) $uploads['basedir'];
+    }
+    if ( $cache_path === '' || $cache_path === '/dev/shm/change-me-now' ) {
+        $required['<your-nginx-cache-path> (not configured yet)'] = '<your-nginx-cache-path> (not configured yet)';
+    } else {
+        $required[rtrim( $cache_path, '/' )] = rtrim( $cache_path, '/' );
+
+        // When FUSE/bindfs is active we also need the real nginx cache directory.
+        if ( function_exists( 'nppp_fuse_source_path' ) ) {
+            $fuse_source = nppp_fuse_source_path( rtrim( $cache_path, '/' ) );
+            if ( $fuse_source !== null ) {
+                // Source path is only PHP-touched when rg scans it through safexec.
+                $rg_cached = get_transient( 'nppp_rg_ok' );
+                if ( $rg_cached === false ) {
+                    $rg_bin = function_exists( 'shell_exec' )
+                        ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) )
+                        : '';
+                    $rg_ok  = $rg_bin !== '' && is_executable( $rg_bin );
+                    set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_ok ], HOUR_IN_SECONDS );
+                } else {
+                    $rg_ok = (bool) $rg_cached['ok'];
+                }
+
+                // Enforce minimum rg version — treat lower versions as unavailable.
+                if ( $rg_ok && function_exists( 'nppp_check_rg_version' ) ) {
+                    $rg_ver = nppp_check_rg_version();
+                    if ( $rg_ver === 'Not Installed' || version_compare( $rg_ver, '14.0.0', '<' ) ) {
+                        $rg_ok = false;
+                    }
+                }
+
+                $sfx_usable = false;
+                if ( $rg_ok
+                    && function_exists( 'nppp_find_safexec_path' )
+                    && function_exists( 'nppp_is_safexec_usable' )
+                ) {
+                    $sfx_cached = get_transient( 'nppp_safexec_ok' );
+                    if ( $sfx_cached === false ) {
+                        $sfx_path   = nppp_find_safexec_path();
+                        $sfx_usable = (bool) ( $sfx_path && nppp_is_safexec_usable( $sfx_path, false ) );
+                        set_transient( 'nppp_safexec_ok', [ 'path' => $sfx_path, 'ok' => $sfx_usable ], HOUR_IN_SECONDS );
+                    } else {
+                        $sfx_usable = (bool) $sfx_cached['ok'];
+                    }
+                }
+
+                if ( $sfx_usable ) {
+                    $required[ rtrim( $fuse_source, '/' ) ] = rtrim( $fuse_source, '/' );
+                }
+            }
+        }
+    }
+    // PHP reads /proc/cpuinfo, /proc/meminfo, /proc/self/mountinfo, /proc/mounts directly.
+    $required['/proc'] = '/proc';
+
+    // proc_open() opens /dev/null as a file descriptor — OBD applies.
+    $required['/dev/null'] = '/dev/null';
+
+    // binary paths
+    $required['/usr/bin']       = '/usr/bin';
+    $required['/usr/local/bin'] = '/usr/local/bin';
+    $required['/bin']           = '/bin';
+
+    // safexec, WordPress core and WP_Filesystem use /tmp for temp file operations.
+    $required['/tmp'] = '/tmp';
+
+    // aaPanel keeps all configs, cache under /www/server
+    if ( nppp_is_aapanel() ) {
+        $required['/www/server'] = '/www/server';
+    }
+
+    $missing = [];
+
+    foreach ( $required as $label => $path ) {
+        if ( ! nppp_obd_path_covered( $path, $obd ) ) {
+            $missing[] = $label !== $path ? $label . ' (' . $path . ')' : $path;
+        }
+    }
+
+    // nginx.conf: group check
+    $nginx_dirs = [
+        '/etc/nginx', '/usr/local/etc/nginx', '/etc/nginx/conf',
+        '/usr/local/nginx/conf', '/usr/local/etc/nginx/conf',
+        '/usr/local/etc', '/opt/nginx/conf', '/www/server/nginx/conf',
+        '/etc/nginx/conf.d', '/usr/local/openresty/nginx/conf',
+        // full file paths — covers when open_basedir lists the .conf file directly
+        '/etc/nginx/nginx.conf',
+        '/usr/local/etc/nginx/nginx.conf',
+        '/etc/nginx/conf/nginx.conf',
+        '/usr/local/nginx/conf/nginx.conf',
+        '/usr/local/etc/nginx/conf/nginx.conf',
+        '/usr/local/etc/nginx.conf',
+        '/opt/nginx/conf/nginx.conf',
+        '/www/server/nginx/conf/nginx.conf',
+        '/etc/nginx/conf.d/ea-nginx.conf',
+        '/usr/local/openresty/nginx/conf/nginx.conf',
+    ];
+    $nginx_covered = false;
+    foreach ( $nginx_dirs as $dir ) {
+        if ( nppp_obd_path_covered( $dir, $obd ) ) {
+            $nginx_covered = true;
+            break;
+        }
+    }
+    if ( ! $nginx_covered ) {
+        $missing[] = 'nginx.conf directory (e.g. /etc/nginx)';
+    }
+
+    $result['compatible'] = empty( $missing );
+    $result['missing']    = $missing;
+
+    return $result;
+}
+
 // Function to check if plugin critical requirements are met
 function nppp_pre_checks_critical() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -501,9 +747,20 @@ function nppp_pre_checks_critical() {
     // Initialize $server_software variable
     $server_software = '';
 
-    // Check SERVER_SOFTWARE
+    // Critical Proxy detection bug fix v2.1.7
+    // On Nginx+Apache reverse-proxy stacks the backend PHP process sees
+    // SERVER_SOFTWARE = "Apache/..." which is non-empty but non-nginx,
+    // silently short-circuiting every fallback detection path below
+    // and cause plugin disabled completely.
     if (isset($_SERVER['SERVER_SOFTWARE'])) {
-        $server_software = sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']));
+        $raw_sw = sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']));
+        if (
+            stripos($raw_sw, 'nginx')     !== false ||
+            stripos($raw_sw, 'openresty') !== false ||
+            stripos($raw_sw, 'tengine')   !== false
+        ) {
+            $server_software = $raw_sw;
+        }
     }
 
     // If no SERVER_SOFTWARE detected, check response headers
@@ -518,7 +775,7 @@ function nppp_pre_checks_critical() {
             'headers'     => array(
                 'Cache-Control' => 'no-cache, no-store, max-age=0',
                 'Pragma'        => 'no-cache',
-                'User-Agent'    => 'NPPP-Precheck/2.1.6',
+                'User-Agent'    => 'NPPP-Precheck/2.1.7',
             ),
         ));
 
@@ -611,26 +868,21 @@ function nppp_pre_checks_critical() {
         return __('GLOBAL ERROR SERVER: The plugin is not functional on your environment. It requires an Nginx web server. If this detection is inaccurate, please refer to the Help tab for detailed instructions.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
-    // Check if either shell_exec or exec is enabled
-    if (function_exists('shell_exec') || function_exists('exec')) {
-        // Attempt to execute a harmless command with shell_exec if available
-        if (function_exists('shell_exec')) {
-            $output = shell_exec('echo "Test"');
-            if (trim($output) !== "Test") {
-                return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "shell_exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
-            }
-        }
+    // Check if both shell_exec and exec are enabled (both are required)
+    if (!function_exists('shell_exec') || !function_exists('exec')) {
+        return __('GLOBAL ERROR PHP: Plugin is not functional on your environment. Both "shell_exec" and "exec" functions are required but one or both are not enabled. Please enable them in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
+    }
 
-        // Fallback: Attempt to execute with exec if shell_exec is not available
-        if (function_exists('exec')) {
-            $output = exec('echo "Test"');
-            if (trim($output) !== "Test") {
-                return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
-            }
-        }
-    } else {
-        // If neither shell_exec nor exec are available
-        return __('GLOBAL ERROR EXEC: Plugin is not functional on your environment. The "shell_exec" or "exec" functions are required but not enabled. Please enable them in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
+    // Verify shell_exec is not silently blocked
+    $output = shell_exec('echo "Test"');
+    if (trim($output) !== "Test") {
+        return __('GLOBAL ERROR PHP: Plugin is not functional on your environment. The "shell_exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    // Verify exec is not silently blocked
+    $output = exec('echo "Test"');
+    if (trim($output) !== "Test") {
+        return __('GLOBAL ERROR PHP: Plugin is not functional on your environment. The "exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
     }
 
     // Check if POSIX extension functions are available
@@ -695,12 +947,133 @@ function nppp_pre_checks_critical() {
     return true;
 }
 
+// Probes one real Nginx cache file to verify the configured Cache Key Regex
+// can actually parse the KEY: line format used on this site.
+function nppp_probe_cache_key_regex(): string {
+    $transient_key = 'nppp_cache_key_regex_probe';
+    $cached        = get_transient( $transient_key );
+
+    if ( $cached !== false && in_array( $cached, [ 'ok', 'fail', 'skip' ], true ) ) {
+        return $cached;
+    }
+
+    $nginx_cache_settings = get_option( 'nginx_cache_settings', [] );
+    $nginx_cache_path     = $nginx_cache_settings['nginx_cache_path'] ?? '/dev/shm/change-me-now';
+
+    $decoded = isset( $nginx_cache_settings['nginx_cache_key_custom_regex'] )
+        ? base64_decode( $nginx_cache_settings['nginx_cache_key_custom_regex'], true )
+        : false;
+
+    $regex = ( $decoded !== false && $decoded !== '' )
+        ? $decoded
+        : ( function_exists( 'nppp_fetch_default_regex_for_cache_key' )
+            ? nppp_fetch_default_regex_for_cache_key()
+            : '/^KEY:\s+https?(?:GET|HEAD)?([^\/]+)(\/[^\s]*)/m' );
+
+    $wp_filesystem = function_exists( 'nppp_initialize_wp_filesystem' )
+        ? nppp_initialize_wp_filesystem()
+        : false;
+
+    if ( $wp_filesystem === false || ! $wp_filesystem->is_dir( $nginx_cache_path ) ) {
+        set_transient( $transient_key, 'skip', 10 * MINUTE_IN_SECONDS );
+        return 'skip';
+    }
+
+    $head_bytes    = (int) apply_filters( 'nppp_locate_head_bytes',          4096 );
+    $head_bytes_fb = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
+    $result        = 'skip';
+
+    try {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator( $nginx_cache_path, RecursiveDirectoryIterator::SKIP_DOTS ),
+            RecursiveIteratorIterator::LEAVES_ONLY
+        );
+
+        foreach ( $iterator as $file ) {
+            if ( ! $file->isReadable() ) {
+                continue;
+            }
+
+            $pathname = $file->getPathname();
+            $content  = function_exists( 'nppp_read_head' )
+                ? nppp_read_head( $wp_filesystem, $pathname, $head_bytes )
+                : '';
+
+            if ( $content === '' ) {
+                continue;
+            }
+
+            // Verify this is a cache file with a KEY: header
+            if ( ! preg_match( '/^KEY:\s/m', $content ) ) {
+                if ( strlen( $content ) >= $head_bytes ) {
+                    $content = function_exists( 'nppp_read_head' )
+                        ? nppp_read_head( $wp_filesystem, $pathname, $head_bytes_fb )
+                        : '';
+                    if ( $content === '' || ! preg_match( '/^KEY:\s/m', $content ) ) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
+
+            // We have a real cache file — test the regex against it
+            $m = [];
+            if ( @preg_match( $regex, $content, $m ) === false ) {
+                $result = 'fail';
+                break;
+            }
+
+            if ( ! isset( $m[1], $m[2] ) ) {
+                $result = 'fail';
+                break;
+            }
+
+            if ( filter_var( 'https://' . trim( $m[1] ) . trim( $m[2] ), FILTER_VALIDATE_URL ) === false ) {
+                $result = 'fail';
+                break;
+            }
+
+            $result = 'ok';
+            break;
+        }
+    } catch ( \Exception $e ) {
+        $result = 'skip';
+    }
+
+    $ttl = (int) apply_filters( 'nppp_regex_probe_ttl', 10 * MINUTE_IN_SECONDS );
+    set_transient( $transient_key, $result, $ttl );
+    return $result;
+}
+
 // Pre-checks and global warnings
 function nppp_pre_checks() {
     // Exlude Advanced and Help Tab
     $nppp_active_tab = isset( $_GET['nppp_tab'] ) ? sanitize_key( wp_unslash( $_GET['nppp_tab'] ) ) : 'settings'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
     if ( ! in_array( $nppp_active_tab, [ 'settings', 'status' ], true ) ) {
         return;
+    }
+
+    // OBD check MUST run before any early return — open_basedir is the #1 silent
+    // killer that *causes* those early returns (is_dir on cache path returns false,
+    // nginx.conf probes all fail, etc).  Only warn when paths are actually missing;
+    // if the user already configured OBD correctly the notice is noise.
+    if ( $nppp_active_tab === 'settings' ) {
+        $obd_check = nppp_open_basedir_compat_check();
+        if ( $obd_check['active'] && ! $obd_check['compatible'] ) {
+            $missing_list = '<ul style="margin: 6px 0 6px 20px; list-style: disc;">';
+            foreach ( $obd_check['missing'] as $item ) {
+                $missing_list .= '<li>' . esc_html( $item ) . '</li>';
+            }
+            $missing_list .= '</ul>';
+
+            nppp_display_pre_check_warning(
+                /* translators: %s: list of missing open_basedir paths as an HTML <ul> */
+                __( 'GLOBAL ERROR PHP: <code>open_basedir</code> is active, but required paths for NPP are missing. See the list below.', 'fastcgi-cache-purge-and-preload-nginx' )
+                . $missing_list
+                . '<strong>' . __( 'Plugin functionality may be broken until this is resolved.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</strong>'
+            );
+        }
     }
 
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -717,13 +1090,9 @@ function nppp_pre_checks() {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
-    // Optimize performance by caching results of recursive permission checks
-    $permission_check_result = nppp_check_permissions_recursive_with_cache();
-    $nppp_permissions_check_result = $permission_check_result;
-
     $nginx_cache_settings = get_option('nginx_cache_settings');
-    $default_cache_path = '/dev/shm/change-me-now';
-    $nginx_cache_path = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
+    $default_cache_path   = '/dev/shm/change-me-now';
+    $nginx_cache_path     = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
     // Check if plugin critical requirements are met
     $requirements_met = nppp_pre_checks_critical();
@@ -738,24 +1107,14 @@ function nppp_pre_checks() {
         return;
     }
 
+    // Permission check only after cache path is confirmed to exist — transient-cached
+    // so cold-miss recursive walk only happens when it's actually needed.
+    $nppp_permissions_check_result = nppp_check_permissions_recursive_with_cache();
+
     // Check permissions are sufficient
     if ($nppp_permissions_check_result === 'false') {
         nppp_display_pre_check_warning(__('GLOBAL ERROR PERMISSION: Insufficient permissions for Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
-    }
-
-    // open_basedir soft warning
-    if ( $nppp_active_tab === 'settings' ) {
-        $nppp_obd = trim( (string) ini_get( 'open_basedir' ) );
-        if ( $nppp_obd !== '' && strtolower( $nppp_obd ) !== 'none' ) {
-            $nppp_obd_key = 'nppp_obd_warned_' . md5( 'nppp' );
-            if ( ! get_transient( $nppp_obd_key ) ) {
-                set_transient( $nppp_obd_key, true, DAY_IN_SECONDS );
-                nppp_display_pre_check_warning(
-                    __( 'GLOBAL WARNING OPEN_BASEDIR: PHP open_basedir restriction is active on your environment. This can silently break preloading and nginx.conf reading. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' )
-                );
-            }
-        }
     }
 
     // Head-only read sizes (once per call)
@@ -764,12 +1123,27 @@ function nppp_pre_checks() {
 
     // Check cache status
     // Fast path: use rg always if available
-    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
-    if ( $rg_bin !== '' && is_executable( $rg_bin ) ) {
+    $rg_cached = get_transient( 'nppp_rg_ok' );
+    if ( $rg_cached === false ) {
+        $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+        $rg_ok  = $rg_bin !== '' && is_executable( $rg_bin );
+        set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_ok ], HOUR_IN_SECONDS );
+    } else {
+        $rg_bin = $rg_cached['path'];
+        $rg_ok  = (bool) $rg_cached['ok'];
+    }
+    // Enforce minimum rg version — treat lower versions as unavailable.
+    if ( $rg_ok && function_exists( 'nppp_check_rg_version' ) ) {
+        $rg_ver = nppp_check_rg_version();
+        if ( $rg_ver === 'Not Installed' || version_compare( $rg_ver, '14.0.0', '<' ) ) {
+            $rg_ok = false;
+        }
+    }
+    if ( $rg_ok ) {
         $has_files = '';
         $escaped_path = escapeshellarg( $nginx_cache_path );
 
-        $cmd       = $rg_bin . ' -q --text --no-unicode --no-ignore --no-messages --no-config -e ' . escapeshellarg( '^KEY: ' ) . ' ' . $escaped_path . ' 2>/dev/null';
+        $cmd       = $rg_bin . ' -q --text --no-unicode --no-ignore --no-messages --no-mmap --no-config -e ' . escapeshellarg( '^KEY: ' ) . ' ' . $escaped_path . ' 2>/dev/null';
         $dummy     = [];
         $exit_code = null;
         exec( $cmd, $dummy, $exit_code );
@@ -839,6 +1213,153 @@ function nppp_pre_checks() {
         nppp_display_pre_check_warning(__('GLOBAL WARNING CACHE: The Nginx cache is empty. Consider preloading the Nginx cache now!', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
+
+    // Regex probe — only meaningful when the cache populated to test against.
+    // Non-fatal: single url purge/advanced tab break but preload, purge all still work.
+    if ( $has_files === 'found' && !$preload_running) {
+        $regex_probe = nppp_probe_cache_key_regex();
+        if ( $regex_probe === 'fail' ) {
+            nppp_display_pre_check_warning(
+                wp_kses(
+                    __( 'GLOBAL WARNING REGEX: The <strong>Cache Key Regex</strong> does not match the Nginx cache key format on this site. <strong>Single URL Purge</strong> and Advanced Tab operations will fail until the regex is corrected. Please update the <strong>Cache Key Regex</strong> in the <strong>Advanced Options</strong> tab.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    [ 'strong' => [] ]
+                )
+            );
+        }
+    }
+}
+
+// Detect the Vary: Accept-Encoding cache issue.
+//
+//  RC1 — Conditional upstream Vary (PHP zlib or a plugin that only emits
+//         Vary: Accept-Encoding when the client advertises gzip/deflate):
+//         · Definitive signal: zlib.output_compression ini = On.
+//         · Probe signal: Vary present with gzip-AE probe, absent with no-AE probe.
+//         · Effect: cache thrashing — NPP-warmed entry overwritten on encoding mismatch.
+//
+//  RC2 — Unconditional upstream Vary (a plugin or middleware that always emits
+//         Vary: Accept-Encoding regardless of the client's Accept-Encoding value):
+//         · Probe signal: Vary present in no-AE probe AND zlib is Off.
+//         · Caveat: nginx gzip_vary on also produces Vary in the no-AE probe but is SAFE
+//           (writes only r->gzip_vary, never r->cache->vary). UI message clarifies.
+//         · Effect: second independent cache file per URL — NPP-warmed entry bypassed.
+if (! function_exists('nppp_detect_vary_issue')) {
+    function nppp_detect_vary_issue(): array {
+        // When the admin has permanently dismissed the Vary notice, skip all
+        // probing.
+        if ( get_option( 'nppp_vary_notice_dismissed' ) ) {
+            return [ 'zlib_on' => false, 'rc1' => false, 'rc2' => false, 'issue' => false ];
+        }
+
+        $transient_key = 'nppp_vary_issue_' . md5('nppp');
+        $cached        = get_transient($transient_key);
+        if (is_array($cached) && array_key_exists('issue', $cached)) {
+            return $cached;
+        }
+
+        // Signal 1: PHP runtime ini value
+        $raw     = (string) ini_get('zlib.output_compression');
+        $zlib_on = ($raw !== '' && $raw !== '0' && strtolower($raw) !== 'off');
+
+        // Signal 2: two-probe header fingerprint
+        $vary_gzip     = false;
+        $vary_identity = false;
+
+        if (function_exists('wp_remote_head') && function_exists('home_url') && function_exists('add_query_arg')) {
+            $token    = substr(dechex(hrtime(true)), -10);
+            $bust_url = add_query_arg(['s' => 'nppp-vary-' . $token, '_nppp' => $token], home_url('/'));
+
+            $common_args = [
+                'timeout'     => 3,
+                'redirection' => 0,
+                'blocking'    => true,
+                'sslverify'   => false,
+            ];
+
+            // Probe A: client advertises gzip — PHP will compress → adds Vary
+            $resp_gzip = wp_remote_head($bust_url, array_merge($common_args, [
+                'headers' => [
+                    'Cache-Control'   => 'no-cache, no-store',
+                    'Pragma'          => 'no-cache',
+                    'Accept-Encoding' => 'gzip, deflate',
+                    'User-Agent'      => 'NPPP-VaryProbe-Gzip/2.1.7',
+                ],
+            ]));
+
+            // Probe B: identity — PHP skips compression → skips Vary
+            //          nginx gzip_vary STILL writes Vary (flag set before gzip_ok check)
+            $resp_identity = wp_remote_head($bust_url, array_merge($common_args, [
+                'headers' => [
+                    'Cache-Control'   => 'no-cache, no-store',
+                    'Pragma'          => 'no-cache',
+                    'Accept-Encoding' => 'identity',
+                    'User-Agent'      => 'NPPP-VaryProbe-Identity/2.1.7',
+                ],
+            ]));
+
+            if (! is_wp_error($resp_gzip)) {
+                $vary_gzip = nppp_probe_has_vary_accept_encoding($resp_gzip);
+            }
+            if (! is_wp_error($resp_identity)) {
+                $vary_identity = nppp_probe_has_vary_accept_encoding($resp_identity);
+            }
+        }
+
+        // RC1: conditional Vary — PHP zlib (ini) or a plugin firing only for gzip-capable clients.
+        $rc1 = $zlib_on || ( $vary_gzip && ! $vary_identity );
+
+        // RC2 potential: Vary present even for a no-encoding-preference request.
+        // Upstream plugin emitting unconditionally = issue (creates second cache file per URL).
+        // nginx gzip_vary on = safe (r->gzip_vary only, never r->cache->vary). UI clarifies.
+        $rc2 = $vary_identity && ! $zlib_on;
+
+        $result = [
+            'zlib_on' => $zlib_on,
+            'rc1'     => $rc1,
+            'rc2'     => $rc2,
+            'issue'   => $rc1 || $rc2,
+        ];
+
+        set_transient($transient_key, $result, HOUR_IN_SECONDS);
+
+        return $result;
+    }
+}
+
+// Extract and normalise response headers, then check whether Vary contains Accept-Encoding.
+if (! function_exists('nppp_probe_has_vary_accept_encoding')) {
+    function nppp_probe_has_vary_accept_encoding($response): bool {
+        $headers = wp_remote_retrieve_headers($response);
+
+        if (is_object($headers)) {
+            if (method_exists($headers, 'getAll')) {
+                $headers = $headers->getAll();
+            } elseif ($headers instanceof Traversable) {
+                $headers = iterator_to_array($headers);
+            } else {
+                $maybe   = (array) $headers;
+                $headers = (isset($maybe['data']) && is_array($maybe['data'])) ? $maybe['data'] : $maybe;
+            }
+        } else {
+            $headers = (array) $headers;
+        }
+
+        if (empty($headers)) {
+            return false;
+        }
+
+        $headers = array_change_key_case($headers, CASE_LOWER);
+
+        if (! isset($headers['vary'])) {
+            return false;
+        }
+
+        $vary = is_array($headers['vary'])
+            ? implode(', ', array_map('strval', $headers['vary']))
+            : (string) $headers['vary'];
+
+        return (stripos($vary, 'accept-encoding') !== false);
+    }
 }
 
 // Handle pre check messages
@@ -847,7 +1368,7 @@ function nppp_display_pre_check_warning($error_message = '') {
         add_action('admin_notices', function() use ($error_message) {
             ?>
             <div class="notice notice-error is-dismissible notice-nppp">
-                <p><?php echo esc_html($error_message); ?></p>
+                <div style="padding: 8px 0;"><?php echo wp_kses_post($error_message); ?></div>
             </div>
             <?php
         });

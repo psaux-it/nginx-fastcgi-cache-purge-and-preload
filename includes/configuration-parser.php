@@ -2,7 +2,7 @@
 /**
  * Nginx configuration parser for Nginx Cache Purge Preload
  * Description: Reads server config fragments to detect cache paths, keys, and runtime settings.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -16,8 +16,17 @@ if (!defined('ABSPATH')) {
 
 // Function to execute a shell command and get the output
 function nppp_get_command_output($command) {
+    if (!function_exists('shell_exec')) {
+        return '';
+    }
+
+    $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+    if (in_array('shell_exec', $disabled, true)) {
+        return '';
+    }
+
     nppp_prepare_request_env(true);
-    return trim(shell_exec($command));
+    return trim((string) shell_exec($command));
 }
 
 // Function to check bindfs version
@@ -166,8 +175,8 @@ function nppp_check_fuse_cache_paths($cache_paths) {
     $fuse_map   = [];
 
     // Parse mount output once
-    $mount_output = shell_exec('mount 2>/dev/null') ?? '';
-    $mount_lines  = explode("\n", $mount_output);
+    $mount_output = function_exists('shell_exec') ? ((string) shell_exec('mount 2>/dev/null')) : '';
+    $mount_lines  = !empty($mount_output) ? explode("\n", $mount_output) : [];
 
     // Loop through the cache paths to check their mount points
     foreach ($cache_paths as $directive => $paths) {
@@ -190,7 +199,7 @@ function nppp_check_fuse_cache_paths($cache_paths) {
 
     // If no fuse mount point found return empty array before setting transient
     if (empty($fuse_paths)) {
-        set_transient('nppp_fuse_path_not_found', true, MONTH_IN_SECONDS);
+        set_transient('nppp_fuse_path_not_found', true, 5 * MINUTE_IN_SECONDS);
         return ['fuse_paths' => [], 'fuse_map' => []];
     }
 
@@ -199,6 +208,7 @@ function nppp_check_fuse_cache_paths($cache_paths) {
 
     // Reset the error transients
     delete_transient('nppp_fuse_path_not_found');
+    delete_transient('nppp_cache_path_not_found');
 
     // Return the array of mount points
     return ['fuse_paths' => $fuse_paths, 'fuse_map' => $fuse_map];
@@ -319,13 +329,13 @@ function nppp_parse_nginx_config($file, $wp_filesystem = null, $is_top_level = t
 
     // Return empty if no Nginx cache paths are found
     if (empty($cache_paths)) {
-        set_transient('nppp_cache_path_not_found', true, MONTH_IN_SECONDS);
+        set_transient('nppp_cache_path_not_found', true, 5 * MINUTE_IN_SECONDS);
         return ['cache_paths' => []];
     }
 
     // Store the result in the cache before returning (only on the top-level call)
     if ($is_top_level) {
-        set_transient($transient_key, ['cache_paths' => $cache_paths], MONTH_IN_SECONDS);
+        set_transient($transient_key, ['cache_paths' => $cache_paths], DAY_IN_SECONDS);
         delete_transient('nppp_cache_path_not_found');
     }
 
@@ -342,7 +352,7 @@ function nppp_get_nginx_info() {
     $php_version = 'Unknown';
 
     // Get version directly via nginx binary
-    if (shell_exec('command -v nginx')) {
+    if (function_exists('shell_exec') && shell_exec('command -v nginx')) {
         $output = shell_exec('nginx -V 2>&1');
 
         // Extract Nginx version
@@ -434,7 +444,7 @@ function nppp_is_cache_path_display_supported(string $directive, string $value):
 }
 
 // Function to generate HTML output
-function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths) {
+function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths, $matched_keys = []) {
     ob_start();
     //img url's
     $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
@@ -518,10 +528,17 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                         <td class="action"><?php esc_html_e('rg (version)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppRgVersion">
                             <?php $rg_version = nppp_check_rg_version(); ?>
+                            <?php $rg_version_ok = ( $rg_version !== 'Not Installed' && $rg_version !== 'Unknown' && version_compare( $rg_version, '14.0.0', '>=' ) ); ?>
                             <?php if ($rg_version === 'Not Installed' || $rg_version === 'Unknown'): ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span style="color: orange; font-size: 14px; font-weight: bold;">
                                     <?php echo esc_html($rg_version); ?>
+                                </span>
+                            <?php elseif ( ! $rg_version_ok ): ?>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 14px; font-weight: bold;">
+                                    <?php echo esc_html($rg_version); ?>
+                                    <?php esc_html_e( '(minimum 14.0.0 required)', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </span>
                             <?php else: ?>
                                 <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
@@ -573,10 +590,10 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                     if ($nppp_is_active_proxy && !$nppp_is_active_fastcgi):
                                 ?>
                                 <div style="margin-bottom:10px; padding:8px 12px; background:#fff8e1; border-left:4px solid #f0ad4e; border-radius:0;">
-                                    <span class="dashicons dashicons-warning" style="color:#e6a817; vertical-align:middle;"></span>
-                                    <strong style="color:#7a4f00;"><?php esc_html_e('Reverse-Proxy Cache Detected!', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong><br>
+                                    <span class="dashicons dashicons-randomize" style="color:#e6a817; vertical-align:middle;"></span>
+                                    <strong style="color:#7a4f00;"><?php esc_html_e('Nginx Proxy Caching Active', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong><br>
                                     <span style="font-size:13px; color:#5a3800;">
-                                        <?php esc_html_e('The plugin supports this setup, but you must verify that your Cache Key Regex option. Incorrect regex will cause purge operations to fail silently.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                                        <?php esc_html_e('NPP supports Nginx proxy cache purge.', 'fastcgi-cache-purge-and-preload-nginx'); ?>
                                     </span>
                                 </div>
                                 <?php
@@ -612,20 +629,22 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                                                             <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
                                                         <?php endif; ?>
                                                         <span style="color: <?php echo $is_supported ? 'teal' : 'orange'; ?>; font-size: 13px; font-weight: bold;"><?php echo esc_html($value); ?></span>
+                                                        <div class="nppp-cache-badges" style="display: block; margin-top: 4px; margin-left: 24px;">
                                                         <?php if ($is_active): ?>
-                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #e6f1fb; color: #0c447c;"><?php esc_html_e('Active', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-right: 4px; padding: 2px 7px; border-radius: 4px; background: #e6f1fb; color: #0c447c;"><?php esc_html_e('Active', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                                         <?php else: ?>
-                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #f1efe8; color: #5f5e5a;"><?php esc_html_e('Other vhost', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-right: 4px; padding: 2px 7px; border-radius: 4px; background: #f1efe8; color: #5f5e5a;"><?php esc_html_e('Other vhost', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                                         <?php endif; ?>
                                                         <?php if (!$is_supported): ?>
-                                                            <span style="font-size: 12px; font-weight: 500; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: #faeeda; color: #633806;"><?php esc_html_e('Path Blocked', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                                                            <span style="font-size: 12px; font-weight: 500; margin-right: 4px; padding: 2px 7px; border-radius: 4px; background: #faeeda; color: #633806;"><?php esc_html_e('Path Blocked', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
                                                         <?php endif; ?>
                                                         <?php
                                                         if (isset($nppp_directive_badges[$directive])):
                                                             [$nppp_badge_label, $nppp_badge_bg, $nppp_badge_color] = $nppp_directive_badges[$directive];
                                                         ?>
-                                                            <span style="font-size: 12px; font-weight: 600; margin-left: 5px; padding: 2px 7px; border-radius: 4px; background: <?php echo esc_attr($nppp_badge_bg); ?>; color: <?php echo esc_attr($nppp_badge_color); ?>; letter-spacing: 0.3px;"><?php echo esc_html($nppp_badge_label); ?></span>
+                                                            <span style="font-size: 12px; font-weight: 600; margin-right: 4px; padding: 2px 7px; border-radius: 4px; background: <?php echo esc_attr($nppp_badge_bg); ?>; color: <?php echo esc_attr($nppp_badge_color); ?>; letter-spacing: 0.3px;"><?php echo esc_html($nppp_badge_label); ?></span>
                                                         <?php endif; ?>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             <?php endforeach; ?>
@@ -653,23 +672,25 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths)
                             <?php elseif ($cache_keys === 'Key Not Found'): ?>
                                 <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span style="color: red; font-size: 13px; font-weight: bold;"><?php esc_html_e('Not Found', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
-                            <?php elseif ($cache_keys === '$scheme$request_method$host$request_uri'): ?>
-                                <span class="dashicons dashicons-yes" style="color: green !important; font-size: 20px;"></span>
-                                <span style="color: teal; font-weight: bold; font-size: 13px;">
-                                    <?php $key_no_quotes = trim($cache_keys, '"'); echo esc_html($key_no_quotes); ?>
-                                </span>
                             <?php else: ?>
                                 <table class="nginx-config-table">
                                     <tbody>
+                                        <?php foreach ($matched_keys as $key): ?>
+                                            <tr>
+                                                <td>
+                                                    <span class="dashicons dashicons-yes" style="color: green !important; font-size: 20px !important;"></span>
+                                                    <span style="color: teal; font-size: 13px; font-weight: bold;">
+                                                        <?php echo esc_html(trim($key, '"')); ?>
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
                                         <?php foreach ($cache_keys as $key): ?>
                                             <tr>
                                                 <td>
-                                                    <span class="dashicons dashicons-warning" style="color: orange; font-size: 18px !important;"></span>
+                                                    <span class="dashicons dashicons-warning" style="color: orange; font-size: 20px !important;"></span>
                                                     <span style="color: teal; font-size: 13px; font-weight: bold;">
-                                                        <?php
-                                                        $key_no_quotes = trim($key, '"');
-                                                        echo esc_html($key_no_quotes);
-                                                        ?>
+                                                        <?php echo esc_html(trim($key, '"')); ?>
                                                     </span>
                                                 </td>
                                             </tr>
@@ -813,19 +834,16 @@ function nppp_nginx_config_shortcode() {
             $cache_keys = 'Not Found';
         }
     } else {
-        // Case 2: Transient found
+        // Case 2: Transient found — extract both supported and unsupported buckets.
+        $cache_keys   = $cached_result['cache_keys']   ?? [];
+        $matched_keys = $cached_result['matched_keys'] ?? [];
 
-        // 2.1: Array is empty, return a default fastcgi_cache_key
-        if (empty($cached_result['cache_keys'])) {
-            $cache_keys = '$scheme$request_method$host$request_uri';
-        } else {
-            // Case 2.2: Unsupported Cache keys exist
-            $cache_keys = $cached_result['cache_keys'];
-
-            // Trim whitespace from all elements in the cache_keys array
-            if (is_array($cache_keys)) {
-                $cache_keys = array_map('trim', $cache_keys);
-            }
+        // Trim whitespace from all array elements.
+        if (is_array($cache_keys)) {
+            $cache_keys = array_map('trim', $cache_keys);
+        }
+        if (is_array($matched_keys)) {
+            $matched_keys = array_map('trim', $matched_keys);
         }
     }
 
@@ -836,5 +854,5 @@ function nppp_nginx_config_shortcode() {
     $fuse_paths = nppp_check_fuse_cache_paths($config_data['cache_paths']);
 
     // Generate HTML output based on parsed data and Nginx info
-    return nppp_generate_html($config_data['cache_paths'], $nginx_info, $cache_keys, $fuse_paths);
+    return nppp_generate_html($config_data['cache_paths'], $nginx_info, $cache_keys, $fuse_paths, $matched_keys ?? []);
 }

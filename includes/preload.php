@@ -2,7 +2,7 @@
 /**
  * Cache preload handlers for Nginx Cache Purge Preload
  * Description: Builds URL queues and executes preload requests for Nginx cache warming.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Read proxy preload settings.
 function nppp_get_proxy_settings() {
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     $proxy_host = isset($nginx_cache_settings['nginx_cache_preload_proxy_host']) && !empty($nginx_cache_settings['nginx_cache_preload_proxy_host'])
         ? $nginx_cache_settings['nginx_cache_preload_proxy_host']
         : '127.0.0.1';
@@ -37,12 +37,16 @@ function nppp_get_proxy_settings() {
 
 // Simple outbound HTTP check
 function nppp_check_network_env(): array {
+    if ( ! function_exists( 'shell_exec' ) ) {
+        return [ 'dns_ok' => false, 'outbound_ok' => false ];
+    }
+
     nppp_prepare_request_env(true);
 
     $url = add_query_arg('nppp_probe', wp_generate_password(8, false), home_url('/'));
     $output = shell_exec('wget -q --no-check-certificate --server-response --spider ' . escapeshellarg($url) . ' 2>&1; echo $?');
-    $lines = explode("\n", trim($output));
-    $ok = trim(end($lines)) === '0';
+    $lines = explode("\n", trim((string) $output));
+    $ok = trim((string) end($lines)) === '0';
     return [
         'dns_ok'      => $ok,
         'outbound_ok' => $ok,
@@ -114,7 +118,11 @@ function nppp_find_safexec_path() {
         return $default_path;
     }
 
-    $detected = trim(shell_exec('command -v safexec 2>/dev/null'));
+    if (!function_exists('shell_exec')) {
+        return false;
+    }
+
+    $detected = trim((string) shell_exec('command -v safexec 2>/dev/null'));
     return !empty($detected) ? $detected : false;
 }
 
@@ -321,21 +329,25 @@ function nppp_detect_premature_process(
                 $test_process = false;
             }
         } else {
-            // If safexec is available, kill nobody process
+            // Two strictly separate kill paths.
+            // safexec path: wget ran as nobody (SUID drop). Only safexec
+            // itself has the privilege to kill its own nobody child.
             if ($use_safexec) {
-                $kill_cmd = escapeshellarg($safexec_path) . ' --kill=' . (int) $test_pid . ' 2>&1';
-                $output = shell_exec($kill_cmd);
-            }
+                $kill_cmd = escapeshellarg($safexec_path) . ' --kill=' . (int) $test_pid . ' 2>/dev/null';
+                shell_exec($kill_cmd);
+            } else {
+                // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
+                if (!defined('SIGTERM')) {
+                    define('SIGTERM', 15); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
+                }
 
-            // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
-            if (!defined('SIGTERM')) {
-                define('SIGTERM', 15); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
-            }
-
-            // Fallback to hard SIGKILL
-            if (!@posix_kill($test_pid, SIGTERM)) {
-                $kill_path = trim(shell_exec('command -v kill'));
-                shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $test_pid);
+                // Fallback to hard SIGKILL
+                if (!@posix_kill($test_pid, SIGTERM)) {
+                    $kill_path = trim((string) shell_exec('command -v kill 2>/dev/null'));
+                    if ($kill_path !== '') {
+                        shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $test_pid . ' 2>/dev/null');
+                    }
+                }
             }
             $test_process = true;
         }
@@ -386,7 +398,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     }
 
     // Get the plugin options
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     $default_wait_time = 0;
     $default_reject_extension = nppp_fetch_default_reject_extension();
     $nginx_cache_reject_extension = isset($nginx_cache_settings['nginx_cache_reject_extension']) ? $nginx_cache_settings['nginx_cache_reject_extension'] : $default_reject_extension;
@@ -458,9 +470,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             }
 
             // Check cpulimit command exist
-            $cpulimitPath = shell_exec('type cpulimit');
+            $cpulimitPath = shell_exec('type cpulimit 2>/dev/null');
 
-            if (!empty(trim($cpulimitPath))) {
+            if (!empty(trim((string) $cpulimitPath))) {
                 $cpulimit = 1;
             } else {
                 $cpulimit = 0;
@@ -603,7 +615,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
             // Get the process ID
             $parts = explode(" ", $output);
-            $pid = trim(end($parts));
+            $pid = trim((string) end($parts));
             nppp_perform_file_operation($PIDFILE, 'write', $pid);
 
             // Call the function to schedule the status check event
@@ -697,8 +709,8 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         }
 
         // Check cpulimit command exist
-        $cpulimitPath = shell_exec('type cpulimit');
-        if (!empty(trim($cpulimitPath))) {
+        $cpulimitPath = shell_exec('type cpulimit 2>/dev/null');
+        if (!empty(trim((string) $cpulimitPath))) {
             $cpulimit = 1;
         } else {
             $cpulimit = 0;
@@ -835,7 +847,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
         // Get the process ID
         $parts = explode(" ", $output);
-        $pid   = trim(end($parts));
+        $pid   = trim((string) end($parts));
         nppp_perform_file_operation($PIDFILE, 'write', $pid);
 
         // Call the function to schedule the status check event
@@ -950,7 +962,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     }
 
     // Get the plugin options
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
     $nginx_cache_read_timeout = isset($nginx_cache_settings['nginx_cache_read_timeout']) ? (int)$nginx_cache_settings['nginx_cache_read_timeout'] : 60;
 
     // Set env
@@ -1022,6 +1034,21 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     $safexec_path = nppp_find_safexec_path();
     $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
 
+    // DYNAMIC FEED DISCOVERY FOR SINGLE PRELOAD
+    $preload_urls = [ $current_page_url ]; // Target list starts with the page itself
+    $preload_feeds_enabled = ! empty( $nginx_cache_settings['nginx_cache_preload_feeds'] ) && $nginx_cache_settings['nginx_cache_preload_feeds'] === 'yes';
+
+    if ( $preload_feeds_enabled ) {
+        $related_feeds = nppp_get_related_feed_urls_for_preload( $current_page_url );
+        $preload_urls  = array_merge( $preload_urls, $related_feeds );
+    }
+
+    // Clean and unique the collected URLs array (safety net)
+    $preload_urls = array_unique( array_filter( $preload_urls ) );
+
+    // Build space-separated shell arguments out of target URLs to prevent shell injections (CVE-2025-6213)
+    $url_shell_arguments = implode( ' ', array_map( 'escapeshellarg', $preload_urls ) );
+
     // Start cache preloading for single post/page (when manual On-page preload action triggers)
     // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
     // 2. Also to prevent cache preloading interrupts as much as possible, increasing UX on different wordpress installs/env. (servers that are often misconfigured, leading to certificate issues),
@@ -1050,7 +1077,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
         '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
         '-- ' .
-        escapeshellarg($current_page_url) . ' ' .
+        $url_shell_arguments . ' ' .
         '>/dev/null 2>&1 & echo $!';
 
     // Trigger desktop preload and get PID
@@ -1059,7 +1086,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     // Extract the PID and store it in the array for desktop
     if ($output_desktop !== null) {
         $parts_desktop = explode(" ", $output_desktop);
-        $pid_desktop = trim(end($parts_desktop));
+        $pid_desktop = trim((string) end($parts_desktop));
 
         // Check if the desktop process is still running
         $isRunning_desktop = nppp_is_process_alive($pid_desktop);
@@ -1097,7 +1124,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
             '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
             '--user-agent=' . escapeshellarg($nppp_mobile_ua) . ' ' .
             '-- ' .
-            escapeshellarg($current_page_url) . ' ' .
+            $url_shell_arguments . ' ' .
             '>/dev/null 2>&1 & echo $!';
 
         // Trigger preload for mobile
@@ -1106,7 +1133,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         // Extract the PID and store it in the array for mobile
         if ($output_mobile !== null) {
             $parts_mobile = explode(" ", $output_mobile);
-            $pid_mobile  = trim(end($parts_mobile));
+            $pid_mobile  = trim((string) end($parts_mobile));
 
             // Check if the mobile process is still running
             $isRunning_mobile = nppp_is_process_alive($pid_mobile);
@@ -1212,7 +1239,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
     $current_page_url_decoded = rawurldecode($current_page_url);
 
     // Get the plugin options
-    $nginx_cache_settings = get_option('nginx_cache_settings');
+    $nginx_cache_settings = get_option('nginx_cache_settings', []);
 
     // Set env
     nppp_prepare_request_env(true);
@@ -1344,12 +1371,17 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
         '>/dev/null 2>&1 & echo $!';
 
     // Trigger desktop preload and get PID
+    // Guard — shell_exec must be available to spawn wget
+    if ( ! function_exists( 'shell_exec' ) ) {
+        nppp_display_admin_notice( 'error', __( 'ERROR ENV: Auto preload skipped — shell_exec is disabled on this server.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        return;
+    }
     $output_desktop = shell_exec($command_desktop);
 
     // Extract the PID and store it in the array for desktop
     if ($output_desktop !== null) {
         $parts_desktop = explode(" ", $output_desktop);
-        $pid_desktop = trim(end($parts_desktop));
+        $pid_desktop = trim((string) end($parts_desktop));
 
         // Check if the desktop process is still running
         $isRunning_desktop = nppp_is_process_alive($pid_desktop);
@@ -1396,7 +1428,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
         // Extract the PID and store it in the array for mobile
         if ($output_mobile !== null) {
             $parts_mobile = explode(" ", $output_mobile);
-            $pid_mobile  = trim(end($parts_mobile));
+            $pid_mobile  = trim((string) end($parts_mobile));
 
             // Check if the mobile process is still running
             $isRunning_mobile = nppp_is_process_alive($pid_mobile);

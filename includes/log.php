@@ -2,7 +2,7 @@
 /**
  * Logging and admin notice helpers for Nginx Cache Purge Preload
  * Description: Centralizes plugin log writes and standardized WordPress admin notice rendering.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -138,6 +138,12 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_update_http_purge_option'                => 'nppp-update-http-purge-option',
             'nppp_update_rg_purge_option'                  => 'nppp-update-rg-purge-option',
             'nppp_update_bypass_path_restriction'          => 'nppp-update-bypass-path-restriction',
+            'nppp_update_preload_feeds_option'             => 'nppp-update-preload-feeds-option',
+            'nppp_update_autopurge_triggers'               => 'nppp-autopurge-triggers',
+            'nppp_dismiss_vary_notice'                     => 'nppp-dismiss-vary-notice',
+            'nppp_clear_url_index'                         => 'nppp-clear-url-index',
+            'nppp_test_cache_key_regex'                    => 'nppp_test_regex_nonce',
+            'nppp_preload_miss_batch'                      => 'nppp_preload_miss_batch_nonce',
         ];
 
         // Get the current AJAX action
@@ -174,6 +180,18 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
     if (function_exists('wp_doing_cron') && wp_doing_cron()) {
         return;
     } elseif (defined('DOING_CRON') && DOING_CRON) {
+        return;
+    }
+
+    // WP-CLI: route the message into the output buffer opened by
+    // capture_cli_output() in wp-cli.php.
+    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+        $our_level = isset( $GLOBALS['nppp_cli_ob_level'] )
+            ? (int) $GLOBALS['nppp_cli_ob_level'] + 1
+            : -1;
+        if ( ob_get_level() === $our_level && $display_notice ) {
+            echo esc_html( $sanitized_message ) . "\n";
+        }
         return;
     }
 

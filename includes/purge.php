@@ -2,7 +2,7 @@
 /**
  * Cache purge handlers for Nginx Cache Purge Preload
  * Description: Executes full and targeted purge operations for supported Nginx cache backends.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -262,6 +262,17 @@ function nppp_purge_post_purge( array &$ctx ): void {
     // Trigger Preload related
     if ( $should_preload_related ) {
         if ( ! empty( $related_urls ) ) {
+            // Filter out feed URLs from related preload when Preload Feeds is OFF.
+            // Covers both pretty-permalink (/feed/, /category/news/feed/) and
+            // plain-permalink (?feed=rss2, ?p=123&feed=rss2)
+            if ( ( $ctx['settings']['nginx_cache_preload_feeds'] ?? 'no' ) !== 'yes' ) {
+                $related_urls = array_values( array_filter( $related_urls, static function ( $url ) {
+                    $path  = wp_parse_url( $url, PHP_URL_PATH )  ?? '';
+                    $query = wp_parse_url( $url, PHP_URL_QUERY ) ?? '';
+                    return ! preg_match( '#(?:^|/)feed(?:/[^/]*)?/?$#', $path )
+                        && ! preg_match( '#(?:^|&)feed=#', $query );
+                } ) );
+            }
             nppp_display_admin_notice( 'info', sprintf(
                 /* translators: %d: Number of related pages queued for background preload */
                 _n(
@@ -542,8 +553,22 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     }
 
     nppp_prepare_request_env();
-    $rg_bin          = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+    if ( ! function_exists( 'shell_exec' ) || ! function_exists( 'exec' ) ) {
+        return 'skip';
+    }
+    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
     if ( $rg_bin === '' ) {
+        return 'skip';
+    }
+    $rg_ver = nppp_check_rg_version();
+    if ( $rg_ver === 'Not Installed' ) {
+        return 'skip';
+    } elseif ( version_compare( $rg_ver, '14.0.0', '<' ) ) {
+        nppp_display_admin_notice( 'info', sprintf(
+            /* translators: %s: Installed ripgrep version. */
+            __( 'WARNING RG SCAN: Installed ripgrep (rg) version (%s) is lower than the required minimum (14.0.0). Falling back to PHP recursive scanner.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $rg_ver
+        ), true, false );
         return 'skip';
     }
     $wp_filesystem   = $ctx['wp_filesystem'];
@@ -560,7 +585,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
         nppp_display_admin_notice( 'info', sprintf(
             /* translators: %s: FUSE source filesystem path that no longer exists on disk. */
             __( 'WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-            $rg_source_path
+            $rg_fuse_path
         ), true, false );
         $rg_source_path = null;
     }
@@ -577,7 +602,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
         $probe_exit = 0;
         exec(
             sprintf(
-                '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
+                '%s -q \'.\' --text --no-ignore --no-config --no-mmap -m 1 %s 2>/dev/null',
                 escapeshellarg( $rg_bin ),
                 escapeshellarg( $rg_scan_path )
             ),
@@ -622,7 +647,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     ) );
 
     $cmd = sprintf(
-        '%s%s -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config %s %s',
+        '%s%s -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config --no-mmap --no-heading %s %s',
         $rg_cmd_prefix,
         escapeshellarg( $rg_bin ),
         escapeshellarg( '^KEY: .*(' . $url_alts . ')' ),
@@ -1614,7 +1639,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
         // Check if the preload process is alive
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            $process_user = trim(shell_exec("ps -o user= -p " . escapeshellarg($pid)));
+            $process_user = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( "ps -o user= -p " . escapeshellarg( $pid ) ) ) : '';
             $killed_by_safexec = false;
 
             if ($process_user === 'nobody') {
@@ -1622,7 +1647,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
                 // If not present at default location, try to discover via system path
                 if (!$wp_filesystem->exists($safexec_path)) {
-                    $detected = trim(shell_exec('command -v safexec 2>/dev/null'));
+                    $detected = trim( (string) shell_exec( 'command -v safexec 2>/dev/null' ) );
                     if (!empty($detected)) {
                         $safexec_path = $detected;
                     } else {
@@ -1677,7 +1702,7 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
                 if (nppp_is_process_alive($pid)) {
                     // Process still alive, try kill -9
-                    $kill_path = trim(shell_exec('command -v kill'));
+                    $kill_path = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( 'command -v kill' ) ) : '';
                     if (!empty($kill_path)) {
                         shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $pid);
                         usleep(300000);

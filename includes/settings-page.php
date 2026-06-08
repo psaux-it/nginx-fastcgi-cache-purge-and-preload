@@ -2,7 +2,7 @@
 /**
  * Settings page renderer and form submission handler for Nginx Cache Purge Preload
  * Description: Outputs the full admin settings page HTML and processes the settings form POST.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -111,12 +111,25 @@ function nppp_nginx_cache_settings_page() {
             }
         }
 
-        // ripgrep binary check
+        // ripgrep binary check — read canonical transient, compute only on cold miss.
         $nppp_rg_installed = false;
-        if ( function_exists( 'shell_exec' ) ) {
+        $rg_cached = get_transient( 'nppp_rg_ok' );
+        if ( $rg_cached !== false ) {
+            $nppp_rg_installed = (bool) $rg_cached['ok'];
+            $nppp_rg_bin       = $rg_cached['path'];
+        } elseif ( function_exists( 'shell_exec' ) ) {
             nppp_prepare_request_env();
             $nppp_rg_bin       = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
-            $nppp_rg_installed = $nppp_rg_bin !== '';
+            $nppp_rg_installed = $nppp_rg_bin !== '' && is_executable( $nppp_rg_bin );
+            set_transient( 'nppp_rg_ok', [ 'path' => $nppp_rg_bin, 'ok' => $nppp_rg_installed ], HOUR_IN_SECONDS );
+        }
+
+        // Enforce minimum rg version — treat lower versions as unavailable.
+        if ( $nppp_rg_installed && function_exists( 'nppp_check_rg_version' ) ) {
+            $nppp_rg_ver = nppp_check_rg_version();
+            if ( $nppp_rg_ver === 'Not Installed' || version_compare( $nppp_rg_ver, '14.0.0', '<' ) ) {
+                $nppp_rg_installed = false;
+            }
         }
 
         // FUSE mount detection
@@ -128,8 +141,15 @@ function nppp_nginx_cache_settings_page() {
         // safexec usability for rg (only meaningful when FUSE is active).
         $nppp_safexec_rg_ok = false;
         if ( $nppp_fuse_active && function_exists( 'nppp_find_safexec_path' ) && function_exists( 'nppp_is_safexec_usable' ) ) {
-            $nppp_sfx_path      = nppp_find_safexec_path();
-            $nppp_safexec_rg_ok = $nppp_sfx_path && nppp_is_safexec_usable( $nppp_sfx_path, false );
+            $sfx_cached = get_transient( 'nppp_safexec_ok' );
+            if ( $sfx_cached !== false ) {
+                $nppp_safexec_rg_ok = (bool) $sfx_cached['ok'];
+                $nppp_sfx_path      = $sfx_cached['path'];
+            } else {
+                $nppp_sfx_path      = nppp_find_safexec_path();
+                $nppp_safexec_rg_ok = (bool) ( $nppp_sfx_path && nppp_is_safexec_usable( $nppp_sfx_path, false ) );
+                set_transient( 'nppp_safexec_ok', [ 'path' => $nppp_sfx_path, 'ok' => $nppp_safexec_rg_ok ], HOUR_IN_SECONDS );
+            }
         }
 
         // Display RG badge when missing. Providing a Resource Group significantly reduces
@@ -279,8 +299,9 @@ function nppp_nginx_cache_settings_page() {
                             <td>
                                 <?php nppp_nginx_cache_path_callback(); ?>
                                 <p class="description"><?php echo esc_html__( 'Enter the full NGINX cache directory path for the plugin to operate.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'This directory must be configured in NGINX and be accessible by the PHP process.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'This directory must be configured in NGINX and be accessible by the PHP process owner.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Read and write permissions are required for purge and preload to function properly.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'If open_basedir is enabled, add the cache path there first before setting it here.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <div class="cache-paths-info" id="nppp-allowed-paths-info"
                                     style="<?php echo ( isset( $nppp_badge_opts['nginx_cache_bypass_path_restriction'] ) && $nppp_badge_opts['nginx_cache_bypass_path_restriction'] === 'yes' ) ? 'display:none;' : ''; ?>">
                                     <h4><?php echo esc_html__( 'Allowed Cache Paths', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
@@ -328,7 +349,7 @@ function nppp_nginx_cache_settings_page() {
                                 </p>
                                 <div class="cache-paths-info">
                                     <p>
-                                        <?php echo esc_html__( 'If Auto Preload is ON, any single-item purge (automatic or manual) will immediately preload the page and—if Related Pages are enabled—the Homepage, Shop Page and/or Category archives. Site-wide purges will trigger a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <?php echo esc_html__( 'If Auto Preload is ON, any single-item purge (automatic or manual) will immediately preload the page and—if Related Pages are enabled—the Homepage, Shop Page, Category & Tag archives, Author archives, Date archives, and RSS feeds. Site-wide purges will trigger a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
                                 </div>
                                 <?php nppp_nginx_cache_autopurge_triggers_callback(); ?>
@@ -396,7 +417,7 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_nginx_cache_related_pages_callback(); ?>
-                                <div class="cache-paths-info"><?php echo esc_html__( 'Extends single-URL purges only — has no effect on full cache purge (Purge All, REST API, or Scheduled Purge). Fires on every single-URL purge: automatically via Auto Purge events and manually via the Admin Bar on-page button, the Advanced Tab, or the front-end purge button.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></div>
+                                <div class="cache-paths-info"><?php echo esc_html__( 'Extends single-URL purges only — has no effect on full cache purge (Purge All, REST API, or Scheduled Purge). Fires on every single-URL purge: automatically via Auto Purge events and manually via the Admin Bar on-page button, the Advanced Tab, or the front-end purge button. Per-post comment feed purges fire automatically whenever comments are open or present, regardless of these toggles.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></div>
                             </td>
                         </tr>
                         <!-- Start Preload Options Section -->
@@ -411,23 +432,70 @@ function nppp_nginx_cache_settings_page() {
                         <tr valign="top">
                             <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
-                        <tr valign="top">
+                        <?php if ( ! get_option( 'nppp_vary_notice_dismissed' ) ) : ?>
+                        <tr valign="top" id="nppp-vary-row">
                             <th scope="row">
                                 <span class="dashicons dashicons-warning" style="color:#e6a817;"></span>
                                 <?php esc_html_e( 'Vary: Accept-Encoding', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </th>
                             <td>
-                                <div style="background:#fff8e1; border-left:4px solid #f0ad4e; padding:10px 14px; max-width:500px;">
-                                    <strong style="color:#7a4f00;"><?php esc_html_e( 'Double Cache Issue', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
+                                <?php
+                                $nppp_vary = function_exists( 'nppp_detect_vary_issue' ) ? nppp_detect_vary_issue() : null;
+                                if ( $nppp_vary !== null && ! empty( $nppp_vary['rc1'] ) ) :
+                                ?>
+                                <div style="background:#fef2f2; border-left:4px solid #dc2626; padding:10px 14px; max-width:500px; position:relative;">
+                                    <button type="button" id="nppp-dismiss-vary" title="<?php esc_attr_e( 'Dismiss permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>" style="position:absolute; top:6px; right:8px; background:none; border:none; cursor:pointer; font-size:16px; line-height:1; color:#991b1b; padding:0;" aria-label="<?php esc_attr_e( 'Dismiss Vary notice permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">&#x2715;</button>
+                                    <strong style="color:#991b1b;"><?php esc_html_e( '⚠ RC1 Detected: Cache Thrashing Risk', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
+                                    <span style="font-size:13px; color:#7f1d1d;">
+                                        <?php
+                                        if ( ! empty( $nppp_vary['zlib_on'] ) ) {
+                                            esc_html_e( 'PHP zlib.output_compression is On — PHP emits Vary: Accept-Encoding for gzip-capable requests, causing Nginx to thrash the cache when NPP and browser requests alternate.', 'fastcgi-cache-purge-and-preload-nginx' );
+                                        } else {
+                                            esc_html_e( 'A plugin or middleware proxy is conditionally emitting Vary: Accept-Encoding for gzip-capable requests, causing Nginx to thrash the cache when NPP and browser requests alternate.', 'fastcgi-cache-purge-and-preload-nginx' );
+                                        }
+                                        ?>
+                                        <a href="?page=nginx_cache_settings&nppp_tab=help#help" style="font-size:13px; color:#991b1b; font-weight:600; text-decoration:none; display:block; margin-top:4px;">
+                                            <?php esc_html_e( '→ See Help tab for the required fix', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        </a>
+                                    </span>
+                                </div>
+                                <?php elseif ( $nppp_vary !== null && ! empty( $nppp_vary['rc2'] ) ) : ?>
+                                <div style="background:#fef2f2; border-left:4px solid #dc2626; padding:10px 14px; max-width:500px; position:relative;">
+                                    <button type="button" id="nppp-dismiss-vary" title="<?php esc_attr_e( 'Dismiss permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>" style="position:absolute; top:6px; right:8px; background:none; border:none; cursor:pointer; font-size:16px; line-height:1; color:#991b1b; padding:0;" aria-label="<?php esc_attr_e( 'Dismiss Vary notice permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">&#x2715;</button>
+                                    <strong style="color:#991b1b;"><?php esc_html_e( '⚠ RC2 Potential: Double Cache Risk', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
+                                    <span style="font-size:13px; color:#7f1d1d;">
+                                        <?php esc_html_e( 'Vary: Accept-Encoding is present in responses. A plugin or upstream proxy may be emitting this unconditionally — Nginx may create a second cache per URL and NPP-warmed cache are never reached by real visitors.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
+                                        <br>
+                                        <?php esc_html_e( 'To verify if this affects you: Run Preload All, then visit the page in a browser for the first time. If you see HIT, you\'re fine. If you see MISS, the double cache issue is affecting you.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br>
+                                        <br>
+                                        <span style="font-size:12.5px; color:#06402B; font-weight: bold;"><?php esc_html_e( 'Note: If nginx "gzip_vary on" is your only Vary source, this detection is a false positive and no action is needed. You can dismiss permanently.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
+                                        <br>
+                                        <a href="?page=nginx_cache_settings&nppp_tab=help#help" style="font-size:13px; color:#991b1b; font-weight:600; text-decoration:none; display:block; margin-top:4px;">
+                                            <?php esc_html_e( '→ See Help tab for the required fix', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        </a>
+                                    </span>
+                                </div>
+                                <?php elseif ( $nppp_vary !== null && empty( $nppp_vary['issue'] ) ) : ?>
+                                <div style="background:#f0fdf4; border-left:4px solid #16a34a; padding:10px 14px; max-width:500px; position:relative;">
+                                    <button type="button" id="nppp-dismiss-vary" title="<?php esc_attr_e( 'Dismiss permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>" style="position:absolute; top:6px; right:8px; background:none; border:none; cursor:pointer; font-size:16px; line-height:1; color:#14532d; padding:0;" aria-label="<?php esc_attr_e( 'Dismiss Vary notice permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">&#x2715;</button>
+                                    <strong style="color:#14532d;"><?php esc_html_e( '✔ Not Affected', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
+                                    <span style="font-size:13px; color:#166534;"><?php esc_html_e( 'No upstream Vary: Accept-Encoding source detected. Single cache  per URL confirmed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                                </div>
+                                <?php else : ?>
+                                <div style="background:#fff8e1; border-left:4px solid #f0ad4e; padding:10px 14px; max-width:500px; position:relative;">
+                                    <button type="button" id="nppp-dismiss-vary" title="<?php esc_attr_e( 'Dismiss permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>" style="position:absolute; top:6px; right:8px; background:none; border:none; cursor:pointer; font-size:16px; line-height:1; color:#7a4f00; padding:0;" aria-label="<?php esc_attr_e( 'Dismiss Vary notice permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">&#x2715;</button>
+                                    <strong style="color:#7a4f00;"><?php esc_html_e( 'Vary Cache Issue', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
                                     <span style="font-size:13px; color:#5a3800;">
-                                        <?php esc_html_e( 'If you encounter this issue ', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                        <a href="#help" style="font-size:13px; color:#7a4f00; font-weight:600; text-decoration:none;">
+                                        <?php esc_html_e( 'Could not verify. ', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <a href="?page=nginx_cache_settings&nppp_tab=help#help" style="font-size:13px; color:#7a4f00; font-weight:600; text-decoration:none;">
                                             <?php esc_html_e( '→ See Help tab for fix and full explanation', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                         </a>
                                     </span>
                                 </div>
+                                <?php endif; ?>
                             </td>
                         </tr>
+                        <?php endif; // nppp_vary_notice_dismissed ?>
                         <tr valign="top">
                             <th scope="row">
                                 <span class="dashicons dashicons-update"></span>
@@ -459,7 +527,7 @@ function nppp_nginx_cache_settings_page() {
                                 <div class="key-regex-info">
                                     <p class="description"><?php echo esc_html__( 'Preload also Nginx cache for Mobile devices separately. This feature supports for both entire and single POST/PAGE cache events.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'Only enable if you have different content, themes or configurations for Mobile and Desktop devices and need to warm the cache for both.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'If enabled, this feature always triggers automatically when Preload actions are called via Rest, Cron or Admin, regardless of whether Auto Preload or Auto Purge are enabled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'If enabled, this feature always triggers automatically when Preload actions are called via Rest, CLI, Cron or Admin, regardless of whether Auto Preload or Auto Purge are enabled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'If only Auto Preload is enabled, it also triggers automatically after any Purge action: REST API, Admin Bar, Advanced Tab, or Auto Purge events.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'When both Auto Purge and Auto Preload are enabled, it triggers automatically whenever cache is purged — whether by Auto Purge events, Purge All, single-URL purges from the Admin Bar or Advanced Tab, or via REST.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 </div>
@@ -485,6 +553,32 @@ function nppp_nginx_cache_settings_page() {
                                 </button>
                                 <div class="cache-paths-info">
                                     <p class="description"><?php echo esc_html__( 'Click the button to restore the built-in mobile User-Agent string. After plugin updates, reset first to pick up any changes, then reapply your custom value.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                </div>
+                            </td>
+                        </tr>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row">
+                                <span class="dashicons dashicons-rss"></span>
+                                <?php echo esc_html__( 'Preload Feeds', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-preload-feeds">
+                                        <?php nppp_nginx_cache_preload_feeds_callback(); ?>
+                                    </div>
+                                </div>
+                                <div class="key-regex-info">
+                                    <p class="description"><?php echo esc_html__( 'Preload Nginx cache for feeds – main site feed, per‑post comment feeds, and taxonomy feeds.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'When enabled, feeds are preloaded during full-site preload operations (Preload All via UI, CRON, REST and CLI).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'When enabled, manual single preload actions (Admin Bar/Advanced Tab) also preload associated feeds.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+									<p class="description"><?php echo esc_html__( 'Feeds are preloaded during manual purge actions when "Preload Related Pages" (Purge Scope) is enabled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'For auto purge actions, feeds are only preloaded when "Auto Preload", "Preload Related Pages" (Purge Scope), and "Preload Feeds" are all enabled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'Important: Ensure your Nginx configuration allows caching for feeds. If your server contains rules that bypass the cache for feed endpoints, caching will not work.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                </div>
+                                <div class="cache-paths-info">
+                                    <h4><strong><?php echo esc_html__( 'Note:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong></h4>
+                                    <p><?php echo esc_html__( 'On large sites, preloading feeds can be substantial. Enabling this feature may double the crawl duration and server load because each post term multiplies the URLs to crawl.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 </div>
                             </td>
                         </tr>
@@ -566,15 +660,30 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_nginx_cache_reject_regex_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'Enter a regex pattern to exclude endpoints from being cached while Preloading. Use | as a delimiter for multiple patterns.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'The default regex patterns exclude dynamic endpoints to prevent caching of user-specific content such as wp-admin|my-account.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'These exclusions are better handled server-side using _cache_bypass, _no_cache, and skip_cache rules in your Nginx configuration.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Here, these patterns are used to prevent wget from making requests to these endpoints during the Preloading process to avoid unnecessary server load.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <div class="nppp-nginx-align-notice">
+                                    <span class="dashicons dashicons-align-left nppp-nginx-align-notice__icon"></span>
+                                    <div class="nppp-nginx-align-notice__body">
+                                        <strong class="nppp-nginx-align-notice__title">
+                                            <?php esc_html_e( 'Keep above rules in sync with your Nginx cache skip rules', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        </strong>
+                                        <p class="nppp-nginx-align-notice__text">
+                                            <?php echo ''; ?>
+                                        </p>
+                                        <a href="https://github.com/psaux-it/wordpress-nginx-cache-docker/tree/main/nginx" target="_blank" rel="noopener noreferrer" class="nppp-nginx-align-notice__btn">
+                                            <span class="dashicons dashicons-external"></span>
+                                            <?php esc_html_e( 'View Compatible Nginx Configuration', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        </a>
+                                    </div>
+                                </div>
+	                            <p class="description"><?php echo esc_html__( 'Default regex pattern to exclude endpoints from being cached while Preloading. Use | as a delimiter for multiple patterns.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'The default regex optimized to exclude dynamic endpoints to prevent caching for WordPress and WooCommerce. Keep the default rules intact.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'These exclusions must also be handled server-side using _cache_bypass, _no_cache, and skip_cache rules in your Nginx configuration.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Here, the regex is just used to prevent preload engine from making requests to these endpoints during the process to avoid unnecessary server load.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <button type="button" id="nginx-regex-reset-defaults" class="button nginx-reset-regex-button">
                                     <?php echo esc_html__( 'Reset Default', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </button>
                                 <div class="cache-paths-info">
-                                    <p class="description"><?php echo esc_html__( 'Click the button to reset defaults. After plugin updates, it\'s best to reset first to apply the latest changes, then reapply your custom rules.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'Click the button to reset the defaults. Before resetting, make sure to back up any custom rules you have added. Always keep the default rules intact. After plugin updates, reset to the latest defaults first, then append your custom rules instead of modifying or replacing the defaults.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 </div>
                             </td>
                         </tr>
@@ -763,11 +872,20 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_nginx_cache_key_custom_regex_callback(); ?>
+                                <p>
+                                    <button type="button" id="nppp-test-regex-btn" class="button-secondary">
+                                        <?php esc_html_e( 'Test Regex', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    </button>
+                                    <span id="nppp-test-regex-result" style="display:inline-block; margin-left:12px; vertical-align:middle;"></span>
+                                </p>
                                 <div class="key-regex-info">
-                                    <br><p class="description">⚡ <?php echo esc_html__('The default regex pattern parses the \'$host\' and \'$request_uri\' portions from nginx cache key lines and correctly handles the three most common standard formats used in WordPress/PHP-FPM stacks:', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
-                                    <p class="description">✅ <code>$scheme$request_method$host$request_uri</code> &mdash; <?php echo esc_html__('most widely used fastcgi format', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
+                                    <br><p class="description">⚡ <?php echo esc_html__('The default regex pattern parses the \'$host\' and \'$request_uri\' portions from nginx cache key lines and correctly handles all common standard formats automatically. Supported key formats:', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
+                                    <p class="description">✅ <code>$scheme$request_method$host$request_uri</code> &mdash; <?php echo esc_html__('most widely used fastcgi format — all HTTP methods supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
                                     <p class="description">✅ <code>$scheme$proxy_host$request_uri</code> &mdash; <?php echo esc_html__('nginx default for proxy_cache setups, no request method in key', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                    <p class="description">✅ <code>$scheme$host$request_uri</code> &mdash; <?php echo esc_html__('scheme-only variant with no request method', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
+                                    <p class="description">✅ <code>$scheme$host$request_uri</code> &mdash; <?php echo esc_html__('scheme-only variant with no request method', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
+                                    <p class="description">✅ <code>$scheme://$host$request_uri</code> &mdash; <?php echo esc_html__('explicit :// separator variant', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
+                                    <p class="description">✅ <code>$host$request_uri</code> &mdash; <?php echo esc_html__('bare host variant with no scheme', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
+                                    <p class="description">✅ <code>$host$uri$is_args$args</code> &mdash; <?php echo esc_html__('bare host with query args, no scheme', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
                                     <p class="description">⚡ <?php echo esc_html__('If you use a non-standard or complex \'_cache_key\' format, you must define a custom regex pattern to correctly parse \'$host\' and \'$request_uri\' portions in order to ensure proper plugin functionality.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
                                     <p class="description">⚡ <?php echo esc_html__('For example, if your custom key format is \'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args\', you will need to provide a corresponding regex pattern that accurately captures the \'$host\' and \'$request_uri\' parts.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
                                     <p class="description">📌 <strong><?php echo esc_html__('Guidelines for creating a compatible regex:', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong></p>
@@ -854,9 +972,9 @@ function nppp_nginx_cache_settings_page() {
                                         <?php nppp_rg_purge_enabled_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'Accelerates single-URL cache purge by using ripgrep (rg) to locate cache files — up to 60× faster than recursive filesystem scan on large caches.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Accelerates single-URL cache purge by using ripgrep (rg) to locate cache files — up to 60× faster on large caches (especially on FUSE/bindfs setups).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Applies only to single-URL purges. Purge All always uses filesystem operations.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'HIGHLY Recommended for large cache sites with over 1,000 URLs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'HIGHLY Recommended for large cache sites with over 1,000 URLs, environments utilizing FUSE mounts / bindfs setups for Nginx Cache Path.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Requirements: ripgrep (rg) linux binary installed and available in PATH.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
@@ -956,6 +1074,19 @@ function nppp_handle_nginx_cache_settings_submission() {
         wp_die(esc_html__('You do not have sufficient permissions to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
+    // Block settings changes while a purge or preload operation is running.
+    // A mid-operation path or regex change leaves the active process out of
+    // sync with the newly saved options, corrupting status monitoring and
+    // potentially the next auto-purge/preload cycle.
+    if ( function_exists( 'nppp_is_operation_active' ) && nppp_is_operation_active() ) {
+        wp_safe_redirect( add_query_arg( [
+            'status_message' => urlencode( __( 'Settings cannot be saved while a purge or preload operation is running. Please wait for it to finish and try again.', 'fastcgi-cache-purge-and-preload-nginx' ) ),
+            'message_type'   => 'error',
+            'redirect_nonce' => wp_create_nonce( 'nppp_redirect_nonce' ),
+        ], admin_url( 'options-general.php?page=nginx_cache_settings' ) ) );
+        exit;
+    }
+
     // Check if 'nginx_cache_settings' is set in the POST data
     if (isset($_POST['nginx_cache_settings'])) {
         $existing_options = get_option('nginx_cache_settings', []);
@@ -976,21 +1107,43 @@ function nppp_handle_nginx_cache_settings_submission() {
             $existing_options = (array) $existing_options;
             $merged = wp_parse_args($new_settings, $existing_options);
 
-            // Always delete the permission cache
+            // Flush URL→filepath index when cache path changes, all entries are stale now.
+            $nppp_old_path_chk = isset( $existing_options['nginx_cache_path'] )
+                ? rtrim( $existing_options['nginx_cache_path'], '/' ) : '';
+            $nppp_new_path_chk = isset( $merged['nginx_cache_path'] )
+                ? rtrim( $merged['nginx_cache_path'], '/' ) : '';
+            if ( $nppp_old_path_chk !== '' && $nppp_new_path_chk !== ''
+                && $nppp_old_path_chk !== $nppp_new_path_chk ) {
+                delete_option( 'nppp_url_filepath_index' );
+                nppp_display_admin_notice(
+                    'info',
+                    sprintf(
+                        /* translators: 1: old cache path 2: new cache path */
+                        __( 'INFO INDEX CLEARED: URL→filepath index flushed — cache path changed from %1$s to %2$s (settings form save).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $nppp_old_path_chk,
+                        $nppp_new_path_chk
+                    ),
+                    true,
+                    false
+                );
+            }
+
+            // Delete transients partially
             $static_key_base = 'nppp';
             $transient_key_permissions_check = 'nppp_permissions_check_' . md5($static_key_base);
             delete_transient($transient_key_permissions_check);
-
-            // Delete cache related binary checks
             delete_transient('nppp_safexec_ok');
             delete_transient('nppp_rg_ok');
+            delete_transient('nppp_cache_key_regex_probe');
+            delete_transient('nppp_wget_version_' . md5($static_key_base));
+            delete_transient('nppp_rg_version_' . md5($static_key_base));
 
             // Update the settings
             update_option('nginx_cache_settings', $merged);
 
             // Redirect with success message
             wp_safe_redirect(add_query_arg(array(
-                'status_message' => urlencode(__('Plugin cache (permission) cleared, settings saved successfully!', 'fastcgi-cache-purge-and-preload-nginx')),
+                'status_message' => urlencode(__('Plugin cache (partially) cleared, settings saved successfully!', 'fastcgi-cache-purge-and-preload-nginx')),
                 'message_type' => 'success',
                 'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
             ), admin_url('options-general.php?page=nginx_cache_settings')));

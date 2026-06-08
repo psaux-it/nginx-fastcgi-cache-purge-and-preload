@@ -2,7 +2,7 @@
 /**
  * Runtime path helpers for Nginx Cache Purge Preload
  * Description: Resolves and creates runtime directories and files used by plugin operations.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -63,7 +63,7 @@ function nppp_fuse_source_path( string $mount_path ): ?string {
     $mount_path = rtrim( $mount_path, '/' );
 
     // Prefer /proc/self/mountinfo (Linux 2.6.26+): correctly disambiguates
-    if ( is_readable( '/proc/self/mountinfo' ) ) {
+    if ( @is_readable( '/proc/self/mountinfo' ) ) {
         $lines = file( '/proc/self/mountinfo', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES );
         if ( $lines !== false ) {
             foreach ( $lines as $line ) {
@@ -111,7 +111,7 @@ function nppp_fuse_source_path( string $mount_path ): ?string {
     }
 
     // Fallback: /proc/mounts (older kernels / containers without /proc/self).
-    if ( is_readable( '/proc/mounts' ) ) {
+    if ( @is_readable( '/proc/mounts' ) ) {
         $lines = file( '/proc/mounts', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES );
         if ( $lines !== false ) {
             foreach ( $lines as $line ) {

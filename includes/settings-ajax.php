@@ -2,7 +2,7 @@
 /**
  * AJAX option handlers for Nginx Cache Purge Preload
  * Description: Handles all wp_ajax_* callbacks for toggle switches and live option updates.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -200,6 +200,11 @@ function nppp_update_auto_preload_mobile_option(): void {
     nppp_save_toggle_option( 'nppp-update-auto-preload-mobile-option', 'preload_mobile', 'nginx_cache_auto_preload_mobile' );
 }
 
+// AJAX callback function to update preload feeds option
+function nppp_update_preload_feeds_option(): void {
+    nppp_save_toggle_option( 'nppp-update-preload-feeds-option', 'preload_feeds', 'nginx_cache_preload_feeds' );
+}
+
 // AJAX callback function to update watchdog option
 function nppp_update_watchdog_option(): void {
     nppp_save_toggle_option( 'nppp-update-watchdog-option', 'watchdog', 'nginx_cache_watchdog' );
@@ -276,12 +281,31 @@ function nppp_update_bypass_path_restriction(): void {
         $opts = array();
     }
     $opts = array_merge( $opts, $normalized );
+
+    // When bypass turns OFF, the stored cache path may have been set while
+    // bypass was ON (e.g. /root). Re-validate it without bypass and reset
+    // to the safe placeholder if it is now outside the allowed roots.
+    $path_was_reset = false;
+    if ( $normalized['nginx_cache_bypass_path_restriction'] === 'no' ) {
+        $current_path = isset( $opts['nginx_cache_path'] ) ? $opts['nginx_cache_path'] : '';
+        if ( $current_path !== '' && nppp_validate_path( $current_path, false, false ) !== true ) {
+            $opts['nginx_cache_path'] = '/dev/shm/change-me-now';
+            $path_was_reset = true;
+        }
+    }
+
     update_option( 'nginx_cache_settings', $opts );
 
-    wp_send_json_success( array(
+    $response = array(
         'message' => __( 'Bypass Path Restriction saved.', 'fastcgi-cache-purge-and-preload-nginx' ),
         'data'    => $normalized,
-    ) );
+    );
+    if ( $path_was_reset ) {
+        $response['path_reset']       = true;
+        $response['nginx_cache_path'] = '/dev/shm/change-me-now';
+        $response['message']         .= ' ' . __( 'Cache path was outside the allowed directories and has been reset to /dev/shm/change-me-now.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+    wp_send_json_success( $response );
 }
 
 // AJAX callback function to update auto purge option
@@ -335,11 +359,25 @@ function nppp_update_rg_purge_option(): void {
     $raw      = sanitize_text_field( wp_unslash( $_POST['rg_purge'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth()
     $rg_purge = ( $raw === 'yes' ) ? 'yes' : 'no';
 
-    // If rg is not available, refuse to enable.
+    // If rg is not available or version is too low, refuse to enable.
     if ( $rg_purge === 'yes' ) {
-        $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+        $rg_bin = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
         if ( $rg_bin === '' || ! is_executable( $rg_bin ) ) {
             wp_send_json_error( __( 'ripgrep (rg) binary not found. Install it to enable RG Purge.', 'fastcgi-cache-purge-and-preload-nginx' ), 400 );
+        }
+        // Enforce minimum rg version requirement.
+        if ( function_exists( 'nppp_check_rg_version' ) ) {
+            $rg_ver = nppp_check_rg_version();
+            if ( $rg_ver === 'Not Installed' || version_compare( $rg_ver, '14.0.0', '<' ) ) {
+                wp_send_json_error(
+                    sprintf(
+                        /* translators: %s: Installed ripgrep version. */
+                        __( 'ripgrep (rg) version %s is below the required minimum (14.0.0). Upgrade rg to enable RG Purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        esc_html( $rg_ver )
+                    ),
+                    400
+                );
+            }
         }
     }
 
@@ -432,7 +470,32 @@ function nppp_update_api_option(): void {
 
 // AJAX callback function to update default reject regex option
 function nppp_update_default_reject_regex_option(): void {
-    nppp_reset_default_option( 'nppp-update-default-reject-regex-option', 'nginx_cache_reject_regex', 'nppp_fetch_default_reject_regex' );
+    nppp_ajax_auth( 'nppp-update-default-reject-regex-option' );
+
+    // Get current settings once
+    $current_options = get_option( 'nginx_cache_settings', [] );
+
+    // Get the raw default regex (includes '/feed/')
+    $default_regex = nppp_fetch_default_reject_regex();
+
+    // If Preload Feeds is enabled, remove '/feed/'
+    $preload_feeds_enabled = ! empty( $current_options['nginx_cache_preload_feeds'] )
+                           && $current_options['nginx_cache_preload_feeds'] === 'yes';
+
+    if ( $preload_feeds_enabled ) {
+        // Remove both feed rules — try all possible positions
+        foreach ( [ '|/feed/', '/feed/|', '/feed/', '|[?&]feed=', '[?&]feed=|', '[?&]feed=' ] as $token ) {
+            $default_regex = str_replace( $token, '', $default_regex );
+        }
+        // Clean up any resulting double or orphan pipes
+        $default_regex = preg_replace( '/\|{2,}/', '|', $default_regex );
+        $default_regex = trim( $default_regex, '|' );
+    }
+
+    $current_options['nginx_cache_reject_regex'] = $default_regex;
+    update_option( 'nginx_cache_settings', $current_options );
+
+    wp_send_json_success( $default_regex );
 }
 
 // AJAX callback function to update default reject extension option
@@ -442,6 +505,7 @@ function nppp_update_default_reject_extension_option(): void {
 
 // AJAX callback function to update default cache key regex option
 function nppp_update_default_cache_key_regex_option(): void {
+    delete_transient( 'nppp_cache_key_regex_probe' );
     nppp_reset_default_option( 'nppp-update-default-cache-key-regex-option', 'nginx_cache_key_custom_regex', 'nppp_fetch_default_regex_for_cache_key' );
 }
 
@@ -493,4 +557,41 @@ function nppp_get_save_cron_expression() {
     nppp_create_scheduled_events( $cron_expression );
 
     wp_send_json_success( __( 'New cron event scheduled successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+}
+
+// Permanently dismiss the Vary: Accept-Encoding row.
+// Stores a simple boolean option; pre-checks and settings-page both gate on it.
+function nppp_dismiss_vary_notice(): void {
+    nppp_ajax_auth( 'nppp-dismiss-vary-notice' );
+
+    update_option( 'nppp_vary_notice_dismissed', 1, false );
+
+    // Purge the detection transient so it is not re-evaluated unnecessarily.
+    delete_transient( 'nppp_vary_issue_' . md5( 'nppp' ) );
+
+    wp_send_json_success();
+}
+
+// AJAX callback to probe the cache key regex against a real cache file.
+function nppp_ajax_test_cache_key_regex() {
+    nppp_ajax_auth( 'nppp_test_regex_nonce' );
+
+    if ( ! function_exists( 'nppp_probe_cache_key_regex' ) ) {
+        wp_send_json_error(
+            array( 'message' => __( 'Probe function not available.', 'fastcgi-cache-purge-and-preload-nginx' ) ),
+            500
+        );
+    }
+
+    $result = nppp_probe_cache_key_regex();
+    $messages = array(
+        'ok'   => __( 'Regex matched and extracted a valid URL.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'fail' => __( 'Regex did not match or produced an invalid URL.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'skip' => __( 'No cache available to test.', 'fastcgi-cache-purge-and-preload-nginx' ),
+    );
+
+    wp_send_json_success( array(
+        'status'  => $result,
+        'message' => $messages[ $result ] ?? __( 'Unknown result.', 'fastcgi-cache-purge-and-preload-nginx' ),
+    ) );
 }

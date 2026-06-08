@@ -2,7 +2,7 @@
 /**
  * Advanced tab handlers for Nginx Cache Purge Preload
  * Description: Implements advanced admin actions for targeted URL purge and preload tasks.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -460,24 +460,6 @@ function nppp_premium_html($nginx_cache_path) {
     // Merge HIT + MISS
     $mergedRows = nppp_merge_cached_and_wget($hits, $wp_filesystem);
 
-    // Warnings - only meaningful when table has data
-    if ( ! $preload_running ) {
-        if ( ! empty( $mergedRows ) && $config_data === false) {
-            echo '<div class="nppp-premium-wrap">
-                      <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: No <span style="color: #f0c36d;">_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
-                  </div>';
-        } elseif ( ! empty( $mergedRows ) && isset($config_data['cache_keys']) && $config_data['cache_keys'] === ['Not Found']) {
-            echo '<div class="nppp-premium-wrap">
-                      <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: No <span style="color: #f0c36d;">_cache_key</span> directive was found. This may indicate a <span style="color: #f0c36d;">parsing error</span> or a missing <span style="color: #f0c36d;">nginx.conf</span> file.', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
-                  </div>';
-        // Warn about the unsupported cache keys
-        } elseif ( ! empty( $mergedRows ) && isset($config_data['cache_keys']) && !empty($config_data['cache_keys'])) {
-            echo '<div class="nppp-premium-wrap">
-                      <p class="nppp-advanced-error-message">' . wp_kses_post( __( 'INFO: <span style="color: #f0c36d;">Unsupported</span> cache key found!', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</p>
-                  </div>';
-        }
-    }
-
     // Warn if no complete crawl snapshot exists yet.
     // The snapshot file (nppp-wget-snapshot.log) is only written when a
     // Preload All run finishes successfully. If it does not exist, the admin
@@ -515,15 +497,28 @@ function nppp_premium_html($nginx_cache_path) {
         )
     );
     ?>
-    <?php if ( ! empty( $mergedRows ) && ! $preload_running ) : ?>
-    <div style="background-color: #f9edbe; border-left: 6px solid #f0c36d; padding: 5px; margin-bottom: 15px; max-width: max-content;">
-        <p style="margin: 0; align-items: center;">
-            <span class="dashicons dashicons-warning" style="font-size: 22px; color: #ffba00; margin-right: 8px;"></span>
-            <?php echo wp_kses_post( __( 'If the <strong>Cached URL\'s</strong> are incorrect, <strong>Preload</strong> will not work as expected. Please check the <strong>Cache Key Regex</strong> option in plugin <strong>Advanced options</strong> section, ensure the regex is configured correctly, and try again.', 'fastcgi-cache-purge-and-preload-nginx' ) ); ?>
-        </p>
+    <h2></h2>
+    <?php
+    $nppp_miss_count  = 0;
+    $nppp_total_count = count( $mergedRows );
+    foreach ( $mergedRows as $nppp_r ) {
+        if ( $nppp_r['status'] === 'MISS' ) $nppp_miss_count++;
+    }
+    $nppp_hit_ratio = $nppp_total_count > 0 ? ( ( $nppp_total_count - $nppp_miss_count ) / $nppp_total_count ) : 0;
+    ?>
+    <?php if ( $nppp_miss_count > 0 && $nppp_hit_ratio >= 0.5 && ! $preload_running ) : ?>
+    <div class="nppp-preload-miss-wrap">
+        <button type="button" id="nppp-preload-miss-all" class="nppp-preload-miss-btn">
+            <span class="dashicons dashicons-update" style="font-size:16px;margin:0 4px 0 0;padding:0;vertical-align:middle;"></span>
+            <?php echo esc_html( sprintf(
+                /* translators: %d: number of MISS URLs in the table */
+                __( 'Preload All MISS (%d)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $nppp_miss_count
+            ) ); ?>
+        </button>
+        <span id="nppp-preload-miss-progress" style="display:none;font-size:13px;color:#646970;"></span>
     </div>
     <?php endif; ?>
-    <h2></h2>
     <?php if ($preload_running) : ?>
     <div class="nppp-table-loading-notice">
         <span class="dashicons dashicons-update-alt spin"></span>
@@ -826,6 +821,32 @@ function nppp_purge_cache_premium_callback() {
     );
 }
 
+/**
+ * AJAX: Preload a batch of MISS URLs via the existing fire-and-forget method.
+ * Accepts up to 200 URLs per request; JS calls this in a loop for larger sets.
+ */
+function nppp_preload_miss_batch_callback() {
+    if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'nppp_preload_miss_batch_nonce' ) ) {
+        wp_send_json_error( 'Nonce verification failed.' );
+    }
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( 'Permission denied.', 403 );
+    }
+
+    $sanitized = isset( $_POST['urls'] ) && is_array( $_POST['urls'] )
+        ? array_map( 'esc_url_raw', wp_unslash( $_POST['urls'] ) )
+        : [];
+
+    $urls = array_values( array_slice( array_filter( $sanitized ), 0, 200 ) );
+
+    if ( empty( $urls ) ) {
+        wp_send_json_error( 'No URLs provided.' );
+    }
+
+    nppp_preload_urls_fire_and_forget( $urls );
+    wp_send_json_success( array( 'queued' => count( $urls ) ) );
+}
+
 // Preload triggered from the Advanced tab
 function nppp_preload_cache_premium_callback() {
     // Verify nonce
@@ -912,7 +933,21 @@ function nppp_preload_cache_premium_callback() {
     $rg_used = false;
 
     nppp_prepare_request_env();
-    $rg_bin = trim( (string) shell_exec('command -v rg 2>/dev/null') );
+    $rg_bin = ( function_exists( 'shell_exec' ) && function_exists( 'exec' ) ) ? trim( (string) shell_exec('command -v rg 2>/dev/null') ) : '';
+
+    if ( $rg_bin !== '' ) {
+        $rg_ver = nppp_check_rg_version();
+        if ( $rg_ver === 'Not Installed' ) {
+            $rg_bin = '';
+        } elseif ( version_compare( $rg_ver, '14.0.0', '<' ) ) {
+            nppp_display_admin_notice( 'info', sprintf(
+                /* translators: %s: Installed ripgrep version. */
+                __( 'WARNING RG SCAN: Installed ripgrep (rg) version (%s) is lower than the required minimum (14.0.0). Skipped preload complete check.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $rg_ver
+            ), true, false );
+            $rg_bin = '';
+        }
+    }
 
     if ($rg_bin !== '') {
         // Wait for wget to finish before scanning.
@@ -932,7 +967,7 @@ function nppp_preload_cache_premium_callback() {
             nppp_display_admin_notice('info', sprintf(
                 /* translators: %s: FUSE source filesystem path that no longer exists on disk. */
                 __('WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                $rg_source_path
+                $nginx_cache_path
             ), true, false);
             $rg_source_path = null;
             $rg_fuse_active = false;
@@ -947,7 +982,7 @@ function nppp_preload_cache_premium_callback() {
         $probe_exit = 0;
         exec(
             sprintf(
-                '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
+                '%s -q \'.\' --text --no-ignore --no-config --no-mmap -m 1 %s 2>/dev/null',
                 escapeshellarg($rg_bin),
                 escapeshellarg($rg_scan_path)
             ),
@@ -1004,7 +1039,7 @@ function nppp_preload_cache_premium_callback() {
             $url_key = preg_replace('#^https?://#', '', $cache_url);
 
             $rg_cmd = sprintf(
-                '%s%s -l -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config %s %s',
+                '%s%s -l -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config --no-mmap %s %s',
                 $rg_cmd_prefix,
                 escapeshellarg($rg_bin),
                 escapeshellarg('^KEY: .*' . preg_quote($url_key, '/') . '$'),
@@ -1045,7 +1080,7 @@ function nppp_extract_cached_urls_rg(
     // Linux Page Cache Warm‑Up (Dentry Cache) for SCAN 2
     $redirect_cmd = sprintf(
         '%s%s -F --text -l -m 1 -E none --no-unicode'
-        . ' --no-heading --no-ignore --no-config --no-messages -e %s -e %s %s 2>/dev/null',
+        . ' --no-heading --no-ignore --no-config --no-messages --no-mmap -e %s -e %s %s 2>/dev/null',
         $rg_cmd_prefix,
         escapeshellarg( $rg_bin ),
         escapeshellarg( 'Status: 301' ),
@@ -1068,7 +1103,7 @@ function nppp_extract_cached_urls_rg(
     // Linux dcache already warmed here
     $key_cmd = sprintf(
         '%s%s --text -m 1 -E none --no-unicode'
-        . ' --no-heading --no-ignore --no-config --no-messages %s %s 2>/dev/null',
+        . ' --no-heading --no-ignore --no-config --no-messages --no-mmap %s %s 2>/dev/null',
         $rg_cmd_prefix,
         escapeshellarg( $rg_bin ),
         escapeshellarg( '^KEY: [^\r\n]+' ),
@@ -1226,17 +1261,32 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     * Always use ripgrep (rg) if the binary is present on the system.
     *
     * PERFORMANCE BENCHMARK | Advanced Tab Load Times | ripgrep + safexec
-    * (5,000 cached URLs, containerised environment):
+    * (5,000 cached URLs, FUSE bindfs mounted Nginx cache path, containerised environment):
     * ---------------------------------------------------------------------
-    * | Method               | Cold dcache | Warm dcache |
-    * |----------------------|-------------|-------------|
-    * | ripgrep (rg)         | ~10 seconds | ~6 seconds  |
-    * | PHP RecursiveIterator| ~52 seconds | ~23 seconds |
+    * | Method               | Cold dcache(+DOM) | Warm dcache(+DOM) |
+    * |----------------------|------------------ |-------------------|
+    * | ripgrep (rg)         |    ~10 seconds    |     ~6 seconds    |
+    * | PHP RecursiveIterator|    ~52 seconds    |     ~23 seconds   |
     * ---------------------------------------------------------------------
     */
 
     nppp_prepare_request_env();
-    $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+    $rg_bin = ( function_exists( 'shell_exec' ) && function_exists( 'exec' ) ) ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
+
+    if ( $rg_bin !== '' ) {
+        $rg_ver = nppp_check_rg_version();
+        if ( $rg_ver === 'Not Installed' ) {
+            $rg_bin = '';
+        } elseif ( version_compare( $rg_ver, '14.0.0', '<' ) ) {
+            nppp_display_admin_notice( 'info', sprintf(
+                /* translators: %s: Installed ripgrep version. */
+                __( 'WARNING RG SCAN: Installed ripgrep (rg) version (%s) is lower than the required minimum (14.0.0). Falling back to PHP recursive scanner.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $rg_ver
+            ), true, false );
+            $rg_bin = '';
+        }
+    }
+
     if ( $rg_bin !== '' ) {
 
         // Resolve FUSE mount
@@ -1248,7 +1298,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             nppp_display_admin_notice( 'info', sprintf(
                 /* translators: %s: FUSE source filesystem path that no longer exists on disk. */
                 __( 'WARNING RG SCAN: FUSE source path from mount table does not exist on disk, falling back to FUSE mount path: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-                $rg_source_path
+                $rg_fuse_path
             ), true, false );
             $rg_source_path = null;
         }
@@ -1270,7 +1320,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             $probe_exit = 0;
             exec(
                 sprintf(
-                    '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
+                    '%s -q \'.\' --text --no-ignore --no-config --no-mmap -m 1 %s 2>/dev/null',
                     escapeshellarg( $rg_bin ),
                     escapeshellarg( $rg_scan_path )
                 ),
@@ -1491,7 +1541,7 @@ function nppp_categorize_url( string $url ): string {
             if ( count( $bulk_map ) > 20000 ) {
                 $bulk_map = array_slice( $bulk_map, -20000, 20000, true );
             }
-            set_transient( 'nppp_category_map', $bulk_map, WEEK_IN_SECONDS );
+            set_transient( 'nppp_category_map', $bulk_map, DAY_IN_SECONDS );
         } );
     }
 

@@ -2,7 +2,7 @@
 /**
  * Purge operation locking for Nginx Cache Purge Preload
  * Description: Atomic WP_Upgrader-based lock helpers for concurrent purge serialization
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -98,6 +98,30 @@ function nppp_release_purge_lock(): void {
     }
 
     WP_Upgrader::release_lock( NPPP_PURGE_LOCK_NAME );
+}
+
+/**
+ * Returns true when any destructive cache operation is currently active.
+ *
+ * Combines both the purge lock (nppp_is_purge_lock_held) and the
+ * preload PID check (nppp_is_preload_running) into one call so that
+ * callers — settings form, AJAX handlers, WP-CLI — can gate option
+ * writes without duplicating logic.
+ *
+ * Uses the Direct filesystem driver because bootstrap is always loaded
+ * before this is called; nppp_initialize_wp_filesystem() is safe here.
+ *
+ * @return bool  true = operation in progress, false = cache is idle
+ */
+function nppp_is_operation_active(): bool {
+    if ( nppp_is_purge_lock_held() ) {
+        return true;
+    }
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+    if ( $wp_filesystem === false ) {
+        return false;
+    }
+    return nppp_is_preload_running( $wp_filesystem );
 }
 
 /**

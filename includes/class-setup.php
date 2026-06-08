@@ -2,7 +2,7 @@
 /**
  * Setup controller for Nginx Cache Purge Preload
  * Description: Handles activation routing and setup gating until compatible Nginx conditions are met.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -89,56 +89,109 @@ final class Setup {
         // Detection signals for UI
         $strict_detected    = self::nppp_is_nginx_detected_strict(); // real, ignores Assume
         $assume_enabled     = self::nppp_assume_nginx_enabled();     // current Assume state
-        $effective_detected = self::nppp_is_nginx_detected();        // effective detection (honors Assume for heuristics)
         $nonce              = wp_create_nonce('nppp_setup_actions');
 
         // Get signals
         self::nppp_is_nginx_detected();
         $signals_detected   = !empty($GLOBALS['NPPP__LAST_SIGNAL_HIT']);
 
-        // Minor inline styles for layout
+        // Consolidated styles — layout, logo, badges, status table.
         echo '<style>
             .nppp-grid{display:grid;gap:16px;grid-template-columns:1fr;max-width:980px}
-            @media (min-width:960px){.nppp-grid{grid-template-columns:2fr 1fr}}
+            @media(min-width:960px){.nppp-grid{grid-template-columns:2fr 1fr}}
             .nppp-card{background:#fff;border:1px solid #dcdcde;border-radius:4px}
             .nppp-card .inside{padding:16px}
             .nppp-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
             .nppp-muted{color:#646970}
             .nppp-kbd{background:#f0f0f1;border:1px solid #dcdcde;border-radius:3px;padding:2px 6px;font-family:monospace}
+            .nppp-header-content{position:relative;isolation:isolate;background:#000;color:#e6ebf2;display:flex;align-items:center;gap:18px;padding:14px 16px;overflow:hidden;margin-bottom:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+            .nppp-aurora-canvas{position:absolute;inset:0;z-index:0;pointer-events:none;display:block;will-change:transform;contain:paint}
+            .nppp-aurora-overlay{position:absolute;inset:0;z-index:2;pointer-events:none;display:block;will-change:transform;contain:paint}
+            .nppp-aurora-canvas,.nppp-aurora-overlay{background:transparent!important;image-rendering:optimizeQuality;transform:translateZ(0)}
+            .wrap .nppp-header-content{background:#000!important}
+            .nppp-img-container,.nppp-buttons-wrapper{position:relative;z-index:1}
+            .nppp-img-container img{width:90px;height:auto}
+            .nppp-header-text{display:flex;flex-direction:column;gap:5px}
+            .nppp-header-eyebrow{display:flex;align-items:center;gap:10px;margin:0}
+            .nppp-wordmark{font-size:13px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;font-family:monospace;color:#fff;background:rgba(255,255,255,0.10);padding:3px 9px;border-radius:4px;border:1px solid rgba(255,255,255,0.18);line-height:1.6;flex-shrink:0}
+            .nppp-header-state{display:inline-block;font-size:18px;font-weight:400;letter-spacing:-0.2px;line-height:1.3;padding:3px 12px;border-radius:6px;background:rgba(255,255,255,0.07)}
+            .nppp-header-state--pass{color:#4ade80;background:rgba(74,222,128,0.10)}
+            .nppp-header-state--info{color:#93c5fd;background:rgba(99,179,237,0.10)}
+            .nppp-header-state--warn{color:#fcd34d;background:rgba(251,191,36,0.10)}
+            .nppp-header-subtitle{color:#ffffff;margin:0;font-size:11px;font-weight:500;letter-spacing:1px;text-transform:uppercase}
+            .nppp-wordmark--pass{background:rgba(74,222,128,0.15);border-color:rgba(74,222,128,0.35);color:#4ade80}
+            .nppp-wordmark--info{background:rgba(99,179,237,0.15);border-color:rgba(99,179,237,0.35);color:#63b3ed}
+            .nppp-wordmark--warn{background:rgba(251,191,36,0.15);border-color:rgba(251,191,36,0.35);color:#fbbf24}
+            .nppp-header-state--pass{color:#4ade80}
+            .nppp-header-state--info{color:#93c5fd}
+            .nppp-header-state--warn{color:#fcd34d}
+            @media(prefers-reduced-motion:reduce){.nppp-aurora-canvas,.nppp-aurora-overlay{display:none}}
+            @media(prefers-color-scheme:dark){.nppp-header-content{background:#0b0e12;color:#e6ebf2}}
+            @media(max-width:782px){.nppp-img-container img{width:60px}}
+            .nppp-status-table{width:100%;border-collapse:collapse;font-size:13px}
+            .nppp-status-table tr+tr td{border-top:1px solid #f0f0f1}
+            .nppp-status-table td{padding:9px 4px;vertical-align:middle;color:#1d2327}
+            .nppp-status-table td.nppp-st-label{color:#3c434a;width:60%}
+            .nppp-status-table td:last-child{text-align:right;white-space:nowrap}
+            .nppp-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+            .nppp-badge--pass{background:#edfaef;color:#1a7f37}
+            .nppp-badge--warn{background:#fff8e5;color:#9a5000}
+            .nppp-badge--fail{background:#fce8e8;color:#b91c1c}
+            .nppp-badge--info{background:#eef2ff;color:#3730a3}
+            .nppp-badge--off{background:#f0f0f1;color:#3c434a}
+            .nppp-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+            .nppp-badge--pass .nppp-dot{background:#1a7f37}
+            .nppp-badge--warn .nppp-dot{background:#9a5000}
+            .nppp-badge--fail .nppp-dot{background:#b91c1c}
+            .nppp-badge--info .nppp-dot{background:#3730a3}
+            .nppp-badge--off .nppp-dot{background:#a0a0a0}
+            .nppp-signals{list-style:none;margin:0;padding:8px 0 0}
+            .nppp-signals li{display:flex;align-items:center;gap:7px;padding:4px 0;color:#646970;font-size:12px}
+            .nppp-signals li::before{content:"";width:5px;height:5px;border-radius:50%;background:#a7aaad;flex-shrink:0}
+            .nppp-signals-label{margin:14px 0 2px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#646970}
         </style>';
 
         echo '<div class="wrap">';
-        $page_title = ($strict_detected || $assume_enabled)
-            ? __('NPP • Setup Completed', 'fastcgi-cache-purge-and-preload-nginx')
-            : __('NPP • Complete Setup', 'fastcgi-cache-purge-and-preload-nginx');
 
-        // Logo
         $plugin_slug = basename( dirname( dirname( __FILE__ ) ) );
         $logo_url    = trailingslashit( content_url( 'plugins/' . $plugin_slug ) ) . 'admin/img/logo.png';
 
-        // Header
-        echo '<h1 class="wp-heading-inline">'
-            . '<img src="' . esc_url($logo_url) . '" alt="' . esc_attr__('NPP logo', 'fastcgi-cache-purge-and-preload-nginx') . '" class="nppp-logo" width="90" height="90" />'
-            . '<span class="nppp-title">' . esc_html($page_title) . '</span>'
-            . '</h1>';
+        // Derive state modifier class for badge + text coloring.
+        $state_mod = $strict_detected ? 'pass' : ( $assume_enabled ? 'info' : 'warn' );
 
+        // State-only label
+        $state_text = $strict_detected
+            ? __( 'Setup Completed',          'fastcgi-cache-purge-and-preload-nginx' )
+            : ( $assume_enabled
+                ? __( 'Assume-Nginx Mode Active', 'fastcgi-cache-purge-and-preload-nginx' )
+                : __( 'Complete Setup',           'fastcgi-cache-purge-and-preload-nginx' )
+            );
+
+        // Aurora hero header
+        echo '<div class="nppp-header-content" data-theme="aurora">';
+        echo '  <div class="nppp-img-container">';
+        echo '    <img src="' . esc_url( $logo_url ) . '" width="90" height="90" alt="' . esc_attr__( 'NPP logo', 'fastcgi-cache-purge-and-preload-nginx' ) . '">';
+        echo '  </div>';
+        echo '  <div class="nppp-buttons-wrapper">';
+        echo '    <div class="nppp-header-text">';
+        echo '      <div class="nppp-header-eyebrow">';
+        echo '        <span class="nppp-wordmark nppp-wordmark--' . esc_attr( $state_mod ) . '">NPP</span>';
+        echo '        <span class="nppp-header-state nppp-header-state--' . esc_attr( $state_mod ) . '">' . esc_html( $state_text ) . '</span>';
+        echo '      </div>';
+        echo '      <p class="nppp-header-subtitle">'
+            . esc_html__( 'Nginx Cache Purge Preload', 'fastcgi-cache-purge-and-preload-nginx' )
+            . ' <span style="color:#2dd4bf;font-weight:400;letter-spacing:0">v' . esc_html( NPPP_PLUGIN_VERSION ) . '</span>'
+            . '</p>';
+        echo '    </div>';
+        echo '  </div>';
+        echo '</div>';
+
+        // where to inject admin notices.
         echo '<hr class="wp-header-end">';
-
-        // Minimal styles for sizing/alignment
-        echo '<style>
-            .nppp-logo{
-                width:90px;height:90px;vertical-align:middle;margin-right:12px;
-                object-fit:contain;border-radius:0px;
-            }
-            .nppp-title{vertical-align:middle}
-            @media (max-width: 782px){
-                .nppp-logo{width:60px;height:60px;margin-right:10px}
-            }
-        </style>';
 
         // Top notice: success vs. action needed
         if ($strict_detected) {
-            echo '<div class="notice notice-success"><p>'
+            echo '<div class="notice notice-success notice-nppp"><p>'
                . esc_html__('Nginx detected. You’re all set — continue to Settings.', 'fastcgi-cache-purge-and-preload-nginx')
                . '</p>';
 
@@ -151,33 +204,57 @@ final class Setup {
             echo '</div>';
 
         } elseif ($assume_enabled) {
-            echo '<div class="notice notice-info"><p>'
-               . esc_html__('Assume-Nginx mode is enabled. You can proceed to Settings. If you later bind the real nginx.conf, this mode will be disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx')
+            echo '<div class="notice notice-info notice-nppp"><p>'
+               . esc_html__('Assume-Nginx mode is enabled. When you solve the Nginx detection issue, this mode will be disabled automatically.', 'fastcgi-cache-purge-and-preload-nginx')
                . '</p></div>';
         } elseif ($signals_detected) {
-            echo '<div class="notice notice-warning"><p>'
-                . esc_html__('Nginx likely detected (via headers/server signature), but the real nginx.conf is not visible. Bind your real nginx.conf (recommended) or enable Assume-Nginx mode to proceed.', 'fastcgi-cache-purge-and-preload-nginx')
+            echo '<div class="notice notice-warning notice-nppp"><p>'
+                . esc_html__('Nginx likely detected (via headers/server signature), but the real nginx.conf is not found. Enable Assume-Nginx mode to proceed with workaround mode and access Settings, then review the Help tab.', 'fastcgi-cache-purge-and-preload-nginx')
                 . '</p></div>';
         } else {
-            echo '<div class="notice notice-error"><p>'
-               . esc_html__('Nginx was not detected. This can be a false positive in proxy, Docker, or chrooted environments.', 'fastcgi-cache-purge-and-preload-nginx')
+            echo '<div class="notice notice-error notice-nppp"><p>'
+               . esc_html__('Nginx could not be confirmed — neither nginx.conf nor any server signature or response header indicated Nginx. If you are certain your server runs Nginx (e.g. behind a strict proxy, CDN, or in a chrooted/containerized environment that strips headers), use Assume-Nginx mode below to proceed with workaround mode and access Settings, then review the Help tab.', 'fastcgi-cache-purge-and-preload-nginx')
+               . '</p></div>';
+        }
+
+        // Targeted open_basedir root-cause notice — shown only when strict detection failed and
+        // open_basedir is provably active, because this is the #1 silent killer of nginx.conf discovery.
+        if ( ! $strict_detected && self::nppp_is_open_basedir_active() ) {
+            echo '<div class="notice notice-warning notice-nppp"><p>'
+               . '<strong>' . esc_html__( 'PHP open_basedir restriction is active.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</strong> '
+               . esc_html__(
+                   'open_basedir silently prevents PHP from reading nginx.conf at all standard probe paths. This is why NPP cannot confirm Nginx — nginx.conf may exist but PHP cannot see it.',
+                   'fastcgi-cache-purge-and-preload-nginx'
+               )
+               . ' '
+               . esc_html__(
+                   'Add all required directories to open_basedir in your PHP-FPM pool config. Visit Settings page to see which paths you need to add. ',
+                   'fastcgi-cache-purge-and-preload-nginx'
+               )
                . '</p></div>';
         }
 
         // Why am I seeing this?
-        echo '<div class="notice notice-info"><p><strong>'
+        if ( $needs_setup || $assume_enabled ) {
+        echo '<div class="notice notice-info notice-nppp"><p><strong>'
             . esc_html__('Why am I seeing this page?', 'fastcgi-cache-purge-and-preload-nginx')
             . '</strong> '
             . esc_html__(
-                'We couldn’t reliably confirm Nginx from within WordPress. This often happens when your site runs behind a proxy (Cloudflare, CDN, load balancer), in containers/VMs, in chroot/jail setups, on Plesk or cPanel, or when nginx.conf is not found.',
+                    'NPP is a plugin built exclusively for Nginx-powered servers — it purges and preloads the Nginx cache. Before enabling its features, it must confirm your server is actually running Nginx.',
+                    'fastcgi-cache-purge-and-preload-nginx'
+                  )
+            . ' '
+            . esc_html__(
+                'NPP could not find nginx.conf at any standard path. This is the only reason you are seeing this page. Common causes: nginx.conf is at a non-standard location, PHP open_basedir restrictions are blocking access to it, or your site runs behind a proxy, CDN, container, or Panel where the config is not directly accessible to PHP.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . ' '
             . esc_html__(
-                'NPP does not directly interact with Nginx. For informational metrics (especially the Status tab), it only reads nginx.conf (read-only).',
+                'NPP reads nginx.conf (read-only) to extract cache paths, cache key, Nginx worker user, and cache zone names. These drive purge operations, preload targeting, cache directory permission checks, duplicate zone detection, and all Status tab metrics. Without nginx.conf, the Status tab cannot render at all.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . '</p></div>';
+        }
 
         echo '<div class="metabox-holder nppp-grid">';
 
@@ -185,6 +262,7 @@ final class Setup {
         echo '<div>';
 
         // Recommended path (bind/sync nginx.conf)
+        if ( $needs_setup || $assume_enabled ) :
         echo '<div class="postbox nppp-card">';
         echo '  <h2 class="hndle"><span>' . esc_html__('Recommended: Bind your live nginx.conf', 'fastcgi-cache-purge-and-preload-nginx') . '</span></h2>';
         echo '  <div class="inside">';
@@ -220,6 +298,7 @@ services:
             . '</p>';
         echo '  </div>';
         echo '</div>';
+        endif;
 
         // Quick enable (Assume-Nginx) card
         echo '<div class="postbox nppp-card">';
@@ -227,12 +306,12 @@ services:
         echo '  <div class="inside">';
         echo '    <p>'
             . esc_html__(
-                'Turn on Assume-Nginx mode to enable all plugin features immediately in non-standard or opaque environments.',
+                'Turn on Assume-Nginx mode to enable all plugin features immediately.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . ' '
             . esc_html__(
-                'This sets a runtime option; you can also persist it to wp-config.php for extra safety.',
+                'This sets a runtime option; you can also persist it to wp-config.php.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . '</p>';
@@ -285,6 +364,7 @@ services:
         echo '  </div>';
 
         // Dummy nginx.conf viewer
+        if ( $needs_setup || $assume_enabled ) :
         echo '  <div class="postbox nppp-card">';
         echo '    <h2 class="hndle"><span>' . esc_html__('Dummy nginx.conf (fallback)', 'fastcgi-cache-purge-and-preload-nginx') . '</span></h2>';
         echo '    <div class="inside">';
@@ -305,55 +385,90 @@ services:
         }
         echo '    </div>';
         echo '  </div>';
+        endif;
 
         echo '</div>';
-
         echo '</div>';
         echo '</div>';
     }
 
-    // Small helper to display what we currently know about detection.
+    // Status card: colored pill-badge table — scannable at a glance.
     private static function nppp_detection_debug_html(bool $nginx_detected, bool $assume_enabled): string {
-        // $nginx_detected here is "strict"
-        $effective = self::nppp_is_nginx_detected();
-
-        // Get signals
+        // Populate $GLOBALS['NPPP__LAST_SIGNAL_HIT'] as a side-effect.
         self::nppp_is_nginx_detected();
-        $signals   = !empty($GLOBALS['NPPP__LAST_SIGNAL_HIT']);
+        $signals    = ! empty( $GLOBALS['NPPP__LAST_SIGNAL_HIT'] );
+        $obd_active = self::nppp_is_open_basedir_active();
 
-        $bits = [];
-        $bits[] = sprintf('<p><strong>%s</strong> %s</p>',
-            esc_html__('nginx.conf detected (strict):', 'fastcgi-cache-purge-and-preload-nginx'),
-            $nginx_detected ? '<span class="dashicons dashicons-yes"></span> ' . esc_html__('Yes', 'fastcgi-cache-purge-and-preload-nginx')
-                            : '<span class="dashicons dashicons-warning"></span> ' . esc_html__('No', 'fastcgi-cache-purge-and-preload-nginx')
-        );
-        $bits[] = sprintf('<p><strong>%s</strong> %s</p>',
-            esc_html__('Signals suggest Nginx:', 'fastcgi-cache-purge-and-preload-nginx'),
-            $signals ? '<span class="dashicons dashicons-yes"></span> ' . esc_html__('Yes', 'fastcgi-cache-purge-and-preload-nginx')
-                     : '<span class="dashicons dashicons-no"></span> ' . esc_html__('No', 'fastcgi-cache-purge-and-preload-nginx')
-        );
-        $bits[] = sprintf('<p><strong>%s</strong> %s</p>',
-            esc_html__('Assume-Nginx Mode:', 'fastcgi-cache-purge-and-preload-nginx'),
-            $assume_enabled ? '<span class="dashicons dashicons-yes"></span> ' . esc_html__('Enabled', 'fastcgi-cache-purge-and-preload-nginx')
-                            : '<span class="dashicons dashicons-no"></span> ' . esc_html__('Disabled', 'fastcgi-cache-purge-and-preload-nginx')
-        );
+        /**
+         * Render a colored pill badge.
+         *
+         * @param string $type  One of: pass | warn | fail | info | off
+         * @param string $label Already-translated, plain text.
+         */
+        $badge = static function ( string $type, string $label ): string {
+            return '<span class="nppp-badge nppp-badge--' . esc_attr( $type ) . '">'
+                 . '<span class="nppp-dot" aria-hidden="true"></span>'
+                 . esc_html( $label )
+                 . '</span>';
+        };
 
-        // Quick hints the detector uses (keep generic to avoid leaking env specifics)
-        $hints  = '<ul style="margin-left:18px">';
-        $hints .= '<li>' . esc_html__('Server signature (SERVER_SOFTWARE)', 'fastcgi-cache-purge-and-preload-nginx') . '</li>';
-        $hints .= '<li>' . esc_html__('HTTP headers (server / PHP hints)', 'fastcgi-cache-purge-and-preload-nginx') . '</li>';
-        $hints .= '<li>' . esc_html__('nginx.conf found at standard paths', 'fastcgi-cache-purge-and-preload-nginx') . '</li>';
-        $hints .= '</ul>';
+        // Build table rows: label cell + badge cell.
+        $rows = '';
 
-        $bits[] = '<p class="nppp-muted"><strong>' . esc_html__('Signals checked:', 'fastcgi-cache-purge-and-preload-nginx') . '</strong></p>' . $hints;
+        // nginx.conf strict detection.
+        $rows .= '<tr>'
+            . '<td class="nppp-st-label">' . esc_html__( 'nginx.conf (strict)', 'fastcgi-cache-purge-and-preload-nginx' ) . '</td>'
+            . '<td>' . ( $nginx_detected
+                ? $badge( 'pass', __( 'Detected',  'fastcgi-cache-purge-and-preload-nginx' ) )
+                : $badge( 'fail', __( 'Not found', 'fastcgi-cache-purge-and-preload-nginx' ) ) )
+            . '</td></tr>';
 
-        if (! $nginx_detected && ! $assume_enabled) {
-            $bits[] = '<p class="nppp-muted">'
-                . esc_html__('If your stack uses a proxy/CDN or containers, direct detection can fail even though Nginx is actually in front. Use the Recommended or Quick Enable options on the left.', 'fastcgi-cache-purge-and-preload-nginx')
-                . '</p>';
+        // Heuristic server signals.
+        $rows .= '<tr>'
+            . '<td class="nppp-st-label">' . esc_html__( 'Nginx signature found', 'fastcgi-cache-purge-and-preload-nginx' ) . '</td>'
+            . '<td>' . ( $signals
+                ? $badge( 'info', __( 'Yes',  'fastcgi-cache-purge-and-preload-nginx' ) )
+                : $badge( 'warn', __( 'None', 'fastcgi-cache-purge-and-preload-nginx' ) ) )
+            . '</td></tr>';
+
+        // Assume-Nginx mode state.
+        $rows .= '<tr>'
+            . '<td class="nppp-st-label">' . esc_html__( 'Assume-Nginx mode', 'fastcgi-cache-purge-and-preload-nginx' ) . '</td>'
+            . '<td>' . ( $assume_enabled
+                ? $badge( 'info', __( 'Enabled', 'fastcgi-cache-purge-and-preload-nginx' ) )
+                : $badge( 'off',  __( 'Off',     'fastcgi-cache-purge-and-preload-nginx' ) ) )
+            . '</td></tr>';
+
+        // open_basedir restriction.
+        $rows .= '<tr>'
+            . '<td class="nppp-st-label">' . esc_html__( 'PHP open_basedir', 'fastcgi-cache-purge-and-preload-nginx' ) . '</td>'
+            . '<td>' . ( $obd_active
+                ? $badge( 'warn', __( 'Active',  'fastcgi-cache-purge-and-preload-nginx' ) )
+                : $badge( 'pass', __( 'Not set', 'fastcgi-cache-purge-and-preload-nginx' ) ) )
+            . '</td></tr>';
+
+        $out = '<table class="nppp-status-table" role="table" aria-label="'
+             . esc_attr__( 'Nginx detection status', 'fastcgi-cache-purge-and-preload-nginx' )
+             . '">' . $rows . '</table>';
+
+        // Signals-checked sub-section.
+        $out .= '<p class="nppp-signals-label">'
+              . esc_html__( 'Signals checked', 'fastcgi-cache-purge-and-preload-nginx' )
+              . '</p>';
+        $out .= '<ul class="nppp-signals">'
+              . '<li>' . esc_html__( 'SERVER_SOFTWARE signature',     'fastcgi-cache-purge-and-preload-nginx' ) . '</li>'
+              . '<li>' . esc_html__( 'HTTP response headers',         'fastcgi-cache-purge-and-preload-nginx' ) . '</li>'
+              . '<li>' . esc_html__( 'nginx.conf at standard paths',  'fastcgi-cache-purge-and-preload-nginx' ) . '</li>'
+              . '</ul>';
+
+        // Contextual hint when detection failed and no override is active.
+        if ( ! $nginx_detected && ! $assume_enabled ) {
+            $out .= '<p class="nppp-muted" style="margin-top:12px;font-size:12px;line-height:1.5">'
+                  . esc_html__( 'Proxied, CDN, or containerised stacks can block direct detection. Use the options on the left to proceed.', 'fastcgi-cache-purge-and-preload-nginx' )
+                  . '</p>';
         }
 
-        return implode('', $bits);
+        return $out;
     }
 
     public static function nppp_handle_setup_post(): void {
@@ -389,9 +504,8 @@ services:
         exit;
     }
 
-    // Do we need to block settings and run setup?
+    // Do we need to block settings and go into setup
     public static function nppp_needs_setup(): bool {
-        // memoize per request
         static $memo = null;
         if ($memo !== null) {
             return $memo;
@@ -399,46 +513,12 @@ services:
 
         // If Assume-Nginx is enabled, never gate.
         if (self::nppp_assume_nginx_enabled()) {
-            $memo = false;
-            return $memo;
+            return $memo = false;
         }
 
-        // Linux check
-        $linux_ok =
-            (PHP_OS === 'Linux') ||
-            (defined('PHP_OS_FAMILY') && PHP_OS_FAMILY === 'Linux') ||
-            (stripos(php_uname(), 'Linux') !== false);
-
-        // Require function availability
-        $shell_ok = function_exists('shell_exec');
-        $exec_ok  = function_exists('exec');
-        $posix_ok = function_exists('posix_kill');
-
-        // Commands check
-        $tools_ok = false;
-        if ($shell_ok) {
-            // Ensure PATH etc. is sane for shell lookups
-            if (function_exists('\\nppp_prepare_request_env')) {
-                \nppp_prepare_request_env(true);
-            }
-
-            $missing = [];
-            foreach (['ps','grep','awk','sort','uniq','sed','nohup','wget'] as $cmd) {
-                // "command -v <cmd>" -> non-empty output if present
-                $out = @shell_exec('command -v ' . escapeshellarg($cmd));
-                if (empty($out)) {
-                    $missing[] = $cmd;
-                }
-            }
-            $tools_ok = empty($missing);
-        }
-
-        // All minimal criticals must be true
-        $env_ok = ($linux_ok && $shell_ok && $exec_ok && $posix_ok && $tools_ok);
-
-        // Gate to Setup only when criticals are OK AND strict nginx.conf is missing AND Assume is off
-        $memo = $env_ok && (! self::nppp_is_nginx_detected_strict()) && (! self::nppp_assume_nginx_enabled());
-        return $memo;
+        // Gate to Setup when nginx.conf is not found AND Assume Nginx mode is off
+        // We never trust signals and strictly check nginx.conf
+        return $memo = ! self::nppp_is_nginx_detected_strict();
     }
 
     private static function nppp_assume_nginx_enabled(): bool {
@@ -474,6 +554,12 @@ services:
         }
 
        return false;
+    }
+
+    // Single source of truth for open_basedir state — avoids repeating ini_get() across callers.
+    private static function nppp_is_open_basedir_active(): bool {
+        $obd = trim((string) ini_get('open_basedir'));
+        return $obd !== '' && strtolower($obd) !== 'none';
     }
 
     // Insert of the define into wp-config.php

@@ -2,7 +2,7 @@
 /**
  * Uninstall cleanup routines for Nginx Cache Purge Preload
  * Description: Removes plugin options, transients, runtime artifacts, and scheduled events during uninstall.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -55,6 +55,8 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_rg_version_' . md5($static_key_base),
         'nppp_pages_in_cache_' . md5($static_key_base),
         'nppp_obd_warned_' . md5($static_key_base),
+        'nppp_vary_issue_' . md5($static_key_base),
+        'nppp_cache_key_regex_probe',
     );
 
     // Delete each transient
@@ -125,6 +127,7 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_url_filepath_index',                // URL→filepath index for single/related purge fast-path
         'nppp_ping_token_db',                     // Watchdog token DB fallback (nppp_watcher_generate_token)
         'nppp_cache_purge.lock',                  // Purge operation lock (WP_Upgrader)
+        'nppp_vary_notice_dismissed',             // Vary: Accept-Encoding probe dismiss flag
     );
 
     foreach ($option_keys as $option_key) {

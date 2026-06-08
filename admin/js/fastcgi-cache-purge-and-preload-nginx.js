@@ -1,7 +1,7 @@
 /**
  * Admin interface scripts for Nginx Cache Purge Preload
  * Description: Handles interactive behavior for plugin settings, tabs, and admin actions.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -139,6 +139,8 @@ $(document).ready(function() {
                 $settingsPlaceholder.show();
                 nppphighlightSubmenu('.nppp-submenu ul li a', 900);
                 npppFabSet(false);
+                var $lc = $('.logs-container');
+                if ($lc.length) { $lc.scrollTop($lc[0].scrollHeight); }
                 break;
             case 'status':
                 showPreloader();
@@ -1000,6 +1002,31 @@ $(document).ready(function() {
         : null;
     }
 
+    // Row-index cache: URL string → jQuery <tr> element.
+    // Built lazily on first use, invalidated after every dt.draw() so it stays
+    // in sync with sort/filter/page changes.
+    var _npppRowIndex = null;
+
+    function _npppBuildRowIndex() {
+        _npppRowIndex = {};
+        var dt = npppDT();
+        if (!dt) return;
+        // dt.rows() covers ALL rows (all pages) in client-side mode.
+        dt.rows().every(function () {
+            var node = this.node();
+            if (!node) return;
+            var $row = $(node);
+            var url  = $row.find('td.nppp-url').text().trim();
+            if (url) _npppRowIndex[url] = $row;
+        });
+    }
+
+    // Invalidate on any draw so the index stays accurate after sort/search/page.
+    // Wired up inside initializePremiumTable() below.
+    function npppInvalidateRowIndex() {
+        _npppRowIndex = null;
+    }
+
     // Highlight row
     function npppFlashRow($row){
         var $main  = $row.hasClass('child') ? $row.prev('tr') : $row;
@@ -1059,27 +1086,20 @@ $(document).ready(function() {
         return fallback || '';
     }
 
-    // Find the main (non-child) row by its URL cell text
+    // Find the main (non-child) row by its URL cell text.
+    // O(1) via _npppRowIndex; falls back to DOM scan when DT is not ready.
     function npppFindRowByUrl(url){
         if (!url) return $();
         url = String(url).trim();
 
         var dt = npppDT();
         if (dt) {
-            var match = $();
-            dt.rows().every(function(){
-                var $row  = $(this.node());
-                var $main = $row.hasClass('child') ? $row.prev('tr') : $row;
-                var text  = $main.find('td.nppp-url').text().trim();
-                if (text === url) {
-                    match = $main;
-                    return false;
-                }
-            });
-            return match;
+            // Build the index lazily on first use after a draw/init.
+            if (_npppRowIndex === null) _npppBuildRowIndex();
+            return _npppRowIndex[url] || $();
         }
 
-        // Non-DataTables fallback (shouldn’t be needed)
+        // Non-DataTables fallback (shouldn't be needed)
         var $r = $('#nppp-premium-table tbody tr').filter(function(){
             var $main = $(this).hasClass('child') ? $(this).prev('tr') : $(this);
             return $main.find('td.nppp-url').text().trim() === url;
@@ -1116,7 +1136,6 @@ $(document).ready(function() {
         var dt = npppDT();
         if (dt) {
             dt.row($main[0]).invalidate('dom');
-            dt.draw(false);
         }
     }
 
@@ -1209,6 +1228,16 @@ $(document).ready(function() {
                             }
                         });
                     }
+
+                    // Batch draw: one single dt.draw(false) after ALL row
+                    // invalidations above.
+                    // Also reset the row index so the next lookup rebuilds
+                    // it with accurate post-purge state.
+                    var _dtBatch = npppDT();
+                    if (_dtBatch) {
+                        _dtBatch.draw(false);
+                        npppInvalidateRowIndex();
+                    }
                 } else {
                     // on error
                     btn.prop('disabled', false).removeClass('disabled');
@@ -1220,6 +1249,58 @@ $(document).ready(function() {
             },
             complete: function() {
                 spin.remove();
+            }
+        });
+    });
+
+    $('#nppp-test-regex-btn').on('click', function(e) {
+        e.preventDefault();
+
+        const $btn  = $(this);
+        const $res  = $('#nppp-test-regex-result');
+
+        // Disable button + inline spinner
+        $btn.prop('disabled', true).addClass('disabled');
+        const $spin = $('<span class="nppp-inline-spinner" aria-hidden="true"></span>').appendTo($btn);
+        $res.html('');
+
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'nppp_test_cache_key_regex',
+                _wpnonce: nppp_admin_data.test_regex_nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    const status  = response.data.status;
+                    const message = response.data.message;
+                    let cls = 'notice notice-success inline';
+                    if (status === 'fail') {
+                        cls = 'notice notice-error inline';
+                    } else if (status === 'skip') {
+                        cls = 'notice notice-warning inline';
+                    }
+                    $res.html('<div class="' + cls + '"><p>' + message + '</p></div>');
+
+                    // Toast
+                    const type = status === 'ok' ? 'success' : (status === 'fail' ? 'error' : 'info');
+                    npppToast(message, type);
+                } else {
+                    const errMsg = response.data?.message || __('Unknown error', 'fastcgi-cache-purge-and-preload-nginx');
+                    $res.html('<div class="notice notice-error inline"><p>' + errMsg + '</p></div>');
+                    npppToast(errMsg, 'error');
+                }
+            },
+            error: function() {
+                const msg = __('AJAX request failed.', 'fastcgi-cache-purge-and-preload-nginx');
+                $res.html('<div class="notice notice-error inline"><p>' + msg + '</p></div>');
+                npppToast(msg, 'error');
+            },
+            complete: function() {
+                $spin.remove();
+                $btn.prop('disabled', false).removeClass('disabled');
             }
         });
     });
@@ -1326,7 +1407,155 @@ $(document).ready(function() {
         });
     });
 
-    // === Percent-encoding Case (pctnorm) autosave ===
+    // Preload All MISS (Advanced tab)
+    $(document).on('click', '#nppp-preload-miss-all', function (e) {
+        e.preventDefault();
+
+        var $btn      = $(this);
+        var $progress = $('#nppp-preload-miss-progress');
+        if ($btn.prop('disabled')) return;
+
+        showPreloader();
+
+        var missUrls = [];
+        var dt       = npppDT();
+        var missRows = null;
+        if (dt) {
+            // Compute once — reused for both URL collection and flip phase
+            missRows = dt.rows(function (idx, data) {
+                return String(data[3]).indexOf('MISS') !== -1;
+            });
+            // Data-based URL extraction — works with deferRender (DataTables 2.x default).
+            // nodes().to$() only returns currently-rendered rows (current page).
+            // this.data()[5] is the stored innerHTML of the Actions cell for ALL rows,
+            // regardless of pagination or deferred rendering — guaranteed complete.
+            missRows.every(function () {
+                var m = /data-url="([^"]*)"/.exec(String(this.data()[5] || ''));
+                if (m && m[1]) missUrls.push(m[1]);
+            });
+        } else {
+            // Fallback: DataTables not yet initialised
+            $('#nppp-premium-table tbody tr').each(function () {
+                var $tr = $(this);
+                if ($tr.find('td.nppp-status.is-miss').length) {
+                    var url = $tr.find('.nppp-preload-btn').data('url');
+                    if (url) missUrls.push(String(url));
+                }
+            });
+        }
+
+        if (!missUrls.length) {
+            hidePreloader();
+            npppToast(
+                __('No MISS URLs found in the table.', 'fastcgi-cache-purge-and-preload-nginx'),
+                'info'
+            );
+            return;
+        }
+
+        var total     = missUrls.length;
+        var queued    = 0;
+        var batchSize = 200;
+        var batches   = [];
+        for (var bi = 0; bi < total; bi += batchSize) {
+            batches.push(missUrls.slice(bi, bi + batchSize));
+        }
+
+        $btn.prop('disabled', true).addClass('disabled');
+        $btn.addClass('nppp-preload-miss-loading');
+
+        function npppProcessMissBatch(idx) {
+            if (idx >= batches.length) {
+                hidePreloader();
+                $btn.removeClass('nppp-preload-miss-loading');
+                $btn.prop('disabled', false).removeClass('disabled');
+                npppToast(
+                    sprintf(
+                        /* translators: %d: total URLs sent for preloading */
+                        __('All %d MISS URLs sent to background preloader. Caching is in progress…', 'fastcgi-cache-purge-and-preload-nginx'),
+                        queued
+                    ),
+                    'success',
+                    7000
+                );
+                // Hide button wrap after all batches sent — no MISS URLs remain to queue
+                // Flip all queued MISS rows to IN PROGRESS in the table optimistically
+                if (dt && missRows) {
+                    if (missRows.count()) {
+                        // 1. Optimistic DOM flip for currently-rendered rows only.
+                        //    Non-rendered rows are handled by the data update + draw below.
+                        missRows.nodes().to$().find('td.nppp-status')
+                            .removeClass('is-miss').addClass('is-hit')
+                            .html('<strong>PROGRESS</strong>');
+
+                        // 2. Write updated status into DT internal data cache for ALL rows
+                        //    (including deferred/unrendered ones) — no DOM re-read needed.
+                        missRows.every(function () {
+                            var d = this.data();
+                            d[3] = '<strong>PROGRESS</strong>';
+                            this.data(d);
+                        });
+
+                        // 3. Redraw from updated internal data.
+                        dt.draw(false);
+                    }
+                } else {
+                    // Fallback: DataTables not initialised — all rows are in DOM.
+                    $('#nppp-premium-table tbody tr').each(function () {
+                        var $td = $(this).find('td.nppp-status.is-miss');
+                        if ($td.length) {
+                            $td.removeClass('is-miss').addClass('is-hit')
+                               .html('<strong>PROGRESS</strong>');
+                        }
+                    });
+                }
+                // Now no MISS rows remain — fade out the button wrap
+                setTimeout(function () {
+                    $btn.closest('.nppp-preload-miss-wrap').fadeOut(400);
+                }, 3000);
+                return;
+            }
+
+            $.ajax({
+                url:      nppp_admin_data.ajaxurl,
+                type:     'POST',
+                dataType: 'json',
+                data: {
+                    action:   'nppp_preload_miss_batch',
+                    urls:     batches[idx],
+                    _wpnonce: nppp_admin_data.preload_miss_batch_nonce
+                },
+                success: function (response) {
+                    if (response && response.success && response.data) {
+                        queued += (parseInt(response.data.queued, 10) || 0);
+                    }
+                },
+                error: function (jqXHR, textStatus) {
+                    // Network or server error — stop the batch loop and notify user.
+                    hidePreloader();
+                    $btn.removeClass('nppp-preload-miss-loading');
+                    $btn.prop('disabled', false).removeClass('disabled');
+                    npppToast(
+                        sprintf(
+                            /* translators: %d: batch number that failed */
+                            __('Preload error on batch %d. Check your connection.', 'fastcgi-cache-purge-and-preload-nginx'),
+                            idx + 1
+                        ),
+                        'error',
+                        7000
+                    );
+                },
+                complete: function (jqXHR, textStatus) {
+                    if (textStatus === 'error') { return; }
+                    npppProcessMissBatch(idx + 1);
+                }
+            });
+        }
+
+        npppProcessMissBatch(0);
+    });
+
+    // Percent-encoding Case (pctnorm) autosave
     (function npppPctnormAutoSave() {
         const $wrap = $('#nppp-pctnorm');
         if (!$wrap.length || !window.nppp_admin_data) return;
@@ -1624,6 +1853,49 @@ $(document).ready(function() {
         }, 'json');
     });
 
+    // Update preload feeds status when state changes
+    $('#nginx_cache_preload_feeds').change(function() {
+        var feedsElement = $(this);
+        var clickToCopySpanFeeds = feedsElement.next('.nppp-onoffswitch-label-preload-feeds');
+        var clickToCopySpanOffsetFeeds = clickToCopySpanFeeds.offset();
+        var notificationLeftFeeds = clickToCopySpanOffsetFeeds.left + clickToCopySpanFeeds.outerWidth() + 10;
+        var notificationTopFeeds = clickToCopySpanOffsetFeeds.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action: 'nppp_update_preload_feeds_option',
+            preload_feeds: isChecked,
+            _wpnonce: nppp_admin_data.preload_feeds_nonce
+        }, function(response) {
+            if (response.success) {
+                var notification = document.createElement('div');
+                notification.textContent = '✔';
+                notification.style.position = 'absolute';
+                notification.style.left = notificationLeftFeeds + 'px';
+                notification.style.top = notificationTopFeeds + 'px';
+                notification.style.backgroundColor = '#50C878';
+                notification.style.color = '#fff';
+                notification.style.padding = '8px 12px';
+                notification.style.transition = 'opacity 0.3s ease-in-out';
+                notification.style.opacity = '1';
+                notification.style.zIndex = '9999';
+                notification.style.fontSize = '13px';
+                notification.style.fontWeight = '700';
+                document.body.appendChild(notification);
+
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 1000);
+            } else {
+                $('#nginx_cache_preload_feeds').prop('checked', !$('#nginx_cache_preload_feeds').prop('checked'));
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+            }
+        }, 'json');
+    });
+
     // Update watchdog status when state changes
     $('#nginx_cache_watchdog').change(function() {
         var watchdogElement = $(this);
@@ -1665,6 +1937,29 @@ $(document).ready(function() {
                 npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
             }
         }, 'json');
+    });
+
+    // Permanently dismiss the Vary: Accept-Encoding row
+    $(document).on('click', '#nppp-dismiss-vary', function () {
+        var $btn = $(this);
+        $btn.prop('disabled', true);
+
+        $.post(nppp_admin_data.ajaxurl, {
+            action:   'nppp_dismiss_vary_notice',
+            _wpnonce: nppp_admin_data.dismiss_vary_nonce
+        })
+        .done(function (response) {
+            if (response && response.success) {
+                $('#nppp-vary-row').fadeOut(300, function () {
+                    $(this).remove();
+                });
+            } else {
+                $btn.prop('disabled', false);
+            }
+        })
+        .fail(function () {
+            $btn.prop('disabled', false);
+        });
     });
 
     // Bypass Path Restriction single toggle card
@@ -2680,7 +2975,9 @@ $(document).ready(function() {
                                    '</div>';
                         }
                         // Update the content area with the new logs HTML
-                        $('.logs-container').html(html);
+                        var $logsContainer = $('.logs-container');
+                        $logsContainer.html(html);
+                        $logsContainer.scrollTop($logsContainer[0].scrollHeight);
                     },
                     error: function(xhr, status, error) {
                         console.error('Error getting log content:', status, error);
@@ -3098,23 +3395,41 @@ $(document).ready(function() {
             // Set column widths
             columnDefs: [
                 { width: "25%", targets: 0, className: 'text-left' },                    // Cached URL
-                { width: "35%", targets: 1, className: 'text-left' },                    // Cache Path
+                { width: "33%", targets: 1, className: 'text-left' },                    // Cache Path
                 { width: "9%", targets: 2, className: 'text-left nppp-category-cell' },  // Content
                 { width: "6%", targets: 3, className: 'text-left' },                     // Status
                 { width: "10%", targets: 4, className: 'text-left nppp-variant-cell' },  // Variants
-                { width: "15%", targets: 5, className: 'text-left' },                    // Actions
+                { width: "17%", targets: 5, className: 'text-left' },                    // Actions
                 { responsivePriority: 1, targets: 0 },                                   // Cached URL gets priority for responsiveness
                 { responsivePriority: 10000, targets: [1, 2, 3, 4, 5] },                 // Collapse all in first row on mobile, hide actions always
                 { defaultContent: "", targets: "_all" },                                 // Ensures all columns render even if empty
                 { searchable: false, targets: [1, 4, 5] },                               // PERF: searchable:false on cols 1+4+5
                 { orderable: false, targets: [5] }                                       // PERF: orderable:false on Actions skips
-            ]
+            ],
+
+            // Move "Preload All MISS" button under the DataTables search field
+            initComplete: function() {
+                var $missWrap = $('.nppp-preload-miss-wrap').first();
+                if ($missWrap.length) {
+                    var $dtSearch = $('#nppp-premium-table_wrapper .dt-search');
+                    if ($dtSearch.length) {
+                        $dtSearch.append($missWrap.detach());
+                    }
+                }
+            }
         });
 
         // clear one-shot highlight before any redraw
         $tbl.off('page.dt.nppp')
             .on('page.dt.nppp', function () {
                 $(this).find('tr.purged-row, tr.child.purged-row').removeClass('purged-row');
+            });
+
+        // Invalidate the URL→row index on every draw so npppFindRowByUrl
+        // always sees the current rows after sort/search/filter changes.
+        $tbl.off('draw.dt.nppp')
+            .on('draw.dt.nppp', function () {
+                npppInvalidateRowIndex();
             });
     }
 
@@ -3292,6 +3607,30 @@ $(document).ready(function() {
             $('.nppp-onoffswitch-switch-preload').css('background', '#ea1919');
             $('.nppp-on-preload').css('color', '#000000');
             $('.nppp-off-preload').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for preload feeds
+    var isFeedsChecked = $('#nginx_cache_preload_feeds').prop('checked');
+    if (isFeedsChecked) {
+        $('.nppp-onoffswitch-switch-preload-feeds').css('background', '#66b317');
+        $('.nppp-on-preload-feeds').css('color', '#ffffff');
+        $('.nppp-off-preload-feeds').css('color', '#000000');
+    } else {
+        $('.nppp-onoffswitch-switch-preload-feeds').css('background', '#ea1919');
+        $('.nppp-on-preload-feeds').css('color', '#000000');
+        $('.nppp-off-preload-feeds').css('color', '#ffffff');
+    }
+
+    $('#nginx_cache_preload_feeds').change(function() {
+        if ($(this).prop('checked')) {
+            $('.nppp-onoffswitch-switch-preload-feeds').css('background', '#66b317');
+            $('.nppp-on-preload-feeds').css('color', '#ffffff');
+            $('.nppp-off-preload-feeds').css('color', '#000000');
+        } else {
+            $('.nppp-onoffswitch-switch-preload-feeds').css('background', '#ea1919');
+            $('.nppp-on-preload-feeds').css('color', '#000000');
+            $('.nppp-off-preload-feeds').css('color', '#ffffff');
         }
     });
 
@@ -3979,6 +4318,7 @@ function npppupdateStatus() {
         "#npppLibfuseVersion",
         "#npppBindfsVersion",
         "#nppppermIsolation",
+        "#npppCacheKeyRegex",
         "#npppcpulimitStatus",
         "#npppsafexecStatus",
         "#npppSafexecVersion",
@@ -4483,6 +4823,33 @@ function npppupdateStatus() {
     nppppermIsolationSpan.appendChild(iconSpanPermIsolation);
     nppppermIsolationSpan.append(permIsolationStatusText);
 
+    // Fetch and update Cache Key Regex test status
+    var npppCacheKeyRegexSpan = document.getElementById("npppCacheKeyRegex");
+    var npppCacheKeyRegex = npppCacheKeyRegexSpan.textContent.trim();
+    npppCacheKeyRegexSpan.textContent = '';
+    npppCacheKeyRegexSpan.style.fontSize = "14px";
+
+    let iconSpanCacheKeyRegex = document.createElement('span');
+    iconSpanCacheKeyRegex.style.fontSize = "20px";
+    let cacheKeyRegexStatusText = '';
+
+    if (npppCacheKeyRegex === "ok") {
+        npppCacheKeyRegexSpan.style.color = "green";
+        iconSpanCacheKeyRegex.classList.add("dashicons", "dashicons-yes");
+        cacheKeyRegexStatusText = ' ' + __('Passed', 'fastcgi-cache-purge-and-preload-nginx');
+    } else if (npppCacheKeyRegex === "fail") {
+        npppCacheKeyRegexSpan.style.color = "red";
+        iconSpanCacheKeyRegex.classList.add("dashicons", "dashicons-no");
+        cacheKeyRegexStatusText = ' ' + __('Failed', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        npppCacheKeyRegexSpan.style.color = "orange";
+        iconSpanCacheKeyRegex.classList.add("dashicons", "dashicons-clock");
+        cacheKeyRegexStatusText = ' ' + __('Skipped', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    npppCacheKeyRegexSpan.appendChild(iconSpanCacheKeyRegex);
+    npppCacheKeyRegexSpan.append(cacheKeyRegexStatusText);
+
     // Fetch and update cpulimit command status
     var npppcpulimitStatusSpan = document.getElementById("npppcpulimitStatus");
     var npppcpulimitStatus = npppcpulimitStatusSpan.textContent.trim();
@@ -4539,8 +4906,9 @@ function npppupdateStatus() {
 
     if (npppSafexecVersion === "Not Installed" || npppSafexecVersion === "Unknown") {
         npppSafexecVersionSpan.style.color = "orange";
-        iconSpanSafexecVersion.classList.add("dashicons", "dashicons-warning");
+        iconSpanSafexecVersion.classList.add("dashicons", "dashicons-arrow-right-alt");
         iconSpanSafexecVersion.style.fontSize = "18px";
+        iconSpanSafexecVersion.style.color = "orange";
         iconSpanSafexecVersion.style.setProperty('font-weight', 'normal', 'important');
         safexecVersionText = ' ' + npppSafexecVersion;
     } else if (npppSafexecVersion.includes("(")) {

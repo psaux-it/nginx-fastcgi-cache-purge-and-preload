@@ -2,8 +2,8 @@
 /*
  * Plugin Name:       Nginx Cache Purge Preload
  * Plugin URI:        https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload
- * Description:       The most comprehensive solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI) cache operations directly from your WordPress dashboard.
- * Version:           2.1.6
+ * Description:       The most comprehensive free solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI) cache operations directly from your WordPress dashboard.
+ * Version:           2.1.7
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
  * License:           GPL-2.0+
@@ -53,6 +53,29 @@ if (!defined('NPPP_PLUGIN_FILE')) {
     define('NPPP_PLUGIN_FILE', __FILE__);
 }
 
+// Register custom cron schedules unconditionally.
+add_filter( 'cron_schedules', static function ( array $schedules ): array {
+    if ( ! isset( $schedules['every_3hours_npp'] ) ) {
+        $schedules['every_3hours_npp'] = [
+            'interval' => 3 * HOUR_IN_SECONDS,
+            'display'  => 'Every 3 Hours-NPP',
+        ];
+    }
+    if ( ! isset( $schedules['monthly_npp'] ) ) {
+        $schedules['monthly_npp'] = [
+            'interval' => 30 * DAY_IN_SECONDS,
+            'display'  => 'Monthly-NPP',
+        ];
+    }
+    if ( ! isset( $schedules['every_min_npp'] ) ) {
+        $schedules['every_min_npp'] = [
+            'interval' => 60,
+            'display'  => 'Every Minute-NPP',
+        ];
+    }
+    return $schedules;
+} );
+
 // Single source of truth for the runtime directory
 if (!defined('NPPP_RUNTIME_SUBDIR')) {
     define('NPPP_RUNTIME_SUBDIR', 'nginx-cache-purge-preload-runtime');
@@ -60,7 +83,7 @@ if (!defined('NPPP_RUNTIME_SUBDIR')) {
 
 // Single source of truth for the plugin version
 if (!defined('NPPP_PLUGIN_VERSION')) {
-    define('NPPP_PLUGIN_VERSION', '2.1.6');
+    define('NPPP_PLUGIN_VERSION', '2.1.7');
 }
 
 // Single source of truth for the safexec version
@@ -443,6 +466,36 @@ add_action('init', function(): void {
     // Token verified
     nppp_load_bootstrap();
 }, 1);
+
+// ---------------------------------------------------------------------------
+// EP9 — WP-CLI (`wp npp …`)
+// Exposes cache purge, preload, status, log, settings, and scheduler to the
+// `wp npp` command group.
+//
+//   1. Command REGISTRATION (require_once wp-cli.php) — always runs on any
+//      WP-CLI invocation so that `wp help npp`, tab-completion, and
+//      `--prompt` all work without the heavy bootstrap.
+//   2. BOOTSTRAP (nppp_load_bootstrap) — loaded only when the user is
+//      actually running `wp npp …`, so every other WP-CLI command pays
+//      zero cost. Still a no-op on all normal web requests.
+// ---------------------------------------------------------------------------
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+    $nppp_cli_args      = WP_CLI::get_runner()->arguments;
+    $nppp_is_npp_invoke = ! empty( $nppp_cli_args ) && $nppp_cli_args[0] === 'npp';
+
+    add_action( 'plugins_loaded', function () use ( $nppp_is_npp_invoke ): void {
+        // Heavy bootstrap: only when actually running `wp npp …`
+        if ( $nppp_is_npp_invoke ) {
+            nppp_load_bootstrap();
+        }
+        // Always register the command (cheap — just defines the class
+        // and calls WP_CLI::add_command). Required for help, completions,
+        // and --prompt on any WP-CLI invocation.
+        require_once plugin_dir_path( __FILE__ ) . 'includes/wp-cli.php';
+    }, 10 );
+
+    unset( $nppp_cli_args, $nppp_is_npp_invoke );
+}
 
 // ---------------------------------------------------------------------------
 // ACTIVATION — generates API key, writes default settings, triggers setup wizard.

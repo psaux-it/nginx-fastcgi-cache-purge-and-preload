@@ -1,7 +1,7 @@
 <?php
 /*
  * NPP admin bootstrap
- * Version:           2.1.6
+ * Version:           2.1.7
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
  * License:           GPL-2.0+
@@ -131,6 +131,7 @@ require_once dirname(__DIR__) . '/includes/related.php';
 require_once dirname(__DIR__) . '/includes/purge.php';
 require_once dirname(__DIR__) . '/includes/purge-http.php';
 require_once dirname(__DIR__) . '/includes/preload.php';
+require_once dirname(__DIR__) . '/includes/preload-feeds.php';
 require_once dirname(__DIR__) . '/includes/help.php';
 require_once dirname(__DIR__) . '/includes/configuration-parser.php';
 require_once dirname(__DIR__) . '/includes/status.php';
@@ -169,6 +170,7 @@ $nppp_page_cache_purge_actions = array(
 
 // Add actions and filters
 add_action('load-settings_page_nginx_cache_settings', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets');
+add_action('load-admin_page_nppp-setup', 'nppp_enqueue_setup_page_assets');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_check_for_plugin_update');
 add_action('admin_enqueue_scripts', 'nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets');
 add_action('admin_bar_menu', 'nppp_add_fastcgi_cache_buttons_admin_bar', 100);
@@ -177,6 +179,7 @@ add_action('admin_init', 'nppp_nginx_cache_settings_init');
 add_action('admin_menu', 'nppp_add_nginx_cache_settings_page');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_pre_checks');
 add_action('load-settings_page_nginx_cache_settings', 'nppp_manage_admin_notices');
+add_action('load-admin_page_nppp-setup', 'nppp_manage_admin_notices');
 add_action('wp_ajax_nppp_clear_nginx_cache_logs', 'nppp_clear_nginx_cache_logs');
 add_action('wp_ajax_nppp_get_nginx_cache_logs', 'nppp_get_nginx_cache_logs');
 add_action('wp_ajax_nppp_update_send_mail_option', 'nppp_update_send_mail_option');
@@ -189,6 +192,7 @@ add_action('wp_ajax_nppp_cache_status', 'nppp_cache_status_callback');
 add_action('wp_ajax_nppp_load_premium_content', 'nppp_load_premium_content_callback');
 add_action('wp_ajax_nppp_purge_cache_premium', 'nppp_purge_cache_premium_callback');
 add_action('wp_ajax_nppp_preload_cache_premium', 'nppp_preload_cache_premium_callback');
+add_action('wp_ajax_nppp_preload_miss_batch', 'nppp_preload_miss_batch_callback');
 add_action('wp_ajax_nppp_update_api_key_option', 'nppp_update_api_key_option');
 add_action('wp_ajax_nppp_update_default_reject_regex_option', 'nppp_update_default_reject_regex_option');
 add_action('wp_ajax_nppp_update_default_reject_extension_option', 'nppp_update_default_reject_extension_option');
@@ -199,16 +203,16 @@ add_action('wp_ajax_nppp_rest_api_preload_url_copy', 'nppp_rest_api_preload_url_
 add_action('wp_ajax_nppp_get_save_cron_expression', 'nppp_get_save_cron_expression');
 add_action('wp_ajax_nppp_update_cache_schedule_option', 'nppp_update_cache_schedule_option');
 add_action('wp_ajax_nppp_cancel_scheduled_event', 'nppp_cancel_scheduled_event_callback');
-add_filter('cron_schedules', 'nppp_custom_monthly_schedule');
-add_filter('cron_schedules', 'nppp_custom_every_min_schedule');
-add_filter('cron_schedules', 'nppp_custom_every_3hours_schedule');
 add_action('npp_cache_preload_event', 'nppp_create_scheduled_event_preload_callback');
 add_action('npp_cache_preload_status_event', 'nppp_create_scheduled_event_preload_status_callback');
 add_action('nppp_index_updater_event', 'nppp_run_index_updater');
+add_action('admin_init', 'nppp_schedule_index_updater');
 add_action('wp_ajax_nppp_get_active_cron_events_ajax', 'nppp_get_active_cron_events_ajax');
 add_action('wp_ajax_nppp_clear_plugin_cache', 'nppp_clear_plugin_cache_callback');
 add_action('wp_ajax_nppp_clear_url_index', 'nppp_clear_url_index_callback');
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
+add_filter('pre_update_option_nginx_cache_settings', 'nppp_before_settings_option_update', 10, 2);
+add_action('permalink_structure_changed', 'nppp_on_permalink_structure_changed', 10, 2);
 add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_default_cache_key_regex_option');
 add_action('wp_ajax_nppp_update_default_mobile_user_agent_option', 'nppp_update_default_mobile_user_agent_option');
 add_action('wp_ajax_nppp_update_http_purge_option', 'nppp_update_http_purge_option');
@@ -252,13 +256,16 @@ if ($nppp_auto_purge) {
     }
 }
 add_action('wp_ajax_nppp_update_auto_preload_mobile_option', 'nppp_update_auto_preload_mobile_option');
+add_action('wp_ajax_nppp_update_preload_feeds_option', 'nppp_update_preload_feeds_option');
 add_action('wp_ajax_nppp_update_watchdog_option', 'nppp_update_watchdog_option');
 add_action('wp_dashboard_setup', 'nppp_add_dashboard_widget');
 add_action('wp_ajax_nppp_update_enable_proxy_option', 'nppp_update_enable_proxy_option');
 add_action('wp_ajax_nppp_update_related_fields', 'nppp_update_related_fields');
 add_action('wp_ajax_nppp_update_pctnorm_mode', 'nppp_update_pctnorm_mode');
 add_action('wp_ajax_nppp_update_bypass_path_restriction', 'nppp_update_bypass_path_restriction');
+add_action('wp_ajax_nppp_dismiss_vary_notice', 'nppp_dismiss_vary_notice');
 add_action('wp_ajax_nppp_refresh_cache_ratio', 'nppp_refresh_cache_ratio_callback');
+add_action('wp_ajax_nppp_test_cache_key_regex', 'nppp_ajax_test_cache_key_regex');
 add_action('nppp_plugin_admin_notices', function($type, $message, $log_message, $display_notice) {
     // Check if admin notice should be displayed
     if (!$display_notice) {

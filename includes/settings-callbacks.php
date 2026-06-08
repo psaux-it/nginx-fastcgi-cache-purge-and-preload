@@ -2,7 +2,7 @@
 /**
  * Settings field callbacks for Nginx Cache Purge Preload
  * Description: Renders all individual settings field HTML for the WordPress Settings API.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -206,6 +206,23 @@ function nppp_nginx_cache_auto_preload_mobile_callback() {
     <?php
 }
 
+// Callback function for the nginx_cache_preload_feeds field
+function nppp_nginx_cache_preload_feeds_callback() {
+    $options = get_option('nginx_cache_settings', []);
+    $preload_feeds_checked = isset($options['nginx_cache_preload_feeds']) && $options['nginx_cache_preload_feeds'] === 'yes' ? 'checked="checked"' : '';
+
+    ?>
+    <input type="checkbox" name="nginx_cache_settings[nginx_cache_preload_feeds]" class="nppp-onoffswitch-checkbox-preload-feeds" value="yes" id="nginx_cache_preload_feeds" <?php echo esc_attr($preload_feeds_checked); ?>>
+    <label class="nppp-onoffswitch-label-preload-feeds" for="nginx_cache_preload_feeds">
+        <span class="nppp-onoffswitch-inner-preload-feeds">
+            <span class="nppp-off-preload-feeds"><?php echo esc_html__('OFF', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+            <span class="nppp-on-preload-feeds"><?php echo esc_html__('ON', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+        </span>
+        <span class="nppp-onoffswitch-switch-preload-feeds"></span>
+    </label>
+    <?php
+}
+
 // Callback function for the nginx_cache_watchdog field
 function nppp_nginx_cache_watchdog_callback() {
     $options = get_option('nginx_cache_settings', []);
@@ -266,9 +283,9 @@ function nppp_nginx_cache_logs_callback() {
     if (file_exists($log_file_path) && is_readable($log_file_path)) {
         // Read the log file into an array of lines
         $lines = file($log_file_path);
-        // Get the latest 5 lines
+        // Get the latest 50 lines
         if (is_array($lines)) {
-            $latest_lines = array_slice($lines, -5);
+            $latest_lines = array_slice($lines, -50);
 
             // Remove leading tab spaces and spaces from each line
             $cleaned_lines = array_map(function($line) {
@@ -277,7 +294,7 @@ function nppp_nginx_cache_logs_callback() {
             ?>
             <div class="logs-container">
                 <?php
-                // Output the latest 5 lines
+                // Output the latest 50 lines
                 foreach ($cleaned_lines as $line) {
                     if (!empty($line)) {
                         // Extract timestamp and message
@@ -414,7 +431,7 @@ function nppp_nginx_cache_related_pages_callback() {
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
                     <span class="title"><?php esc_html_e( 'Always Purge the Homepage', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                    <span class="desc"><?php esc_html_e( 'When any single URL is purged (manual or auto), also purge the homepage.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
+                    <span class="desc"><?php esc_html_e( 'When any single URL is purged (manual or auto), also purge the homepage. For standard posts, also purges the main RSS feed (/feed/).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
                 </span>
             </label>
         </div>
@@ -439,8 +456,8 @@ function nppp_nginx_cache_related_pages_callback() {
             <label for="nppp_rel_cat">
                 <span class="nppp-toggle" aria-hidden="true"></span>
                 <span class="nppp-text">
-                    <span class="title"><?php esc_html_e( 'Always Purge Categories & Tags (WordPress + WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                    <span class="desc"><?php esc_html_e( 'When a post or product is purged (manual or auto), also purge its category and tag archives.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
+                    <span class="title"><?php esc_html_e( 'Always Purge Archives & Related URLs (WordPress + WooCommerce)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="desc"><?php esc_html_e( 'When a post or product is purged (manual or auto), also purge: all taxonomy archives (categories, tags, custom taxonomies, WooCommerce product attributes), author archive, date-based archives, and taxonomy RSS feeds. Per-post comment feeds are always purged automatically when comments are open or present.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
                 </span>
             </label>
         </div>
@@ -529,7 +546,7 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
                     <span class="nppp-toggle" aria-hidden="true"></span>
                     <span class="nppp-text">
                         <span class="title"><?php esc_html_e( 'Posts & Comments', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        <span class="desc"><?php esc_html_e( 'Auto Purge any post, page, or WooCommerce product when published, updated, deleted, when a comment is approved, or when product stock changes (quantity, status, or order cancellation). (Archive pages are purged only if enabled under Purge Scope.)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Auto Purge the cached page when a published post, page, or WooCommerce product is updated, taken offline (draft/trash/private), scheduled to go live, or restored from trash. First-time publishes are skipped — the page was never cached yet. Also fires on permanent deletion, when the approved comment count changes, or when WooCommerce product stock changes (quantity, status, or order cancellation). (Related pages are purged only if enabled under Purge Scope.)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     </span>
                 </label>
             </div>
@@ -545,7 +562,7 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
                     <span class="nppp-toggle" aria-hidden="true"></span>
                     <span class="nppp-text">
                         <span class="title"><?php esc_html_e( 'Categories, Tags & Taxonomies', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        <span class="desc"><?php esc_html_e( 'Auto Purge category, tag, and custom taxonomy archive pages when terms are created, edited, or removed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="desc"><?php esc_html_e( 'Auto Purge taxonomy archive pages when a term is edited (name or slug changed) or deleted. On term creation the archive was never cached yet, so no archive purge occurs; The Homepage is purged instead if enabled under Purge Scope.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     </span>
                 </label>
             </div>
@@ -608,6 +625,8 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     $opts    = get_option('nginx_cache_settings', array());
     $current = isset($opts['nginx_cache_pctnorm_mode']) ? $opts['nginx_cache_pctnorm_mode'] : 'off';
 
+    $putenv_ok = function_exists('putenv') && function_exists('getenv');
+
     $cached = get_transient('nppp_safexec_ok');
     if ($cached === false) {
         $safexec_path = nppp_find_safexec_path();
@@ -617,7 +636,7 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
         $safexec_path = $cached['path'];
         $safexec_ok   = $cached['ok'];
     }
-    $is_disabled = ! $safexec_ok;
+    $is_disabled = ! $safexec_ok || ! $putenv_ok;
 
     if ($is_disabled && $current !== 'off') {
         $opts['nginx_cache_pctnorm_mode'] = 'off';
@@ -626,7 +645,9 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     }
 
     // Shown as native tooltip
-    if (!$safexec_path) {
+    if (!$putenv_ok) {
+        $status_note = esc_html__( 'Unavailable: putenv() or getenv() is restricted in PHP (check disable_functions in php.ini). URL Normalization requires both to manage the safexec environment.', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif (!$safexec_path) {
         $status_note = esc_html__( 'Unavailable: safexec not found. Install it to enable URL Normalization (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
     } elseif (!$safexec_ok) {
         // Distinguish: SUID failure vs SHA256 integrity failure
@@ -637,7 +658,9 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
                      && (($stat_info['mode'] & 04000) === 04000);
 
         if ($suid_ok) {
-            $status_note = esc_html__( 'Unavailable: safexec integrity check failed. Reinstall the correct version (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
+            $status_note = esc_html__( 'Unavailable: safexec status is cached. Permissions appear correct now — save settings again to refresh.', 'fastcgi-cache-purge-and-preload-nginx' );
+        } elseif (!$stat_info) {
+            $status_note = esc_html__( 'Unavailable: safexec is not accessible. Check file permissions (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
         } else {
             $status_note = esc_html__( 'Unavailable: safexec is not SUID/root-owned. Fix permissions (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
         }
@@ -783,12 +806,27 @@ function nppp_rg_purge_enabled_callback(): void {
     // Check rg availability
     $cached = get_transient( 'nppp_rg_ok' );
     if ( $cached === false ) {
-        $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+        // shell_exec may be in disable_functions — calling it directly throws a fatal Error in PHP 8.x.
+        if ( function_exists( 'shell_exec' ) ) {
+            $rg_bin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
+        } else {
+            $rg_bin = '';
+        }
         $rg_ok  = $rg_bin !== '' && is_executable( $rg_bin );
         set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_ok ], HOUR_IN_SECONDS );
     } else {
         $rg_bin = $cached['path'];
         $rg_ok  = $cached['ok'];
+    }
+
+    // Enforce minimum rg version — treat lower versions as unavailable.
+    $rg_ver_low = false;
+    if ( $rg_ok && function_exists( 'nppp_check_rg_version' ) ) {
+        $rg_ver = nppp_check_rg_version();
+        if ( $rg_ver === 'Not Installed' || version_compare( $rg_ver, '14.0.0', '<' ) ) {
+            $rg_ok      = false;
+            $rg_ver_low = true;
+        }
     }
 
     $is_disabled = ! $rg_ok;
@@ -803,6 +841,12 @@ function nppp_rg_purge_enabled_callback(): void {
 
     if ( ! $rg_bin ) {
         $status_note = esc_html__( 'Unavailable: ripgrep (rg) not found. Install it to enable RG Purge (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $rg_ver_low ) {
+        $status_note = sprintf(
+            /* translators: %s: Installed ripgrep version. */
+            esc_html__( 'Unavailable: ripgrep (rg) version %s is below the required minimum (14.0.0). Upgrade rg to enable RG Purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            isset( $rg_ver ) ? esc_html( $rg_ver ) : esc_html__( 'unknown', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
     } elseif ( ! $rg_ok ) {
         $status_note = esc_html__( 'Unavailable: ripgrep (rg) binary is not executable. Check permissions.', 'fastcgi-cache-purge-and-preload-nginx' );
     } else {

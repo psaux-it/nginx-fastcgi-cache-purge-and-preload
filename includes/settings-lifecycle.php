@@ -2,7 +2,7 @@
 /**
  * Plugin lifecycle hooks for Nginx Cache Purge Preload
  * Description: Handles plugin activation defaults and deactivation cleanup.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -49,7 +49,7 @@ function nppp_reset_plugin_settings_on_deactivation() {
 
             // Fall back to SIGKILL if still alive.
             if (nppp_is_process_alive($pid)) {
-                $kill_path = trim((string) shell_exec('command -v kill'));
+                $kill_path = function_exists( 'shell_exec' ) ? trim((string) shell_exec('command -v kill')) : '';
                 if (!empty($kill_path)) {
                     shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $pid);
                     usleep(300000);
@@ -101,6 +101,7 @@ function nppp_defaults_on_plugin_activation() {
         'nppp_autopurge_3rdparty'             => 'no',
         'nginx_cache_auto_preload'            => 'no',
         'nginx_cache_auto_preload_mobile'     => 'no',
+        'nginx_cache_preload_feeds'           => 'no',
         'nginx_cache_mobile_user_agent'       => nppp_fetch_default_mobile_user_agent(),
         'nginx_cache_watchdog'                => 'no',
         'nginx_cache_send_mail'               => 'no',

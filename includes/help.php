@@ -2,7 +2,7 @@
 /**
  * Help and FAQ renderer for Nginx Cache Purge Preload
  * Description: Outputs plugin documentation, onboarding guidance, and support information in admin.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -175,7 +175,7 @@ function nppp_my_faq_html() {
                         <h4><strong>Fast-Path 2 — Index lookup</strong></h4>
                         <p>NPP maintains a persistent URL→Filepath index built during Preloading. If the URL is found in the index and the file still exists, NPP deletes it directly with no directory scan needed.</p>
 
-                        <h4><strong>Fast-Path 3 — Recursive filesystem scan</strong></h4>
+                        <h4><strong>Fast-Path 3|4 — Recursive filesystem scan (PHP and RG)</strong></h4>
                         <p>If neither fast-path succeeds, NPP walks the entire Nginx cache directory, reads each file's cache key header, and deletes the matching entry. This is the original workflow and remains the fallback for all environments.</p>
 
                         <h4><strong>Purge All</strong></h4>
@@ -189,41 +189,106 @@ function nppp_my_faq_html() {
                     </div>
                 </div>
 
-                <h3 class="nppp-question">Why does NPP's cache warm get bypassed by real visitors? (Accept-Encoding / Double Cache File)</h3>
+                <h3 class="nppp-question">Why does NPP's cache warm get bypassed by real visitors? (Accept-Encoding / Vary Cache Issue)</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
-                        <h3><strong>The Problem: NPP Warms Cache, Visitors Create Another, Cache MISS</strong></h3>
+                        <h3><strong>The Problem: NPP Warms Cache, But Cache Get Overwritten, Bypassed or Secondary Cache Generated</strong></h3>
 
                         <p style="font-size: 14px;">
-                            If <strong>PHP compresses output itself</strong> (via <code>zlib.output_compression = On</code> in <code>php.ini</code>),
-                            it adds a <code>Vary: Accept-Encoding</code> response header. Nginx's cache engine
-                            then computes an MD5 <em>variant hash</em> from the request's <code>Accept-Encoding</code> value
-                            and writes a separate cache file for each distinct value.
+                            When a response cached by Nginx contains a <code>Vary: Accept-Encoding</code> header,
+                            Nginx's cache engine computes an MD5 <em>variant hash</em> from the request's <code>Accept-Encoding</code> value.
+                            On a variant hash mismatch, Nginx attempts to open a secondary cache file.
+                            If the secondary fetch returns no <code>Vary</code> header, Nginx falls back and
+                            <strong>overwrites the primary cache</strong> with the new response — destroying the previously warmed cache.
                         </p>
                         <p style="font-size: 14px;">
-                            NPP's preloader sends <code>Accept-Encoding: identity</code> by default — requesting plain, uncompressed content.
-                            Real browsers always send one, so their variant hash never matches the preloaded entry and Nginx writes a second cache file,
-                            bypassing the warm cache entirely. Note that what the NPPs preloader sends is not the real issue —
-                            even if it mimicked a browser exactly, different browsers send different values
-                            (Chrome adds <code>zstd</code>, Safari omits <code>br</code>, older clients send only <code>gzip</code>),
-                            making it impossible to warm a single entry that serves all visitors. This breaks Nginx cache managing logic by NPP.
-                            This effectively breaks NPP's cache warming — preloaded entries are never served to real visitors. The only correct fix is on the Nginx/PHP side.
+                            This means warmed cache entries can be silently destroyed by subsequent requests with a different
+                            <code>Accept-Encoding</code> value, causing unnecessary PHP backend hits and cache thrashing.
+                            The only correct fix is on the Nginx/PHP side.
                         </p>
-
                         <p style="font-size: 14px;">
                             This affects <strong>fastcgi_cache, proxy_cache, uwsgi_cache, and scgi_cache</strong> equally.
                         </p>
 
-                        <h3><strong>The Fix: Two Required Changes</strong></h3>
+                        <h3><strong>Root Causes</strong></h3>
+
+                        <p style="font-size: 14px;">
+                            The variant hash mismatch mechanism is triggered exclusively when the <strong>upstream response</strong>
+                            contains a <code>Vary: Accept-Encoding</code> header that Nginx's cache engine stores.
+                            Nginx processes this in <code>ngx_http_upstream_process_vary()</code>, which writes to <code>r-&gt;cache-&gt;vary</code> —
+                            the only field that feeds the variant hash engine. There are two independent upstream-side sources:
+                        </p>
+
+                        <h4><strong>Root Cause 1 — PHP <code>zlib.output_compression = On</code></strong></h4>
+                        <p style="font-size: 14px;">
+                            When PHP compresses output itself, it adds <code>Vary: Accept-Encoding</code> to the response
+                            <strong>only when the client sends <code>Accept-Encoding: gzip</code> or <code>deflate</code></strong>.
+                            For requests without <code>Accept-Encoding</code> (such as NPP's preloader), PHP does not add it.
+                        </p>
+                        <p style="font-size: 14px;">
+                            This creates a <strong>cache thrashing</strong> scenario when a real browser reaches a URL before NPP does:
+                            the browser's gzip request causes PHP to emit <code>Vary: Accept-Encoding</code>, which Nginx stores in the cache file
+                            along with a gzip variant hash. When NPP subsequently warms that URL, its request (no <code>Accept-Encoding</code>)
+                            mismatches the stored variant hash, triggers a secondary cache lookup, fetches uncompressed content from PHP
+                            (which now emits no <code>Vary</code>), and <strong>overwrites the primary cache file</strong> with
+                            uncompressed, Vary-free content — destroying the browser-warmed cache unnecessarily.
+                            This cycle repeats on every browser/NPP alternation, causing perpetual cache churn.
+                        </p>
+                        <p style="font-size: 14px;">
+                            📌 <strong>Note:</strong> If NPP always warms a URL before any real browser, Root Cause 1 does not trigger —
+                            because PHP never emits <code>Vary: Accept-Encoding</code> for NPP's request, so no variant hash is stored,
+                            and browsers receive a clean HIT. The problem only manifests when a browser reaches a URL first.
+                        </p>
+
+                        <h4><strong>Root Cause 2 — An upstream component emitting <code>Vary: Accept-Encoding</code> unconditionally</strong></h4>
+                        <p style="font-size: 14px;">
+                            Any component running <strong>upstream of Nginx's cache engine</strong> — such as a WordPress plugin,
+                            a PHP middleware, or an intermediate proxy — that adds <code>Vary: Accept-Encoding</code> to every response
+                            regardless of the client's <code>Accept-Encoding</code> value will cause variant hash mismatches for every request.
+                            Unlike Root Cause 1, where the header is conditional on the client advertising gzip support,
+                            this source adds it unconditionally — including for NPP's requests.
+                        </p>
+                        <p style="font-size: 14px;">
+                            Because NPP's preloader sends no <code>Accept-Encoding</code> header, the variant hash stored
+                            during the warm pass is computed from an empty value. When a real browser subsequently requests
+                            the same URL with <code>Accept-Encoding: gzip, deflate, br</code>, Nginx computes a different
+                            variant hash, finds no matching cache file, and creates a <strong>second independent cache file</strong>
+                            for the same URL — going to PHP instead of serving the NPP-warmed cache.
+                            The result is two separate cache files on disk for the same URL, and the NPP-warmed cache
+                            is never served to real visitors regardless of warm order.
+                        </p>
+                        <p style="font-size: 14px;">
+                            📌 <strong>Note on <code>gzip_vary on</code>:</strong> Nginx's own <code>gzip_vary on</code> directive
+                            does <strong>not</strong> cause variant hash mismatches. It sets the internal <code>r-&gt;gzip_vary</code> flag,
+                            which only instructs <code>ngx_http_header_filter_module</code> to write
+                            <code>Vary: Accept-Encoding</code> into the raw bytes sent to the client.
+                            It never touches <code>r-&gt;cache-&gt;vary</code> — the field that controls the variant hash mechanism.
+                            <code>gzip_vary on</code> is a client-facing correctness signal for browsers and downstream proxies,
+                            not an instruction to Nginx's own cache engine.
+                        </p>
+
+                        <h3><strong>The Fix</strong></h3>
 
                         <h4><strong>Step 1 — Disable PHP-level compression (php.ini)</strong></h4>
                         <p style="font-size: 14px;">PHP must not compress output or add <code>Vary: Accept-Encoding</code>. Let Nginx handle all compression.</p>
-                        <pre>; /etc/php/fpm-phpX.Y/php.ini
+        <pre>; /etc/php/fpm-phpX.Y/php.ini
 zlib.output_compression = Off</pre>
                         <p style="font-size: 14px;">Reload PHP-FPM after saving: <code>systemctl reload php-fpm</code></p>
+                        <p style="font-size: 14px;">
+                            📌 <strong>This step is only required if Root Cause 1 applies to you.</strong>
+                            However, disabling it is always the safer and architecturally correct choice,
+                            as it ensures PHP never produces compressed output or emits <code>Vary: Accept-Encoding</code>
+                            regardless of request order or client type.
+                        </p>
 
-                        <h4><strong>Step 2 — Add fastcgi_ignore_headers Vary to your Nginx PHP block</strong></h4>
-                        <p style="font-size: 14px;">Even with PHP compression off, other upstream components may still emit a <code>Vary</code> header. This directive tells Nginx to ignore it completely during cache operations:</p>
+                        <h4><strong>Step 2 — Add <code>fastcgi_ignore_headers Vary</code> to your Nginx PHP block</strong></h4>
+                        <p style="font-size: 14px;">
+                            This directive tells Nginx to ignore the <code>Vary</code> header completely during cache operations.
+                            When set, <code>ngx_http_upstream_process_vary()</code> returns immediately without writing to
+                            <code>r-&gt;cache-&gt;vary</code>, preventing variant hash storage and all resulting cache overwrites
+                            regardless of whether <code>Vary: Accept-Encoding</code> originates from PHP <code>zlib.output_compression</code>,
+                            a plugin, or any other upstream component.
+                        </p>
 
 <pre>location ~ \.php$ {
     fastcgi_cache_key "$scheme$request_method$host$request_uri";
@@ -231,7 +296,7 @@ zlib.output_compression = Off</pre>
     include /etc/nginx/fastcgi_params;
 
     fastcgi_param  HTTP_ACCEPT_ENCODING  "";  # ← strip Accept-Encoding before it reaches PHP
-    fastcgi_ignore_headers Vary;              # ← prevents secondary cache file creation
+    fastcgi_ignore_headers Vary;              # ← prevents variant hash storage and cache overwrites
 
     fastcgi_cache YOUR_ZONE;
     fastcgi_cache_valid 30d;
@@ -242,11 +307,15 @@ zlib.output_compression = Off</pre>
 }</pre>
 
                         <p style="font-size: 14px;">
-                            <strong>Why both?</strong> <code>fastcgi_param HTTP_ACCEPT_ENCODING ""</code> prevents PHP from ever seeing the client's
-                            <code>Accept-Encoding</code> value — so PHP cannot produce compressed output or emit <code>Vary: Accept-Encoding</code>
-                            in the first place. <code>fastcgi_ignore_headers Vary</code> is the second line of defence: even if a <code>Vary</code>
-                            header arrives from any upstream source, Nginx will not act on it during cache operations.
-                            Together they guarantee a single cache file per URL regardless of what the client sends.
+                            <strong>Why both directives?</strong> <code>fastcgi_param HTTP_ACCEPT_ENCODING ""</code> strips the
+                            <code>Accept-Encoding</code> header before it reaches PHP — so PHP cannot produce compressed output
+                            or emit <code>Vary: Accept-Encoding</code> in the first place.
+                            <code>fastcgi_ignore_headers Vary</code> is the universal second line of defence:
+                            even if a <code>Vary</code> header arrives from any upstream source
+                            (PHP, a plugin, or a proxy layer),
+                            Nginx will not store it in the cache file and will not activate the variant hash mechanism.
+                            Together they guarantee a single stable cache file per URL regardless of what the client sends
+                            or which request arrives first.
                         </p>
                         <p style="font-size: 14px;">
                             📌 If you already set <code>fastcgi_param HTTP_ACCEPT_ENCODING ""</code> in your shared
@@ -265,11 +334,16 @@ gzip_proxied any;
 gzip_types text/plain text/css application/javascript application/json text/xml application/xml text/javascript;</pre>
 
                         <p style="font-size: 14px;">
-                            <code>gzip_vary on</code> adds <code>Vary: Accept-Encoding</code> to responses served from Nginx — but this does <strong>not</strong> affect cache file creation
-                            because it fires <em>after</em> the cache lookup, not before. The cache key is already resolved by then.
+                            <code>gzip_vary on</code> adds <code>Vary: Accept-Encoding</code> to responses sent to clients —
+                            informing browsers and downstream proxies that the response content varies by encoding.
+                            This does <strong>not</strong> affect Nginx's own cache variant mechanism:
+                            <code>gzip_vary on</code> writes only to the client-facing response bytes via <code>r-&gt;gzip_vary</code>,
+                            and never writes to <code>r-&gt;cache-&gt;vary</code> which controls variant hash storage.
+                            Nginx compresses responses on the fly per-client from a single cached uncompressed entry.
+                            One cache file, served correctly to all clients.
                         </p>
 
-                        <h3><strong>Why fastcgi_ignore_headers Vary is Safe Here</strong></h3>
+                        <h3><strong>Why <code>fastcgi_ignore_headers Vary</code> is Safe Here</strong></h3>
                         <p style="font-size: 14px;">
                             Normally suppressing <code>Vary</code> would risk serving gzip-compressed content to clients that cannot decompress it.
                             But with <code>zlib.output_compression = Off</code>, PHP never produces compressed output — so there is only one content variant.
@@ -289,14 +363,26 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                             <tbody>
                                 <tr>
                                     <td><code>zlib.output_compression = On</code>, no fix</td>
-                                    <td>2 (primary + secondary)</td>
-                                    <td>❌ Miss — visitor gets secondary file</td>
-                                    <td>Wasted RAM/disk, NPP preload ineffective</td>
+                                    <td>1 (thrashing — overwritten on encoding mismatch)</td>
+                                    <td>⚠️ Unstable — warmed cache overwritten when browser hits first</td>
+                                    <td>Cache churn, unnecessary PHP hits, warm entries silently destroyed</td>
+                                </tr>
+                                <tr>
+                                    <td>Plugin or upstream proxy emitting <code>Vary: Accept-Encoding</code> unconditionally, no fix</td>
+                                    <td>2 (secondary file created — NPP warm and browser request produce separate cache entries for the same URL)</td>
+                                    <td>❌ Miss — browser request computes a different variant hash and bypasses the NPP-warmed cache entirely, going to PHP instead</td>
+                                    <td>NPP preload permanently ineffective; real visitors always trigger a PHP backend hit regardless of warm order</td>
+                                </tr>
+                                <tr>
+                                    <td><code>gzip on; gzip_vary on;</code> (nginx-side only, no upstream Vary)</td>
+                                    <td>1 ✅</td>
+                                    <td>✅ HIT — NPP warmed cache is served</td>
+                                    <td>None — <code>gzip_vary</code> does not affect cache variant engine</td>
                                 </tr>
                                 <tr>
                                     <td><code>zlib.output_compression = Off</code> + <code>fastcgi_ignore_headers Vary</code></td>
                                     <td>1 ✅</td>
-                                    <td>✅ HIT — NPP warmed entry is served</td>
+                                    <td>✅ HIT — NPP warmed cache is served</td>
                                     <td>None</td>
                                 </tr>
                             </tbody>
@@ -519,6 +605,193 @@ apk add ripgrep           # Alpine Linux</pre>
                     </div>
                 </div>
 
+                <h3 class="nppp-question">Why does the NPP REST API return 404 (rest_no_route) behind an Nginx → Apache reverse proxy?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>REST API 404 on Nginx + Apache Reverse Proxy Stacks</strong></h3>
+                        <p style="font-size: 14px;">
+                            On setups where <strong>Nginx acts as a reverse proxy in front of Apache</strong> (a common pattern in control panels such as aaPanel, HestiaCP, CyberPanel, and similar), NPP's REST API endpoints return a
+                            <code>rest_no_route</code> 404 even though the URL and method are correct:
+                        </p>
+                        <pre>{"code":"rest_no_route","message":"No route was found matching the URL and request method.","data":{"status":404}}</pre>
+                        <p style="font-size: 14px;">
+                            The root cause is a two-layer header suppression problem. First, Nginx does not forward the
+                            <code>Authorization</code> header to Apache by default. Second, even when Apache receives it,
+                            PHP does not automatically expose it as <code>$_SERVER['HTTP_AUTHORIZATION']</code> unless a
+                            <code>RewriteRule</code> explicitly sets the environment variable. WordPress reads
+                            <code>HTTP_AUTHORIZATION</code> to authenticate REST API requests — if it is absent, the
+                            Bearer token is never seen and the route resolver treats the request as unauthenticated or
+                            misrouted, returning 404.
+                        </p>
+
+                        <h4><strong>Fix 1 — Nginx: forward Authorization and X-Api-Key to Apache</strong></h4>
+                        <p style="font-size: 14px;">
+                            Inside your <code>location / { ... }</code> block that proxies to Apache, add the four
+                            highlighted lines. Both <code>proxy_pass_header</code> (copies the upstream response header
+                            downstream) and <code>proxy_set_header</code> (injects the client request header into the
+                            proxied request) are required together — <code>proxy_pass_header</code> alone is not
+                            sufficient for request-direction forwarding.
+                        </p>
+                        <pre>location / {
+    proxy_pass http://127.0.0.1:8288;  # your Apache backend port
+
+    proxy_pass_header Authorization;
+    proxy_pass_header X-Api-Key;
+    proxy_set_header Authorization $http_authorization;
+    proxy_set_header X-Api-Key $http_x_api_key;
+}</pre>
+                        <p style="font-size: 14px;">Reload Nginx after saving: <code>nginx -t &amp;&amp; systemctl reload nginx</code></p>
+
+                        <h4><strong>Fix 2 — Apache: expose the Authorization header to PHP</strong></h4>
+                        <p style="font-size: 14px;">
+                            Apache's <code>mod_php</code> and PHP-FPM via <code>mod_proxy_fcgi</code> do not populate
+                            <code>$_SERVER['HTTP_AUTHORIZATION']</code> from the incoming header automatically — it must
+                            be injected via <code>mod_rewrite</code>. Add the block below inside your WordPress
+                            <code>&lt;Directory&gt;</code> section. The critical line is the first
+                            <code>RewriteRule</code> that maps the raw HTTP header into the
+                            <code>HTTP_AUTHORIZATION</code> environment variable before any other rewrite logic runs.
+                            The standard WordPress router rules must follow it in the same block.
+                        </p>
+                        <pre>&lt;Directory "/www/wwwroot/yourdomain.com"&gt;
+    SetOutputFilter DEFLATE
+    Options FollowSymLinks
+    AllowOverride All
+    Require all granted
+    DirectoryIndex index.php index.html index.htm default.php default.html default.htm
+
+    RewriteEngine On
+    RewriteBase /
+    RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    RewriteRule ^index\.php$ - [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . /index.php [L]
+&lt;/Directory&gt;</pre>
+                        <p style="font-size: 14px;">
+                            Reload Apache after saving: <code>systemctl reload apache2</code> (Debian/Ubuntu) or
+                            <code>systemctl reload httpd</code> (RHEL/Fedora).
+                        </p>
+
+                        <h4><strong>Why the RewriteRule line is the key fix</strong></h4>
+                        <p style="font-size: 14px;">
+                            <code>RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]</code> matches every
+                            request (<code>^</code>), performs no URL rewrite (<code>-</code>), and sets the Apache
+                            environment variable <code>HTTP_AUTHORIZATION</code> to the value of the incoming
+                            <code>Authorization</code> HTTP header. PHP's CGI/FastCGI SAPI then picks up all
+                            <code>HTTP_*</code> environment variables and exposes them as <code>$_SERVER</code> keys,
+                            making the Bearer token visible to WordPress and NPP's REST authentication layer.
+                        </p>
+
+                        <h4><strong>Verification</strong></h4>
+                        <p style="font-size: 14px;">After applying both fixes, re-run your REST API call — a successful purge or preload returns HTTP 200 with a JSON body. If you still see 404, confirm with:</p>
+                        <pre># Test purge endpoint
+curl -v -X POST \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json" \
+  "https://yourdomain.com/wp-json/nppp_nginx_cache/v2/purge"
+
+# Test preload endpoint
+curl -v -X POST \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Accept: application/json" \
+  "https://yourdomain.com/wp-json/nppp_nginx_cache/v2/preload"</pre>
+                        <p style="font-size: 14px;">
+                            📌 The NPP API key is generated under <strong>Settings → NPP Settings → REST API</strong>.
+                            The <code>Authorization: Bearer</code> scheme and the <code>X-Api-Key</code> header are both
+                            accepted — use whichever your client supports.
+                        </p>
+                        <p style="font-size: 14px;">
+                            📌 This fix applies to any control panel that uses the Nginx → Apache proxy pattern,
+                            including <strong>aaPanel</strong>, <strong>HestiaCP</strong>,
+                            <strong>CyberPanel</strong>, and manually configured dual-stack servers. The Nginx and
+                            Apache config paths will differ per panel — consult your panel's vhost editor for the
+                            correct files to edit.
+                        </p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">How do I clear the entire cache on every post update instead of just the updated page?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Full Cache Purge on Post Update — Developer Recipe</strong></h3>
+                        <p style="font-size: 14px;">
+                            By default, NPP's Auto Purge surgically clears only the updated post and its related URLs
+                            (homepage, category archives, tag archives). This is the correct behavior for most sites.
+                        </p>
+                        <p style="font-size: 14px;">
+                            However, if your site sorts content by modified date, uses a heavily interlinked layout, or
+                            has any other reason to invalidate the entire cache on every content update, you can override
+                            this behavior with the drop-in recipe below. Add it to your <strong>child theme's
+                            <code>functions.php</code></strong>.
+                        </p>
+
+                        <h4><strong>Recipe 1 — Full purge on publish → publish updates only</strong></h4>
+                        <p style="font-size: 14px;">
+                            Fires only when an already-published post is updated. New posts, drafts going live, and
+                            deletions are not affected.
+                        </p>
+                        <pre>// NPP Drop-in | Clear the entire cache when a post is updated
+add_action( 'transition_post_status', function ( string $new, string $old, WP_Post $post ): void {
+    if ( $new !== 'publish' || $old !== 'publish' ) return;
+    if ( ! function_exists( 'nppp_purge_callback' ) ) return;
+
+    // Gutenberg: second meta-box-loader request guard.
+    // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+    if ( isset( $_REQUEST['meta-box-loader'] ) ) return;
+
+    if ( defined( 'DOING_AUTOSAVE' ) &amp;&amp; DOING_AUTOSAVE ) return;
+    if ( ! is_post_type_viewable( $post->post_type ) ) return;
+
+    $options = get_option( 'nginx_cache_settings', [] );
+    if ( ( $options['nginx_cache_purge_on_update']  ?? 'no' ) !== 'yes' ) return;
+    if ( ( $options['nppp_autopurge_posts']         ?? 'no' ) !== 'yes' ) return;
+
+    // Cross-request dedup: Elementor fires multiple HTTP requests per save.
+    $dedup_key = 'nppp_fullpurge_recipe_' . $post->ID;
+    if ( get_transient( $dedup_key ) ) return;
+    set_transient( $dedup_key, 1, 10 );
+
+    nppp_purge_callback();
+}, 20, 3 );</pre>
+
+                        <h4><strong>Recipe 2 — Full purge on any transition to published</strong></h4>
+                        <p style="font-size: 14px;">
+                            Extends Recipe 1 to also fire when a new post is published, a draft goes live, or a
+                            scheduled post is released. Replace the single status guard line:
+                        </p>
+                        <p style="font-size: 14px;"><strong>Remove:</strong></p>
+                        <pre>if ( $new !== 'publish' || $old !== 'publish' ) return;</pre>
+                        <p style="font-size: 14px;"><strong>Replace with:</strong></p>
+                        <pre>if ( $new !== 'publish' ) return;</pre>
+                        <p style="font-size: 14px;">
+                            Everything else in the recipe stays the same. The hook now covers content updates,
+                            new publications, drafts going live, and scheduled posts becoming public.
+                        </p>
+
+                        <h4><strong>How it works</strong></h4>
+                        <p style="font-size: 14px;">
+                            The recipe hooks into WordPress's <code>transition_post_status</code> action and calls
+                            NPP's internal <code>nppp_purge_callback()</code> — the same function the Purge All
+                            button triggers. It respects your existing NPP settings:
+                        </p>
+                        <ul style="font-size: 14px;">
+                            <li>The <strong>Auto Purge master toggle</strong> (<code>nginx_cache_purge_on_update</code>) must be ON — the recipe is a no-op if Auto Purge is disabled.</li>
+                            <li>The <strong>Posts &amp; Comments sub-trigger</strong> (<code>nppp_autopurge_posts</code>) must be ON.</li>
+                            <li>Works correctly with <strong>Gutenberg</strong>, <strong>Elementor</strong>, and <strong>Classic Editor</strong> — a 10-second transient dedup guard prevents duplicate purges from editors that fire multiple HTTP requests per save.</li>
+                            <li>Only fires for <strong>publicly viewable post types</strong> — CPTs registered with <code>publicly_queryable = false</code> are skipped.</li>
+                            <li>Autosaves never trigger a purge.</li>
+                        </ul>
+
+                        <h4><strong>Important</strong></h4>
+                        <p style="font-size: 14px;">
+                            ⚠️ If <strong>Auto Preload</strong> is also ON in your NPP settings, every post save will
+                            trigger a <strong>full site crawl</strong> immediately after the purge. On large sites this
+                            is a significant server load event — use with caution or keep Auto Preload OFF and rely on
+                            Scheduled Preload instead.
+                        </p>
+                    </div>
+                </div>
+
                 <h3 class="nppp-question">What Linux commands are required for the preload action?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
@@ -629,6 +902,18 @@ apk add ripgrep           # Alpine Linux</pre>
                             <li>Paths outside the allowed roots — including <code>/home</code>, <code>/opt</code>, <code>/srv</code>, <code>/etc</code>, and the WordPress installation directory — are always rejected.</li>
                             <li>Symlinks are resolved and the destination is validated against the same rules.</li>
                         </ul>
+
+                        <h4>Bypass Path Restriction <span style="font-size: 12px; font-weight: normal;">(available since v2.1.6)</span></h4>
+                        <p style="font-size: 14px;">If your environment requires a cache path that falls outside the allowed roots above — for example a custom mount point, a non-standard directory layout, an environment managed by web panels, managed hosting configurations, or a containerised setup — you can enable <strong>Bypass Path Restriction</strong> in the Nginx Cache Directory settings.</p>
+                        <p style="font-size: 14px;">When enabled, <strong>all built-in path safety guardrails are disabled</strong>. NPP will operate on any directory you configure as the Nginx cache path, including locations it would normally reject.</p>
+
+                        <p style="font-size: 14px;">⚠️ <strong>CAUTION — read before enabling:</strong></p>
+                        <ul style="font-size: 14px;">
+                            <li>The plugin will perform purge operations — including <strong>recursive deletion</strong> — on whatever path you supply, with no further validation.</li>
+                            <li>Configuring a system-critical path (e.g., <code>/var/www</code>, <code>/home</code>) by mistake will cause <strong>irreversible data loss</strong> if the <strong>PHP process owner</strong> has write/delete permissions for that directory and the path is not restricted by <code>open_basedir</code>.</li>
+                            <li>By enabling this feature you explicitly accept full responsibility for any data loss or system damage that may result.</li>
+                        </ul>
+                        <p style="font-size: 14px;">Only enable Bypass Path Restriction if you are certain of the nginx cache path you are entering and understand the consequences. For all standard deployments, the built-in allowed-path list is the safer and recommended choice.</p>
                     </div>
                 </div>
 
