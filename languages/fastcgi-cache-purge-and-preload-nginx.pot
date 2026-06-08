@@ -60,13 +60,13 @@ msgid "Nginx Cache actions"
 msgstr ""
 
 #: includes/admin-bar.php:158
-#: includes/dashboard-widget.php:389
+#: includes/dashboard-widget.php:405
 #: includes/settings-page.php:71
 msgid "Purge All"
 msgstr ""
 
 #: includes/admin-bar.php:169
-#: includes/dashboard-widget.php:400
+#: includes/dashboard-widget.php:416
 #: includes/settings-page.php:75
 msgid "Preload All"
 msgstr ""
@@ -74,7 +74,7 @@ msgstr ""
 #: includes/admin-bar.php:212
 #: includes/advanced.php:534
 #: includes/configuration-parser.php:469
-#: includes/enqueue-assets.php:157
+#: includes/enqueue-assets.php:155
 #: includes/settings-page.php:183
 #: includes/settings-page.php:247
 #: includes/status.php:1080
@@ -209,7 +209,7 @@ msgid "Preload"
 msgstr ""
 
 #: includes/advanced.php:656
-#: includes/dashboard-widget.php:579
+#: includes/dashboard-widget.php:595
 msgid "Permission denied."
 msgstr ""
 
@@ -520,20 +520,20 @@ msgstr ""
 #: includes/dashboard-widget.php:218
 #: includes/dashboard-widget.php:232
 #: includes/dashboard-widget.php:246
-#: includes/dashboard-widget.php:259
-#: includes/dashboard-widget.php:279
-#: includes/dashboard-widget.php:284
+#: includes/dashboard-widget.php:275
 #: includes/dashboard-widget.php:295
 #: includes/dashboard-widget.php:300
-#: includes/dashboard-widget.php:305
-#: includes/dashboard-widget.php:310
-#: includes/dashboard-widget.php:315
-#: includes/dashboard-widget.php:338
-#: includes/dashboard-widget.php:343
-#: includes/dashboard-widget.php:348
-#: includes/dashboard-widget.php:353
-#: includes/dashboard-widget.php:492
-#: includes/dashboard-widget.php:539
+#: includes/dashboard-widget.php:311
+#: includes/dashboard-widget.php:316
+#: includes/dashboard-widget.php:321
+#: includes/dashboard-widget.php:326
+#: includes/dashboard-widget.php:331
+#: includes/dashboard-widget.php:354
+#: includes/dashboard-widget.php:359
+#: includes/dashboard-widget.php:364
+#: includes/dashboard-widget.php:369
+#: includes/dashboard-widget.php:508
+#: includes/dashboard-widget.php:555
 msgid "Enabled"
 msgstr ""
 
@@ -851,7 +851,7 @@ msgstr ""
 #: includes/dashboard-widget.php:216
 #: includes/dashboard-widget.php:230
 #: includes/dashboard-widget.php:244
-#: includes/dashboard-widget.php:257
+#: includes/dashboard-widget.php:273
 #: includes/status.php:1281
 msgid "Unavailable"
 msgstr ""
@@ -859,160 +859,160 @@ msgstr ""
 #: includes/dashboard-widget.php:220
 #: includes/dashboard-widget.php:234
 #: includes/dashboard-widget.php:248
-#: includes/dashboard-widget.php:261
-#: includes/dashboard-widget.php:279
-#: includes/dashboard-widget.php:284
+#: includes/dashboard-widget.php:277
 #: includes/dashboard-widget.php:295
 #: includes/dashboard-widget.php:300
-#: includes/dashboard-widget.php:305
-#: includes/dashboard-widget.php:310
-#: includes/dashboard-widget.php:315
-#: includes/dashboard-widget.php:338
-#: includes/dashboard-widget.php:343
-#: includes/dashboard-widget.php:348
-#: includes/dashboard-widget.php:353
+#: includes/dashboard-widget.php:311
+#: includes/dashboard-widget.php:316
+#: includes/dashboard-widget.php:321
+#: includes/dashboard-widget.php:326
+#: includes/dashboard-widget.php:331
+#: includes/dashboard-widget.php:354
+#: includes/dashboard-widget.php:359
+#: includes/dashboard-widget.php:364
+#: includes/dashboard-widget.php:369
 msgid "Disabled"
 msgstr ""
 
-#: includes/dashboard-widget.php:278
+#: includes/dashboard-widget.php:294
 #: includes/settings-page.php:330
 #: includes/wp-cli.php:496
 #: includes/wp-cli.php:1529
 msgid "Auto Purge"
 msgstr ""
 
-#: includes/dashboard-widget.php:283
+#: includes/dashboard-widget.php:299
 #: includes/settings-page.php:925
 #: includes/wp-cli.php:504
 #: includes/wp-cli.php:1545
 msgid "HTTP Purge"
 msgstr ""
 
-#: includes/dashboard-widget.php:288
+#: includes/dashboard-widget.php:304
 #: includes/settings-page.php:967
 #: includes/wp-cli.php:505
 #: includes/wp-cli.php:1547
 msgid "RG Purge"
 msgstr ""
 
-#: includes/dashboard-widget.php:294
+#: includes/dashboard-widget.php:310
 #: includes/settings-page.php:502
 #: includes/wp-cli.php:497
 #: includes/wp-cli.php:1525
 msgid "Auto Preload"
 msgstr ""
 
-#: includes/dashboard-widget.php:299
+#: includes/dashboard-widget.php:315
 #: includes/settings-page.php:519
 #: includes/wp-cli.php:498
 #: includes/wp-cli.php:1526
 msgid "Preload Mobile"
 msgstr ""
 
-#: includes/dashboard-widget.php:304
+#: includes/dashboard-widget.php:320
 #: includes/settings-page.php:563
 #: includes/wp-cli.php:500
 #: includes/wp-cli.php:1527
 msgid "Preload Feeds"
 msgstr ""
 
-#: includes/dashboard-widget.php:309
+#: includes/dashboard-widget.php:325
 #: includes/settings-page.php:588
 #: includes/wp-cli.php:499
 #: includes/wp-cli.php:1528
 msgid "Preload Watchdog"
 msgstr ""
 
-#: includes/dashboard-widget.php:314
+#: includes/dashboard-widget.php:330
 #: includes/wp-cli.php:508
 msgid "Proxy"
 msgstr ""
 
-#: includes/dashboard-widget.php:319
+#: includes/dashboard-widget.php:335
 #: includes/settings-page.php:639
 #: includes/wp-cli.php:510
 #: includes/wp-cli.php:1550
 msgid "URL Normalization"
 msgstr ""
 
-#: includes/dashboard-widget.php:325
+#: includes/dashboard-widget.php:341
 msgid "Cloudflare APO"
 msgstr ""
 
-#: includes/dashboard-widget.php:331
+#: includes/dashboard-widget.php:347
 msgid "Redis Object Cache"
 msgstr ""
 
-#: includes/dashboard-widget.php:337
+#: includes/dashboard-widget.php:353
 msgid "Scheduled Cache"
 msgstr ""
 
-#: includes/dashboard-widget.php:342
+#: includes/dashboard-widget.php:358
 #: includes/settings-page.php:811
 #: includes/wp-cli.php:501
 #: includes/wp-cli.php:1538
 msgid "REST API"
 msgstr ""
 
-#: includes/dashboard-widget.php:347
+#: includes/dashboard-widget.php:363
 #: includes/wp-cli.php:503
 msgid "Send Mail"
 msgstr ""
 
-#: includes/dashboard-widget.php:352
+#: includes/dashboard-widget.php:368
 #: includes/settings-callbacks.php:501
 #: includes/wp-cli.php:509
 #: includes/wp-cli.php:1549
 msgid "Bypass Path Restriction"
 msgstr ""
 
-#: includes/dashboard-widget.php:375
+#: includes/dashboard-widget.php:391
 #: includes/settings-page.php:57
 msgid "Processing, please wait..."
 msgstr ""
 
-#: includes/dashboard-widget.php:455
+#: includes/dashboard-widget.php:471
 msgid "Cache coverage ratio gauge"
 msgstr ""
 
-#: includes/dashboard-widget.php:467
+#: includes/dashboard-widget.php:483
 msgid "Refresh cache coverage ratio"
 msgstr ""
 
-#: includes/dashboard-widget.php:468
+#: includes/dashboard-widget.php:484
 msgid "Refresh"
 msgstr ""
 
-#: includes/dashboard-widget.php:475
+#: includes/dashboard-widget.php:491
 msgid "CACHE COVERAGE"
 msgstr ""
 
 #. translators: %s: formatted preload last complete time
-#: includes/dashboard-widget.php:524
+#: includes/dashboard-widget.php:540
 #, php-format
 msgid "Last Run: %s"
 msgstr ""
 
-#: includes/dashboard-widget.php:554
+#: includes/dashboard-widget.php:570
 msgid "Give Star"
 msgstr ""
 
-#: includes/dashboard-widget.php:559
+#: includes/dashboard-widget.php:575
 msgid "Configure Settings"
 msgstr ""
 
 #. translators: NPP is the plugin short name — do not translate.
-#: includes/dashboard-widget.php:570
+#: includes/dashboard-widget.php:586
 msgid "NPP - Nginx Cache Status"
 msgstr ""
 
-#: includes/dashboard-widget.php:585
+#: includes/dashboard-widget.php:601
 #: includes/status.php:1320
 #: includes/status.php:1348
 msgid "Nonce verification failed."
 msgstr ""
 
-#: includes/enqueue-assets.php:163
+#: includes/enqueue-assets.php:161
 #: includes/status.php:1061
 #: includes/status.php:1069
 msgid "Clear Plugin Cache"
