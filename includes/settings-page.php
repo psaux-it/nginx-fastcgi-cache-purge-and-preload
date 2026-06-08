@@ -675,15 +675,15 @@ function nppp_nginx_cache_settings_page() {
                                         </a>
                                     </div>
                                 </div>
-	                            <p class="description"><?php echo esc_html__( 'Enter a regex pattern to exclude endpoints from being cached while Preloading. Use | as a delimiter for multiple patterns.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'The default regex pattern optimized to exclude dynamic endpoints to prevent caching for WordPress and WooCommerce.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'These exclusions must handled server-side using _cache_bypass, _no_cache, and skip_cache rules in your Nginx configuration.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+	                            <p class="description"><?php echo esc_html__( 'Default regex pattern to exclude endpoints from being cached while Preloading. Use | as a delimiter for multiple patterns.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'The default regex optimized to exclude dynamic endpoints to prevent caching for WordPress and WooCommerce. Keep the default rules intact.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'These exclusions must also be handled server-side using _cache_bypass, _no_cache, and skip_cache rules in your Nginx configuration.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Here, the regex is just used to prevent preload engine from making requests to these endpoints during the process to avoid unnecessary server load.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <button type="button" id="nginx-regex-reset-defaults" class="button nginx-reset-regex-button">
                                     <?php echo esc_html__( 'Reset Default', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </button>
                                 <div class="cache-paths-info">
-                                    <p class="description"><?php echo esc_html__( 'Click the button to reset defaults. After plugin updates, it\'s best to reset first to apply the latest changes, then reapply your custom rules.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'Click the button to reset the defaults. Before resetting, make sure to back up any custom rules you have added. Always keep the default rules intact. After plugin updates, reset to the latest defaults first, then append your custom rules instead of modifying or replacing the defaults.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 </div>
                             </td>
                         </tr>
