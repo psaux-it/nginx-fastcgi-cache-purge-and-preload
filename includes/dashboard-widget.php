@@ -249,9 +249,25 @@ function nppp_dashboard_widget() {
     }
 
     // RG Purge
-    $rg_cached    = get_transient( 'nppp_rg_ok' );
-    $rg_available = is_array( $rg_cached ) ? (bool) $rg_cached['ok'] : false;
-    $rg_on        = isset( $settings['nppp_rg_purge_enabled'] ) && $settings['nppp_rg_purge_enabled'] === 'yes';
+    $rg_cached = get_transient( 'nppp_rg_ok' );
+    if ( $rg_cached === false ) {
+        $rg_bin = function_exists( 'shell_exec' )
+            ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) )
+            : '';
+        $rg_available = $rg_bin !== '' && is_executable( $rg_bin );
+        // Enforce minimum version (≥14.0.0).
+        if ( $rg_available && function_exists( 'nppp_check_rg_version' ) ) {
+            $rg_ver = nppp_check_rg_version();
+            if ( $rg_ver === 'Not Installed' || version_compare( $rg_ver, '14.0.0', '<' ) ) {
+                $rg_available = false;
+            }
+        }
+        // Seed the transient so subsequent requests are instant.
+        set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_available ], HOUR_IN_SECONDS );
+    } else {
+        $rg_available = is_array( $rg_cached ) && (bool) $rg_cached['ok'];
+    }
+    $rg_on = isset( $settings['nppp_rg_purge_enabled'] ) && $settings['nppp_rg_purge_enabled'] === 'yes';
 
     if ( ! $rg_available ) {
         $rg_status = __( 'Unavailable', 'fastcgi-cache-purge-and-preload-nginx' );
