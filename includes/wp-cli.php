@@ -1426,7 +1426,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         update_option( 'nginx_cache_settings', $settings );
 
-        /* translators: 1: Settings key name 2: New sanitized value */
+        /* translators: 1: Settings key name 2: New value */
         WP_CLI::success( sprintf( __( 'Updated "%1$s" → "%2$s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, (string) $sanitized ) );
         if ( $path_was_reset ) {
             WP_CLI::warning( __( 'Cache path was outside the allowed directories and has been reset to /dev/shm/change-me-now.', 'fastcgi-cache-purge-and-preload-nginx' ) );
