@@ -2721,15 +2721,15 @@ msgid "View Compatible Nginx Configuration"
 msgstr ""
 
 #: includes/settings-page.php:678
-msgid "Enter a regex pattern to exclude endpoints from being cached while Preloading. Use | as a delimiter for multiple patterns."
+msgid "Default regex pattern to exclude endpoints from being cached while Preloading. Use | as a delimiter for multiple patterns."
 msgstr ""
 
 #: includes/settings-page.php:679
-msgid "The default regex pattern optimized to exclude dynamic endpoints to prevent caching for WordPress and WooCommerce."
+msgid "The default regex optimized to exclude dynamic endpoints to prevent caching for WordPress and WooCommerce. Keep the default rules intact."
 msgstr ""
 
 #: includes/settings-page.php:680
-msgid "These exclusions must handled server-side using _cache_bypass, _no_cache, and skip_cache rules in your Nginx configuration."
+msgid "These exclusions must also be handled server-side using _cache_bypass, _no_cache, and skip_cache rules in your Nginx configuration."
 msgstr ""
 
 #: includes/settings-page.php:681
@@ -2737,9 +2737,7 @@ msgid "Here, the regex is just used to prevent preload engine from making reques
 msgstr ""
 
 #: includes/settings-page.php:686
-#: includes/settings-page.php:705
-#: includes/settings-page.php:917
-msgid "Click the button to reset defaults. After plugin updates, it's best to reset first to apply the latest changes, then reapply your custom rules."
+msgid "Click the button to reset the defaults. Before resetting, make sure to back up any custom rules you have added. Always keep the default rules intact. After plugin updates, reset to the latest defaults first, then append your custom rules instead of modifying or replacing the defaults."
 msgstr ""
 
 #: includes/settings-page.php:693
@@ -2761,6 +2759,11 @@ msgstr ""
 
 #: includes/settings-page.php:700
 msgid "By excluding static files, Preload operation are accelerated by avoiding unnecessary requests via wget for static assets."
+msgstr ""
+
+#: includes/settings-page.php:705
+#: includes/settings-page.php:917
+msgid "Click the button to reset defaults. After plugin updates, it's best to reset first to apply the latest changes, then reapply your custom rules."
 msgstr ""
 
 #: includes/settings-page.php:712
