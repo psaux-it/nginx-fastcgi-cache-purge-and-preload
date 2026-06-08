@@ -21,7 +21,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_style('nppp_jquery-ui-tabs-theme', plugins_url('../admin/css/jquery-ui.theme.min.css', __FILE__), array(), '1.13.3');
 
     // Enqueue CSS files for dataTables
-    wp_enqueue_style('nppp_datatables-css', plugins_url('../admin/css/dataTables.min.css', __FILE__), array(), '2.3.7');
+    wp_enqueue_style('nppp_datatables-css', plugins_url('../admin/css/dataTables.min.css', __FILE__), array(), '2.3.8');
 
     // Enqueue CSS files for Tempus Dominus Date/Time Picker
     wp_enqueue_style('nppp_tempus-dominus-css', plugins_url('../admin/css/tempus-dominus.min.css', __FILE__), array(), '6.10.4');
@@ -41,7 +41,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     * License: MIT (https://datatables.net/license/mit)
     */
     // Enqueue JavaScript files for dataTables
-    wp_enqueue_script('nppp_datatables-js', plugins_url('../admin/js/dataTables.min.js', __FILE__), array('jquery'), '2.3.7', true);
+    wp_enqueue_script('nppp_datatables-js', plugins_url('../admin/js/dataTables.min.js', __FILE__), array('jquery'), '2.3.8', true);
 
     /*!
     * Tempus Dominus Date Time Picker v6.10.4
@@ -57,13 +57,11 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     wp_enqueue_script('nppp_admin-js', plugins_url('../admin/js/fastcgi-cache-purge-and-preload-nginx.js', __FILE__), array('jquery', 'jquery-ui-core', 'jquery-ui-tabs', 'jquery-ui-accordion', 'nppp_datatables-js', 'nppp_tempus-dominus-js', 'wp-i18n'), '2.1.7', true);
 
     // Enqueue JavaScript (header effect) file for Nginx Cache Purge Preload Plugin
-    wp_enqueue_script('nppp_aurora-canvas', plugins_url('../admin/js/nppp-header.js', __FILE__), array('jquery'), '2.1.7', true);
+    wp_enqueue_script('nppp_aurora-canvas', plugins_url('../admin/js/nppp-header.js', __FILE__), array(), '2.1.7', true);
 
     // Set script i18n translations
     wp_set_script_translations('nppp_admin-js', 'fastcgi-cache-purge-and-preload-nginx');
 
-    // Retrieve plugin options.
-    $options = get_option('nginx_cache_settings');
     // Create a nonce for clearing nginx cache logs
     $clear_nginx_cache_logs_nonce = wp_create_nonce('nppp-clear-nginx-cache-logs');
     // Create a nonce for updating send mail option
@@ -171,7 +169,7 @@ function nppp_enqueue_setup_page_assets() {
     wp_enqueue_script(
         'nppp_aurora-canvas',
         plugins_url( '../admin/js/nppp-header.js', __FILE__ ),
-        array( 'jquery' ),
+        array(),
         '2.1.7',
         true
     );
@@ -312,6 +310,8 @@ function nppp_shell_toolset_check($global_, $preload) {
         $commands = ['ps', 'grep', 'awk', 'sort', 'uniq', 'sed'];
     } elseif ($preload) {
         $commands = ['wget', 'nohup'];
+    } else {
+        return true;
     }
 
     // Get the missing commands from the existing transient
@@ -603,7 +603,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_front_assets() {
         if (wp_verify_nonce($nonce, 'nppp_redirect_nonce')) {
             // Keep legacy frontend notice assets untouched for compatibility.
             wp_enqueue_style('nppp_admin-front-css', plugins_url('../frontend/css/fastcgi-cache-purge-and-preload-nginx-front.css', __FILE__), array(), '2.1.7');
-            wp_enqueue_script('nppp_admin-front-js', plugins_url('../frontend/js/fastcgi-cache-purge-and-preload-nginx-front.js', __FILE__), array('jquery'), '2.1.7', true);
+            wp_enqueue_script('nppp_admin-front-js', plugins_url('../frontend/js/fastcgi-cache-purge-and-preload-nginx-front.js', __FILE__), array(), '2.1.7', true);
 
             // Enqueue isolated frontend toast assets for single-page action results.
             wp_enqueue_style('nppp-front-toast-css', plugins_url('../frontend/css/nppp-front-toast.css', __FILE__), array(), '2.1.7');
