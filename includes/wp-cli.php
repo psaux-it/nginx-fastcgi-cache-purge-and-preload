@@ -1004,9 +1004,10 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         }
 
         if ( ! $wp_filesystem->exists( $pid_file ) ) {
+            nppp_cleanup_preload_state();
             $porcelain
                 ? WP_CLI::line( 'warning' )
-                : WP_CLI::warning( __( 'No active preload process found (PID file absent).', 'fastcgi-cache-purge-and-preload-nginx' ) );
+                : WP_CLI::warning( __( 'No active preload process found (PID absent).', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
 
@@ -1014,14 +1015,16 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( $pid <= 0 ) {
             $wp_filesystem->delete( $pid_file );
+            nppp_cleanup_preload_state();
             $porcelain
                 ? WP_CLI::line( 'warning' )
-                : WP_CLI::warning( __( 'Invalid PID in lock file. Stale lock removed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+                : WP_CLI::warning( __( 'Invalid PID. Stale file removed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
 
         if ( ! nppp_is_process_alive( $pid ) ) {
             $wp_filesystem->delete( $pid_file );
+            nppp_cleanup_preload_state();
             $porcelain
                 ? WP_CLI::line( 'warning' )
                 /* translators: %d: Process ID that is no longer alive */
@@ -1081,6 +1084,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             if ( ! $killed ) {
                 // safexec is the ONLY valid kill path for a nobody process.
                 // posix_kill / kill -9 from PHP-FPM user will return EPERM — do NOT attempt them.
+                nppp_watcher_delete_token();
                 $porcelain
                     ? WP_CLI::line( 'error' )
                     : WP_CLI::error( sprintf(
@@ -1113,6 +1117,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             }
 
             if ( ! $killed ) {
+                nppp_watcher_delete_token();
                 $porcelain
                     ? WP_CLI::line( 'error' )
                     : WP_CLI::error( sprintf(
@@ -1125,6 +1130,12 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         }
 
         $wp_filesystem->delete( $pid_file );
+
+        // Clear all preload runtime state.
+        // The watchdog process was already killed above before the main-kill attempt;
+        // invalidate its token and stop the tick monitor now that the kill is confirmed.
+        nppp_cleanup_preload_state();
+        nppp_watcher_delete_token();
 
         $porcelain
             ? WP_CLI::line( 'success' )
