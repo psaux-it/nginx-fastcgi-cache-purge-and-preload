@@ -1081,7 +1081,6 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             if ( ! $killed ) {
                 // safexec is the ONLY valid kill path for a nobody process.
                 // posix_kill / kill -9 from PHP-FPM user will return EPERM — do NOT attempt them.
-                $wp_filesystem->delete( $pid_file );
                 $porcelain
                     ? WP_CLI::line( 'error' )
                     : WP_CLI::error( sprintf(
