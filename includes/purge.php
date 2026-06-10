@@ -1642,6 +1642,15 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             $process_user = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( "ps -o user= -p " . escapeshellarg( $pid ) ) ) : '';
             $killed_by_safexec = false;
 
+            // Kill the watchdog FIRST, before any attempt to kill the main preload process.
+            // The watchdog polls /proc/$pid via a shell loop; if the main process dies while
+            // the watchdog is still alive, there is a brief window in which it wakes up,
+            // detects the dead PID, and fires the post-preload completion HTTP POST —
+            // running index rebuild, mail, and hit-count updates for a run the user
+            // explicitly interrupted. Killing the watchdog and invalidating its token before
+            // the main-process kill closes this race window entirely.
+            nppp_stop_watchdog();
+
             if ($process_user === 'nobody') {
                 $safexec_path = '/usr/bin/safexec';
 
@@ -1725,17 +1734,12 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 }
             }
 
-            // Kill confirmed — now safe to clear the tick monitor hook and phase state.
-            // This is intentionally placed here and NOT at the top of the function,
-            // because the two early-return paths above (SIGKILL failed, kill not found)
-            // leave the process running. In those cases we must NOT destroy monitoring.
-            wp_clear_scheduled_hook('npp_cache_preload_status_event');
-            delete_transient($nppp_phase_key);
-            delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
-
-            // Kill the watchdog after purge has already killed the preload
-            nppp_kill_preload_watcher();
-            nppp_watcher_delete_token();
+            // Kill confirmed — clear the tick monitor hook and phase state.
+            // Intentionally placed here (not at function top): the two early-return paths
+            // above leave the main process running, so the tick monitor must stay active
+            // for natural-completion cleanup in those cases.
+            // The watchdog was already killed above, before the main-kill attempt race window.
+            nppp_cleanup_preload_state();
 
             // If on-going preload action halted via purge
             // that means user restrictly wants to purge cache
