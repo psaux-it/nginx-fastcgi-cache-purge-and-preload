@@ -377,3 +377,26 @@ function nppp_cron_wake_handler(): void {
     // Respond and exit cleanly.
     wp_die( 'ok', '', [ 'response' => 200 ] );
 }
+
+// ---------------------------------------------------------------------------
+// Preload termination & state cleanup helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Idempotent cleanup of watchdog and its token.
+ * Safe to call even if the watchdog is already dead.
+ */
+function nppp_stop_watchdog(): void {
+    nppp_kill_preload_watcher();
+    nppp_watcher_delete_token();
+}
+
+/**
+ * Clear the tick‑monitor cron hook and phase/cycle transients.
+ * Must only be called when the main preload process is definitely dead.
+ */
+function nppp_clear_preload_scheduler(): void {
+    wp_clear_scheduled_hook( 'npp_cache_preload_status_event' );
+    delete_transient( 'nppp_preload_phase_' . md5( 'nppp' ) );
+    delete_transient( 'nppp_preload_cycle_start_' . md5( 'nppp' ) );
+}
