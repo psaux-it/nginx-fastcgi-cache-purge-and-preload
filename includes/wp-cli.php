@@ -1018,13 +1018,14 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             nppp_cleanup_preload_state();
             $porcelain
                 ? WP_CLI::line( 'warning' )
-                : WP_CLI::warning( __( 'Invalid PID. Stale file removed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+                : WP_CLI::warning( __( 'Invalid PID. Stale lock removed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
 
         if ( ! nppp_is_process_alive( $pid ) ) {
             $wp_filesystem->delete( $pid_file );
             nppp_cleanup_preload_state();
+            nppp_watcher_delete_token();
             $porcelain
                 ? WP_CLI::line( 'warning' )
                 /* translators: %d: Process ID that is no longer alive */
