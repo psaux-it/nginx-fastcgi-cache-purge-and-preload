@@ -190,7 +190,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             ? (int) $GLOBALS['nppp_cli_ob_level'] + 1
             : -1;
         if ( ob_get_level() === $our_level && $display_notice ) {
-            echo esc_html( $sanitized_message ) . "\n";
+            echo $sanitized_message . "\n";
         }
         return;
     }
