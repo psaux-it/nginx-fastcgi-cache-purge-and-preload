@@ -20,11 +20,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants
 // ---------------------------------------------------------------------------
 
-define( 'NPPP_WATCHER_TOKEN_TTL',   12 * HOUR_IN_SECONDS );
-define( 'NPPP_WATCHER_TOKEN_KEY',   'nppp_ping_token_'   . md5( 'nppp' ) );
+define( 'NPPP_WATCHER_TOKEN_TTL',    12 * HOUR_IN_SECONDS );
+define( 'NPPP_WATCHER_TOKEN_KEY',    'nppp_ping_token_'   . md5( 'nppp' ) );
 define( 'NPPP_WATCHER_TOKEN_OPTION', 'nppp_ping_token_db' );
-define( 'NPPP_WATCHER_PID_FILE',    'preload_watcher.pid' );
-define( 'NPPP_WATCHER_AJAX_ACTION', 'nppp_cron_wake' );
+define( 'NPPP_WATCHER_PID_FILE',     'preload_watcher.pid' );
+define( 'NPPP_WATCHER_AJAX_ACTION',  'nppp_cron_wake' );
 
 // ---------------------------------------------------------------------------
 // Rate limiting
