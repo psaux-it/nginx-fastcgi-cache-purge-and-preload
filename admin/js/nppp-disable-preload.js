@@ -109,6 +109,17 @@
             // disable preload proxy checkbox
             $('#nginx_cache_preload_enable_proxy').prop('disabled', true);
 
+            // disable preload related pages checkbox
+            $('input[type="checkbox"][name="nginx_cache_settings[nppp_related_preload_after_manual]"]')
+                .prop('disabled', true)
+                .attr({'aria-disabled': 'true'})
+                .off('.nppp')
+                .on('click.nppp change.nppp', function(e) {
+                    e.preventDefault();
+                    return false;
+                })
+                .closest('label, .form-table tr, p').css({ cursor: 'not-allowed' });
+
             // Disable proxy host/port fields
             $('#nginx_cache_preload_proxy_host').prop('disabled', true);
             $('#nginx_cache_preload_proxy_port').prop('disabled', true);
@@ -163,7 +174,7 @@
                     });
 
                 $toggle.closest('.nppp-onoffswitch-preload-feeds')
-                    .css({ opacity: '0.5', cursor: 'not-allowed' })
+                    .css({ cursor: 'not-allowed' })
                     .find('.nppp-onoffswitch-label-preload-feeds')
                     .css({ 'pointer-events': 'none', 'cursor': 'not-allowed' });
             })();
@@ -201,6 +212,7 @@
         npppHardDisableClick('#nginx-extension-reset-defaults');
         npppHardDisableClick('#nginx-mobile-ua-reset-defaults');
         npppHardDisableClick('#nginx-cache-schedule-set');
+        npppHardDisableClick('[name="nginx_cache_settings[nppp_related_preload_after_manual]"]');
     });
 
     // Disable the Preload button on the Advanced Tab
