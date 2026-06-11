@@ -649,32 +649,32 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             }
 
             // Define a default success message
-            $default_success_message = __( 'SUCCESS: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' );
+            $default_success_message = __( 'SUCCESS: Nginx cache preloading has started in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' );
 
             // Check the status of $nppp_is_rest_api and display success message accordingly
             if (is_bool($nppp_is_rest_api) && $nppp_is_rest_api) {
                 if (!$preload_mobile) {
-                    nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache preloading has started in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 } else {
-                    nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache preloading has started for Mobile in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 }
             }
 
             // Check the status of $nppp_is_wp_cron and display success message accordingly
             if (is_bool($nppp_is_wp_cron) && $nppp_is_wp_cron) {
                 if (!$preload_mobile) {
-                    nppp_display_admin_notice('success', __( 'SUCCESS CRON: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS CRON: Nginx cache preloading has started in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 } else {
-                    nppp_display_admin_notice('success', __( 'SUCCESS CRON: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS CRON: Nginx cache preloading has started for Mobile in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 }
             }
 
             // Check the status of $nppp_is_admin_bar and display success message accordingly
             if (is_bool($nppp_is_admin_bar) && $nppp_is_admin_bar) {
                 if (!$preload_mobile) {
-                    nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache preloading has started in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 } else {
-                    nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache preloading has started for Mobile in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 }
             }
 
@@ -683,7 +683,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 if (!$preload_mobile) {
                     nppp_display_admin_notice('success', $default_success_message);
                 } else {
-                    nppp_display_admin_notice('success', __( 'SUCCESS: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS: Nginx cache preloading has started for Mobile in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 }
             }
         } elseif ($status === 1) {
