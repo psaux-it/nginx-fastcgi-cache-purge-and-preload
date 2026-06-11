@@ -488,7 +488,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
     }
 
     // For the stop-preload action the user is on the Status tab
-    if ( $action === 'nppp_stop_preload' ) {
+    if ( $action === 'nppp_stop_preload' || $action === 'nppp_preload_cache' ) {
         $redirect_url .= '#status';
     }
 
