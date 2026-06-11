@@ -121,6 +121,7 @@
             // Disable preload exclude reset actions
             $('#nginx-regex-reset-defaults').prop('disabled', true);
             $('#nginx-extension-reset-defaults').prop('disabled', true);
+            $('#nginx-mobile-ua-reset-defaults').prop('disabled', true);
 
             // Disable preload exclude fields (not editable/clickable)
             $('#nginx_cache_reject_regex').prop('disabled', true).attr('readonly', 'readonly');
@@ -198,6 +199,7 @@
         npppHardDisableClick('.nppp-preload-btn');
         npppHardDisableClick('#nginx-regex-reset-defaults');
         npppHardDisableClick('#nginx-extension-reset-defaults');
+        npppHardDisableClick('#nginx-mobile-ua-reset-defaults');
         npppHardDisableClick('#nginx-cache-schedule-set');
     });
 
