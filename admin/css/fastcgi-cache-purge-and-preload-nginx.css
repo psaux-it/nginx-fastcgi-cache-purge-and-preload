@@ -5204,7 +5204,7 @@ div.updated.notice-nppp p,
 
 /* Stop Preload button — amber/orange, distinct from purge (red) and preload (green) */
 #nppp-stop-preload-button.nppp-button {
-    background-color: #e67e22;
+    background-color: #F4A460;
     color: white;
 }
 
