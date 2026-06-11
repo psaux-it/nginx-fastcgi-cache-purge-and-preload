@@ -99,6 +99,9 @@
             // disable reset cache key regex button
             $('#nginx-key-regex-reset-defaults').prop('disabled', true);
 
+            // disable reset mobile user agent button
+            $('#nginx-mobile-ua-reset-defaults').prop('disabled', true);
+
             // disable clear logs button
             $('#clear-logs-button').prop('disabled', true);
 
