@@ -62,6 +62,19 @@
                 });
         }
 
+        // Disable the Stop Preload button in the WP admin bar
+        var $stopPreloadButton = $('#wp-admin-bar-stop-preload-cache');
+        if ($stopPreloadButton.length) {
+            $stopPreloadButton.off('click');
+
+            $stopPreloadButton.find('a')
+                .removeAttr('href')
+                .css({
+                    'opacity': '0.5',
+                    'cursor': 'not-allowed'
+                });
+        }
+
         // Disable the Preload button on the Dashboard Widget
         $('.nppp-action-button[data-action="nppp-widget-preload"]')
             .addClass('disabled')
