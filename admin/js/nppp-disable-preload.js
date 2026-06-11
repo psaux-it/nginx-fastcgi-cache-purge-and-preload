@@ -87,7 +87,7 @@
         // Check if we're on the plugin settings page to disable Preload-related features
         if ($('#nppp-nginx-tabs').length > 0) {
             // Disable the Preload button on the Settings page
-            $('#nppp-preload-button').addClass('disabled').removeAttr('href');
+            $('#nppp-preload-button, #nppp-stop-preload-button').addClass('disabled').removeAttr('href');
 
             // Disable auto preload
             $('#nginx_cache_auto_preload').prop('disabled', true);
@@ -192,6 +192,7 @@
 
         // Hard-disable click routes for preload-only actions.
         npppHardDisableClick('#nppp-preload-button');
+        npppHardDisableClick('#nppp-stop-preload-button');
         npppHardDisableClick('#nppp-preload-url');
         npppHardDisableClick('#nppp-preload-url .nppp-tooltip');
         npppHardDisableClick('.nppp-preload-btn');
