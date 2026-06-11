@@ -3941,7 +3941,7 @@ $(document).ready(function() {
     });
 
     // Set cache button behaviours
-    $('#nppp-purge-button, #nppp-preload-button').on('click', function(event) {
+    $('#nppp-purge-button, #nppp-preload-button, #nppp-stop-preload-button').on('click', function(event) {
         // Prevent the default click behavior
         event.preventDefault();
 
