@@ -246,6 +246,13 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 
 == Changelog ==
 
+= 2.1.8 (2026-06-28) =
+
+* Fixed: "Purge All" now terminates the preload watchdog before stopping the main preload process, closing a post-completion race window that could leave stale preload state behind.
+* Fixed: WP-CLI "preload --stop" no longer clears the preload PID when the underlying process termination fails (safexec), preventing broken preload state and subsequent workflow failures.
+* Fixed: WP-CLI "preload --stop" now performs complete preload state cleanup, including scheduled cron events, transients, and watchdog tokens.
+* Added: "Stop Preload" button in the Status tab and Admin Bar. Previously, stopping an active preload process required using "Purge All" on UI, which also cleared the entire cache. The new button stops the preload process immediately while preserving the existing cache.
+
 = 2.1.7 (2026-06-08) =
 
 2.1.7 is the cache coverage release. The core motivation: cache every URL 
