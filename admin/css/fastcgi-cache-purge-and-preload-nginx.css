@@ -5201,3 +5201,47 @@ div.updated.notice-nppp p,
     50%  { box-shadow: 0 0 0 6px rgba(34, 113, 177, 0); }
     100% { box-shadow: 0 0 0 0 rgba(34, 113, 177, 0); }
 }
+
+/* Stop Preload button — amber/orange, distinct from purge (red) and preload (green) */
+#nppp-stop-preload-button.nppp-button {
+    background-color: #e67e22;
+    color: white;
+}
+
+#nppp-stop-preload-button.nppp-button:hover {
+    background-color: #d35400;
+    color: white;
+}
+
+/* Wrapper for the Stop Preload button inside the Preload Progress section */
+.nppp-stop-preload-wrap {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Tip text beneath the Stop Preload button */
+.nppp-stop-preload-tip {
+    font-size: 13px;
+    color: #646970;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    line-height: 1.4;
+}
+
+.nppp-stop-preload-tip .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+/* Mobile: keep Stop Preload button full-row if needed */
+@media screen and (max-width: 768px) {
+    .nppp-stop-preload-wrap {
+        margin-top: 12px;
+    }
+}
