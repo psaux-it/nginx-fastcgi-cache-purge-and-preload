@@ -16,6 +16,7 @@
         // Select the buttons
         var npppAllButtonsfront = {
             npppPreload: $('#wp-admin-bar-preload-cache'),
+            npppStopPreload: $('#wp-admin-bar-stop-preload-cache'),
             preloadButtonSinglefront: $('#wp-admin-bar-preload-cache-single')
         };
 
