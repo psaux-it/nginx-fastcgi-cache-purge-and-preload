@@ -16,6 +16,7 @@
         // Select the buttons
         var npppAllButtonsfront = {
             npppPreload: $('#wp-admin-bar-preload-cache'),
+            npppStopPreload: $('#wp-admin-bar-stop-preload-cache'),
             npppPurge: $('#wp-admin-bar-purge-cache'),
             npppStatus: $('#wp-admin-bar-fastcgi-cache-status'),
             npppAdvanced: $('#wp-admin-bar-fastcgi-cache-advanced'),
