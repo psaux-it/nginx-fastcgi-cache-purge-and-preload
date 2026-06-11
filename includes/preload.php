@@ -1515,3 +1515,165 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
         }
     }
 }
+
+/**
+ * Stop a running preload process from the admin UI — cache contents preserved.
+ *
+ * Mirrors the WP-CLI "preload --stop" workflow for UI. CLI has own function.
+ * Result is captured by the admin-bar action buffer and shown as a redirect
+ * notice on the Status tab.
+ *
+ * @since v2.1.9
+ * @param string $pid_file Absolute path to the cache_preload.pid runtime file.
+ * @return void
+ */
+function nppp_stop_preload_ui( string $pid_file ): void {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ( $wp_filesystem === false ) {
+        nppp_display_admin_notice(
+            'error',
+            __( 'ERROR STOP: Failed to initialize WP Filesystem.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
+    // No PID file — no active preload to stop.
+    if ( ! $wp_filesystem->exists( $pid_file ) ) {
+        nppp_cleanup_preload_state();
+        nppp_display_admin_notice(
+            'warning',
+            __( 'INFO STOP: No active preload process found.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
+    $pid = (int) trim( (string) nppp_perform_file_operation( $pid_file, 'read' ) );
+
+    if ( $pid <= 0 ) {
+        $wp_filesystem->delete( $pid_file );
+        nppp_cleanup_preload_state();
+        nppp_display_admin_notice(
+            'warning',
+            __( 'INFO STOP: Invalid PID detected. Stale lock file removed.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
+    if ( ! nppp_is_process_alive( $pid ) ) {
+        $wp_filesystem->delete( $pid_file );
+        nppp_cleanup_preload_state();
+        nppp_watcher_delete_token();
+        nppp_display_admin_notice(
+            'warning',
+            /* translators: %d: Process ID that is no longer alive */
+            sprintf(
+                __( 'INFO STOP: Preload process (PID %d) already finished.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $pid
+            )
+        );
+        return;
+    }
+
+    // Kill the watchdog monitor first — before the main preload process.
+    nppp_kill_preload_watcher();
+
+    // Kill the main preload process — safexec-aware.
+    // When safexec SUID drops wget to nobody, only safexec --kill can signal it;
+    // a plain kill/posix_kill from the PHP-FPM user returns EPERM silently.
+    $killed       = false;
+    $process_user = '';
+
+    if ( function_exists( 'shell_exec' ) ) {
+        $process_user = trim( (string) shell_exec(
+            'ps -o user= -p ' . escapeshellarg( (string) $pid ) . ' 2>/dev/null'
+        ) );
+    }
+
+    if ( $process_user === 'nobody' ) {
+        // Process dropped to nobody via safexec SUID — only safexec --kill works.
+        $sfx = '/usr/bin/safexec';
+        if ( ! file_exists( $sfx ) && function_exists( 'shell_exec' ) ) {
+            $detected = trim( (string) shell_exec( 'command -v safexec 2>/dev/null' ) );
+            $sfx      = ( $detected !== '' ) ? $detected : '';
+        }
+
+        if ( $sfx !== '' && function_exists( 'stat' ) ) {
+            $sfx_info = @stat( $sfx );
+            if ( $sfx_info
+                && isset( $sfx_info['uid'], $sfx_info['mode'] )
+                && $sfx_info['uid'] === 0
+                && ( $sfx_info['mode'] & 04000 ) === 04000
+            ) {
+                // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+                shell_exec( escapeshellarg( $sfx ) . ' --kill=' . (int) $pid . ' 2>&1' );
+                usleep( 250000 );
+                if ( ! nppp_is_process_alive( $pid ) ) {
+                    $killed = true;
+                }
+            }
+        }
+
+        if ( ! $killed ) {
+            // safexec is the only valid kill path for a nobody process.
+            nppp_watcher_delete_token();
+            nppp_display_admin_notice(
+                'error',
+                /* translators: 1: Process ID 2: Same PID for the manual kill command example */
+                sprintf(
+                    __( 'ERROR STOP: Cannot stop preload PID %1$d (via safexec). Please contact support and report this issue.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $pid,
+                    $pid
+                )
+            );
+            return;
+        }
+    } else {
+        // Standard (non-safexec) process — SIGTERM → verify → SIGKILL → verify.
+        // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec
+        exec( sprintf( 'kill -TERM %d 2>/dev/null', $pid ) );
+        usleep( 300000 );
+
+        if ( nppp_is_process_alive( $pid ) ) {
+            $kill_bin = function_exists( 'shell_exec' )
+                ? trim( (string) shell_exec( 'command -v kill 2>/dev/null' ) )
+                : '';
+            if ( $kill_bin !== '' ) {
+                // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+                shell_exec( escapeshellarg( $kill_bin ) . ' -9 ' . (int) $pid . ' 2>/dev/null' );
+                usleep( 300000 );
+            }
+        }
+
+        if ( ! nppp_is_process_alive( $pid ) ) {
+            $killed = true;
+        }
+
+        if ( ! $killed ) {
+            nppp_watcher_delete_token();
+            nppp_display_admin_notice(
+                'error',
+                /* translators: %d: Process ID that could not be stopped */
+                sprintf(
+                    __( 'ERROR STOP: Failed to stop preload process (PID %d). Please contact support and report this issue.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $pid
+                )
+            );
+            return;
+        }
+    }
+
+    // Confirmed kill — remove PID file and clear all preload runtime state.
+    $wp_filesystem->delete( $pid_file );
+    nppp_cleanup_preload_state();
+    nppp_watcher_delete_token();
+
+    nppp_display_admin_notice(
+        'success',
+        /* translators: %d: Process ID of the terminated preload worker */
+        sprintf(
+            __( 'SUCCESS STOP: Preload process (%d) stopped successfully. The existing cache has been preserved.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $pid
+        )
+    );
+}
