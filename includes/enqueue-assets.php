@@ -281,14 +281,15 @@ function nppp_disable_features($unsupported, $preload) {
     } elseif ( $preload === true ) {
         // If preload feature not useable
         $features = array(
-            'nginx_cache_auto_preload'           => 'no',
-            'nginx_cache_auto_preload_mobile'    => 'no',
-            'nginx_cache_watchdog'               => 'no',
-            'nginx_cache_schedule'               => 'no',
-            'nginx_cache_preload_enable_proxy'   => 'no',
-            'nginx_cache_pctnorm_mode'           => 'off',
-            'nginx_cache_send_mail'              => 'no',
-            'nginx_cache_preload_feeds'          => 'no',
+            'nginx_cache_auto_preload'            => 'no',
+            'nginx_cache_auto_preload_mobile'     => 'no',
+            'nginx_cache_watchdog'                => 'no',
+            'nginx_cache_schedule'                => 'no',
+            'nginx_cache_preload_enable_proxy'    => 'no',
+            'nginx_cache_pctnorm_mode'            => 'off',
+            'nginx_cache_send_mail'               => 'no',
+            'nginx_cache_preload_feeds'           => 'no',
+            'nppp_related_preload_after_manual'   => 'no',
         );
     } else {
         return;
