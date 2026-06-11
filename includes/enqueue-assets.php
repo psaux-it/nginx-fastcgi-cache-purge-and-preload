@@ -301,6 +301,17 @@ function nppp_disable_features($unsupported, $preload) {
 
     // Update the option in the database.
     update_option( 'nginx_cache_settings', $options );
+
+    // Preload schedule and watchdog are dead in both disable modes — tear
+    // out of the cron queue so they cannot fire.
+    wp_clear_scheduled_hook( 'npp_cache_preload_event' );
+    wp_clear_scheduled_hook( 'npp_cache_preload_status_event' );
+
+    // The URL→filepath index updater only serves single-URL purge, which is
+    // still functional in preload-only-disabled mode — only cancel it on full disable.
+    if ( $unsupported ) {
+        wp_clear_scheduled_hook( 'nppp_index_updater_event' );
+    }
 }
 
 // Check NPP required shell toolset for plugin and preload action
