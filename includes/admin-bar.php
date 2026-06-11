@@ -205,6 +205,17 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
         }
     }
 
+    // Add "Stop Preload" admin-bar menu for NPP
+    $wp_admin_bar->add_menu(array(
+        'parent' => 'fastcgi-cache-operations',
+        'id'     => 'stop-preload-cache',
+        'title'  => __('Stop Preload', 'fastcgi-cache-purge-and-preload-nginx'),
+        'href'   => $needs_setup
+            ? $setup_url
+            : wp_nonce_url(admin_url('admin.php?action=nppp_stop_preload'), 'stop_preload_nonce'),
+        'meta'   => array('class' => 'nppp-action-trigger'),
+    ));
+
     // Add "Status" admin-bar parent menu for NPP
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
@@ -286,6 +297,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         'nppp_purge_cache_single'   => 'purge_cache_nonce',
         'nppp_preload_cache'        => 'preload_cache_nonce',
         'nppp_preload_cache_single' => 'preload_cache_nonce',
+        'nppp_stop_preload'         => 'stop_preload_nonce',
     );
 
     // Prevents hijacking other pages
@@ -425,6 +437,10 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
             nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
             $nppp_single_action = true;
             break;
+        case 'nppp_stop_preload':
+            // Stop the ongoing preload without purging the cache.
+            nppp_stop_preload_ui( $PIDFILE );
+            break;
         default:
             return;
     }
@@ -469,6 +485,11 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
             ),
             admin_url('options-general.php')
         );
+    }
+
+    // For the stop-preload action the user is on the Status tab
+    if ( $action === 'nppp_stop_preload' ) {
+        $redirect_url .= '#status';
     }
 
     wp_safe_redirect($redirect_url);
