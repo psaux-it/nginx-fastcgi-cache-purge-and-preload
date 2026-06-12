@@ -2250,7 +2250,6 @@ button.nppp-preload-btn[disabled] {
 
 .nppp-version-num {
     font-size: 12px;
-    font-weight: 800;
     letter-spacing: .5px;
     font-variant-numeric: tabular-nums;
     text-shadow: 0 0 8px hsla(210,100%,80%,.9);
@@ -2269,7 +2268,7 @@ button.nppp-preload-btn[disabled] {
 .nppp-tip-motto {
     font-size: 12px;
     font-weight: 600;
-    letter-spacing: .25px;
+    letter-spacing: .45px;
     line-height: 1;
     white-space: nowrap;
 }
