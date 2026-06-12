@@ -489,9 +489,9 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths,
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="action"><?php esc_html_e('nginx.conf (Strict Detection)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action"><?php esc_html_e('nginx.conf (Strict)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppNginxConfDetected">
-                            <?php if ( ! empty($conf_path) ) : ?>
+                            <?php if ( ! empty($conf_path) && ! $nppp_assume_on ) : ?>
                                 <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
                                 <span><?php echo esc_html($conf_path); ?></span>
                             <?php else : ?>
