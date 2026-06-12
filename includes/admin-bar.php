@@ -209,7 +209,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
     $wp_admin_bar->add_menu(array(
         'parent' => 'fastcgi-cache-operations',
         'id'     => 'stop-preload-cache',
-        'title'  => __('Stop Preload', 'fastcgi-cache-purge-and-preload-nginx'),
+        'title'  => __('Preload Stop', 'fastcgi-cache-purge-and-preload-nginx'),
         'href'   => $needs_setup
             ? $setup_url
             : wp_nonce_url(admin_url('admin.php?action=nppp_stop_preload'), 'stop_preload_nonce'),
