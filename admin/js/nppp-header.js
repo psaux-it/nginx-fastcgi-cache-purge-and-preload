@@ -2035,6 +2035,7 @@
   }
 
   function start() {
+    if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) return;
     S.host = pickHost();
     if (!S.host) return;
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
