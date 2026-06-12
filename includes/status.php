@@ -1131,6 +1131,7 @@ function nppp_my_status_html() {
                         <div id="wpt-status" class="nppp-progress-status">
                             <?php esc_html_e( 'Initializing...', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                         </div>
+                        <?php if ( nppp_is_preload_running( $wp_filesystem ) ) : ?>
                         <!-- Stop Preload Button -->
                         <div class="nppp-stop-preload-wrap">
                             <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?action=nppp_stop_preload' ), 'stop_preload_nonce' ) ); ?>"
@@ -1140,6 +1141,7 @@ function nppp_my_status_html() {
                                 <?php esc_html_e( 'Stop Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </a>
                         </div>
+                        <?php endif; ?>
                     </div>
                 </section>
 
