@@ -10,7 +10,11 @@
 
 <div align="center">
 <a href="https://dev.to/psauxit/why-purging-nginx-cache-is-only-half-the-job-and-how-i-built-the-other-half-3bhp">
-<img src="https://img.shields.io/badge/Dev.to-Read%20Full%20Article-black?style=for-the-badge&logo=dev.to">
+<img src="https://img.shields.io/badge/Dev.to-Architecture-black?style=for-the-badge&logo=dev.to">
+</a>
+&nbsp;&nbsp;
+<a href="https://www.psauxit.com/nginx-fastcgi-cache-wordpress-guide/">
+<img src="https://img.shields.io/badge/FAQ-Guide%20%26%20Tips-0078D7?style=for-the-badge&logo=readthedocs&logoColor=white">
 </a>
 </div>
 
