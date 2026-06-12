@@ -75,10 +75,16 @@ function nppp_nginx_cache_settings_page() {
                         <?php esc_html_e( 'Preload All', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     </a>
                 </div>
-                <p class="nppp-cache-tip">
-                    <span class="dashicons dashicons-info"></span>
-                    <?php esc_html_e( 'Use Purge All to stop Preload All', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                </p>
+                <div class="nppp-cache-tip">
+                    <span class="nppp-tip-version"
+                        data-version="<?php echo esc_attr( defined( 'NPPP_PLUGIN_VERSION' ) ? NPPP_PLUGIN_VERSION : '2.1.7' ); ?>">
+                        <span class="nppp-version-v">v</span><span class="nppp-version-num"><?php echo esc_html( defined( 'NPPP_PLUGIN_VERSION' ) ? NPPP_PLUGIN_VERSION : '2.1.7' ); ?></span>
+                    </span>
+                    <span class="nppp-tip-divider" aria-hidden="true"></span>
+                    <span class="nppp-tip-motto" aria-label="<?php esc_attr_e( 'Purge. Preload. Perform.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
+                        <span class="nppp-motto-word nppp-w1"><?php esc_html_e( 'Purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>&#32;<span class="nppp-motto-word nppp-w2"><?php esc_html_e( 'Preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>&#32;<span class="nppp-motto-word nppp-w3"><?php esc_html_e( 'Perform.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    </span>
+                </div>
             </div>
         </div>
         <?php
