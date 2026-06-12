@@ -4966,6 +4966,94 @@ function npppupdateStatus() {
     nppprgStatusSpan.appendChild(iconSpanRg);
     nppprgStatusSpan.append(rgStatusText);
 
+    // Fetch and update nginx.conf strict detection status
+    var npppNginxConfDetectedSpan = document.getElementById("npppNginxConfDetected");
+    var npppNginxConfDetected = npppNginxConfDetectedSpan.textContent.trim();
+    npppNginxConfDetectedSpan.textContent = '';
+    npppNginxConfDetectedSpan.style.fontSize = "14px";
+
+    let iconSpanNginxConf = document.createElement('span');
+    let nginxConfStatusText = '';
+
+    if (npppNginxConfDetected === "Not Found") {
+        npppNginxConfDetectedSpan.style.color = "red";
+        iconSpanNginxConf.classList.add("dashicons", "dashicons-no");
+        nginxConfStatusText = ' ' + __('Not Found', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        npppNginxConfDetectedSpan.style.color = "green";
+        iconSpanNginxConf.classList.add("dashicons", "dashicons-yes");
+        nginxConfStatusText = ' ' + npppNginxConfDetected;
+    }
+
+    npppNginxConfDetectedSpan.appendChild(iconSpanNginxConf);
+    npppNginxConfDetectedSpan.append(nginxConfStatusText);
+
+    // Fetch and update nginx signature / headers signal status
+    var npppNginxSignalSpan = document.getElementById("npppNginxSignal");
+    var npppNginxSignal = npppNginxSignalSpan.textContent.trim();
+    npppNginxSignalSpan.textContent = '';
+    npppNginxSignalSpan.style.fontSize = "14px";
+
+    let iconSpanNginxSignal = document.createElement('span');
+    let nginxSignalStatusText = '';
+
+    if (npppNginxSignal === "Detected") {
+        npppNginxSignalSpan.style.color = "green";
+        iconSpanNginxSignal.classList.add("dashicons", "dashicons-yes");
+        nginxSignalStatusText = ' ' + __('Detected', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        npppNginxSignalSpan.style.color = "orange";
+        iconSpanNginxSignal.classList.add("dashicons", "dashicons-clock");
+        nginxSignalStatusText = ' ' + __('None', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    npppNginxSignalSpan.appendChild(iconSpanNginxSignal);
+    npppNginxSignalSpan.append(nginxSignalStatusText);
+
+    // Fetch and update PHP open_basedir restriction status
+    var npppOpenBasedirSpan = document.getElementById("npppOpenBasedir");
+    var npppOpenBasedir = npppOpenBasedirSpan.textContent.trim();
+    npppOpenBasedirSpan.textContent = '';
+    npppOpenBasedirSpan.style.fontSize = "14px";
+
+    let iconSpanOpenBasedir = document.createElement('span');
+    let openBasedirStatusText = '';
+
+    if (npppOpenBasedir === "Active") {
+        npppOpenBasedirSpan.style.color = "orange";
+        iconSpanOpenBasedir.classList.add("dashicons", "dashicons-warning");
+        openBasedirStatusText = ' ' + __('Active', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        npppOpenBasedirSpan.style.color = "green";
+        iconSpanOpenBasedir.classList.add("dashicons", "dashicons-yes");
+        openBasedirStatusText = ' ' + __('Not Set', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    npppOpenBasedirSpan.appendChild(iconSpanOpenBasedir);
+    npppOpenBasedirSpan.append(openBasedirStatusText);
+
+    // Fetch and update assume-nginx mode status
+    var npppAssumeNginxSpan = document.getElementById("npppAssumeNginx");
+    var npppAssumeNginx = npppAssumeNginxSpan.textContent.trim();
+    npppAssumeNginxSpan.textContent = '';
+    npppAssumeNginxSpan.style.fontSize = "14px";
+
+    let iconSpanAssumeNginx = document.createElement('span');
+    let assumeNginxStatusText = '';
+
+    if (npppAssumeNginx === "Enabled") {
+        npppAssumeNginxSpan.style.color = "orange";
+        iconSpanAssumeNginx.classList.add("dashicons", "dashicons-clock");
+        assumeNginxStatusText = ' ' + __('Enabled', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        npppAssumeNginxSpan.style.color = "green";
+        iconSpanAssumeNginx.classList.add("dashicons", "dashicons-yes");
+        assumeNginxStatusText = ' ' + __('Off', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    npppAssumeNginxSpan.appendChild(iconSpanAssumeNginx);
+    npppAssumeNginxSpan.append(assumeNginxStatusText);
+
     // Add spin effect to icons
     document.querySelectorAll('.status').forEach(status => {
         status.addEventListener('click', () => {
