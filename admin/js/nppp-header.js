@@ -2070,7 +2070,21 @@
     // First banana spawns 10–30 s in so the user can find their feet first
     S.bananaTimer = 10 + Math.random() * 20;
 
-    requestAnimationFrame(draw);
+    // Defer one frame so the badge has a computed layout, then spawn Walkie
+    // to the right of it.
+    requestAnimationFrame(function positionWalkie() {
+        var badge = document.querySelector('.nppp-cache-tip');
+        if (badge && S.host) {
+            var bRect = badge.getBoundingClientRect();
+            var hRect = S.host.getBoundingClientRect();
+            // Start 50 px past the badge's right edge, capped at 70 % of header width
+            S.walkerX = Math.min((bRect.right - hRect.left) + 50, S.W * 0.70);
+        } else {
+            // Fallback if badge isn't in the DOM yet
+            S.walkerX = Math.round(S.W * 0.45);
+        }
+        requestAnimationFrame(draw);
+    });
   }
 
   function dispose() {
@@ -2094,4 +2108,87 @@
     document.addEventListener('DOMContentLoaded', start, { once: true });
   else
     start();
+})();
+
+/**
+ * NPP Badge — version count-up + live aurora hue sync
+ */
+(function () {
+  'use strict';
+
+  if (window.NPPPAurora && window.NPPPAurora.__badgeAnimated) return;
+  if (window.NPPPAurora) window.NPPPAurora.__badgeAnimated = true;
+
+  /* Version count-up (0.0.0 → x.y.z) */
+  function animateVersion() {
+    var pill = document.querySelector('.nppp-tip-version');
+    var num  = pill && pill.querySelector('.nppp-version-num');
+    if (!num) return;
+
+    var raw     = (pill.getAttribute('data-version') || num.textContent).trim();
+    var parts   = raw.split('.');
+    var targets = parts.map(Number);
+
+    /* Reset immediately */
+    num.textContent = targets.map(function () { return '0'; }).join('.');
+
+    var dur = 850, started = null;
+    function ease(t) { return 1 - Math.pow(1 - t, 3); }
+
+    function step(ts) {
+      if (!started) started = ts;
+      var t = Math.min(1, (ts - started) / dur);
+      num.textContent = targets
+        .map(function (v) { return String(Math.floor(ease(t) * v)); })
+        .join('.');
+      if (t < 1) { requestAnimationFrame(step); }
+      else        { num.textContent = raw; }
+    }
+
+    /* Short pause so page animations settle first */
+    setTimeout(function () { requestAnimationFrame(step); }, 650);
+  }
+
+  /* Live aurora hue sync for badge ring + version pill */
+  function startHueSync() {
+    var badge = document.querySelector('.nppp-cache-tip');
+    var pill  = badge && badge.querySelector('.nppp-tip-version');
+    if (!badge) return;
+
+    var hue = 270;
+
+    (function tick() {
+      hue = (hue + 0.055) % 360;   /* ~3°/s at 60 fps */
+      var h2 = (hue + 65)  % 360;
+      var h3 = (hue + 140) % 360;
+
+      /* Override CSS @keyframes — JS ring is smoother and stays in sync */
+      badge.style.boxShadow =
+        '0 0 0 1.5px hsla(' + (hue | 0) + ',80%,68%,.55),' +
+        '0 0 14px hsla(' + (hue | 0) + ',80%,60%,.20)';
+
+      /* Version pill gradient tracks the same hue pair */
+      if (pill) {
+        pill.style.background =
+          'linear-gradient(135deg,' +
+            'hsla(' + (hue | 0) + ',85%,62%,.64),' +
+            'hsla(' + (h2 | 0) + ',90%,58%,.64))';
+      }
+
+      requestAnimationFrame(tick);
+    })();
+  }
+
+  /* Bootstrap */
+  function init() {
+    animateVersion();
+    startHueSync();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
+
 })();
