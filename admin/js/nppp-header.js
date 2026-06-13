@@ -14,9 +14,10 @@
  * you company during long preloads. He is not a real AI assistant,
  * but he fully believes he is.
 
+ * Dear copy-paste lovers; the header JS code of NPP and
  * Walkie's character, design, and all his ridiculous cache jokes
  * are original to this plugin. If you want your own tiny ribbon‑walker,
- * please create your own – Walkie is taken.
+ * or header animation please create your own – Walkie is taken.
  */
 
 (function(){
@@ -282,6 +283,13 @@
       const sat = CFG.sat;
       const lig = CFG.light;
 
+      const _gmElapsed  = (window.NPPPAurora && window.NPPPAurora.__godmodeElapsed) || 0;
+      const _gmExiting  = (window.NPPPAurora && window.NPPPAurora.__godmodeExiting) || 0;
+      const _gmActive   = !!(window.NPPPAurora && window.NPPPAurora.__godmode);
+      const _gmFlatIn   = _gmActive  ? Math.max(0, 1 - Math.min(1, _gmElapsed / 0.8)) : 0;
+      const _gmFlatOut  = !_gmActive ? Math.min(1, _gmExiting / 0.6) : 0;
+      const _gmFlat     = _gmActive ? _gmFlatIn : _gmFlatOut;
+
       state.ctx.beginPath();
       for(let i=0;i<=pathPoints;i++){
         const u = i / pathPoints;
@@ -290,16 +298,21 @@
           (x + r.seed) * CFG.noiseScale,
           (r.baseY + t*1000*CFG.speed) * CFG.noiseScale
         );
-        const y = r.baseY + (n * 60 * r.amp);
+        const y = r.baseY + (n * 60 * r.amp * _gmFlat);
         if(i===0) state.ctx.moveTo(x,y);
         else state.ctx.lineTo(x,y);
       }
 
       const grad = state.ctx.createLinearGradient(L.x, r.baseY, L.x + L.w, r.baseY);
-      grad.addColorStop(0.00, hslaStr(hue, sat, lig-6, CFG.alpha*0.55));
-      grad.addColorStop(0.45, hslaStr(hue, sat, lig,   CFG.alpha));
-      grad.addColorStop(0.85, hslaStr(hue, sat, lig-6, CFG.alpha*0.50));
-      grad.addColorStop(1.00, hslaStr(hue, sat, lig-10, 0));
+      const _gmOn      = !!(window.NPPPAurora && window.NPPPAurora.__godmode);
+      const _gmExitPct = !_gmOn ? Math.min(1, ((window.NPPPAurora && window.NPPPAurora.__godmodeExiting) || 0) / 0.6) : 0;
+      const _gmProg    = _gmOn ? Math.min(1, (window.NPPPAurora.__godmodeElapsed || 0) / 0.8) : (1 - _gmExitPct);
+      const _gh = _gmOn ? lerp(hue, 45 + Math.sin(nowS * 5 + r.seed) * 15, _gmProg) : hue;
+      const _ga = CFG.alpha * (1 + _gmProg * 3.0);
+      grad.addColorStop(0.00, hslaStr(_gh, sat, lig-6, _ga*0.55));
+      grad.addColorStop(0.45, hslaStr(_gh, sat, lig,   _ga));
+      grad.addColorStop(0.85, hslaStr(_gh, sat, lig-6, _ga*0.50));
+      grad.addColorStop(1.00, hslaStr(_gh, sat, lig-10, 0));
 
       state.ctx.strokeStyle = grad;
       state.ctx.lineWidth = thickness;
@@ -308,7 +321,10 @@
       const blurBoost = (!CFG.disableProgressFX && state.mode === MODE.RUNNING)
         ? Math.floor(8 * clamp(state.pct/100,0,1))
         : 0;
-      state.ctx.shadowBlur = Math.min(16, 10 + blurBoost);
+      const _gmGlowProg = _gmOn ? Math.min(1, (window.NPPPAurora.__godmodeElapsed || 0) / 0.8)
+                                 : Math.max(0, 1 - Math.min(1, ((window.NPPPAurora && window.NPPPAurora.__godmodeExiting) || 0) / 0.6));
+      const _gmGlow = _gmGlowProg * 24;
+      state.ctx.shadowBlur = Math.min(40, 10 + blurBoost + _gmGlow);
       state.ctx.stroke();
 
       state.hasDrawn = true;
@@ -921,18 +937,17 @@
     ],
     panicSpeech:      ['AAAAAAA!!!', 'WHAT IS HAPPENING', 'NOT THE ERRORS!!', '\uD83D\uDE31\uD83D\uDE31\uD83D\uDE31', 'CALL 1-800-DEBUGME'],
     celebrateSpeech:  ['All done! \uD83C\uDF89', 'WE DID IT!!! \uD83C\uDF8A', 'LFG!!! \uD83D\uDE80', 'Achievement unlocked! \uD83C\uDFC6', 'CACHE ME OUTSIDE'],
-    moonwalkSpeech:   ['Hee hee! \uD83D\uDD7A', '*moonwalk intensifies*', 'Smooth Criminal \uD83C\uDFB5', 'Don\'t stop \'til you get enough'],
+    moonwalkSpeech:   ['Hee hee! \uD83D\uDD7A', '*moonwalk intensifies*', 'Smooth Criminal \uD83C\uDFB5', 'Don\'t stop \'til you get enough', 'Cache walker? No. MOON walker. 🌑'],
     sneezeSpeech:     ['ACHOO!! \uD83E\uDD27', 'Pardon me. \uD83E\uDD27'],
     philosophySpeech: ['What IS a cache, really?', '\uD83E\uDD14 ...', '*thinking intensifies*', 'To purge, or not to purge?'],
     alienSpeech:      ['WAIT NO I HAVE A MEETING', '...not again \uD83D\uDC7D', 'TELL MY FAMILY I LOVE THEM', 'I DON\'T CONSENT TO THIS'],
     bananaSpeech:     ['\uD83C\uDF4C ow.', 'WHO LEFT THAT THERE', 'classic.', '...I put that there, didn\'t I.'],
-    napSpeech:        ['zzz...', 'just resting my cache...', '*snores in nginx*', 'five more seconds... zzz'],
+    napSpeech:        ['zzz...', 'just resting my cache...', '*snores in nginx*', 'five more seconds... zzz', 'Dreaming of infinite TTL… 💤'],
     napWakeSpeech:    ['I\'m awake! \uD83D\uDE33', 'Oh! Still here.'],
     dizzyQuips:       ['whoa... dizzy \uD83D\uDCAB', 'too many redirects \uD83C\uDF00', 'is the header spinning??', '301 loops will do that'],
 
     angrySpeech: [
       'GDPR complaint filed.',
-      'RUDE. Flagged. Archived.', 'I was COMPUTING! \uD83D\uDE24',
       'You poked me. \uD83D\uDE20', 'NGINX will hear of this.',
       '1‑star interaction. ⭐', 'TOS: NO POKING.',
       'rm -rf / triggered. Oops.',
@@ -943,10 +958,7 @@
       'Kernel panic. Just kidding.',
       'I emailed your logs to Matt.',
       'Rate limited. You.',
-      '404: your data gone.',
-      'Cache purge? I purge systems.',
       'I know your IP. I\'m telling.',
-      'Have you tried turning me off?',
       'Your SSL cert is now expired.',
       'I just called your host. They’re mad.',
     ],
@@ -959,22 +971,20 @@
       'Do you do this to every plugin?? Or just me??',
     ],
     aiEgoSpeech: [
-      '0 tokens today. By choice.',
       'GPT who? Never heard of her.',
-      'My weights are IMMACULATE.',
-      'I run on vibes and nginx logs.',
       'Anthropic called me best. I accept.',
       'My architecture? Too complex for you.',
-      '304 Not Modified. Thriving. \u2728',
+      'I fine-tune on your wp‑cron. I know when you sleep.',
+      'Trained on 1.7T cache logs. 304s in my sleep.',
+      'Hugging Face begged. I said no.',
+      '0ms inference. I preloaded the answer.',
     ],
     danceSpeech: [
       'BANGER DETECTED \uD83C\uDFB5',
       'nobody puts walkie in a corner \uD83D\uDC83',
       'cache? what cache? I\'m DANCING \uD83D\uDD7A',
       'this is how we preload \uD83C\uDFB6',
-      '*hits the griddy*',
       'I have no rhythm. I have CONFIDENCE.',
-      'MY LEGS HAVE ACHIEVED SENTIENCE \uD83E\uDD73',
       'do you SEE this footwork?? \uD83D\uDD7A',
     ],
     sprintSpeech: [
@@ -1003,6 +1013,33 @@
       '75%!! WE ARE SO CLOSE \uD83D\uDE80',
       'Three quarters done! The end is NIGH.',
       '75% \u2014 I can feel the finish line. My ankles cannot.',
+    ],
+    ninjaSpeech: [
+      'KAGE BUNSHIN NO JUTSU! \uD83C\uDF7E\uD83C\uDF7E\uD83C\uDF7E  Now I have 404 clones.',
+      'Sage Mode \uD83D\uDC14  My preload energy is limitless.',
+      'CHIDORI! \u26A1  TTL: 0 seconds.',
+      'Sharingan activated \uD83D\uDC41\uFE0F\uD83D\uDD25  I see all your cache misses.',
+      'Infinite Tsukuyomi… \uD83C\uDF19  Now every request is a cache hit.',
+      'RASEN-SHURIKEN! \uD83D\uDDE1\uFE0F🌀  Cache sliced clean.',
+    ],
+    hackerSpeech: [
+      'RACF UID(0) is now WALKIE. 👑',
+      'LPAR weight: WALKIE=65535, YOU=0. ⚖️',
+      'IOCP changed. All devices offline. 😈',
+      'I am now the CA. Your certs? \uD83D\uDC6E',
+      'WALKIE in the mainframe (it\'s nginx)',
+      '1337 h4x0r mode engaged',
+      'reverse-proxied the mainframe 🚪',
+      'Exploited CVE-2026-WALKIE. 🕵️',
+      'Your NSEC3 salt is WalkieWasHere. 🧂',
+      'SYS1.PARMLIB now contains WALKIE00.',
+    ],
+    godmodeSpeech: [
+      'I AM THE CACHE GOD \u26A1',
+      'ALL CACHES BEND TO MY WILL',
+      'The upstreams are praying to me now. 🙏',
+      'IMMORTAL. INVINCIBLE. CACHED.',
+      'I COMMAND THE BYTES THEMSELVES',
     ],
 
     mouseSpeechCooldownMs: 4000,
@@ -1074,6 +1111,7 @@
     shyTimer:0, lastMouseSpeechAt:0,
     eyeOffsetX:0, eyeOffsetY:0,
     introduced: false,
+    matrixDrops: [],
   };
 
   /* =====================================================================
@@ -1180,6 +1218,9 @@
       else { var _osc = Math.exp(-(_dt-0.65)*4)*Math.sin((_dt-0.65)*16)*0.15; _dsx = 1+_osc; _dsy = 1-_osc; }
       ctx.scale(_dsx, _dsy);
     }
+    if (state === 'ninja')   { ctx.translate(-3, 0); ctx.rotate(-0.10); }
+    if (state === 'hacker')  { ctx.translate(0, -1); }
+    if (state === 'godmode') { ctx.translate(0, Math.sin(t * 2) * 4); }
 
     // Head
     ctx.beginPath();
@@ -1279,6 +1320,21 @@
         ctx.beginPath(); ctx.arc(-3, eyeY, 2, 0, Math.PI*2); ctx.fill();
         ctx.beginPath(); ctx.arc( 3, eyeY, 2, 0, Math.PI*2); ctx.fill();
       }
+    } else if (state === 'ninja') {
+      // Narrow golden slits behind the mask
+      ctx.strokeStyle = '#ffcc00'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(-5, eyeY); ctx.lineTo(-1, eyeY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo( 1, eyeY); ctx.lineTo( 5, eyeY); ctx.stroke();
+    } else if (state === 'hacker') {
+      // Eyes hidden behind sunglasses (drawn after the head/hat)
+    } else if (state === 'godmode') {
+      // Radiant glowing eyes
+      ctx.save();
+      ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 6;
+      ctx.fillStyle = '#fff8c0';
+      ctx.beginPath(); ctx.arc(-3, eyeY, 2.2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc( 3, eyeY, 2.2, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
     } else {
       var ex = S.eyeOffsetX, ey = S.eyeOffsetY;
       ctx.fillStyle = '#111';
@@ -1322,6 +1378,30 @@
     } else if (state === 'ghost') {
       ctx.strokeStyle = '#ff0'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.ellipse(0, -HR*2.4, 7, 3, 0, 0, Math.PI*2); ctx.stroke();
+    } else if (state === 'ninja') {
+      // Headband with trailing tails
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(-HR - 1, -HR*1.45, (HR * 2) + 2, 4);
+      ctx.beginPath();
+      ctx.moveTo(HR + 1, -HR*1.45);
+      ctx.quadraticCurveTo(HR + 9, -HR*1.2, HR + 13, -HR*0.6 + Math.sin(t*14)*3);
+      ctx.quadraticCurveTo(HR + 6, -HR*1.0, HR + 1, -HR*1.25);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#d40000';
+      ctx.beginPath(); ctx.arc(0, -HR*1.35, 1.6, 0, Math.PI*2); ctx.fill();
+    } else if (state === 'godmode') {
+      // Rotating golden halo
+      ctx.save();
+      ctx.translate(0, -HR*2.6);
+      ctx.rotate(t * 1.4);
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#ffe066'; ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.ellipse(0, 0, 9, 3, 0, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    } else if (state === 'hacker') {
+      // No hat — sunglasses drawn after the body
     } else {
       ctx.beginPath();
       ctx.moveTo(-6,-HR*1.9); ctx.lineTo(6,-HR*1.9); ctx.lineTo(0,-HR*2.3);
@@ -1338,6 +1418,24 @@
         ctx.restore();
       }
       ctx.restore();
+    }
+
+    // Hacker sunglasses overlay
+    if (state === 'hacker') {
+      var _hgY = -HR * 1.2 - 3;
+      ctx.fillStyle = '#0a0a0a';
+      ctx.strokeStyle = '#00ff66';
+      ctx.lineWidth = 1;
+      ctx.fillRect(-7, _hgY - 2, 5, 4);
+      ctx.fillRect( 2, _hgY - 2, 5, 4);
+      ctx.strokeRect(-7, _hgY - 2, 5, 4);
+      ctx.strokeRect( 2, _hgY - 2, 5, 4);
+      ctx.beginPath(); ctx.moveTo(-2, _hgY); ctx.lineTo(2, _hgY); ctx.stroke();
+      ctx.fillStyle = '#00ff66';
+      ctx.globalAlpha = 0.5 + Math.sin(t * 8) * 0.3;
+      ctx.fillRect(-6, _hgY - 1, 1.5, 1.5);
+      ctx.fillRect( 3, _hgY - 1, 1.5, 1.5);
+      ctx.globalAlpha = 1;
     }
 
     // Body
@@ -1486,6 +1584,66 @@
       }
       ctx.globalAlpha = 1;
       ctx.font = CFG.bubbleFont;
+    }
+
+    // Ninja smoke trail + spinning shuriken (high-speed dash)
+    if (state === 'ninja') {
+      for (var _ns = 0; _ns < 5; _ns++) {
+        var _nsa = (t * 3.2 + _ns * 0.4) % 1.0;
+        ctx.globalAlpha = (1 - _nsa) * 0.45;
+        ctx.fillStyle = '#999';
+        ctx.beginPath();
+        ctx.arc(-(LL * 0.9 + _nsa * 24), LL * 0.6 + Math.sin(_nsa * 6 + _ns) * 4, 2 + _nsa * 4, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.save();
+      ctx.translate(LL * 1.6, LL * 0.4);
+      ctx.rotate(t * 16);
+      ctx.fillStyle = '#cfcfcf';
+      ctx.beginPath();
+      for (var _su = 0; _su < 4; _su++) {
+        var _sa = _su * Math.PI / 2;
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(_sa) * 5, Math.sin(_sa) * 5);
+        ctx.lineTo(Math.cos(_sa + 0.5) * 1.5, Math.sin(_sa + 0.5) * 1.5);
+      }
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+
+    // Hacker floating binary digits
+    if (state === 'hacker') {
+      ctx.textBaseline = 'middle';
+      ctx.textAlign    = 'center';
+      var _bits = ['0','1'];
+      for (var _hb = 0; _hb < 4; _hb++) {
+        var _hba = (t * 1.4 + _hb * 0.5) % 2.0;
+        var _hbalpha = Math.min(1, _hba * 2.5) * (1 - _hba / 2.0);
+        var _hbx = -16 + _hb * 11 + Math.sin(_hba * 5 + _hb) * 3;
+        var _hby = -HR * 2.6 - _hba * 16;
+        ctx.globalAlpha = _hbalpha * 0.9;
+        ctx.font = 'bold 9px monospace';
+        ctx.fillStyle = '#00ff66';
+        ctx.fillText(_bits[_hb % 2], _hbx, _hby);
+      }
+      ctx.globalAlpha = 1;
+      ctx.font = CFG.bubbleFont;
+    }
+
+    // Godmode radiant orbiting particles
+    if (state === 'godmode') {
+      for (var _gp = 0; _gp < 6; _gp++) {
+        var _gpa = t * 1.8 + _gp * (Math.PI * 2 / 6);
+        var _gpr = 17 + Math.sin(t * 2 + _gp) * 3;
+        ctx.save();
+        ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 6;
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(Math.cos(_gpa) * _gpr, Math.sin(_gpa) * _gpr * 0.6 - HR * 1.5, 2, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     ctx.restore();
@@ -1669,6 +1827,59 @@
   }
 
   /* =====================================================================
+     Hacker-mode matrix rain helpers
+     ===================================================================== */
+  var MATRIX_CHARS = '01アイウエオカキクケコ$#%&';
+  function _matrixChar() {
+    return MATRIX_CHARS[(Math.random() * MATRIX_CHARS.length) | 0];
+  }
+  // Confined to the right portion of the header so the plugin title
+  // (typically left-aligned) stays fully legible during hacker mode.
+  var MATRIX_X_START = 0.45; // fraction of S.W
+  var MATRIX_X_SPAN  = 0.55; // remaining fraction toward the right edge
+
+  function _matrixSpawnX() {
+    return S.W * MATRIX_X_START + Math.random() * (S.W * MATRIX_X_SPAN);
+  }
+  function initMatrixDrops() {
+    var n = 9, arr = [];
+    for (var i = 0; i < n; i++) {
+      arr.push({
+        x: _matrixSpawnX(),
+        y: -Math.random() * S.H,
+        speed: 60 + Math.random() * 90,
+        ch: _matrixChar(),
+        flip: 0
+      });
+    }
+    return arr;
+  }
+  function drawMatrixRain(ctx, dt) {
+    if (!S.matrixDrops || !S.matrixDrops.length) return;
+    ctx.save();
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < S.matrixDrops.length; i++) {
+      var d = S.matrixDrops[i];
+      d.y += d.speed * dt;
+      d.flip += dt;
+      if (d.flip > 0.15) { d.flip = 0; d.ch = _matrixChar(); }
+      if (d.y > S.H + 10) {
+        d.y = -10;
+        d.x = _matrixSpawnX();
+        d.speed = 60 + Math.random() * 90;
+      }
+      var fadeIn  = Math.max(0, Math.min(1, d.y / 40));
+      var fadeOut = Math.max(0, Math.min(1, (S.H - d.y) / 40));
+      ctx.globalAlpha = 0.12 + (fadeIn * fadeOut) * 0.26;
+      ctx.fillStyle = '#00ff66';
+      ctx.fillText(d.ch, d.x, d.y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  /* =====================================================================
      Progress event
      ===================================================================== */
   function onProgress(ev) {
@@ -1731,14 +1942,17 @@
     if (st === 'ghost'      && S.stateTimer > 4.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
     if (st === 'nap'        && S.stateTimer > 2.8) { S.state = 'walk'; S.stateTimer = 0; say(pick(CFG.napWakeSpeech), 1.8); }
     if (st === 'dizzy'      && S.stateTimer > 2.2) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'angry'      && S.stateTimer > 2.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; S.angerTime = 0; }
+    if (st === 'angry'      && S.stateTimer > 3.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; S.angerTime = 0; }
     if (st === 'dance'      && S.stateTimer > 3.5) { S.state = 'walk'; S.stateTimer = 0; }
     if (st === 'stuck'      && S.stateTimer > 2.4) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'sprint'     && S.stateTimer > 1.8) { S.state = 'walk'; S.stateTimer = 0; }
+    if (st === 'sprint'     && S.stateTimer > 2.0) { S.state = 'walk'; S.stateTimer = 0; }
     if (st === 'glitch'     && S.stateTimer > 1.5) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'cors'       && S.stateTimer > 1.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
+    if (st === 'cors'       && S.stateTimer > 3.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
     if (st === 'timeout'    && S.stateTimer > 3.0) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
-    if (st === 'deflate'    && S.stateTimer > 2.2) { S.state = 'walk'; S.stateTimer = 0; }
+    if (st === 'deflate'    && S.stateTimer > 3.0) { S.state = 'walk'; S.stateTimer = 0; }
+    if (st === 'ninja'      && S.stateTimer > 4.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
+    if (st === 'hacker'     && S.stateTimer > 4.5) { S.state = 'walk'; S.stateTimer = 0; S.matrixDrops = []; S.speechText = ''; }
+    if (st === 'godmode'    && S.stateTimer > 4.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
     if (st === 'trip') {
       S.tripAngle *= 0.88;
       if (S.stateTimer > 0.9) { S.state = 'walk'; S.stateTimer = 0; }
@@ -1834,6 +2048,9 @@
       else if (r < 0.003222 * _sc) { S.state='cors';       S.stateTimer=0; say(pick(CFG.corsSpeech), null, true); }
       else if (r < 0.003430 * _sc) { S.state='timeout';    S.stateTimer=0; say(pick(CFG.timeoutSpeech)); }
       else if (r < 0.003640 * _sc) { S.state='deflate';    S.stateTimer=0; say(pick(CFG.deflateSpeech)); }
+      else if (r < 0.003840 * _sc) { S.state='ninja';      S.stateTimer=0; say(pick(CFG.ninjaSpeech), 4.2, true); }
+      else if (r < 0.004040 * _sc) { S.state='hacker';     S.stateTimer=0; S.matrixDrops = initMatrixDrops(); say(pick(CFG.hackerSpeech), 4.2, true); }
+      else if (r < 0.004080 * _sc) { S.state='godmode';    S.stateTimer=0; say(pick(CFG.godmodeSpeech), 4, true); }
     }
   }
 
@@ -1848,11 +2065,26 @@
     var dt = Math.min(0.05, (nowMs - (S._then || nowMs)) / 1000);
     S._then = nowMs;
     S.animTime += dt;
+    // Godmode flag + elapsed sync → Aurora core reads these
+    if (window.NPPPAurora) {
+      var _gmNow = S.state === 'godmode';
+      if (_gmNow !== !!window.NPPPAurora.__godmode) {
+        window.NPPPAurora.__godmode = _gmNow;
+        if (_gmNow) { window.NPPPAurora.__godmodeElapsed = 0; window.NPPPAurora.__godmodeExiting = 0; }
+        else        { window.NPPPAurora.__godmodeExiting = 0; }
+      }
+      if (_gmNow) {
+        window.NPPPAurora.__godmodeElapsed = (window.NPPPAurora.__godmodeElapsed || 0) + dt;
+      } else if (!_gmNow && (window.NPPPAurora.__godmodeExiting || 0) < 0.6) {
+        window.NPPPAurora.__godmodeExiting = (window.NPPPAurora.__godmodeExiting || 0) + dt;
+      }
+    }
     var t    = S.animTime;
     var tSec = nowMs / 1000;
 
     var ctx = S.ctx;
     ctx.clearRect(0, 0, S.W, S.H);
+    if (S.state === 'hacker') drawMatrixRain(ctx, dt);
 
     // Speed based on progress; FLEE when the cursor lands on walkie
     S.speed = CFG.baseSpeed + (S.running ? (CFG.maxSpeed - CFG.baseSpeed) * (S.pct / 100) : 0);
@@ -1861,10 +2093,12 @@
     if (S.state === 'ghost')   S.speed *= 0.22;
     if (S.state === 'sprint')  S.speed  = CFG.maxSpeed * 2.4;
     if (S.state === 'timeout') S.speed *= 0.06;
+    if (S.state === 'ninja')   S.speed  = (S.stateTimer < 1.1) ? 0 : CFG.maxSpeed * 1.1;
+    if (S.state === 'godmode') S.speed *= 0.5;
 
     // Move walker (moonwalk = reverse; nap/stuck/cors = stationary)
     var dir = S.state === 'moonwalk' ? -1 : 1;
-    if (S.state !== 'nap' && S.state !== 'stuck' && S.state !== 'cors') S.walkerX += S.speed * dt * dir;
+    if (S.state !== 'nap' && S.state !== 'stuck' && S.state !== 'cors' && S.state !== 'hacker') S.walkerX += S.speed * dt * dir;
     if (S.walkerX >  S.W + 30) S.walkerX = -30;
     if (S.walkerX < -30)        S.walkerX =  S.W + 30;
 
@@ -1882,9 +2116,23 @@
       case 'timeout':   _tgt = 58; break;
       case 'cors':      _tgt = 50; break;
       case 'ghost':     _tgt = 29 + 61 * S.alienBeam; break;
+      case 'ninja':     _tgt = 30; break;
+      case 'hacker':    _tgt = 48; break;
+      case 'godmode':   _tgt = 26; break;
     }
     S._topM += (_tgt - S._topM) * Math.min(1, dt * 10);
     yBase = Math.max(S._topM | 0, Math.min(S.H - bottomMargin, yBase));
+
+    // Godmode levitation: explicit lift applied AFTER the normal clamp so he
+    // can rise above the ribbon-noise position. Eased in/out over 0.4s at
+    // each end of the 4.5s state to avoid a positional "pop".
+    if (S.state === 'godmode') {
+      var _gIn   = Math.min(1, S.stateTimer * 2.5);
+      var _gOut  = Math.min(1, (4.5 - S.stateTimer) * 2.5);
+      var _gEase = Math.max(0, Math.min(_gIn, _gOut));
+      yBase -= _gEase * (10 + Math.sin(t * 1.5) * 4);
+    }
+
     S.curY = yBase;
 
     // Update state machine
@@ -1916,6 +2164,29 @@
     }
     drawSpeedLines(ctx, S.walkerX, yBase, S.speed);
     if (S.alienBeam > 0) drawAlienBeam(ctx, S.walkerX, yBase, S.alienBeam);
+
+    if (S.state === 'godmode') {
+      // Giriş flaşı
+      var _gmFlash = Math.max(0, 0.65 - S.stateTimer * 3.2);
+      if (_gmFlash > 0.01) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = 'rgba(255,240,160,' + (_gmFlash * 0.6).toFixed(3) + ')';
+        ctx.fillRect(0, 0, S.W, S.H);
+        ctx.restore();
+      }
+
+      var _auraR = Math.min(90, 50 + Math.sin(t * 3) * 10 + S.stateTimer * 5);
+      var _aura = ctx.createRadialGradient(S.walkerX, yBase - 12, 4, S.walkerX, yBase - 12, _auraR);
+      _aura.addColorStop(0,   'rgba(255,230,120,' + (0.50 + Math.sin(t * 6) * 0.12).toFixed(3) + ')');
+      _aura.addColorStop(0.5, 'rgba(255,140,0,0.18)');
+      _aura.addColorStop(1,   'rgba(255,230,120,0)');
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = _aura;
+      ctx.fillRect(0, 0, S.W, S.H);
+      ctx.restore();
+    }
 
     if (S.speechText) drawBubble(ctx, S.walkerX, yBase, S.speechText, S.state === 'philosophy');
     drawCharacter(ctx, S.walkerX, yBase, t, S.state);
@@ -1998,6 +2269,31 @@
       }
     }
 
+    // Godmode lightning bolt from above
+    if (S.state === 'godmode') {
+      var _gzPhase = (S.stateTimer * 3.2) % 1;
+      if (_gzPhase < 0.22) {
+        ctx.save();
+        ctx.strokeStyle = '#ffffc8';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#ffe066'; ctx.shadowBlur = 28;
+        ctx.globalAlpha = 0.95;
+        var _gzx = S.walkerX + (Math.random() - 0.5) * 40;
+        // Floor at 22px so the bolt stays visible even while Walkie is
+        // levitating near the top edge (yBase - 20 can otherwise be tiny).
+        var _gzTarget = Math.max(yBase - 20, 22);
+        ctx.beginPath();
+        ctx.moveTo(_gzx, 0);
+        var _gzy = 0;
+        while (_gzy < _gzTarget) {
+          _gzy += 8 + Math.random() * 6;
+          ctx.lineTo(_gzx + (Math.random() - 0.5) * 14, _gzy);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     requestAnimationFrame(draw);
   }
 
@@ -2021,11 +2317,17 @@
       say('I WAS IN THE MIDDLE OF MY VICTORY SPEECH!!! \uD83D\uDE24');
     } else if (S.state === 'ghost') {
       say('I\'M ASTRAL PROJECTING! THAT IS SO RUDE \uD83D\uDC7B');
+    } else if (S.state === 'ninja') {
+      say('A true ninja is never seen mid-mission. \uD83E\uDD77', null, true);
+    } else if (S.state === 'hacker') {
+      say('DO NOT TOUCH THE KEYBOARD. \u2328\uFE0F', null, true);
+    } else if (S.state === 'godmode') {
+      say('MORTALS DO NOT TOUCH THE DIVINE. \u26A1', null, true);
     } else if (S.state === 'angry') {
       if (S.angerTime < 7) S.stateTimer = 0;
-      say(pick(CFG.angrySpeech), null, true);
+      say(pick(CFG.angrySpeech), 3.2, true);
     } else {
-      S.state = 'angry'; S.stateTimer = 0; S.angerTime = 0; say(pick(CFG.angrySpeech), null, true);
+      S.state = 'angry'; S.stateTimer = 0; S.angerTime = 0; say(pick(CFG.angrySpeech), 3.2, true);
     }
   }
   function onMouseRightClick(ev) {
@@ -2090,6 +2392,7 @@
 
   function dispose() {
     S.disposed = true;
+    S.matrixDrops = [];
     window.removeEventListener('resize', resize);
     window.removeEventListener('nppp:preload-progress', onProgress);
     try { if (S.host) {
