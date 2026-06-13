@@ -14,7 +14,7 @@
  * you company during long preloads. He is not a real AI assistant,
  * but he fully believes he is.
 
- * Tthe header JS code of NPP and
+ * The header JS code of NPP and
  * Walkie's character, design, and all his ridiculous cache jokes
  * are original to this plugin. If you want your own tiny ribbon‑walker,
  * or header animation please create your own.
