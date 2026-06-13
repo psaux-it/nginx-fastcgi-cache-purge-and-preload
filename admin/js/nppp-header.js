@@ -14,10 +14,10 @@
  * you company during long preloads. He is not a real AI assistant,
  * but he fully believes he is.
 
- * Dear copy-paste lovers; the header JS code of NPP and
+ * Tthe header JS code of NPP and
  * Walkie's character, design, and all his ridiculous cache jokes
  * are original to this plugin. If you want your own tiny ribbon‑walker,
- * or header animation please create your own – Walkie is taken.
+ * or header animation please create your own.
  */
 
 (function(){
@@ -1947,7 +1947,7 @@
     if (st === 'stuck'      && S.stateTimer > 2.4) { S.state = 'walk'; S.stateTimer = 0; }
     if (st === 'sprint'     && S.stateTimer > 2.0) { S.state = 'walk'; S.stateTimer = 0; }
     if (st === 'glitch'     && S.stateTimer > 1.5) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'cors'       && S.stateTimer > 3.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
+    if (st === 'cors'       && S.stateTimer > 1.8) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
     if (st === 'timeout'    && S.stateTimer > 3.0) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
     if (st === 'deflate'    && S.stateTimer > 3.0) { S.state = 'walk'; S.stateTimer = 0; }
     if (st === 'ninja'      && S.stateTimer > 4.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
