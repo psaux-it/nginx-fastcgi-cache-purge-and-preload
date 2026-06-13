@@ -942,6 +942,13 @@
     philosophySpeech: ['What IS a cache, really?', '\uD83E\uDD14 ...', '*thinking intensifies*', 'To purge, or not to purge?'],
     alienSpeech:      ['WAIT NO I HAVE A MEETING', '...not again \uD83D\uDC7D', 'TELL MY FAMILY I LOVE THEM', 'I DON\'T CONSENT TO THIS'],
     bananaSpeech:     ['\uD83C\uDF4C ow.', 'WHO LEFT THAT THERE', 'classic.', '...I put that there, didn\'t I.'],
+    nppTripSpeech: [
+      'See these stars? \u2B50 Five of them. On WordPress.org. Hint hint.',
+      'I fell FOR you. Literally. \u2B50\u2B50\u2B50\u2B50\u2B50?',
+      'Ow. Anyway \u2014 5 stars would help the bruising.',
+      'These stars are free. A review isn\'t... or is it? \uD83D\uDC40',
+      'NPP! (...also please rate us 5\u2B50 \uD83D\uDE4F)',
+    ],
     napSpeech:        ['zzz...', 'just resting my cache...', '*snores in nginx*', 'five more seconds... zzz', 'Dreaming of infinite TTL… 💤'],
     napWakeSpeech:    ['I\'m awake! \uD83D\uDE33', 'Oh! Still here.'],
     dizzyQuips:       ['whoa... dizzy \uD83D\uDCAB', 'too many redirects \uD83C\uDF00', 'is the header spinning??', '301 loops will do that'],
@@ -1092,7 +1099,7 @@
     walkerX:0, speed:0, pct:0, running:false, errors:0,
     animTime:0,
     state:'walk',
-    stateTimer:0, _topM:29,
+    stateTimer:0, _topM:32,
     speechText:'', speechTimer:0, nextSpeech:0,
     tripAngle:0,
     stars:[],
@@ -1934,7 +1941,7 @@
     if (st === 'angry') S.angerTime += dt;
 
     // Transition guards
-    if (st === 'panic'      && S.stateTimer > 1.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
+    if (st === 'panic'      && S.stateTimer > 2.0) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
     if (st === 'celebrate'  && S.stateTimer > 5.0) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
     if (st === 'sneeze'     && S.stateTimer > 1.2) { S.state = 'walk'; S.stateTimer = 0; }
     if (st === 'philosophy' && S.stateTimer > 3.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
@@ -1945,7 +1952,7 @@
     if (st === 'angry'      && S.stateTimer > 3.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; S.angerTime = 0; }
     if (st === 'dance'      && S.stateTimer > 3.5) { S.state = 'walk'; S.stateTimer = 0; }
     if (st === 'stuck'      && S.stateTimer > 2.4) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'sprint'     && S.stateTimer > 2.0) { S.state = 'walk'; S.stateTimer = 0; }
+    if (st === 'sprint'     && S.stateTimer > 2.3) { S.state = 'walk'; S.stateTimer = 0; }
     if (st === 'glitch'     && S.stateTimer > 1.5) { S.state = 'walk'; S.stateTimer = 0; }
     if (st === 'cors'       && S.stateTimer > 1.8) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
     if (st === 'timeout'    && S.stateTimer > 3.0) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
@@ -1955,7 +1962,7 @@
     if (st === 'godmode'    && S.stateTimer > 4.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
     if (st === 'trip') {
       S.tripAngle *= 0.88;
-      if (S.stateTimer > 0.9) { S.state = 'walk'; S.stateTimer = 0; }
+      if (S.stateTimer > 1.5) { S.state = 'walk'; S.stateTimer = 0; }
     }
 
     // orbiting stars
@@ -1988,7 +1995,7 @@
 
       S.shyTimer += dt;
       if (S.shyTimer > 1.5 && S._then - S.lastMouseSpeechAt > CFG.mouseSpeechCooldownMs) {
-        say(pick(CFG.shySpeech), 2.0);
+        say(pick(CFG.shySpeech), null);
         S.lastMouseSpeechAt = S._then;
         S.shyTimer = 0;
       }
@@ -2036,21 +2043,21 @@
       if      (r < 0.000303 * _sc) { S.state='sneeze';     S.stateTimer=0; say(pick(CFG.sneezeSpeech), 2); }
       else if (r < 0.000525 * _sc) { S.state='moonwalk';   S.stateTimer=0; say(pick(CFG.moonwalkSpeech), 2.5); }
       else if (r < 0.000782 * _sc) { S.state='philosophy'; S.stateTimer=0; say(pick(CFG.philosophySpeech), 3.5); }
-      else if (r < 0.000910 * _sc) { S.state='ghost';      S.stateTimer=0; S.alienBeam=0; say(pick(CFG.alienSpeech), 3.5); }
+      else if (r < 0.000980 * _sc) { S.state='ghost';      S.stateTimer=0; S.alienBeam=0; say(pick(CFG.alienSpeech), 3.5); }
       else if (r < 0.001148 * _sc) { S.state='nap';        S.stateTimer=0; say(pick(CFG.napSpeech), 2.5); }
       else if (r < 0.001451 * _sc) { S.state='dizzy';      S.stateTimer=0; say(pick(CFG.dizzyQuips), 1.8); }
-      else if (r < 0.001618 * _sc) { S.state='trip'; S.stateTimer=0; S.tripAngle=0.55; S.stars=(function(){var a=[];for(var _i=0;_i<3;_i++){var _sa=_i*Math.PI*2/3;a.push({angle:_sa,x:Math.cos(_sa)*13,y:Math.sin(_sa)*9-CFG.headRadius*1.6});}return a;}()); S.starTimer=1.5; say('NPP',1.4); }
+      else if (r < 0.001618 * _sc) { S.state='trip'; S.stateTimer=0; S.tripAngle=0.55; S.stars=(function(){var a=[];for(var _i=0;_i<3;_i++){var _sa=_i*Math.PI*2/3;a.push({angle:_sa,x:Math.cos(_sa)*13,y:Math.sin(_sa)*9-CFG.headRadius*1.6});}return a;}()); S.starTimer=1.5; say(pick(CFG.nppTripSpeech), null, true); }
       else if (r < 0.001951 * _sc) { S.state='dance';      S.stateTimer=0; say(pick(CFG.danceSpeech)); }
       else if (r < 0.002189 * _sc) { S.state='stuck';      S.stateTimer=0; say(pick(CFG.stuckSpeech)); }
       else if (r < 0.002360 * _sc) { S.state='sprint';     S.stateTimer=0; say(pick(CFG.sprintSpeech)); }
       else if (r < 0.002799 * _sc) { say(pick(CFG.aiEgoSpeech)); }
       else if (r < 0.003037 * _sc) { S.state='glitch';     S.stateTimer=0; say(pick(CFG.glitchSpeech), 1.5); }
-      else if (r < 0.003222 * _sc) { S.state='cors';       S.stateTimer=0; say(pick(CFG.corsSpeech), null, true); }
+      else if (r < 0.003222 * _sc) { S.state='cors';       S.stateTimer=0; say(pick(CFG.corsSpeech), 1.6, true); }
       else if (r < 0.003430 * _sc) { S.state='timeout';    S.stateTimer=0; say(pick(CFG.timeoutSpeech)); }
       else if (r < 0.003640 * _sc) { S.state='deflate';    S.stateTimer=0; say(pick(CFG.deflateSpeech)); }
       else if (r < 0.003840 * _sc) { S.state='ninja';      S.stateTimer=0; say(pick(CFG.ninjaSpeech), 4.2, true); }
       else if (r < 0.004040 * _sc) { S.state='hacker';     S.stateTimer=0; S.matrixDrops = initMatrixDrops(); say(pick(CFG.hackerSpeech), 4.2, true); }
-      else if (r < 0.004080 * _sc) { S.state='godmode';    S.stateTimer=0; say(pick(CFG.godmodeSpeech), 4, true); }
+      else if (r < 0.004150 * _sc) { S.state='godmode';    S.stateTimer=0; say(pick(CFG.godmodeSpeech), 4, true); }
     }
   }
 
@@ -2105,20 +2112,20 @@
     var yBase = ribbonY(S.walkerX, tSec);
 
     // Dynamic top margin per state
-    var _tgt = 29, bottomMargin = 22;
+    var _tgt = 32, bottomMargin = 22;
     switch (S.state) {
-      case 'celebrate': _tgt = 50; break;
+      case 'celebrate': _tgt = 54; break;
       case 'dance':     _tgt = 60; break;
       case 'nap':       _tgt = 52; break;
       case 'angry':     _tgt = 45; break;
       case 'sprint':    _tgt = 34; break;
       case 'glitch':    _tgt = 36; break;
-      case 'timeout':   _tgt = 58; break;
+      case 'timeout':   _tgt = 62; break;
       case 'cors':      _tgt = 50; break;
-      case 'ghost':     _tgt = 29 + 61 * S.alienBeam; break;
+      case 'ghost':     _tgt = 29 + 67 * S.alienBeam; break;
       case 'ninja':     _tgt = 30; break;
-      case 'hacker':    _tgt = 48; break;
-      case 'godmode':   _tgt = 26; break;
+      case 'hacker':    _tgt = 60; break;
+      case 'godmode':   _tgt = 44; break;
     }
     S._topM += (_tgt - S._topM) * Math.min(1, dt * 10);
     yBase = Math.max(S._topM | 0, Math.min(S.H - bottomMargin, yBase));
@@ -2146,7 +2153,7 @@
     if (S.state === 'walk' && !S.speechText) {
       if (!S.introduced) {
         S.introduced = true;
-        say(CFG.questions[0], 4, true);
+        say(CFG.questions[0], null, true);
         S.nextSpeech = CFG.speechIntervalMin + Math.random() * (CFG.speechIntervalMax - CFG.speechIntervalMin);
       } else if (S.nextSpeech <= 0) {
         S.nextSpeech = CFG.speechIntervalMin + Math.random() * (CFG.speechIntervalMax - CFG.speechIntervalMin);
