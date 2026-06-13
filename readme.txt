@@ -254,6 +254,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Fixed: Active WP cron events are now cancelled immediately when plugin requirements fail mid-operation, preventing orphaned cron jobs from firing after functionality is disabled.
 * Fixed: Several disable-functionality and disable-preload guard were missing coverage for new and existing options introduced before.
 * UI/UX: Preload All now redirects to the Status tab instead of Settings, taking users directly to the live preload progress section.
+* Walkie: Added three new modes to the NPP mascot.
 * Added: "Stop Preload" button in the Status tab and a dedicated Admin Bar link. Previously, stopping an active preload process required using "Purge All" on UI, which also cleared the entire cache. The new button stops the preload process immediately while preserving the existing cache.
 * Added: Nginx detection results to the Status Tab.
 
