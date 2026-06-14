@@ -717,11 +717,6 @@ function nppp_open_basedir_compat_check(): array {
     // proc_open() opens /dev/null as a file descriptor — OBD applies.
     $required['/dev/null'] = '/dev/null';
 
-    // binary paths
-    $required['/usr/bin']       = '/usr/bin';
-    $required['/usr/local/bin'] = '/usr/local/bin';
-    $required['/bin']           = '/bin';
-
     // safexec, WordPress core and WP_Filesystem use /tmp for temp file operations.
     $required['/tmp'] = '/tmp';
 
