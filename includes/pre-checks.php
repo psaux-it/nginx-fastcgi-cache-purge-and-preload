@@ -716,7 +716,9 @@ function nppp_open_basedir_compat_check(): array {
     $required['/proc'] = '/proc';
 
     // Only required when proc_open is available; nppp_detect_premature_process()
-    if ( function_exists( 'proc_open' ) ) {
+    if (function_exists('proc_open') && is_callable('proc_open') &&
+        function_exists('proc_get_status') && is_callable('proc_get_status') &&
+        function_exists('proc_close') && is_callable('proc_close')) {
         $required['/dev/null'] = '/dev/null';
     }
 
