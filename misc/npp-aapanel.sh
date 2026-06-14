@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  BETA: npp-aapanel.sh — NPP Infrastructure Setup for aaPanel
+#  BETA-2: npp-aapanel.sh — NPP Infrastructure Setup for aaPanel
 # =============================================================================
 #  Nginx Cache Purge Preload (NPP) — Complete environment bootstrap
 #  for aaPanel-managed WordPress installations.
@@ -12,12 +12,13 @@
 #    3.  Removes all NPP-required functions from PHP disable_functions in the
 #        matching php.ini and reloads PHP-FPM
 #    4.  Checks / installs ripgrep >= 14.0.0 (latest available) from GitHub
-#        releases (DEB for Debian/Ubuntu; static musl tar.gz for RPM/Alpine)
+#        releases (DEB for Debian/Ubuntu; static musl tar.gz for RPM distros)
 #    5.  Installs safexec via the official one-liner installer
 #    6.  Ensures GNU Wget >= 1.16 is present (not wget2 / busybox)
 #    7.  Downloads WP-CLI, renames it to `wp`, installs to /usr/local/bin/wp
 #    8.  Installs and activates the NPP plugin
-#    9.  Sets Nginx Cache Path for NPP (FastCGI or Proxy)
+#    9.  Verifies all binaries and PHP functions are operational
+#   10.  Configures NPP nginx cache path and flushes plugin transients
 #
 #  Usage:
 #    sudo bash npp-aapanel.sh /www/wwwroot/your-wordpress-site
@@ -32,7 +33,6 @@
 #    Ubuntu 18.04 / 20.04 / 22.04 / 24.04
 #    Debian 10 / 11 / 12
 #    CentOS 7 / 8 · AlmaLinux 8/9 · Rocky Linux 8/9 · Fedora 38+
-#    Alpine Linux 3.x
 #
 # =============================================================================
 
@@ -78,7 +78,7 @@ _banner() {
     _blank
     echo "${MAG}${BOLD}$(printf '═%.0s' $(seq 1 $WIDTH))${RST}"
     printf "${MAG}${BOLD}%-${WIDTH}s${RST}\n" "  NPP × aaPanel — Infrastructure Setup"
-    printf "${DIM}%-${WIDTH}s${RST}\n"        "  Nginx Cache Purge & Preload · github.com/psaux-it"
+    printf "${DIM}%-${WIDTH}s${RST}\n"        "  Nginx Cache Purge Preload · for WordPress · v${SCRIPT_VERSION}"
     echo "${MAG}${BOLD}$(printf '═%.0s' $(seq 1 $WIDTH))${RST}"
     _blank
 }
@@ -95,17 +95,59 @@ _warn() { echo "  ${YLW}${BOLD}⚠${RST}  $1"; }
 _fail() { echo "  ${RED}${BOLD}✗${RST}  $1"; }
 _step() { echo "  ${MAG}→${RST}  $1"; }
 
-_progress() {
-    # _progress "message" (single-line spinner for long ops)
-    echo "  ${YLW}◌${RST}  $1"
-}
-
 _done_summary() {
     _blank
     echo "${GRN}${BOLD}$(printf '═%.0s' $(seq 1 $WIDTH))${RST}"
     printf "${GRN}${BOLD}  %-$((WIDTH-2))s${RST}\n" "✔  Setup complete — NPP is ready to use!"
     echo "${GRN}${BOLD}$(printf '═%.0s' $(seq 1 $WIDTH))${RST}"
     _blank
+}
+
+_print_csv_table() {
+    # Render a comma-separated list as a multi-column table within WIDTH.
+    # Usage: _print_csv_table "Label" "comma,separated,values"
+    local label="$1"
+    local csv="${2:-}"
+    local indent="     "                       # 5 spaces — aligns under icon
+    local avail=$(( WIDTH - ${#indent} ))
+    local -a items=()
+    local count=0
+    if [[ -n "${csv}" ]]; then
+        local -a _raw=()
+        IFS=',' read -ra _raw <<< "${csv}" || true
+        local _it
+        for _it in "${_raw[@]}"; do
+            _it="${_it//[[:space:]]/}"         # strip all internal whitespace
+            if [[ -n "${_it}" ]]; then
+                items+=("${_it}")
+                count=$(( count + 1 ))
+            fi
+        done
+    fi
+    if [[ ${count} -eq 0 ]]; then
+        echo "  ${BLU}ℹ${RST}  ${label}: ${DIM}(empty / not set)${RST}"
+        return 0
+    fi
+    echo "  ${BLU}ℹ${RST}  ${label} ${DIM}(${count})${RST}:"
+    local max_len=0 _it
+    for _it in "${items[@]}"; do
+        if [[ ${#_it} -gt ${max_len} ]]; then max_len=${#_it}; fi
+    done
+    local col_w=$(( max_len + 2 ))             # +2 gutter between columns
+    local cols=$(( avail / col_w ))
+    if [[ ${cols} -lt 1 ]]; then cols=1; fi
+    local col_idx=0 row_buf=""
+    for _it in "${items[@]}"; do
+        row_buf+="$(printf "%-${col_w}s" "${_it}")"
+        col_idx=$(( col_idx + 1 ))
+        if [[ $(( col_idx % cols )) -eq 0 ]]; then
+            echo "${indent}${DIM}${row_buf}${RST}"
+            row_buf=""
+        fi
+    done
+    if [[ -n "${row_buf}" ]]; then
+        echo "${indent}${DIM}${row_buf}${RST}"
+    fi
 }
 
 # =============================================================================
@@ -139,8 +181,31 @@ readonly -a NPP_REQUIRED_FUNCS=(
     "getenv"          # PATH read in nppp_setup_safexec_env(); nginx include parser
 )
 
+# Shell tool sets:
+#   global  (true,false) : ps grep awk sort uniq sed   — ALL plugin actions fail if missing
+#   preload (false,true) : nohup wget                  — Preload fails if missing
+# ripgrep + safexec are OPTIONAL; handled in their own install steps.
+# wget version/type validation is handled entirely in Step 6 (ensure_gnu_wget).
+readonly -a NPP_GLOBAL_TOOLS=( "ps" "grep" "awk" "sort" "uniq" "sed" )
+readonly -a NPP_PRELOAD_TOOLS=( "nohup" "wget" )
+
+# Static paths NPP needs reachable under open_basedir
+readonly -a NPP_OPEN_BASEDIR_STATIC_PATHS=(
+    "/tmp/"
+    "/proc/"
+    "/dev/null"
+    "/www/server/nginx/conf/"
+    "/www/server/panel/vhost/nginx"
+    "/usr/bin/"
+    "/usr/sbin/"
+    "/usr/local/bin/"
+    "/usr/local/sbin/"
+    "/bin/"
+    "/sbin/"
+)
+
 # Minimum versions for sanity checks
-readonly SCRIPT_VERSION="1.0.0"
+readonly SCRIPT_VERSION="2.1.7"
 
 # =============================================================================
 # HELPERS — GENERAL UTILITIES
@@ -175,9 +240,7 @@ detect_arch() {
 
 # Detect OS family
 detect_os_family() {
-    if [[ -f /etc/alpine-release ]]; then
-        echo "alpine"
-    elif [[ -f /etc/debian_version ]]; then
+    if [[ -f /etc/debian_version ]]; then
         echo "debian"
     elif [[ -f /etc/redhat-release ]] || [[ -f /etc/centos-release ]] || [[ -f /etc/fedora-release ]]; then
         echo "rhel"
@@ -211,7 +274,17 @@ preflight_checks() {
         exit 1
     fi
 
-    WP_PATH="${1%/}"   # strip trailing slash for consistency
+    # Strip ALL trailing slashes (handles /path, /path/, /path//, etc.)
+    # so SQL lookups, vhost-root grep matching, and path concatenation
+    # throughout the script all see one canonical form.
+    WP_PATH="${1}"
+    while [[ "${WP_PATH}" == */ ]]; do
+        WP_PATH="${WP_PATH%/}"
+    done
+    # Guard against a root-only input ("/" or "//") collapsing to empty
+    if [[ -z "${WP_PATH}" ]]; then
+        WP_PATH="/"
+    fi
     _ok "WordPress path argument: ${WHT}${WP_PATH}${RST}"
 
     # 0.3 aaPanel detection
@@ -241,14 +314,26 @@ preflight_checks() {
         _step "sqlite3 not found — installing …"
         local os_fam; os_fam="$(detect_os_family)"
         case "${os_fam}" in
-            debian) apt-get install -y -q sqlite3 ;;
-            rhel)   yum install -y sqlite 2>/dev/null || dnf install -y sqlite ;;
-            alpine) apk add --no-cache sqlite ;;
+            debian) apt-get install -y -q sqlite3 &>/dev/null || true ;;
+            rhel)
+                if have dnf; then
+                    dnf install -y sqlite &>/dev/null || true
+                else
+                    yum install -y sqlite &>/dev/null || true
+                fi
+                ;;
             *)
                 _fail "Cannot auto-install sqlite3 on this OS. Install it manually."
                 exit 1
                 ;;
         esac
+
+        # Re-check after install attempt — give a clear error rather than
+        # failing later with a confusing "command not found".
+        if ! have sqlite3; then
+            _fail "Failed to install sqlite3. Install it manually and re-run."
+            exit 1
+        fi
     fi
     _ok "sqlite3 CLI available: $(sqlite3 --version | head -1)"
 
@@ -289,55 +374,17 @@ validate_wp_path() {
     fi
     _ok "WordPress installation found (wp-config.php present)"
 
-    # 1.3 Discover the sites table schema once — find the PHP version column
-    _step "Inspecting aaPanel database schema …"
-    local schema
-    schema="$(sqlite_q "${AAPANEL_DB}" '.schema sites' 2>/dev/null || true)"
+    # 1.3 Cross-reference WP_PATH against aaPanel's sites table.
+    _step "Looking up site record in aaPanel database …"
+    local row
 
-    if [[ -z "${schema}" ]]; then
-        _fail "Could not read 'sites' table from ${AAPANEL_DB}"
-        _info "Table dump: $(sqlite_q "${AAPANEL_DB}" '.tables' 2>/dev/null || echo '<none>')"
-        exit 1
-    fi
-
-    # Determine the PHP version column name (aaPanel versions differ)
-    PHP_VER_COL=""
-    if echo "${schema}" | grep -qi "phpversion"; then
-        PHP_VER_COL="phpversion"
-    elif echo "${schema}" | grep -qi "php_version"; then
-        PHP_VER_COL="php_version"
-    else
-        # Fallback: list all column names and find the one containing 'php'
-        PHP_VER_COL="$(sqlite_q "${AAPANEL_DB}" \
-            "PRAGMA table_info(sites);" 2>/dev/null \
-            | awk -F'|' '{print $2}' \
-            | grep -i 'php' | head -1 || true)"
-    fi
-
-    if [[ -z "${PHP_VER_COL}" ]]; then
-        : # no PHP version column — nginx vhost detection will be used instead
-    else
-        _ok "PHP version column in DB: ${WHT}${PHP_VER_COL}${RST}"
-    fi
-
-    # 1.4 Cross-reference WP_PATH against aaPanel's sites table
-    #     Build SELECT list conditionally — only include PHP col if it exists
-    local query row
-    if [[ -n "${PHP_VER_COL}" ]]; then
-        query="SELECT name, path, ${PHP_VER_COL}
-               FROM sites
-               WHERE rtrim(path, '/') = '${WP_PATH}'
-                  OR rtrim(path, '/') = '${WP_PATH%/}'
-               LIMIT 1;"
-    else
-        query="SELECT name, path
-               FROM sites
-               WHERE rtrim(path, '/') = '${WP_PATH}'
-                  OR rtrim(path, '/') = '${WP_PATH%/}'
-               LIMIT 1;"
-    fi
-
-    row="$(sqlite_q "${AAPANEL_DB}" "${query}" 2>/dev/null || true)"
+    # SQLite-side rtrim() on BOTH sides — handles any combination of
+    # trailing slashes (single, double, none) from either the user-supplied
+    # path or the value stored in aaPanel's DB, without relying on bash's
+    # ${1%/} which only strips one trailing slash.
+    row="$(sqlite_q "${AAPANEL_DB}" \
+        "SELECT name, path FROM sites WHERE rtrim(path, '/') = rtrim('${WP_PATH}', '/') LIMIT 1;" \
+        2>/dev/null || true)"
 
     if [[ -z "${row}" ]]; then
         _warn "Path '${WP_PATH}' not found in aaPanel sites table."
@@ -346,24 +393,18 @@ validate_wp_path() {
             "SELECT name, path FROM sites ORDER BY id;" 2>/dev/null \
             | awk -F'|' '{printf "     %-30s %s\n", $1, $2}' || true
         _blank
-        _info "Attempting to continue with filesystem-detected PHP version …"
+        _info "Attempting to continue via nginx vhost auto-detection …"
         SITE_DOMAIN="<unknown>"
         SITE_PATH="${WP_PATH}"
-        PHP_VERSION_RAW=""
     else
         SITE_DOMAIN="$(echo "${row}" | cut -d'|' -f1)"
         SITE_PATH="$(echo "${row}"   | cut -d'|' -f2)"
-        PHP_VERSION_RAW=""
-        if [[ -n "${PHP_VER_COL}" ]]; then
-            PHP_VERSION_RAW="$(echo "${row}" | cut -d'|' -f3)"
-        fi
         _ok "aaPanel site record matched"
         _info "  Domain : ${WHT}${SITE_DOMAIN}${RST}"
         _info "  Path   : ${WHT}${SITE_PATH}${RST}"
-        [[ -n "${PHP_VERSION_RAW}" ]] && _info "  PHP    : ${WHT}${PHP_VERSION_RAW}${RST}  (raw DB value)"
     fi
 
-    # 1.5 Verify webserver is nginx via aaPanel config table
+    # 1.4 Verify webserver is nginx via aaPanel config table
     _step "Verifying webserver type via aaPanel config table …"
     local webserver_type
     webserver_type="$(sqlite_q "${AAPANEL_DB}" \
@@ -382,6 +423,74 @@ validate_wp_path() {
 }
 
 # =============================================================================
+# STEP 1B — WEBSERVER ARCHITECTURE DETECTION
+# =============================================================================
+detect_webserver_arch() {
+    _section "Webserver Architecture Detection"
+
+    # Defaults — assume the simplest, most common aaPanel setup until proven otherwise
+    WEBSERVER_ARCH="single"
+    NPP_CACHE_PATH="/www/server/fastcgi_cache"
+
+    if [[ "${SITE_DOMAIN}" == "<unknown>" ]]; then
+        _warn "Site domain unresolved — cannot query aaPanel 'service_type' column"
+        _warn "Assuming single-webserver architecture (nginx only)"
+        _info "  Nginx cache path: ${WHT}${NPP_CACHE_PATH}${RST}"
+        _track "Webserver architecture: single (assumed) | cache path: ${NPP_CACHE_PATH}"
+        return 0
+    fi
+
+    # 1B.1 Read service_type for the matched site:
+    #        - empty / "nginx" → single webserver  (nginx only, FastCGI)
+    #        - "apache"        → multi webserver   (nginx proxy + apache backend),
+    #                            nginx caches the proxied response per-site
+    _step "Querying service_type for site '${SITE_DOMAIN}' …"
+    local service_type
+    service_type="$(sqlite_q "${AAPANEL_DB}" \
+        "SELECT service_type FROM sites WHERE name='${SITE_DOMAIN}' LIMIT 1;" \
+        2>/dev/null | head -1 || true)"
+    service_type="${service_type,,}"
+
+    case "${service_type}" in
+        apache)
+            WEBSERVER_ARCH="multi-apache"
+            NPP_CACHE_PATH="/www/server/fastcgi_cache/${SITE_DOMAIN}"
+            _ok "Multi-webserver architecture detected: ${WHT}nginx (proxy/cache) + apache (backend)${RST}"
+            _info "  aaPanel runs this site on Apache, reverse-proxied through Nginx"
+            _info "  Nginx caches the proxied response in a per-site subdirectory"
+            ;;
+        openlitespeed)
+            WEBSERVER_ARCH="multi-ols"
+            NPP_CACHE_PATH="/www/server/fastcgi_cache/${SITE_DOMAIN}"
+            _ok "Multi-webserver architecture detected: ${WHT}nginx (proxy/cache) + OpenLiteSpeed (backend)${RST}"
+            _info "  aaPanel runs this site on OpenLiteSpeed, reverse-proxied through Nginx"
+            _info "  Nginx caches the proxied response in a per-site subdirectory"
+            ;;
+        ""|nginx)
+            # service_type is empty both for a plain single-nginx (FastCGI) site
+            # AND for a multi-webserver nginx+nginx (proxy + backend) setup —
+            # aaPanel does not record a distinct service_type for the latter.
+            # Fortunately the cache path is identical in both cases, so we
+            # don't need to fully disambiguate them here.
+            WEBSERVER_ARCH="single-or-multi-nginx"
+            NPP_CACHE_PATH="/www/server/fastcgi_cache"
+            _ok "Nginx-fronted architecture detected: ${WHT}nginx only, or nginx + nginx (proxy/cache)${RST}"
+            _info "  aaPanel does not distinguish single-nginx from nginx+nginx in 'service_type'"
+            _info "  Cache path is identical for both — no further action needed"
+            ;;
+        *)
+            WEBSERVER_ARCH="single-or-multi-nginx"
+            NPP_CACHE_PATH="/www/server/fastcgi_cache"
+            _warn "Unrecognized service_type '${service_type}' for site '${SITE_DOMAIN}'"
+            _warn "Falling back to nginx-only cache path assumption"
+            ;;
+    esac
+
+    _info "  Nginx cache path: ${WHT}${NPP_CACHE_PATH}${RST}"
+    _track "Webserver architecture: ${WEBSERVER_ARCH} | cache path: ${NPP_CACHE_PATH}"
+}
+
+# =============================================================================
 # STEP 2 — DETECT ACTIVE PHP VERSION
 # =============================================================================
 detect_php_version() {
@@ -390,47 +499,60 @@ detect_php_version() {
     PHP_VERSION=""   # e.g. "82"  (used to build /www/server/php/82/etc/php.ini)
     PHP_VER_DOT=""   # e.g. "8.2"
 
-    # 2.1 Prefer the DB value
-    if [[ -n "${PHP_VERSION_RAW:-}" ]]; then
-        # Raw value may be "82", "8.2", "php82", "PHP-8.2" — normalise
-        PHP_VERSION="$(echo "${PHP_VERSION_RAW}" | tr -d '.' | tr -dc '0-9')"
-        PHP_VER_DOT="$(echo "${PHP_VERSION}" | sed 's/\(.\)/\1./')"
-        _ok "PHP version from aaPanel DB: ${WHT}${PHP_VER_DOT}${RST} (internal: ${PHP_VERSION})"
-    fi
+    # 2.1 Locate the site's nginx vhost config. This is the ONLY place aaPanel
+    #     records a site's PHP version (the sqlite 'sites' table has no such
+    #     column). Since each domain can run its own PHP-FPM pool/version,
+    #     we must resolve THIS site's vhost — not just grab whatever PHP
+    #     happens to be installed on the box.
+    local vhost_dir="/www/server/panel/vhost/nginx"
+    local vhost_conf=""
 
-    # 2.2 Validate that the PHP dir actually exists
-    if [[ -n "${PHP_VERSION}" ]] && [[ ! -d "${AAPANEL_PHP_BASE}/${PHP_VERSION}" ]]; then
-        _warn "PHP dir ${AAPANEL_PHP_BASE}/${PHP_VERSION} does not exist — re-detecting …"
-        PHP_VERSION=""
-    fi
-
-    # 2.3a Read PHP version from nginx vhost config — aaPanel's own method
-    #       Pattern 1: include enable-php-83-xxx.conf  (modern aaPanel)
-    #       Pattern 2: unix:/tmp/php-cgi-83.sock       (classic aaPanel)
-    if [[ -z "${PHP_VERSION}" ]]; then
-        _step "Reading PHP version from nginx vhost config …"
-        local vhost_conf="/www/server/panel/vhost/nginx/${SITE_DOMAIN}.conf"
-        if [[ -f "${vhost_conf}" ]]; then
-            local vhost_ver=""
-            vhost_ver="$(grep -oP 'enable-php-\K[0-9]+' "${vhost_conf}" \
+    if [[ "${SITE_DOMAIN}" != "<unknown>" ]] && [[ -f "${vhost_dir}/${SITE_DOMAIN}.conf" ]]; then
+        vhost_conf="${vhost_dir}/${SITE_DOMAIN}.conf"
+        _ok "Vhost config matched via aaPanel DB domain: ${WHT}${SITE_DOMAIN}.conf${RST}"
+    else
+        # 2.2 Fallback: site not in aaPanel's DB (or its vhost file is
+        #     missing/renamed). Search every vhost conf for one whose
+        #     document root matches our WordPress path — keeps per-domain
+        #     PHP detection correct on multi-site boxes.
+        _step "Searching nginx vhost configs for root matching ${WP_PATH} …"
+        if [[ -d "${vhost_dir}" ]]; then
+            vhost_conf="$(grep -lRE --include='*.conf' \
+                "root[[:space:]]+${WP_PATH}(/|;|[[:space:]])" "${vhost_dir}" 2>/dev/null \
                 | head -1 || true)"
-            if [[ -z "${vhost_ver}" ]]; then
-                vhost_ver="$(grep -oP 'php-cgi-\K[0-9]+(?=\.sock)' "${vhost_conf}" \
-                    | head -1 || true)"
-            fi
-            if [[ -n "${vhost_ver}" ]]; then
-                PHP_VERSION="${vhost_ver}"
-                PHP_VER_DOT="$(echo "${PHP_VERSION}" | sed 's/\(.\)/\1./')"
-                _ok "PHP version from nginx vhost: ${WHT}${PHP_VER_DOT}${RST}"
-            else
-                _warn "Could not parse PHP version from: ${vhost_conf}"
-            fi
+        fi
+
+        if [[ -n "${vhost_conf}" ]]; then
+            _ok "Vhost config matched by root path: ${WHT}$(basename "${vhost_conf}")${RST}"
+            [[ "${SITE_DOMAIN}" == "<unknown>" ]] && SITE_DOMAIN="$(basename "${vhost_conf}" .conf)"
         else
-            _warn "Nginx vhost not found: ${vhost_conf}"
+            _warn "No nginx vhost config found for ${WP_PATH}"
         fi
     fi
 
-    # 2.3 Last resort: scan installed PHP versions and pick the newest
+    # 2.3 Parse PHP version from the resolved vhost config.
+    #       Pattern 1: include enable-php-83-xxx.conf  (modern aaPanel)
+    #       Pattern 2: unix:/tmp/php-cgi-83.sock       (classic aaPanel)
+    if [[ -n "${vhost_conf}" ]]; then
+        local vhost_ver=""
+        vhost_ver="$(grep -oP 'enable-php-\K[0-9]+' "${vhost_conf}" \
+            | head -1 || true)"
+        if [[ -z "${vhost_ver}" ]]; then
+            vhost_ver="$(grep -oP 'php-cgi-\K[0-9]+(?=\.sock)' "${vhost_conf}" \
+                | head -1 || true)"
+        fi
+        if [[ -n "${vhost_ver}" ]]; then
+            PHP_VERSION="${vhost_ver}"
+            PHP_VER_DOT="$(echo "${PHP_VERSION}" | sed 's/\(.\)/\1./')"
+            _ok "PHP version from nginx vhost: ${WHT}${PHP_VER_DOT}${RST}"
+        else
+            _warn "Could not parse PHP version from: ${vhost_conf}"
+        fi
+    fi
+
+    # 2.4 Last resort: scan installed PHP versions and pick the newest.
+    #     WARNING: on multi-PHP servers this may not match the version the
+    #     target site actually runs — only used if vhost detection fails.
     if [[ -z "${PHP_VERSION}" ]]; then
         _step "Scanning installed PHP versions in ${AAPANEL_PHP_BASE} …"
         local detected_ver=""
@@ -449,10 +571,11 @@ detect_php_version() {
 
         PHP_VERSION="${detected_ver}"
         PHP_VER_DOT="$(echo "${PHP_VERSION}" | sed 's/\(.\)/\1./')"
-        _warn "Vhost parse failed; using newest installed: PHP ${PHP_VER_DOT}"
+        _warn "Vhost detection failed; using newest installed PHP: ${PHP_VER_DOT}"
+        _warn "If this site uses a different PHP version, verify the nginx vhost config manually."
     fi
 
-    # 2.4 Verify php.ini exists
+    # 2.5 Verify php.ini exists
     PHP_INI="${AAPANEL_PHP_BASE}/${PHP_VERSION}/etc/php.ini"
     if [[ ! -f "${PHP_INI}" ]]; then
         _fail "php.ini not found: ${PHP_INI}"
@@ -460,7 +583,7 @@ detect_php_version() {
     fi
     _ok "php.ini path: ${WHT}${PHP_INI}${RST}"
 
-    # 2.5 Verify PHP binary exists
+    # 2.6 Verify PHP binary exists
     PHP_BIN="${AAPANEL_PHP_BASE}/${PHP_VERSION}/bin/php"
     if [[ ! -x "${PHP_BIN}" ]]; then
         _warn "PHP binary not found at ${PHP_BIN}"
@@ -491,11 +614,7 @@ enable_php_functions() {
         | tr -d '"' \
         || true)"
 
-    if [[ -z "${current_df}" ]]; then
-        _info "Current disable_functions: ${DIM}(empty / not set)${RST}"
-    else
-        _info "Current disable_functions: ${DIM}${current_df}${RST}"
-    fi
+    _print_csv_table "Current disable_functions" "${current_df}"
 
     # 3.2 Convert to array, remove NPP-required functions
     local -a df_array=()
@@ -549,9 +668,10 @@ enable_php_functions() {
         _ok "php.ini updated"
 
         # 3.7 Verify the change took effect
-        local verify
-        verify="$(grep -E '^\s*disable_functions\s*=' "${PHP_INI}" | tail -1)"
-        _info "Updated: ${DIM}${verify}${RST}"
+        local new_df_val
+        new_df_val="$(grep -E '^\s*disable_functions\s*=' "${PHP_INI}" | tail -1 \
+            | sed 's/^\s*disable_functions\s*=\s*//' | tr -d '"')"
+        _print_csv_table "Updated disable_functions" "${new_df_val}"
     fi
 
     # 3.8 Check POSIX extension availability
@@ -596,6 +716,228 @@ enable_php_functions() {
 }
 
 # =============================================================================
+# STEP 3B — OPEN_BASEDIR CONFIGURATION CHECK
+# =============================================================================
+configure_open_basedir() {
+    _section "open_basedir Configuration Check"
+
+    local user_ini="${WP_PATH}/.user.ini"
+
+    # If .user.ini doesn't exist in the WP document root, open_basedir is not
+    # restricted for this site via aaPanel's per-site mechanism — nothing to do.
+    if [[ ! -f "${user_ini}" ]]; then
+        _ok "No .user.ini in document root — open_basedir is not restricted for this site"
+        _track "open_basedir: not restricted (.user.ini absent)"
+        return 0
+    fi
+
+    _ok ".user.ini found: ${WHT}${user_ini}${RST}"
+
+    # Must actually contain an open_basedir directive to be relevant
+    if ! grep -qE '^\s*open_basedir\s*=' "${user_ini}" 2>/dev/null; then
+        _ok ".user.ini exists but sets no open_basedir — not restricted"
+        _track "open_basedir: not restricted (.user.ini has no open_basedir)"
+        return 0
+    fi
+
+    # Paths NPP requires PHP-FPM to access
+    # Use cache path resolved by detect_webserver_arch()
+    # Ensure trailing slash for open_basedir directory matching.
+    # NPP_CACHE_PATH is set to:
+    #   /www/server/fastcgi_cache             (single-nginx / nginx+nginx)
+    #   /www/server/fastcgi_cache/<domain>    (nginx + apache / ols backend)
+    local npp_cache_dir="${NPP_CACHE_PATH%/}/"
+    local -a required_paths=(
+        "${WP_PATH}/"
+        "${npp_cache_dir}"
+    )
+    required_paths+=( "${NPP_OPEN_BASEDIR_STATIC_PATHS[@]}" )
+
+    _print_csv_table "NPP-required open_basedir paths" "$(IFS=','; echo "${required_paths[*]}")"
+
+    # 3B.1 Read current open_basedir value from .user.ini
+    local current_uini
+    current_uini="$(grep -E '^\s*open_basedir\s*=' "${user_ini}" | tail -1 \
+        | sed 's/^\s*open_basedir\s*=\s*//')"
+    _print_csv_table "Current .user.ini open_basedir" "$(echo "${current_uini}" | tr ':' ',')"
+
+    # 3B.2 Merge existing colon-separated paths with required_paths,
+    #      preserving any custom paths the user already has and de-duplicating.
+    local -A seen=()
+    local -a merged=()
+    local p
+
+    local -a existing_arr=()
+    IFS=':' read -ra existing_arr <<< "${current_uini}"
+    for p in "${existing_arr[@]}"; do
+        p="$(echo "${p}" | tr -d '[:space:]')"
+        [[ -z "${p}" ]] && continue
+        if [[ -z "${seen[${p}]:-}" ]]; then
+            merged+=("${p}")
+            seen["${p}"]=1
+        fi
+    done
+
+    for p in "${required_paths[@]}"; do
+        if [[ -z "${seen[${p}]:-}" ]]; then
+            merged+=("${p}")
+            seen["${p}"]=1
+        fi
+    done
+
+    local new_uini
+    new_uini="$(IFS=':'; echo "${merged[*]}")"
+
+    # 3B.3 Apply if changed
+    if [[ "${new_uini}" == "${current_uini}" ]]; then
+        _ok ".user.ini open_basedir already includes all NPP-required paths"
+        _track "open_basedir: already satisfied (.user.ini)"
+        return 0
+    fi
+
+    local backup="${user_ini}.npp-bak-$(date +%Y%m%d-%H%M%S)"
+    cp "${user_ini}" "${backup}"
+    _ok "Backed up → ${DIM}${backup}${RST}"
+
+    chattr -i "${user_ini}"
+    sed -i "s|^\s*open_basedir\s*=.*|open_basedir=${new_uini}|" "${user_ini}"
+    chown "${AAPANEL_WEB_USER}:${AAPANEL_WEB_USER}" "${user_ini}" 2>/dev/null || true
+    chattr +i "${user_ini}"
+
+    _ok "Updated open_basedir in .user.ini"
+    _print_csv_table "Updated .user.ini open_basedir" "$(echo "${new_uini}" | tr ':' ',')"
+
+    # 3B.4 Reload PHP-FPM so the .user.ini change is picked up immediately
+    #      (otherwise it applies after user_ini.cache_ttl, default 300s)
+    _step "Reloading PHP-FPM ${PHP_VER_DOT} to refresh .user.ini cache …"
+    local fpm_reloaded=false
+    for cmd in \
+        "service php-fpm-${PHP_VERSION} reload" \
+        "/etc/init.d/php-fpm-${PHP_VERSION} reload" \
+        "systemctl reload php-fpm-${PHP_VERSION}"
+    do
+        if eval "${cmd}" &>/dev/null 2>&1; then
+            fpm_reloaded=true
+            _ok "PHP-FPM reloaded via: ${DIM}${cmd}${RST}"
+            break
+        fi
+    done
+    [[ "${fpm_reloaded}" == false ]] && _warn "Could not auto-reload PHP-FPM — .user.ini changes apply within user_ini.cache_ttl (default 300s)."
+
+    _track "open_basedir: updated for NPP (.user.ini)"
+}
+
+# =============================================================================
+# STEP 3C — SYSTEM SHELL TOOLSET CHECK
+# =============================================================================
+check_system_toolset() {
+    _section "System Shell Toolset Check"
+
+    # Mirrors the two toolsets in nppp_shell_toolset_check() / nppp_is_dockerized():
+    #   • Global  (ps grep awk sort uniq sed) — hard dep; ALL plugin actions
+    #   • Preload (nohup)                     — hard dep; Preload action only
+    #   • wget is a preload hard dep but gets its own install step (Step 6)
+    #   • rg / safexec are optional — handled in Steps 4 / 5 without exit on failure
+
+    # -------------------------------------------------------------------------
+    # 3C.1  Global toolset — hard dependency for ALL plugin functionality
+    # -------------------------------------------------------------------------
+    _step "Checking global shell toolset: ${WHT}$(IFS=' '; echo "${NPP_GLOBAL_TOOLS[*]}")${RST} …"
+
+    local -a missing_global=()
+    local _gt
+    for _gt in "${NPP_GLOBAL_TOOLS[@]}"; do
+        if have "${_gt}"; then
+            _ok "${_gt}: ${DIM}$(command -v "${_gt}")${RST}"
+        else
+            _warn "${_gt}: NOT FOUND"
+            missing_global+=("${_gt}")
+        fi
+    done
+
+    if [[ ${#missing_global[@]} -gt 0 ]]; then
+        _blank
+        _step "Attempting to install missing global tools: ${WHT}$(IFS=' '; echo "${missing_global[*]}")${RST} …"
+        # procps    → ps
+        # grep      → grep
+        # gawk/mawk → awk
+        # coreutils → sort uniq sed
+        local os_fam; os_fam="$(detect_os_family)"
+        case "${os_fam}" in
+            debian)
+                apt-get install -y -q procps grep gawk coreutils &>/dev/null || true
+                ;;
+            rhel)
+                if have dnf; then
+                    dnf install -y procps-ng grep gawk coreutils &>/dev/null || true
+                else
+                    yum install -y procps-ng grep gawk coreutils &>/dev/null || true
+                fi
+                ;;
+            *)
+                _warn "Unrecognised OS family — cannot auto-install; please install manually."
+                ;;
+        esac
+
+        # Re-verify
+        local -a still_missing_global=()
+        for _gt in "${missing_global[@]}"; do
+            if have "${_gt}"; then
+                _ok "${_gt}: installed → ${DIM}$(command -v "${_gt}")${RST}"
+            else
+                _fail "${_gt}: STILL MISSING"
+                still_missing_global+=("${_gt}")
+            fi
+        done
+
+        if [[ ${#still_missing_global[@]} -gt 0 ]]; then
+            _blank
+            _fail "Hard dependency missing: ${RED}$(IFS=', '; echo "${still_missing_global[*]}")${RST}"
+            _info "These tools are required for ALL NPP plugin functionality."
+            _info "Install them manually and re-run this script."
+            exit 1
+        fi
+    fi
+    _ok "Global shell toolset satisfied"
+
+    # -------------------------------------------------------------------------
+    # 3C.2  Preload toolset — nohup is a hard dependency for the Preload feature
+    #       (wget is also required but validated separately in Step 6)
+    # -------------------------------------------------------------------------
+    _step "Checking preload toolset: ${WHT}nohup${RST} (wget handled in Step 6) …"
+
+    if have nohup; then
+        _ok "nohup: ${DIM}$(command -v nohup)${RST}"
+    else
+        _step "nohup not found — attempting to install coreutils …"
+        local os_fam2; os_fam2="$(detect_os_family)"
+        case "${os_fam2}" in
+            debian) apt-get install -y -q coreutils &>/dev/null || true ;;
+            rhel)
+                if have dnf; then
+                    dnf install -y coreutils &>/dev/null || true
+                else
+                    yum install -y coreutils &>/dev/null || true
+                fi
+                ;;
+            *) _warn "Unrecognised OS family — install nohup (coreutils) manually." ;;
+        esac
+
+        if have nohup; then
+            _ok "nohup: installed → ${DIM}$(command -v nohup)${RST}"
+        else
+            _fail "nohup not found after install attempt."
+            _info "nohup is required by the NPP Preload action."
+            _info "Install coreutils manually and re-run this script."
+            exit 1
+        fi
+    fi
+    _ok "Preload shell toolset satisfied"
+
+    _track "System toolset: global ($(IFS=','; echo "${NPP_GLOBAL_TOOLS[*]}")) ✔ | preload (nohup,wget) ✔"
+}
+
+# =============================================================================
 # STEP 4 — INSTALL RIPGREP >= 14.0.0
 # =============================================================================
 install_ripgrep() {
@@ -628,15 +970,8 @@ install_ripgrep() {
     # -------------------------------------------------------------------------
     case "${os_fam}" in
 
-        # -- Debian / Ubuntu --------------------------------------------------
+        # Debian / Ubuntu
         debian)
-            # Map arch to deb arch name
-            local deb_arch
-            case "${arch}" in
-                x86_64)  deb_arch="amd64" ;;
-                aarch64) deb_arch="arm64" ;;
-            esac
-
             # First: try native package manager (Ubuntu 19+ / Debian 12+ have a new enough rg)
             if have apt-get; then
                 local repo_ver
@@ -646,103 +981,117 @@ install_ripgrep() {
 
                 if ver_gte "${repo_ver}" "${RG_MIN_VERSION}"; then
                     _step "Installing ripgrep from apt (repo version: ${repo_ver}) …"
-                    apt-get install -y -q ripgrep &>/dev/null && installed=true
-                    _ok "Installed via apt"
+                    if apt-get install -y -q ripgrep &>/dev/null; then
+                        installed=true
+                        _ok "Installed via apt"
+                    else
+                        _warn "apt install failed — falling back to .deb download …"
+                    fi
                 else
                     _step "Repo version ${repo_ver} < ${RG_MIN_VERSION} — downloading from GitHub …"
                 fi
             fi
 
             # Fallback: download .deb from GitHub
-            if [[ "${installed}" == false ]]; then
-                local deb_file="ripgrep_${RG_INSTALL_VERSION}-1_${deb_arch}.deb"
+            # Only amd64 .deb is published — arm64 falls through to the binary fallback (step 4.3)
+            if [[ "${installed}" == false ]] && [[ "${arch}" == "x86_64" ]]; then
+                local deb_file="ripgrep_${RG_INSTALL_VERSION}-1_amd64.deb"
                 local deb_url="https://github.com/BurntSushi/ripgrep/releases/download/${RG_INSTALL_VERSION}/${deb_file}"
                 local tmp_deb="/tmp/${deb_file}"
 
                 _step "Downloading ${deb_file} from GitHub …"
                 if curl -fsSL --retry 3 --retry-delay 2 -o "${tmp_deb}" "${deb_url}"; then
-                    dpkg -i "${tmp_deb}" &>/dev/null && installed=true
+                    if dpkg -i "${tmp_deb}" &>/dev/null; then
+                        installed=true
+                        _ok "Installed via .deb package"
+                    else
+                        _warn "dpkg install failed — falling back to binary …"
+                    fi
                     rm -f "${tmp_deb}"
-                    _ok "Installed via .deb package"
                 else
-                    _warn "deb download failed — falling back to static musl binary …"
+                    _warn "deb download failed — falling back to binary …"
                 fi
             fi
             ;;
 
-        # -- RHEL / CentOS / AlmaLinux / Rocky / Fedora ----------------------
+        # RHEL / CentOS / AlmaLinux / Rocky / Fedora
         rhel)
-            # ripgrep is in EPEL for CentOS/RHEL and in fedora repos for Fedora
-            _step "Attempting to install ripgrep via package manager …"
+            # ripgrep is in EPEL for CentOS/RHEL and in Fedora base repos.
+            _step "Checking ripgrep version in package manager repos …"
 
             if have dnf; then
-                # Try direct install first (Fedora 37+)
-                if dnf install -y ripgrep &>/dev/null 2>&1; then
-                    installed=true
-                    _ok "Installed via dnf"
-                else
-                    # Enable EPEL and try again (RHEL / Rocky / AlmaLinux)
+                local repo_ver dnf_ver_raw
+                # 1. Query base repos first (Fedora ships ripgrep without EPEL)
+                dnf_ver_raw="$(dnf info --available ripgrep 2>/dev/null \
+                    | grep -i '^Version' | head -1 | awk '{print $NF}' || echo "")"
+
+                # 2. Not found in base repos → enable EPEL and re-query
+                #    (covers RHEL 8/9, Rocky, AlmaLinux, CentOS Stream)
+                if [[ -z "${dnf_ver_raw}" ]]; then
                     _step "Enabling EPEL repository …"
                     dnf install -y epel-release &>/dev/null 2>&1 || true
+                    dnf_ver_raw="$(dnf info --available ripgrep 2>/dev/null \
+                        | grep -i '^Version' | head -1 | awk '{print $NF}' || echo "")"
+                fi
+                repo_ver="${dnf_ver_raw:-0.0.0}"
+
+                if [[ "${repo_ver}" != "0.0.0" ]] && ver_gte "${repo_ver}" "${RG_MIN_VERSION}"; then
+                    _step "Installing ripgrep from dnf (repo version: ${repo_ver}) …"
                     if dnf install -y ripgrep &>/dev/null 2>&1; then
                         installed=true
-                        _ok "Installed via dnf + EPEL"
+                        _ok "Installed via dnf (v${repo_ver})"
+                    else
+                        _warn "dnf install failed — falling back to static binary …"
                     fi
+                elif [[ "${repo_ver}" != "0.0.0" ]]; then
+                    _step "Repo version ${repo_ver} < ${RG_MIN_VERSION} — skipping dnf, using static binary …"
+                else
+                    _step "ripgrep not found in any dnf repo — using static binary …"
                 fi
-            elif have yum; then
-                yum install -y epel-release &>/dev/null 2>&1 || true
-                if yum install -y ripgrep &>/dev/null 2>&1; then
-                    installed=true
-                    _ok "Installed via yum + EPEL"
-                fi
-            fi
 
-            # Check version if installed via package manager
-            if [[ "${installed}" == true ]]; then
-                local pm_ver
-                pm_ver="$(rg --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")"
-                if ! ver_gte "${pm_ver}" "${RG_MIN_VERSION}"; then
-                    _warn "Package manager installed rg ${pm_ver} < ${RG_MIN_VERSION} — upgrading via static binary …"
-                    installed=false
+            elif have yum; then
+                _step "Enabling EPEL repository (yum) …"
+                yum install -y epel-release &>/dev/null 2>&1 || true
+
+                local repo_ver yum_ver_raw
+                # yum info available = show only not-yet-installed candidate versions
+                yum_ver_raw="$(yum info available ripgrep 2>/dev/null \
+                    | grep -i '^Version' | head -1 | awk '{print $NF}' || echo "")"
+                repo_ver="${yum_ver_raw:-0.0.0}"
+
+                if [[ "${repo_ver}" != "0.0.0" ]] && ver_gte "${repo_ver}" "${RG_MIN_VERSION}"; then
+                    _step "Installing ripgrep from yum (repo version: ${repo_ver}) …"
+                    if yum install -y ripgrep &>/dev/null 2>&1; then
+                        installed=true
+                        _ok "Installed via yum + EPEL (v${repo_ver})"
+                    else
+                        _warn "yum install failed — falling back to static binary …"
+                    fi
+                elif [[ "${repo_ver}" != "0.0.0" ]]; then
+                    _step "Repo version ${repo_ver} < ${RG_MIN_VERSION} — skipping yum, using static binary …"
+                else
+                    _step "ripgrep not found in EPEL/yum repos — using static binary …"
                 fi
             fi
-            # Note: no .rpm on GitHub releases → use musl static binary as fallback
-            ;;
-        # -- Alpine -----------------------------------------------------------
-        alpine)
-            _step "Installing ripgrep via apk …"
-            if apk add --no-cache ripgrep &>/dev/null 2>&1; then
-                installed=true
-                _ok "Installed via apk"
-            fi
-            # Check version — apk may supply < RG_MIN_VERSION
-            if [[ "${installed}" == true ]]; then
-                local apk_ver
-                apk_ver="$(rg --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")"
-                if ! ver_gte "${apk_ver}" "${RG_MIN_VERSION}"; then
-                    _warn "apk installed rg ${apk_ver} < ${RG_MIN_VERSION} — upgrading via static binary …"
-                    installed=false
-                fi
-            fi
-            # Note: no .apk on GitHub releases → use musl static binary as fallback
+            # Note: no .rpm on GitHub releases → use musl static binary as fallback (step 4.3)
             ;;
         *)
-            _fail "Cannot auto-install wget on this OS. Install GNU Wget ${WGET_MIN_VERSION}+ manually."
-            exit 1
+            # Unknown/unsupported OS family (not Debian/RHEL)
+            _warn "Unrecognized OS family — skipping package manager, trying static binary …"
             ;;
     esac
 
     # -------------------------------------------------------------------------
-    # 4.3 Universal fallback: musl static binary tar.gz from GitHub
+    # 4.3 Universal fallback: static binary tar.gz from GitHub
+    #     x86_64  → musl static  (ripgrep-X.Y.Z-x86_64-unknown-linux-musl)
+    #     aarch64 → GNU binary   (ripgrep-X.Y.Z-aarch64-unknown-linux-gnu)
+    #     Note: no musl build is published for aarch64 on GitHub releases.
     # -------------------------------------------------------------------------
     if [[ "${installed}" == false ]]; then
-        _step "Downloading ripgrep ${RG_INSTALL_VERSION} musl static binary …"
-
-        # GitHub releases provide musl static tarballs for x86_64 and aarch64
         local tarball_arch
         case "${arch}" in
             x86_64)  tarball_arch="x86_64-unknown-linux-musl" ;;
-            aarch64) tarball_arch="aarch64-unknown-linux-musl" ;;
+            aarch64) tarball_arch="aarch64-unknown-linux-gnu"  ;;
         esac
 
         local tar_name="ripgrep-${RG_INSTALL_VERSION}-${tarball_arch}.tar.gz"
@@ -756,11 +1105,13 @@ install_ripgrep() {
             install -m 755 "${extracted_dir}/rg" /usr/local/bin/rg
             rm -rf "${tmp_tar}" "${extracted_dir}"
             installed=true
-            _ok "Installed musl static binary → /usr/local/bin/rg"
+            _ok "Installed static binary → /usr/local/bin/rg"
         else
-            _fail "All ripgrep installation methods failed."
-            _info "Please install ripgrep ${RG_MIN_VERSION}+ manually and re-run."
-            exit 1
+            _warn "Static binary download failed — ripgrep could not be installed."
+            _info "NPP will fall back to PHP-based cache scanning (slower but functional)."
+            _info "Install ripgrep ${RG_MIN_VERSION}+ manually when convenient: https://github.com/BurntSushi/ripgrep/releases"
+            _track "ripgrep: SKIPPED (all install methods failed — optional dep)"
+            return 0
         fi
     fi
 
@@ -771,8 +1122,10 @@ install_ripgrep() {
         _ok "ripgrep ${final_ver} installed at: $(command -v rg)"
         _track "ripgrep: installed v${final_ver}"
     else
-        _fail "ripgrep binary not found in PATH after installation."
-        exit 1
+        _warn "ripgrep binary not found in PATH after installation."
+        _info "NPP will fall back to PHP-based cache scanning — this is OK."
+        _info "Install ripgrep ${RG_MIN_VERSION}+ manually: https://github.com/BurntSushi/ripgrep/releases"
+        _track "ripgrep: SKIPPED (not in PATH after install — optional dep)"
     fi
 }
 
@@ -810,9 +1163,12 @@ install_safexec() {
         _blank
         _ok "safexec installer completed"
     else
-        _fail "safexec installation failed."
-        _info "Run manually: curl -fsSL ${SAFEXEC_INSTALL_URL} | sudo sh"
-        exit 1
+        _blank
+        _warn "safexec installation failed — this is an optional dependency."
+        _info "NPP will run preload as the PHP-FPM user instead (fully functional)."
+        _info "Install manually when convenient: curl -fsSL ${SAFEXEC_INSTALL_URL} | sudo sh"
+        _track "safexec: SKIPPED (installer failed — optional dep)"
+        return 0
     fi
 
     # 5.3 Verify installation
@@ -872,16 +1228,18 @@ ensure_gnu_wget() {
 
         case "${os_fam}" in
             debian)
-                # On Debian/Ubuntu, install wget (package is GNU Wget 1.x)
-                apt-get install -y -q wget &>/dev/null
+                # On Debian/Ubuntu, install wget (package is GNU Wget 1.x).
+                apt-get install -y -q wget &>/dev/null || true
                 ;;
             rhel)
-                have dnf && dnf install -y wget &>/dev/null || yum install -y wget &>/dev/null
+                if have dnf; then
+                    dnf install -y wget &>/dev/null || true
+                else
+                    yum install -y wget &>/dev/null || true
+                fi
                 ;;
-            alpine)
-                # Alpine wget is busybox; we need gnu wget
-                apk add --no-cache wget &>/dev/null
-                # Alpine's wget package IS a compatible wget (not busybox default)
+            *)
+                _warn "Unrecognized OS family — cannot auto-install wget; re-checking …"
                 ;;
         esac
 
@@ -907,9 +1265,12 @@ install_wpcli() {
     # 7.1 Check if already installed and working
     if [[ -x "${WP_CLI_BIN}" ]]; then
         local cur_wpcli_ver
-        cur_wpcli_ver="$(${WP_CLI_BIN} --version 2>/dev/null | head -1 || echo "?")"
-        _ok "WP-CLI already installed: ${WHT}${cur_wpcli_ver}${RST}"
-        _track "WP-CLI: already installed ${cur_wpcli_ver}"
+        # Extract semver only — avoids "?" when phar exits non-zero after printing
+        cur_wpcli_ver="$(${WP_CLI_BIN} --allow-root --version 2>/dev/null \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+        [[ -z "${cur_wpcli_ver}" ]] && cur_wpcli_ver="?"
+        _ok "WP-CLI already installed: ${WHT}WP-CLI ${cur_wpcli_ver}${RST}"
+        _track "WP-CLI: already installed v${cur_wpcli_ver}"
         return 0
     fi
 
@@ -923,6 +1284,7 @@ install_wpcli() {
     fi
 
     # 7.3 Verify it's a valid phar
+    local PHP_VERIFY_CMD
     if ! php -r "echo 'ok';" &>/dev/null; then
         _warn "System php not found — using aaPanel php for verification"
         PHP_VERIFY_CMD="${PHP_BIN}"
@@ -930,7 +1292,7 @@ install_wpcli() {
         PHP_VERIFY_CMD="php"
     fi
 
-    if ! "${PHP_VERIFY_CMD}" "${tmp_phar}" --version &>/dev/null; then
+    if ! "${PHP_VERIFY_CMD}" "${tmp_phar}" --version --allow-root &>/dev/null; then
         _fail "Downloaded WP-CLI phar is invalid or corrupt."
         rm -f "${tmp_phar}"
         exit 1
@@ -940,25 +1302,14 @@ install_wpcli() {
     install -m 755 "${tmp_phar}" "${WP_CLI_BIN}"
     rm -f "${tmp_phar}"
 
-    # 7.5 Ensure shebang points to the correct PHP for this server.
-    #     WP-CLI's phar shebang is #!/usr/bin/env php — which picks up the
-    #     system PHP.  On aaPanel the "active CLI php" symlink is at
-    #     /www/server/php/xx/bin/php but env php might resolve elsewhere.
-    #     We patch the shebang to use the aaPanel PHP binary explicitly.
-    local shebang_line; shebang_line="$(head -1 "${WP_CLI_BIN}")"
-    if echo "${shebang_line}" | grep -q '^#!'; then
-        # Replace shebang
-        sed -i "1s|.*|#!${PHP_BIN}|" "${WP_CLI_BIN}"
-        _ok "Shebang patched to: #!${PHP_BIN}"
-    fi
-
-    # 7.6 Verify
+    # 7.5 Verify
     local installed_ver
-    installed_ver="$("${WP_CLI_BIN}" --version 2>/dev/null | head -1 || echo "?")"
-    _ok "WP-CLI installed: ${WHT}${installed_ver}${RST} → ${WP_CLI_BIN}"
-    _track "WP-CLI: installed ${installed_ver}"
+    installed_ver="$("${WP_CLI_BIN}" --allow-root --version 2>/dev/null \
+        | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "?")"
+    _ok "WP-CLI installed: ${WHT}WP-CLI ${installed_ver}${RST} → ${WP_CLI_BIN}"
+    _track "WP-CLI: installed v${installed_ver}"
 
-    # 7.7 Quick sanity — run as www user
+    # 7.6 Quick sanity — run as www user
     _step "Verifying WP-CLI works as user '${AAPANEL_WEB_USER}' …"
     if run_as_www "${WP_CLI_BIN}" --version &>/dev/null; then
         _ok "WP-CLI works as ${AAPANEL_WEB_USER}"
@@ -980,7 +1331,7 @@ install_npp_plugin() {
 
     # Helper: run wp-cli as www against the target WP install
     wp() {
-        run_as_www "${WP_CLI_BIN}" --path="${WP_PATH}" --allow-root "$@" 2>&1
+        run_as_www "${WP_CLI_BIN}" --path="${WP_PATH}" "$@" 2>&1
     }
 
     # 8.1 Verify WP-CLI can bootstrap WordPress from the target path
@@ -1050,23 +1401,44 @@ post_install_verify() {
 
     local all_ok=true
 
-    check_bin() {
-        local name="$1"
-        if have "${name}"; then
-            local ver_str="$(${name} --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo '?')"
-            _ok "${name}: $(command -v ${name})  ${DIM}(${ver_str})${RST}"
+    # rg is OPTIONAL — NPP falls back to PHP-based cache scanning when absent
+    if have rg; then
+        local rg_ver; rg_ver="$(rg --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo '?')"
+        _ok "rg: $(command -v rg)  ${DIM}(${rg_ver})${RST}"
+    else
+        _info "rg: not installed — NPP will use PHP-based cache scanning (this is OK)"
+    fi
+
+    # System shell toolset — re-confirm after full install sequence
+    # (validated + installed in Step 3B; re-check here in case PATH changed)
+    _step "Re-verifying system shell toolset …"
+    for _vtool in "${NPP_GLOBAL_TOOLS[@]}" nohup; do
+        if have "${_vtool}"; then
+            _ok "${_vtool}: ${DIM}$(command -v "${_vtool}")${RST}"
         else
-            _fail "${name}: NOT FOUND"
+            _fail "${_vtool}: NOT FOUND — PATH may have shifted during install"
             all_ok=false
         fi
-    }
+    done
 
-    check_bin rg "${RG_MIN_VERSION}"
-    check_bin safexec || true    # safexec version flag may differ
+    # safexec is OPTIONAL — NPP gracefully runs preload as the PHP-FPM user when it's absent
     if have safexec; then
         _ok "safexec: $(command -v safexec)  ${DIM}(SUID: $(stat -c '%a' "$(command -v safexec)" 2>/dev/null))${RST}"
+    else
+        _info "safexec: not installed — NPP will run preload as the PHP-FPM user (this is OK)"
     fi
-    check_bin wp
+
+    # WP-CLI — use explicit install path so display is consistent with rg/safexec/wget
+    if [[ -x "${WP_CLI_BIN}" ]]; then
+        local _wp_ver
+        _wp_ver="$("${WP_CLI_BIN}" --allow-root --version 2>/dev/null \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+        [[ -z "${_wp_ver}" ]] && _wp_ver="?"
+        _ok "wp: ${WP_CLI_BIN}  ${DIM}(WP-CLI ${_wp_ver})${RST}"
+    else
+        _fail "wp: NOT FOUND (expected: ${WP_CLI_BIN})"
+        all_ok=false
+    fi
 
     # Wget check (special — must be GNU Wget)
     if have wget; then
@@ -1085,9 +1457,12 @@ post_install_verify() {
 
     # 9.2 PHP function check
     _step "PHP function availability check …"
-    local php_func_check
+    local php_func_check php_funcs_literal
+    # Join NPP_REQUIRED_FUNCS + posix_kill into a PHP array literal:
+    php_funcs_literal="$(printf "'%s'," "${NPP_REQUIRED_FUNCS[@]}" "posix_kill")"
+    php_funcs_literal="${php_funcs_literal%,}"
     php_func_check="$("${PHP_BIN}" -r "
-        \$funcs = ['shell_exec','exec','proc_open','putenv','posix_kill'];
+        \$funcs = [${php_funcs_literal}];
         \$ok = [];
         \$fail = [];
         foreach (\$funcs as \$f) {
@@ -1108,13 +1483,34 @@ post_install_verify() {
         _warn "Restart PHP-FPM manually: service php-fpm-${PHP_VERSION} restart"
     fi
 
-    # 9.3 Set nginx cache path to aaPanel default fastcgi cache directory
-    #     Source: plugin wp-cli.php → settings_set() validates path existence
-    #     aaPanel default fastcgi_cache_path: /www/server/fastcgi_cache
-    local npp_cache_path="/www/server/fastcgi_cache"
-    _step "Configuring NPP nginx cache path: ${WHT}${npp_cache_path}${RST}"
+    # 9.3 open_basedir status — read live value back from .user.ini
+    _step "open_basedir status …"
+    local user_ini="${WP_PATH}/.user.ini"
+    if [[ ! -f "${user_ini}" ]]; then
+        _ok "open_basedir: not restricted (.user.ini absent)"
+    elif ! grep -qE '^\s*open_basedir\s*=' "${user_ini}" 2>/dev/null; then
+        _ok "open_basedir: not restricted (.user.ini has no open_basedir directive)"
+    else
+        local live_obd
+        live_obd="$(grep -E '^\s*open_basedir\s*=' "${user_ini}" | tail -1 \
+            | sed 's/^\s*open_basedir\s*=\s*//')"
+        _print_csv_table "open_basedir (live .user.ini)" "$(echo "${live_obd}" | tr ':' ',')"
+    fi
+}
 
-    # Create cache directory + set ownership before plugin validation runs
+# =============================================================================
+# STEP 10 — NPP PLUGIN CONFIGURATION (CACHE PATH)
+# =============================================================================
+configure_npp_plugin() {
+    _section "NPP Plugin Configuration"
+
+    local npp_cache_path="${NPP_CACHE_PATH}"
+
+    _info "Webserver architecture : ${WHT}${WEBSERVER_ARCH}${RST}"
+    _info "Nginx cache path       : ${WHT}${npp_cache_path}${RST}"
+    _blank
+
+    # 10.1 Create cache directory + set ownership before plugin validation runs
     if [[ ! -d "${npp_cache_path}" ]]; then
         _step "Cache directory not found — creating …"
         mkdir -p "${npp_cache_path}"
@@ -1125,13 +1521,12 @@ post_install_verify() {
         _ok "Cache directory already exists: ${WHT}${npp_cache_path}${RST}"
     fi
 
-    # Bypass path restriction must be enabled before plugin validates the cache path,
-    # otherwise settings_set() rejects paths outside the WordPress root.
+    # 10.2 Bypass path restriction must be enabled before plugin validates the
+    #      cache path, otherwise settings_set() rejects paths outside WP root.
     _step "Checking nginx_cache_bypass_path_restriction …"
     local bypass_val
     bypass_val="$(run_as_www "${WP_CLI_BIN}" \
         --path="${WP_PATH}" \
-        --allow-root \
         npp settings get nginx_cache_bypass_path_restriction 2>/dev/null \
         | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')" || bypass_val=""
 
@@ -1140,7 +1535,6 @@ post_install_verify() {
         local bypass_out
         if bypass_out="$(run_as_www "${WP_CLI_BIN}" \
                 --path="${WP_PATH}" \
-                --allow-root \
                 npp settings set nginx_cache_bypass_path_restriction yes 2>&1)"; then
             _ok "nginx_cache_bypass_path_restriction → yes"
             _info "  ${bypass_out}"
@@ -1152,12 +1546,11 @@ post_install_verify() {
         _ok "nginx_cache_bypass_path_restriction already yes — no change needed"
     fi
 
-    # Set nginx_cache_path via WP-CLI (plugin validates path, sanitizes, saves to DB)
+    # 10.3 Set nginx_cache_path via WP-CLI (plugin validates, sanitizes, saves to DB)
     _step "Running: wp npp settings set nginx_cache_path ${npp_cache_path} …"
     local set_path_out
     if set_path_out="$(run_as_www "${WP_CLI_BIN}" \
             --path="${WP_PATH}" \
-            --allow-root \
             npp settings set nginx_cache_path "${npp_cache_path}" 2>&1)"; then
         _ok "nginx_cache_path → ${WHT}${npp_cache_path}${RST}"
         _info "  ${set_path_out}"
@@ -1165,22 +1558,21 @@ post_install_verify() {
     else
         _warn "Could not set nginx_cache_path automatically."
         _info "  ${set_path_out}"
-        _info "  Set manually after setup:"
+        _info "  Set manually:"
         _info "  sudo -u ${AAPANEL_WEB_USER} ${WP_CLI_BIN} --path=${WP_PATH} npp settings set nginx_cache_path ${npp_cache_path}"
         _track "nginx_cache_path: set manually required"
     fi
 
-    # Flush plugin transients so new path is picked up immediately
+    # 10.4 Flush plugin transients so new path is picked up immediately
     _step "Flushing NPP transient caches …"
     run_as_www "${WP_CLI_BIN}" \
         --path="${WP_PATH}" \
-        --allow-root \
         npp flush &>/dev/null || true
     _ok "NPP transients cleared"
 }
 
 # =============================================================================
-# STEP 10 — FINAL SUMMARY
+# STEP 11 — FINAL SUMMARY
 # =============================================================================
 print_summary() {
     _blank
@@ -1203,9 +1595,8 @@ print_summary() {
     echo "  ${BLU}2.${RST} Ensure Nginx fastcgi_cache_path is set in nginx.conf."
     echo "     Example: /www/server/nginx/conf/nginx.conf"
     _blank
-    echo "  ${BLU}3.${RST} If open_basedir is active, add these paths:"
-    echo "     ${DIM}/www/server:/tmp:/usr/bin:/usr/local/bin:/proc:/dev/null${RST}"
-    echo "     Modify per-site PHP-FPM pool or .user.ini as needed."
+    echo "  ${BLU}3.${RST} open_basedir was handled automatically by this script."
+    echo "     If you add new cache paths later, re-run or update .user.ini manually."
     _blank
     echo "  ${BLU}4.${RST} Run the NPP self-test to verify full functionality:"
     echo "     ${DIM}sudo -u www ${WP_CLI_BIN} --path=${WP_PATH} npp status --format=json${RST}"
@@ -1227,8 +1618,8 @@ main() {
     WP_PATH=""
     SITE_DOMAIN=""
     SITE_PATH=""
-    PHP_VERSION_RAW=""
-    PHP_VER_COL=""
+    WEBSERVER_ARCH=""
+    NPP_CACHE_PATH=""
     PHP_VERSION=""
     PHP_VER_DOT=""
     PHP_INI=""
@@ -1240,11 +1631,20 @@ main() {
     # 1. Validate WordPress path + aaPanel DB cross-reference
     validate_wp_path
 
+    # 1B. Detect webserver architecture (single nginx vs nginx + apache)
+    detect_webserver_arch
+
     # 2. Detect PHP version from DB / filesystem
     detect_php_version
 
     # 3. Enable required PHP functions
     enable_php_functions
+
+    # 3B. Configure open_basedir restrictions (if active)
+    configure_open_basedir
+
+    # 3C. Check required system shell toolset (global + preload)
+    check_system_toolset
 
     # 4. Install ripgrep
     install_ripgrep
@@ -1261,10 +1661,13 @@ main() {
     # 8. Install + activate NPP plugin
     install_npp_plugin
 
-    # 9. Post-install verification
+    # 9. Post-install verification (binaries + PHP functions)
     post_install_verify
 
-    # 10. Summary
+    # 10. NPP plugin configuration (cache path + transient flush)
+    configure_npp_plugin
+
+    # 11. Summary
     print_summary
 }
 
