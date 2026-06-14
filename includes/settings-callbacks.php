@@ -650,16 +650,13 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     } elseif (!$safexec_path) {
         $status_note = esc_html__( 'Unavailable: safexec not found. Install it to enable URL Normalization (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
     } elseif (!$safexec_ok) {
-        // Distinguish: SUID failure vs SHA256 integrity failure
-        $p         = @realpath($safexec_path) ?: $safexec_path;
-        $stat_info = function_exists('stat') ? @stat($p) : false;
-        $suid_ok   = $stat_info
-                     && ($stat_info['uid'] === 0)
-                     && (($stat_info['mode'] & 04000) === 04000);
+        // Distinguish: SUID failure
+        $ls      = nppp_safexec_ls_check($safexec_path);
+        $suid_ok = $ls && $ls['is_root'] && $ls['has_suid'];
 
         if ($suid_ok) {
             $status_note = esc_html__( 'Unavailable: safexec status is cached. Permissions appear correct now — save settings again to refresh.', 'fastcgi-cache-purge-and-preload-nginx' );
-        } elseif (!$stat_info) {
+        } elseif ($ls === null) {
             $status_note = esc_html__( 'Unavailable: safexec is not accessible. Check file permissions (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
         } else {
             $status_note = esc_html__( 'Unavailable: safexec is not SUID/root-owned. Fix permissions (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
