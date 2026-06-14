@@ -14,6 +14,55 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// OBD safe SUID check for the safexec
+if (! function_exists('nppp_safexec_ls_check')) {
+    function nppp_safexec_ls_check($path) {
+        if (!function_exists('shell_exec') || $path === '') {
+            return null;
+        }
+
+        // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+        $output = (string) shell_exec('LC_ALL=C ls -lLn -- ' . escapeshellarg($path) . ' 2>/dev/null');
+
+        // Take the first non-empty line.
+        $line = '';
+        foreach (explode("\n", $output) as $raw) {
+            $raw = trim($raw);
+            if ($raw !== '') {
+                $line = $raw;
+                break;
+            }
+        }
+        if ($line === '') {
+            return null;
+        }
+
+        // Parse with a strict regex that validates the format before extracting values.
+        if (!preg_match('/^([-bcdlps?][rwxsStT-]{9})[+.]?\s+\d+\s+(\d+)/', $line, $m)) {
+            return null;
+        }
+
+        $perm = $m[1];
+        $uid  = $m[2];
+
+        // Must be a regular file ('-').
+        if ($perm[0] !== '-') {
+            return null;
+        }
+
+        //   's' — SUID bit set AND execute bit set   (chmod 4755 → -rwsr-xr-x)  ← normal case
+        //   'S' — SUID bit set, execute bit NOT set  (chmod 4655 → -rwSr-xr-x)  ← unusual but valid SUID
+        //   'x' — execute only, no SUID
+        //   '-' — neither execute nor SUID
+        $perm_char = $perm[3];
+
+        return [
+            'is_root'  => ($uid === '0'),
+            'has_suid' => ($perm_char === 's' || $perm_char === 'S'),
+        ];
+    }
+}
+
 // Detect wget compatibility required by NPP.
 if (! function_exists('nppp_get_wget_compatibility')) {
     function nppp_get_wget_compatibility(): array {
