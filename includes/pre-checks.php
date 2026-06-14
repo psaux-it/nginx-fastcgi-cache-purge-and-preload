@@ -602,7 +602,7 @@ function nppp_open_basedir_compat_check(): array {
         $required[rtrim( ABSPATH, '/' )] = rtrim( ABSPATH, '/' );
         $parent = dirname( rtrim( ABSPATH, '/' ) );
 
-        if ( $parent !== rtrim( ABSPATH, '/' ) ) {
+        if ( $parent !== rtrim( ABSPATH, '/' ) && @file_exists( $parent . '/wp-config.php' ) ) {
             $required[$parent] = $parent;
         }
     }
