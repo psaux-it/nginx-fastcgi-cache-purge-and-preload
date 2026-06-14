@@ -590,7 +590,7 @@ function nppp_get_in_cache_page_count() {
     $rg_cached = get_transient( 'nppp_rg_ok' );
     if ( $rg_cached === false ) {
         $rg_bin = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
-        $rg_ok  = $rg_bin !== '' && is_executable( $rg_bin );
+        $rg_ok  = $rg_bin !== '';
         set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_ok ], HOUR_IN_SECONDS );
     } else {
         $rg_bin = $rg_cached['path'];
