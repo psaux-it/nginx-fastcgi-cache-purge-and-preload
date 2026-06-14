@@ -253,6 +253,8 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Fixed: WP-CLI "preload --stop" now performs complete preload state cleanup, including scheduled cron events, transients, and watchdog tokens.
 * Fixed: Active WP cron events are now cancelled immediately when plugin requirements fail mid-operation, preventing orphaned cron jobs from firing after functionality is disabled.
 * Fixed: Several disable-functionality and disable-preload guard were missing coverage for new and existing options introduced before.
+* Improved: Open basedir compatibility check now requires the parent of ABSPATH only when wp-config.php actually resides there, eliminating a confusing false-positive on standard WordPress installations.
+* Improved: For aaPanel environments, open_basedir requirements now list only the specific Nginx config and vhost directories instead of the broader /www/server path, reducing unnecessary directory exposure.
 * UI/UX: Preload All now redirects to the Status tab instead of Settings, taking users directly to the live preload progress section.
 * Walkie: Added three new modes to the NPP mascot.
 * Added: "Stop Preload" button in the Status tab and a dedicated Admin Bar link. Previously, stopping an active preload process required using "Purge All" on UI, which also cleared the entire cache. The new button stops the preload process immediately while preserving the existing cache.
