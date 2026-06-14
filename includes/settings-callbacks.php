@@ -812,7 +812,7 @@ function nppp_rg_purge_enabled_callback(): void {
         } else {
             $rg_bin = '';
         }
-        $rg_ok  = $rg_bin !== '' && is_executable( $rg_bin );
+        $rg_ok  = $rg_bin !== '';
         set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_ok ], HOUR_IN_SECONDS );
     } else {
         $rg_bin = $cached['path'];
