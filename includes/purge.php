@@ -1665,15 +1665,10 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 }
 
                 // Check for safexec binary and SUID
-                if ($safexec_path && function_exists('stat')) {
-                    $is_root_owner = false;
-                    $has_suid      = false;
-
-                    $info = @stat($safexec_path);
-                    if ($info && isset($info['uid'], $info['mode'])) {
-                        $is_root_owner = ($info['uid'] === 0);
-                        $has_suid      = ($info['mode'] & 04000) === 04000;
-                    }
+                if ($safexec_path) {
+                    $sfx_ls        = nppp_safexec_ls_check($safexec_path);
+                    $is_root_owner = $sfx_ls && $sfx_ls['is_root'];
+                    $has_suid      = $sfx_ls && $sfx_ls['has_suid'];
 
                     if ($is_root_owner && $has_suid) {
                         $output = shell_exec(escapeshellarg($safexec_path) . ' --kill=' . (int) $pid . ' 2>&1');
