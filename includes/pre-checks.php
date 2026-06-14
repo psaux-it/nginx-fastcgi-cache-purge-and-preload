@@ -651,6 +651,7 @@ function nppp_open_basedir_compat_check(): array {
         $required[rtrim( ABSPATH, '/' )] = rtrim( ABSPATH, '/' );
         $parent = dirname( rtrim( ABSPATH, '/' ) );
 
+        // In case in parent we need write access for assume nginx mode
         if ( $parent !== rtrim( ABSPATH, '/' ) && @file_exists( $parent . '/wp-config.php' ) ) {
             $required[$parent] = $parent;
         }
@@ -711,11 +712,13 @@ function nppp_open_basedir_compat_check(): array {
             }
         }
     }
-    // PHP reads /proc/cpuinfo, /proc/meminfo, /proc/self/mountinfo, /proc/mounts directly.
+    // NPP reads /proc/cpuinfo, /proc/meminfo, /proc/self/mountinfo, /proc/mounts.
     $required['/proc'] = '/proc';
 
-    // proc_open() opens /dev/null as a file descriptor — OBD applies.
-    $required['/dev/null'] = '/dev/null';
+    // Only required when proc_open is available; nppp_detect_premature_process()
+    if ( function_exists( 'proc_open' ) ) {
+        $required['/dev/null'] = '/dev/null';
+    }
 
     // safexec, WordPress core and WP_Filesystem use /tmp for temp file operations.
     $required['/tmp'] = '/tmp';
