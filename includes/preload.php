@@ -474,7 +474,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             }
 
             // Test and detect premature process
-            if (function_exists('proc_open') && is_callable('proc_open')) {
+            if (function_exists('proc_open') && is_callable('proc_open') &&
+                function_exists('proc_get_status') && is_callable('proc_get_status') &&
+                function_exists('proc_close') && is_callable('proc_close')) {
                 $test_result = nppp_detect_premature_process(
                     $fdomain,
                     $tmp_path,
@@ -712,7 +714,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         }
 
         // Test and detect premature process
-        if (function_exists('proc_open') && is_callable('proc_open')) {
+        if (function_exists('proc_open') && is_callable('proc_open') &&
+            function_exists('proc_get_status') && is_callable('proc_get_status') &&
+            function_exists('proc_close') && is_callable('proc_close')) {
             $test_result = nppp_detect_premature_process(
                 $fdomain,
                 $tmp_path,
