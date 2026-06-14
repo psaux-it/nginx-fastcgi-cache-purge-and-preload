@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  BETA-2: npp-aapanel.sh — NPP Infrastructure Setup for aaPanel
+#  BETA-3: NPP Infrastructure Setup for aaPanel
 # =============================================================================
 #  Nginx Cache Purge Preload (NPP) — Complete environment bootstrap
 #  for aaPanel-managed WordPress installations.
@@ -21,7 +21,8 @@
 #   10.  Configures NPP nginx cache path and flushes plugin transients
 #
 #  Usage:
-#    sudo bash npp-aapanel.sh /www/wwwroot/your-wordpress-site
+#    sudo bash npp-aapanel.sh                                     # interactive site picker
+#    sudo bash npp-aapanel.sh /www/wwwroot/your-wordpress-site    # direct path (non-interactive)
 #
 #  Requirements:
 #    • Must be run as root
@@ -256,6 +257,88 @@ sqlite_q() {
 }
 
 # =============================================================================
+# INTERACTIVE SITE PICKER — populated from aaPanel's sites table
+# =============================================================================
+select_site_interactive() {
+    _section "WordPress Site Selection"
+
+    _step "Querying aaPanel for registered sites …"
+    local sites_raw
+    sites_raw="$(sqlite_q "${AAPANEL_DB}" "SELECT name, path FROM sites ORDER BY id;" 2>/dev/null || true)"
+
+    if [[ -z "${sites_raw}" ]]; then
+        _fail "No sites found in aaPanel database (${AAPANEL_DB})."
+        _info "Add a site in aaPanel first, or pass the WordPress path directly:"
+        _info "  sudo bash npp-aapanel.sh /www/wwwroot/your-site"
+        exit 1
+    fi
+
+    local -a site_names=()
+    local -a site_paths=()
+    local -a site_wp=()
+    local name path
+
+    while IFS='|' read -r name path; do
+        [[ -z "${name}" ]] && continue
+        site_names+=("${name}")
+        site_paths+=("${path}")
+        if [[ -f "${path}/wp-config.php" ]]; then
+            site_wp+=("yes")
+        else
+            site_wp+=("no")
+        fi
+    done <<< "${sites_raw}"
+
+    local count=${#site_names[@]}
+    if [[ ${count} -eq 0 ]]; then
+        _fail "No sites found in aaPanel database."
+        exit 1
+    fi
+
+    _blank
+    echo "  ${WHT}${BOLD}Select the WordPress site to configure for NPP:${RST}"
+    _blank
+
+    local i marker
+    for ((i=0; i<count; i++)); do
+        if [[ "${site_wp[$i]}" == "yes" ]]; then
+            marker="${GRN}●${RST}"
+        else
+            marker="${DIM}○${RST}"
+        fi
+        printf "    ${MAG}${BOLD}%2d)${RST} %b  ${WHT}%-32s${RST} ${DIM}%s${RST}\n" \
+            "$((i+1))" "${marker}" "${site_names[$i]}" "${site_paths[$i]}"
+    done
+
+    _blank
+    echo "  ${DIM}● = WordPress detected (wp-config.php found)    ○ = not detected${RST}"
+    _blank
+
+    local choice
+    while true; do
+        read -r -p "  ${CYN}${BOLD}Enter the number of the site to set up [1-${count}]: ${RST}" choice
+        if [[ "${choice}" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= count )); then
+            break
+        fi
+        _warn "Invalid selection. Enter a number between 1 and ${count}."
+    done
+
+    local sel=$((choice - 1))
+    WP_PATH="${site_paths[${sel}]}"
+    SITE_DOMAIN="${site_names[${sel}]}"
+
+    # Strip trailing slashes for consistency with the rest of the script
+    while [[ "${WP_PATH}" == */ ]]; do
+        WP_PATH="${WP_PATH%/}"
+    done
+    [[ -z "${WP_PATH}" ]] && WP_PATH="/"
+
+    _blank
+    _ok "Selected: ${WHT}${SITE_DOMAIN}${RST} → ${WHT}${WP_PATH}${RST}"
+    _track "Site selected interactively: ${SITE_DOMAIN} (${WP_PATH})"
+}
+
+# =============================================================================
 # STEP 0 — PRE-FLIGHT CHECKS
 # =============================================================================
 preflight_checks() {
@@ -269,23 +352,21 @@ preflight_checks() {
     _ok "Running as root"
 
     # 0.2 Argument provided
-    if [[ $# -lt 1 ]]; then
-        _fail "Missing argument. Usage: sudo bash npp-aapanel.sh /path/to/wordpress"
-        exit 1
+    WP_PATH=""
+    if [[ $# -ge 1 ]]; then
+        # Strip ALL trailing slashes (handles /path, /path/, /path//, etc.)
+        # so SQL lookups, vhost-root grep matching, and path concatenation
+        # throughout the script all see one canonical form.
+        WP_PATH="${1}"
+        while [[ "${WP_PATH}" == */ ]]; do
+            WP_PATH="${WP_PATH%/}"
+        done
+        # Guard against a root-only input ("/" or "//") collapsing to empty
+        if [[ -z "${WP_PATH}" ]]; then
+            WP_PATH="/"
+        fi
+        _ok "WordPress path argument: ${WHT}${WP_PATH}${RST}"
     fi
-
-    # Strip ALL trailing slashes (handles /path, /path/, /path//, etc.)
-    # so SQL lookups, vhost-root grep matching, and path concatenation
-    # throughout the script all see one canonical form.
-    WP_PATH="${1}"
-    while [[ "${WP_PATH}" == */ ]]; do
-        WP_PATH="${WP_PATH%/}"
-    done
-    # Guard against a root-only input ("/" or "//") collapsing to empty
-    if [[ -z "${WP_PATH}" ]]; then
-        WP_PATH="/"
-    fi
-    _ok "WordPress path argument: ${WHT}${WP_PATH}${RST}"
 
     # 0.3 aaPanel detection
     local bt_found=false
@@ -352,6 +433,12 @@ preflight_checks() {
         fi
     done
     _ok "Required tools (curl, tar) present"
+
+    # 0.8 No path/domain argument given — show interactive site picker now
+    # that aaPanel's DB (0.4) and sqlite3 (0.5) are confirmed available.
+    if [[ -z "${WP_PATH}" ]]; then
+        select_site_interactive
+    fi
 }
 
 # =============================================================================
@@ -1016,23 +1103,16 @@ install_ripgrep() {
 
         # RHEL / CentOS / AlmaLinux / Rocky / Fedora
         rhel)
-            # ripgrep is in EPEL for CentOS/RHEL and in Fedora base repos.
+            # Check existing repos only (no EPEL enablement — avoids conflicts with aaPanel-managed repos).
+            # Fedora base repos often have a recent enough ripgrep; RHEL/CentOS/Rocky/Alma
+            # typically won't unless EPEL is already enabled, in which case we use the static binary fallback.
             _step "Checking ripgrep version in package manager repos …"
 
             if have dnf; then
                 local repo_ver dnf_ver_raw
-                # 1. Query base repos first (Fedora ships ripgrep without EPEL)
+                # Query existing repos only — do NOT enable EPEL on aaPanel
                 dnf_ver_raw="$(dnf info --available ripgrep 2>/dev/null \
                     | grep -i '^Version' | head -1 | awk '{print $NF}' || echo "")"
-
-                # 2. Not found in base repos → enable EPEL and re-query
-                #    (covers RHEL 8/9, Rocky, AlmaLinux, CentOS Stream)
-                if [[ -z "${dnf_ver_raw}" ]]; then
-                    _step "Enabling EPEL repository …"
-                    dnf install -y epel-release &>/dev/null 2>&1 || true
-                    dnf_ver_raw="$(dnf info --available ripgrep 2>/dev/null \
-                        | grep -i '^Version' | head -1 | awk '{print $NF}' || echo "")"
-                fi
                 repo_ver="${dnf_ver_raw:-0.0.0}"
 
                 if [[ "${repo_ver}" != "0.0.0" ]] && ver_gte "${repo_ver}" "${RG_MIN_VERSION}"; then
@@ -1046,15 +1126,12 @@ install_ripgrep() {
                 elif [[ "${repo_ver}" != "0.0.0" ]]; then
                     _step "Repo version ${repo_ver} < ${RG_MIN_VERSION} — skipping dnf, using static binary …"
                 else
-                    _step "ripgrep not found in any dnf repo — using static binary …"
+                    _step "ripgrep not found in existing dnf repos (EPEL not enabled on aaPanel) — using static binary …"
                 fi
 
             elif have yum; then
-                _step "Enabling EPEL repository (yum) …"
-                yum install -y epel-release &>/dev/null 2>&1 || true
-
                 local repo_ver yum_ver_raw
-                # yum info available = show only not-yet-installed candidate versions
+                # Query existing repos only — do NOT enable EPEL on aaPanel
                 yum_ver_raw="$(yum info available ripgrep 2>/dev/null \
                     | grep -i '^Version' | head -1 | awk '{print $NF}' || echo "")"
                 repo_ver="${yum_ver_raw:-0.0.0}"
@@ -1063,17 +1140,16 @@ install_ripgrep() {
                     _step "Installing ripgrep from yum (repo version: ${repo_ver}) …"
                     if yum install -y ripgrep &>/dev/null 2>&1; then
                         installed=true
-                        _ok "Installed via yum + EPEL (v${repo_ver})"
+                        _ok "Installed via yum (v${repo_ver})"
                     else
                         _warn "yum install failed — falling back to static binary …"
                     fi
                 elif [[ "${repo_ver}" != "0.0.0" ]]; then
                     _step "Repo version ${repo_ver} < ${RG_MIN_VERSION} — skipping yum, using static binary …"
                 else
-                    _step "ripgrep not found in EPEL/yum repos — using static binary …"
+                    _step "ripgrep not found in existing yum repos (EPEL not enabled on aaPanel) — using static binary …"
                 fi
             fi
-            # Note: no .rpm on GitHub releases → use musl static binary as fallback (step 4.3)
             ;;
         *)
             # Unknown/unsupported OS family (not Debian/RHEL)
