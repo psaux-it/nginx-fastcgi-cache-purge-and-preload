@@ -316,7 +316,7 @@ select_site_interactive() {
 
     local choice
     while true; do
-        read -r -p "  ${CYN}${BOLD}Enter the number of the site to set up [1-${count}]: ${RST}" choice
+        read -r -p "  ${CYN}${BOLD}Enter the number of the site to set up [1-${count}]: ${RST}" choice </dev/tty
         if [[ "${choice}" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= count )); then
             break
         fi
@@ -1750,7 +1750,7 @@ main() {
 # ---------------------------------------------------------------------------
 # Guard: ensure the script is not sourced
 # ---------------------------------------------------------------------------
-if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+if [[ "${BASH_SOURCE[0]:-${0}}" != "${0}" ]]; then
     echo "ERROR: Do not source this script. Run it directly: sudo bash npp-aapanel.sh <wp-path>" >&2
     return 1
 fi
