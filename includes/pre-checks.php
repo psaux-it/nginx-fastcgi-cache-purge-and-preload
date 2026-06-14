@@ -726,7 +726,8 @@ function nppp_open_basedir_compat_check(): array {
     $required['/tmp'] = '/tmp';
 
     // aaPanel specific requirements
-    if ( nppp_is_aapanel() ) {
+    $is_aapanel = nppp_is_aapanel();
+    if ( $is_aapanel ) {
         $required['/www/server/nginx/conf']        = '/www/server/nginx/conf';
         $required['/www/server/panel/vhost/nginx'] = '/www/server/panel/vhost/nginx';
     }
@@ -757,7 +758,7 @@ function nppp_open_basedir_compat_check(): array {
         '/etc/nginx/conf.d/ea-nginx.conf',
         '/usr/local/openresty/nginx/conf/nginx.conf',
     ];
-    $nginx_covered = false;
+    $nginx_covered = $is_aapanel;
     foreach ( $nginx_dirs as $dir ) {
         if ( nppp_obd_path_covered( $dir, $obd ) ) {
             $nginx_covered = true;
