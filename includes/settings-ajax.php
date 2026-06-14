@@ -362,7 +362,7 @@ function nppp_update_rg_purge_option(): void {
     // If rg is not available or version is too low, refuse to enable.
     if ( $rg_purge === 'yes' ) {
         $rg_bin = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
-        if ( $rg_bin === '' || ! is_executable( $rg_bin ) ) {
+        if ( $rg_bin === '' ) {
             wp_send_json_error( __( 'ripgrep (rg) binary not found. Install it to enable RG Purge.', 'fastcgi-cache-purge-and-preload-nginx' ), 400 );
         }
         // Enforce minimum rg version requirement.
