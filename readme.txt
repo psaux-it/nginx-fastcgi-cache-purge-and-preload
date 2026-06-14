@@ -255,8 +255,8 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Fixed: Several disable-functionality and disable-preload guard were missing coverage for new and existing options introduced before.
 * Improved: Open basedir compatibility check now requires the parent of ABSPATH only when wp-config.php actually resides there, eliminating a confusing false-positive on standard WordPress installations.
 * Improved: For aaPanel environments, open_basedir requirements now list only the specific Nginx config and vhost directories instead of the broader /www/server path, reducing unnecessary directory exposure.
+* Improved: Reduced open_basedir requirements – binary directories are no longer needed in the whitelist, thanks to replacing PHP stat()/is_executable() checks with a more obd compatible shell‑based detection method.
 * UI/UX: Preload All now redirects to the Status tab instead of Settings, taking users directly to the live preload progress section.
-* Walkie: Added three new modes to the NPP mascot.
 * Added: "Stop Preload" button in the Status tab and a dedicated Admin Bar link. Previously, stopping an active preload process required using "Purge All" on UI, which also cleared the entire cache. The new button stops the preload process immediately while preserving the existing cache.
 * Added: Nginx detection results to the Status Tab.
 
