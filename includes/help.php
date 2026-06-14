@@ -72,94 +72,82 @@ function nppp_my_faq_html() {
                     </div>
                 </div>
 
-                <h3 class="nppp-question">Preloading fails with "ERROR COMMAND" or NPP cannot read nginx.conf — could open_basedir be the cause?</h3>
+                <h3 class="nppp-question">I've checked everything, but preloading still doesn't work and Nginx cannot be detected — could open_basedir be the cause?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h3><strong>PHP <code>open_basedir</code> and NPP</strong></h3>
-                        <p>Yes. If <code>open_basedir</code> is active in your PHP configuration, it silently restricts every filesystem and binary access PHP makes — including the paths NPP must reach to preload pages, read <code>nginx.conf</code>, detect FUSE mounts, and locate system binaries. The error surface is misleading: instead of an <code>open_basedir</code> violation message, you typically see:</p>
-                        <pre>ERROR COMMAND: Preloading failed for https://example.com. Please check Exclude Endpoints and Exclude File Extensions settings syntax.</pre>
-                        <p>This message means NPP could not execute a required system command — most commonly because <code>open_basedir</code> is blocking access to the <code>wget</code> binary, <code>nginx.conf</code>, the cache directory, or <code>/proc</code> (which NPP reads to detect FUSE mounts).</p>
+                        <p>Yes. If <code>open_basedir</code> is active in your PHP configuration, it silently restricts every filesystem access PHP makes — including the paths NPP must reach.</p>
+                        <p><strong>NPP performs an automatic compatibility check</strong> when <code>open_basedir</code> is active. If required paths are missing, you will see a warning on the plugin <strong>Settings</strong> page that lists exactly which paths need to be added to your <code>open_basedir</code> configuration.</p>
 
-                        <h4><strong>What paths does NPP require access to?</strong></h4>
-                        <p>The following table lists every path category NPP needs and why. All of these must be reachable by the PHP-FPM process for NPP to work correctly:</p>
+                        <h4><strong>How does NPP determine required paths?</strong></h4>
+                        <p>The plugin dynamically builds the list of paths based on your actual WordPress installation and configuration. The categories below are checked:</p>
                         <table class="responsive-table">
                             <thead>
                                 <tr>
-                                    <th>Path</th>
-                                    <th>Why NPP needs it</th>
+                                    <th>Path category</th>
+                                    <th>Why NPP needs it?</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td><code>{ABSPATH}/</code></td>
-                                    <td>WordPress installation root — plugin files, runtime files (PID, log, snapshot)</td>
+                                    <td>WordPress root (<code>ABSPATH</code>) and its parent</td>
+                                    <td>Entire WordPress installation must be functional. Parent only needed on specific wp installations.</td>
                                 </tr>
                                 <tr>
-                                    <td><code>{ABSPATH}/../</code></td>
-                                    <td>Parent of WordPress root — required by WP Filesystem API for uploads and adjacent paths</td>
+                                    <td><code>WP_CONTENT_DIR</code> / uploads directory</td>
+                                    <td>NPP keeps runtime files and logs in uploads directory. Usually <code>ABSPATH</code> already covers.</td>
                                 </tr>
                                 <tr>
-                                    <td><code>/dev/shm/</code>, <code>/tmp/</code>, <code>/var/</code>, <code>/cache/</code></td>
-                                    <td>Nginx cache directory root — NPP reads, writes, and deletes cache files here</td>
+                                    <td>Your configured Nginx cache path</td>
+                                    <td>NPP reads, writes, and deletes nginx cache files.</td>
+                                </tr>
+                                <tr>
+                                    <td>FUSE source path (if bindfs is used)</td>
+                                    <td>NPP reads the real cache directory behind the FUSE mount when <code>rg</code> scans are executed through <code>safexec</code>.</td>
                                 </tr>
                                 <tr>
                                     <td><code>/proc/</code></td>
-                                    <td>FUSE mount detection — NPP reads <code>/proc/self/mountinfo</code> and <code>/proc/mounts</code> to determine if the cache path is a FUSE (bindfs) mount</td>
+                                    <td>FUSE detection, preload progress job and various system resource metric reads.</td>
                                 </tr>
                                 <tr>
                                     <td><code>/dev/null</code></td>
-                                    <td>Standard null device — used by shell command redirects</td>
+                                    <td>Preload premature process check — only required if <code>proc_open</code> is available.</td>
                                 </tr>
                                 <tr>
-                                    <td><code>/etc/nginx/</code></td>
-                                    <td>Default nginx.conf location — NPP reads it to extract cache key directives and verify cache zone configuration</td>
+                                    <td><code>/tmp/</code></td>
+                                    <td>Preload process — temporarily hold artifacts here during preloading.</td>
                                 </tr>
                                 <tr>
-                                    <td><code>/usr/bin/</code>, <code>/usr/sbin/</code></td>
-                                    <td>System binaries — <code>wget</code> (preload), <code>rg</code> (ripgrep scan), <code>safexec</code>, <code>nginx -V</code> (conf path detection), <code>ps</code> (PID checks)</td>
+                                    <td>Main nginx configuration directories (nginx.conf)</td>
+                                    <td>NPP parse Nginx configuration, paths, keys, users for Status tab metrics and also needed for strict‑mode Nginx detection.</td>
                                 </tr>
                                 <tr>
-                                    <td><code>/usr/local/bin/</code>, <code>/usr/local/sbin/</code></td>
-                                    <td>Alternative binary locations — same binaries as above when installed outside <code>/usr/bin</code></td>
-                                </tr>
-                                <tr>
-                                    <td><code>/bin/</code>, <code>/sbin/</code></td>
-                                    <td>Core system utilities — <code>echo</code>, shell builtins used in command probes</td>
+                                    <td>aaPanel‑specific directories <em>(only if detected)</em></td>
+                                    <td><code>/www/server/nginx/conf</code> and <code>/www/server/panel/vhost/nginx</code> — required on aaPanel environments.</td>
                                 </tr>
                             </tbody>
                         </table>
 
-                        <h4><strong>Recommended <code>open_basedir</code> configuration</strong></h4>
-                        <p>Add the following to your PHP-FPM pool configuration file (e.g., <code>/etc/php/8.x/fpm/pool.d/yoursite.conf</code>) or your server-wide <code>php.ini</code>. Adjust <code>{ABSPATH}</code> to your actual WordPress installation path and the cache root to match your <code>nginx_cache_path</code> setting:</p>
-                        <pre>php_admin_value[open_basedir] =
-    /var/www/yoursite.com/ :
-    /var/www/yoursite.com/../ :
-    /dev/shm/ :
-    /tmp/ :
-    /var/ :
-    /cache/ :
-    /proc/ :
-    /dev/null :
-    /etc/nginx/ :
-    /usr/bin/ :
-    /usr/sbin/ :
-    /usr/local/bin/ :
-    /usr/local/sbin/ :
-    /bin/ :
-    /sbin/</pre>
-                        <p>Reload PHP-FPM after saving: <code>systemctl reload php-fpm</code></p>
-
-                        <h4><strong>How to confirm <code>open_basedir</code> is the culprit</strong></h4>
+                        <h4><strong>What should I do when the <code>open_basedir</code> warning appears?</strong></h4>
                         <ol>
-                            <li>Check the <strong>Status tab</strong> — NPP emits a <code>GLOBAL WARNING OPEN_BASEDIR</code> notice when it detects an active restriction.</li>
-                            <li>Temporarily set <code>open_basedir =</code> (empty) in your pool config, reload PHP-FPM, and re-test. If the error disappears, <code>open_basedir</code> was the cause.</li>
-                            <li>Re-enable <code>open_basedir</code> with the full path list above and confirm NPP works correctly.</li>
+                            <li>Go to the <strong>Settings</strong> page of NPP. The warning will show an exact list of missing paths.</li>
+                            <li>Add those paths to your <code>open_basedir</code> configuration (in your PHP‑FPM pool config or server‑wide <code>php.ini</code>).</li>
+                            <li>Reload PHP‑FPM: <code>systemctl reload php-fpm</code> (or the equivalent for your environment).</li>
+                            <li>Return to the NPP Settings tab — the warning should disappear and full functionality will be restored.</li>
                         </ol>
 
+                        <h4><strong>Example: typical minimal <code>open_basedir</code> entry</strong></h4>
+                        <p>Every environment is different. The plugin warning will give you the exact list, but here is a typical baseline you can start from (adjust <code>ABSPATH</code> and cache path):</p>
+                        <pre>php_admin_value[open_basedir] =
+    /var/www/yoursite.com/ :
+    /tmp/ :
+    /var/cache/nginx/ :
+    /proc/ :
+    /dev/null :
+    /etc/nginx/nginx.conf :</pre>
+
                         <h4><strong>Important notes</strong></h4>
-                        <p>⚠️ Setting <code>open_basedir =</code> (completely empty) disables the restriction globally — do not leave it empty in production. Always re-enable it with the correct path list after testing.</p>
-                        <p>📌 On Docker-based deployments, binary paths may differ (e.g., <code>/usr/local/bin/wget</code> instead of <code>/usr/bin/wget</code>). Check actual binary locations with <code>which wget rg safexec nginx ps</code> inside the PHP-FPM container and add those directories to the list accordingly.</p>
-                        <p>📌 If your Nginx configuration is stored outside <code>/etc/nginx/</code> (e.g., <code>/usr/local/etc/nginx/</code> or <code>/opt/nginx/conf/</code>), add that directory as well. NPP probes all common nginx.conf locations — every directory in that probe list must be reachable.</p>
+                        <p>📌 On Docker‑based deployments, ensure the actual nginx.conf directory (e.g., <code>/usr/local/etc/nginx/</code>) is included, as the plugin probes multiple standard locations. The compatibility warning will tell you if one is missing.</p>
                     </div>
                 </div>
 
