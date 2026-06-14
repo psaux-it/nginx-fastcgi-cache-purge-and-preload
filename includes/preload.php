@@ -128,10 +128,6 @@ function nppp_find_safexec_path() {
 
 // Checks if the given safexec path is root-owned and SUID-enabled
 function nppp_is_safexec_usable($path, $notify = true) {
-    if (!function_exists('stat')) {
-        return false;
-    }
-
     // Prevent interference with REST, AJAX, and Cron responses.
     $notify = $notify && !(
         (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) ||
@@ -151,19 +147,18 @@ function nppp_is_safexec_usable($path, $notify = true) {
         return false;
     }
 
-    $p = @realpath($path) ?: $path;
-    $info = @stat($p);
+    $ls = nppp_safexec_ls_check($path);
 
-    if ($info === false) {
+    if ($ls === null) {
         if ($notify) {
             /* translators: %s: Safexec binary filesystem path */
-            nppp_display_admin_notice('info', sprintf(__('INFO SAFEXEC: safexec at %s is not accessible. Starting preload as the PHP-FPM user.', 'fastcgi-cache-purge-and-preload-nginx'), $p), true, false);
+            nppp_display_admin_notice('info', sprintf(__('INFO SAFEXEC: safexec at %s is not accessible. Starting preload as the PHP-FPM user.', 'fastcgi-cache-purge-and-preload-nginx'), $path), true, false);
         }
         return false;
     }
 
-    $is_root_owner = ($info['uid'] === 0);
-    $has_suid      = ($info['mode'] & 04000) === 04000;
+    $is_root_owner = $ls['is_root'];
+    $has_suid      = $ls['has_suid'];
 
     if (!($is_root_owner && $has_suid)) {
         if ($notify) {
@@ -1598,19 +1593,13 @@ function nppp_stop_preload_ui( string $pid_file ): void {
             $sfx      = ( $detected !== '' ) ? $detected : '';
         }
 
-        if ( $sfx !== '' && function_exists( 'stat' ) ) {
-            $sfx_info = @stat( $sfx );
-            if ( $sfx_info
-                && isset( $sfx_info['uid'], $sfx_info['mode'] )
-                && $sfx_info['uid'] === 0
-                && ( $sfx_info['mode'] & 04000 ) === 04000
-            ) {
-                // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
-                shell_exec( escapeshellarg( $sfx ) . ' --kill=' . (int) $pid . ' 2>&1' );
-                usleep( 250000 );
-                if ( ! nppp_is_process_alive( $pid ) ) {
-                    $killed = true;
-                }
+        $sfx_ls = ( $sfx !== '' ) ? nppp_safexec_ls_check( $sfx ) : null;
+        if ( $sfx_ls && $sfx_ls['is_root'] && $sfx_ls['has_suid'] ) {
+            // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+            shell_exec( escapeshellarg( $sfx ) . ' --kill=' . (int) $pid . ' 2>&1' );
+            usleep( 250000 );
+            if ( ! nppp_is_process_alive( $pid ) ) {
+                $killed = true;
             }
         }
 
