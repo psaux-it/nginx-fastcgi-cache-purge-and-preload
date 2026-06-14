@@ -676,9 +676,10 @@ function nppp_open_basedir_compat_check(): array {
     // safexec, WordPress core and WP_Filesystem use /tmp for temp file operations.
     $required['/tmp'] = '/tmp';
 
-    // aaPanel keeps all configs, cache under /www/server
+    // aaPanel specific requirements
     if ( nppp_is_aapanel() ) {
-        $required['/www/server'] = '/www/server';
+        $required['/www/server/nginx/conf']        = '/www/server/nginx/conf';
+        $required['/www/server/panel/vhost/nginx'] = '/www/server/panel/vhost/nginx';
     }
 
     $missing = [];
