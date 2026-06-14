@@ -126,7 +126,7 @@ function nppp_nginx_cache_settings_page() {
         } elseif ( function_exists( 'shell_exec' ) ) {
             nppp_prepare_request_env();
             $nppp_rg_bin       = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) );
-            $nppp_rg_installed = $nppp_rg_bin !== '' && is_executable( $nppp_rg_bin );
+            $nppp_rg_installed = $nppp_rg_bin !== '';
             set_transient( 'nppp_rg_ok', [ 'path' => $nppp_rg_bin, 'ok' => $nppp_rg_installed ], HOUR_IN_SECONDS );
         }
 
