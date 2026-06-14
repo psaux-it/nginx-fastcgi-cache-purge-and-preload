@@ -1066,19 +1066,13 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 $sfx      = $detected !== '' ? $detected : '';
             }
 
-            if ( $sfx !== '' && function_exists( 'stat' ) ) {
-                $sfx_info = @stat( $sfx );
-                if ( $sfx_info
-                    && isset( $sfx_info['uid'], $sfx_info['mode'] )
-                    && $sfx_info['uid'] === 0
-                    && ( $sfx_info['mode'] & 04000 ) === 04000
-                ) {
-                    // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
-                    shell_exec( escapeshellarg( $sfx ) . ' --kill=' . (int) $pid . ' 2>&1' );
-                    usleep( 250000 );
-                    if ( ! nppp_is_process_alive( $pid ) ) {
-                        $killed = true;
-                    }
+            $sfx_ls = ( $sfx !== '' ) ? nppp_safexec_ls_check( $sfx ) : null;
+            if ( $sfx_ls && $sfx_ls['is_root'] && $sfx_ls['has_suid'] ) {
+                // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+                shell_exec( escapeshellarg( $sfx ) . ' --kill=' . (int) $pid . ' 2>&1' );
+                usleep( 250000 );
+                if ( ! nppp_is_process_alive( $pid ) ) {
+                    $killed = true;
                 }
             }
 
