@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  BETA-3: NPP Infrastructure Setup for aaPanel
+#  STABLE: NPP Infrastructure Setup for aaPanel
 # =============================================================================
 #  Nginx Cache Purge Preload (NPP) — Complete environment bootstrap
 #  for aaPanel-managed WordPress installations.
