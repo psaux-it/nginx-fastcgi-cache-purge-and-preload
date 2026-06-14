@@ -254,7 +254,7 @@ function nppp_dashboard_widget() {
         $rg_bin = function_exists( 'shell_exec' )
             ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) )
             : '';
-        $rg_available = $rg_bin !== '' && is_executable( $rg_bin );
+        $rg_available = $rg_bin !== '';
         // Enforce minimum version (≥14.0.0).
         if ( $rg_available && function_exists( 'nppp_check_rg_version' ) ) {
             $rg_ver = nppp_check_rg_version();
