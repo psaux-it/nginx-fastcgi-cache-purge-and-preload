@@ -38,7 +38,7 @@ wp npp settings get
 wp npp schedule
 ```
 
-**NPP** includes 10 dedicated **WP-CLI** commands. Run `wp help npp` for the full list and usage details.
+> **NPP** includes 10 dedicated **WP-CLI** commands. Run `wp help npp` for the full list and usage details.
 
 ### 🛡️ Secure Command Execution Layer (safexec)
 
@@ -50,7 +50,13 @@ wp npp schedule
 
 ⚡ Spin up a full environment and try NPP in minutes with the ready-to-run **[Docker](https://github.com/psaux-it/wordpress-nginx-cache-docker)** setup.
 
-🧩 If you are on **All-in-One Monolithic Server** arc you can still use pre-made automation bash script below.
+### 🖥️ aaPanel Quick Setup
+
+Running WordPress on **aaPanel**? A dedicated bootstrap script handles the full NPP environment in one command.
+
+````bash
+sudo bash -c "$(curl -Ss https://psaux-it.github.io/npp-aapanel.sh)"
+````
 
 ### Requirements
 
