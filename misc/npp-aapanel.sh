@@ -1,34 +1,67 @@
-#!/usr/bin/env bash
 # =============================================================================
-#  STABLE: NPP Infrastructure Setup for aaPanel
+#  Nginx Cache Purge Preload (NPP) — WordPress Plugin
+#  https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/
+#  https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload
+#
+#  Copyright (C) 2024-2026  Hasan CALISIR — https://www.psauxit.com
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/gpl-2.0.html>.
+#
 # =============================================================================
+#  NPP Infrastructure Setup for aaPanel
+# =============================================================================
+#
 #  Nginx Cache Purge Preload (NPP) — Complete environment bootstrap
 #  for aaPanel-managed WordPress installations.
 #
 #  What this script does:
-#    1.  Validates the aaPanel environment and the supplied WordPress path
-#    2.  Cross-references the WP path with aaPanel's SQLite DB to confirm the
-#        site is registered and to auto-detect the active PHP version
-#    3.  Removes all NPP-required functions from PHP disable_functions in the
-#        matching php.ini and reloads PHP-FPM
-#    4.  Checks / installs ripgrep >= 14.0.0 (latest available) from GitHub
-#        releases (DEB for Debian/Ubuntu; static musl tar.gz for RPM distros)
+#    0.  Pre-flight checks: root privilege, aaPanel detection, SQLite DB
+#        presence, internet connectivity, required tools (curl, tar, sqlite3);
+#        presents an interactive site picker when no path argument is supplied
+#    1.  Validates the supplied WordPress path (wp-config.php check) and
+#        cross-references it with aaPanel's SQLite DB to confirm registration;
+#        verifies the configured webserver is nginx
+#    1B. Detects webserver architecture (single nginx / nginx+apache /
+#        nginx+OpenLiteSpeed) and resolves the correct nginx cache path
+#    1C. Fixes nginx vhost config directory and .conf file permissions so the
+#        `www` user (PHP-FPM / NPP / WP-CLI) can read them at runtime
+#    2.  Detects the site's active PHP version from its nginx vhost config
+#        (fallback: newest installed version under /www/server/php)
+#    3.  Removes all NPP-required functions from disable_functions in the
+#        matching php.ini and reloads PHP-FPM to apply the change
+#    3B. Checks and updates .user.ini open_basedir (if active) to include
+#        all paths that NPP requires PHP-FPM to access at runtime
+#    3C. Verifies and installs the global shell toolset (ps, grep, awk, sort,
+#        uniq, sed) and preload toolset (nohup) required by the plugin
+#    4.  Checks / installs ripgrep >= 14.0.0 from GitHub releases
+#        (DEB for Debian/Ubuntu; static musl tar.gz for RPM distros)
 #    5.  Installs safexec via the official one-liner installer
 #    6.  Ensures GNU Wget >= 1.16 is present (not wget2 / busybox)
 #    7.  Downloads WP-CLI, renames it to `wp`, installs to /usr/local/bin/wp
-#    8.  Installs and activates the NPP plugin
-#    9.  Verifies all binaries and PHP functions are operational
+#    8.  Installs and activates the NPP plugin via WP-CLI
+#    9.  Verifies all binaries, shell tools, and PHP functions are operational
 #   10.  Configures NPP nginx cache path and flushes plugin transients
+#   11.  Prints a structured setup summary with next-step instructions
 #
 #  Usage:
-#    sudo bash npp-aapanel.sh                                     # interactive site picker
+#    sudo bash npp-aapanel.sh                                     # interactive domain picker
 #    sudo bash npp-aapanel.sh /www/wwwroot/your-wordpress-site    # direct path (non-interactive)
 #
 #  Requirements:
 #    • Must be run as root
-#    • aaPanel must be installed
+#    • aaPanel must be installed (min 8.0.3)
 #    • sqlite3 CLI must be present
-#    • Internet access for downloads
 #
 #  Supported distros
 #    Ubuntu 18.04 / 20.04 / 22.04 / 24.04
@@ -575,6 +608,124 @@ detect_webserver_arch() {
 
     _info "  Nginx cache path: ${WHT}${NPP_CACHE_PATH}${RST}"
     _track "Webserver architecture: ${WEBSERVER_ARCH} | cache path: ${NPP_CACHE_PATH}"
+}
+
+# =============================================================================
+# STEP 1C — NGINX VHOST CONFIG PERMISSIONS (www READ ACCESS)
+# =============================================================================
+fix_vhost_permissions() {
+    _section "Nginx Vhost Config Permissions"
+
+    # NPP, WP-CLI, and PHP-FPM all run as '${AAPANEL_WEB_USER}' and must be
+    # able to READ nginx vhost .conf files at runtime — for PHP-version
+    # auto-detection, nginx include-path parsing, and cache-key inspection.
+    # aaPanel installs these directories as root:root with restrictive modes
+    # by default, blocking the www user entirely.
+    #
+    # Safe target permissions (ownership unchanged — root:root throughout):
+    #   /www/server/panel             755  (traversal only)
+    #   /www/server/panel/vhost       755  (traversal only)
+    #   /www/server/panel/vhost/nginx 755  (traversal + listing)
+    #   *.conf files within           644  (world-readable)
+
+    local vhost_base="/www/server/panel/vhost/nginx"
+    local changed=false
+
+    # -------------------------------------------------------------------------
+    # 1C.1  Directory exists guard
+    # -------------------------------------------------------------------------
+    if [[ ! -d "${vhost_base}" ]]; then
+        _warn "Vhost config directory not found: ${vhost_base}"
+        _info "Skipping permission fix — directory absent"
+        _track "Vhost permissions: skipped (${vhost_base} absent)"
+        return 0
+    fi
+
+    # -------------------------------------------------------------------------
+    # 1C.2  Directory traversal permissions — chmod 755
+    # -------------------------------------------------------------------------
+    _step "Checking directory traversal permissions (755) …"
+
+    local -a chk_dirs=(
+        "/www/server/panel"
+        "/www/server/panel/vhost"
+        "${vhost_base}"
+    )
+
+    local dir perm
+    for dir in "${chk_dirs[@]}"; do
+        if [[ ! -d "${dir}" ]]; then
+            _warn "  Not found, skipping: ${dir}"
+            continue
+        fi
+        perm="$(stat -c '%a' "${dir}" 2>/dev/null || echo '000')"
+        if [[ "${perm}" != "755" ]]; then
+            chmod 755 "${dir}"
+            _ok "  ${WHT}${dir}${RST}  ${DIM}${perm} → 755${RST}"
+            changed=true
+        else
+            _ok "  ${WHT}${dir}${RST}  ${DIM}already 755${RST}"
+        fi
+    done
+
+    # -------------------------------------------------------------------------
+    # 1C.3  Vhost .conf file read permissions — chmod 644
+    # -------------------------------------------------------------------------
+    _step "Checking .conf file permissions (644) …"
+
+    local conf_count=0 fixed_count=0
+    local f fperm
+    while IFS= read -r -d '' f; do
+        conf_count=$(( conf_count + 1 ))
+        fperm="$(stat -c '%a' "${f}" 2>/dev/null || echo '000')"
+        if [[ "${fperm}" != "644" ]]; then
+            chmod 644 "${f}"
+            fixed_count=$(( fixed_count + 1 ))
+            changed=true
+        fi
+    done < <(find "${vhost_base}" -type f -name "*.conf" -print0 2>/dev/null)
+
+    if [[ ${conf_count} -eq 0 ]]; then
+        _info "No .conf files found in ${vhost_base}"
+    elif [[ ${fixed_count} -gt 0 ]]; then
+        _ok "${fixed_count} of ${conf_count} .conf file(s) updated → 644"
+    else
+        _ok "All ${conf_count} .conf file(s) already 644 — no changes needed"
+    fi
+
+    # -------------------------------------------------------------------------
+    # 1C.4  Verify the www user can now read the site's vhost config
+    # -------------------------------------------------------------------------
+    _step "Verifying '${AAPANEL_WEB_USER}' can read vhost configs …"
+
+    local test_conf=""
+    if [[ "${SITE_DOMAIN}" != "<unknown>" ]] && \
+       [[ -f "${vhost_base}/${SITE_DOMAIN}.conf" ]]; then
+        test_conf="${vhost_base}/${SITE_DOMAIN}.conf"
+    else
+        # Fallback: pick any .conf present (read-access test is generic)
+        test_conf="$(find "${vhost_base}" -maxdepth 1 -name '*.conf' \
+            2>/dev/null | head -1 || true)"
+    fi
+
+    if [[ -z "${test_conf}" ]]; then
+        _info "No .conf file available to test read access"
+    elif run_as_www test -r "${test_conf}"; then
+        _ok "'${AAPANEL_WEB_USER}' can read: ${DIM}$(basename "${test_conf}")${RST}"
+    else
+        _warn "'${AAPANEL_WEB_USER}' still cannot read: ${DIM}${test_conf}${RST}"
+        _info "Check parent directory ownership or SELinux / AppArmor policies."
+    fi
+
+    # -------------------------------------------------------------------------
+    # 1C.5  Summary track
+    # -------------------------------------------------------------------------
+    if [[ "${changed}" == false ]]; then
+        _ok "All vhost config permissions were already correct — no changes made"
+        _track "Vhost permissions: already correct"
+    else
+        _track "Vhost permissions: corrected for '${AAPANEL_WEB_USER}' read access"
+    fi
 }
 
 # =============================================================================
@@ -1710,6 +1861,9 @@ main() {
     # 1B. Detect webserver architecture (single nginx vs nginx + apache)
     detect_webserver_arch
 
+    # 1C. Fix nginx vhost config permissions (www read access)
+    fix_vhost_permissions
+
     # 2. Detect PHP version from DB / filesystem
     detect_php_version
 
@@ -1751,7 +1905,7 @@ main() {
 # Guard: ensure the script is not sourced
 # ---------------------------------------------------------------------------
 if [[ "${BASH_SOURCE[0]:-${0}}" != "${0}" ]]; then
-    echo "ERROR: Do not source this script. Run it directly: sudo bash npp-aapanel.sh <wp-path>" >&2
+    echo "ERROR: Do not source this script. Run it directly: sudo bash npp-aapanel.sh" >&2
     return 1
 fi
 
