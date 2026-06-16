@@ -109,47 +109,67 @@ Automatic Installation
 
 == Frequently Asked Questions ==
 
-= Does this plugin require Nginx? =
+= Is NPP a trustworthy and secure plugin? =
 
-Yes. NPP is designed exclusively for Nginx web servers running on Linux. It does not work on Apache, shared hosting, or environments where `shell_exec` and `exec` are disabled.
+Yes. NPP is engineered with a highly defensive, multi-layered "Narrow Gate" architecture using a lazy bootstrap mechanism to minimize your server's attack surface. To completely eliminate performance overhead and vulnerability surfaces, NPP stays entirely dormant on 99% of public web traffic, verifying entry paths before heavy core files ever load into memory.
 
-= Does NPP require the ngx_cache_purge Nginx cache module? =
+= Does NPP require Nginx? =
+
+Yes. Nginx must be part of your web server stack. It does not matter if Nginx is configured as a frontend reverse proxy or as the direct backend server—as long as Nginx is handling the caching layer on a Linux environment, the plugin works perfectly.
+
+It does not work on standalone Apache setups, restricted shared hosting, or environments where `shell_exec` and `exec` are disabled.
+
+= Does NPP require the ngx_cache_purge Nginx module? =
 
 No. The `ngx_cache_purge` module is optional. When available, NPP uses it as the first purge path (HTTP Purge). If it is not present, NPP automatically falls back to a URL index lookup and then a full filesystem scan. Nothing breaks either way.
 
-Relying on `ngx_cache_purge` module today introduces unnecessary security and stability risks to your server and not recommended.
+Currently relying on `ngx_cache_purge` module today introduces unnecessary security and stability risks to your server and not recommended.
 
 * **Unproven Security (Lack of updates)**: The original module project has not been actively maintained for several years. It receives no routine security reviews, vulnerability patches, or bug fixes.
 * **Unreliable Codebase (Fragmented availability)**: Because the original project stalled-abandoned, the community has created multiple independent "forks" just to keep it working. This fragmentation makes it nearly impossible to guarantee which version is actually secure or fully compatible with your nginx config and version.
 * **Vulnerable Defaults (Outdated system packages)**: Due to the lack of an proven, and trusted release, most Linux distributions default to shipping outdated, decade-old versions of this module. These legacy builds lack modern security standards and frequently experience compatibility issues in real-world production scenarios.
 
-= What server dependencies are required? =
+= Which command-line utilities and tools are required? =
 
 Mostly basic, built-in shell tools are required. **wget** is required for cache preloading. For hardened shell execution, **safexec** is highly recommended — see the Help tab for installation instructions. For large cache-heavy websites, especially when Nginx cache paths are located on FUSE-based mounts (such as bindfs to solve permission issues), **ripgrep (rg)** is strongly recommended for significantly faster cache purge performance.
 
-= Why is the plugin not working on my environment? =
+= Which PHP functions must be removed from disable_functions? =
 
-The most common reasons are: `shell_exec` and `exec` is disabled, `open_basedir` restrictions prevent required filesystem access, the PHP-FPM user lacks write permission to the Nginx cache directory, or automatic Nginx detection fails (for example, `nginx.conf` cannot be located). See the **Help tab** for a full environment checklist and solutions.
+**Hard Dependencies**
+
+* **`shell_exec`** – The primary dependency used for core plugin functionality.
+* **`exec`** – Required for executing `ripgrep` RG Purge.
+
+**Optional Dependencies:**
+
+* **`proc_open`, `proc_close`, `proc_get_status`** – Required for the health check of background preload process.
+* **`putenv`, `getenv`** – Required to pass critical runtime flags to the `safexec` and drive the **URL Normalization** feature.
+
+= Why NPP not working on my environment? =
+
+The most common reasons are: `shell_exec` and `exec` is disabled, `open_basedir` restrictions prevent required filesystem access, the PHP-FPM user lacks write permission to the Nginx cache directory, or Nginx detection fails (`nginx.conf` cannot be located). See the **Help tab** for a full environment checklist and solutions.
 
 = I am getting permission errors. What should I do? =
 
 This is the most common issue in environments where the WEBSERVER-USER (nginx/www-data) and PHP-FPM-USER are different. NPP provides a one-liner bash script to automate the fix using **bindfs** on monolithic servers. For containerized environments, users can review the full configuration setup via [NPP Containerized](https://github.com/psaux-it/wordpress-nginx-cache-docker) See the **Help tab → Permission Issues** section or the [GitHub repository](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload) for details.
 
-= Does it work with Cloudflare? =
+= Does NPP work with Cloudflare? =
 
 Yes. NPP has built-in Cloudflare APO Sync that mirrors every purge to Cloudflare’s edge cache automatically. Requires the official Cloudflare WordPress plugin. Enable it under **Settings**.
 
-= Does it work with Redis Object Cache? =
+= Does NPP work with Redis Object Cache? =
 
 Yes. NPP supports **Redis Object Cache** Sync, which keeps Redis and the Nginx cache aligned during purge and preload operations. When enabled, NPP flushes the Redis object cache at the correct point in the Nginx Purge + Preload chain to ensure fresh content is used when rebuilding cache. Enable it under **Settings**.
 
-= Is it compatible with WooCommerce? =
+= Is NPP compatible with WooCommerce? =
 
 Yes. NPP includes built-in WooCommerce Auto-Purge for stock changes and order events, and supports purging the Shop page as a related URL when a product is updated.
 
-= Can I use it alongside other caching plugins? =
+= Can I use NPP alongside other caching plugins? =
 
-Yes, but disable page caching in other plugins to avoid conflicts. You can keep their frontend optimization features (minification, lazy loading, CDN) active. See the **Help tab** for details.
+Yes, but disable page caching in other plugins to avoid conflicts. You can keep their frontend optimization features (minification, lazy loading) active.
+
+For the best results, NPP pairs best with lightweight, minification-only trustful plugins. Because Nginx already handles your page caching instantly at the server level, using heavy, code-bloated page caching plugins only introduces unnecessary overhead even you disable page caching features. Keeping your frontend optimization layer as lean as possible is the ideal match for high-speed Nginx caching.
 
 = Where can I find the allowed Nginx cache paths? =
 
@@ -159,7 +179,7 @@ NPP restricts cache paths by default to prevent accidental deletion of system fi
 
 Yes. NPP includes full WP-CLI integration. You can purge, preload, check status, view logs, update settings, flush transients, and manage scheduled events directly from the terminal — no admin dashboard access required. Run `wp help npp` and `wp help npp <subcommand>` to see all available commands.
 
-= What Nginx cache types are supported? =
+= What Nginx cache types are supported by NPP? =
 
 NPP supports **FastCGI**, **Proxy**, **SCGI**, and **UWSGI** cache methods. The plugin automatically applies the appropriate purge strategy (HTTP Purge, INDEX Purge, or RG Purge).
 
@@ -171,7 +191,9 @@ HTTP Purge is an optional fast‑path that uses Nginx's `ngx_cache_purge` module
 
 RG Purge is a lightning‑fast alternative to the traditional PHP filesystem scan. It uses `ripgrep` (rg) — line-oriented search tool written in Rust — to locate nginx cache files in a fraction of the time.
 
-In a standard Nginx cache with thousands of URLs, the built‑in PHP recursive iterator can take 10–60 seconds to find all cache entries for a single page purge. RG Purge reduces this to **1–2 seconds regardless of cache size** by using parallel directory traversal and memory‑mapped I/O. When to enable: large sites over 10.000 URL.
+On a typical website with thousands of cached URLs, the built‑in PHP recursive iterator can take anywhere from 10 to 60 seconds to scan the disk and locate cache files for a single purge event. RG Purge reduces this cleanup time **1–2 seconds regardless of cache size** by using parallel directory traversal and memory‑mapped I/O.
+
+* **When to enable:** Strongly recommended for large or high-traffic sites with over 10,000 URLs, or any environment where Nginx cache paths are stored on slower disk arrays or FUSE-based mounts (like bindfs).
 
 = What is Index Purge and how does it speed up single‑URL purges? =
 
