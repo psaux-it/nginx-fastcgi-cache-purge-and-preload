@@ -113,6 +113,8 @@ Automatic Installation
 
 Yes. NPP is engineered with a highly defensive, multi-layered "Narrow Gate" architecture using a lazy bootstrap mechanism to minimize your server's attack surface. To completely eliminate performance overhead and vulnerability surfaces, NPP stays entirely dormant on 99% of public web traffic, verifying entry paths before heavy core files ever load into memory.
 
+For hardened environment security, it also ships with its own secure privilege-dropping wrapper, `safexec`—a custom C-binary utility designed to isolate system commands and execute them under a low-privilege runtime user.
+
 = Does NPP require Nginx? =
 
 Yes. Nginx must be part of your web server stack. It does not matter if Nginx is configured as a frontend reverse proxy or as the direct backend server—as long as Nginx is handling the caching layer on a Linux environment, the plugin works perfectly.
