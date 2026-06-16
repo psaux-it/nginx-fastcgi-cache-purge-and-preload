@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # =============================================================================
 #  Nginx Cache Purge Preload (NPP) — WordPress Plugin
 #  https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/
