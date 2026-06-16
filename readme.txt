@@ -113,9 +113,15 @@ Automatic Installation
 
 Yes. NPP is designed exclusively for Nginx web servers running on Linux. It does not work on Apache, shared hosting, or environments where `shell_exec` and `exec` are disabled.
 
-= Does it require the ngx_cache_purge Nginx module? =
+= Does NPP require the ngx_cache_purge Nginx cache module? =
 
-No. The `ngx_cache_purge` module is optional. When available, NPP uses it as the fastest purge path (HTTP Purge). If it is not present, NPP automatically falls back to a URL index lookup and then a full filesystem scan. Nothing breaks either way.
+No. The `ngx_cache_purge` module is optional. When available, NPP uses it as the first purge path (HTTP Purge). If it is not present, NPP automatically falls back to a URL index lookup and then a full filesystem scan. Nothing breaks either way.
+
+Relying on `ngx_cache_purge` module today introduces unnecessary security and stability risks to your server and not recommended.
+
+* **Unproven Security (Lack of updates)**: The original module project has not been actively maintained for several years. It receives no routine security reviews, vulnerability patches, or bug fixes.
+* **Unreliable Codebase (Fragmented availability)**: Because the original project stalled-abandoned, the community has created multiple independent "forks" just to keep it working. This fragmentation makes it nearly impossible to guarantee which version is actually secure or fully compatible with your nginx config and version.
+* **Vulnerable Defaults (Outdated system packages)**: Due to the lack of an proven, and trusted release, most Linux distributions default to shipping outdated, decade-old versions of this module. These legacy builds lack modern security standards and frequently experience compatibility issues in real-world production scenarios.
 
 = What server dependencies are required? =
 
@@ -175,17 +181,21 @@ During every cache preload, NPP quietly builds a persistent URL‑to‑filepath 
 
 `safexec` is a small, privilege‑dropping wrapper (written in C) created specifically for NPP. It is used to safely execute system commands like `wget`, and `rg` while enforcing strict security controls.
 
-What it does:
+**What it does?**
+
 * Drops privileges to a low‑privilege user (`nobody`) before running the shell command.
 * Scrubs the environment to prevent information leaks.
 * Optionally normalizes percent‑encoded characters in URLs during cache preloading — solving a common cause of duplicate cache entries (e.g., `%2F` vs `/`).
 
-Without safexec, the plugin runs commands with the same permissions as the PHP process. safexec adds an extra layer of isolation and is especially valuable:
-* Where you want to limit the impact of shell operations (injections).
-* In FUSE environments where the PHP user lacks access to the underlying cache directory — `safexec` can temporarily assume the Nginx user's identity to read directly from the real path.
+Without `safexec`, traditionally the plugin runs shell commands with the same permissions as the PHP process owner. **It adds an extra layer of isolation.**
 
-URL Normalization modes:
-In Preload Settings you can choose how `safexec` handles percent‑encoded URLs:
+* In environments where you want to mitigate the risk and impact of potential command injections.
+* In FUSE environments where the PHP user lacks access to the underlying cache directory — `safexec` can temporarily assume the Nginx user's identity to read directly from the real path for faster Purge operations.
+
+**URL Normalization**
+
+In Preload Settings you can choose how `safexec` handles percent‑encoded URLs.
+
 * **OFF** – No normalization (default).
 * **UPPER** – Convert all percent‑encoded sequences to uppercase (e.g., `%2f` → `%2F`).
 * **LOWER** – Convert to lowercase.
@@ -193,7 +203,7 @@ In Preload Settings you can choose how `safexec` handles percent‑encoded URLs:
 
 This is crucial if your Nginx `$request_uri` cache key treats different entries, which can lead to cache fragmentation. Choose the mode that matches your Nginx configuration.
 
-safexec is entirely optional. NPP works without it, but for production sites, especially those with FUSE mounts or strict security requirements, it is highly recommended.
+`safexec` is entirely optional. NPP works without it, but for production sites, especially those with FUSE mounts or strict security requirements, it is highly recommended.
 
 = Does NPP cache pages that contain a question mark (?), like filters or UTM tags? =
 
@@ -209,17 +219,18 @@ Yes. NPP includes a "Preload Feeds" option that warms your main RSS2, Atom, per�
 
 = How is NPP's purge system different from other Nginx cache plugins? =
 
-Most Nginx cache plugins rely on a single purge method — usually a slow, recursive PHP scan of every file in the cache directory, or they require a special Nginx module. NPP uses a **layered fast‑path chain** that automatically picks the fastest available method for every single‑URL purge, without you needing to configure anything:
+Most Nginx cache plugins rely on a single purge method — usually a slow, recursive PHP scan of every file in the cache directory, or they require a special Nginx cache module. NPP uses a **layered fast‑path chain** that automatically picks the fastest available method for every single‑URL purge, without you needing to configure anything.
 
-1. **FP1 – HTTP Purge** – If the `ngx_cache_purge` module is present, NPP instructs Nginx to delete the cache entry via a simple HTTP request. Near‑instant.
-2. **FP2 – Index Purge** – If the URL is already indexed from a previous preload, NPP finds the cache file path in memory — zero disk scanning.
-3. **FP3 – RG Purge** – If `ripgrep` is installed, a single, highly optimized system command locates all matching cache files in 1–2 seconds, even on directories with 50,000+ files.
-4. **FP4 – PHP recursive scan** – The traditional method; used only as a silent fallback when nothing faster is available.
+* **FP1 – HTTP Purge** – If the `ngx_cache_purge` module is present, NPP instructs Nginx to delete the cache entry via a simple HTTP request. Near‑instant.
+* **FP2 – Index Purge** – If the URL is already indexed from a previous preload, NPP finds the cache file path in memory — zero disk scanning.
+* **FP3 – RG Purge** – If `ripgrep` is installed, a single, highly optimized system command locates all matching cache files in 1–2 seconds, even on directories with 50,000+ files.
+* **FP4 – PHP recursive scan** – The traditional method; used only as a silent fallback when nothing faster is available.
 
-This design means:
-- No single point of failure — if one method isn’t available, the next one takes over automatically.
-- Your purges are always as fast as your server environment allows, **without changing any settings**.
-- You can improve purge speed later simply by installing `ripgrep` or enabling the Nginx module — the plugin adapts instantly.
+Key benefits of this approach!
+
+* No single point of failure — if one method isn’t available, the next one takes over automatically.
+* Your purges are always as fast as your server environment allows, **without changing any settings**.
+* You can improve purge speed later simply by installing `ripgrep` or enabling the Nginx cache module (not currently recommended) — the plugin adapts instantly.
 
 No other Nginx cache plugin offers this kind of resilient, self‑optimizing purge stack. It is one of the key reasons NPP stays fast and safe even on massive WooCommerce sites, and high‑traffic news platforms.
 
