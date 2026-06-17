@@ -112,6 +112,7 @@ function nppp_defaults_on_plugin_activation() {
         'nppp_rg_purge_enabled'               => 'no',
         'nppp_http_purge_suffix'              => 'purge',
         'nppp_http_purge_custom_url'          => '',
+        'nppp_http_purge_all_path'            => 'purge_all',
         'nginx_cache_bypass_path_restriction' => 'no',
     );
 
