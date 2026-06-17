@@ -244,7 +244,7 @@
                 $('#nppp-test-http-purge').prop('disabled', true).css({ cursor:'not-allowed' });
 
                 // Disable sub-fields
-                $('#nppp_http_purge_suffix, #nppp_http_purge_custom_url')
+                $('#nppp_http_purge_suffix, #nppp_http_purge_custom_url, #nppp_http_purge_all_path')
                     .prop('disabled', true)
                     .attr('readonly', 'readonly')
                     .css({ cursor:'not-allowed' });
