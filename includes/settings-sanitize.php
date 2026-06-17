@@ -585,6 +585,30 @@ function nppp_nginx_cache_settings_sanitize($input) {
         $sanitized_input['nppp_http_purge_custom_url'] = '';
     }
 
+    // Purge All path
+    $raw_all_path = isset( $input['nppp_http_purge_all_path'] )
+                    ? trim( sanitize_text_field( $input['nppp_http_purge_all_path'] ), '/' )
+                    : '';
+    if ( $raw_all_path === '' ) {
+        $sanitized_input['nppp_http_purge_all_path'] = 'purge_all';
+        add_settings_error(
+            'nppp_nginx_cache_settings_group',
+            'nppp-http-purge-all-path',
+            __( 'ERROR OPTION: Purge All Path cannot be empty. Reset to "purge_all".', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'error'
+        );
+    } elseif ( preg_match( '/^[a-zA-Z0-9_\-]+$/', $raw_all_path ) ) {
+        $sanitized_input['nppp_http_purge_all_path'] = $raw_all_path;
+    } else {
+        $sanitized_input['nppp_http_purge_all_path'] = 'purge_all';
+        add_settings_error(
+            'nppp_nginx_cache_settings_group',
+            'nppp-http-purge-all-path',
+            __( 'ERROR OPTION: Purge All Path must contain only letters, numbers, hyphens, or underscores. Reset to "purge_all".', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'error'
+        );
+    }
+
     // Sanitize bypass path restriction
     $sanitized_input['nginx_cache_bypass_path_restriction'] =
         ( isset( $input['nginx_cache_bypass_path_restriction'] ) && $input['nginx_cache_bypass_path_restriction'] === 'yes' )
