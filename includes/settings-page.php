@@ -936,34 +936,46 @@ function nppp_nginx_cache_settings_page() {
                                         <?php nppp_http_purge_enabled_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'Delegates single-URL purging to Nginx itself via the ngx_cache_purge module instead of NPP touching the filesystem. Applies to both manual and auto purge triggers.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Recommended module: nginx-modules fork v2.5.x', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Delegates both Purge Single and Purge All events to Nginx itself via the ngx_cache_purge module instead of NPP touching the filesystem.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Recommended ngx_cache_purge module: https://github.com/nginx-modules fork v3.0.2', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Broadly compatible with managed hosting and control panels where ngx_cache_purge is pre-compiled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Purge All always uses filesystem operations. HTTP Purge applies only to single-URL and related single-URL purges.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Falls back to filesystem purge automatically if the module is unavailable, existing workflow is fully preserved.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'When NPP\'s URL index already holds more than one cache path for a URL (e.g. Vary or mobile variants), HTTP Purge is bypassed and the index is used directly.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'This toggle enables HTTP purging for both individual URLs (manual and auto) and full cache clears, using the user defined endpoints below.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Falls back to filesystem purge automatically if the module is unavailable or the endpoint is not yet configured; existing NPP workflow is fully preserved.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+	                            <p class="description"><?php echo esc_html__( 'Note: If "cache_purge_background_queue on" is used to prevent a race condition with the Auto Preload chain, NPP will safely fall back to a filesystem purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'When NPP\'s URL index already holds more than one cache path for a URL (e.g. Vary or mobile variants), HTTP Purge is bypassed and the Index Purge is used automatically.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'After making changes, always Clear Plugin Cache in the Status tab for them to take effect.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
-                        <tr valign="top" id="nppp-http-purge-suffix-row">
-                            <th scope="row">
-                                <span class="dashicons dashicons-admin-links"></span>
-                                <?php echo esc_html__( 'Purge URL Suffix', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                            </th>
-                            <td>
-                                <?php nppp_http_purge_suffix_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'URL prefix for the purge endpoint. Matches the location block in nginx.conf. Default: purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                            </td>
-                        </tr>
-                        <tr valign="top" id="nppp-http-purge-custom-url-row">
+						<tr valign="top" id="nppp-http-purge-custom-url-row">
                             <th scope="row">
                                 <span class="dashicons dashicons-admin-site-alt3"></span>
                                 <?php echo esc_html__( 'Purge Custom Base URL', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </th>
                             <td>
                                 <?php nppp_http_purge_custom_url_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'Leave blank to auto-build the HTTP purge URL from your site URL and the suffix above.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Set this when the purge endpoint differs from your public site URL — Docker networks, separate Nginx server, non-standard port, or cPanel/Plesk environments with a custom Nginx layer.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+	                            <p class="description"><?php echo esc_html__( 'Leave blank to auto-build both purge URLs from your site URL combined with the paths below.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Set this when the purge endpoint differs from your public site URL — Dockerized environments, separate Nginx server, non-standard port, or panel environments with a custom Nginx layer.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+	                            <p class="description"><?php echo esc_html__( 'Scheme and host only, e.g. http://nginx-internal:8080 (add :port if needed). Do not include a path; the Single and All paths defined below will be appended automatically.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr valign="top" id="nppp-http-purge-suffix-row">
+                            <th scope="row">
+                                <span class="dashicons dashicons-admin-links"></span>
+                                <?php echo esc_html__( 'Purge Single Path', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <?php nppp_http_purge_suffix_callback(); ?>
+                                <p class="description"><?php echo esc_html__( 'The URI path used to purge individual cached pages. This must match the regex pattern in your Nginx single purge location block (e.g., location ~ ^/purge(/.*)). Default: purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                            </td>
+                        </tr>
+	                    <tr valign="top" id="nppp-http-purge-all-path-row">
+                            <th scope="row">
+                                <span class="dashicons dashicons-admin-links"></span>
+                                <?php echo esc_html__( 'Purge All Path', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <?php nppp_http_purge_all_path_callback(); ?>
+                                <p class="description"><?php echo esc_html__( 'The URI path used to clear the entire cache. This must match the exact URI in your Nginx purge all location block (e.g., location = /purge_all). Default: purge_all.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
                         <!-- RG Purge -->
