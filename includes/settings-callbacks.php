@@ -793,7 +793,7 @@ function nppp_http_purge_suffix_callback(): void {
 // Callback function for HTTP Purge Custom URL
 function nppp_http_purge_custom_url_callback(): void {
     $options = get_option( 'nginx_cache_settings', [] );
-    echo "<input type='text' id='nppp_http_purge_custom_url' name='nginx_cache_settings[nppp_http_purge_custom_url]' value='" . esc_attr( $options['nppp_http_purge_custom_url'] ?? '' ) . "' class='regular-text' placeholder='https://docker/purge' />";
+    echo "<input type='text' id='nppp_http_purge_custom_url' name='nginx_cache_settings[nppp_http_purge_custom_url]' value='" . esc_attr( $options['nppp_http_purge_custom_url'] ?? '' ) . "' class='regular-text' placeholder='https://nginx-internal:8080' />";
 }
 
 // Callback function for HTTP Purge All Path
