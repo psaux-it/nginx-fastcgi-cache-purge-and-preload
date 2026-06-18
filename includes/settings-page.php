@@ -990,9 +990,10 @@ function nppp_nginx_cache_settings_page() {
                                         <?php nppp_rg_purge_enabled_callback(); ?>
                                     </div>
                                 </div>
-                                <p class="description"><?php echo esc_html__( 'Accelerates single-URL cache purge by using ripgrep (rg) to locate cache files — up to 60× faster on large caches (especially on FUSE/bindfs setups).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Applies only to single-URL purges. Purge All always uses filesystem operations.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'HIGHLY Recommended for large cache sites with over 1,000 URLs, environments utilizing FUSE mounts / bindfs setups for Nginx Cache Path.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Accelerates single-URL cache purge by using ripgrep (rg) to locate cache files on filesystem.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Applies only to single-URL purges — not to Purge All (which uses a separate method: HTTP Purge or direct filesystem fallback).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'HIGHLY Recommended for large cache sites with over 1,000 URLs, also on environments utilizing FUSE mounts / bindfs setups for Nginx Cache Path.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+	                            <p class="description"><?php echo esc_html__( 'On environments utilizing FUSE mounts / bindfs setups for Nginx Cache Path, for best results, rg must be used with safexec.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Requirements: ripgrep (rg) linux binary installed and available in PATH.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
