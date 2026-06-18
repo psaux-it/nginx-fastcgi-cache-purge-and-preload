@@ -64,7 +64,9 @@ function nppp_acquire_purge_lock( string $context = 'single' ): bool {
 
     switch ( $context ) {
         case 'all':
-            // Purge All: kernel-level recursive dir delete — fast even on huge caches.
+            // Purge All: HTTP fast path (if enabled) is near-instant (delegate nginx) or
+            // direct filesystem fallback is a kernel-level recursive dir delete
+            // fast even on huge caches.
             $ttl = (int) apply_filters( 'nppp_purge_all_lock_ttl', 60 );
             break;
 
