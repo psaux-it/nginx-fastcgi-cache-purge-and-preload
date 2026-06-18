@@ -831,7 +831,7 @@
     limbWidth: 2.5,
     limbLength: 12,
     baseSpeed: 30,
-    maxSpeed: 80,
+    maxSpeed: 50,
     speechIntervalMin: 5,
     speechIntervalMax: 12,
     speechDuration: 3,
