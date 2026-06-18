@@ -32,18 +32,26 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
 
     // Check if the cache path exists and is a directory
     if ($wp_filesystem->is_dir($nginx_cache_path)) {
-        // HTTP fast-path: delegate the cache walk to nginx via the dedicated
+        // HTTP fast-path: delegate the cache walk to Nginx via the dedicated
         // Purge All endpoint. Returns false (falls through below) when HTTP
-        // Purge is OFF, the endpoint is unavailable, or nginx reported 202
-        // (background queue) — see nppp_http_purge_all() for why 202 isn't
-        // trusted here and we fallback nppp_wp_purge immediately.
+        // Purge is OFF, the endpoint is unavailable, or Nginx reported 202
+        // (background queue) — see nppp_http_purge_all() for why a 202 response
+        // is not architecturally suitable for NPP yet, forcing an immediate
+        // fallback to nppp_wp_purge.
+        // PR: https://github.com/nginx-modules/ngx_cache_purge/pull/67
         if ( function_exists( 'nppp_http_purge_all' ) && nppp_http_purge_all() ) {
             update_option( 'nppp_last_known_hits',      0,      false );
             update_option( 'nppp_last_hits_scanned_at', time(), false );
+            nppp_display_admin_notice(
+                'info',
+                __( 'INFO HTTP PURGE ALL: Purge All handled by HTTP (nginx), filesystem purge skipped.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                true,
+                false
+            );
             return 0;
         }
 
-        // Recursively remove the cache directory contents.
+        // Fallback filesystem purge.
         $result = nppp_wp_purge($nginx_cache_path);
 
         // Check cache purge status
