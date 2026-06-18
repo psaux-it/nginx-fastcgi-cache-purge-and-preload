@@ -155,7 +155,7 @@ function nppp_my_faq_html() {
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h3><strong>NPP Purge Workflow</strong></h3>
-                        <p>NPP uses a layered purge strategy. For single-URL purges (manual, auto-purge on update, related URLs) it tries each path in order and stops as soon as one succeeds. Purge All always uses the filesystem directly.</p>
+                        <p>NPP uses a layered purge strategy for both single-URL and full-cache purges. For single-URL purges (manual, auto-purge on update, related URLs) it tries each path in order and stops as soon as one succeeds. Purge All tries the HTTP fast path first when HTTP Purge is enabled, and falls back to filesystem operations otherwise.</p>
 
                         <h4><strong>Fast-Path 1 — HTTP Purge (optional)</strong></h4>
                         <p>If <strong>HTTP Purge</strong> is enabled in settings and the <code>ngx_cache_purge</code> Nginx module is detected, NPP sends an HTTP request to the module's purge endpoint. The module removes the cache entry from shared memory and disk atomically. On HTTP 200 the filesystem is never touched — the purge is complete. On any other response NPP falls through to the next path automatically.</p>
@@ -167,7 +167,7 @@ function nppp_my_faq_html() {
                         <p>If neither fast-path succeeds, NPP walks the entire Nginx cache directory, reads each file's cache key header, and deletes the matching entry. This is the original workflow and remains the fallback for all environments.</p>
 
                         <h4><strong>Purge All</strong></h4>
-                        <p>Purge All always uses filesystem operations — it recursively removes the entire cache directory contents. HTTP Purge does not apply to Purge All. If Cloudflare APO Sync or Redis Object Cache Sync is enabled, those are triggered after the filesystem purge completes.</p>
+                        <p>If HTTP Purge is enabled and a dedicated Purge All location block is configured in Nginx (via the <code>ngx_cache_purge</code> module's <code>purge_all</code> directive, module version 3.0.2+), NPP first asks Nginx to purge the entire cache over HTTP. On HTTP 200 Nginx has already deleted all cache files and shared memory metadata atomically, and NPP's filesystem purge is skipped entirely. On any other response — including HTTP 202, which means Nginx queued the purge into a background worker — NPP falls back to its own filesystem-based full purge, recursively removing the entire cache directory contents. If Cloudflare APO Sync or Redis Object Cache Sync is enabled, those are triggered after the purge completes, regardless of which path handled it.</p>
 
                         <h4><strong>When HTTP Purge is not available</strong></h4>
                         <p>HTTP Purge is entirely optional. If the module is not present, not compiled, or the purge location block is not configured in Nginx, NPP falls back to the index and filesystem paths automatically. The existing workflow is fully preserved — nothing breaks.</p>
@@ -528,7 +528,7 @@ location ~ /purge(/.*) {
                         A: Check the <strong>Status</strong> tab to confirm <code>rg</code> is detected. If you are using a FUSE mount, ensure safexec is installed and SUID‑root (see the safexec FAQ). If neither is available, RG Purge will fall back to the PHP scan.</p>
 
                         <p><strong>Q: Does RG Purge work with Purge All?</strong><br>
-                        A: No. Purge All always uses filesystem operations (recursive directory deletion). RG Purge applies only to single‑URL and related‑URL purges.</p>
+                        A: No. Purge All either completes via the HTTP fast path (when HTTP Purge is enabled and Nginx confirms completion) or falls back to a recursive filesystem deletion — RG Purge applies only to single‑URL and related‑URL purges, never to Purge All.</p>
                     </div>
                 </div>
 
