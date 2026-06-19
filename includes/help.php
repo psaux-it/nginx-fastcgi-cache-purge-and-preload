@@ -403,42 +403,76 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                         <p>You need two things in your Nginx server block: a <code>fastcgi_cache_path</code> with a named zone, and a location block that handles purge requests using that zone. A minimal working example:</p>
 
 <pre>## In the http {} block:
-fastcgi_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m inactive=60m;
-fastcgi_cache_key "$scheme$request_method$host$request_uri";
+fastcgi_cache_path /var/cache/nginx levels=1:2 keys_zone=NPP:100m max_size=1g inactive=30d;
+</pre>
 
+<pre>
 ## In the server {} block:
-fastcgi_cache my_cache;
-fastcgi_cache_valid 200 301 302 60m;
+location ~ \.php$ {
+    fastcgi_cache_key "$scheme$request_method$host$request_uri";
 
-## Purge location — dedicated location required for NPP HTTP Purge
-location ~ /purge(/.*) {
-    allow 127.0.0.1;        # Only allow local requests
-    # allow 172.16.0.0/12;  # Docker network (adjust as needed)
-    deny all;               # Deny everyone else
+    try_files $uri =404;
+    fastcgi_split_path_info ^(.+\.php)(/.+)$;
+    fastcgi_index index.php;
+    fastcgi_pass wordpress-fpm:9001;
+    include /etc/nginx/fastcgi_params;
 
-    fastcgi_cache_purge my_cache "$scheme$request_method$host$1";
+    fastcgi_cache_bypass $skip_cache;
+    fastcgi_no_cache $skip_cache;
+    fastcgi_cache NPP;
+    fastcgi_cache_valid 200 30d;
+    fastcgi_cache_valid 404 1m;
+    fastcgi_cache_use_stale error timeout updating http_500 http_503;
+    fastcgi_cache_lock on;
+    fastcgi_cache_background_update on;
+    fastcgi_ignore_headers Vary;
+}
+
+## Purge Single location - (requires ngx_cache_purge module ≥ 2.3)
+location ~ ^/purge(/.*) {
+    allow 127.0.0.1;       # Only allow local requests
+    allow 172.16.0.0/12;   # Docker network (adjust as needed)
+    deny all;              # Deny everyone else
+
+    # IMPORTANT: $is_args$args handles query string compatibility
+    fastcgi_cache_purge NPP "$scheme$request_method$host$1$is_args$args";
+}
+
+## Purge All location — for full cache clear (requires ngx_cache_purge module ≥ 3.0.2)
+location = /purge_all {
+    allow 127.0.0.1;       # Only allow local requests
+    allow 172.16.0.0/12;   # Docker network (adjust as needed)
+    deny all;              # Deny everyone else
+
+    fastcgi_cache       NPP;
+    fastcgi_cache_key   "$scheme$request_method$host$request_uri";
+    fastcgi_cache_purge GET purge_all from all;
 }</pre>
+                        <p>🔒 <strong>Security Tip:</strong> Always restrict the <code>allow</code> directive to your server's internal IP addresses. Never expose the purge location to the public internet. Because NPP use <code>GET</code> not <code>PURGE</code></p>
 
-                        <p><strong>Explanation:</strong></p>
-                        <ul>
-                            <li>The <code>location ~ /purge(/.*)</code> block captures any URL path starting with <code>/purge/</code>.</li>
-                            <li>The <code>$1</code> variable captures everything after <code>/purge</code> (e.g., <code>/my-page/</code>).</li>
-                            <li>The <code>fastcgi_cache_purge</code> directive uses the <strong>exact same cache key format</strong> as <code>fastcgi_cache_key</code>, with <code>$1</code> replacing the full request URI.</li>
-                        </ul>
-                        <p>🔒 <strong>Security Tip:</strong> Always restrict the <code>allow</code> directive to your server's internal IP addresses. Never expose the purge location to the public internet.</p>
-
-                        <h4><strong>How NPP builds the purge URL</strong></h4>
-                        <p>When NPP purges <code>https://example.com/my-page/</code>:</p>
+                        <h4><strong>How NPP builds the purge URL — Single‑URL Purge</strong></h4>
+                        <p>When NPP purges a single page such as <code>https://example.com/my-page/?color=blue</code>:</p>
                         <ol>
-                            <li>It constructs the purge URL: <code>https://example.com/purge/my-page/</code></li>
+                            <li>It constructs the purge URL: <code>https://example.com/purge/my-page/?color=blue</code><br>
+                                — using the <strong>Purge Custom Base URL</strong> (if set) or the site’s home URL, then appending the <strong>Purge Single Path</strong> (default <code>purge</code>) and the page’s path + query string.</li>
                             <li>It sends a <code>GET</code> request to that URL.</li>
-                            <li>Nginx matches the <code>/purge/</code> location, extracts <code>/my-page/</code> as <code>$1</code>, and deletes the corresponding cache file.</li>
+                            <li>Nginx matches the <code>location ~ ^/purge(/.*)</code> block, captures the path after <code>/purge</code> in <code>$1</code>, and <code>$is_args$args</code> restores the original query string — so the cache key matches the stored entry exactly, even for URLs with filters, search, or pagination.</li>
                             <li>Nginx returns <code>200</code> (purge successful) or another status code (see fallback behavior below).</li>
                         </ol>
-                        <p>If the purge endpoint returns anything other than <code>200</code>, NPP automatically falls back to its filesystem-based purge, so your cache is still cleared – just a bit slower.</p>
+
+                        <h4><strong>How NPP builds the purge URL — Purge All</strong></h4>
+                        <p>When NPP purges the entire cache (Purge All):</p>
+                        <ol>
+                            <li>It constructs the purge URL: <code>https://example.com/purge_all</code><br>
+                                — using the <strong>Purge Custom Base URL</strong> (if set) or the site’s home URL, then appending the <strong>Purge All Path</strong> (default <code>purge_all</code>).</li>
+                            <li>It sends a <code>GET</code> request to that URL.</li>
+                            <li>Nginx’s <code>location = /purge_all</code> block — configured with <code>fastcgi_cache_purge GET purge_all from all;</code> — deletes every file in the cache zone atomically.</li>
+                            <li>Nginx returns <code>200</code> when the purge completes (or <code>202</code> if the module queued the work to a background worker).</li>
+                        </ol>
+                        <p>If a purge endpoint returns anything other than <code>200</code>, NPP automatically falls back to its filesystem‑based purge — your cache is still cleared, just a bit slower.</p>
 
                         <h4><strong>NPP settings for HTTP Purge</strong></h4>
-                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and enable <strong>HTTP Purge</strong>. Three additional options let you customize the purge URL:</p>
+                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and enable <strong>HTTP Purge</strong>. The following options let you customise both purge endpoints:</p>
 
                         <table class="responsive-table">
                             <thead>
@@ -450,18 +484,20 @@ location ~ /purge(/.*) {
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td><strong>HTTP Purge URL Suffix</strong></td>
-                                    <td><code>purge</code></td>
-                                    <td>The path prefix prepended to the URL. Change this if your Nginx location uses a different prefix — for example if your location is <code>~ /cache-purge(/.*)</code> set this to <code>cache-purge</code>.</td>
+                                    <td><strong>Purge Custom Base URL</strong></td>
+                                    <td>(empty)</td>
+                                    <td>Overrides the base URL for both single and purge‑all requests. Enter only the scheme and host, e.g. <code>http://nginx-internal:8080</code>. The <strong>Single</strong> and <strong>All</strong> paths defined below are appended automatically.<br>
+                                        Leave empty to auto‑build URLs from your site URL. Set this when the purge endpoint differs from your public site URL — Dockerized environments, separate Nginx server, non-standard port, or panel environments with a custom Nginx layer</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>HTTP Purge Custom Base URL</strong></td>
-                                    <td>(empty)</td>
-                                    <td>Overrides the entire base URL. Essential for Docker or reverse‑proxy setups where the purge endpoint is not reachable via the public site URL. Examples:<br>
-                                        • <code>http://nginx/purge</code> — Docker service name<br>
-                                        • <code>http://127.0.0.1:8080/purge</code> — non‑standard port<br>
-                                        When a Custom Base URL is set, the <strong>URL Suffix</strong> field is ignored.
-                                    </td>
+                                    <td><strong>Purge Single Path</strong></td>
+                                    <td><code>purge</code></td>
+                                    <td>The URI path prefix for single‑URL purges. Must match the regex location in nginx (e.g. <code>location ~ ^/purge(/.*)</code>). Change this only if your purge location uses a different prefix.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Purge All Path</strong></td>
+                                    <td><code>purge_all</code></td>
+                                    <td>The exact URI path for full cache purge. Must match the exact location in nginx (e.g. <code>location = /purge_all</code>). This is used for the Purge All HTTP fast‑path and is independent of the single‑purge path.</td>
                                 </tr>
                             </tbody>
                         </table>
