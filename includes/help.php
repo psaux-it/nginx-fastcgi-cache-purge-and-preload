@@ -400,7 +400,7 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                         <p>⚠️ <strong>Important:</strong> HTTP Purge will <strong>not</strong> work if you use the inline <code>fastcgi_cache_purge on;</code> directive inside your PHP location block. This is because the module's access handler expects the <code>PURGE</code> method for inline setups, while NPP sends <code>GET</code>. For this reason, we strongly recommend the dedicated location configuration shown below.</p>
 
                         <h4><strong>Required Nginx config</strong></h4>
-                        <p>You need two things in your Nginx server block: a <code>fastcgi_cache_path</code> with a named zone, and a location block that handles purge requests using that zone. A minimal working example:</p>
+                        <p>You need two things in your Nginx server block: a <code>fastcgi_cache_path</code> with a named zone, and a location block that handles purge requests using that zone. NPP compatible example:</p>
 
 <pre>## In the http {} block:
 fastcgi_cache_path /var/cache/nginx levels=1:2 keys_zone=NPP:100m max_size=1g inactive=30d;
@@ -449,6 +449,8 @@ location = /purge_all {
     fastcgi_cache_purge GET purge_all from all;
 }</pre>
                         <p>🔒 <strong>Security Tip:</strong> Always restrict the <code>allow</code> directive to your server's internal IP addresses. Never expose the purge location to the public internet. Because NPP use <code>GET</code> not <code>PURGE</code></p>
+
+                        <p>📌 For a complete, production‑ready Nginx configuration including cache exclusion rules, rate limiting, and security headers, see the <a href="https://github.com/psaux-it/wordpress-nginx-cache-docker" target="_blank" rel="noopener">NPP Docker Stack Repository</a>.</p>
 
                         <h4><strong>How NPP builds the purge URL — Single‑URL Purge</strong></h4>
                         <p>When NPP purges a single page such as <code>https://example.com/my-page/?color=blue</code>:</p>
