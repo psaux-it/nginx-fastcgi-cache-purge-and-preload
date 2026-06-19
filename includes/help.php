@@ -211,12 +211,12 @@ function nppp_my_faq_html() {
                         <p style="font-size: 14px;">
                             When PHP compresses output itself, it adds <code>Vary: Accept-Encoding</code> to the response
                             <strong>only when the client sends <code>Accept-Encoding: gzip</code> or <code>deflate</code></strong>.
-                            For requests without <code>Accept-Encoding</code> (such as NPP's preloader), PHP does not add it.
+                            For requests sending <code>Accept-Encoding: identity</code> — wget's hardcoded default — PHP treats this identically to no compression support and does not add <code>Vary: Accept-Encoding</code>.
                         </p>
                         <p style="font-size: 14px;">
                             This creates a <strong>cache thrashing</strong> scenario when a real browser reaches a URL before NPP does:
                             the browser's gzip request causes PHP to emit <code>Vary: Accept-Encoding</code>, which Nginx stores in the cache file
-                            along with a gzip variant hash. When NPP subsequently warms that URL, its request (no <code>Accept-Encoding</code>)
+                            along with a gzip variant hash. When NPP subsequently warms that URL, its request (<code>Accept-Encoding: identity</code> — wget's hardcoded default)
                             mismatches the stored variant hash, triggers a secondary cache lookup, fetches uncompressed content from PHP
                             (which now emits no <code>Vary</code>), and <strong>overwrites the primary cache file</strong> with
                             uncompressed, Vary-free content — destroying the browser-warmed cache unnecessarily.
@@ -237,8 +237,8 @@ function nppp_my_faq_html() {
                             this source adds it unconditionally — including for NPP's requests.
                         </p>
                         <p style="font-size: 14px;">
-                            Because NPP's preloader sends no <code>Accept-Encoding</code> header, the variant hash stored
-                            during the warm pass is computed from an empty value. When a real browser subsequently requests
+                            Because NPP's preloader sends <code>Accept-Encoding: identity</code> — the variant hash stored during the warm pass is computed from <code>"identity"</code>.
+                            When a real browser subsequently requests
                             the same URL with <code>Accept-Encoding: gzip, deflate, br</code>, Nginx computes a different
                             variant hash, finds no matching cache file, and creates a <strong>second independent cache file</strong>
                             for the same URL — going to PHP instead of serving the NPP-warmed cache.
@@ -351,13 +351,13 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                             <tbody>
                                 <tr>
                                     <td><code>zlib.output_compression = On</code>, no fix</td>
-                                    <td>1 (thrashing — overwritten on encoding mismatch)</td>
+                                    <td>1 (thrashing — the no-<code>Vary</code> response from NPP's warm pass is written back to the primary cache key path, overwriting the browser-cached gzip variant)</td>
                                     <td>⚠️ Unstable — warmed cache overwritten when browser hits first</td>
                                     <td>Cache churn, unnecessary PHP hits, warm entries silently destroyed</td>
                                 </tr>
                                 <tr>
                                     <td>Plugin or upstream proxy emitting <code>Vary: Accept-Encoding</code> unconditionally, no fix</td>
-                                    <td>2 (secondary file created — NPP warm and browser request produce separate cache entries for the same URL)</td>
+                                    <td>2 (two variant files on disk — NPP's warm stored at <code>MD5("identity")</code> key, browser's response stored at <code>MD5("gzip, deflate, br")</code> key; neither overwrites the other)</td>
                                     <td>❌ Miss — browser request computes a different variant hash and bypasses the NPP-warmed cache entirely, going to PHP instead</td>
                                     <td>NPP preload permanently ineffective; real visitors always trigger a PHP backend hit regardless of warm order</td>
                                 </tr>
