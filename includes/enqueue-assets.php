@@ -368,14 +368,31 @@ function nppp_plugin_requirements_met() {
 
     // Check if the operating system is Linux
     if (nppp_is_linux()) {
-        // Initialize $server_software variable
+        // =========================================================================
+        // NGINX DETECTION — strictly ordered cheapest → most expensive.
+        //
+        // Each tier short-circuits the chain on first conclusive hit.
+        // The HTTP probe (Tier 3) is only reached when Tier 0-2 are all blind,
+        // which in practice only happens in Docker separate-container deployments
+        // where nginx and PHP-FPM run in different containers with no shared
+        // filesystem or PATH.
+        //
+        // Architecture coverage per tier:
+        //   Tier 0 — pure Nginx (zero I/O, instant)
+        //   Tier 1 — pure Nginx, Nginx+Apache same-host, same-container Docker
+        //   Tier 2 — same-host installs where nginx binary is not on PHP's PATH
+        //   Tier 3 — Docker separate-container, any topology Tier 0-2 cannot see
+        //   Tier 4 — last-resort heuristic (weakest, zero I/O)
+        // =========================================================================
         $server_software = '';
 
-        // Critical Proxy detection bug fix v2.1.7
-        // On Nginx+Apache reverse-proxy stacks the backend PHP process sees
-        // SERVER_SOFTWARE = "Apache/..." which is non-empty but non-nginx,
-        // silently short-circuiting every fallback detection path below
-        // and cause plugin disabled completely.
+        // -------------------------------------------------------------------------
+        // TIER 0 — Zero I/O: $_SERVER['SERVER_SOFTWARE'] (memory read, instant).
+        // Reliable for pure-Nginx stacks where the SAPI directly reports the
+        // frontend server.  Silently ignored for Apache values — reverse-proxy
+        // stacks (Nginx → Apache → PHP) continue through cheaper tiers before
+        // we ever touch the network, avoiding the HTTP probe overhead when not needed.
+        // -------------------------------------------------------------------------
         if (isset($_SERVER['SERVER_SOFTWARE'])) {
             $raw_sw = sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']));
             if (
@@ -387,7 +404,37 @@ function nppp_plugin_requirements_met() {
             }
         }
 
-        // If no SERVER_SOFTWARE detected, check response headers
+        // -------------------------------------------------------------------------
+        // TIER 1 — Single shell fork: nginx binary on PATH.
+        // Catches: pure-Nginx, Nginx+Apache on the same host, Nginx in the same
+        // Docker container as PHP-FPM.
+        // Misses:  Nginx in a completely separate Docker container.
+        // -------------------------------------------------------------------------
+        if (empty($server_software) && function_exists('shell_exec')) {
+            $nginx_bin = trim((string) shell_exec('command -v nginx 2>/dev/null'));
+            if (!empty($nginx_bin)) {
+                $server_software = 'nginx';
+            }
+        }
+
+        // -------------------------------------------------------------------------
+        // TIER 2 — Filesystem scan: known Nginx config file paths (fast local I/O).
+        // Catches same-host installs where the nginx binary is absent from the PHP
+        // process PATH (e.g. custom compile prefix, non-standard package layout).
+        // Still cheaper than a network round-trip.
+        // -------------------------------------------------------------------------
+        if (empty($server_software)) {
+            $nginx_conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
+            if (!empty($nginx_conf_paths)) {
+                $server_software = 'nginx';
+            }
+        }
+
+        // -------------------------------------------------------------------------
+        // TIER 3 — HTTP HEAD probe (network round-trip; last resort before the
+        // weakest heuristic).  Only reached for Docker separate-container setups
+        // or exotic proxy topologies where Tiers 0-2 are all inconclusive.
+        // -------------------------------------------------------------------------
         if (empty($server_software)) {
             // Perform the request
             $token     = substr(dechex(hrtime(true)), -8);
@@ -430,7 +477,9 @@ function nppp_plugin_requirements_met() {
                     $headers = array_change_key_case($headers, CASE_LOWER);
                 }
 
-                // Any header *name* containing 'fastcgi' is a strong signal
+                // Signal A — any header *name* containing 'fastcgi'.
+                // Strongest signal: survives even when Server header is stripped.
+                // Specific to Nginx+PHP-FPM (not Nginx+Apache proxy).
                 foreach ($headers as $key => $value) {
                     if (is_string($key) && stripos($key, 'fastcgi') !== false) {
                         $header_value = is_array($value) ? implode(' ', array_map('strval', $value)) : (string) $value;
@@ -441,7 +490,9 @@ function nppp_plugin_requirements_met() {
                     }
                 }
 
-                // If still empty, check the 'server' header (nginx-family too)
+                // Signal B — 'Server' header value.
+                // In Nginx+Apache proxy setups nginx overrides the upstream Server
+                // header by default, so 'Apache' never reaches the client here.
                 if (empty($server_software) && isset($headers['server'])) {
                     $server_header = $headers['server'];
                     $server_value  = is_array($server_header) ? implode(' ', array_map('strval', $server_header)) : (string) $server_header;
@@ -455,7 +506,9 @@ function nppp_plugin_requirements_met() {
                     }
                 }
 
-                // Some proxies add clues in 'via'
+                // Signal C — 'Via' header.
+                // Some proxy topologies surface nginx identity here rather than
+                // in the Server header (e.g. Varnish-fronted nginx).
                 if (empty($server_software) && isset($headers['via'])) {
                     $via_header = $headers['via'];
                     $via_value  = is_array($via_header) ? implode(' ', array_map('strval', $via_header)) : (string) $via_header;
@@ -471,15 +524,13 @@ function nppp_plugin_requirements_met() {
             }
         }
 
-        // Lastly fallback the traditional check for edge cases
-        if (empty($server_software)) {
-            $nginx_conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
-            if (!empty($nginx_conf_paths)) {
-                $server_software = 'nginx';
-            }
-        }
-
-        // Very weak heuristic: FPM/CGI ≠ nginx
+        // -------------------------------------------------------------------------
+        // TIER 4 — PHP_SAPI (zero I/O, weakest heuristic, absolute last resort).
+        // 'fpm-fcgi' / 'cgi-fcgi' almost always means PHP-FPM paired with Nginx,
+        // but Apache+mod_fcgid also uses 'cgi-fcgi', making this non-conclusive.
+        // Intentionally placed last — it is only a tie-breaker when every
+        // stronger signal above has failed.
+        // -------------------------------------------------------------------------
         if (empty($server_software)) {
             $sapi = PHP_SAPI;
             if (stripos($sapi, 'fpm-fcgi') !== false || stripos($sapi, 'cgi-fcgi') !== false) {
