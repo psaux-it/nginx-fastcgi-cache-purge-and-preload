@@ -595,3 +595,18 @@ function nppp_ajax_test_cache_key_regex() {
         'message' => $messages[ $result ] ?? __( 'Unknown result.', 'fastcgi-cache-purge-and-preload-nginx' ),
     ) );
 }
+
+// AJAX handler — lazy-loads the Vary: Accept-Encoding check after page paint so the
+// two blocking wp_remote_head() probes (timeout=3s each, worst-case ~6s on a cold
+// transient) never delay the settings page's initial PHP render.
+function nppp_check_vary_issue_callback(): void {
+    nppp_ajax_auth( 'nppp-check-vary-issue' );
+
+    $nppp_vary = function_exists( 'nppp_detect_vary_issue' ) ? nppp_detect_vary_issue() : null;
+
+    wp_send_json_success( array(
+        'html' => function_exists( 'nppp_render_vary_notice_html' )
+            ? nppp_render_vary_notice_html( $nppp_vary )
+            : '',
+    ) );
+}
