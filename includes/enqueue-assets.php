@@ -158,6 +158,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'rg_purge_nonce'               => $update_rg_purge_option_nonce,
         'bypass_pr_nonce'              => wp_create_nonce( 'nppp-update-bypass-path-restriction' ),
         'dismiss_vary_nonce'           => wp_create_nonce( 'nppp-dismiss-vary-notice' ),
+        'check_vary_nonce'             => wp_create_nonce( 'nppp-check-vary-issue' ),
         'clear_cache_btn_label'        => __( 'Clear Plugin Cache', 'fastcgi-cache-purge-and-preload-nginx' ),
         'test_regex_nonce'             => wp_create_nonce( 'nppp_test_regex_nonce' ),
         'preload_miss_batch_nonce'     => wp_create_nonce( 'nppp_preload_miss_batch_nonce' ),
