@@ -264,6 +264,7 @@ add_action('wp_ajax_nppp_update_related_fields', 'nppp_update_related_fields');
 add_action('wp_ajax_nppp_update_pctnorm_mode', 'nppp_update_pctnorm_mode');
 add_action('wp_ajax_nppp_update_bypass_path_restriction', 'nppp_update_bypass_path_restriction');
 add_action('wp_ajax_nppp_dismiss_vary_notice', 'nppp_dismiss_vary_notice');
+add_action('wp_ajax_nppp_check_vary_issue', 'nppp_check_vary_issue_callback');
 add_action('wp_ajax_nppp_refresh_cache_ratio', 'nppp_refresh_cache_ratio_callback');
 add_action('wp_ajax_nppp_test_cache_key_regex', 'nppp_ajax_test_cache_key_regex');
 add_action('nppp_plugin_admin_notices', function($type, $message, $log_message, $display_notice) {
