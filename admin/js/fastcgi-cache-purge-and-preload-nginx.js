@@ -1962,6 +1962,41 @@ $(document).ready(function() {
         });
     });
 
+    // Vary: Accept-Encoding async check.
+    // Runs inside document.ready so the DOM is available and #nppp-vary-result
+    // is guaranteed to exist when the selector fires.
+    // The blocking wp_remote_head() probes are deferred to this background
+    // request so they never delay the initial settings page render.
+    // The existing $(document).on('click','#nppp-dismiss-vary',...) delegation
+    // above handles the AJAX-injected button automatically — no rebinding needed.
+    (function () {
+        var $varyContainer = $('#nppp-vary-result');
+        if ( ! $varyContainer.length || typeof nppp_admin_data === 'undefined' || ! nppp_admin_data.check_vary_nonce ) {
+            return;
+        }
+
+        $.ajax({
+            url:    nppp_admin_data.ajaxurl,
+            method: 'POST',
+            data: {
+                action:   'nppp_check_vary_issue',
+                _wpnonce: nppp_admin_data.check_vary_nonce
+            },
+            success: function ( response ) {
+                if ( response && response.success && response.data && response.data.html ) {
+                    $varyContainer.html( response.data.html );
+                } else {
+                    // Server responded but returned no HTML — remove the spinner
+                    $varyContainer.find('.spinner').removeClass('is-active');
+                }
+            },
+            error: function () {
+                // Network/server error — remove the spinner so it doesn't spin forever
+                $varyContainer.find('.spinner').removeClass('is-active');
+            }
+        });
+    }());
+
     // Bypass Path Restriction single toggle card
     (function npppSetupBypassPr() {
         const $npppBprFS = $('#nppp-bypass-pr-fieldset');
