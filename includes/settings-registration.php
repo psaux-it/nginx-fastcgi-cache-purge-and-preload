@@ -16,6 +16,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Initializes the Nginx Cache settings by registering settings, adding settings section, and fields
 function nppp_nginx_cache_settings_init() {
+    // Settings API only matters for the Settings page's full-page POST to
+    // options.php — admin-ajax.php fires admin_init too.
+    if (wp_doing_ajax()) {
+        return;
+    }
+
     // Register settings
     register_setting('nppp_nginx_cache_settings_group', 'nginx_cache_settings', 'nppp_nginx_cache_settings_sanitize');
 
