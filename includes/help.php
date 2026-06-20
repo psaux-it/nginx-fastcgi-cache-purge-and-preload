@@ -314,6 +314,56 @@ zlib.output_compression = Off</pre>
                             Reload Nginx after saving: <code>nginx -t &amp;&amp; systemctl reload nginx</code>
                         </p>
 
+                        <h4><strong>📌 For <code>proxy_cache</code> users (Nginx → Apache / HTTP backend)</strong></h4>
+                        <p style="font-size: 14px;">
+                            If your Nginx configuration uses <code>proxy_pass</code> instead of <code>fastcgi_pass</code>,
+                            replace <strong>Step 2</strong> with the following equivalent configuration:
+                        </p>
+
+<pre>location / {
+    proxy_pass http://127.0.0.1:8288;  # Your Apache backend
+
+    # CACHE ZONE SETUP
+    proxy_cache YOUR_ZONE;
+    proxy_cache_key "$scheme$host$request_uri";
+    proxy_cache_valid 200 30d;
+    proxy_cache_bypass $skip_cache;
+    proxy_no_cache $skip_cache;
+
+    # ===========================================================
+    # THE CRITICAL FIX FOR proxy_cache (Variant Hash Prevention)
+    # ===========================================================
+
+    # 1. Strip the Accept-Encoding header before it reaches Apache.
+    #    (Prevents Apache/mod_deflate from emitting Vary in the first place)
+    proxy_set_header Accept-Encoding "";
+
+    # 2. Ignore the Vary header during cache operations.
+    #    Prevents Nginx from writing r->cache->vary and stops variant hashing.
+    proxy_ignore_headers Vary;
+
+    # 3. [OPTIONAL BUT RECOMMENDED] Hide Vary from the client/probe.
+    #    Nginx internally ignores Vary (due to #2), but it might still forward
+    #    the header to the browser or monitoring tools.
+    #    Adding this silences false-positive warnings in plugins like NPP
+    #    without affecting the cache engine.
+    proxy_hide_header Vary;
+
+    # ... rest of your proxy settings
+}</pre>
+
+                        <p style="font-size: 14px;">
+                            <strong>🛡️ Why <code>proxy_hide_header Vary;</code> is the "Final Polish" for proxy setups</strong><br>
+                            <code>proxy_ignore_headers Vary;</code> protects the cache (stops variant hashing).<br>
+                            <code>proxy_hide_header Vary;</code> protects your monitoring (stops the header from reaching the client).<br><br>
+                            Without <code>hide_header</code>, Nginx will still forward the backend's <code>Vary</code> header to the client.
+                            While this <strong>does not</strong> create a double cache (thanks to <code>ignore_headers</code>),
+                            it will trigger <strong>false-positive warnings</strong> in environment checkers (like NPP's pre‑flight probe)
+                            that simply look for the presence of the header.
+                            Adding <code>proxy_hide_header Vary;</code> is the safe, recommended way to silence these warnings
+                            without altering cache behavior.
+                        </p>
+
                         <h4><strong>Step 3 — Let Nginx handle gzip (nginx.conf http block)</strong></h4>
                         <p style="font-size: 14px;">With PHP compression disabled, Nginx becomes the sole compression layer — which is the correct architecture. Confirm these are present in your <code>http {}</code> block:</p>
 <pre>gzip on;
