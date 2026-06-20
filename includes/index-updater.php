@@ -24,6 +24,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return void
  */
 function nppp_schedule_index_updater(): void {
+    // Activation hook already schedules this once; admin_init is only
+    // self-healing for real page loads. admin-ajax.php fires
+    // admin_init too — skip the cron-option DB round-trip on every XHR.
+    if (wp_doing_ajax()) {
+        return;
+    }
+
     if ( wp_next_scheduled( 'nppp_index_updater_event' )
         && wp_get_schedule( 'nppp_index_updater_event' ) !== 'every_3hours_npp'
     ) {
