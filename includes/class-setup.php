@@ -24,6 +24,12 @@ final class Setup {
      * Static bootstrap: register all WP hooks.
      */
     public static function init(): void {
+        // Skipping registration here is what stops the HEAD-probe storm on
+        // tab switches.
+        if (wp_doing_ajax()) {
+            return;
+        }
+
         // Activation redirect flag is set in main file via register_activation_hook
         add_action('admin_init', [__CLASS__, 'nppp_auto_disable_assume_when_detected'], 99);
         add_action('admin_init', [__CLASS__, 'nppp_maybe_redirect_to_setup']);
