@@ -403,15 +403,10 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize & validate custom cache key regex
     if (!empty($input['nginx_cache_key_custom_regex'])) {
-        // Decode the base64-encoded regex if it's being passed encoded
-        $decoded_regex = base64_decode($input['nginx_cache_key_custom_regex'], true);
-        if ($decoded_regex !== false) {
-            // Retrieve the decoded regex
-            $regex = $decoded_regex;
-        } else {
-            // If decoding fails, use the input directly
-            $regex = $input['nginx_cache_key_custom_regex'];
-        }
+        // The textarea is always rendered with the decoded plaintext value
+        // (nppp_nginx_cache_key_custom_regex_callback() decodes for display),
+        // so $_POST here is always plaintext
+        $regex = $input['nginx_cache_key_custom_regex'];
 
         // ####################################################################
         // Validate & Sanitize the regex
