@@ -276,7 +276,6 @@ function nppp_disable_features($unsupported, $preload) {
             'nppp_autopurge_plugins'              => 'no',
             'nppp_autopurge_themes'               => 'no',
             'nppp_autopurge_3rdparty'             => 'no',
-            'nginx_cache_bypass_path_restriction' => 'no',
             'nginx_cache_preload_feeds'           => 'no',
         );
     } elseif ( $preload === true ) {
