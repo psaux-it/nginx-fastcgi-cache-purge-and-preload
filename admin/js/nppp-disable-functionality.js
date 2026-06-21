@@ -134,20 +134,25 @@
                 const $cb = $(`input[type="checkbox"][name="${name}"]`);
                 if (!$cb.length) return;
 
-                // force on, grey out, make non-interactive
-                $cb.prop('checked', true)
-                    .prop('disabled', true)
+                // Preserve the real current state — these options are already
+                // forced to 'no' by nppp_disable_features() before this page
+                // renders.
+                const currentVal = $cb.is(':checked') ? 'yes' : 'no';
+
+                $cb.prop('disabled', true)
                     .attr({'aria-disabled':'true', 'title':'Locked in unsupported environment'})
                     .off('click change')
                     .on('click.npppLock change.npppLock', function(e){ e.preventDefault(); return false; });
 
-                // grey the label/row too (optional)
-                $cb.closest('label, .form-table tr, p').css({ cursor:'not-allowed' });
+                $cb.closest('label, .form-table tr, p').css({
+                    cursor: 'not-allowed',
+                    pointerEvents: 'none',
+                    userSelect: 'none'
+                });
 
-                // disabled inputs don't submit; ensure "yes" still posts
                 const $form = $cb.closest('form');
                 if ($form.length && !$form.find(`input[type="hidden"][name="${name}"]`).length){
-                    $('<input>', {type:'hidden', name, value:'yes'}).appendTo($form);
+                    $('<input>', {type:'hidden', name, value: currentVal}).appendTo($form);
                 }
             }
 
