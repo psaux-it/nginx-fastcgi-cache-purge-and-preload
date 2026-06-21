@@ -535,8 +535,10 @@ services:
     // Detect nginx
     private static function nppp_is_nginx_detected_strict(): bool {
         if (function_exists('\\nppp_precheck_nginx_detected')) {
-            // ask precheck to IGNORE assume mode
-            return (bool) \nppp_precheck_nginx_detected(false);
+            // ask precheck to IGNORE assume mode AND skip the dead signal
+            // computation — this is the only call site that reads nothing
+            // but the boolean return value.
+            return (bool) \nppp_precheck_nginx_detected(false, true);
         }
 
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading server signature only; no state change.
