@@ -250,29 +250,9 @@
                     .css({ cursor:'not-allowed' });
             })();
 
-            // Disable Bypass Path Restriction toggle
-            (function disableBypassPr(){
-                const $toggle = $('#nginx_cache_bypass_path_restriction');
-                if (!$toggle.length) return;
-
-                const $fs       = $('#nppp-bypass-pr-fieldset');
-                const $form     = $toggle.closest('form');
-                const name      = $toggle.attr('name');
-                const currentVal = $toggle.is(':checked') ? 'yes' : 'no';
-
-                $toggle
-                    .prop('disabled', true)
-                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
-                    .off('.nppp')
-                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
-
-                if ($fs.length) {
-                    $fs.css({ cursor:'not-allowed' })
-                       .find('label').css({ 'pointer-events':'none', 'cursor':'not-allowed' });
-                }
-
-                ensureHiddenMirror($form, name, currentVal);
-            })();
+            // Bypass Path Restriction is intentionally left live: it has no
+            // shell_exec/exec dependency and is the only control that lets the
+            // admin clear an open_basedir / unconfigured-path GLOBAL ERROR.
 
             // Disable Ripgrep Purge toggle
             (function disableRgPurge(){
