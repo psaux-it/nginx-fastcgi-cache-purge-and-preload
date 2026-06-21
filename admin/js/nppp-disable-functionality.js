@@ -364,8 +364,10 @@
                 var csFontFam   = cs.fontFamily;
                 var csBoxSizing = cs.boxSizing;
 
-                // 2. Remove original submit from .submit flex layout.
-                $submit.hide();
+                // 2. Keep the real submit live — it's the only way back from an
+                // open_basedir/unconfigured-path GLOBAL ERROR,
+                // Status tab is unreachable here, so we still
+                // add a Clear Cache button next to it rather than instead of it.
 
                 // 3. Build pixel-perfect replacement input.
                 var btnLabel = window.nppp_admin_data.clear_cache_btn_label
@@ -387,7 +389,8 @@
                     'font-size':     csFontSize,
                     'font-weight':   csFontWt,
                     'font-family':   csFontFam,
-                    'width':             '100%',
+                    'width':             'auto',
+                    'margin-left':       '8px',
                     'background-color':  '#0073aa',
                     'color':             '#fff',
                     'border':            'none',
