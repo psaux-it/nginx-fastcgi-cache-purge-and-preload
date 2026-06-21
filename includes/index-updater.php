@@ -31,6 +31,13 @@ function nppp_schedule_index_updater(): void {
         return;
     }
 
+    // admin-post.php fires admin_init too — both NPP admin_post_ handlers
+    // redirect straight back to a real page load, where this self-heals anyway.
+    global $pagenow;
+    if ( isset( $pagenow ) && $pagenow === 'admin-post.php' ) {
+        return;
+    }
+
     if ( wp_next_scheduled( 'nppp_index_updater_event' )
         && wp_get_schedule( 'nppp_index_updater_event' ) !== 'every_3hours_npp'
     ) {
