@@ -243,9 +243,11 @@
                 // Disable Test Connection button
                 $('#nppp-test-http-purge').prop('disabled', true).css({ cursor:'not-allowed' });
 
-                // Disable sub-fields
+                // Lock sub-fields visually only — `disabled` strips a field from
+                // the POST body entirely, which made settings-sanitize.php see them
+                // as empty and fire the "cannot be empty" reset errors on every save.
+                // `readonly` keeps them non-editable while still submitting their value.
                 $('#nppp_http_purge_suffix, #nppp_http_purge_custom_url, #nppp_http_purge_all_path')
-                    .prop('disabled', true)
                     .attr('readonly', 'readonly')
                     .css({ cursor:'not-allowed' });
             })();
