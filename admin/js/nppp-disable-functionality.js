@@ -108,6 +108,27 @@
             // disable generate API key button
             $('#api-key-button').prop('disabled', true);
 
+            // disable Test Regex probe button
+            $('#nppp-test-regex-btn').prop('disabled', true);
+
+            // Lock free-text/number settings to read-only.
+            $(
+                '#nginx_cache_api_key, '              +
+                '#nginx_cache_key_custom_regex, '     +
+                '#nginx_cache_email, '                +
+                '#nginx_cache_read_timeout, '         +
+                '#nginx_cache_wait_request, '         +
+                '#nginx_cache_limit_rate, '           +
+                '#nginx_cache_reject_extension, '     +
+                '#nginx_cache_reject_regex, '         +
+                '#nginx_cache_cpu_limit, '            +
+                '#nginx_cache_preload_proxy_port, '   +
+                '#nginx_cache_preload_proxy_host, '   +
+                '#nginx_cache_mobile_user_agent'
+            )
+                .attr('readonly', 'readonly')
+                .css({ cursor: 'not-allowed' });
+
             // Related purge checkboxes (lock + detach)
             function npppLockCheckbox(name){
                 const $cb = $(`input[type="checkbox"][name="${name}"]`);
