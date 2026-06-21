@@ -154,7 +154,23 @@ if (! function_exists('nppp_get_wget_compatibility')) {
 
 // Nginx detector used by Setup.
 if (! function_exists('nppp_precheck_nginx_detected')) {
-    function nppp_precheck_nginx_detected(bool $honor_assume = true): bool {
+    function nppp_precheck_nginx_detected(bool $honor_assume = true, bool $skip_signal_probe = false): bool {
+        // $skip_signal_probe is for hot-path strict callers that NEVER read
+        // $GLOBALS['NPPP__LAST_SIGNAL_HIT']
+        if (!$honor_assume && $skip_signal_probe) {
+            $GLOBALS['NPPP__LAST_SIGNAL_HIT'] = false;
+            if (function_exists('nppp_initialize_wp_filesystem')) {
+                $fs = nppp_initialize_wp_filesystem();
+                if ($fs && function_exists('nppp_get_nginx_conf_paths')) {
+                    $paths = nppp_get_nginx_conf_paths($fs, $honor_assume);
+                    if (!empty($paths)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         // Aggregate network/env signals (usable only when $honor_assume === true)
         $signal_hit = false;
 
@@ -172,8 +188,22 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
             }
         }
 
+        // Single shell fork: nginx binary on PATH. Mirrors the same Tier 1
+        // check already proven in nppp_plugin_requirements_met() — cheaper
+        // and more reliable than the network probe below, so it belongs
+        // before it. Reached whenever the strict-mode fast path above
+        // wasn't taken — i.e. honor_assume=true, or the diagnostics call
+        // (honor_assume=false, skip_signal_probe=false) that needs the
+        // real signal for its UI row.
+        if (!$signal_hit && function_exists('shell_exec')) {
+            $nginx_bin = trim((string) shell_exec('command -v nginx 2>/dev/null'));
+            if (!empty($nginx_bin)) {
+                $signal_hit = true;
+            }
+        }
+
         // HTTP HEAD probe. Only reached for Docker separate-container setups
-        // or exotic proxy topologies.
+        // or exotic proxy topologies. Expensive.
         if (!$signal_hit) {
             // Perform the request
             $token     = substr(dechex(hrtime(true)), -8);
