@@ -465,6 +465,7 @@ services:
               . '<li>' . esc_html__( 'SERVER_SOFTWARE signature',     'fastcgi-cache-purge-and-preload-nginx' ) . '</li>'
               . '<li>' . esc_html__( 'HTTP response headers',         'fastcgi-cache-purge-and-preload-nginx' ) . '</li>'
               . '<li>' . esc_html__( 'nginx.conf at standard paths',  'fastcgi-cache-purge-and-preload-nginx' ) . '</li>'
+              . '<li>' . esc_html__( 'nginx binary check',            'fastcgi-cache-purge-and-preload-nginx' ) . '</li>'
               . '</ul>';
 
         // Contextual hint when detection failed and no override is active.
