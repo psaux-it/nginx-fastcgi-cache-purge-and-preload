@@ -158,7 +158,6 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
         // $skip_signal_probe is for hot-path strict callers that NEVER read
         // $GLOBALS['NPPP__LAST_SIGNAL_HIT']
         if (!$honor_assume && $skip_signal_probe) {
-            $GLOBALS['NPPP__LAST_SIGNAL_HIT'] = false;
             if (function_exists('nppp_initialize_wp_filesystem')) {
                 $fs = nppp_initialize_wp_filesystem();
                 if ($fs && function_exists('nppp_get_nginx_conf_paths')) {
