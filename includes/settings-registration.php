@@ -22,6 +22,15 @@ function nppp_nginx_cache_settings_init() {
         return;
     }
 
+    // Settings API output here has zero consumers — no do_settings_sections(),
+    // no settings_fields(), form posts to admin-post.php not options.php.
+    // Restrict the 30+ field registrations to the one page that could ever use them.
+    // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only page detection; no state change.
+    $current_page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+    if ( $current_page !== 'nginx_cache_settings' ) {
+        return;
+    }
+
     // Register settings
     register_setting('nppp_nginx_cache_settings_group', 'nginx_cache_settings', 'nppp_nginx_cache_settings_sanitize');
 
