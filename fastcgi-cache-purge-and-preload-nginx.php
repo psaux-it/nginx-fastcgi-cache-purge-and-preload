@@ -39,7 +39,8 @@ if (!defined('ABSPATH')) {
 // ---------------------------------------------------------------------------
 
 // Compatibility mode for environments where Nginx cannot be auto-detected
-// during setup. Activated via setup wizard or manually via wp-config.php.
+// during setup. Activated via the Setup wizard (stored as a DB option) or
+// by manually adding define('NPPP_ASSUME_NGINX', true) to wp-config.php.
 function nppp_maybe_define_assume_nginx(): void {
     if (! defined('NPPP_ASSUME_NGINX') && get_option('nppp_assume_nginx_runtime')) {
         define('NPPP_ASSUME_NGINX', true);
