@@ -477,8 +477,12 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths,
             }
             $nppp_signal_ok = ! empty( $GLOBALS['NPPP__LAST_SIGNAL_HIT'] );
             $nppp_assume_on = function_exists('nppp_is_assume_nginx_mode') ? nppp_is_assume_nginx_mode() : false;
-            $nppp_obd_raw   = trim( (string) ini_get('open_basedir') );
-            $nppp_obd_on    = ( $nppp_obd_raw !== '' && strtolower($nppp_obd_raw) !== 'none' );
+            if ( function_exists( 'nppp_is_open_basedir_active' ) ) {
+                $nppp_obd_on = nppp_is_open_basedir_active();
+            } else {
+                $nppp_obd_raw = trim( (string) ini_get( 'open_basedir' ) );
+                $nppp_obd_on  = ( $nppp_obd_raw !== '' && strtolower( $nppp_obd_raw ) !== 'none' );
+            }
             ?>
             <table>
                 <thead>
