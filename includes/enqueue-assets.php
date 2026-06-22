@@ -232,7 +232,7 @@ function nppp_is_dockerized() {
         // Cache for 5 second.
         // Critical shell commands must reflect the real system state on every request.
         // A long transient here would leave the plugin in wrong state.
-        set_transient($transient_key, $missing_commands, 5);
+        set_transient($transient_key, $missing_commands, HOUR_IN_SECONDS);
 
         // Keep wget compatibility cache in sync with command availability refresh.
         delete_transient('nppp_wget_compatibility_' . md5($static_key_base));
