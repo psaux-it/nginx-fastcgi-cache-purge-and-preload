@@ -1045,6 +1045,13 @@ function nppp_handle_nginx_cache_settings_submission() {
         wp_die(esc_html__('You do not have sufficient permissions to access this page.', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
+	// admin-post.php carries no $_GET['page'], so Setup::nppp_gate_settings_until_setup()
+    // never sees this request — enforce the same wall.
+    if (class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup()) {
+        wp_safe_redirect(admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG));
+        exit;
+    }
+
     // Block settings changes while a purge or preload operation is running.
     // A mid-operation path or regex change leaves the active process out of
     // sync with the newly saved options, corrupting status monitoring and
