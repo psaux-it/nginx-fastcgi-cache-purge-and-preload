@@ -563,8 +563,12 @@ services:
        return false;
     }
 
-    // Single source of truth for open_basedir state — avoids repeating ini_get() across callers.
+    // Delegates to the real canonical helper in pre-checks.php (loaded by bootstrap
+    // before any Setup hook can fire). Inline fallback only if it's somehow absent.
     private static function nppp_is_open_basedir_active(): bool {
+        if (function_exists('\\nppp_is_open_basedir_active')) {
+            return \nppp_is_open_basedir_active();
+        }
         $obd = trim((string) ini_get('open_basedir'));
         return $obd !== '' && strtolower($obd) !== 'none';
     }
