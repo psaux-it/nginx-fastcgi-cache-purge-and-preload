@@ -551,9 +551,16 @@ services:
         return false;
     }
 
+    // honor_assume=false is intentional — this powers the "Nginx signature
+    // found" diagnostic row, not the gating decision. honor_assume=true
+    // short-circuits on enabled Assume-mode (or an already-found nginx.conf)
+    // before $GLOBALS['NPPP__LAST_SIGNAL_HIT'] is ever set, which froze this
+    // row on "None" forever once Assume mode was on — even with real signals
+    // present, as the Status tab (which already uses honor_assume=false)
+    // correctly showed. Both call sites must agree on this parameter.
     private static function nppp_is_nginx_detected(): bool {
         if (function_exists('\\nppp_precheck_nginx_detected')) {
-            return (bool) \nppp_precheck_nginx_detected(true);
+            return (bool) \nppp_precheck_nginx_detected(false);
         }
 
         // fallback if pre-checks wasn't loaded for some reason
