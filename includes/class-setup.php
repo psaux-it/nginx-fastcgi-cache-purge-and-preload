@@ -400,8 +400,6 @@ services:
 
     // Status card: colored pill-badge table — scannable at a glance.
     private static function nppp_detection_debug_html(bool $nginx_detected, bool $assume_enabled): string {
-        // Populate $GLOBALS['NPPP__LAST_SIGNAL_HIT'] as a side-effect.
-        self::nppp_is_nginx_detected();
         $signals    = ! empty( $GLOBALS['NPPP__LAST_SIGNAL_HIT'] );
         $obd_active = self::nppp_is_open_basedir_active();
 
