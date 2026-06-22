@@ -312,12 +312,7 @@ services:
         echo '  <div class="inside">';
         echo '    <p>'
             . esc_html__(
-                'Turn on Assume-Nginx mode to enable all plugin features immediately.',
-                'fastcgi-cache-purge-and-preload-nginx'
-              )
-            . ' '
-            . esc_html__(
-                'This sets a runtime option; you can also persist it to wp-config.php.',
+                'Turn on Assume-Nginx mode to enable all plugin features immediately. This sets a runtime option.',
                 'fastcgi-cache-purge-and-preload-nginx'
               )
             . '</p>';
@@ -331,14 +326,7 @@ services:
             echo '        <button class="button button-primary" name="nppp_action" value="assume_on">'
                 . esc_html__('Enable Assume-Nginx Mode', 'fastcgi-cache-purge-and-preload-nginx')
                 . '</button>';
-            echo '        <label>'
-                . '<input type="checkbox" name="write_wp_config" value="1" /> '
-                . esc_html__('Also write define(\'NPPP_ASSUME_NGINX\', true) to wp-config.php', 'fastcgi-cache-purge-and-preload-nginx')
-               . '</label>';
-            echo '      </div>';
-            echo '      <p class="nppp-muted" style="margin-top:8px">'
-                . esc_html__('Tip: Persisting to wp-config.php avoids surprises if options are reset.', 'fastcgi-cache-purge-and-preload-nginx')
-                . '</p>';
+           echo '      </div>';
         } else {
             echo '      <p><em class="nppp-muted">'
                 . esc_html__('Assume-Nginx mode is already enabled or Nginx is detected.', 'fastcgi-cache-purge-and-preload-nginx')
@@ -492,10 +480,6 @@ services:
 
             set_transient('nppp_assume_recently_enabled', 1, 60);
 
-            if (! empty($_POST['write_wp_config'])) {
-                self::nppp_try_write_wp_config_define();
-            }
-
             // Clear plugin caches after switching mode
             if (function_exists('\\nppp_clear_plugin_cache')) {
                 \nppp_clear_plugin_cache(true);
@@ -583,85 +567,6 @@ services:
         return $obd !== '' && strtolower($obd) !== 'none';
     }
 
-    // Insert of the define into wp-config.php
-    private static function nppp_try_write_wp_config_define(): void {
-        $wp_filesystem = nppp_initialize_wp_filesystem();
-        if ($wp_filesystem === false) {
-            nppp_display_admin_notice(
-                'error',
-                __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
-            );
-            return;
-        }
-
-        $wp_config_path = self::nppp_locate_wp_config_path();
-        if (! $wp_config_path) return;
-
-        // Bail gracefully if wp-config.php isn't directly writable
-        if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
-            return;
-        }
-
-        $contents = $wp_filesystem->get_contents($wp_config_path);
-        if ($contents === false || $contents === '') return;
-
-        $has_active_define = preg_match("/^[ \t]*define\(\s*['\"]NPPP_ASSUME_NGINX['\"]\s*,\s*true\s*\)\s*;/mi", $contents);
-        if ($has_active_define) return;
-
-        $define_line = "define('NPPP_ASSUME_NGINX', true);\n";
-        $pos = strpos($contents, "That's all, stop editing!");
-
-        // If not found (localized files), try the require line:
-        if ($pos === false) {
-            $reqPattern = "/require_once\s*\(\s*ABSPATH\s*\.\s*['\"]wp-settings\.php['\"]\s*\)\s*;\s*/mi";
-            if (preg_match($reqPattern, $contents, $m, PREG_OFFSET_CAPTURE)) {
-                $pos = $m[0][1];
-            }
-        }
-
-        // If still not found, safest is to prepend (so it runs before includes)
-        if ($pos !== false) {
-            $contents = substr_replace($contents, $define_line, $pos, 0);
-        } else {
-            if (preg_match('/\A(\xEF\xBB\xBF)?<\?php(?:\s*declare\s*\([^)]*\)\s*;\s*)?/i', $contents, $m)) {
-                $insert_at = strlen($m[0]);
-                $contents  = substr_replace($contents, $define_line, $insert_at, 0);
-            } else {
-                $contents = "<?php\n" . $define_line . $contents;
-            }
-        }
-
-        self::nppp_write_atomically($wp_filesystem, $wp_config_path, $contents);
-    }
-
-    private static function nppp_write_atomically($wp_filesystem, string $target_path, string $new_contents): bool {
-        $tmp_path = $target_path . '.nppp-tmp-' . uniqid('', true);
-
-        if (! $wp_filesystem->put_contents($tmp_path, $new_contents, FS_CHMOD_FILE)) {
-            $wp_filesystem->delete($tmp_path);
-            return false;
-        }
-
-        if (! $wp_filesystem->move($tmp_path, $target_path, true)) {
-            $wp_filesystem->delete($tmp_path);
-            return false;
-        }
-
-        if (function_exists('opcache_invalidate')) {
-            @opcache_invalidate($target_path, true);
-        }
-
-        return true;
-    }
-
-    private static function nppp_locate_wp_config_path(): ?string {
-        // Standard location
-        if (file_exists(ABSPATH . 'wp-config.php') ) return ABSPATH . 'wp-config.php';
-        // One level up
-        $up = dirname(ABSPATH) . '/wp-config.php';
-        return file_exists($up) ? $up : null;
-    }
-
     // Auto-disable Assume-Nginx when real detection passes
     public static function nppp_auto_disable_assume_when_detected(): void {
         if (! current_user_can('manage_options')) return;
@@ -674,7 +579,6 @@ services:
 
         if ($detected && $assume_enabled) {
             delete_option(self::RUNTIME_OPTION);
-            self::nppp_try_remove_wp_config_define();
             update_option('nppp_assume_nginx_auto_disabled_notice', 1, false);
 
             // Clear plugin caches after switching back to detected mode
@@ -709,37 +613,6 @@ services:
         // Attach on the two pages where we want to show it
         add_action('admin_head-' . $hook_settings, $attach_printer, 1);
         add_action('admin_head-' . $hook_setup,    $attach_printer, 1);
-    }
-
-    // Remove define('NPPP_ASSUME_NGINX', true); from wp-config.php
-    private static function nppp_try_remove_wp_config_define(): void {
-        $wp_filesystem = nppp_initialize_wp_filesystem();
-        if ($wp_filesystem === false) {
-            nppp_display_admin_notice(
-                'error',
-                __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
-            );
-            return;
-        }
-
-        $wp_config_path = self::nppp_locate_wp_config_path();
-        if (! $wp_config_path) return;
-
-        // Bail gracefully if wp-config.php isn't directly writable
-        if (! $wp_filesystem->exists($wp_config_path) || ! $wp_filesystem->is_writable($wp_config_path)) {
-            return;
-        }
-
-        $contents = $wp_filesystem->get_contents($wp_config_path);
-        if ($contents === false || $contents === '') return;
-
-        // Match lines that define NPPP_ASSUME_NGINX as true
-        $pattern = "/^[ \t]*define\(\s*['\"]NPPP_ASSUME_NGINX['\"]\s*,\s*true\s*\)\s*;[^\r\n]*\r?\n?/mi";
-        $new = preg_replace($pattern, '', $contents);
-
-        if ($new !== null && $new !== $contents) {
-            self::nppp_write_atomically($wp_filesystem, $wp_config_path, $new);
-        }
     }
 
     private static function nppp_dummy_nginx_conf(): string {
