@@ -527,6 +527,9 @@ services:
     }
 
     private static function nppp_assume_nginx_enabled(): bool {
+        if (function_exists('nppp_is_assume_nginx_mode')) {
+            return nppp_is_assume_nginx_mode();
+        }
         if (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX) return true;
         return (bool) get_option(self::RUNTIME_OPTION);
     }
