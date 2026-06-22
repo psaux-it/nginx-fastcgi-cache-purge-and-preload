@@ -231,7 +231,17 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
 
         // HTTP HEAD probe. Only reached for Docker separate-container setups
         // or exotic proxy topologies. Expensive.
-        if (!$signal_hit) {
+        // On the hot admin path (honor_assume=true) the probe result is transient-cached
+        // for 10 minutes — at most one network request per interval rather than one per
+        // page load. The Setup-page diagnostic path (honor_assume=false) and the
+        // auto-disable strict path (skip_signal_probe=true) both bypass this block
+        // entirely, so live signal data is preserved where it matters.
+        $nppp_probe_tk     = 'nppp_http_probe_' . md5('nppp');
+        $nppp_probe_cached = $honor_assume ? get_transient($nppp_probe_tk) : false;
+        if (!$signal_hit && $nppp_probe_cached !== false) {
+            $signal_hit = ($nppp_probe_cached === '1');
+        }
+        if (!$signal_hit && $nppp_probe_cached === false) {
             // Perform the request
             $token     = substr(dechex(hrtime(true)), -8);
             $probe_url = add_query_arg(['s' => 'nppp-' . $token, '_nppp' => $token], home_url('/'));
@@ -301,6 +311,12 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
                         $signal_hit = true;
                     }
                 }
+            }
+
+            // Persist the probe outcome so subsequent admin page loads skip the
+            // network request for up to 10 minutes.
+            if ($honor_assume) {
+                set_transient($nppp_probe_tk, $signal_hit ? '1' : '0', 10 * MINUTE_IN_SECONDS);
             }
         }
 
