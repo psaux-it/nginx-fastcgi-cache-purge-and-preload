@@ -93,6 +93,7 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_obd_warned_' . md5($static_key_base),
         'nppp_vary_issue_' . md5($static_key_base),
         'nppp_cache_key_regex_probe',
+        'nppp_http_probe_' . md5($static_key_base),
     );
 
     // Delete each known transient
