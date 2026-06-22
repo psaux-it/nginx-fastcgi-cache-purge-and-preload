@@ -367,213 +367,45 @@ function nppp_plugin_requirements_met() {
 
     // Check if the operating system is Linux
     if (nppp_is_linux()) {
-        // =========================================================================
-        // NGINX DETECTION — strictly ordered cheapest → most expensive.
-        //
-        // Each tier short-circuits the chain on first conclusive hit.
-        // The HTTP probe (Tier 3) is only reached when Tier 0-2 are all blind,
-        // which in practice only happens in Docker separate-container deployments
-        // where nginx and PHP-FPM run in different containers with no shared
-        // filesystem or PATH.
-        //
-        // Architecture coverage per tier:
-        //   Tier 0 — pure Nginx (zero I/O, instant)
-        //   Tier 1 — pure Nginx, Nginx+Apache same-host, same-container Docker
-        //   Tier 2 — same-host installs where nginx binary is not on PHP's PATH
-        //   Tier 3 — Docker separate-container, any topology Tier 0-2 cannot see
-        //   Tier 4 — last-resort heuristic (weakest, zero I/O)
-        // =========================================================================
-        $server_software = '';
-
-        // -------------------------------------------------------------------------
-        // TIER 0 — Zero I/O: $_SERVER['SERVER_SOFTWARE'] (memory read, instant).
-        // Reliable for pure-Nginx stacks where the SAPI directly reports the
-        // frontend server.  Silently ignored for Apache values — reverse-proxy
-        // stacks (Nginx → Apache → PHP) continue through cheaper tiers before
-        // we ever touch the network, avoiding the HTTP probe overhead when not needed.
-        // -------------------------------------------------------------------------
-        if (isset($_SERVER['SERVER_SOFTWARE'])) {
-            $raw_sw = sanitize_text_field(wp_unslash($_SERVER['SERVER_SOFTWARE']));
-            if (
-                stripos($raw_sw, 'nginx')     !== false ||
-                stripos($raw_sw, 'openresty') !== false ||
-                stripos($raw_sw, 'tengine')   !== false
-            ) {
-                $server_software = $raw_sw;
-            }
+        // Centralised Nginx detection (honours Assume mode)
+        if (!nppp_precheck_nginx_detected(true)) {
+            return false;
         }
+        
+        // Initialize a flag to track the success functions
+        $shell_functions_enabled = true;
 
-        // -------------------------------------------------------------------------
-        // TIER 1 — Single shell fork: nginx binary on PATH.
-        // Catches: pure-Nginx, Nginx+Apache on the same host, Nginx in the same
-        // Docker container as PHP-FPM.
-        // Misses:  Nginx in a completely separate Docker container.
-        // -------------------------------------------------------------------------
-        if (empty($server_software) && function_exists('shell_exec')) {
-            $nginx_bin = trim((string) shell_exec('command -v nginx 2>/dev/null'));
-            if (!empty($nginx_bin)) {
-                $server_software = 'nginx';
-            }
-        }
+        // Check if shell_exec is enabled
+        if (function_exists('shell_exec')) {
+            // Attempt to execute a harmless command
+            $output = shell_exec('echo "Test"');
 
-        // -------------------------------------------------------------------------
-        // TIER 2 — Filesystem scan: known Nginx config file paths (fast local I/O).
-        // Catches same-host installs where the nginx binary is absent from the PHP
-        // process PATH (e.g. custom compile prefix, non-standard package layout).
-        // Still cheaper than a network round-trip.
-        // -------------------------------------------------------------------------
-        if (empty($server_software)) {
-            $nginx_conf_paths = nppp_get_nginx_conf_paths($wp_filesystem);
-            if (!empty($nginx_conf_paths)) {
-                $server_software = 'nginx';
-            }
-        }
-
-        // -------------------------------------------------------------------------
-        // TIER 3 — HTTP HEAD probe (network round-trip; last resort before the
-        // weakest heuristic).  Only reached for Docker separate-container setups
-        // or exotic proxy topologies where Tiers 0-2 are all inconclusive.
-        // -------------------------------------------------------------------------
-        if (empty($server_software)) {
-            // Perform the request
-            $token     = substr(dechex(hrtime(true)), -8);
-            $probe_url = add_query_arg(['s' => 'nppp-' . $token, '_nppp' => $token], home_url('/'));
-            $response  = wp_remote_head($probe_url, array(
-                'timeout'     => 2,
-                'redirection' => 0,
-                'blocking'    => true,
-                'headers'     => array(
-                    'Cache-Control' => 'no-cache, no-store, max-age=0',
-                    'Pragma'        => 'no-cache',
-                    'User-Agent'    => 'NPPP-Precheck/2.1.7',
-                ),
-            ));
-
-            // Check if the request was successful
-            if (is_array($response) && !is_wp_error($response)) {
-                // Get response headers
-                $headers = wp_remote_retrieve_headers($response);
-
-                // Normalize WP header container -> plain array
-                if (is_object($headers)) {
-                    if (method_exists($headers, 'getAll')) {
-                        // Requests v2/v1: preferred API
-                        $headers = $headers->getAll();
-                    } elseif ($headers instanceof \Traversable) {
-                        // Iterable fallback
-                        $headers = iterator_to_array($headers);
-                    } else {
-                        // Defensive: cast and peel typical 'data' payload if present
-                        $maybe   = (array) $headers;
-                        $headers = (isset($maybe['data']) && is_array($maybe['data'])) ? $maybe['data'] : $maybe;
-                    }
-                } else {
-                    $headers = (array) $headers;
-                }
-
-                // Case-normalize keys for consistent lookups
-                if (!empty($headers)) {
-                    $headers = array_change_key_case($headers, CASE_LOWER);
-                }
-
-                // Signal A — any header *name* containing 'fastcgi'.
-                // Strongest signal: survives even when Server header is stripped.
-                // Specific to Nginx+PHP-FPM (not Nginx+Apache proxy).
-                foreach ($headers as $key => $value) {
-                    if (is_string($key) && stripos($key, 'fastcgi') !== false) {
-                        $header_value = is_array($value) ? implode(' ', array_map('strval', $value)) : (string) $value;
-                        if ($header_value !== '') {
-                            $server_software = 'nginx';
-                            break;
-                        }
-                    }
-                }
-
-                // Signal B — 'Server' header value.
-                // In Nginx+Apache proxy setups nginx overrides the upstream Server
-                // header by default, so 'Apache' never reaches the client here.
-                if (empty($server_software) && isset($headers['server'])) {
-                    $server_header = $headers['server'];
-                    $server_value  = is_array($server_header) ? implode(' ', array_map('strval', $server_header)) : (string) $server_header;
-
-                    if ($server_value !== '' && (
-                        stripos($server_value, 'nginx') !== false ||
-                        stripos($server_value, 'openresty') !== false ||
-                        stripos($server_value, 'tengine') !== false
-                    )) {
-                        $server_software = 'nginx';
-                    }
-                }
-
-                // Signal C — 'Via' header.
-                // Some proxy topologies surface nginx identity here rather than
-                // in the Server header (e.g. Varnish-fronted nginx).
-                if (empty($server_software) && isset($headers['via'])) {
-                    $via_header = $headers['via'];
-                    $via_value  = is_array($via_header) ? implode(' ', array_map('strval', $via_header)) : (string) $via_header;
-
-                    if ($via_value !== '' && (
-                        stripos($via_value, 'nginx') !== false ||
-                        stripos($via_value, 'openresty') !== false ||
-                        stripos($via_value, 'tengine') !== false
-                    )) {
-                        $server_software = 'nginx';
-                    }
-                }
-            }
-        }
-
-        // -------------------------------------------------------------------------
-        // TIER 4 — PHP_SAPI (zero I/O, weakest heuristic, absolute last resort).
-        // 'fpm-fcgi' / 'cgi-fcgi' almost always means PHP-FPM paired with Nginx,
-        // but Apache+mod_fcgid also uses 'cgi-fcgi', making this non-conclusive.
-        // Intentionally placed last — it is only a tie-breaker when every
-        // stronger signal above has failed.
-        // -------------------------------------------------------------------------
-        if (empty($server_software)) {
-            $sapi = PHP_SAPI;
-            if (stripos($sapi, 'fpm-fcgi') !== false || stripos($sapi, 'cgi-fcgi') !== false) {
-                $server_software = 'nginx';
-            }
-        }
-
-        // Check if the web server is Nginx
-        if (stripos($server_software, 'nginx') !== false) {
-            // Initialize a flag to track the success functions
-            $shell_functions_enabled = true;
-
-            // Check if shell_exec is enabled
-            if (function_exists('shell_exec')) {
-                // Attempt to execute a harmless command
-                $output = shell_exec('echo "Test"');
-
-                // Check if the command executed successfully
-                if (trim((string) $output) !== "Test") {
-                    $shell_functions_enabled = false;
-                }
-            } else {
+            // Check if the command executed successfully
+            if (trim((string) $output) !== "Test") {
                 $shell_functions_enabled = false;
             }
+        } else {
+            $shell_functions_enabled = false;
+        }
 
-            // Check if exec is enabled
-            if (function_exists('exec')) {
-                // Attempt to execute a harmless command with exec
-                $output = exec('echo "Test"');
+        // Check if exec is enabled
+        if (function_exists('exec')) {
+            // Attempt to execute a harmless command with exec
+            $output = exec('echo "Test"');
 
-                // Check if the command executed successfully
-                if (trim((string) $output) !== "Test") {
-                    $shell_functions_enabled = false;
-                }
-            } else {
+            // Check if the command executed successfully
+            if (trim((string) $output) !== "Test") {
                 $shell_functions_enabled = false;
             }
+        } else {
+            $shell_functions_enabled = false;
+        }
 
-            // NPP ready to go
-            if ($shell_functions_enabled && function_exists('posix_kill')) {
-                // Lastly we check shell command required by NPP
-                if (nppp_shell_toolset_check(true, false)) {
-                    $nppp_met = true;
-                }
+        // NPP ready to go
+        if ($shell_functions_enabled && function_exists('posix_kill')) {
+            // Lastly we check shell command required by NPP
+            if (nppp_shell_toolset_check(true, false)) {
+                $nppp_met = true;
             }
         }
     }
