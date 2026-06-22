@@ -95,8 +95,9 @@ function nppp_render_mobile_fab(): void {
     }
 
     // Determine whether initial setup is still pending.
-    $needs_setup = class_exists('\\NPPP\\Setup') && \NPPP\Setup::nppp_needs_setup();
-    $setup_url   = admin_url('admin.php?page=' . ( defined('\\NPPP\\Setup::PAGE_SLUG') ? \NPPP\Setup::PAGE_SLUG : 'nppp-setup' ));
+    $nppp_setup_loaded = class_exists('\\NPPP\\Setup');
+    $needs_setup = $nppp_setup_loaded && \NPPP\Setup::nppp_needs_setup();
+    $setup_url   = admin_url('admin.php?page=' . ( $nppp_setup_loaded ? \NPPP\Setup::PAGE_SLUG : 'nppp-setup' ));
 
     // Build the current front-end URL (helper defined in includes/admin-bar.php).
     $from_url = function_exists('nppp_get_current_front_url')
