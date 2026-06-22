@@ -178,8 +178,10 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
         // ($honor_assume=false) still needs the full signal picture below for
         // its Status-tab UI row, so it intentionally falls through unchanged.
         if ($honor_assume) {
-            if ((defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true)
-                || (bool) get_option('nppp_assume_nginx_runtime')) {
+            $nppp_assume_check = function_exists('nppp_is_assume_nginx_mode')
+                ? nppp_is_assume_nginx_mode()
+                : ((defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true) || (bool) get_option('nppp_assume_nginx_runtime'));
+            if ($nppp_assume_check) {
                 return true;
             }
 
@@ -423,8 +425,9 @@ function nppp_get_nginx_conf_paths($wp_filesystem, bool $honor_assume = true) {
 
     // Only consider the Assume-Nginx dummy when explicitly honoring assume mode
     if ($honor_assume && empty($conf_paths)) {
-        $assume_on = (defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true)
-                  || (bool) get_option('nppp_assume_nginx_runtime');
+        $assume_on = function_exists('nppp_is_assume_nginx_mode')
+            ? nppp_is_assume_nginx_mode()
+            : ((defined('NPPP_ASSUME_NGINX') && NPPP_ASSUME_NGINX === true) || (bool) get_option('nppp_assume_nginx_runtime'));
 
         if ($assume_on) {
             // Shipped dummy file
