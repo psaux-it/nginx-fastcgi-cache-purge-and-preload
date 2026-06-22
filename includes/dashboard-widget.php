@@ -278,8 +278,9 @@ function nppp_dashboard_widget() {
     }
 
     // Need setup
-    $needs_setup = class_exists('\NPPP\Setup') && \NPPP\Setup::nppp_needs_setup();
-    $setup_url   = admin_url('admin.php?page=' . \NPPP\Setup::PAGE_SLUG);
+    $nppp_setup_loaded = class_exists('\NPPP\Setup');
+    $needs_setup = $nppp_setup_loaded && \NPPP\Setup::nppp_needs_setup();
+    $setup_url   = admin_url('admin.php?page=' . ( $nppp_setup_loaded ? \NPPP\Setup::PAGE_SLUG : 'nppp-setup' ));
     $settings_url = admin_url('options-general.php?page=nginx_cache_settings');
 
     // Check if the preload process is running
