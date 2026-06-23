@@ -529,7 +529,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths,
                         </td>
                     </tr>
                     <tr>
-                        <td class="action"><?php esc_html_e('Assume-Nginx Mode', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="action"><?php esc_html_e('Bypass Detection', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                         <td class="status" id="npppAssumeNginx">
                             <?php if ( $nppp_assume_on ) : ?>
                                 <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
