@@ -173,10 +173,10 @@ function nppp_nginx_cache_settings_page() {
                 <?php if ( $nppp_show_assume ) : ?>
                     <div id="nppp-assume">
                         <span class="dashicons dashicons-warning" aria-hidden="true"></span>
-                        <strong><?php echo esc_html__( 'Assume-Nginx Mode Active', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                        <strong><?php echo esc_html__( 'Manual Bypass Active', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
                         <?php if ( class_exists( '\NPPP\Setup' ) ) : ?>
                             <a href="<?php echo esc_url( admin_url( 'admin.php?page=' . \NPPP\Setup::PAGE_SLUG ) ); ?>" class="button button-small">
-                                <?php echo esc_html__( 'Setup', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                <?php echo esc_html__( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </a>
                         <?php endif; ?>
                     </div>
