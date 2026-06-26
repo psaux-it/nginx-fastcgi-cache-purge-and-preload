@@ -1155,14 +1155,10 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                     $key
                 ) );
             }
-            $val = (string) $settings[ $key ];
-            // nginx_cache_key_custom_regex is base64-encoded in the DB for safe storage.
-            if ( $key === 'nginx_cache_key_custom_regex' && $val !== '' ) {
-                $decoded = base64_decode( $val, true );
-                if ( $decoded !== false && $decoded !== '' ) {
-                    $val = $decoded;
-                }
-            }
+            // Use the central getter for the regex key so decode logic stays in one place.
+            $val = ( $key === 'nginx_cache_key_custom_regex' )
+                ? nppp_get_cache_key_regex()
+                : (string) $settings[ $key ];
             WP_CLI::line( $val );
             return;
         }
@@ -1171,12 +1167,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $labels = $this->get_pretty_labels();
 
         foreach ( $settings as $k => $v ) {
-            // nginx_cache_key_custom_regex is base64-encoded in the DB — decode for display.
-            if ( $k === 'nginx_cache_key_custom_regex' && $v !== '' ) {
-                $decoded_v = base64_decode( $v, true );
-                if ( $decoded_v !== false && $decoded_v !== '' ) {
-                    $v = $decoded_v;
-                }
+            // Use the central getter for the regex key so decode logic stays in one place.
+            if ( $k === 'nginx_cache_key_custom_regex' ) {
+                $v = nppp_get_cache_key_regex();
             }
             if ( $pretty ) {
                 $pretty_name = $labels[ $k ] ?? $k;
