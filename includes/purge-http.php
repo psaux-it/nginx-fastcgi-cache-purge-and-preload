@@ -169,7 +169,7 @@ function nppp_http_purge_try_first( string $url ) {
     // vary_aware-enabled exact-match purge on a large cache hits
     // max_execution_time before wp_remote_get() ever gets to time out.
     if ( function_exists( 'set_time_limit' ) ) {
-        @set_time_limit( $nppp_timeout + 5 );
+        @set_time_limit( $nppp_timeout + 5 ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
     $response = wp_remote_get( $purge_url, [
@@ -354,7 +354,7 @@ function nppp_http_purge_all(): bool {
     $nppp_timeout = nppp_http_purge_timeout( 'all' );
 
     if ( function_exists( 'set_time_limit' ) ) {
-        @set_time_limit( $nppp_timeout + 5 );
+        @set_time_limit( $nppp_timeout + 5 ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
     $response = wp_remote_get( $purge_url, [
