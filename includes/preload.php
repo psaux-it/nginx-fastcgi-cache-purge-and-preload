@@ -1565,7 +1565,6 @@ function nppp_stop_preload_ui( string $pid_file ): void {
         nppp_watcher_delete_token();
         nppp_display_admin_notice(
             'warning',
-            /* translators: %d: Process ID that is no longer alive */
             sprintf(
                 /* translators: %d: The process ID (PID) of the preload process that has already finished. */
                 __( 'INFO STOP: Preload process (PID %d) already finished.', 'fastcgi-cache-purge-and-preload-nginx' ),
