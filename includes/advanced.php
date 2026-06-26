@@ -1237,13 +1237,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     }
 
     $nginx_cache_settings = get_option('nginx_cache_settings', []);
-    $decoded = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
-             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'], true)
-             : false;
-
-    $regex   = ($decoded !== false && $decoded !== '')
-             ? $decoded
-             : nppp_fetch_default_regex_for_cache_key();
+    $regex = nppp_get_cache_key_regex();
 
     $https_enabled = wp_is_using_https();
     $head_bytes    = (int) apply_filters('nppp_locate_head_bytes', 4096);
