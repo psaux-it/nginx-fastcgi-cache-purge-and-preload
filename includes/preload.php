@@ -1567,6 +1567,7 @@ function nppp_stop_preload_ui( string $pid_file ): void {
             'warning',
             /* translators: %d: Process ID that is no longer alive */
             sprintf(
+                /* translators: %d: The process ID (PID) of the preload process that has already finished. */
                 __( 'INFO STOP: Preload process (PID %d) already finished.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $pid
             )
@@ -1612,8 +1613,8 @@ function nppp_stop_preload_ui( string $pid_file ): void {
             nppp_watcher_delete_token();
             nppp_display_admin_notice(
                 'error',
-                /* translators: 1: Process ID 2: Same PID for the manual kill command example */
                 sprintf(
+                    /* translators: %1$d: The process ID (PID) of the preload process that could not be stopped. */
                     __( 'ERROR STOP: Cannot stop preload PID %1$d (via safexec). Please contact support and report this issue.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $pid,
                     $pid
@@ -1646,8 +1647,8 @@ function nppp_stop_preload_ui( string $pid_file ): void {
             nppp_watcher_delete_token();
             nppp_display_admin_notice(
                 'error',
-                /* translators: %d: Process ID that could not be stopped */
                 sprintf(
+                    /* translators: %d: The process ID (PID) of the preload process that could not be stopped. */
                     __( 'ERROR STOP: Failed to stop preload process (PID %d). Please contact support and report this issue.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $pid
                 )
@@ -1663,8 +1664,8 @@ function nppp_stop_preload_ui( string $pid_file ): void {
 
     nppp_display_admin_notice(
         'success',
-        /* translators: %d: Process ID of the terminated preload worker */
         sprintf(
+            /* translators: %d: The process ID (PID) of the preload process that was stopped successfully. */
             __( 'SUCCESS STOP: Preload process (%d) stopped successfully. The existing cache has been preserved.', 'fastcgi-cache-purge-and-preload-nginx' ),
             $pid
         )
