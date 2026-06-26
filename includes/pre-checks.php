@@ -981,15 +981,8 @@ function nppp_probe_cache_key_regex(): string {
     $nginx_cache_settings = get_option( 'nginx_cache_settings', [] );
     $nginx_cache_path     = $nginx_cache_settings['nginx_cache_path'] ?? '/dev/shm/change-me-now';
 
-    $decoded = isset( $nginx_cache_settings['nginx_cache_key_custom_regex'] )
-        ? base64_decode( $nginx_cache_settings['nginx_cache_key_custom_regex'], true )
-        : false;
-
-    $regex = ( $decoded !== false && $decoded !== '' )
-        ? $decoded
-        : ( function_exists( 'nppp_fetch_default_regex_for_cache_key' )
-            ? nppp_fetch_default_regex_for_cache_key()
-            : '/^KEY:\s+https?(?:GET|HEAD)?([^\/]+)(\/[^\s]*)/m' );
+    // Central getter
+    $regex = nppp_get_cache_key_regex();
 
     $wp_filesystem = function_exists( 'nppp_initialize_wp_filesystem' )
         ? nppp_initialize_wp_filesystem()
