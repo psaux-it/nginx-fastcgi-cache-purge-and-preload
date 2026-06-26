@@ -250,11 +250,8 @@ function nppp_nginx_cache_reject_regex_callback() {
 
 // Callback function to display the custom Regex field for fastcgi_cache_key
 function nppp_nginx_cache_key_custom_regex_callback() {
-    $options = get_option('nginx_cache_settings', []);
-    $default_cache_key_regex = nppp_fetch_default_regex_for_cache_key();
-    $cache_key_regex = isset($options['nginx_cache_key_custom_regex']) ? base64_decode($options['nginx_cache_key_custom_regex']) : $default_cache_key_regex;
-    // Use wp_kses() with an empty array to allow raw text without HTML sanitization
-    echo "<textarea id='nginx_cache_key_custom_regex' name='nginx_cache_settings[nginx_cache_key_custom_regex]' rows='1' cols='50' class='large-text'>" . esc_textarea($cache_key_regex) . "</textarea>";
+    $cache_key_regex = nppp_get_cache_key_regex();
+    echo "<textarea id='nginx_cache_key_custom_regex' name='nginx_cache_settings[nginx_cache_key_custom_regex]' rows='1' cols='50' class='large-text'>" . esc_textarea( $cache_key_regex ) . "</textarea>";
 }
 
 // Callback function to display the Mobile User Agent field
@@ -377,6 +374,33 @@ function nppp_fetch_default_reject_regex(): string {
 // Get default regex for nginx cache key
 function nppp_fetch_default_regex_for_cache_key(): string {
     return nppp_get_preload_defaults()['cache_key_regex'] ?? '';
+}
+
+/**
+ * Central getter — always returns the active cache key regex as plaintext.
+ *
+ *   1. Properly base64-encoded value   (normal: saved via plugin UI or WP-CLI)
+ *   2. Raw regex stored directly in DB (legacy: wp option update / old version)
+ *   3. Missing / empty                 (fall back to plugin default)
+ */
+function nppp_get_cache_key_regex(): string {
+    $settings = get_option( 'nginx_cache_settings', [] );
+    $stored   = isset( $settings['nginx_cache_key_custom_regex'] )
+        ? (string) $settings['nginx_cache_key_custom_regex']
+        : '';
+
+    if ( $stored === '' ) {
+        return nppp_fetch_default_regex_for_cache_key();
+    }
+
+    // Strict decode: raw regex values (not valid base64) return false here.
+    $decoded = base64_decode( $stored, true );
+
+    // If strict decode fails the stored value is already the raw regex — use as-is.
+    // The next Settings save will re-encode it correctly.
+    return ( $decoded !== false && $decoded !== '' )
+        ? $decoded
+        : $stored;
 }
 
 // Get default mobile user agent string
