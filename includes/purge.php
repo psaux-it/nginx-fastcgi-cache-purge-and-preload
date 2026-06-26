@@ -165,12 +165,7 @@ function nppp_purge_single_init( $nginx_cache_path, $current_page_url, $nppp_aut
 
     $auto_preload = ! empty( $settings['nginx_cache_auto_preload'] ) && $settings['nginx_cache_auto_preload'] === 'yes';
     $chain_autopreload = $auto_preload;
-    $cache_key_regex_raw = ! empty( $settings['nginx_cache_key_custom_regex'] )
-        ? base64_decode( $settings['nginx_cache_key_custom_regex'], true )
-        : false;
-    $regex = ( $cache_key_regex_raw !== false && $cache_key_regex_raw !== '' )
-        ? $cache_key_regex_raw
-        : nppp_fetch_default_regex_for_cache_key();
+    $regex = nppp_get_cache_key_regex();
 
     $primary_key = preg_replace( '#^https?://#', '', $current_page_url );
     $targets     = [
