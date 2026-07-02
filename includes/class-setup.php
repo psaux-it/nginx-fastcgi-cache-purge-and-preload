@@ -58,15 +58,19 @@ final class Setup {
     // Hide/redirect Settings if detection failed and assume-mode not enabled
     public static function nppp_gate_settings_until_setup(): void {
         if (! current_user_can('manage_options')) return;
-        if (! self::nppp_needs_setup()) return;
 
-        // If admin tries to access Settings, bounce to Setup.
+        // This function's only effect is redirecting away from the Settings
+        // page — it never does anything on any other admin screen. Check
+        // which page we're on (a cheap $_GET read) before paying for
+        // nppp_needs_setup()
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only check of current admin page; no state change.
         $current_page = isset($_GET['page']) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
-        if ($current_page === self::SETTINGS_SLUG) {
-            wp_safe_redirect(admin_url('admin.php?page=' . self::PAGE_SLUG));
-            exit;
-        }
+        if ($current_page !== self::SETTINGS_SLUG) return;
+
+        if (! self::nppp_needs_setup()) return;
+
+        wp_safe_redirect(admin_url('admin.php?page=' . self::PAGE_SLUG));
+        exit;
     }
 
     public static function nppp_register_setup_page(): void {
