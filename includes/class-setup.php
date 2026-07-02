@@ -596,8 +596,25 @@ final class Setup {
         // skip immediately after enabling
         if (get_transient('nppp_assume_recently_enabled')) return;
 
-        $detected = self::nppp_is_nginx_detected_strict();
+        // A notice from an earlier auto-disable can still be pending display
+        // (e.g. it was set while the admin was on a page other than Settings/
+        // Setup, so the printer never fired) — that path must not depend on
+        // Assume-Nginx still being on, since disabling it is exactly what
+        // triggers the notice. Handle it first via a cheap option read only.
+        $notice_pending = (bool) get_option('nppp_assume_nginx_auto_disabled_notice');
+
+        // Cheap O(1) option read next. The expensive strict check below forks
+        // `nginx -V` and stats up to 10 candidate config paths — there is no
+        // reason to pay that cost on every admin_init on every wp-admin page
+        // for the common case where Assume-Nginx isn't even enabled and no
+        // notice is pending, since the outcome of this method can only ever
+        // change anything in those two cases.
         $assume_enabled = self::nppp_assume_nginx_enabled();
+        if (! $assume_enabled && ! $notice_pending) {
+            return;
+        }
+
+        $detected = $assume_enabled ? self::nppp_is_nginx_detected_strict() : false;
 
         if ($detected && $assume_enabled) {
             delete_option(self::RUNTIME_OPTION);
