@@ -982,7 +982,7 @@ function nppp_preload_cache_premium_callback() {
         $probe_exit = 0;
         exec(
             sprintf(
-                '%s -q \'.\' --text --no-ignore --no-config --no-mmap -m 1 %s 2>/dev/null',
+                '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
                 escapeshellarg($rg_bin),
                 escapeshellarg($rg_scan_path)
             ),
@@ -1039,7 +1039,7 @@ function nppp_preload_cache_premium_callback() {
             $url_key = preg_replace('#^https?://#', '', $cache_url);
 
             $rg_cmd = sprintf(
-                '%s%s -l -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config --no-mmap %s %s',
+                '%s%s -l -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config %s %s',
                 $rg_cmd_prefix,
                 escapeshellarg($rg_bin),
                 escapeshellarg('^KEY: .*' . preg_quote($url_key, '/') . '$'),
@@ -1324,7 +1324,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             $probe_exit = 0;
             exec(
                 sprintf(
-                    '%s -q \'.\' --text --no-ignore --no-config --no-mmap -m 1 %s 2>/dev/null',
+                    '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
                     escapeshellarg( $rg_bin ),
                     escapeshellarg( $rg_scan_path )
                 ),
