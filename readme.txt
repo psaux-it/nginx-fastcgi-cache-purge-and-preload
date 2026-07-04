@@ -290,6 +290,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Fixed: Several disable-functionality and disable-preload guard were missing coverage for new and existing options introduced before.
 * Fixed: Setup hooks and Settings field registrations were both running on every admin AJAX request and non-Settings admin page, firing redundant HEAD probes on each admin tab switch and registering fields that had no consumers outside the Settings page.
 * Security: Removed the option to atomic write directly to wp-config.php from the Setup page to enable "Assume Nginx Mode".
+* Performance: Merged redirect‑ and KEY‑line cache scans into a single ripgrep pass using -m 2 dual‑pattern matching, cutting directory‑walk cost in half on large caches. (Credit: @apoorva-01)
 * Improved: HTTP Purge timeouts no longer falsely arm the lockout, and the timeout is now configurable via the `nppp_http_purge_timeout` filter.
 * Improved: Reduced open_basedir requirements – the plugin now needs fewer paths in the whitelist, eliminating unnecessary warnings on strict PHP configurations.
 * Improved: Nginx detection refactored — redundant inline detection code removed in favour of the centralised detection logic.
