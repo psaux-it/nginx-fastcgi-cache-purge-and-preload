@@ -1076,77 +1076,87 @@ function nppp_extract_cached_urls_rg(
     $scan_path = rtrim( $scan_path, '/' ) . '/';
     $fuse_path = rtrim( $fuse_path, '/' ) . '/';
 
-    // SCAN 1 — Redirect check with -F
-    // Linux Page Cache Warm‑Up (Dentry Cache) for SCAN 2
-    $redirect_cmd = sprintf(
-        '%s%s -F --text -l -m 1 -E none --no-unicode'
-        . ' --no-heading --no-ignore --no-config --no-messages --no-mmap -e %s -e %s %s 2>/dev/null',
-        $rg_cmd_prefix,
-        escapeshellarg( $rg_bin ),
-        escapeshellarg( 'Status: 301' ),
-        escapeshellarg( 'Status: 302' ),
-        escapeshellarg( $scan_path )
-    );
-
-    $redirect_out  = [];
-    $redirect_exit = 0;
-    exec( $redirect_cmd, $redirect_out, $redirect_exit );
-
-    if ( $redirect_exit === 2 ) {
-        return null;
-    }
-
-    $redirect_set = array_flip( array_filter( array_map( 'trim', $redirect_out ), 'strlen' ) );
-    unset( $redirect_out );
-
-    // SCAN 2 — extract KEY: line from every cache file.
-    // Linux dcache already warmed here
-    $key_cmd = sprintf(
-        '%s%s --text -m 1 -E none --no-unicode'
-        . ' --no-heading --no-ignore --no-config --no-messages --no-mmap %s %s 2>/dev/null',
+    // -m 2 (not -m 1) is required here: a redirect status line
+    // and its KEY: line are two DIFFERENT things we both need, and their
+    // relative order inside the cache file is not something we control. Capping
+    // at 2 matches lets rg return both (whichever order they occur in)
+    // without reading past the point it needs to.
+    //
+    // This does not add I/O: files in this size range (2-64 KB) are already
+    // pulled into rg's line buffer in a single read() syscall regardless of
+    // where the match is.
+    // Scanning a few extra lines in that same buffer to find a 2nd
+    // match costs microseconds of memchr, not a syscall.
+    $cmd = sprintf(
+        '%s%s --text -m 2 -E none --no-unicode'
+        . ' --no-heading --no-ignore --no-config --no-messages -e %s -e %s %s 2>/dev/null',
         $rg_cmd_prefix,
         escapeshellarg( $rg_bin ),
         escapeshellarg( '^KEY: [^\r\n]+' ),
+        escapeshellarg( 'Status: 30[12]' ),
         escapeshellarg( $scan_path )
     );
 
-    $key_out  = [];
-    $key_exit = 0;
-    exec( $key_cmd, $key_out, $key_exit );
+    $out  = [];
+    $exit = 0;
+    exec( $cmd, $out, $exit );
 
     // Permission error
-    if ( $key_exit === 2 ) {
+    if ( $exit === 2 ) {
         return null;
     }
-    if ( $key_exit === 1 || empty( $key_out ) ) {
+    if ( $exit === 1 || empty( $out ) ) {
         return [ 'error' => 'NPPP_EMPTY_CACHE' ];
     }
 
-    // Parse rg output lines: "FILEPATH:KEY: <cache_key_string>"
-    $scheme       = $https_enabled ? 'https' : 'http';
-    $urls         = [];
-    $regex_tested = false;
-
-    foreach ( $key_out as $raw_line ) {
+    // Bucket the (at most 2) matched lines per file. --no-heading output is
+    // "FILEPATH:LINE" per matched line. A file that is a redirect AND has a
+    // KEY: line emits two rows here — order is irrelevant since we bucket
+    // by line content, not by which one rg happened to see first.
+    $per_file = [];
+    foreach ( $out as $raw_line ) {
         $raw_line = trim( $raw_line );
         if ( $raw_line === '' ) {
             continue;
         }
 
-        // Split
         $sep = strpos( $raw_line, ':' );
         if ( $sep === false ) {
             continue;
         }
 
         $scan_filepath = substr( $raw_line, 0, $sep );
-        $key_line      = substr( $raw_line, $sep + 1 );
-        if ( $scan_filepath === '' || $key_line === '' ) {
+        $line_body     = substr( $raw_line, $sep + 1 );
+        if ( $scan_filepath === '' || $line_body === '' ) {
             continue;
         }
 
-        // Skip redirect files
-        if ( isset( $redirect_set[ $scan_filepath ] ) ) {
+        if ( strpos( $line_body, 'Status: 301' ) === 0 || strpos( $line_body, 'Status: 302' ) === 0 ) {
+            $per_file[ $scan_filepath ]['redirect'] = true;
+            continue;
+        }
+
+        // Keep the first KEY: line seen per file (a file should only ever
+        // have one; this guards against a pathological duplicate).
+        if ( ! isset( $per_file[ $scan_filepath ]['key'] ) ) {
+            $per_file[ $scan_filepath ]['key'] = $line_body;
+        }
+    }
+    unset( $out );
+
+    // Parse grouped entries: "FILEPATH => ['key' => ..., 'redirect' => true]"
+    $scheme       = $https_enabled ? 'https' : 'http';
+    $urls         = [];
+    $regex_tested = false;
+
+    foreach ( $per_file as $scan_filepath => $nppp_bucket ) {
+        // Skip redirect files regardless of whether a KEY: line was also captured.
+        if ( ! empty( $nppp_bucket['redirect'] ) ) {
+            continue;
+        }
+
+        $key_line = $nppp_bucket['key'] ?? null;
+        if ( $key_line === null ) {
             continue;
         }
 
