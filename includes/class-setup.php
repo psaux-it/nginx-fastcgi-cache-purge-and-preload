@@ -556,7 +556,7 @@ final class Setup {
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading server signature only; no state change.
         $server_sw = isset($_SERVER['SERVER_SOFTWARE']) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) ) : '';
         if ( $server_sw && stripos( $server_sw, 'nginx' ) !== false ) {
-             return true;
+            return true;
         }
         return false;
     }
@@ -618,7 +618,26 @@ final class Setup {
             return;
         }
 
-        $detected = $assume_enabled ? self::nppp_is_nginx_detected_strict() : false;
+        // Short-TTL cache scoped to *this* call site only. This method runs
+        // on every admin_init while Assume-Nginx is on (i.e. every real
+        // wp-admin page load — Setup::init() already skips AJAX), and the
+        // strict check it calls forks `nginx -V` and stats up to 10
+        // candidate conf paths with zero caching of its own. Detection
+        // state changes on the order of an admin installing nginx and
+        // adding it to PATH — minutes, not seconds — so a short TTL here
+        // costs no real responsiveness while cutting the fork rate from
+        // "every page load" to "at most once per interval".
+        $detected = false;
+        if ($assume_enabled) {
+            $detect_tk     = 'nppp_setup_strict_detect_' . md5('nppp');
+            $detect_cached = get_transient($detect_tk);
+            if ($detect_cached === false) {
+                $detected = self::nppp_is_nginx_detected_strict();
+                set_transient($detect_tk, $detected ? '1' : '0', 5 * MINUTE_IN_SECONDS);
+            } else {
+                $detected = ($detect_cached === '1');
+            }
+        }
 
         if ($detected && $assume_enabled) {
             delete_option(self::RUNTIME_OPTION);
