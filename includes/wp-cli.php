@@ -1459,7 +1459,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             if ( ! function_exists( 'nppp_plugin_requirements_met' ) ) {
                 WP_CLI::error( __( 'NPP environment checker missing. Plugin incomplete.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
-            if ( ! nppp_plugin_requirements_met() ) {
+            if ( ! nppp_plugin_requirements_met( true ) ) {
                 WP_CLI::error( __( 'CRITICAL ENVIRONMENT ERROR: Linux, Nginx, shell_exec/exec, or posix_kill requirements not met. State‑changing actions blocked. Run "wp npp status" for diagnosis.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
         }
