@@ -349,7 +349,21 @@ function nppp_shell_toolset_check($global_, $preload) {
 }
 
 // Check plugin requirements
-function nppp_plugin_requirements_met() {
+//
+// Hot path: called on every wp-admin page load (admin_enqueue_scripts) and
+// every front-end page view by a logged-in manage_options user
+// (wp_enqueue_scripts) — unlike the Setup/Advanced-tab diagnostics, this is
+// a capability gate, not a live UI row, so a short-TTL cache is safe here.
+function nppp_plugin_requirements_met(bool $bypass_cache = false) {
+    $nppp_req_tk = 'nppp_requirements_met_' . md5('nppp');
+
+    if (!$bypass_cache) {
+        $nppp_req_cached = get_transient($nppp_req_tk);
+        if ($nppp_req_cached !== false) {
+            return ($nppp_req_cached === '1');
+        }
+    }
+
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
@@ -369,9 +383,12 @@ function nppp_plugin_requirements_met() {
     if (nppp_is_linux()) {
         // Centralised Nginx detection (honours Assume mode)
         if (!nppp_precheck_nginx_detected(true)) {
+            if (!$bypass_cache) {
+                set_transient($nppp_req_tk, '0', 60);
+            }
             return false;
         }
-        
+
         // Initialize a flag to track the success functions
         $shell_functions_enabled = true;
 
@@ -408,6 +425,10 @@ function nppp_plugin_requirements_met() {
                 $nppp_met = true;
             }
         }
+    }
+
+    if (!$bypass_cache) {
+        set_transient($nppp_req_tk, $nppp_met ? '1' : '0', 60);
     }
 
     return $nppp_met;
