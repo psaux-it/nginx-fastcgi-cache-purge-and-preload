@@ -95,6 +95,7 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_cache_key_regex_probe',
         'nppp_http_probe_' . md5($static_key_base),
         'nppp_setup_strict_detect_' . md5($static_key_base),
+        'nppp_requirements_met_' . md5($static_key_base),
     );
 
     // Delete each known transient
