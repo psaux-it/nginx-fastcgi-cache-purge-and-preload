@@ -59,6 +59,7 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_cache_key_regex_probe',
         'nppp_http_probe_' . md5($static_key_base),
         'nppp_setup_strict_detect_' . md5($static_key_base),
+        'nppp_requirements_met_' . md5($static_key_base),
     );
 
     // Delete each transient
