@@ -63,6 +63,85 @@ if (! function_exists('nppp_safexec_ls_check')) {
     }
 }
 
+// Detect whether WP-Cron's opportunistic HTTP-triggered pseudo-cron can be
+// relied on to promptly fire the post-preload status-refresh event.
+// Two independent failure modes make it unreliable:
+//   1. DISABLE_WP_CRON is set (site uses a real system cron instead) — static,
+//      free to check, no network call needed.
+//   2. The site's self-loopback request (the mechanism WP-Cron itself relies
+//      on to spawn) is blocked or fails — some hosts firewall or misroute
+//      localhost-to-itself requests.
+if (! function_exists('nppp_get_cron_reliability')) {
+    function nppp_get_cron_reliability(): array {
+        $transient_key = 'nppp_cron_reliability_' . md5('nppp');
+        $cached = get_transient($transient_key);
+
+        if (is_array($cached) && array_key_exists('ok', $cached) && array_key_exists('reason', $cached)) {
+            return $cached;
+        }
+
+        // Failure mode 1: real system cron in charge, WP-Cron's HTTP spawn
+        // never runs at all — this alone is decisive, no need to also probe
+        // loopback reachability.
+        if (defined('DISABLE_WP_CRON') && DISABLE_WP_CRON) {
+            $cached = ['ok' => false, 'reason' => 'disable_wp_cron'];
+            set_transient($transient_key, $cached, 6 * HOUR_IN_SECONDS);
+            return $cached;
+        }
+
+        // Failure mode 2: loopback request to the site's own wp-cron.php
+        // doesn't come back cleanly.
+        $cron_url = site_url('wp-cron.php');
+        $response = wp_remote_post(
+            $cron_url,
+            array(
+                'timeout'   => 3,
+                'blocking'  => true,
+                'sslverify' => apply_filters('https_local_ssl_verify', false),
+                'body'      => array('doing_wp_cron' => sprintf('%.22F', microtime(true))),
+            )
+        );
+
+        if (is_wp_error($response)) {
+            $cached = ['ok' => false, 'reason' => 'loopback_unreachable'];
+            set_transient($transient_key, $cached, 6 * HOUR_IN_SECONDS);
+            return $cached;
+        }
+
+        $code = (int) wp_remote_retrieve_response_code($response);
+        if ($code >= 300) {
+            $cached = ['ok' => false, 'reason' => 'loopback_http_' . $code];
+            set_transient($transient_key, $cached, 6 * HOUR_IN_SECONDS);
+            return $cached;
+        }
+
+        $cached = ['ok' => true, 'reason' => 'ok'];
+        set_transient($transient_key, $cached, 6 * HOUR_IN_SECONDS);
+
+        return $cached;
+    }
+}
+
+// Human-readable label for the Status tab / wp npp status
+if (! function_exists('nppp_get_cron_reliability_label')) {
+    function nppp_get_cron_reliability_label(): string {
+        $result = nppp_get_cron_reliability();
+
+        if (!empty($result['ok'])) {
+            return __('OK', 'fastcgi-cache-purge-and-preload-nginx');
+        }
+
+        switch ($result['reason']) {
+            case 'disable_wp_cron':
+                return __('Unreliable (DISABLE_WP_CRON)', 'fastcgi-cache-purge-and-preload-nginx');
+            case 'loopback_unreachable':
+                return __('Unreliable (loopback unreachable)', 'fastcgi-cache-purge-and-preload-nginx');
+            default:
+                return __('Unreliable', 'fastcgi-cache-purge-and-preload-nginx');
+        }
+    }
+}
+
 // Detect wget compatibility required by NPP.
 if (! function_exists('nppp_get_wget_compatibility')) {
     function nppp_get_wget_compatibility(): array {
