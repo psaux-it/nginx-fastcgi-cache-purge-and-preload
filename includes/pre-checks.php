@@ -147,7 +147,7 @@ if (! function_exists('nppp_get_cron_reliability_short_label')) {
     function nppp_get_cron_reliability_short_label(): string {
         $result = nppp_get_cron_reliability();
         return !empty($result['ok'])
-            ? __('Ok', 'fastcgi-cache-purge-and-preload-nginx')
+            ? __('OK', 'fastcgi-cache-purge-and-preload-nginx')
             : __('Not Reliable', 'fastcgi-cache-purge-and-preload-nginx');
     }
 }
