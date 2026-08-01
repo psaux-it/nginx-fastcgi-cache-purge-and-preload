@@ -80,6 +80,7 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_safexec_version_' . md5($static_key_base),
         'nppp_wget_urls_cache_' . md5($static_key_base),
         'nppp_wget_compatibility_' . md5($static_key_base),
+        'nppp_cron_reliability_' . md5($static_key_base),
         'nppp_missing_commands_' . md5($static_key_base),
         'nppp_preload_trigger_' . md5($static_key_base),
         'nppp_http_purge_endpoint_broken',
