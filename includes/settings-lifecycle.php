@@ -73,6 +73,17 @@ function nppp_defaults_on_plugin_activation() {
 
     $new_api_key = bin2hex(random_bytes(32));
 
+    // If the site relies on a real system cron instead of WP-Cron's opportunistic
+    // HTTP-triggered pseudo-cron (DISABLE_WP_CRON), the periodic status-refresh
+    // event that reports preload completion can lag far behind the actual
+    // preload finishing — the site's normal traffic never wakes it up.
+    // Default the Watchdog on for fresh installs in that case so post-preload
+    // status stays accurate without depending on WP-Cron timing. This only
+    // seeds the default for a *new* activation — array_merge() below lets any
+    // pre-existing user choice win on reactivation/upgrade, so a user who
+    // explicitly turned Watchdog off is never overridden.
+    $nppp_default_watchdog = ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) ? 'yes' : 'no';
+
     // Define default options
     $default_options = array(
         'nginx_cache_path'                    => '/dev/shm/change-me-now',
@@ -103,7 +114,7 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_auto_preload_mobile'     => 'no',
         'nginx_cache_preload_feeds'           => 'no',
         'nginx_cache_mobile_user_agent'       => nppp_fetch_default_mobile_user_agent(),
-        'nginx_cache_watchdog'                => 'no',
+        'nginx_cache_watchdog'                => $nppp_default_watchdog,
         'nginx_cache_send_mail'               => 'no',
         'nginx_cache_preload_enable_proxy'    => 'no',
         'nginx_cache_schedule'                => 'no',
