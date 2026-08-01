@@ -329,6 +329,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $cmd_safexec   = (string) nppp_check_command_status( 'safexec' );
         $cmd_rg        = (string) nppp_check_command_status( 'rg' );
         $cmd_cpulimit  = (string) nppp_check_command_status( 'cpulimit' );
+        $cron_reliability = function_exists( 'nppp_get_cron_reliability_label' ) ? (string) nppp_get_cron_reliability_label() : 'N/A';
 
         // ── Cache health ──────────────────────────────────────────────────
         $path_status   = nppp_check_path();
@@ -461,6 +462,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             [ 'Field' => __( 'safexec (Recommended)', 'fastcgi-cache-purge-and-preload-nginx' ),                                              'Value' => $cmd_safexec ],
             [ 'Field' => __( 'rg (Recommended)', 'fastcgi-cache-purge-and-preload-nginx' ),                                                   'Value' => $cmd_rg ],
             [ 'Field' => __( 'cpulimit (Optional)', 'fastcgi-cache-purge-and-preload-nginx' ),                                                'Value' => $cmd_cpulimit ],
+            [ 'Field' => __( 'WP-Cron Reliability', 'fastcgi-cache-purge-and-preload-nginx' ),                                                'Value' => $cron_reliability ],
 
             $sep( _x( 'CACHE HEALTH', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ),
             [ 'Field' => __( 'Nginx Cache Path (Required)', 'fastcgi-cache-purge-and-preload-nginx' ),                                        'Value' => $cache_path ],
