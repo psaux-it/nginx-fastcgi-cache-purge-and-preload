@@ -467,7 +467,7 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths,
                     <a href="<?php echo esc_url( admin_url( 'admin.php?page=' . \NPPP\Setup::PAGE_SLUG ) ); ?>"
                        class="button button-small"
                        style="margin-left:12px; vertical-align:middle; font-size:12px; background-color: #f0fff0;">
-                        <?php esc_html_e('Status Page', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                        <?php esc_html_e('Check Status', 'fastcgi-cache-purge-and-preload-nginx'); ?>
                     </a>
                 <?php endif; ?>
             </h2>
