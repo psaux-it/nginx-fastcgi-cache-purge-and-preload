@@ -4930,6 +4930,30 @@ function npppupdateStatus() {
     npppsafexecStatusSpan.appendChild(iconSpanSafexec);
     npppsafexecStatusSpan.append(safexecStatusText);
 
+    // Fetch and update WP-Cron reliability status
+    var npppCronReliabilitySpan = document.getElementById("npppCronReliability");
+    if (npppCronReliabilitySpan) {
+        var npppCronReliability = npppCronReliabilitySpan.textContent.trim();
+        npppCronReliabilitySpan.textContent = '';
+        npppCronReliabilitySpan.style.fontSize = "14px";
+
+        let iconSpanCronReliability = document.createElement('span');
+        let cronReliabilityStatusText = '';
+
+        if (npppCronReliability === "OK") {
+            npppCronReliabilitySpan.style.color = "green";
+            iconSpanCronReliability.classList.add("dashicons", "dashicons-yes");
+            cronReliabilityStatusText = ' ' + __('Ok', 'fastcgi-cache-purge-and-preload-nginx');
+        } else if (npppCronReliability === "Not Reliable") {
+            npppCronReliabilitySpan.style.color = "red";
+            iconSpanCronReliability.classList.add("dashicons", "dashicons-warning");
+            cronReliabilityStatusText = ' ' + __('Not Reliable', 'fastcgi-cache-purge-and-preload-nginx');
+        }
+
+        npppCronReliabilitySpan.appendChild(iconSpanCronReliability);
+        npppCronReliabilitySpan.append(cronReliabilityStatusText);
+    }
+
     var npppSafexecVersionSpan = document.getElementById("npppSafexecVersion");
     var npppSafexecVersion = npppSafexecVersionSpan.textContent.trim();
 
