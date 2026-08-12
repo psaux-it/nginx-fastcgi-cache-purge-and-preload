@@ -1177,6 +1177,26 @@ function nppp_pre_checks() {
                 . '<strong>' . __( 'Plugin functionality may be broken until this is resolved.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</strong>'
             );
         }
+
+        // DISABLE_WP_CRON is a deliberate site-owner choice — NPP never works
+        // around it. WordPress' automatic self-trigger is off, so NPP's
+        // preload schedule, index updater, AND scheduled post publishing
+        // (WordPress core's own, plus every other plugin's) only run when
+        // something actually calls wp-cron.php. This notice exists purely
+        // so that choice is an informed one — it changes nothing at runtime.
+        if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
+            $nppp_cron_url = esc_url( site_url( 'wp-cron.php' ) );
+            $nppp_wp_path  = defined( 'ABSPATH' ) ? esc_html( rtrim( ABSPATH, '/' ) ) : '/path/to/wordpress';
+
+            nppp_display_pre_check_warning(
+                __( 'GLOBAL NOTICE CRON: <code>DISABLE_WP_CRON</code> is set. WordPress\' automatic scheduler is off — NPP\'s preload schedule, index updater, mobile preload and scheduled post publishing will only run when something actually calls <code>wp-cron.php</code>. Point a real system cron at it, for example:', 'fastcgi-cache-purge-and-preload-nginx' )
+                . '<pre style="margin:6px 0; padding:8px; background:#f6f7f7; overflow-x:auto;">*/5 * * * * wget -q -O /dev/null ' . $nppp_cron_url . ' >/dev/null 2>&1</pre>'
+                . __( 'or, if WP-CLI is available on the server:', 'fastcgi-cache-purge-and-preload-nginx' )
+                . '<pre style="margin:6px 0; padding:8px; background:#f6f7f7; overflow-x:auto;">*/5 * * * * wp cron event run --due-now --quiet --allow-root --path=' . $nppp_wp_path . '</pre>'
+                . __( 'For just the preload schedule specifically, NPP\'s own REST endpoint (Settings → REST API) is a narrower alternative.', 'fastcgi-cache-purge-and-preload-nginx' )
+            );
+            unset( $nppp_cron_url, $nppp_wp_path );
+        }
     }
 
     $wp_filesystem = nppp_initialize_wp_filesystem();
