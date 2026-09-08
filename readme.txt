@@ -281,7 +281,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 
 == Changelog ==
 
-= 2.1.8 (2026-06-28) =
+= 2.1.8 (2026-09-08) =
 
 * Fixed: "Purge All" now terminates the preload watchdog before stopping the main preload process, closing a post-completion race window that could leave stale preload state behind.
 * Fixed: WP-CLI "preload --stop" no longer clears the preload pid when the underlying process termination fails (safexec), preventing broken preload state and subsequent workflow failures.
@@ -289,6 +289,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Fixed: Active WP cron events are now cancelled immediately when plugin requirements fail mid-operation, preventing orphaned cron jobs from firing after functionality is disabled.
 * Fixed: Several disable-functionality and disable-preload guard were missing coverage for new and existing options introduced before.
 * Fixed: Setup hooks and Settings field registrations were both running on every admin AJAX request and non-Settings admin page, firing redundant HEAD probes on each admin tab switch and registering fields that had no consumers outside the Settings page.
+* Fixed: Removed redundant "jquery-ui.theme.min.css" enqueue and deleted the unused asset file.
 * Security: Removed the option to atomic write directly to wp-config.php from the Setup page to enable "Assume Nginx Mode".
 * Performance: Merged redirect‑ and KEY‑line cache scans into a single ripgrep pass using -m 2 dual‑pattern matching, cutting directory‑walk cost in half on large caches. (Credit: @apoorva-01)
 * Improved: HTTP Purge timeouts no longer falsely arm the lockout, and the timeout is now configurable via the `nppp_http_purge_timeout` filter.
@@ -296,12 +297,15 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Improved: Nginx detection refactored — redundant inline detection code removed in favour of the centralised detection logic.
 * Improved: Setup page overhauled — "Assume-Nginx mode" renamed to "Manual Bypass", notices and cards simplified to be less alarming and more actionable.
 * Improved: Moved the Accept-Encoding vary header check to an asynchronous AJAX request to prevent settings page rendering delays.
+* Improved: Bumped bundled jQuery UI assets to v1.14.2 (WP 7.1).
+* Improved: Bumped bundled DataTables assets to v3.0.3.
 * Added: HTTP Purge support extended to "Purge All" (requires ngx_cache_purge module v3.0.2+) — previously HTTP Purge only accelerated single-page purges; it now also covers full cache purges. Configurable via the new "Purge All Path" and "Custom Base URL" settings.
 * Added: "Stop Preload" button in the Status tab and a dedicated Admin Bar link. Previously, stopping an active preload process required using "Purge All" on UI, which also cleared the entire cache. The new button stops the preload process immediately while preserving the existing cache.
 * Added: Nginx detection results to the Status Tab.
 * Added: WP-Cron Reliability check to the Status tab and WP-CLI status output to detect loopback failures or custom system cron setups that could delay post-preload status refreshes.
 * Added: Automatic fallback to enable the Preload Watchdog on fresh plugin activations when DISABLE_WP_CRON is active.
 * UI/UX: Preload All now redirects to the Status tab instead of Settings, taking users directly to the live preload progress section.
+* Tested: Confirmed compatibility with WordPress 7.1.
 
 = 2.1.7 (2026-06-08) =
 
