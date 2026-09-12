@@ -610,3 +610,27 @@ function nppp_check_vary_issue_callback(): void {
             : '',
     ) );
 }
+
+// Permanently dismiss the DISABLE_WP_CRON row.
+// Stores a simple boolean option; pre-checks and settings-page both gate on it.
+function nppp_dismiss_cron_notice(): void {
+    nppp_ajax_auth( 'nppp-dismiss-cron-notice' );
+
+    update_option( 'nppp_cron_notice_dismissed', 1, false );
+
+    wp_send_json_success();
+}
+
+// AJAX handler — lazy-loads the DISABLE_WP_CRON check after page paint, mirroring
+// the Vary: Accept-Encoding structer.
+function nppp_check_cron_issue_callback(): void {
+    nppp_ajax_auth( 'nppp-check-cron-issue' );
+
+    $nppp_cron = function_exists( 'nppp_detect_cron_issue' ) ? nppp_detect_cron_issue() : null;
+
+    wp_send_json_success( array(
+        'html' => function_exists( 'nppp_render_cron_notice_html' )
+            ? nppp_render_cron_notice_html( $nppp_cron )
+            : '',
+    ) );
+}
