@@ -729,11 +729,9 @@ function nppp_parse_nginx_cache_key_file($file, $wp_filesystem, &$parsed_files) 
     return ['cache_keys' => $cache_keys];
 }
 
-/**
- * Detect aaPanel environment, for open_basedir required paths forwarding
- * 'bt' is aaPanel's exclusive CLI tool — nothing else installs it.
- * /etc/init.d/bt covers edge cases where bt was removed from PATH.
- */
+// Detect aaPanel environment, for open_basedir required paths forwarding
+// 'bt' is aaPanel's exclusive CLI tool — nothing else installs it.
+// /etc/init.d/bt covers edge cases where bt was removed from PATH.
 function nppp_is_aapanel(): bool {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
@@ -760,10 +758,8 @@ function nppp_is_aapanel(): bool {
     return $bt_init === '1';
 }
 
-/**
- * Parses open_basedir into a normalised path array.
- * Returns [] when OBD is inactive or set to "none".
- */
+// Parses open_basedir into a normalised path array.
+// Returns [] when OBD is inactive or set to "none".
 function nppp_open_basedir_paths(): array {
     $raw = trim( (string) ini_get( 'open_basedir' ) );
     if ( $raw === '' || strtolower( $raw ) === 'none' ) {
@@ -775,17 +771,14 @@ function nppp_open_basedir_paths(): array {
     ) );
 }
 
-/**
- * Returns true when open_basedir is active.
- */
+
+// Returns true when open_basedir is active.
 function nppp_is_open_basedir_active(): bool {
     return ! empty( nppp_open_basedir_paths() );
 }
 
-/**
- * Tests whether $path is reachable under at least one open_basedir entry
- * using the same prefix-walk PHP performs internally.
- */
+// Tests whether $path is reachable under at least one open_basedir entry
+// using the same prefix-walk PHP performs internally.
 function nppp_obd_path_covered( string $path, array $obd_paths ): bool {
     if ( $path === '' || empty( $obd_paths ) ) {
         return false;
@@ -803,12 +796,10 @@ function nppp_obd_path_covered( string $path, array $obd_paths ): bool {
     return false;
 }
 
-/**
- * Master OBD compatibility check for NPP.
- *
- * Only warn when OBD is active AND at least one PHP-level file I/O path is
- * uncovered.
- */
+// Master OBD compatibility check for NPP.
+//
+// Only warn when OBD is active AND at least one PHP-level file I/O path is
+// uncovered.
 function nppp_open_basedir_compat_check(): array {
     $result = [ 'active' => false, 'compatible' => true, 'missing' => [] ];
 
@@ -1177,26 +1168,6 @@ function nppp_pre_checks() {
                 . '<strong>' . __( 'Plugin functionality may be broken until this is resolved.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</strong>'
             );
         }
-
-        // DISABLE_WP_CRON is a deliberate site-owner choice — NPP never works
-        // around it. WordPress' automatic self-trigger is off, so NPP's
-        // preload schedule, index updater, AND scheduled post publishing
-        // (WordPress core's own, plus every other plugin's) only run when
-        // something actually calls wp-cron.php. This notice exists purely
-        // so that choice is an informed one — it changes nothing at runtime.
-        if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
-            $nppp_cron_url = esc_url( site_url( 'wp-cron.php' ) );
-            $nppp_wp_path  = defined( 'ABSPATH' ) ? esc_html( rtrim( ABSPATH, '/' ) ) : '/path/to/wordpress';
-
-            nppp_display_pre_check_warning(
-                __( 'GLOBAL NOTICE CRON: <code>DISABLE_WP_CRON</code> is set. WordPress\' automatic scheduler is off — NPP\'s preload schedule, index updater, mobile preload and scheduled post publishing will only run when something actually calls <code>wp-cron.php</code>. Point a real system cron at it, for example:', 'fastcgi-cache-purge-and-preload-nginx' )
-                . '<pre style="margin:6px 0; padding:8px; background:#f6f7f7; overflow-x:auto;">*/5 * * * * wget -q -O /dev/null ' . $nppp_cron_url . ' >/dev/null 2>&1</pre>'
-                . __( 'or, if WP-CLI is available on the server:', 'fastcgi-cache-purge-and-preload-nginx' )
-                . '<pre style="margin:6px 0; padding:8px; background:#f6f7f7; overflow-x:auto;">*/5 * * * * wp cron event run --due-now --quiet --allow-root --path=' . $nppp_wp_path . '</pre>'
-                . __( 'For just the preload schedule specifically, NPP\'s own REST endpoint (Settings → REST API) is a narrower alternative.', 'fastcgi-cache-purge-and-preload-nginx' )
-            );
-            unset( $nppp_cron_url, $nppp_wp_path );
-        }
     }
 
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -1498,13 +1469,8 @@ function nppp_display_pre_check_warning($error_message = '') {
     }
 }
 
-/**
- * Renders the Vary: Accept-Encoding notice markup for a given detection result.
- * Shared by the AJAX handler so the markup only lives in one place.
- *
- * @param array|null $nppp_vary Result of nppp_detect_vary_issue(), or null on probe failure.
- * @return string HTML fragment for #nppp-vary-result.
- */
+// Renders the Vary: Accept-Encoding notice markup for a given detection result.
+// Shared by the AJAX handler so the markup only lives in one place.
 if ( ! function_exists( 'nppp_render_vary_notice_html' ) ) {
     function nppp_render_vary_notice_html( $nppp_vary ) {
         ob_start();
@@ -1564,6 +1530,54 @@ if ( ! function_exists( 'nppp_render_vary_notice_html' ) ) {
                 </span>
             </div>
             <?php
+        endif;
+
+        return (string) ob_get_clean();
+    }
+}
+
+// Detect whether DISABLE_WP_CRON is set.
+//
+// Unlike nppp_get_cron_reliability() (used for the Status tab / wp npp status,
+// always reflects live state, never dismissible), this check backs the
+// dismissible Settings-page notice: a static config read, gated on the
+// dismiss option so the admin is informed once and not nagged on every
+// subsequent page load after acknowledging it.
+if (! function_exists('nppp_detect_cron_issue')) {
+    function nppp_detect_cron_issue(): array {
+        // When the admin has permanently dismissed the Cron notice, skip.
+        if ( get_option( 'nppp_cron_notice_dismissed' ) ) {
+            return [ 'issue' => false ];
+        }
+
+        return [ 'issue' => ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) ];
+    }
+}
+
+// Renders the DISABLE_WP_CRON notice markup for a given detection result.
+// Shared by the AJAX handler so the markup only lives in one place.
+if ( ! function_exists( 'nppp_render_cron_notice_html' ) ) {
+    function nppp_render_cron_notice_html( $nppp_cron ) {
+        ob_start();
+
+        if ( ! empty( $nppp_cron['issue'] ) ) :
+            $nppp_cron_url = esc_url( site_url( 'wp-cron.php' ) );
+            $nppp_wp_path  = defined( 'ABSPATH' ) ? esc_html( rtrim( ABSPATH, '/' ) ) : '/path/to/wordpress';
+            ?>
+            <div style="background:#fef2f2; border-left:4px solid #dc2626; padding:10px 14px; max-width:500px; position:relative;">
+                <button type="button" id="nppp-dismiss-cron" title="<?php esc_attr_e( 'Dismiss permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>" style="position:absolute; top:6px; right:8px; background:none; border:none; cursor:pointer; font-size:16px; line-height:1; color:#991b1b; padding:0;" aria-label="<?php esc_attr_e( 'Dismiss Cron notice permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">&#x2715;</button>
+                <strong style="color:#991b1b;"><?php esc_html_e( '⚠ DISABLE_WP_CRON Detected', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
+                <span style="font-size:13px; color:#7f1d1d;">
+                    <?php esc_html_e( 'WordPress\' automatic scheduler is off — NPP\'s preload schedule, index updater, mobile preload and scheduled post publishing only run when something actually calls', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    <code>wp-cron.php</code>. <?php esc_html_e( 'Point a real system cron at it, for example:', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    <pre style="margin:6px 0; padding:8px; background:#f6f7f7; overflow-x:auto;">*/5 * * * * wget -q -O /dev/null <?php echo esc_url( $nppp_cron_url ); ?> >/dev/null 2>&1</pre>
+                    <?php esc_html_e( 'or, if WP-CLI is available on the server:', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    <pre style="margin:6px 0; padding:8px; background:#f6f7f7; overflow-x:auto;">*/5 * * * * wp cron event run --due-now --quiet --allow-root --path=<?php echo esc_html( $nppp_wp_path ); ?></pre>
+                    <?php esc_html_e( 'For just the preload schedule specifically, NPP\'s own REST endpoint (Settings → REST API) is a narrower alternative.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </span>
+            </div>
+            <?php
+            unset( $nppp_cron_url, $nppp_wp_path );
         endif;
 
         return (string) ob_get_clean();
