@@ -1235,7 +1235,7 @@ function nppp_my_status_html() {
                                 </td>
                             </tr>
                             <tr>
-                                <td class="check"><?php esc_html_e('WP-Cron Reliability', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="check"><?php esc_html_e('WP-Cron Status', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppCronReliability" title="<?php echo function_exists('nppp_get_cron_reliability_label') ? esc_attr(nppp_get_cron_reliability_label()) : ''; ?>">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html( function_exists('nppp_get_cron_reliability_short_label') ? nppp_get_cron_reliability_short_label() : 'N/A' ); ?></span>
