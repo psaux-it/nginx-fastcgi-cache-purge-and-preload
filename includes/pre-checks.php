@@ -128,16 +128,16 @@ if (! function_exists('nppp_get_cron_reliability_label')) {
         $result = nppp_get_cron_reliability();
 
         if (!empty($result['ok'])) {
-            return __('OK', 'fastcgi-cache-purge-and-preload-nginx');
+            return __('Enabled', 'fastcgi-cache-purge-and-preload-nginx');
         }
 
         switch ($result['reason']) {
             case 'disable_wp_cron':
-                return __('Unreliable (DISABLE_WP_CRON)', 'fastcgi-cache-purge-and-preload-nginx');
+                return __('Disabled (DISABLE_WP_CRON)', 'fastcgi-cache-purge-and-preload-nginx');
             case 'loopback_unreachable':
-                return __('Unreliable (loopback unreachable)', 'fastcgi-cache-purge-and-preload-nginx');
+                return __('Disabled (loopback unreachable)', 'fastcgi-cache-purge-and-preload-nginx');
             default:
-                return __('Unreliable', 'fastcgi-cache-purge-and-preload-nginx');
+                return __('Disabled', 'fastcgi-cache-purge-and-preload-nginx');
         }
     }
 }
@@ -147,8 +147,8 @@ if (! function_exists('nppp_get_cron_reliability_short_label')) {
     function nppp_get_cron_reliability_short_label(): string {
         $result = nppp_get_cron_reliability();
         return !empty($result['ok'])
-            ? __('OK', 'fastcgi-cache-purge-and-preload-nginx')
-            : __('Not Reliable', 'fastcgi-cache-purge-and-preload-nginx');
+            ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')
+            : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx');
     }
 }
 
