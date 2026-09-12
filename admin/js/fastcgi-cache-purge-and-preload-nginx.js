@@ -1997,6 +1997,63 @@ $(document).ready(function() {
         });
     }());
 
+    // Permanently dismiss the DISABLE_WP_CRON row
+    $(document).on('click', '#nppp-dismiss-cron', function () {
+        var $btn = $(this);
+        $btn.prop('disabled', true);
+
+        $.post(nppp_admin_data.ajaxurl, {
+            action:   'nppp_dismiss_cron_notice',
+            _wpnonce: nppp_admin_data.dismiss_cron_nonce
+        })
+        .done(function (response) {
+            if (response && response.success) {
+                $('#nppp-cron-row').fadeOut(300, function () {
+                    $(this).remove();
+                });
+            } else {
+                $btn.prop('disabled', false);
+            }
+        })
+        .fail(function () {
+            $btn.prop('disabled', false);
+        });
+    });
+
+    // DISABLE_WP_CRON async check.
+    // Mirrors the Vary: Accept-Encoding lazy-load.
+    // The existing delegation above handles the AJAX-injected button automatically 
+    // so no rebinding needed.
+    (function () {
+        var $cronContainer = $('#nppp-cron-result');
+        if ( ! $cronContainer.length || typeof nppp_admin_data === 'undefined' || ! nppp_admin_data.check_cron_nonce ) {
+            return;
+        }
+
+        $.ajax({
+            url:    nppp_admin_data.ajaxurl,
+            method: 'POST',
+            data: {
+                action:   'nppp_check_cron_issue',
+                _wpnonce: nppp_admin_data.check_cron_nonce
+            },
+            success: function ( response ) {
+                if ( response && response.success && response.data && response.data.html ) {
+                    $cronContainer.html( response.data.html );
+                } else {
+                    // No issue detected — nothing to show, remove the whole row
+                    $('#nppp-cron-row').fadeOut(300, function () {
+                        $(this).remove();
+                    });
+                }
+            },
+            error: function () {
+                // Network/server error — remove the spinner so it doesn't spin forever
+                $cronContainer.find('.spinner').removeClass('is-active');
+            }
+        });
+    }());
+
     // Bypass Path Restriction single toggle card
     (function npppSetupBypassPr() {
         const $npppBprFS = $('#nppp-bypass-pr-fieldset');
