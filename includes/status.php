@@ -108,6 +108,9 @@ function nppp_clear_plugin_cache($silent = false) {
     // detection runs fresh on the next settings page load.
     delete_option( 'nppp_vary_notice_dismissed' );
 
+    // Re-arm the DISABLE_WP_CRON notice row the same way.
+    delete_option( 'nppp_cron_notice_dismissed' );
+
     // Transients that must not be cleared while a preload is running:
     //   nppp_preload_phase_        — tick monitor reads this every 5s to track desktop/mobile phase
     //   nppp_preload_cycle_start_  — needed at completion to calculate total elapsed time
