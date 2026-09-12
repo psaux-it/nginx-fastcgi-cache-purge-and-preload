@@ -4997,14 +4997,14 @@ function npppupdateStatus() {
         let iconSpanCronReliability = document.createElement('span');
         let cronReliabilityStatusText = '';
 
-        if (npppCronReliability === "OK") {
+        if (npppCronReliability === "Enabled") {
             npppCronReliabilitySpan.style.color = "green";
             iconSpanCronReliability.classList.add("dashicons", "dashicons-yes");
-            cronReliabilityStatusText = ' ' + __('Ok', 'fastcgi-cache-purge-and-preload-nginx');
-        } else if (npppCronReliability === "Not Reliable") {
-            npppCronReliabilitySpan.style.color = "red";
+            cronReliabilityStatusText = ' ' + __('Enabled', 'fastcgi-cache-purge-and-preload-nginx');
+        } else if (npppCronReliability === "Disabled") {
+            npppCronReliabilitySpan.style.color = "#e6a817";
             iconSpanCronReliability.classList.add("dashicons", "dashicons-warning");
-            cronReliabilityStatusText = ' ' + __('Not Reliable', 'fastcgi-cache-purge-and-preload-nginx');
+            cronReliabilityStatusText = ' ' + __('Disabled', 'fastcgi-cache-purge-and-preload-nginx');
         }
 
         npppCronReliabilitySpan.appendChild(iconSpanCronReliability);
