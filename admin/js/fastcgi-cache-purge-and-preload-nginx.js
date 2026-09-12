@@ -816,6 +816,16 @@ $(document).ready(function() {
             // mobile preload invisible in the Status tab.
             const mobileTransitioning = data.status === "done" && data.preload_phase === "mobile";
 
+            // The Stop Preload button lives outside #wpt-status (sibling in
+            // .nppp-progress-wrap), so status.innerHTML above never touches it —
+            // without this it stays visible forever once preload finishes,
+            // until the page is fully reloaded. Toggle it off the same
+            // liveness signal that drives polling itself.
+            const stopPreloadWrap = document.querySelector(".nppp-stop-preload-wrap");
+            if (stopPreloadWrap) {
+                stopPreloadWrap.style.display = (data.status === "running" || mobileTransitioning) ? "" : "none";
+            }
+
             if (data.status === "running" || mobileTransitioning) {
                 // Polling is driven ONLY by process liveness — never by the estimated pct.
                 // The estimate can overshoot 100 before wget actually finishes.
