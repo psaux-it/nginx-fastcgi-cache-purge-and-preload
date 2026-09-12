@@ -771,7 +771,6 @@ function nppp_open_basedir_paths(): array {
     ) );
 }
 
-
 // Returns true when open_basedir is active.
 function nppp_is_open_basedir_active(): bool {
     return ! empty( nppp_open_basedir_paths() );
