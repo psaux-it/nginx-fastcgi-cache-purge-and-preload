@@ -132,6 +132,7 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_ping_token_db',                     // Watchdog token DB fallback (nppp_watcher_generate_token)
         'nppp_cache_purge.lock',                  // Purge operation lock (WP_Upgrader)
         'nppp_vary_notice_dismissed',             // Vary: Accept-Encoding probe dismiss flag
+        'nppp_cron_notice_dismissed',             // DISABLE_WP_CRON notice dismiss flag
     );
 
     foreach ($option_keys as $option_key) {
