@@ -717,6 +717,22 @@ function nppp_nginx_cache_settings_page() {
                         <tr valign="top">
                             <td colspan="2" style="padding-left: 0; margin: 0;"><hr class="nppp-separator" style="margin: 0; padding: 0;"></td>
                         </tr>
+                        <?php if ( ! get_option( 'nppp_cron_notice_dismissed' ) ) : ?>
+                        <tr valign="top" id="nppp-cron-row">
+                            <th scope="row">
+                                <span class="dashicons dashicons-warning" style="color:#e6a817;"></span>
+                                <?php esc_html_e( 'DISABLE_WP_CRON', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <div id="nppp-cron-result">
+                                    <div style="background:#f6f7f7; border-left:4px solid #c3c4c7; padding:10px 14px; max-width:500px;">
+                                        <span class="spinner is-active" style="float:none; margin:0 6px 0 0; vertical-align:middle;"></span>
+                                        <?php esc_html_e( 'Checking wp-cron reliability…', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endif; // nppp_cron_notice_dismissed ?>
                         <tr valign="top">
                             <th scope="row">
                                 <span class="dashicons dashicons-clock"></span>
