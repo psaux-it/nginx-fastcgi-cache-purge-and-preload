@@ -1565,7 +1565,7 @@ if ( ! function_exists( 'nppp_render_cron_notice_html' ) ) {
             ?>
             <div style="background:#fef2f2; border-left:4px solid #dc2626; padding:10px 14px; max-width:500px; position:relative;">
                 <button type="button" id="nppp-dismiss-cron" title="<?php esc_attr_e( 'Dismiss permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>" style="position:absolute; top:6px; right:8px; background:none; border:none; cursor:pointer; font-size:16px; line-height:1; color:#991b1b; padding:0;" aria-label="<?php esc_attr_e( 'Dismiss Cron notice permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">&#x2715;</button>
-                <strong style="color:#991b1b;"><?php esc_html_e( '⚠ DISABLE_WP_CRON Detected', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
+                <strong style="color:#991b1b;"><?php esc_html_e( '⚠ WordPress Cron Is DISABLED', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
                 <span style="font-size:13px; color:#7f1d1d;">
                     <?php esc_html_e( 'WordPress\' automatic scheduler is off — NPP\'s preload schedule, index updater, mobile preload and scheduled post publishing only run when something actually calls', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     <code>wp-cron.php</code>. <?php esc_html_e( 'Point a real system cron at it, for example:', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
