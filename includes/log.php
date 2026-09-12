@@ -145,6 +145,8 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_test_cache_key_regex'                    => 'nppp_test_regex_nonce',
             'nppp_preload_miss_batch'                      => 'nppp_preload_miss_batch_nonce',
             'nppp_check_vary_issue'                        => 'nppp-check-vary-issue',
+            'nppp_dismiss_cron_notice'                     => 'nppp-dismiss-cron-notice',
+            'nppp_check_cron_issue'                        => 'nppp-check-cron-issue',
         ];
 
         // Get the current AJAX action
