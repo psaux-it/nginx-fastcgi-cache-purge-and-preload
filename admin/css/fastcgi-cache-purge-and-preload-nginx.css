@@ -5799,52 +5799,75 @@ div.updated.notice-nppp p,
     font-style: italic;
 }
 
-/* --- Live feed (terminal, matching .logs-container) --- */
+/* --- Live feed (DataTables, dark "terminal" theme matching .logs-container) --- */
 #nppp-f2b-tab .nppp-f2b-feed {
-    max-height: 340px;
-    overflow-y: auto;
     background: #000;
     border-radius: 5px;
     padding: 12px;
     font-family: Consolas, Menlo, monospace;
     font-size: 12px;
-    line-height: 1.7;
+    line-height: 1.6;
 }
 
 #nppp-f2b-tab .nppp-f2b-feed-empty { color: #bdbdbd; }
 
-#nppp-f2b-tab .nppp-f2b-line {
-    display: flex;
-    gap: 12px;
-    align-items: baseline;
+/* Base table (DataTables clones this for the scrollY header/body split,
+   so target by class, not just #id) */
+#nppp-f2b-tab table.nppp-f2b-feed-table {
+    width: 100% !important;
+    border-collapse: collapse;
+    background: transparent;
+    color: #e0e0e0;
+}
+
+#nppp-f2b-tab table.nppp-f2b-feed-table thead th {
+    background: #111;
+    color: #9a9a9a;
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    border-bottom: 1px solid #262626;
     white-space: nowrap;
 }
 
-#nppp-f2b-tab .nppp-f2b-ts {
-    color: #7a7a7a;
-    flex: 0 0 auto;
-    font-variant-numeric: tabular-nums;
+#nppp-f2b-tab table.nppp-f2b-feed-table tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #1a1a1a;
+    vertical-align: middle;
+    white-space: nowrap;
 }
 
-#nppp-f2b-tab .nppp-f2b-ev {
-    flex: 0 0 56px;
-    font-weight: 700;
-    letter-spacing: .04em;
-}
+#nppp-f2b-tab table.nppp-f2b-feed-table tbody tr:hover { background: #111; }
 
+#nppp-f2b-tab .nppp-f2b-ts       { color: #7a7a7a; font-variant-numeric: tabular-nums; }
+#nppp-f2b-tab .nppp-f2b-ev       { font-weight: 700; letter-spacing: .04em; }
 #nppp-f2b-tab .nppp-f2b-is-ban   .nppp-f2b-ev { color: #ff5252; }
 #nppp-f2b-tab .nppp-f2b-is-unban .nppp-f2b-ev { color: #7ed321; }
+#nppp-f2b-tab .nppp-f2b-jailname { color: #9cdcfe; }
+#nppp-f2b-tab .nppp-f2b-ip       { color: #e0e0e0; }
 
-#nppp-f2b-tab .nppp-f2b-jailname {
-    color: #9cdcfe;
-    flex: 0 0 auto;
+/* --- DataTables chrome, dark variant, scoped to the Live Feed only --- */
+#nppp-f2b-feed-table_wrapper .dt-search label,
+#nppp-f2b-feed-table_wrapper .dt-info {
+    color: #9a9a9a;
+    font-size: 12px;
 }
 
-#nppp-f2b-tab .nppp-f2b-ip {
+#nppp-f2b-feed-table_wrapper .dt-search input.dt-input {
+    background: #111;
     color: #e0e0e0;
-    flex: 1 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-search input.dt-input:focus {
+    outline: none;
+    border-color: #337AB7;
+    box-shadow: 0 0 4px rgba(51, 122, 183, .6);
 }
 
 #nppp-f2b-tab .nppp-f2b-foot {
@@ -5861,3 +5884,52 @@ div.updated.notice-nppp p,
     #nppp-f2b-tab .nppp-f2b-copy-block .nppp-f2b-btn { width: 100%; }
     #nppp-f2b-tab .nppp-f2b-feed { overflow-x: auto; }
 }
+
+/* --- DataTables pagination, dark variant --- */
+#nppp-f2b-feed-table_wrapper .dt-paging {
+    margin-top: 8px;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-paging .dt-paging-button {
+    background: #111 !important;
+    color: #bdbdbd !important;
+    border: 1px solid #333 !important;
+    border-radius: 4px;
+    margin-left: 3px;
+    padding: 4px 9px;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-paging .dt-paging-button:hover {
+    background: #1a1a1a !important;
+    color: #fff !important;
+    border-color: #444 !important;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-paging .dt-paging-button.current {
+    background: #337AB7 !important;
+    color: #fff !important;
+    border-color: #337AB7 !important;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-paging .dt-paging-button.disabled,
+#nppp-f2b-feed-table_wrapper .dt-paging .dt-paging-button.disabled:hover {
+    background: #090909 !important;
+    color: #555 !important;
+    border-color: #222 !important;
+    cursor: default;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-length,
+#nppp-f2b-feed-table_wrapper .dt-length label {
+    color: #9a9a9a;
+    font-size: 12px;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-length select.dt-input {
+    background: #111;
+    color: #e0e0e0;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
