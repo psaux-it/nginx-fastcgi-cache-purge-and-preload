@@ -63,6 +63,13 @@ if ( ! defined( 'NPPP_F2B_RDAP_CACHE_TTL' ) ) {
     define( 'NPPP_F2B_RDAP_CACHE_TTL', 6 * HOUR_IN_SECONDS );
 }
 
+// Live Feed safety valve. "All events" is bounded to retention (90 days by
+// default) already, but a jail under sustained attack could still push
+// this table into the tens of thousands of rows.
+if ( ! defined( 'NPPP_F2B_FEED_HARD_CAP' ) ) {
+    define( 'NPPP_F2B_FEED_HARD_CAP', 5000 );
+}
+
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
@@ -390,24 +397,42 @@ function nppp_f2b_enrich_event_callback( int $event_id, string $ip ): void {
 }
 
 /**
+ * Cache-only enrichment. Never makes a network call -- writes rdap_json
+ * ONLY if a prior lookup for this exact IP is still sitting in the
+ * transient cache. Used by ban events (as the fast path before falling
+ * back to a real dispatch tier) and by unban events (as the ONLY thing
+ * that ever touches rdap_json for them.
+ *
+ * Returns true when it found and wrote cached data, false otherwise, so
+ * callers can decide whether to fall through to a real lookup or not.
+ */
+function nppp_f2b_maybe_reuse_cached_rdap( int $event_id, string $ip ): bool {
+    $cached = get_transient( 'nppp_f2b_rdap_' . md5( $ip ) );
+
+    if ( ! is_array( $cached ) ) {
+        return false;
+    }
+
+    global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $wpdb->update(
+        nppp_f2b_table_name(),
+        array( 'rdap_json' => wp_json_encode( $cached ) ),
+        array( 'id' => $event_id ),
+        array( '%s' ),
+        array( '%d' )
+    );
+
+    return true;
+}
+
+/**
  * Single entry point called from nppp_f2b_handle_event() for 'ban' events.
  * Cache hit -> instant inline UPDATE, no dispatch of any kind. Cache miss ->
  * tier 1, else tier 2, else tier 3.
  */
 function nppp_f2b_maybe_enrich( int $event_id, string $ip, array $response_payload ): void {
-    $cache_key = 'nppp_f2b_rdap_' . md5( $ip );
-    $cached    = get_transient( $cache_key );
-
-    if ( is_array( $cached ) ) {
-        global $wpdb;
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-        $wpdb->update(
-            nppp_f2b_table_name(),
-            array( 'rdap_json' => wp_json_encode( $cached ) ),
-            array( 'id' => $event_id ),
-            array( '%s' ),
-            array( '%d' )
-        );
+    if ( nppp_f2b_maybe_reuse_cached_rdap( $event_id, $ip ) ) {
         return;
     }
 
@@ -474,12 +499,40 @@ function nppp_f2b_handle_enrich_loopback( WP_REST_Request $request ) {
         );
     }
 
+    global $wpdb;
+    $table = nppp_f2b_table_name();
+
+    // Defense in depth: this route shares its bearer token with the public
+    // /event webhook, so anyone who can reach it with a valid token could
+    // otherwise pass an arbitrary event_id/ip pair and overwrite the
+    // rdap_json of ANY row -- including rows that were never banned from
+    // that ip, or that are already enriched. Only enrich a row this
+    // request actually owns: a real, still-unenriched 'ban' event for the
+    // SAME ip.
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $owns_row = $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT id FROM {$table}
+             WHERE id = %d AND ip = %s AND event_type = 'ban' AND rdap_json IS NULL
+             LIMIT 1", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+            $event_id,
+            $ip
+        )
+    );
+
+    if ( ! $owns_row ) {
+        return new WP_Error(
+            'nppp_f2b_bad_request',
+            __( 'Nothing to enrich for this event.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            array( 'status' => 400 )
+        );
+    }
+
     $rdap = nppp_f2b_lookup_ip( $ip );
 
-    global $wpdb;
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->update(
-        nppp_f2b_table_name(),
+        $table,
         array( 'rdap_json' => wp_json_encode( $rdap ) ),
         array( 'id' => $event_id ),
         array( '%s' ),
@@ -626,9 +679,17 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
         );
     }
 
-    // Only real bans carry threat-intel value -- unban never enriches.
-    if ( 'ban' === $ev_raw && $wpdb->insert_id ) {
-        nppp_f2b_maybe_enrich( (int) $wpdb->insert_id, $ip, array( 'ok' => true ) );
+    // Real bans get the full enrichment pipeline (cache -> fastcgi ->
+    // loopback -> cron). Unbans never justify a fresh RIPE lookup -- the IP
+    // is already leaving the ban list -- but if a prior ban already cached
+    // RDAP data for this same IP, reusing it here is free: one indexed
+    // UPDATE, zero network calls.
+    if ( $wpdb->insert_id ) {
+        if ( 'ban' === $ev_raw ) {
+            nppp_f2b_maybe_enrich( (int) $wpdb->insert_id, $ip, array( 'ok' => true ) );
+        } elseif ( 'unban' === $ev_raw ) {
+            nppp_f2b_maybe_reuse_cached_rdap( (int) $wpdb->insert_id, $ip );
+        }
     }
 
     return rest_ensure_response( array( 'ok' => true ) );
@@ -697,11 +758,22 @@ function nppp_f2b_get_recidive_ips( int $min_count = 2, int $limit = 25 ): array
     return is_array( $rows ) ? $rows : array();
 }
 
-// Primary-key descending scan, LIMIT-bounded. At most $limit row lookups.
-function nppp_f2b_get_recent_events( int $limit = 50 ): array {
+// Primary-key descending scan, LIMIT-bounded. $limit = 0 (default) means
+// "all events" -- bounded only by NPPP_F2B_FEED_HARD_CAP as a safety valve,
+// never truly unbounded. Retention cleanup already caps the table to
+// nppp_f2b_retention_days() (90 days by default), so in practice this is
+// the whole table on all but the busiest, longest-retained installs.
+function nppp_f2b_get_recent_events( int $limit = 0 ): array {
     global $wpdb;
 
     $table = nppp_f2b_table_name();
+
+    $hard_cap = (int) apply_filters( 'nppp_f2b_feed_hard_cap', NPPP_F2B_FEED_HARD_CAP );
+    if ( $hard_cap < 1 ) {
+        $hard_cap = 1;
+    }
+
+    $limit = ( $limit > 0 ) ? min( $limit, $hard_cap ) : $hard_cap;
 
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $rows = $wpdb->get_results(
@@ -716,6 +788,17 @@ function nppp_f2b_get_recent_events( int $limit = 50 ): array {
     );
 
     return is_array( $rows ) ? $rows : array();
+}
+
+// Total row count, bounded only by retention cleanup (never an arbitrary
+// WHERE). Runs once per Security-tab load, not per request.
+function nppp_f2b_get_total_event_count(): int {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
 }
 
 // Range-scan COUNT, never an unbounded COUNT(*).
@@ -806,10 +889,12 @@ function nppp_f2b_load_tab_content_callback() {
     // has run (or on a multisite sub-site) still gets a working table.
     nppp_f2b_maybe_install();
 
-    $summaries = nppp_f2b_get_jail_summaries( 24 );
-    $recidive  = nppp_f2b_get_recidive_ips( 2, 25 );
-    $recent    = nppp_f2b_get_recent_events( 50 );
-    $configured = nppp_f2b_has_any_events();
+    $summaries      = nppp_f2b_get_jail_summaries( 24 );
+    $recidive       = nppp_f2b_get_recidive_ips( 2, 25 );
+    $recent         = nppp_f2b_get_recent_events();
+    $total_events   = nppp_f2b_get_total_event_count();
+    $feed_truncated = $total_events > count( $recent );
+    $configured     = nppp_f2b_has_any_events();
 
     $stats = array(
         'bans_24h'   => (int) array_sum( array_map( 'intval', array_column( $summaries, 'bans' ) ) ),
