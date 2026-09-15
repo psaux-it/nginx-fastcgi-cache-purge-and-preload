@@ -147,6 +147,10 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_check_vary_issue'                        => 'nppp-check-vary-issue',
             'nppp_dismiss_cron_notice'                     => 'nppp-dismiss-cron-notice',
             'nppp_check_cron_issue'                        => 'nppp-check-cron-issue',
+            'nppp_load_security_content'                   => 'nppp-security-tab',
+            'nppp_f2b_regenerate_token'                    => 'nppp-security-tab',
+            'nppp_f2b_clear_events'                        => 'nppp-security-tab',
+            'nppp_f2b_test_connection'                     => 'nppp-security-tab',
         ];
 
         // Get the current AJAX action
