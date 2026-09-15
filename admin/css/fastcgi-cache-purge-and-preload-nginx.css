@@ -5343,3 +5343,521 @@ div.updated.notice-nppp p,
         margin-top: 12px;
     }
 }
+
+/* =========================================================================
+   Fail2Ban tab — Nginx jail monitor
+   ========================================================================= */
+
+#nppp-f2b-tab {
+    max-width: 1000px;
+    margin-left: 0;
+}
+
+/* --- Header --- */
+#nppp-f2b-tab .nppp-f2b-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 10px 0 22px;
+}
+
+#nppp-f2b-tab .nppp-f2b-head-text {
+    flex: 1 1 380px;
+    min-width: 260px;
+}
+
+#nppp-f2b-tab h2 {
+    background-color: #337AB7;
+    color: #fff;
+    padding: 10px 14px;
+    margin: 0 0 10px;
+    text-transform: uppercase;
+    font-size: 16px;
+    letter-spacing: .02em;
+}
+
+#nppp-f2b-tab .nppp-f2b-lede {
+    margin: 0 0 10px;
+    color: #50575e;
+    font-size: 13px;
+    line-height: 1.6;
+    max-width: 70ch;
+}
+
+#nppp-f2b-tab .nppp-f2b-pill {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #fff;
+}
+
+#nppp-f2b-tab .nppp-f2b-pill-ok   { background: #66b317; }
+#nppp-f2b-tab .nppp-f2b-pill-wait { background: #f8b334; color: #4a3200; }
+
+#nppp-f2b-tab .nppp-f2b-toolbar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+/* --- Buttons --- */
+#nppp-f2b-tab .nppp-f2b-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px;
+    padding: 0 14px;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    background: #f6f7f7;
+    color: #2c3338;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn:hover:not([disabled]) {
+    background: #eef0f1;
+    border-color: #8c8f94;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn:focus-visible {
+    outline: 2px solid #337AB7;
+    outline-offset: 1px;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn[disabled] {
+    opacity: .55;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn-primary {
+    background: #337AB7;
+    border-color: #2c6698;
+    color: #fff;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn-primary:hover:not([disabled]) {
+    background: #2c6698;
+    border-color: #245582;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn-danger {
+    background: #fff;
+    border-color: #ea1919;
+    color: #ea1919;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn-danger:hover:not([disabled]) {
+    background: #ea1919;
+    border-color: #ea1919;
+    color: #fff;
+}
+
+/* --- Test result banner --- */
+#nppp-f2b-tab .nppp-f2b-result {
+    margin: 0 0 20px;
+    padding: 12px 16px;
+    border-radius: 4px;
+    border-left-width: 5px;
+    border-left-style: solid;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+#nppp-f2b-tab .nppp-f2b-result-ok {
+    background: #f1f8e8;
+    border: 1px solid #cbe39f;
+    border-left: 5px solid #66b317;
+    color: #1d2327;
+}
+
+#nppp-f2b-tab .nppp-f2b-result-fail {
+    background: #fdf1f1;
+    border: 1px solid #f2b6b6;
+    border-left: 5px solid #ea1919;
+    color: #1d2327;
+}
+
+/* --- Stat cards --- */
+#nppp-f2b-tab .nppp-f2b-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    margin: 0 0 22px;
+}
+
+#nppp-f2b-tab .nppp-f2b-stat {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-top: 4px solid #337AB7;
+    border-radius: 6px;
+    padding: 16px 12px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .08);
+}
+
+#nppp-f2b-tab .nppp-f2b-stat-ban   { border-top-color: #ea1919; }
+#nppp-f2b-tab .nppp-f2b-stat-unban { border-top-color: #66b317; }
+#nppp-f2b-tab .nppp-f2b-stat-jail  { border-top-color: #f8b334; }
+
+#nppp-f2b-tab .nppp-f2b-stat-num {
+    display: block;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #1d2327;
+    font-variant-numeric: tabular-nums;
+}
+
+#nppp-f2b-tab .nppp-f2b-stat-ban   .nppp-f2b-stat-num { color: #ea1919; }
+#nppp-f2b-tab .nppp-f2b-stat-unban .nppp-f2b-stat-num { color: #4d8a10; }
+
+#nppp-f2b-tab .nppp-f2b-stat-label {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #646970;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+/* --- Connection card --- */
+#nppp-f2b-tab .nppp-f2b-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    margin: 0 0 24px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
+    overflow: hidden;
+}
+
+#nppp-f2b-tab .nppp-f2b-card-title {
+    margin: 0;
+    padding: 10px 16px;
+    background: #f0f0f1;
+    border-bottom: 1px solid #dcdcde;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #337AB7;
+}
+
+#nppp-f2b-tab .nppp-f2b-card-body { padding: 18px 16px; }
+
+#nppp-f2b-tab .nppp-f2b-row { margin-bottom: 18px; }
+#nppp-f2b-tab .nppp-f2b-row:last-child { margin-bottom: 0; }
+
+#nppp-f2b-tab .nppp-f2b-row > label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1d2327;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+
+#nppp-f2b-tab .nppp-f2b-copy {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#nppp-f2b-tab .nppp-f2b-copy input[type="text"] {
+    flex: 1 1 280px;
+    min-width: 200px;
+    height: 32px;
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    background: #f6f7f7;
+    color: #1d2327;
+}
+
+#nppp-f2b-tab .nppp-f2b-copy-block {
+    align-items: flex-start;
+    flex-wrap: nowrap;
+}
+
+#nppp-f2b-tab .nppp-f2b-code {
+    flex: 1 1 auto;
+    width: 100%;
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    background: #f6f7f7;
+    color: #1d2327;
+    white-space: pre;
+    resize: vertical;
+}
+
+#nppp-f2b-tab .nppp-f2b-hint-text {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #646970;
+}
+
+/* --- Setup disclosure --- */
+#nppp-f2b-tab .nppp-f2b-setup {
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px solid #f0f0f1;
+}
+
+#nppp-f2b-tab .nppp-f2b-setup > summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    color: #337AB7;
+    padding: 4px 0;
+    list-style: revert;
+}
+
+#nppp-f2b-tab .nppp-f2b-setup > summary:hover { color: #2c6698; }
+
+#nppp-f2b-tab .nppp-f2b-step {
+    margin: 18px 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+#nppp-f2b-tab .nppp-f2b-step-n {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: #337AB7;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+#nppp-f2b-tab .nppp-f2b-note {
+    margin: 18px 0 0;
+    padding: 10px 14px;
+    background: #fdf6e7;
+    border-left: 4px solid #f8b334;
+    border-radius: 0 4px 4px 0;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #4a3200;
+}
+
+#nppp-f2b-tab code {
+    background: #f0f0f1;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+#nppp-f2b-tab .nppp-f2b-note code { background: #fff; }
+
+/* --- Empty-state banner --- */
+#nppp-f2b-tab .nppp-f2b-banner {
+    margin: 0 0 24px;
+    padding: 12px 16px;
+    background: #eef4fa;
+    border: 1px solid #c3d8ea;
+    border-left: 5px solid #337AB7;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #1d2327;
+}
+
+/* --- Section headings --- */
+#nppp-f2b-tab .nppp-f2b-section {
+    margin: 28px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #337AB7;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #337AB7;
+}
+
+#nppp-f2b-tab .nppp-f2b-empty {
+    margin: 0 0 8px;
+    padding: 14px;
+    background: #f6f7f7;
+    border-radius: 4px;
+    color: #646970;
+    font-size: 13px;
+}
+
+/* --- Jail cards --- */
+#nppp-f2b-tab .nppp-f2b-jails {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-left: 4px solid #337AB7;
+    border-radius: 6px;
+    padding: 14px 16px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .06);
+}
+
+#nppp-f2b-tab .nppp-f2b-jail h4 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1d2327;
+    word-break: break-all;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-nums {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+#nppp-f2b-tab .nppp-f2b-badge {
+    display: inline-block;
+    min-width: 24px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+#nppp-f2b-tab .nppp-f2b-badge-ban   { background: #ea1919; }
+#nppp-f2b-tab .nppp-f2b-badge-unban { background: #66b317; }
+
+#nppp-f2b-tab .nppp-f2b-badge-cap {
+    font-size: 11px;
+    color: #646970;
+    margin-right: 6px;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-last {
+    margin: 0;
+    font-size: 11px;
+    color: #646970;
+}
+
+/* --- Repeat offenders table --- */
+#nppp-f2b-tab .nppp-f2b-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .06);
+}
+
+#nppp-f2b-tab .nppp-f2b-table th {
+    background: #337AB7;
+    color: #fff;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    border: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-table td {
+    padding: 10px 14px;
+    border-top: 1px solid #f0f0f1;
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+#nppp-f2b-tab .nppp-f2b-table tbody tr:nth-child(even) { background: #fafafa; }
+#nppp-f2b-tab .nppp-f2b-table tbody tr:hover { background: #f0f6fb; }
+
+#nppp-f2b-tab .nppp-f2b-empty-cell {
+    color: #646970;
+    font-style: italic;
+}
+
+/* --- Live feed (terminal, matching .logs-container) --- */
+#nppp-f2b-tab .nppp-f2b-feed {
+    max-height: 340px;
+    overflow-y: auto;
+    background: #000;
+    border-radius: 5px;
+    padding: 12px;
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+#nppp-f2b-tab .nppp-f2b-feed-empty { color: #bdbdbd; }
+
+#nppp-f2b-tab .nppp-f2b-line {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    white-space: nowrap;
+}
+
+#nppp-f2b-tab .nppp-f2b-ts {
+    color: #7a7a7a;
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+#nppp-f2b-tab .nppp-f2b-ev {
+    flex: 0 0 56px;
+    font-weight: 700;
+    letter-spacing: .04em;
+}
+
+#nppp-f2b-tab .nppp-f2b-is-ban   .nppp-f2b-ev { color: #ff5252; }
+#nppp-f2b-tab .nppp-f2b-is-unban .nppp-f2b-ev { color: #7ed321; }
+
+#nppp-f2b-tab .nppp-f2b-jailname {
+    color: #9cdcfe;
+    flex: 0 0 auto;
+}
+
+#nppp-f2b-tab .nppp-f2b-ip {
+    color: #e0e0e0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#nppp-f2b-tab .nppp-f2b-foot {
+    margin: 16px 0 0;
+    font-size: 12px;
+    color: #646970;
+}
+
+/* --- Narrow screens --- */
+@media screen and (max-width: 782px) {
+    #nppp-f2b-tab .nppp-f2b-toolbar { width: 100%; }
+    #nppp-f2b-tab .nppp-f2b-toolbar .nppp-f2b-btn { flex: 1 1 auto; }
+    #nppp-f2b-tab .nppp-f2b-copy-block { flex-wrap: wrap; }
+    #nppp-f2b-tab .nppp-f2b-copy-block .nppp-f2b-btn { width: 100%; }
+    #nppp-f2b-tab .nppp-f2b-feed { overflow-x: auto; }
+}
