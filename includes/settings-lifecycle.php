@@ -20,6 +20,11 @@ function nppp_reset_plugin_settings_on_deactivation() {
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
     wp_clear_scheduled_hook('npp_cache_preload_event');
 
+    // Fail2ban retention cron. The recorded events themselves are kept — only
+    // uninstall wipes data — but the scheduled job must not survive
+    // deactivation.
+    wp_clear_scheduled_hook('nppp_f2b_cleanup_event');
+
     // Kill the watchdog.
     if (function_exists('nppp_kill_preload_watcher')) {
         nppp_kill_preload_watcher();
