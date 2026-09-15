@@ -53,6 +53,16 @@ if ( ! defined( 'NPPP_F2B_WINDOW_DAYS' ) ) {
     define( 'NPPP_F2B_WINDOW_DAYS', 30 );
 }
 
+// Last-resort async enrichment hook.
+if ( ! defined( 'NPPP_F2B_ENRICH_HOOK' ) ) {
+    define( 'NPPP_F2B_ENRICH_HOOK', 'nppp_f2b_enrich_event' );
+}
+
+// Per-IP RDAP cache.
+if ( ! defined( 'NPPP_F2B_RDAP_CACHE_TTL' ) ) {
+    define( 'NPPP_F2B_RDAP_CACHE_TTL', 6 * HOUR_IN_SECONDS );
+}
+
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
@@ -100,6 +110,7 @@ function nppp_f2b_install_table(): void {
         ip VARCHAR(45) NOT NULL,
         event_type VARCHAR(8) NOT NULL,
         created_at DATETIME NOT NULL,
+        rdap_json LONGTEXT NULL,
         PRIMARY KEY  (id),
         KEY created_event_jail_idx (created_at, event_type, jail),
         KEY event_created_ip_idx (event_type, created_at, ip)
@@ -213,6 +224,205 @@ function nppp_f2b_regenerate_token(): string {
 }
 
 // ---------------------------------------------------------------------------
+// RIPE lookup. Used only by enrichment, never by the webhook insert path.
+// ---------------------------------------------------------------------------
+
+function nppp_f2b_lookup_ip( string $ip ): array {
+    $cache_key = 'nppp_f2b_rdap_' . md5( $ip );
+    $cached    = get_transient( $cache_key );
+    if ( is_array( $cached ) ) {
+        return $cached;
+    }
+
+    $result = array(
+        'inetnum'      => '',
+        'netname'      => '',
+        'country'      => '',
+        'org_id'       => '',
+        'origin_asns'  => array(),
+        'abuse_emails' => array(),
+    );
+
+    $whois_response = wp_remote_get(
+        add_query_arg( 'resource', rawurlencode( $ip ), 'https://stat.ripe.net/data/whois/data.json' ),
+        array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
+    );
+
+    if ( ! is_wp_error( $whois_response ) && 200 === (int) wp_remote_retrieve_response_code( $whois_response ) ) {
+        $whois_body = json_decode( wp_remote_retrieve_body( $whois_response ), true );
+
+        if ( is_array( $whois_body ) && isset( $whois_body['data'] ) ) {
+            foreach ( $whois_body['data']['records'][0] ?? array() as $record ) {
+                $key   = $record['key'] ?? '';
+                $value = (string) ( $record['value'] ?? '' );
+                if ( 'inetnum' === $key ) { $result['inetnum'] = $value; }
+                elseif ( 'netname' === $key ) { $result['netname'] = $value; }
+                elseif ( 'country' === $key ) { $result['country'] = $value; }
+                elseif ( 'org' === $key ) { $result['org_id'] = $value; }
+            }
+
+            foreach ( $whois_body['data']['irr_records'] ?? array() as $route ) {
+                foreach ( $route as $record ) {
+                    if ( 'origin' === ( $record['key'] ?? '' ) && ctype_digit( (string) $record['value'] ) ) {
+                        $result['origin_asns'][] = 'AS' . $record['value'];
+                    }
+                }
+            }
+            $result['origin_asns'] = array_values( array_unique( $result['origin_asns'] ) );
+        }
+    }
+
+    $abuse_response = wp_remote_get(
+        add_query_arg( 'resource', rawurlencode( $ip ), 'https://stat.ripe.net/data/abuse-contact-finder/data.json' ),
+        array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
+    );
+
+    if ( ! is_wp_error( $abuse_response ) && 200 === (int) wp_remote_retrieve_response_code( $abuse_response ) ) {
+        $abuse_body = json_decode( wp_remote_retrieve_body( $abuse_response ), true );
+        foreach ( $abuse_body['data']['abuse_contacts'] ?? array() as $email ) {
+            $email = sanitize_email( (string) $email );
+            if ( '' !== $email ) { $result['abuse_emails'][] = $email; }
+        }
+        $result['abuse_emails'] = array_values( array_unique( $result['abuse_emails'] ) );
+    }
+
+    set_transient( $cache_key, $result, NPPP_F2B_RDAP_CACHE_TTL );
+    return $result;
+}
+
+// ---------------------------------------------------------------------------
+// Enrichment dispatch. Never blocks the webhook response.
+// ---------------------------------------------------------------------------
+
+/**
+ * Tier 1: fastcgi_finish_request(). Sends $response_payload to the client
+ * immediately, closes the FastCGI connection, then keeps running IN THIS
+ * SAME PHP-FPM WORKER to do the RIPE lookup and write it back.
+ */
+function nppp_f2b_dispatch_via_fastcgi( int $event_id, string $ip, array $response_payload ): bool {
+    if ( ! function_exists( 'fastcgi_finish_request' ) ) {
+        return false;
+    }
+    if ( ! apply_filters( 'nppp_f2b_use_fastcgi_finish_request', true ) ) {
+        return false;
+    }
+
+    // Clear output buffers before sending the response.
+    while ( ob_get_level() > 0 ) {
+        ob_end_clean();
+    }
+
+    $json = wp_json_encode( $response_payload );
+
+    status_header( 200 );
+    header( 'Content-Type: application/json; charset=UTF-8' );
+    header( 'Content-Length: ' . strlen( $json ) );
+
+    echo $json;
+
+    fastcgi_finish_request();
+    ignore_user_abort( true );
+
+    // Lookup
+    $rdap = nppp_f2b_lookup_ip( $ip );
+
+    global $wpdb;
+
+    // Save enrichment data.
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $wpdb->update(
+        nppp_f2b_table_name(),
+        array( 'rdap_json' => wp_json_encode( $rdap ) ),
+        array( 'id' => $event_id ),
+        array( '%s' ),
+        array( '%d' )
+    );
+
+    exit;
+}
+
+/**
+ * Tier 2: non-blocking loopback POST
+ * Fires a request to our own /enrich route and returns without waiting for
+ * a reply.
+ */
+function nppp_f2b_dispatch_via_loopback( int $event_id, string $ip ): bool {
+    if ( ! apply_filters( 'nppp_f2b_use_loopback_dispatch', true ) ) {
+        return false;
+    }
+
+    $response = wp_remote_post(
+        nppp_f2b_get_enrich_endpoint_url(),
+        array(
+            'blocking'  => false,
+            'timeout'   => 0.5,
+            'sslverify' => apply_filters( 'nppp_f2b_loopback_sslverify', true ),
+            'headers'   => array(
+                'Authorization' => 'Bearer ' . nppp_f2b_get_token(),
+                'Content-Type'  => 'application/json',
+            ),
+            'body'      => wp_json_encode( array( 'event_id' => $event_id, 'ip' => $ip ) ),
+        )
+    );
+
+    return ! is_wp_error( $response );
+}
+
+/**
+ * Tier 3 (fallback target): plain WP-Cron. Slower
+ */
+add_action( NPPP_F2B_ENRICH_HOOK, 'nppp_f2b_enrich_event_callback', 10, 2 );
+function nppp_f2b_enrich_event_callback( int $event_id, string $ip ): void {
+    if ( $event_id <= 0 || '' === $ip ) {
+        return;
+    }
+    $rdap = nppp_f2b_lookup_ip( $ip );
+
+    global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $wpdb->update(
+        nppp_f2b_table_name(),
+        array( 'rdap_json' => wp_json_encode( $rdap ) ),
+        array( 'id' => $event_id ),
+        array( '%s' ),
+        array( '%d' )
+    );
+}
+
+/**
+ * Single entry point called from nppp_f2b_handle_event() for 'ban' events.
+ * Cache hit -> instant inline UPDATE, no dispatch of any kind. Cache miss ->
+ * tier 1, else tier 2, else tier 3.
+ */
+function nppp_f2b_maybe_enrich( int $event_id, string $ip, array $response_payload ): void {
+    $cache_key = 'nppp_f2b_rdap_' . md5( $ip );
+    $cached    = get_transient( $cache_key );
+
+    if ( is_array( $cached ) ) {
+        global $wpdb;
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $wpdb->update(
+            nppp_f2b_table_name(),
+            array( 'rdap_json' => wp_json_encode( $cached ) ),
+            array( 'id' => $event_id ),
+            array( '%s' ),
+            array( '%d' )
+        );
+        return;
+    }
+
+    if ( nppp_f2b_dispatch_via_fastcgi( $event_id, $ip, $response_payload ) ) {
+        return;
+    }
+
+    if ( nppp_f2b_dispatch_via_loopback( $event_id, $ip ) ) {
+        return;
+    }
+
+    wp_schedule_single_event( time(), NPPP_F2B_ENRICH_HOOK, array( $event_id, $ip ) );
+}
+
+// ---------------------------------------------------------------------------
 // REST route: POST /wp-json/nppp_f2b/v1/event
 //
 // Dedicated REST namespace for the Fail2Ban webhook.
@@ -231,6 +441,53 @@ function nppp_f2b_register_routes() {
     );
 }
 add_action( 'rest_api_init', 'nppp_f2b_register_routes' );
+
+// Internal-only route used by Tier 2 (loopback dispatch).
+function nppp_f2b_register_enrich_route() {
+    register_rest_route(
+        'nppp_f2b/v1',
+        '/enrich',
+        array(
+            'methods'             => 'POST',
+            'callback'            => 'nppp_f2b_handle_enrich_loopback',
+            'permission_callback' => 'nppp_f2b_validate_request',
+        )
+    );
+}
+add_action( 'rest_api_init', 'nppp_f2b_register_enrich_route' );
+
+function nppp_f2b_get_enrich_endpoint_url(): string {
+    return esc_url_raw( rest_url( 'nppp_f2b/v1/enrich' ) );
+}
+
+function nppp_f2b_handle_enrich_loopback( WP_REST_Request $request ) {
+    $body     = $request->get_json_params();
+    $event_id = is_array( $body ) && isset( $body['event_id'] ) ? (int) $body['event_id'] : 0;
+    $ip_raw   = is_array( $body ) && isset( $body['ip'] ) ? (string) $body['ip'] : '';
+    $ip       = filter_var( $ip_raw, FILTER_VALIDATE_IP );
+
+    if ( $event_id <= 0 || false === $ip ) {
+        return new WP_Error(
+            'nppp_f2b_bad_request',
+            __( 'Invalid enrichment payload.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            array( 'status' => 400 )
+        );
+    }
+
+    $rdap = nppp_f2b_lookup_ip( $ip );
+
+    global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $wpdb->update(
+        nppp_f2b_table_name(),
+        array( 'rdap_json' => wp_json_encode( $rdap ) ),
+        array( 'id' => $event_id ),
+        array( '%s' ),
+        array( '%d' )
+    );
+
+    return rest_ensure_response( array( 'ok' => true ) );
+}
 
 function nppp_f2b_validate_request( WP_REST_Request $request ) {
     // Read the stored token directly; do not self-generate credentials here.
@@ -331,7 +588,8 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
 
     global $wpdb;
 
-    // Store UTC; convert to site time only for display.
+    // Thin, fast write. rdap_json starts NULL; nppp_f2b_maybe_enrich()
+    // below decides how (and whether) it gets filled in.
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $inserted = $wpdb->insert(
         nppp_f2b_table_name(),
@@ -340,8 +598,9 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
             'ip'         => $ip,
             'event_type' => $is_test ? 'test' : $ev_raw,
             'created_at' => gmdate( 'Y-m-d H:i:s' ),
+            'rdap_json'  => null,
         ),
-        array( '%s', '%s', '%s', '%s' )
+        array( '%s', '%s', '%s', '%s', '%s' )
     );
 
     if ( $is_test ) {
@@ -365,6 +624,11 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
             __( 'Event could not be stored.', 'fastcgi-cache-purge-and-preload-nginx' ),
             array( 'status' => 500 )
         );
+    }
+
+    // Only real bans carry threat-intel value -- unban never enriches.
+    if ( 'ban' === $ev_raw && $wpdb->insert_id ) {
+        nppp_f2b_maybe_enrich( (int) $wpdb->insert_id, $ip, array( 'ok' => true ) );
     }
 
     return rest_ensure_response( array( 'ok' => true ) );
@@ -442,7 +706,7 @@ function nppp_f2b_get_recent_events( int $limit = 50 ): array {
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $rows = $wpdb->get_results(
         $wpdb->prepare(
-            "SELECT jail, ip, event_type, created_at
+            "SELECT jail, ip, event_type, created_at, rdap_json
              FROM {$table}
              ORDER BY id DESC
              LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
@@ -499,15 +763,20 @@ function nppp_f2b_get_endpoint_url(): string {
 function nppp_f2b_get_action_conf_snippet(): string {
     $endpoint = nppp_f2b_get_endpoint_url();
 
+    // nohup detach curl from fail2ban's own action queue —
+    // the jail moves to the next ban immediately instead of waiting on the
+    // network round trip.
     return "[Definition]\n" .
-        "actionban   = curl -sS -k -o /dev/null --max-time 3 --connect-timeout 2 -X POST {$endpoint} \\\n" .
+        "actionban   = nohup curl -sS -k -o /dev/null --max-time 5 --connect-timeout 2 -X POST {$endpoint} \\\n" .
         "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
         "                -H \"Content-Type: application/json\" \\\n" .
-        "                -d '{\"event\":\"ban\",\"jail\":\"<name>\",\"ip\":\"<ip>\"}'\n" .
-        "actionunban = curl -sS -k -o /dev/null --max-time 3 --connect-timeout 2 -X POST {$endpoint} \\\n" .
+        "                -d '{\"event\":\"ban\",\"jail\":\"<name>\",\"ip\":\"<ip>\"}' \\\n" .
+        "                >/dev/null 2>&1 &\n" .
+        "actionunban = nohup curl -sS -k -o /dev/null --max-time 5 --connect-timeout 2 -X POST {$endpoint} \\\n" .
         "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
         "                -H \"Content-Type: application/json\" \\\n" .
-        "                -d '{\"event\":\"unban\",\"jail\":\"<name>\",\"ip\":\"<ip>\"}'\n" .
+        "                -d '{\"event\":\"unban\",\"jail\":\"<name>\",\"ip\":\"<ip>\"}' \\\n" .
+        "                >/dev/null 2>&1 &\n" .
         "\n" .
         "[Init]\n" .
         "nppp_token =\n";
