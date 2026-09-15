@@ -259,7 +259,7 @@ function nppp_nginx_cache_settings_page() {
                             <span class="tab-text"><?php echo esc_html__( 'Advanced', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                         </a>
                     </li>
-					<li>
+                    <li>
                         <a href="#security">
                             <?php echo do_shortcode('[nppp_svg_icon icon="shield" class="tab-icon" size="24px"]'); ?>
                             <span class="tab-text"><?php echo esc_html__( 'Fail2Ban', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
