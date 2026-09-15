@@ -84,12 +84,16 @@ function nppp_clear_plugin_cache_on_uninstall() {
     $like_ep3_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep3_fail_') . '%';
     $like_ep10_fail             = $wpdb->esc_like('_transient_nppp_ep10_fail_') . '%';
     $like_ep10_fail_timeout     = $wpdb->esc_like('_transient_timeout_nppp_ep10_fail_') . '%';
+    $like_f2b_rdap              = $wpdb->esc_like('_transient_nppp_f2b_rdap_') . '%';
+    $like_f2b_rdap_timeout      = $wpdb->esc_like('_transient_timeout_nppp_f2b_rdap_') . '%';
 
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->query(
         $wpdb->prepare(
             "DELETE FROM {$wpdb->options}
             WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
@@ -116,7 +120,9 @@ function nppp_clear_plugin_cache_on_uninstall() {
             $like_ep3_fail,
             $like_ep3_fail_timeout,
             $like_ep10_fail,
-            $like_ep10_fail_timeout
+            $like_ep10_fail_timeout,
+            $like_f2b_rdap,
+            $like_f2b_rdap_timeout
         )
     );
 }
@@ -167,6 +173,7 @@ function nppp_clear_scheduled_events_on_uninstall() {
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
     wp_clear_scheduled_hook('nppp_index_updater_event');
     wp_clear_scheduled_hook('nppp_f2b_cleanup_event');
+    wp_clear_scheduled_hook('nppp_f2b_enrich_event');
 
     // Remove tracking cron hooks left by 2.0.1–2.1.4 in case migration never ran
     wp_clear_scheduled_hook('npp_plugin_tracking_event', array('active'));
