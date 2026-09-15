@@ -259,6 +259,12 @@ function nppp_nginx_cache_settings_page() {
                             <span class="tab-text"><?php echo esc_html__( 'Advanced', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                         </a>
                     </li>
+					<li>
+                        <a href="#security">
+                            <?php echo do_shortcode('[nppp_svg_icon icon="shield" class="tab-icon" size="24px"]'); ?>
+                            <span class="tab-text"><?php echo esc_html__( 'Fail2Ban', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        </a>
+                    </li>
                     <li>
                         <a href="#help">
                             <?php echo do_shortcode('[nppp_svg_icon icon="help" class="tab-icon" size="24px"]'); ?>
@@ -1042,6 +1048,10 @@ function nppp_nginx_cache_settings_page() {
 
             <div id="premium" class="tab-content">
                 <div id="premium-content-placeholder" style="display: none;"></div>
+            </div>
+
+            <div id="security" class="tab-content">
+                <div id="security-content-placeholder" style="display: none;"></div>
             </div>
 
             <div id="help" class="tab-content">
