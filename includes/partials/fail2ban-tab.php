@@ -198,7 +198,21 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
         </tbody>
     </table>
 
-    <h3 class="nppp-f2b-section"><?php esc_html_e( 'Live Feed — last 50 events', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
+    <h3 class="nppp-f2b-section">
+        <?php if ( $feed_truncated ) : ?>
+            <?php
+            printf(
+                /* translators: 1: number of events shown, 2: total number of events stored */
+                esc_html__( 'Live Feed — showing most recent %1$s of %2$s events', 'fastcgi-cache-purge-and-preload-nginx' ),
+                esc_html( number_format_i18n( count( $recent ) ) ),
+                esc_html( number_format_i18n( $total_events ) )
+            );
+            ?>
+        <?php else : ?>
+            <?php esc_html_e( 'Live Feed — all events', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        <?php endif; ?>
+    </h3>
+
     <div class="nppp-f2b-feed">
         <?php if ( empty( $recent ) ) : ?>
             <div class="nppp-f2b-feed-empty">
