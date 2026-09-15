@@ -500,11 +500,11 @@ function nppp_f2b_get_action_conf_snippet(): string {
     $endpoint = nppp_f2b_get_endpoint_url();
 
     return "[Definition]\n" .
-        "actionban   = curl -sS -o /dev/null --max-time 3 --connect-timeout 2 -X POST {$endpoint} \\\n" .
+        "actionban   = curl -sS -k -o /dev/null --max-time 3 --connect-timeout 2 -X POST {$endpoint} \\\n" .
         "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
         "                -H \"Content-Type: application/json\" \\\n" .
         "                -d '{\"event\":\"ban\",\"jail\":\"<name>\",\"ip\":\"<ip>\"}'\n" .
-        "actionunban = curl -sS -o /dev/null --max-time 3 --connect-timeout 2 -X POST {$endpoint} \\\n" .
+        "actionunban = curl -sS -k -o /dev/null --max-time 3 --connect-timeout 2 -X POST {$endpoint} \\\n" .
         "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
         "                -H \"Content-Type: application/json\" \\\n" .
         "                -d '{\"event\":\"unban\",\"jail\":\"<name>\",\"ip\":\"<ip>\"}'\n" .
