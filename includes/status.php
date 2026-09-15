@@ -97,6 +97,7 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_http_probe_' . md5($static_key_base),
         'nppp_setup_strict_detect_' . md5($static_key_base),
         'nppp_requirements_met_' . md5($static_key_base),
+        'nppp_f2b_rl',
     );
 
     // Delete each known transient
@@ -141,6 +142,8 @@ function nppp_clear_plugin_cache($silent = false) {
     $like_ep8_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep8_fail_') . '%';
     $like_ep3_fail              = $wpdb->esc_like('_transient_nppp_ep3_fail_') . '%';
     $like_ep3_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep3_fail_') . '%';
+    $like_ep10_fail             = $wpdb->esc_like('_transient_nppp_ep10_fail_') . '%';
+    $like_ep10_fail_timeout     = $wpdb->esc_like('_transient_timeout_nppp_ep10_fail_') . '%';
 
     // Safe clean up transients directly in DB
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -148,6 +151,8 @@ function nppp_clear_plugin_cache($silent = false) {
         $wpdb->prepare(
             "DELETE FROM {$wpdb->options}
             WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
@@ -170,7 +175,9 @@ function nppp_clear_plugin_cache($silent = false) {
             $like_ep8_fail,
             $like_ep8_fail_timeout,
             $like_ep3_fail,
-            $like_ep3_fail_timeout
+            $like_ep3_fail_timeout,
+            $like_ep10_fail,
+            $like_ep10_fail_timeout
         )
     );
 
