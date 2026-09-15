@@ -5842,6 +5842,25 @@ div.updated.notice-nppp p,
 
 #nppp-f2b-tab table.nppp-f2b-feed-table tbody tr:hover { background: #111; }
 
+/* DataTables Responsive control icon + expanded child row: library
+   defaults */
+#nppp-f2b-tab table.nppp-f2b-feed-table {
+    --dtr-control-triangle_color: #e0e0e0;
+}
+
+#nppp-f2b-tab table.nppp-f2b-feed-table > tbody > tr.child {
+    background: #0a0a0a;
+}
+
+#nppp-f2b-tab table.nppp-f2b-feed-table > tbody > tr.child ul.dtr-details,
+#nppp-f2b-tab table.nppp-f2b-feed-table > tbody > tr.child span.dtr-data {
+    color: #e0e0e0;
+}
+
+#nppp-f2b-tab table.nppp-f2b-feed-table > tbody > tr.child span.dtr-title {
+    color: #9a9a9a;
+}
+
 #nppp-f2b-tab .nppp-f2b-ts       { color: #7a7a7a; font-variant-numeric: tabular-nums; }
 #nppp-f2b-tab .nppp-f2b-ev       { font-weight: 700; letter-spacing: .04em; }
 #nppp-f2b-tab .nppp-f2b-is-ban   .nppp-f2b-ev { color: #ff5252; }
