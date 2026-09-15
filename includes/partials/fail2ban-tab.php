@@ -201,16 +201,82 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
     <h3 class="nppp-f2b-section"><?php esc_html_e( 'Live Feed — last 50 events', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
     <div class="nppp-f2b-feed">
         <?php if ( empty( $recent ) ) : ?>
-            <div class="nppp-f2b-feed-empty"><?php esc_html_e( 'No events yet.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></div>
+            <div class="nppp-f2b-feed-empty">
+                <?php esc_html_e( 'No events yet.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            </div>
         <?php else : ?>
-            <?php foreach ( $recent as $nppp_row ) : ?>
-                <div class="nppp-f2b-line nppp-f2b-is-<?php echo esc_attr( $nppp_row['event_type'] ); ?>">
-                    <span class="nppp-f2b-ts"><?php echo esc_html( nppp_f2b_local_time( (string) $nppp_row['created_at'] ) ); ?></span>
-                    <span class="nppp-f2b-ev"><?php echo esc_html( strtoupper( $nppp_row['event_type'] ) ); ?></span>
-                    <span class="nppp-f2b-jailname"><?php echo esc_html( $nppp_row['jail'] ); ?></span>
-                    <span class="nppp-f2b-ip"><?php echo esc_html( $nppp_row['ip'] ); ?></span>
-                </div>
-            <?php endforeach; ?>
+            <table id="nppp-f2b-feed-table" class="nppp-f2b-feed-table">
+                <thead>
+                    <tr>
+                        <th><?php esc_html_e( 'Time', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <th><?php esc_html_e( 'Event', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <th><?php esc_html_e( 'Jail', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <th><?php esc_html_e( 'IP', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <th><?php esc_html_e( 'Country', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <th><?php esc_html_e( 'Network', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <th><?php esc_html_e( 'Range', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <th><?php esc_html_e( 'ASN', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <th><?php esc_html_e( 'Abuse', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    <?php foreach ( $recent as $nppp_row ) : ?>
+                        <?php
+                        $nppp_rdap = array();
+
+                        if ( ! empty( $nppp_row['rdap_json'] ) ) {
+                            $nppp_decoded = json_decode( $nppp_row['rdap_json'], true );
+
+                            if ( is_array( $nppp_decoded ) ) {
+                                $nppp_rdap = $nppp_decoded;
+                            }
+                        }
+                        ?>
+
+                        <tr class="nppp-f2b-is-<?php echo esc_attr( $nppp_row['event_type'] ); ?>">
+                            <td class="nppp-f2b-ts">
+                                <?php echo esc_html( nppp_f2b_local_time( (string) $nppp_row['created_at'] ) ); ?>
+                            </td>
+
+                            <td class="nppp-f2b-ev">
+                                <?php echo esc_html( strtoupper( $nppp_row['event_type'] ) ); ?>
+                            </td>
+
+                            <td class="nppp-f2b-jailname">
+                                <?php echo esc_html( $nppp_row['jail'] ); ?>
+                            </td>
+
+                            <td class="nppp-f2b-ip">
+                                <?php echo esc_html( $nppp_row['ip'] ); ?>
+                            </td>
+
+                            <td>
+                                <?php if ( ! empty( $nppp_rdap['country'] ) ) : ?>
+                                    <span class="fi fi-<?php echo esc_attr( strtolower( $nppp_rdap['country'] ) ); ?>"></span>
+                                    <?php echo esc_html( strtoupper( $nppp_rdap['country'] ) ); ?>
+                                <?php endif; ?>
+                            </td>
+
+                            <td>
+                                <?php echo ! empty( $nppp_rdap['netname'] ) ? esc_html( $nppp_rdap['netname'] ) : ''; ?>
+                            </td>
+
+                            <td>
+                                <?php echo ! empty( $nppp_rdap['inetnum'] ) ? esc_html( $nppp_rdap['inetnum'] ) : ''; ?>
+                            </td>
+
+                            <td>
+                                <?php echo ! empty( $nppp_rdap['origin_asns'] ) ? esc_html( implode( ', ', $nppp_rdap['origin_asns'] ) ) : ''; ?>
+                            </td>
+
+                            <td>
+                                <?php echo ! empty( $nppp_rdap['abuse_emails'] ) ? esc_html( implode( ', ', $nppp_rdap['abuse_emails'] ) ) : ''; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         <?php endif; ?>
     </div>
 
