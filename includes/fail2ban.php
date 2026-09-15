@@ -543,7 +543,7 @@ function nppp_f2b_load_tab_content_callback() {
     $retention_days = nppp_f2b_retention_days();
 
     ob_start();
-    include plugin_dir_path( __FILE__ ) . 'partials/security-tab.php';
+    include plugin_dir_path( __FILE__ ) . 'partials/fail2ban-tab.php';
     $html = ob_get_clean();
 
     // The partial escapes its own output. Do not run wp_kses_post() here.
