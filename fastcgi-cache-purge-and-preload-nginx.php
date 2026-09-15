@@ -143,6 +143,7 @@ foreach ([
     'npp_cache_preload_status_event',
     'nppp_index_updater_event',
     'publish_future_post',
+    'nppp_f2b_cleanup_event',
 ] as $nppp_cron_event) {
     add_action($nppp_cron_event, 'nppp_load_bootstrap', 0);
 }
@@ -499,12 +500,129 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 }
 
 // ---------------------------------------------------------------------------
+// EP10 — Fail2ban webhook (/nppp_f2b/v1/event)
+//
+// Deliberately its own REST namespace. It shares nothing with EP3's
+// nppp_nginx_cache/v2: not the "Enable REST API" master toggle, not the
+// dummy-endpoint fallback in rest-api-helper.php, not the EP3 abuse counter.
+// The two gates can never see each other's traffic — EP3 matches on the
+// substring 'nppp_nginx_cache', which 'nppp_f2b' does not contain — so a
+// single request is never logged or rate-limited by both.
+//
+// Same shape as EP3/EP8: the token is verified BEFORE nppp_load_bootstrap(),
+// so an unauthenticated flood can never force the plugin stack to
+// load on every request.
+// ---------------------------------------------------------------------------
+add_action('rest_api_init', function (): void {
+    // Load the plugin bootstrap only for the exact Fail2Ban webhook route.
+    $nppp_ep10_route = $GLOBALS['wp']->query_vars['rest_route'] ?? '';
+    if (!is_string($nppp_ep10_route)
+        || !preg_match('#^/nppp_f2b/v1/event/?$#i', $nppp_ep10_route)) {
+        return;
+    }
+ 
+    // POST is the only method this route ever accepts.
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+        return;
+    }
+ 
+    // Every exit below this point is a hard stop. Force the JSON die handler.
+    add_filter('wp_die_handler', static function (): string {
+        return '_json_wp_die_handler';
+    }, 99);
+ 
+    // Get IP
+    $nppp_ep10_raw_ip = nppp_resolve_ip();
+ 
+    // Optional hard allow-list — empty by default, which keeps container and
+    // sidecar setups working where fail2ban is not on localhost. Harden a
+    // bare-metal install from wp-config.php.
+    //   add_filter('nppp_f2b_trusted_ips', fn() => ['127.0.0.1', '::1']);
+    $nppp_ep10_trusted = apply_filters('nppp_f2b_trusted_ips', []);
+    if (!empty($nppp_ep10_trusted) && is_array($nppp_ep10_trusted)
+        && !in_array($nppp_ep10_raw_ip, $nppp_ep10_trusted, true)) {
+        wp_die('', '', ['response' => 403]);
+    }
+ 
+    // Early block abusing IP. Its own counter namespace (nppp_ep10_fail_*),
+    // so EP3 and EP10 never share or poison each other's penalty budget.
+    $nppp_ep10_rate_key = 'nppp_ep10_fail_' . hash('sha256', $nppp_ep10_raw_ip);
+    if ((int) get_transient($nppp_ep10_rate_key) >= 20) {
+        wp_die('', '', ['response' => 429]);
+    }
+ 
+    // Mask IP for logging
+    $nppp_ep10_masked = nppp_mask_ip($nppp_ep10_raw_ip);
+ 
+    // Extract the bearer token.
+    $nppp_ep10_auth = sanitize_text_field(
+        wp_unslash($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '')
+    );
+ 
+    // Last resort: Apache/mod_php without CGIPassAuth exposes the header via
+    // apache_request_headers() but puts it in NEITHER $_SERVER key.
+    if ($nppp_ep10_auth === '') {
+        $nppp_ep10_headers = [];
+        if (function_exists('getallheaders')) {
+            $nppp_ep10_headers = getallheaders() ?: [];
+        } elseif (function_exists('apache_request_headers')) {
+            $nppp_ep10_headers = apache_request_headers() ?: [];
+        }
+        foreach ($nppp_ep10_headers as $nppp_ep10_h_name => $nppp_ep10_h_val) {
+            if (strcasecmp($nppp_ep10_h_name, 'Authorization') === 0) {
+                $nppp_ep10_auth = sanitize_text_field(wp_unslash((string) $nppp_ep10_h_val));
+                if ($nppp_ep10_auth !== '') {
+                    // Keep layer 2 in sync — see comment above.
+                    $_SERVER['HTTP_AUTHORIZATION'] = $nppp_ep10_auth;
+                }
+                break;
+            }
+        }
+        unset($nppp_ep10_headers, $nppp_ep10_h_name, $nppp_ep10_h_val);
+    }
+ 
+    $nppp_ep10_token = '';
+    if (strpos($nppp_ep10_auth, 'Bearer ') === 0) {
+        $nppp_ep10_token = substr($nppp_ep10_auth, 7);
+    }
+    $nppp_ep10_token = sanitize_text_field($nppp_ep10_token);
+ 
+    // Missing token — logged and answered 403 rather
+    // than left to fall through to a misleading core 404.
+    if (empty($nppp_ep10_token)) {
+        nppp_ep_gate_log($nppp_ep10_masked, $nppp_ep10_raw_ip, 'ep10', 'nppp_f2b_event', 'ERROR 403 MISSING TOKEN (web server may not be forwarding the Authorization header to PHP)');
+        wp_die('', '', ['response' => 403]);
+    }
+ 
+    // Wrong format — log and penalise.
+    if (!preg_match('/^[a-f0-9]{64}$/i', $nppp_ep10_token)) {
+        nppp_ep_gate_log($nppp_ep10_masked, $nppp_ep10_raw_ip, 'ep10', 'nppp_f2b_event', 'ERROR 403 MALFORMED TOKEN');
+        wp_die('', '', ['response' => 403]);
+    }
+ 
+    // Validate against the stored token — log and penalise on mismatch.
+    $nppp_ep10_stored = get_option('nppp_f2b_token', '');
+    if (!is_string($nppp_ep10_stored) || $nppp_ep10_stored === '' || !hash_equals($nppp_ep10_stored, $nppp_ep10_token)) {
+        nppp_ep_gate_log($nppp_ep10_masked, $nppp_ep10_raw_ip, 'ep10', 'nppp_f2b_event', 'ERROR 403 TOKEN MISMATCH');
+        wp_die('', '', ['response' => 403]);
+    }
+ 
+    // Token verified pre-bootstrap — safe to load the full plugin stack now.
+    nppp_load_bootstrap();
+}, 1);
+
+// ---------------------------------------------------------------------------
 // ACTIVATION — generates API key, writes default settings, triggers setup wizard.
 // DEACTIVATION — clears scheduled cron events, terminates active preload process.
 // ---------------------------------------------------------------------------
 function nppp_on_activation() {
     nppp_maybe_define_assume_nginx();
     nppp_load_bootstrap();
+
+    // Update-in-place installs are covered separately by migration 2.1.8 in includes/update.php
+    if ( function_exists( 'nppp_f2b_install_table' ) ) {
+        nppp_f2b_install_table();
+    }
 
     // Grant the custom purge capability to Administrators on activation.
     $admin_role = get_role( 'administrator' );
