@@ -1034,6 +1034,43 @@ $(document).ready(function() {
         }
     }
 
+    // Initialize DataTables.js for the Fail2Ban Live Feed table.
+    function initializeF2bFeedTable() {
+        var $tbl = $('#nppp-f2b-feed-table');
+        if (!$tbl.length) return;
+
+        // Already initialised?
+        if ($.fn.dataTable.isDataTable($tbl)) {
+            var f2bDtExisting = $tbl.DataTable();
+            f2bDtExisting.columns.adjust();
+
+            if (f2bDtExisting.responsive) f2bDtExisting.responsive.recalc();
+            return;
+        }
+
+        $tbl.DataTable({
+            autoWidth: false,
+            responsive: true,
+            orderClasses: false,
+            paging: true,
+            ordering: true,
+            order: [],
+            searching: true,
+            language: {
+                search:       __('Search:', 'fastcgi-cache-purge-and-preload-nginx'),
+                info:         __('Showing _START_ to _END_ of _TOTAL_ events', 'fastcgi-cache-purge-and-preload-nginx'),
+                infoEmpty:    __('No events yet.', 'fastcgi-cache-purge-and-preload-nginx'),
+                infoFiltered: __('(filtered from _MAX_ total events)', 'fastcgi-cache-purge-and-preload-nginx'),
+                zeroRecords:  __('No matching events found.', 'fastcgi-cache-purge-and-preload-nginx')
+            },
+            columnDefs: [
+                { responsivePriority: 1,     targets: [0, 1, 2, 3] },       // Time/Event/Jail/IP always visible
+                { responsivePriority: 10000, targets: [4, 5, 6, 7, 8] },    // RDAP columns collapse first on mobile
+                { defaultContent: '', targets: '_all' }                     // renders even if a cell is empty (not yet enriched)
+            ]
+        });
+    }
+
     // Load Fail2Ban tab content.
     function loadSecurityTabContent() {
         $.ajax({
@@ -1045,13 +1082,29 @@ $(document).ready(function() {
             },
             success: function(response) {
                 if (response !== '') {
+                    // Clean teardown if a previous DT instance exists.
+                    var f2bTblSel = '#nppp-f2b-feed-table';
+                    if ($.fn.dataTable.isDataTable(f2bTblSel)) {
+                        $(f2bTblSel).DataTable().destroy(true);
+                    }
+
                     $securityPlaceholder
                         .stop(true, true)
                         .css('opacity', 0)
                         .html(response)
                         .show();
+
+                    // Init DT for the freshly injected Live Feed table.
+                    initializeF2bFeedTable();
+
                     hidePreloader();
-                    $securityPlaceholder.animate({ opacity: 1 }, 100);
+                    $securityPlaceholder.animate({ opacity: 1 }, 100, function () {
+                        if ($.fn.dataTable.isDataTable(f2bTblSel)) {
+                            var f2bDtLater = $(f2bTblSel).DataTable();
+                            f2bDtLater.columns.adjust();
+                            if (f2bDtLater.responsive) f2bDtLater.responsive.recalc();
+                        }
+                    });
                     npppBindSecurityTabEvents();
                 } else {
                     console.error('Empty response received for Security tab.');
