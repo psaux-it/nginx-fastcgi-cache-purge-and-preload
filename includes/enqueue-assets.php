@@ -67,6 +67,8 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     $update_send_mail_option_nonce = wp_create_nonce('nppp-update-send-mail-option');
     // Create a nonce for the status tab
     $cache_status_nonce = wp_create_nonce('cache-status');
+    // Create a nonce for the Fail2Ban Tab (fail2ban monitor)
+    $security_tab_nonce = wp_create_nonce('nppp-security-tab');
     // Create a nonce for auto preload option
     $update_auto_preload_option_nonce = wp_create_nonce('nppp-update-auto-preload-option');
     // Create a nonce for auto purge option
@@ -136,6 +138,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'reject_regex_nonce'           => $update_default_reject_regex_option_nonce,
         'reject_extension_nonce'       => $update_default_reject_extension_option_nonce,
         'cache_status_nonce'           => $cache_status_nonce,
+        'security_tab_nonce'           => $security_tab_nonce,
         'premium_nonce_purge'          => wp_create_nonce('purge_cache_premium_nonce'),
         'premium_nonce_preload'        => wp_create_nonce('preload_cache_premium_nonce'),
         'premium_content_nonce'        => wp_create_nonce('load_premium_content_nonce'),
