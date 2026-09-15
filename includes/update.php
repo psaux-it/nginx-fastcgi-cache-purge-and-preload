@@ -41,6 +41,7 @@ function nppp_get_db_migrations() {
         '2.1.5' => array( 'nppp_migration_215' ),
         '2.1.6' => array( 'nppp_migration_216' ),
         '2.1.7' => array( 'nppp_migration_217' ),
+        '2.1.8' => array( 'nppp_migration_218' ),
     );
 }
 
@@ -101,6 +102,7 @@ function nppp_run_pending_migrations( $old_version, $new_version ) {
             '2.1.5' => __( 'Opt-in usage tracking has been completely removed. /opt/ removed from allowed Nginx cache path roots, if your Nginx cache was stored under /opt/, please move it to a supported location and re-save in Settings.', 'fastcgi-cache-purge-and-preload-nginx' ),
             '2.1.6' => __( 'Auto purge sub-triggers added. Your existing auto purge behaviour has been preserved automatically. Please Reset to Default the Cache Key Regex for the latest compatibility updates to take effect.', 'fastcgi-cache-purge-and-preload-nginx' ),
             '2.1.7' => __( 'Three things to review after this update: (1) Verify your Nginx skip-cache rules match the new preload regex approach and use "Reset Default" on the "Exclude Endpoints" setting. (2) Use "Reset Default" on "Cache Key Regex" to activate expanded cache key format support. (3) Confirm ripgrep >= 14.0.0 is installed and that both shell_exec and exec are enabled in your PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            '2.1.8' => __( 'New: Fail2Ban tab added — a fail2ban Nginx jail monitor (bans, recidive, live feed). Open the Fail2Ban tab for one-time server-side integration setup instructions.', 'fastcgi-cache-purge-and-preload-nginx' ),
         );
 
         $lines = array();
@@ -210,4 +212,13 @@ function nppp_migration_216() {
 // prompting users to review the three post-upgrade action items.
 function nppp_migration_217() {
     // Intentionally empty — notice is handled by nppp_run_pending_migrations().
+}
+
+// Migration 2.1.8:
+// Introduces the Fail2Ban tab (fail2ban Nginx jail monitor). Creates the
+// event-log table for installs that update in place.
+function nppp_migration_218() {
+    if ( function_exists( 'nppp_f2b_install_table' ) ) {
+        nppp_f2b_install_table();
+    }
 }
