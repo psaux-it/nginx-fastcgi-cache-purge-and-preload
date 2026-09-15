@@ -58,6 +58,7 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_obd_warned_' . md5($static_key_base),
         'nppp_vary_issue_' . md5($static_key_base),
         'nppp_cache_key_regex_probe',
+        'nppp_f2b_rl',
         'nppp_http_probe_' . md5($static_key_base),
         'nppp_setup_strict_detect_' . md5($static_key_base),
         'nppp_requirements_met_' . md5($static_key_base),
@@ -81,12 +82,16 @@ function nppp_clear_plugin_cache_on_uninstall() {
     $like_ep8_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep8_fail_') . '%';
     $like_ep3_fail              = $wpdb->esc_like('_transient_nppp_ep3_fail_') . '%';
     $like_ep3_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep3_fail_') . '%';
+    $like_ep10_fail             = $wpdb->esc_like('_transient_nppp_ep10_fail_') . '%';
+    $like_ep10_fail_timeout     = $wpdb->esc_like('_transient_timeout_nppp_ep10_fail_') . '%';
 
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->query(
         $wpdb->prepare(
             "DELETE FROM {$wpdb->options}
             WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
@@ -109,9 +114,21 @@ function nppp_clear_plugin_cache_on_uninstall() {
             $like_ep8_fail,
             $like_ep8_fail_timeout,
             $like_ep3_fail,
-            $like_ep3_fail_timeout
+            $like_ep3_fail_timeout,
+            $like_ep10_fail,
+            $like_ep10_fail_timeout
         )
     );
+}
+
+/**
+ * Drop the fail2ban event-log table created by includes/fail2ban.php.
+ */
+function nppp_drop_f2b_table_on_uninstall() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'nppp_f2b_events';
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange
+    $wpdb->query( "DROP TABLE IF EXISTS {$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix, not user input
 }
 
 /**
@@ -133,6 +150,8 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_cache_purge.lock',                  // Purge operation lock (WP_Upgrader)
         'nppp_vary_notice_dismissed',             // Vary: Accept-Encoding probe dismiss flag
         'nppp_cron_notice_dismissed',             // DISABLE_WP_CRON notice dismiss flag
+        'nppp_f2b_token',                         // Fail2ban webhook bearer token
+        'nppp_f2b_db_version',                    // Fail2ban event table schema stamp
     );
 
     foreach ($option_keys as $option_key) {
@@ -147,6 +166,7 @@ function nppp_clear_scheduled_events_on_uninstall() {
     wp_clear_scheduled_hook('npp_cache_preload_event');
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
     wp_clear_scheduled_hook('nppp_index_updater_event');
+    wp_clear_scheduled_hook('nppp_f2b_cleanup_event');
 
     // Remove tracking cron hooks left by 2.0.1–2.1.4 in case migration never ran
     wp_clear_scheduled_hook('npp_plugin_tracking_event', array('active'));
@@ -230,6 +250,7 @@ function nppp_run_uninstall_cleanup_for_current_site() {
     nppp_clear_scheduled_events_on_uninstall();
     nppp_delete_runtime_artifacts_on_uninstall();
     nppp_delete_plugin_options_on_uninstall();
+    nppp_drop_f2b_table_on_uninstall();
 
     // Remove the custom purge capability from every role that holds it.
     foreach ( wp_roles()->role_objects as $role ) {
