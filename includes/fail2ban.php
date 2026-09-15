@@ -102,10 +102,24 @@ function nppp_f2b_install_table(): void {
         created_at DATETIME NOT NULL,
         PRIMARY KEY  (id),
         KEY created_event_jail_idx (created_at, event_type, jail),
-        KEY event_ip_created_idx (event_type, ip, created_at)
+        KEY event_created_ip_idx (event_type, created_at, ip)
     ) {$charset_collate};";
 
     dbDelta( $sql );
+
+    // dbDelta() can ADD a missing index but never drops/reorders one under
+    // an existing name.
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $nppp_f2b_stale_index = $wpdb->get_var(
+        $wpdb->prepare(
+            "SHOW INDEX FROM {$table_name} WHERE Key_name = %s", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+            'event_ip_created_idx'
+        )
+    );
+    if ( $nppp_f2b_stale_index ) {
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.SchemaChange
+        $wpdb->query( "ALTER TABLE {$table_name} DROP INDEX event_ip_created_idx" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+    }
 
     // Confirm the table actually exists before stamping the schema version.
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
