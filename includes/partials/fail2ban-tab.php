@@ -167,13 +167,25 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
     <?php endif; ?>
 
     <h3 class="nppp-f2b-section">
-        <?php
-        printf(
-            /* translators: %d: number of days in the rolling reporting window */
-            esc_html__( 'Repeat Offenders — last %d days', 'fastcgi-cache-purge-and-preload-nginx' ),
-            (int) $window_days
-        );
-        ?>
+        <?php if ( ! empty( $recidive ) && $recidive_total > count( $recidive ) ) : ?>
+            <?php
+            printf(
+                /* translators: 1: number of days in the rolling reporting window, 2: number of IPs shown, 3: total repeat-offender IPs in that window */
+                esc_html__( 'Repeat Offenders — last %1$d days (top %2$s of %3$s)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                (int) $window_days,
+                esc_html( number_format_i18n( count( $recidive ) ) ),
+                esc_html( number_format_i18n( $recidive_total ) )
+            );
+            ?>
+        <?php else : ?>
+            <?php
+            printf(
+                /* translators: %d: number of days in the rolling reporting window */
+                esc_html__( 'Repeat Offenders — last %d days', 'fastcgi-cache-purge-and-preload-nginx' ),
+                (int) $window_days
+            );
+            ?>
+        <?php endif; ?>
     </h3>
     <table class="nppp-f2b-table">
         <thead>
