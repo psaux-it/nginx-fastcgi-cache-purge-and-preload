@@ -1094,6 +1094,24 @@ $(document).ready(function() {
         window.nppp_f2b_init_country_map('#nppp-f2b-world-map', countries);
     }
 
+    function initializeF2bOffendersChart() {
+        var $chartEl = $('#nppp-f2b-offenders-chart');
+        if (!$chartEl.length || typeof window.nppp_f2b_render_offenders_chart !== 'function') {
+            return;
+        }
+
+        var offenders = [];
+        try {
+            var rawOffenders = $chartEl.attr('data-offenders');
+            offenders = rawOffenders ? JSON.parse(rawOffenders) : [];
+        } catch (e) {
+            console.error('Failed to parse Repeat Offenders chart data.', e);
+            offenders = [];
+        }
+
+        window.nppp_f2b_render_offenders_chart('#nppp-f2b-offenders-chart', offenders);
+    }
+
     // Load Fail2Ban tab content.
     function loadSecurityTabContent() {
         $.ajax({
@@ -1117,6 +1135,10 @@ $(document).ready(function() {
                         window.nppp_f2b_destroy_country_map();
                     }
 
+                    if (typeof window.nppp_f2b_destroy_offenders_chart === 'function') {
+                        window.nppp_f2b_destroy_offenders_chart();
+                    }
+
                     $securityPlaceholder
                         .stop(true, true)
                         .css('opacity', 0)
@@ -1129,6 +1151,8 @@ $(document).ready(function() {
                     // Init the bubble map for the freshly injected
                     // Top Attack Countries panel.
                     initializeF2bCountryMap();
+
+                    initializeF2bOffendersChart();
 
                     hidePreloader();
                     $securityPlaceholder.animate({ opacity: 1 }, 100, function () {
