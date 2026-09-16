@@ -1072,6 +1072,28 @@ $(document).ready(function() {
         });
     }
 
+    // Init the Top Attack Countries bubble map from the data-countries JSON
+    // attribute rendered server-side into the freshly injected partial.
+    // No separate AJAX round trip: the same nppp_load_security_content
+    // response already carries this data, computed once per tab load.
+    function initializeF2bCountryMap() {
+        var $mapEl = $('#nppp-f2b-world-map');
+        if (!$mapEl.length || typeof window.nppp_f2b_init_country_map !== 'function') {
+            return;
+        }
+
+        var countries = [];
+        try {
+            var raw = $mapEl.attr('data-countries');
+            countries = raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            console.error('Failed to parse Top Attack Countries data.', e);
+            countries = [];
+        }
+
+        window.nppp_f2b_init_country_map('#nppp-f2b-world-map', countries);
+    }
+
     // Load Fail2Ban tab content.
     function loadSecurityTabContent() {
         $.ajax({
@@ -1089,6 +1111,12 @@ $(document).ready(function() {
                         $(f2bTblSel).DataTable().destroy(true);
                     }
 
+                    // Clean teardown of a previous map instance before its
+                    // container is wiped out by the .html(response) below.
+                    if (typeof window.nppp_f2b_destroy_country_map === 'function') {
+                        window.nppp_f2b_destroy_country_map();
+                    }
+
                     $securityPlaceholder
                         .stop(true, true)
                         .css('opacity', 0)
@@ -1097,6 +1125,10 @@ $(document).ready(function() {
 
                     // Init DT for the freshly injected Live Feed table.
                     initializeF2bFeedTable();
+
+                    // Init the bubble map for the freshly injected
+                    // Top Attack Countries panel.
+                    initializeF2bCountryMap();
 
                     hidePreloader();
                     $securityPlaceholder.animate({ opacity: 1 }, 100, function () {
