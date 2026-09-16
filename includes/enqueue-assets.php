@@ -28,6 +28,9 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Enqueue CSS files for Nginx FastCGI Cache Purge and Preload Plugin
     wp_enqueue_style('nppp_admin-css', plugins_url('../admin/css/fastcgi-cache-purge-and-preload-nginx.css', __FILE__), array(), '2.1.7');
 
+    // Enqueue CSS files for Flag Icons (Fail2Ban)
+    wp_enqueue_style('nppp-flag-icons', plugins_url('../admin/css/flag-icons.css', __FILE__), array(), '7.5.0');
+
     // Enqueue jQuery UI core, jQuery UI Tabs, jQuery UI Accordion
     wp_enqueue_script('jquery-ui-core');
     wp_enqueue_script('jquery-ui-tabs');
