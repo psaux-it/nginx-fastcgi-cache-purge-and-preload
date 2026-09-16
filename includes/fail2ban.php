@@ -271,13 +271,39 @@ function nppp_f2b_lookup_ip( string $ip ): array {
         $whois_body = json_decode( wp_remote_retrieve_body( $whois_response ), true );
 
         if ( is_array( $whois_body ) && isset( $whois_body['data'] ) ) {
-            foreach ( $whois_body['data']['records'][0] ?? array() as $record ) {
-                $key   = $record['key'] ?? '';
-                $value = (string) ( $record['value'] ?? '' );
-                if ( 'inetnum' === $key ) { $result['inetnum'] = $value; }
-                elseif ( 'netname' === $key ) { $result['netname'] = $value; }
-                elseif ( 'country' === $key ) { $result['country'] = $value; }
-                elseif ( 'org' === $key ) { $result['org_id'] = $value; }
+            // RIRs return incompatible whois key sets for the same concepts:
+            //   RIPE/APNIC/AFRINIC/LACNIC (RPSL style): inetnum, netname, country, org
+            //   ARIN (legacy style):  NetRange/CIDR, NetName, Country (in the Org
+            //                         block, never the network block), Organization/
+            //                         OrgName/OrgId
+            // Matching only lowercase RPSL keys against records[0] silently drops
+            // every ARIN-registered IP — the majority of US cloud/hosting ranges
+            // Walk every record block and match case-insensitively against both naming schemes.
+            foreach ( $whois_body['data']['records'] ?? array() as $nppp_f2b_record_block ) {
+                if ( ! is_array( $nppp_f2b_record_block ) ) {
+                    continue;
+                }
+
+                foreach ( $nppp_f2b_record_block as $record ) {
+                    $key   = strtolower( (string) ( $record['key'] ?? '' ) );
+                    $value = trim( (string) ( $record['value'] ?? '' ) );
+
+                    if ( '' === $value ) {
+                        continue;
+                    }
+
+                    // First non-empty match wins per field; earlier blocks are
+                    // generally the more specific (network-level) registration.
+                    if ( '' === $result['inetnum'] && in_array( $key, array( 'inetnum', 'netrange', 'cidr' ), true ) ) {
+                        $result['inetnum'] = $value;
+                    } elseif ( '' === $result['netname'] && 'netname' === $key ) {
+                        $result['netname'] = $value;
+                    } elseif ( '' === $result['country'] && 'country' === $key ) {
+                        $result['country'] = strtoupper( $value );
+                    } elseif ( '' === $result['org_id'] && in_array( $key, array( 'org', 'orgid', 'orgname', 'organization', 'custname' ), true ) ) {
+                        $result['org_id'] = $value;
+                    }
+                }
             }
 
             foreach ( $whois_body['data']['irr_records'] ?? array() as $route ) {
@@ -305,7 +331,26 @@ function nppp_f2b_lookup_ip( string $ip ): array {
         $result['abuse_emails'] = array_values( array_unique( $result['abuse_emails'] ) );
     }
 
-    set_transient( $cache_key, $result, nppp_f2b_rdap_cache_ttl() );
+    // Only cache for the full TTL when at least one field was actually
+    // populated. A transient RIPE timeout/outage must not freeze an empty
+    // result in place for up to nppp_f2b_rdap_cache_ttl() (30 days by
+    // default) -- that would silently hide real data forever for this IP.
+    $nppp_f2b_lookup_had_data = (
+        '' !== $result['inetnum']
+        || '' !== $result['netname']
+        || '' !== $result['country']
+        || '' !== $result['org_id']
+        || ! empty( $result['origin_asns'] )
+        || ! empty( $result['abuse_emails'] )
+    );
+
+    $nppp_f2b_cache_ttl = $nppp_f2b_lookup_had_data
+        ? nppp_f2b_rdap_cache_ttl()
+        // Negative cache: retry a genuinely empty/failed lookup after a few
+        // minutes instead of freezing it for the full TTL.
+        : (int) apply_filters( 'nppp_f2b_rdap_negative_cache_ttl', 5 * MINUTE_IN_SECONDS );
+
+    set_transient( $cache_key, $result, $nppp_f2b_cache_ttl );
     return $result;
 }
 
