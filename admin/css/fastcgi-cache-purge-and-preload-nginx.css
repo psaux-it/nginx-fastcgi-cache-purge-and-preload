@@ -5835,13 +5835,16 @@ div.updated.notice-nppp p,
 }
 
 #nppp-f2b-tab .nppp-obar-head {
+    box-sizing: border-box;
     padding: 10px 14px;
     font-size: 11px;
     line-height: 1.2;
-    visibility: hidden;
+    background: #337AB7;
+    color: transparent;
 }
 
 #nppp-f2b-tab .nppp-obar-row {
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     gap: 12px;
