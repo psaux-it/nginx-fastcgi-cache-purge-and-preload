@@ -53,6 +53,11 @@ if ( ! defined( 'NPPP_F2B_WINDOW_DAYS' ) ) {
     define( 'NPPP_F2B_WINDOW_DAYS', 30 );
 }
 
+// Repeat Offenders panel — how many top IPs to display.
+if ( ! defined( 'NPPP_F2B_RECIDIVE_TOP_N' ) ) {
+    define( 'NPPP_F2B_RECIDIVE_TOP_N', 5 );
+}
+
 // Last-resort async enrichment hook.
 if ( ! defined( 'NPPP_F2B_ENRICH_HOOK' ) ) {
     define( 'NPPP_F2B_ENRICH_HOOK', 'nppp_f2b_enrich_event' );
@@ -765,6 +770,29 @@ function nppp_f2b_get_recidive_ips( int $min_count = 2, int $limit = 25 ): array
     return is_array( $rows ) ? $rows : array();
 }
 
+// Distinct-IP count matching the same window/min_count as
+// nppp_f2b_get_recidive_ips(), used only to detect truncation for the UI.
+function nppp_f2b_get_recidive_total_count( int $min_count = 2 ): int {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    return (int) $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COUNT(*) FROM (
+                SELECT ip
+                FROM {$table}
+                WHERE event_type = 'ban' AND created_at >= %s
+                GROUP BY ip
+                HAVING COUNT(*) >= %d
+             ) AS nppp_recidive_ips", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+            nppp_f2b_window_cutoff(),
+            $min_count
+        )
+    );
+}
+
 // Primary-key descending scan, LIMIT-bounded. $limit = 0 (default) means
 // "all events" -- bounded only by NPPP_F2B_FEED_HARD_CAP as a safety valve,
 // never truly unbounded. Retention cleanup already caps the table to
@@ -897,7 +925,8 @@ function nppp_f2b_load_tab_content_callback() {
     nppp_f2b_maybe_install();
 
     $summaries      = nppp_f2b_get_jail_summaries( 24 );
-    $recidive       = nppp_f2b_get_recidive_ips( 2, 25 );
+    $recidive       = nppp_f2b_get_recidive_ips( 2, (int) apply_filters( 'nppp_f2b_recidive_top_n', NPPP_F2B_RECIDIVE_TOP_N ) );
+    $recidive_total = nppp_f2b_get_recidive_total_count( 2 );
     $recent         = nppp_f2b_get_recent_events();
     $total_events   = nppp_f2b_get_total_event_count();
     $feed_truncated = $total_events > count( $recent );
