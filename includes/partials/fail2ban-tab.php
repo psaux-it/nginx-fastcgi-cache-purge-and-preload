@@ -20,63 +20,23 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
 ?>
 <div id="nppp-f2b-tab">
 
-    <div class="nppp-f2b-head">
-        <div class="nppp-f2b-head-text">
-            <h2><?php esc_html_e( 'Fail2ban Nginx Jail Monitor', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h2>
-            <p class="nppp-f2b-lede">
-                <?php esc_html_e( 'Read-only monitoring. fail2ban pushes ban and unban events to this site over a token-authenticated webhook. NPP never runs fail2ban-client, never opens a privileged socket and never needs root on the WordPress side.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-            </p>
-            <?php if ( $configured ) : ?>
-                <span class="nppp-f2b-pill nppp-f2b-pill-ok"><?php esc_html_e( 'Receiving events', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-            <?php else : ?>
-                <span class="nppp-f2b-pill nppp-f2b-pill-wait"><?php esc_html_e( 'Waiting for first event', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-            <?php endif; ?>
+    <div class="nppp-f2b-card nppp-f2b-card-connection">
+        <div class="nppp-f2b-card-titlebar">
+            <h3 class="nppp-f2b-card-title"><?php esc_html_e( 'Connection', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
+            <div class="nppp-f2b-card-title-actions">
+                <?php if ( $configured ) : ?>
+                    <span class="nppp-f2b-pill nppp-f2b-pill-ok"><?php esc_html_e( 'Receiving events', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                <?php else : ?>
+                    <span class="nppp-f2b-pill nppp-f2b-pill-wait"><?php esc_html_e( 'Waiting for first event', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                <?php endif; ?>
+                <button type="button" class="nppp-f2b-btn nppp-f2b-btn-primary" id="nppp-f2b-test-connection">
+                    <?php esc_html_e( 'Test Connection', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </button>
+            </div>
         </div>
-        <div class="nppp-f2b-toolbar">
-            <button type="button" class="nppp-f2b-btn nppp-f2b-btn-primary" id="nppp-f2b-test-connection">
-                <?php esc_html_e( 'Test Connection', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-            </button>
-            <button type="button" class="nppp-f2b-btn" id="nppp-f2b-refresh">
-                <?php esc_html_e( 'Refresh', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-            </button>
-            <button type="button" class="nppp-f2b-btn nppp-f2b-btn-danger" id="nppp-f2b-clear-log">
-                <?php esc_html_e( 'Clear All Events', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-            </button>
-        </div>
-    </div>
-
-    <div id="nppp-f2b-test-result" class="nppp-f2b-result" role="status" aria-live="polite" style="display:none;"></div>
-
-    <div class="nppp-f2b-stats">
-        <div class="nppp-f2b-stat nppp-f2b-stat-ban">
-            <span class="nppp-f2b-stat-num"><?php echo esc_html( (string) $stats['bans_24h'] ); ?></span>
-            <span class="nppp-f2b-stat-label"><?php esc_html_e( 'Bans / 24h', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-        </div>
-        <div class="nppp-f2b-stat nppp-f2b-stat-unban">
-            <span class="nppp-f2b-stat-num"><?php echo esc_html( (string) $stats['unbans_24h'] ); ?></span>
-            <span class="nppp-f2b-stat-label"><?php esc_html_e( 'Unbans / 24h', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-        </div>
-        <div class="nppp-f2b-stat nppp-f2b-stat-jail">
-            <span class="nppp-f2b-stat-num"><?php echo esc_html( (string) $stats['jails'] ); ?></span>
-            <span class="nppp-f2b-stat-label"><?php esc_html_e( 'Active jails / 24h', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-        </div>
-        <div class="nppp-f2b-stat nppp-f2b-stat-total">
-            <span class="nppp-f2b-stat-num"><?php echo esc_html( (string) $stats['window'] ); ?></span>
-            <span class="nppp-f2b-stat-label">
-                <?php
-                printf(
-                    /* translators: %d: number of days in the rolling reporting window */
-                    esc_html__( 'Events / %dd', 'fastcgi-cache-purge-and-preload-nginx' ),
-                    (int) $window_days
-                );
-                ?>
-            </span>
-        </div>
-    </div>
-
-    <div class="nppp-f2b-card">
-        <h3 class="nppp-f2b-card-title"><?php esc_html_e( 'Connection', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
         <div class="nppp-f2b-card-body">
+
+            <div id="nppp-f2b-test-result" class="nppp-f2b-result" role="status" aria-live="polite" style="display:none;"></div>
 
             <div class="nppp-f2b-row">
                 <label for="nppp-f2b-endpoint-field"><?php esc_html_e( 'Webhook URL', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
@@ -142,6 +102,45 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
             <?php esc_html_e( 'No events received yet. Complete the setup above, then use Test Connection to verify the whole path end to end.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
         </div>
     <?php endif; ?>
+
+    <div class="nppp-f2b-activity-toolbar">
+        <h3 class="nppp-f2b-activity-toolbar-title"><?php esc_html_e( 'Activity Overview', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
+        <div class="nppp-f2b-toolbar">
+            <button type="button" class="nppp-f2b-btn" id="nppp-f2b-refresh">
+                <?php esc_html_e( 'Refresh', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            </button>
+            <button type="button" class="nppp-f2b-btn nppp-f2b-btn-danger" id="nppp-f2b-clear-log">
+                <?php esc_html_e( 'Clear All Events', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            </button>
+        </div>
+    </div>
+
+    <div class="nppp-f2b-stats">
+        <div class="nppp-f2b-stat nppp-f2b-stat-ban">
+            <span class="nppp-f2b-stat-num"><?php echo esc_html( (string) $stats['bans_24h'] ); ?></span>
+            <span class="nppp-f2b-stat-label"><?php esc_html_e( 'Bans / 24h', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+        </div>
+        <div class="nppp-f2b-stat nppp-f2b-stat-unban">
+            <span class="nppp-f2b-stat-num"><?php echo esc_html( (string) $stats['unbans_24h'] ); ?></span>
+            <span class="nppp-f2b-stat-label"><?php esc_html_e( 'Unbans / 24h', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+        </div>
+        <div class="nppp-f2b-stat nppp-f2b-stat-jail">
+            <span class="nppp-f2b-stat-num"><?php echo esc_html( (string) $stats['jails'] ); ?></span>
+            <span class="nppp-f2b-stat-label"><?php esc_html_e( 'Active jails / 24h', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+        </div>
+        <div class="nppp-f2b-stat nppp-f2b-stat-total">
+            <span class="nppp-f2b-stat-num"><?php echo esc_html( (string) $stats['window'] ); ?></span>
+            <span class="nppp-f2b-stat-label">
+                <?php
+                printf(
+                    /* translators: %d: number of days in the rolling reporting window */
+                    esc_html__( 'Events / %dd', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    (int) $window_days
+                );
+                ?>
+            </span>
+        </div>
+    </div>
 
     <h3 class="nppp-f2b-section"><?php esc_html_e( 'Jail Activity — last 24 hours', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
     <?php if ( empty( $summaries ) ) : ?>
