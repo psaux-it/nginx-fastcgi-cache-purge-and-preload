@@ -34,6 +34,18 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Enqueue CSS files for Flag Icons (Fail2Ban Tab)
     wp_enqueue_style('nppp-flag-icons', plugins_url('../admin/css/flag-icons.css', __FILE__), array(), '7.5.0');
 
+    // jsVectorMap
+    // https://www.npmjs.com/package/jsvectormap
+    // Licensed under the MIT License.
+    // Enqueue CSS + JS for the Fail2Ban Tab "Top Attack Countries" world map.
+    wp_enqueue_style('nppp-jsvectormap-css', plugins_url('../admin/css/jsvectormap.min.css', __FILE__), array(), '1.7.0');
+    wp_enqueue_script('nppp-jsvectormap-js', plugins_url('../admin/js/jsvectormap.min.js', __FILE__), array(), '1.7.0', true);
+    // World map dataset. Must load after jsvectormap.min.js.
+    wp_enqueue_script('nppp-jsvectormap-world-js', plugins_url('../admin/js/world.js', __FILE__), array('nppp-jsvectormap-js'), '1.7.0', true);
+    // Bubble-marker init logic for the Top Attack Countries panel.
+    // Must load after jsVectorMap + world map.
+    wp_enqueue_script('nppp-f2b-country-map-js', plugins_url('../admin/js/nppp-f2b-country-map.js', __FILE__), array('nppp-jsvectormap-world-js'), '2.1.7', true);
+
     // Enqueue jQuery UI core, jQuery UI Tabs, jQuery UI Accordion
     wp_enqueue_script('jquery-ui-core');
     wp_enqueue_script('jquery-ui-tabs');
