@@ -948,13 +948,19 @@ function nppp_f2b_get_action_conf_snippet(): string {
 function nppp_f2b_get_jail_local_snippet(): string {
     $token = nppp_f2b_get_token();
 
+    $comment = __(
+        "Add this under each nginx-related [jail] section in jail.local.\n" .
+        "If the jail already defines its own \"action = ...\" line, APPEND the\n" .
+        "nppp-webhook[...] line to it instead of replacing it — otherwise you\n" .
+        "disable that jail's real ban action.",
+        'fastcgi-cache-purge-and-preload-nginx'
+    );
+    $comment = '# ' . str_replace( "\n", "\n# ", $comment );
+
     return "action = %(action_)s\n" .
         "         nppp-webhook[nppp_token=\"{$token}\"]\n" .
         "\n" .
-        "# Add this under each nginx-related [jail] section in jail.local.\n" .
-        "# If the jail already defines its own \"action = ...\" line, APPEND the\n" .
-        "# nppp-webhook[...] line to it instead of replacing it — otherwise you\n" .
-        "# disable that jail's real ban action.\n";
+        $comment . "\n";
 }
 
 // ---------------------------------------------------------------------------
