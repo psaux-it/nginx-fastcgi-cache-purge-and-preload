@@ -59,8 +59,15 @@ if ( ! defined( 'NPPP_F2B_ENRICH_HOOK' ) ) {
 }
 
 // Per-IP RDAP cache.
-if ( ! defined( 'NPPP_F2B_RDAP_CACHE_TTL' ) ) {
-    define( 'NPPP_F2B_RDAP_CACHE_TTL', 6 * HOUR_IN_SECONDS );
+function nppp_f2b_rdap_cache_ttl(): int {
+    $ttl = (int) apply_filters( 'nppp_f2b_rdap_cache_ttl', NPPP_F2B_WINDOW_DAYS * DAY_IN_SECONDS );
+    if ( $ttl < HOUR_IN_SECONDS ) {
+        $ttl = HOUR_IN_SECONDS;
+    }
+    if ( $ttl > 365 * DAY_IN_SECONDS ) {
+        $ttl = 365 * DAY_IN_SECONDS;
+    }
+    return $ttl;
 }
 
 // Live Feed safety valve. "All events" is bounded to retention (90 days by
@@ -293,7 +300,7 @@ function nppp_f2b_lookup_ip( string $ip ): array {
         $result['abuse_emails'] = array_values( array_unique( $result['abuse_emails'] ) );
     }
 
-    set_transient( $cache_key, $result, NPPP_F2B_RDAP_CACHE_TTL );
+    set_transient( $cache_key, $result, nppp_f2b_rdap_cache_ttl() );
     return $result;
 }
 
