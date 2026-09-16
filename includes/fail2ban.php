@@ -203,33 +203,17 @@ function nppp_f2b_maybe_install(): void {
 // ---------------------------------------------------------------------------
 // Country aggregation (Top Attack Countries)
 //
-// country_code is a STORED generated column derived from rdap_json, backed
-// by a covering index (event_type, created_at, country_code). This makes
-// the GROUP BY in nppp_f2b_get_top_countries() an index-only scan -- MySQL
-// never touches the row data or re-parses rdap_json per row. Without this
-// column the only alternative is JSON_EXTRACT() per row with no index
-// support, which degrades to a full table scan as the event log grows.
-//
-// Deliberately keyed off the full retention window (90 days by default),
-// not the 30-day NPPP_F2B_WINDOW_DAYS used by Repeat Offenders: country
-// distribution is a slower-moving signal than individual IP recidivism,
-// and compressing it into the same short window would hide long-tail
-// attackers that only re-appear every few weeks.
+// STORED country_code + covering index enables index-only GROUP BY without
+// re-parsing rdap_json. Uses the full retention window (90 days by default),
+// since country distribution changes more slowly than Repeat Offenders.
 // ---------------------------------------------------------------------------
 
 /**
- * Add the generated country_code column and its covering index if this is
- * a pre-1.1.0 table. Idempotent -- safe to call on every admin_init retry.
- *
- * A STORED generated column forces the database to rewrite the table once,
- * backfilling the value for every existing row in the same ALTER. On a
- * fail2ban_events table bounded by retention (90 days by default, hard
- * capped at 365) this is a sub-second operation on any real-world install.
- * Sites that disabled retention cleanup entirely and let the table grow
- * unbounded for months may see a longer one-time ALTER; it still runs only
- * once, from admin_init, the same place this file already self-heals the
- * legacy event_ip_created_idx index.
- */
+ * Add country_code and its covering index for pre-1.1.0 tables.
+ * Idempotent and safe to retry from admin_init. ALTER backfills existing rows;
+ * normally fast within the retention window, but may take longer on large,
+// unbounded tables.
+// */
 function nppp_f2b_migrate_country_code_column( string $table_name ): void {
     global $wpdb;
 
@@ -242,10 +226,8 @@ function nppp_f2b_migrate_country_code_column( string $table_name ): void {
     );
 
     if ( ! $nppp_f2b_col_exists ) {
-        // NULLIF(...,'') collapses an rdap_json with an empty country field
-        // (lookup ran but RIR returned nothing) to NULL, same as a row that
-        // was never enriched at all -- both are correctly excluded by the
-        // "country_code IS NOT NULL" filter in the queries below.
+        // NULLIF(...,'') treats an empty RDAP country as NULL, excluding it
+        // alongside unenriched rows via the country_code IS NOT NULL filter.
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.SchemaChange
         $wpdb->query(
             "ALTER TABLE {$table_name}
@@ -257,11 +239,9 @@ function nppp_f2b_migrate_country_code_column( string $table_name ): void {
         );
     }
 
-    // Re-check rather than trust the ALTER's return value: a DB user with
-    // ALTER but not INDEX privilege, or a MySQL/MariaDB fork predating
-    // generated-column support, can fail the statement without $wpdb
-    // surfacing a fatal error. The Top Attack Countries panel degrades to
-    // a "needs a one-time database update" notice instead of a broken query.
+    // Re-check after ALTER: privilege/support failures may be silent.
+    // If unavailable, show a one-time database update notice instead of
+    // breaking the Top Attack Countries query.
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $nppp_f2b_col_ok = (bool) $wpdb->get_var(
         $wpdb->prepare(
