@@ -46,6 +46,9 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Must load after jsVectorMap + world map.
     wp_enqueue_script('nppp-f2b-country-map-js', plugins_url('../admin/js/nppp-f2b-country-map.js', __FILE__), array('nppp-jsvectormap-world-js'), '2.1.7', true);
 
+    // Bar chart for the Repeat Offenders panel in Fail2Ban Jail Monitoring Tab
+    wp_enqueue_script('nppp-f2b-offenders-chart-js', plugins_url('../admin/js/nppp-f2b-offenders-chart.js', __FILE__), array(), '2.1.7', true);
+
     // Enqueue jQuery UI core, jQuery UI Tabs, jQuery UI Accordion
     wp_enqueue_script('jquery-ui-core');
     wp_enqueue_script('jquery-ui-tabs');
