@@ -296,6 +296,34 @@ add_action('rest_api_init', function (): void {
         wp_unslash( $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '' )
     );
 
+    // Last resort for Apache/mod_php: recover Authorization and X-Api-Key via
+    // apache_request_headers()/getallheaders() when they are missing from $_SERVER.
+    // This works only with mod_php, not Apache→PHP-FPM (mod_proxy_fcgi/fcgid),
+    // where the headers are dropped before reaching PHP.
+    if ( $auth_header === '' || empty( $_SERVER['HTTP_X_API_KEY'] ) ) {
+        $nppp_ep3_headers = [];
+        if (function_exists('getallheaders')) {
+            $nppp_ep3_headers = getallheaders() ?: [];
+        } elseif (function_exists('apache_request_headers')) {
+            $nppp_ep3_headers = apache_request_headers() ?: [];
+        }
+        foreach ($nppp_ep3_headers as $nppp_ep3_h_name => $nppp_ep3_h_val) {
+            if ($auth_header === '' && strcasecmp($nppp_ep3_h_name, 'Authorization') === 0) {
+                $auth_header = sanitize_text_field(wp_unslash((string) $nppp_ep3_h_val));
+                if ($auth_header !== '') {
+                    // Keep layer 2 in sync -- it re-reads
+                    // Authorization via $request->get_header(), which WordPress
+                    // populates from $_SERVER, not from getallheaders().
+                    $_SERVER['HTTP_AUTHORIZATION'] = $auth_header;
+                }
+            }
+            if (empty($_SERVER['HTTP_X_API_KEY']) && strcasecmp($nppp_ep3_h_name, 'X-Api-Key') === 0) {
+                $_SERVER['HTTP_X_API_KEY'] = sanitize_text_field(wp_unslash((string) $nppp_ep3_h_val));
+            }
+        }
+        unset($nppp_ep3_headers, $nppp_ep3_h_name, $nppp_ep3_h_val);
+    }
+
     // Get the key from the 'Authorization: Bearer <key>' header.
     if (strpos($auth_header, 'Bearer ') === 0) $api_key = substr($auth_header, 7);
 
