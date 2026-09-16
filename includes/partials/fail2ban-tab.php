@@ -211,6 +211,90 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
     </table>
 
     <h3 class="nppp-f2b-section">
+        <?php if ( $country_available && ! empty( $top_countries ) && $top_countries_total > count( $top_countries ) ) : ?>
+            <?php
+            printf(
+                /* translators: 1: number of days in the full retention window, 2: number of countries shown, 3: total distinct countries in that window */
+                esc_html__( 'Top Attack Countries — last %1$d days (top %2$s of %3$s)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                (int) $country_days,
+                esc_html( number_format_i18n( count( $top_countries ) ) ),
+                esc_html( number_format_i18n( $top_countries_total ) )
+            );
+            ?>
+        <?php else : ?>
+            <?php
+            printf(
+                /* translators: %d: number of days in the full retention window */
+                esc_html__( 'Top Attack Countries — last %d days', 'fastcgi-cache-purge-and-preload-nginx' ),
+                (int) $country_days
+            );
+            ?>
+        <?php endif; ?>
+    </h3>
+
+    <?php if ( ! $country_available ) : ?>
+        <p class="nppp-f2b-empty">
+            <?php esc_html_e( 'This panel needs a one-time database update. It activates automatically the next time an administrator opens this page.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </p>
+    <?php elseif ( empty( $top_countries ) ) : ?>
+        <p class="nppp-f2b-empty">
+            <?php esc_html_e( 'No enriched ban events yet. Countries appear here once RDAP lookups complete for banned IPs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </p>
+    <?php else : ?>
+        <div class="nppp-f2b-geo">
+            <div class="nppp-f2b-geo-list">
+                <table class="nppp-f2b-table nppp-f2b-geo-table">
+                    <thead>
+                        <tr>
+                            <th><?php esc_html_e( 'Country', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                            <th><?php esc_html_e( 'Bans', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ( $top_countries as $nppp_country_row ) : ?>
+                            <?php $nppp_cc = strtolower( (string) $nppp_country_row['country'] ); ?>
+                            <tr>
+                                <td>
+                                    <span class="fi fi-<?php echo esc_attr( $nppp_cc ); ?>"></span>
+                                    <?php echo esc_html( strtoupper( (string) $nppp_country_row['country'] ) ); ?>
+                                </td>
+                                <td>
+                                    <span class="nppp-f2b-badge nppp-f2b-badge-ban"><?php echo esc_html( (string) (int) $nppp_country_row['attack_count'] ); ?></span>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="nppp-f2b-geo-map-wrap">
+                <div
+                    id="nppp-f2b-world-map"
+                    class="nppp-f2b-world-map"
+                    data-countries="<?php
+                        echo esc_attr(
+                            wp_json_encode(
+                                array_map(
+                                    static function ( $nppp_country_row ) {
+                                        return array(
+                                            'code'  => strtoupper( (string) $nppp_country_row['country'] ),
+                                            'count' => (int) $nppp_country_row['attack_count'],
+                                        );
+                                    },
+                                    $top_countries
+                                )
+                            )
+                        );
+                    ?>"
+                ></div>
+                <p class="nppp-f2b-geo-hint">
+                    <?php esc_html_e( 'Bubble size and color reflect ban volume. Drag to pan, use the +/- buttons to zoom, hover a bubble for the exact count.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </p>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <h3 class="nppp-f2b-section">
         <?php if ( $feed_truncated ) : ?>
             <?php
             printf(
