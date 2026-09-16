@@ -1165,10 +1165,11 @@ function nppp_f2b_clear_events_callback() {
             array( 'message' => __( 'Could not clear the event log. Check that the database user has DELETE privilege on this table.', 'fastcgi-cache-purge-and-preload-nginx' ) ),
             500
         );
+        return;
     }
 
     wp_send_json_success(
-        array( 'message' => __( 'Event log cleared.', 'fastcgi-cache-purge-and-preload-nginx' ) )
+        array( 'message' => __( 'All events cleared.', 'fastcgi-cache-purge-and-preload-nginx' ) )
     );
 }
 
