@@ -60,11 +60,11 @@ if ( ! defined( 'NPPP_F2B_RECIDIVE_TOP_N' ) ) {
 
 // Top Attack Countries panel — how many countries to display.
 if ( ! defined( 'NPPP_F2B_TOP_COUNTRIES_N' ) ) {
-    define( 'NPPP_F2B_TOP_COUNTRIES_N', 10 );
+    define( 'NPPP_F2B_TOP_COUNTRIES_N', 8 );
 }
 
 // Not autoloaded: stamps whether the country_code generated column is
-// present and usable, set once by nppp_f2b_migrate_country_code_column().
+// present and usable, set once by nppp_f2b_ensure_country_code_column().
 // Read on every Security tab load, so caching it avoids a SHOW COLUMNS
 // round trip per page view.
 if ( ! defined( 'NPPP_F2B_COUNTRY_COL_OK_OPTION' ) ) {
@@ -117,10 +117,12 @@ function nppp_f2b_retention_days(): int {
 }
 
 /**
- * Create/update the event table and ensure its token and cleanup cron exist.
+ * Create the event table (or heal it if the version stamp is stale) and
+ * ensure its token and cleanup cron exist.
  *
- * Called on activation, migration, and admin_init self-heal.
- * Schema version is stamped only after confirming the table exists.
+ * Called on activation, from nppp_migration_218() on update-in-place
+ * installs, and from admin_init self-heal. Schema version is stamped
+ * only after confirming the table exists.
  */
 function nppp_f2b_install_table(): void {
     global $wpdb;
@@ -134,7 +136,7 @@ function nppp_f2b_install_table(): void {
     //
     // created_event_jail_idx supports the jail summary and retention delete.
     //
-    // event_ip_created_idx matches event_type = 'ban' + GROUP BY ip and
+    // event_created_ip_idx matches event_type = 'ban' + GROUP BY ip and
     // keeps created_at available for the aggregate.
     $sql = "CREATE TABLE {$table_name} (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -150,20 +152,6 @@ function nppp_f2b_install_table(): void {
 
     dbDelta( $sql );
 
-    // dbDelta() can ADD a missing index but never drops/reorders one under
-    // an existing name.
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-    $nppp_f2b_stale_index = $wpdb->get_var(
-        $wpdb->prepare(
-            "SHOW INDEX FROM {$table_name} WHERE Key_name = %s", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
-            'event_ip_created_idx'
-        )
-    );
-    if ( $nppp_f2b_stale_index ) {
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.SchemaChange
-        $wpdb->query( "ALTER TABLE {$table_name} DROP INDEX event_ip_created_idx" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
-    }
-
     // Confirm the table actually exists before stamping the schema version.
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $nppp_f2b_table_exists = $wpdb->get_var(
@@ -177,8 +165,11 @@ function nppp_f2b_install_table(): void {
         return;
     }
 
-    // Add the generated country_code column + its covering index
-    nppp_f2b_migrate_country_code_column( $table_name );
+    // Add the generated country_code column + its covering index. Kept
+    // outside dbDelta() intentionally: dbDelta() cannot reliably diff
+    // GENERATED ALWAYS AS (...) columns and can silently strip the
+    // generation expression on a later run.
+    nppp_f2b_ensure_country_code_column( $table_name );
 
     // Pre-generate the token so the setup snippets are complete the very first
     // time an admin opens the Fail2Ban tab.
@@ -209,12 +200,11 @@ function nppp_f2b_maybe_install(): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Add country_code and its covering index for pre-1.1.0 tables.
- * Idempotent and safe to retry from admin_init. ALTER backfills existing rows;
- * normally fast within the retention window, but may take longer on large,
-// unbounded tables.
-// */
-function nppp_f2b_migrate_country_code_column( string $table_name ): void {
+ * Ensure the generated country_code column and its covering index exist.
+ * Idempotent — safe to call on every install/self-heal. Runs outside
+ * dbDelta() because dbDelta() cannot manage GENERATED ALWAYS AS columns.
+ */
+function nppp_f2b_ensure_country_code_column( string $table_name ): void {
     global $wpdb;
 
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -267,7 +257,7 @@ function nppp_f2b_country_window_cutoff(): string {
 }
 
 // Index-only GROUP BY over (event_type, created_at, country_code).
-function nppp_f2b_get_top_countries( int $limit = 10 ): array {
+function nppp_f2b_get_top_countries( int $limit = NPPP_F2B_TOP_COUNTRIES_N ): array {
     if ( ! nppp_f2b_country_feature_available() ) {
         return array();
     }
