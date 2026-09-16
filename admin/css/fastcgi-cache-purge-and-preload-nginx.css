@@ -5349,8 +5349,16 @@ div.updated.notice-nppp p,
    ========================================================================= */
 
 #nppp-f2b-tab {
-    max-width: 1000px;
+    max-width: clamp(1000px, 92vw, 1440px);
     margin-left: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-stats {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+#nppp-f2b-tab .nppp-f2b-jails {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
 /* --- Header --- */
@@ -5371,19 +5379,20 @@ div.updated.notice-nppp p,
 #nppp-f2b-tab h2 {
     background-color: #337AB7;
     color: #fff;
-    padding: 10px 14px;
-    margin: 0 0 10px;
+    padding: 7px 14px;
+    margin: 1px 0 18px;
     text-transform: uppercase;
     font-size: 16px;
     letter-spacing: .02em;
 }
 
 #nppp-f2b-tab .nppp-f2b-lede {
-    margin: 0 0 10px;
+    /*margin: 0 0 10px;
     color: #50575e;
     font-size: 13px;
     line-height: 1.6;
-    max-width: 70ch;
+    max-width: 70ch;*/
+    display: none;
 }
 
 #nppp-f2b-tab .nppp-f2b-pill {
