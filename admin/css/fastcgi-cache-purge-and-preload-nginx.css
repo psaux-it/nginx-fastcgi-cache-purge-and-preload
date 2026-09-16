@@ -5555,13 +5555,13 @@ div.updated.notice-nppp p,
 #nppp-f2b-tab .nppp-f2b-card-title {
     margin: 0;
     padding: 10px 16px;
-    background: #f0f0f1;
+    background: #337AB7;
     border-bottom: 1px solid #dcdcde;
     font-size: 13px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .04em;
-    color: #337AB7;
+    color: #fff;
 }
 
 #nppp-f2b-tab .nppp-f2b-card-body { padding: 18px 16px; }
