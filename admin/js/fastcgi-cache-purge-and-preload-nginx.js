@@ -1275,7 +1275,7 @@ $(document).ready(function() {
                     data: { action: 'nppp_f2b_clear_events', _wpnonce: nonce },
                     success: function(resp) {
                         if (resp && resp.success) {
-                            npppF2bToast(__('Event log cleared.', 'fastcgi-cache-purge-and-preload-nginx'), 'success');
+                            npppF2bToast(__('All events cleared.', 'fastcgi-cache-purge-and-preload-nginx'), 'success');
                             showPreloader();
                             loadSecurityTabContent();
                         } else {
