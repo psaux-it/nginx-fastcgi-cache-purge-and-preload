@@ -187,6 +187,11 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
             ?>
         <?php endif; ?>
     </h3>
+    <?php if ( ! empty( $recidive ) ) : ?>
+        <div class="nppp-f2b-repeat">
+            <div class="nppp-f2b-repeat-list">
+    <?php endif; ?>
+
     <table class="nppp-f2b-table">
         <thead>
             <tr>
@@ -209,6 +214,33 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
             <?php endif; ?>
         </tbody>
     </table>
+
+    <?php if ( ! empty( $recidive ) ) : ?>
+            </div>
+
+            <div class="nppp-f2b-repeat-chart-wrap">
+                <div
+                    id="nppp-f2b-offenders-chart"
+                    class="nppp-f2b-offenders-chart"
+                    data-offenders="<?php
+                        echo esc_attr(
+                            wp_json_encode(
+                                array_map(
+                                    static function ( $nppp_row ) {
+                                        return array(
+                                            'ip'    => (string) $nppp_row['ip'],
+                                            'count' => (int) $nppp_row['ban_count'],
+                                        );
+                                    },
+                                    $recidive
+                                )
+                            )
+                        );
+                    ?>"
+                ></div>
+            </div>
+        </div>
+    <?php endif; ?>
 
     <h3 class="nppp-f2b-section">
         <?php if ( $country_available && ! empty( $top_countries ) && $top_countries_total > count( $top_countries ) ) : ?>
