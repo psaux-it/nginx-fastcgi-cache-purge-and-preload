@@ -40,7 +40,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 <?php esc_html_e( 'Refresh', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
             </button>
             <button type="button" class="nppp-f2b-btn nppp-f2b-btn-danger" id="nppp-f2b-clear-log">
-                <?php esc_html_e( 'Clear Log', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                <?php esc_html_e( 'Clear All Events', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
             </button>
         </div>
     </div>
