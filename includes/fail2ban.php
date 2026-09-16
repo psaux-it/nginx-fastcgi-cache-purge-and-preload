@@ -58,6 +58,19 @@ if ( ! defined( 'NPPP_F2B_RECIDIVE_TOP_N' ) ) {
     define( 'NPPP_F2B_RECIDIVE_TOP_N', 5 );
 }
 
+// Top Attack Countries panel — how many countries to display.
+if ( ! defined( 'NPPP_F2B_TOP_COUNTRIES_N' ) ) {
+    define( 'NPPP_F2B_TOP_COUNTRIES_N', 10 );
+}
+
+// Not autoloaded: stamps whether the country_code generated column is
+// present and usable, set once by nppp_f2b_migrate_country_code_column().
+// Read on every Security tab load, so caching it avoids a SHOW COLUMNS
+// round trip per page view.
+if ( ! defined( 'NPPP_F2B_COUNTRY_COL_OK_OPTION' ) ) {
+    define( 'NPPP_F2B_COUNTRY_COL_OK_OPTION', 'nppp_f2b_country_col_ok' );
+}
+
 // Last-resort async enrichment hook.
 if ( ! defined( 'NPPP_F2B_ENRICH_HOOK' ) ) {
     define( 'NPPP_F2B_ENRICH_HOOK', 'nppp_f2b_enrich_event' );
@@ -164,6 +177,9 @@ function nppp_f2b_install_table(): void {
         return;
     }
 
+    // Add the generated country_code column + its covering index
+    nppp_f2b_migrate_country_code_column( $table_name );
+
     // Pre-generate the token so the setup snippets are complete the very first
     // time an admin opens the Fail2Ban tab.
     nppp_f2b_get_token();
@@ -182,6 +198,143 @@ function nppp_f2b_maybe_install(): void {
         return;
     }
     nppp_f2b_install_table();
+}
+
+// ---------------------------------------------------------------------------
+// Country aggregation (Top Attack Countries)
+//
+// country_code is a STORED generated column derived from rdap_json, backed
+// by a covering index (event_type, created_at, country_code). This makes
+// the GROUP BY in nppp_f2b_get_top_countries() an index-only scan -- MySQL
+// never touches the row data or re-parses rdap_json per row. Without this
+// column the only alternative is JSON_EXTRACT() per row with no index
+// support, which degrades to a full table scan as the event log grows.
+//
+// Deliberately keyed off the full retention window (90 days by default),
+// not the 30-day NPPP_F2B_WINDOW_DAYS used by Repeat Offenders: country
+// distribution is a slower-moving signal than individual IP recidivism,
+// and compressing it into the same short window would hide long-tail
+// attackers that only re-appear every few weeks.
+// ---------------------------------------------------------------------------
+
+/**
+ * Add the generated country_code column and its covering index if this is
+ * a pre-1.1.0 table. Idempotent -- safe to call on every admin_init retry.
+ *
+ * A STORED generated column forces the database to rewrite the table once,
+ * backfilling the value for every existing row in the same ALTER. On a
+ * fail2ban_events table bounded by retention (90 days by default, hard
+ * capped at 365) this is a sub-second operation on any real-world install.
+ * Sites that disabled retention cleanup entirely and let the table grow
+ * unbounded for months may see a longer one-time ALTER; it still runs only
+ * once, from admin_init, the same place this file already self-heals the
+ * legacy event_ip_created_idx index.
+ */
+function nppp_f2b_migrate_country_code_column( string $table_name ): void {
+    global $wpdb;
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $nppp_f2b_col_exists = $wpdb->get_var(
+        $wpdb->prepare(
+            "SHOW COLUMNS FROM {$table_name} LIKE %s", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+            'country_code'
+        )
+    );
+
+    if ( ! $nppp_f2b_col_exists ) {
+        // NULLIF(...,'') collapses an rdap_json with an empty country field
+        // (lookup ran but RIR returned nothing) to NULL, same as a row that
+        // was never enriched at all -- both are correctly excluded by the
+        // "country_code IS NOT NULL" filter in the queries below.
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.SchemaChange
+        $wpdb->query(
+            "ALTER TABLE {$table_name}
+             ADD COLUMN country_code CHAR(2)
+                 GENERATED ALWAYS AS (
+                     NULLIF(UPPER(JSON_UNQUOTE(JSON_EXTRACT(rdap_json, '$.country'))), '')
+                 ) STORED,
+             ADD INDEX ban_country_idx (event_type, created_at, country_code)" // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+        );
+    }
+
+    // Re-check rather than trust the ALTER's return value: a DB user with
+    // ALTER but not INDEX privilege, or a MySQL/MariaDB fork predating
+    // generated-column support, can fail the statement without $wpdb
+    // surfacing a fatal error. The Top Attack Countries panel degrades to
+    // a "needs a one-time database update" notice instead of a broken query.
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $nppp_f2b_col_ok = (bool) $wpdb->get_var(
+        $wpdb->prepare(
+            "SHOW COLUMNS FROM {$table_name} LIKE %s", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+            'country_code'
+        )
+    );
+
+    // Not autoloaded: read once per admin-rendered Security tab load via
+    // nppp_f2b_country_feature_available(), never on the front end.
+    update_option( NPPP_F2B_COUNTRY_COL_OK_OPTION, $nppp_f2b_col_ok, false );
+}
+
+// Cached feature flag -- avoids a SHOW COLUMNS round trip on every tab load.
+function nppp_f2b_country_feature_available(): bool {
+    return (bool) get_option( NPPP_F2B_COUNTRY_COL_OK_OPTION, false );
+}
+
+// Full retention window cutoff -- see the note above on why this is NOT
+// nppp_f2b_window_cutoff() (the 30-day Repeat Offenders window).
+function nppp_f2b_country_window_cutoff(): string {
+    return gmdate( 'Y-m-d H:i:s', time() - ( nppp_f2b_retention_days() * DAY_IN_SECONDS ) );
+}
+
+// Index-only GROUP BY over (event_type, created_at, country_code).
+function nppp_f2b_get_top_countries( int $limit = 10 ): array {
+    if ( ! nppp_f2b_country_feature_available() ) {
+        return array();
+    }
+
+    global $wpdb;
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT country_code AS country, COUNT(*) AS attack_count, MAX(created_at) AS last_seen
+             FROM {$table}
+             WHERE event_type = 'ban' AND created_at >= %s AND country_code IS NOT NULL
+             GROUP BY country_code
+             ORDER BY attack_count DESC, country ASC
+             LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+            nppp_f2b_country_window_cutoff(),
+            $limit
+        ),
+        ARRAY_A
+    );
+
+    return is_array( $rows ) ? $rows : array();
+}
+
+// Distinct-country count matching the same window/filter as
+// nppp_f2b_get_top_countries(), used only to detect truncation for the UI.
+function nppp_f2b_get_top_countries_total_count(): int {
+    if ( ! nppp_f2b_country_feature_available() ) {
+        return 0;
+    }
+
+    global $wpdb;
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    return (int) $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COUNT(*) FROM (
+                SELECT country_code
+                FROM {$table}
+                WHERE event_type = 'ban' AND created_at >= %s AND country_code IS NOT NULL
+                GROUP BY country_code
+             ) AS nppp_top_countries", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+            nppp_f2b_country_window_cutoff()
+        )
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -982,6 +1135,14 @@ function nppp_f2b_load_tab_content_callback() {
     $total_events   = nppp_f2b_get_total_event_count();
     $feed_truncated = $total_events > count( $recent );
     $configured     = nppp_f2b_has_any_events();
+
+    // Top Attack Countries — full retention window (90 days by default),
+    // deliberately independent of the 30-day Repeat Offenders window above.
+    $country_available   = nppp_f2b_country_feature_available();
+    $country_days        = nppp_f2b_retention_days();
+    $top_countries_n     = (int) apply_filters( 'nppp_f2b_top_countries_n', NPPP_F2B_TOP_COUNTRIES_N );
+    $top_countries       = $country_available ? nppp_f2b_get_top_countries( $top_countries_n ) : array();
+    $top_countries_total = $country_available ? nppp_f2b_get_top_countries_total_count() : 0;
 
     $stats = array(
         'bans_24h'   => (int) array_sum( array_map( 'intval', array_column( $summaries, 'bans' ) ) ),
