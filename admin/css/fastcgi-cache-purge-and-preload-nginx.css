@@ -5904,6 +5904,69 @@ div.updated.notice-nppp p,
     color: #646970;
 }
 
+/* --- Top Attack Countries: ranked list + jsVectorMap bubble map --- */
+#nppp-f2b-tab .nppp-f2b-geo {
+    display: grid;
+    grid-template-columns: minmax(220px, 320px) 1fr;
+    gap: 16px;
+    align-items: start;
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-list {
+    min-width: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-table th:last-child,
+#nppp-f2b-tab .nppp-f2b-geo-table td:last-child {
+    text-align: right;
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-table .fi {
+    margin-right: 6px;
+    vertical-align: middle;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .08);
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-map-wrap {
+    min-width: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-world-map {
+    width: 100%;
+    height: 380px;
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .06);
+    overflow: hidden;
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-hint {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #646970;
+}
+
+/* jsVectorMap chrome */
+#nppp-f2b-tab .nppp-f2b-world-map .jvm-zoom-btn {
+    background: #337AB7;
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+}
+
+#nppp-f2b-tab .nppp-f2b-world-map .jvm-zoom-btn:hover {
+    background: #2c6698;
+}
+
+#nppp-f2b-tab .nppp-f2b-world-map .jvm-tooltip {
+    background: #1d2327;
+    color: #fff;
+    font-size: 12px;
+    padding: 4px 9px;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+}
+
 /* --- Narrow screens --- */
 @media screen and (max-width: 782px) {
     #nppp-f2b-tab .nppp-f2b-toolbar { width: 100%; }
@@ -5911,6 +5974,8 @@ div.updated.notice-nppp p,
     #nppp-f2b-tab .nppp-f2b-copy-block { flex-wrap: wrap; }
     #nppp-f2b-tab .nppp-f2b-copy-block .nppp-f2b-btn { width: 100%; }
     #nppp-f2b-tab .nppp-f2b-feed { overflow-x: auto; }
+    #nppp-f2b-tab .nppp-f2b-geo { grid-template-columns: 1fr; }
+    #nppp-f2b-tab .nppp-f2b-world-map { height: 300px; }
 }
 
 /* --- DataTables pagination, dark variant --- */
@@ -5960,4 +6025,3 @@ div.updated.notice-nppp p,
     border-radius: 4px;
     padding: 4px 8px;
 }
-
