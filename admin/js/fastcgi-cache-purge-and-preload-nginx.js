@@ -1053,6 +1053,7 @@ $(document).ready(function() {
             responsive: true,
             orderClasses: false,
             paging: true,
+            deferRender: true,
             ordering: true,
             order: [],
             searching: true,
