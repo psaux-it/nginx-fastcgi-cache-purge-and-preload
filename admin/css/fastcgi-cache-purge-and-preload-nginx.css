@@ -5808,6 +5808,97 @@ div.updated.notice-nppp p,
     font-style: italic;
 }
 
+/* --- Repeat Offenders: ranked table + row-aligned bar list --- */
+#nppp-f2b-tab .nppp-f2b-repeat {
+    display: grid;
+    grid-template-columns: minmax(360px, 480px) 1fr;
+    gap: 16px;
+    align-items: start;
+}
+
+#nppp-f2b-tab .nppp-f2b-repeat-list {
+    min-width: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-repeat-chart-wrap {
+    min-width: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-offenders-chart {
+    width: 100%;
+    box-sizing: border-box;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .06);
+    overflow: hidden;
+}
+
+#nppp-f2b-tab .nppp-obar-head {
+    padding: 10px 14px;
+    font-size: 11px;
+    line-height: 1.2;
+    visibility: hidden;
+}
+
+#nppp-f2b-tab .nppp-obar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-top: 1px solid #f0f0f1;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+#nppp-f2b-tab .nppp-obar-row:nth-child(even) { background: #fafafa; }
+#nppp-f2b-tab .nppp-obar-row:hover { background: #f0f6fb; }
+
+#nppp-f2b-tab .nppp-obar-ip {
+    flex: 0 0 118px;
+    min-width: 0;
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    color: #1d2327;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#nppp-f2b-tab .nppp-obar-track {
+    flex: 1 1 auto;
+    min-width: 40px;
+    height: 14px;
+    background: #f0f0f1;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+#nppp-f2b-tab .nppp-obar-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: filter .12s ease;
+}
+
+#nppp-f2b-tab .nppp-obar-row:hover .nppp-obar-bar {
+    filter: brightness(1.08);
+}
+
+#nppp-f2b-tab .nppp-obar-count {
+    flex: 0 0 26px;
+    text-align: right;
+    font-weight: 700;
+    color: #1d2327;
+    font-variant-numeric: tabular-nums;
+}
+
+#nppp-f2b-tab .nppp-obar-empty {
+    margin: 0;
+    padding: 14px;
+    color: #646970;
+    font-size: 13px;
+}
+
 /* --- Live feed (DataTables, dark "terminal" theme matching .logs-container) --- */
 #nppp-f2b-tab .nppp-f2b-feed {
     background: #000;
@@ -5976,6 +6067,8 @@ div.updated.notice-nppp p,
     #nppp-f2b-tab .nppp-f2b-feed { overflow-x: auto; }
     #nppp-f2b-tab .nppp-f2b-geo { grid-template-columns: 1fr; }
     #nppp-f2b-tab .nppp-f2b-world-map { height: 300px; }
+    #nppp-f2b-tab .nppp-f2b-repeat { grid-template-columns: 1fr; }
+    #nppp-f2b-tab .nppp-obar-head { display: none; }
 }
 
 /* --- DataTables pagination, dark variant --- */
