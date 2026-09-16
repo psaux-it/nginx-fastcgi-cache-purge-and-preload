@@ -5361,44 +5361,10 @@ div.updated.notice-nppp p,
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
-/* --- Header --- */
-#nppp-f2b-tab .nppp-f2b-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 16px;
-    margin: 10px 0 22px;
-}
-
-#nppp-f2b-tab .nppp-f2b-head-text {
-    flex: 1 1 380px;
-    min-width: 260px;
-}
-
-#nppp-f2b-tab h2 {
-    background-color: #337AB7;
-    color: #fff;
-    padding: 7px 14px;
-    margin: 1px 0 18px;
-    text-transform: uppercase;
-    font-size: 16px;
-    letter-spacing: .02em;
-}
-
-#nppp-f2b-tab .nppp-f2b-lede {
-    /*margin: 0 0 10px;
-    color: #50575e;
-    font-size: 13px;
-    line-height: 1.6;
-    max-width: 70ch;*/
-    display: none;
-}
-
+/* --- Status pill (now lives in the Connection card titlebar) --- */
 #nppp-f2b-tab .nppp-f2b-pill {
     display: inline-block;
     padding: 3px 12px;
-    border-radius: 999px;
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
@@ -5542,12 +5508,12 @@ div.updated.notice-nppp p,
     letter-spacing: .04em;
 }
 
-/* --- Connection card --- */
+/* --- Connection card (now the first element in the tab) --- */
 #nppp-f2b-tab .nppp-f2b-card {
     background: #fff;
     border: 1px solid #dcdcde;
     border-radius: 6px;
-    margin: 0 0 24px;
+    margin: 10px 0 24px;
     box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
     overflow: hidden;
 }
@@ -5565,6 +5531,84 @@ div.updated.notice-nppp p,
 }
 
 #nppp-f2b-tab .nppp-f2b-card-body { padding: 18px 16px; }
+
+/* Titlebar: card title + status pill + Test Connection button, all in one row */
+#nppp-f2b-tab .nppp-f2b-card-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    padding: 10px 16px;
+    background: #337AB7;
+    border-bottom: 1px solid #dcdcde;
+}
+
+/* Nested inside the titlebar the title text no longer owns its own bar chrome */
+#nppp-f2b-tab .nppp-f2b-card-titlebar .nppp-f2b-card-title {
+    margin: 0;
+    padding: 0;
+    background: none;
+    border-bottom: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-card-title-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Primary action button sits on the dark titlebar, needs a visible border */
+#nppp-f2b-tab .nppp-f2b-card-titlebar .nppp-f2b-btn-primary {
+    background: #fff;
+    border-color: #fff;
+    color: #337AB7;
+}
+
+#nppp-f2b-tab .nppp-f2b-card-titlebar .nppp-f2b-btn-primary:hover:not([disabled]) {
+    background: #eef4fa;
+    border-color: #eef4fa;
+    color: #2c6698;
+}
+
+/* --- Activity toolbar: Refresh / Clear All Events, above the stat cards --- */
+#nppp-f2b-tab .nppp-f2b-activity-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    margin: 0 0 20px;
+    padding: 10px 16px;
+    background: #337AB7;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
+}
+
+#nppp-f2b-tab .nppp-f2b-activity-toolbar-title {
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+/* Non-destructive button on the blue bar gets the same light treatment
+   as the Test Connection button in the Connection card titlebar. */
+#nppp-f2b-tab .nppp-f2b-activity-toolbar .nppp-f2b-btn:not(.nppp-f2b-btn-danger) {
+    background: #fff;
+    border-color: #fff;
+    color: #337AB7;
+}
+
+#nppp-f2b-tab .nppp-f2b-activity-toolbar .nppp-f2b-btn:not(.nppp-f2b-btn-danger):hover:not([disabled]) {
+    background: #eef4fa;
+    border-color: #eef4fa;
+    color: #2c6698;
+}
 
 #nppp-f2b-tab .nppp-f2b-row { margin-bottom: 18px; }
 #nppp-f2b-tab .nppp-f2b-row:last-child { margin-bottom: 0; }
@@ -6065,6 +6109,10 @@ div.updated.notice-nppp p,
 @media screen and (max-width: 782px) {
     #nppp-f2b-tab .nppp-f2b-toolbar { width: 100%; }
     #nppp-f2b-tab .nppp-f2b-toolbar .nppp-f2b-btn { flex: 1 1 auto; }
+    #nppp-f2b-tab .nppp-f2b-card-titlebar { flex-direction: column; align-items: stretch; }
+    #nppp-f2b-tab .nppp-f2b-card-title-actions { justify-content: space-between; }
+    #nppp-f2b-tab .nppp-f2b-card-title-actions .nppp-f2b-btn { flex: 1 1 auto; }
+    #nppp-f2b-tab .nppp-f2b-activity-toolbar { flex-direction: column; align-items: stretch; }
     #nppp-f2b-tab .nppp-f2b-copy-block { flex-wrap: wrap; }
     #nppp-f2b-tab .nppp-f2b-copy-block .nppp-f2b-btn { width: 100%; }
     #nppp-f2b-tab .nppp-f2b-feed { overflow-x: auto; }
