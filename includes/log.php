@@ -200,6 +200,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             ? (int) $GLOBALS['nppp_cli_ob_level'] + 1
             : -1;
         if ( ob_get_level() === $our_level && $display_notice ) {
+            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- WP-CLI terminal output, not HTML; $sanitized_message already went through sanitize_text_field() above, and esc_html() would incorrectly HTML-entity-encode the string for a plain-text terminal.
             echo $sanitized_message . "\n";
         }
         return;
