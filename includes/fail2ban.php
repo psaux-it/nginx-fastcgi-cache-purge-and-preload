@@ -224,9 +224,9 @@ function nppp_f2b_ensure_country_code_column( string $table_name ): void {
     if ( ! $nppp_f2b_col_exists ) {
         // NULLIF(...,'') treats an empty RDAP country as NULL, excluding it
         // alongside unenriched rows via the country_code IS NOT NULL filter.
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.SchemaChange -- intentional, idempotent schema self-heal on a custom plugin table
-        $wpdb->query(
+        $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- intentional, idempotent schema self-heal on a custom plugin table; no caching applies to a one-time ALTER TABLE
             $wpdb->prepare(
+                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange -- intentional, idempotent schema self-heal on a custom plugin table, guarded by the SHOW COLUMNS check above
                 'ALTER TABLE %i
                  ADD COLUMN country_code CHAR(2)
                      GENERATED ALWAYS AS (
