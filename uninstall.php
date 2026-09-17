@@ -59,6 +59,7 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_vary_issue_' . md5($static_key_base),
         'nppp_cache_key_regex_probe',
         'nppp_f2b_rl',
+        'nppp_f2b_abuse_rl',
         'nppp_http_probe_' . md5($static_key_base),
         'nppp_setup_strict_detect_' . md5($static_key_base),
         'nppp_requirements_met_' . md5($static_key_base),
@@ -158,6 +159,9 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_cron_notice_dismissed',             // DISABLE_WP_CRON notice dismiss flag
         'nppp_f2b_token',                         // Fail2ban webhook bearer token
         'nppp_f2b_db_version',                    // Fail2ban event table schema stamp
+        'nppp_f2b_country_col_ok',                // Fail2ban generated country_code column flag
+        'nppp_f2b_abuse_settings',                // Fail2ban Abuse Reporter configuration
+        'nppp_f2b_abuse_reports',                 // Fail2ban Abuse Reporter cooldown map
     );
 
     foreach ($option_keys as $option_key) {
