@@ -5439,6 +5439,73 @@ div.updated.notice-nppp p,
     color: #fff;
 }
 
+/* Info badge + tooltip, e.g. next to "Send Test Email" in Abuse Reporter */
+#nppp-f2b-tab .nppp-f2b-info-badge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #337ab7;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: help;
+    user-select: none;
+}
+
+#nppp-f2b-tab .nppp-f2b-info-badge:hover,
+#nppp-f2b-tab .nppp-f2b-info-badge:focus-visible {
+    background: #2c6698;
+    outline: none;
+}
+
+#nppp-f2b-tab .nppp-f2b-info-badge .nppp-tooltiptext {
+    visibility: hidden;
+    opacity: 0;
+    width: 280px;
+    background-color: #0f172a;
+    color: #e2e8f0;
+    text-align: left;
+    line-height: 1.6;
+    font-size: 12.5px;
+    font-weight: 400;
+    border-radius: 8px;
+    padding: 12px 14px;
+    position: absolute;
+    z-index: 20;
+    top: 135%;
+    right: -8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+    transition: opacity .15s ease;
+}
+
+#nppp-f2b-tab .nppp-f2b-info-badge .nppp-tooltiptext::after {
+    content: "";
+    position: absolute;
+    bottom: 100%;
+    right: 12px;
+    border-width: 6px;
+    border-style: solid;
+    border-color: transparent transparent #0f172a transparent;
+}
+
+#nppp-f2b-tab .nppp-f2b-info-badge:hover .nppp-tooltiptext,
+#nppp-f2b-tab .nppp-f2b-info-badge:focus-visible .nppp-tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+@media screen and (max-width: 480px) {
+    #nppp-f2b-tab .nppp-f2b-info-badge .nppp-tooltiptext {
+        width: 220px;
+        right: -60px;
+    }
+}
+
 /* --- Test result banner --- */
 #nppp-f2b-tab .nppp-f2b-result {
     margin: 0 0 20px;
