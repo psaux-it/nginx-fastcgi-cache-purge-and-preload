@@ -117,7 +117,7 @@ function nppp_send_mail_now(
     delete_transient( 'nppp_preload_trigger_' . md5('nppp') );
 
     // Template
-    $template_file = __DIR__ . '/mail.html';
+    $template_file = __DIR__ . '/templates/mail.html';
     $image_url     = plugins_url( '/admin/img/logo-blackwhite.png', dirname( __FILE__ ) );
 
     $html_content = '';
