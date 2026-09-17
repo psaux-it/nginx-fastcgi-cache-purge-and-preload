@@ -6169,3 +6169,200 @@ div.updated.notice-nppp p,
     border-radius: 4px;
     padding: 4px 8px;
 }
+
+
+/* =========================================================================
+   Fail2Ban tab — Abuse Reporter
+   ========================================================================= */
+
+#nppp-f2b-tab .nppp-f2b-abuse-intro {
+    margin: 0 0 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f0f0f1;
+    line-height: 1.7;
+}
+
+#nppp-f2b-tab .nppp-f2b-abuse-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 4px 20px;
+    align-items: start;
+}
+
+#nppp-f2b-tab .nppp-f2b-abuse-field { margin-bottom: 16px; }
+
+#nppp-f2b-tab .nppp-f2b-abuse-field-wide { grid-column: 1 / -1; }
+
+#nppp-f2b-tab .nppp-f2b-abuse-field input[type="text"],
+#nppp-f2b-tab .nppp-f2b-abuse-field input[type="email"],
+#nppp-f2b-tab .nppp-f2b-abuse-field input[type="number"],
+#nppp-f2b-tab .nppp-f2b-abuse-field select {
+    width: 100%;
+    max-width: 100%;
+    height: 32px;
+    font-size: 13px;
+    background: #f6f7f7;
+    color: #1d2327;
+}
+
+#nppp-f2b-tab .nppp-f2b-abuse-field-wide select { max-width: 280px; }
+
+#nppp-f2b-tab .nppp-f2b-abuse-field .nppp-f2b-hint-text {
+    margin-top: 5px;
+    line-height: 1.5;
+}
+
+/* --- Report cells, shared by Repeat Offenders and the Live Feed --- */
+#nppp-f2b-tab .nppp-f2b-report-col { white-space: nowrap; }
+
+#nppp-f2b-tab .nppp-f2b-report-btn {
+    height: 26px;
+    padding: 0 11px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    background: #fff;
+    border-color: #ea1919;
+    color: #ea1919;
+}
+
+#nppp-f2b-tab .nppp-f2b-report-btn:hover:not([disabled]) {
+    background: #ea1919;
+    border-color: #ea1919;
+    color: #fff;
+}
+
+#nppp-f2b-tab .nppp-f2b-report-done {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: #66b317;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    cursor: default;
+}
+
+#nppp-f2b-tab .nppp-f2b-report-na {
+    color: #8c8f94;
+    cursor: help;
+}
+
+/* The Live Feed is the dark terminal panel — soften the muted states there */
+#nppp-f2b-tab table.nppp-f2b-feed-table .nppp-f2b-report-na { color: #555; }
+
+/* --- Confirmation dialog --- */
+body.nppp-f2b-modal-open { overflow: hidden; }
+
+#nppp-f2b-tab .nppp-f2b-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100050;
+}
+
+#nppp-f2b-tab .nppp-f2b-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, .62);
+}
+
+#nppp-f2b-tab .nppp-f2b-modal-box {
+    position: relative;
+    width: min(720px, calc(100vw - 32px));
+    max-height: calc(100vh - 80px);
+    margin: 48px auto 0;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, .35);
+    overflow: hidden;
+}
+
+#nppp-f2b-tab .nppp-f2b-modal-body {
+    padding: 18px 16px;
+    overflow-y: auto;
+}
+
+#nppp-f2b-tab .nppp-f2b-modal-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    padding: 12px 16px;
+    background: #f6f7f7;
+    border-top: 1px solid #dcdcde;
+}
+
+#nppp-f2b-tab .nppp-f2b-modal-foot .nppp-f2b-hint-text {
+    margin: 0;
+    flex: 1 1 300px;
+}
+
+#nppp-f2b-tab .nppp-f2b-modal .nppp-f2b-result { margin-bottom: 16px; }
+#nppp-f2b-tab .nppp-f2b-modal .nppp-f2b-note   { margin: 0 0 16px; }
+
+/* --- Preview body --- */
+#nppp-f2b-tab .nppp-f2b-abuse-preview-table th {
+    width: 150px;
+    background: #337AB7;
+    color: #fff;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, .18);
+    vertical-align: top;
+}
+
+#nppp-f2b-tab .nppp-f2b-abuse-preview-table tbody tr:first-child th { border-top: 0; }
+#nppp-f2b-tab .nppp-f2b-abuse-preview-table tbody tr:nth-child(even) { background: transparent; }
+#nppp-f2b-tab .nppp-f2b-abuse-preview-table tbody tr:hover { background: transparent; }
+
+#nppp-f2b-tab .nppp-f2b-abuse-preview-table td { word-break: break-word; }
+
+#nppp-f2b-tab .nppp-f2b-abuse-muted {
+    color: #646970;
+    font-size: 12px;
+}
+
+#nppp-f2b-tab .nppp-f2b-abuse-preview-label {
+    margin: 18px 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #646970;
+}
+
+#nppp-f2b-tab .nppp-f2b-abuse-evidence {
+    margin: 0;
+    padding: 12px 14px;
+    max-height: 220px;
+    overflow: auto;
+    background: #000;
+    border-radius: 5px;
+    color: #e0e0e0;
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre;
+}
+
+/* --- Narrow screens --- */
+@media screen and (max-width: 782px) {
+    #nppp-f2b-tab .nppp-f2b-abuse-grid { grid-template-columns: 1fr; }
+    #nppp-f2b-tab .nppp-f2b-abuse-field-wide select { max-width: 100%; }
+    #nppp-f2b-tab .nppp-f2b-modal-box { margin-top: 16px; max-height: calc(100vh - 32px); }
+    #nppp-f2b-tab .nppp-f2b-modal-foot { flex-direction: column; align-items: stretch; }
+    #nppp-f2b-tab .nppp-f2b-modal-foot .nppp-f2b-btn { width: 100%; }
+    #nppp-f2b-tab .nppp-f2b-abuse-preview-table th { width: auto; }
+}
