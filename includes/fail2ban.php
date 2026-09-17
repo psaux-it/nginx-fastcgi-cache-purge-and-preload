@@ -1132,6 +1132,15 @@ function nppp_f2b_load_tab_content_callback() {
         'window'     => nppp_f2b_get_window_event_count(),
     );
 
+    // Abuse Reporter — one options read plus, only when the reporter is
+    // actually armed, a single bounded IN() lookup for the offender contacts.
+    $abuse_settings   = nppp_f2b_get_abuse_settings();
+    $abuse_ready      = nppp_f2b_abuse_is_ready( $abuse_settings );
+    $abuse_report_log = $abuse_ready ? nppp_f2b_get_abuse_report_log() : array();
+    $abuse_contacts   = ( $abuse_ready && ! empty( $recidive ) )
+        ? nppp_f2b_get_abuse_map_for_ips( array_column( $recidive, 'ip' ) )
+        : array();
+
     $token          = nppp_f2b_get_token();
     $endpoint       = nppp_f2b_get_endpoint_url();
     $action_snippet = nppp_f2b_get_action_conf_snippet();
