@@ -573,7 +573,7 @@ add_action('rest_api_init', function (): void {
 
     // Optional hard allow-list — empty by default, which keeps container and
     // sidecar setups working where fail2ban is not on localhost. Harden a
-    // bare-metal install from wp-config.php.
+    // bare-metal install from child theme's functions.php;
     //   add_filter('nppp_f2b_trusted_ips', fn() => ['127.0.0.1', '::1']);
     $nppp_ep10_trusted = apply_filters('nppp_f2b_trusted_ips', []);
     if (!empty($nppp_ep10_trusted) && is_array($nppp_ep10_trusted)
