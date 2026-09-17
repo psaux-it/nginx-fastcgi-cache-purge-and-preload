@@ -106,6 +106,9 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 <?php else : ?>
                     <span class="nppp-f2b-pill nppp-f2b-pill-wait" id="nppp-f2b-abuse-pill"><?php esc_html_e( 'Not configured', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                 <?php endif; ?>
+                <button type="button" class="nppp-f2b-btn" id="nppp-f2b-abuse-test">
+                    <?php esc_html_e( 'Send Test Email', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </button>
                 <button type="button" class="nppp-f2b-btn nppp-f2b-btn-primary" id="nppp-f2b-abuse-save">
                     <?php esc_html_e( 'Save Reporter', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                 </button>
@@ -114,9 +117,13 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
         <div class="nppp-f2b-card-body">
 
             <div id="nppp-f2b-abuse-save-result" class="nppp-f2b-result" role="status" aria-live="polite" style="display:none;"></div>
+            <div id="nppp-f2b-abuse-test-result" class="nppp-f2b-result" role="status" aria-live="polite" style="display:none;"></div>
 
             <p class="nppp-f2b-hint-text nppp-f2b-abuse-intro">
                 <?php esc_html_e( 'Sends a formal abuse report to the network owner of a banned IP, built from the ban evidence below and addressed to the abuse contact already resolved for that network. Set this once and the Report buttons stay available in Repeat Offenders and the Live Feed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            </p>
+            <p class="nppp-f2b-hint-text nppp-f2b-abuse-intro">
+                <?php esc_html_e( '"Send Test Email" renders the same template with a dummy IP and dummy ban data and mails it to the Reply-To address above (or the Sender address if Reply-To is empty) — use it to check how the report looks and that this site can actually deliver mail. It uses whatever is currently in this form, even if you have not pressed "Save Reporter" yet, and it assumes WordPress is already able to send mail (SMTP setup is outside this plugin\'s scope).', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
             </p>
 
             <div class="nppp-f2b-abuse-grid">
