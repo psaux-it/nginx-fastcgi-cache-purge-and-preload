@@ -97,6 +97,7 @@ if (! function_exists('nppp_get_cron_reliability')) {
             array(
                 'timeout'   => 3,
                 'blocking'  => true,
+                // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- 'https_local_ssl_verify' is a WordPress core filter (wp-includes/class-wp-http.php), not a plugin-defined hook; reused here so this loopback probe respects the same site-level SSL policy WP core applies to its own local requests.
                 'sslverify' => apply_filters('https_local_ssl_verify', false),
                 'body'      => array('doing_wp_cron' => sprintf('%.22F', microtime(true))),
             )
