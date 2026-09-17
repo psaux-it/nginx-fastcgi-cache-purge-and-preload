@@ -797,7 +797,7 @@ function nppp_f2b_save_abuse_settings_callback() {
             'ready'    => $ready,
             'settings' => $clean,
             'message'  => $ready
-                ? __( 'Abuse Reporter saved. Report buttons are now available — reload the tab to see them.', 'fastcgi-cache-purge-and-preload-nginx' )
+                ? __( 'Abuse Reporter saved. Report buttons are now available.', 'fastcgi-cache-purge-and-preload-nginx' )
                 : __( 'Saved. The reporter stays inactive until it is enabled and the sender address, organisation and contact name are filled in.', 'fastcgi-cache-purge-and-preload-nginx' ),
         )
     );
