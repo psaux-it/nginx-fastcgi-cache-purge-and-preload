@@ -106,7 +106,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 <?php else : ?>
                     <span class="nppp-f2b-pill nppp-f2b-pill-wait" id="nppp-f2b-abuse-pill"><?php esc_html_e( 'Not configured', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                 <?php endif; ?>
-                <button type="button" class="nppp-f2b-btn" id="nppp-f2b-abuse-test">
+                <button type="button" class="nppp-f2b-btn nppp-f2b-btn-primary" id="nppp-f2b-abuse-test">
                     <?php esc_html_e( 'Send Test Email', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                 </button>
                 <button type="button" class="nppp-f2b-btn nppp-f2b-btn-primary" id="nppp-f2b-abuse-save">
