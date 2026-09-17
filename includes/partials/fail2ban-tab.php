@@ -312,7 +312,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                                             'count' => (int) $nppp_country_row['attack_count'],
                                         );
                                     },
-                                    $top_countries
+                                    $top_countries_map
                                 )
                             )
                         );
