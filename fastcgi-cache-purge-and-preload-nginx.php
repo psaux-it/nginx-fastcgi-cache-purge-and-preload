@@ -555,7 +555,8 @@ add_action('rest_api_init', function (): void {
     }
 
     // POST is the only method this route ever accepts.
-    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    $nppp_ep10_method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
+    if ( 'POST' !== $nppp_ep10_method ) {
         return;
     }
 
