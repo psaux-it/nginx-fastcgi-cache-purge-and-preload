@@ -63,6 +63,11 @@ if ( ! defined( 'NPPP_F2B_TOP_COUNTRIES_N' ) ) {
     define( 'NPPP_F2B_TOP_COUNTRIES_N', 8 );
 }
 
+// World map bubbles — effectively "all of them" default.
+if ( ! defined( 'NPPP_F2B_MAP_COUNTRIES_MAX' ) ) {
+    define( 'NPPP_F2B_MAP_COUNTRIES_MAX', 300 );
+}
+
 // Not autoloaded: stamps whether the country_code generated column is
 // present and usable, set once by nppp_f2b_ensure_country_code_column().
 // Read on every Security tab load, so caching it avoids a SHOW COLUMNS
@@ -1113,6 +1118,12 @@ function nppp_f2b_load_tab_content_callback() {
     $top_countries_n     = (int) apply_filters( 'nppp_f2b_top_countries_n', NPPP_F2B_TOP_COUNTRIES_N );
     $top_countries       = $country_available ? nppp_f2b_get_top_countries( $top_countries_n ) : array();
     $top_countries_total = $country_available ? nppp_f2b_get_top_countries_total_count() : 0;
+
+    // The bubble map shows every attacking country in the window, not just
+    // the top N in the table — same query, same window, no LIMIT that
+    // matters in practice (see NPPP_F2B_MAP_COUNTRIES_MAX).
+    $map_countries_max = (int) apply_filters( 'nppp_f2b_map_countries_n', NPPP_F2B_MAP_COUNTRIES_MAX );
+    $top_countries_map = $country_available ? nppp_f2b_get_top_countries( $map_countries_max ) : array();
 
     $stats = array(
         'bans_24h'   => (int) array_sum( array_map( 'intval', array_column( $summaries, 'bans' ) ) ),
