@@ -54,6 +54,15 @@ if ( ! defined( 'NPPP_F2B_ABUSE_RATE_KEY' ) ) {
     define( 'NPPP_F2B_ABUSE_RATE_KEY', 'nppp_f2b_abuse_rl' );
 }
 
+// Debounce window for the "Send Test Email" button.
+if ( ! defined( 'NPPP_F2B_ABUSE_TEST_RATE_KEY' ) ) {
+    define( 'NPPP_F2B_ABUSE_TEST_RATE_KEY', 'nppp_f2b_abuse_test_rl' );
+}
+
+if ( ! defined( 'NPPP_F2B_ABUSE_TEST_COOLDOWN' ) ) {
+    define( 'NPPP_F2B_ABUSE_TEST_COOLDOWN', 20 );
+}
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
@@ -421,6 +430,51 @@ function nppp_f2b_get_ip_report_data( string $ip ): ?array {
     );
 }
 
+/**
+ * Synthetic report payload for the "Send Test Email" button, shaped exactly
+ * like nppp_f2b_get_ip_report_data() so it can be dropped into the same
+ * renderer. Every value lives inside a documentation/reserved range (RFC
+ * 5737 / RFC 5398) so it can never resolve to a real network or a real
+ * abuse desk, and it never touches the fail2ban events table, the cooldown
+ * log, or the hourly abuse rate limiter.
+ *
+ * @return array Same shape as nppp_f2b_get_ip_report_data().
+ */
+function nppp_f2b_abuse_dummy_report_data(): array {
+    $now = time();
+
+    $evidence = array(
+        array(
+            'jail'       => 'wp-login',
+            'created_at' => gmdate( 'Y-m-d H:i:s', $now - 5 * MINUTE_IN_SECONDS ),
+        ),
+        array(
+            'jail'       => 'nginx-limit-req',
+            'created_at' => gmdate( 'Y-m-d H:i:s', $now - 40 * MINUTE_IN_SECONDS ),
+        ),
+        array(
+            'jail'       => 'nginx-botsearch',
+            'created_at' => gmdate( 'Y-m-d H:i:s', $now - 3 * HOUR_IN_SECONDS ),
+        ),
+    );
+
+    return array(
+        'ip'           => '203.0.113.45',
+        'ban_count'    => 7,
+        'first_ban'    => gmdate( 'Y-m-d H:i:s', $now - 3 * DAY_IN_SECONDS ),
+        'last_ban'     => gmdate( 'Y-m-d H:i:s', $now - 5 * MINUTE_IN_SECONDS ),
+        'jails'        => array( 'nginx-botsearch', 'nginx-limit-req', 'wp-login' ),
+        'evidence'     => $evidence,
+        'abuse_emails' => array(),
+        'netname'      => 'EXAMPLE-TEST-NET',
+        'country'      => 'ZZ',
+        'inetnum'      => '203.0.113.0/24',
+        'org_id'       => 'EXAMPLE-TEST-ORG',
+        'origin_asns'  => array( 'AS64500' ),
+        'window_days'  => (int) NPPP_F2B_WINDOW_DAYS,
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Report rendering
 // ---------------------------------------------------------------------------
@@ -507,7 +561,7 @@ function nppp_f2b_abuse_subject( array $data ): string {
  * by nppp_send_mail_now(). Returns '' when the template is unreadable so the
  * caller can fail loudly instead of mailing an empty body.
  */
-function nppp_f2b_abuse_render_email( array $data, array $settings ): string {
+function nppp_f2b_abuse_render_email( array $data, array $settings, bool $is_test = false ): string {
     $wp_filesystem = nppp_initialize_wp_filesystem();
     if ( false === $wp_filesystem ) {
         return '';
@@ -521,6 +575,18 @@ function nppp_f2b_abuse_render_email( array $data, array $settings ): string {
     $html = $wp_filesystem->get_contents( $template_file );
     if ( empty( $html ) ) {
         return '';
+    }
+
+    // Stamp an unmissable banner on test sends so this can never be read as
+    // a real abuse report, whether viewed inline or forwarded on later.
+    if ( $is_test ) {
+        $banner = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
+            . '<tr><td style="background-color:#b45309; padding:10px 40px; text-align:center;">'
+            . '<p style="margin:0; font-family:Arial,Helvetica,sans-serif; font-size:12px; font-weight:bold; letter-spacing:1.5px; text-transform:uppercase; color:#ffffff;">'
+            . esc_html__( 'TEST EMAIL — sample data, not a real abuse report', 'fastcgi-cache-purge-and-preload-nginx' )
+            . '</p></td></tr></table>';
+
+        $html = str_replace( '<body style="margin:0; padding:0; background-color:#f1f5f9;">', '<body style="margin:0; padding:0; background-color:#f1f5f9;">' . $banner, $html );
     }
 
     $dash      = '&ndash;';
@@ -689,6 +755,100 @@ function nppp_f2b_abuse_send_report( string $ip ): array {
             __( 'Abuse report for %1$s sent to %2$s.', 'fastcgi-cache-purge-and-preload-nginx' ),
             $data['ip'],
             implode( ', ', $data['abuse_emails'] )
+        ),
+    );
+}
+
+/**
+ * Render the real template with dummy evidence and hand it to wp_mail(),
+ * addressed back to the operator instead of a real abuse desk.
+ *
+ * Deliberately bypasses every gate that only makes sense for a real report:
+ * nppp_f2b_abuse_is_ready() (min_bans/cooldown/contact fields are about the
+ * outgoing report, not about whether mail can be sent at all), the ban
+ * evidence lookup (there is none for a fake IP), the per-IP cooldown log,
+ * dry_run, and the hourly abuse rate limiter. It keeps its own tiny
+ * debounce instead so the button can't be hammered into a mail loop.
+ *
+ * $settings is taken as given by the caller (the AJAX callback below builds
+ * it straight from the form fields) so a user can preview the template
+ * before ever pressing "Save Reporter".
+ *
+ * @return array array( 'ok' => bool, 'message' => string ).
+ */
+function nppp_f2b_abuse_send_test_mail( array $settings ): array {
+    $recipient = '' !== $settings['reply_to'] ? $settings['reply_to'] : $settings['from_email'];
+
+    if ( '' === $recipient ) {
+        return array(
+            'ok'      => false,
+            'message' => __( 'Enter a Reply-To address (or a Sender address) first — the test email is sent there so you can review it.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+
+    if ( '' === $settings['from_email'] ) {
+        return array(
+            'ok'      => false,
+            'message' => __( 'Enter a Sender address first — it is required to build the From header.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+
+    $bucket = get_transient( NPPP_F2B_ABUSE_TEST_RATE_KEY );
+    if ( is_int( $bucket ) && ( time() - $bucket ) < NPPP_F2B_ABUSE_TEST_COOLDOWN ) {
+        return array(
+            'ok'      => false,
+            'message' => sprintf(
+                /* translators: %d: seconds to wait */
+                __( 'Please wait %d seconds before sending another test email.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                NPPP_F2B_ABUSE_TEST_COOLDOWN - ( time() - $bucket )
+            ),
+        );
+    }
+
+    $data = nppp_f2b_abuse_dummy_report_data();
+    $body = nppp_f2b_abuse_render_email( $data, $settings, true );
+
+    if ( '' === $body ) {
+        return array(
+            'ok'      => false,
+            'message' => __( 'The abuse report template could not be read. Reinstall the plugin files and try again.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+
+    $from_name = '' !== $settings['from_name'] ? $settings['from_name'] : 'NPP Abuse Reporter';
+
+    $headers = array(
+        'Content-Type: text/html; charset=UTF-8',
+        sprintf( 'From: %s <%s>', $from_name, $settings['from_email'] ),
+    );
+
+    // No Reply-To/Cc header here: the recipient of a test send already IS
+    // the reply-to/self address, so adding it again would only risk a
+    // duplicate copy in the same inbox depending on the SMTP provider.
+
+    set_transient( NPPP_F2B_ABUSE_TEST_RATE_KEY, time(), NPPP_F2B_ABUSE_TEST_COOLDOWN );
+
+    $subject = sprintf(
+        /* translators: %s: the normal report subject line */
+        __( '[TEST] %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+        nppp_f2b_abuse_subject( $data )
+    );
+
+    $sent = wp_mail( $recipient, $subject, $body, $headers );
+
+    if ( ! $sent ) {
+        return array(
+            'ok'      => false,
+            'message' => __( 'WordPress could not hand the test email to the mail transport. This site\'s SMTP setup is outside this plugin\'s scope — check whatever mail plugin or server configuration you use for outgoing mail, then try again.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+
+    return array(
+        'ok'      => true,
+        'message' => sprintf(
+            /* translators: %s: recipient email address the test was sent to */
+            __( 'Test email sent to %s using dummy IP 203.0.113.45 — check that inbox (and spam folder) to review the template.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $recipient
         ),
     );
 }
@@ -870,6 +1030,46 @@ function nppp_f2b_abuse_preview_callback() {
             'html'    => $html,
         )
     );
+}
+
+/**
+ * "Send Test Email" — validates and sanitizes whatever is currently in the
+ * form (not necessarily saved yet) and sends one real email built from
+ * dummy ban data to the operator's own Reply-To/Sender address, so the
+ * template and the site's outgoing mail path can both be checked without
+ * touching any real fail2ban evidence or any real abuse desk.
+ */
+function nppp_f2b_abuse_send_test_callback() {
+    nppp_ajax_auth( 'nppp-security-tab' );
+
+    $fields = array(
+        'enabled',
+        'from_name',
+        'from_email',
+        'reply_to',
+        'cc_self',
+        'org_name',
+        'contact_name',
+        'contact_phone',
+        'min_bans',
+        'cooldown_days',
+        'dry_run',
+    );
+
+    $input = array();
+    foreach ( $fields as $field ) {
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth(); every value is whitelisted and sanitized by nppp_f2b_sanitize_abuse_settings()
+        $input[ $field ] = isset( $_POST[ $field ] ) ? wp_unslash( $_POST[ $field ] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+    }
+
+    $settings = nppp_f2b_sanitize_abuse_settings( $input );
+    $result   = nppp_f2b_abuse_send_test_mail( $settings );
+
+    if ( empty( $result['ok'] ) ) {
+        wp_send_json_error( array( 'message' => $result['message'] ), 400 );
+    }
+
+    wp_send_json_success( array( 'message' => $result['message'] ) );
 }
 
 function nppp_f2b_abuse_send_callback() {
