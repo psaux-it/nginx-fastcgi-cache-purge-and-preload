@@ -97,6 +97,104 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
         </div>
     </div>
 
+    <div class="nppp-f2b-card nppp-f2b-card-abuse">
+        <div class="nppp-f2b-card-titlebar">
+            <h3 class="nppp-f2b-card-title"><?php esc_html_e( 'Abuse Reporter', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
+            <div class="nppp-f2b-card-title-actions">
+                <?php if ( $abuse_ready ) : ?>
+                    <span class="nppp-f2b-pill nppp-f2b-pill-ok" id="nppp-f2b-abuse-pill"><?php esc_html_e( 'Armed', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                <?php else : ?>
+                    <span class="nppp-f2b-pill nppp-f2b-pill-wait" id="nppp-f2b-abuse-pill"><?php esc_html_e( 'Not configured', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                <?php endif; ?>
+                <button type="button" class="nppp-f2b-btn nppp-f2b-btn-primary" id="nppp-f2b-abuse-save">
+                    <?php esc_html_e( 'Save Reporter', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </button>
+            </div>
+        </div>
+        <div class="nppp-f2b-card-body">
+
+            <div id="nppp-f2b-abuse-save-result" class="nppp-f2b-result" role="status" aria-live="polite" style="display:none;"></div>
+
+            <p class="nppp-f2b-hint-text nppp-f2b-abuse-intro">
+                <?php esc_html_e( 'Sends a formal abuse report to the network owner of a banned IP, built from the ban evidence below and addressed to the abuse contact already resolved for that network. Set this once and the Report buttons stay available in Repeat Offenders and the Live Feed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            </p>
+
+            <div class="nppp-f2b-abuse-grid">
+
+                <div class="nppp-f2b-row nppp-f2b-abuse-field nppp-f2b-abuse-field-wide">
+                    <label for="nppp-f2b-abuse-enabled"><?php esc_html_e( 'Reporter status', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                    <select id="nppp-f2b-abuse-enabled">
+                        <option value="no" <?php selected( $abuse_settings['enabled'], 'no' ); ?>><?php esc_html_e( 'Disabled', 'fastcgi-cache-purge-and-preload-nginx' ); ?></option>
+                        <option value="yes" <?php selected( $abuse_settings['enabled'], 'yes' ); ?>><?php esc_html_e( 'Enabled', 'fastcgi-cache-purge-and-preload-nginx' ); ?></option>
+                    </select>
+                    <p class="nppp-f2b-hint-text"><?php esc_html_e( 'Reports are never sent automatically. Every report is a deliberate click, confirmed in a preview dialog first.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                </div>
+
+                <div class="nppp-f2b-row nppp-f2b-abuse-field">
+                    <label for="nppp-f2b-abuse-from-name"><?php esc_html_e( 'Sender name', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                    <input type="text" id="nppp-f2b-abuse-from-name" value="<?php echo esc_attr( $abuse_settings['from_name'] ); ?>" maxlength="120" />
+                </div>
+
+                <div class="nppp-f2b-row nppp-f2b-abuse-field">
+                    <label for="nppp-f2b-abuse-from-email"><?php esc_html_e( 'Sender address', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                    <input type="email" id="nppp-f2b-abuse-from-email" value="<?php echo esc_attr( $abuse_settings['from_email'] ); ?>" maxlength="190" placeholder="abuse-report@example.com" />
+                    <p class="nppp-f2b-hint-text"><?php esc_html_e( 'Use an address on this domain so SPF and DKIM still pass.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                </div>
+
+                <div class="nppp-f2b-row nppp-f2b-abuse-field">
+                    <label for="nppp-f2b-abuse-reply-to"><?php esc_html_e( 'Reply-To address', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                    <input type="email" id="nppp-f2b-abuse-reply-to" value="<?php echo esc_attr( $abuse_settings['reply_to'] ); ?>" maxlength="190" />
+                    <p class="nppp-f2b-hint-text"><?php esc_html_e( 'Where the abuse desk replies. A monitored mailbox, not a no-reply alias.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                </div>
+
+                <div class="nppp-f2b-row nppp-f2b-abuse-field">
+                    <label for="nppp-f2b-abuse-cc-self"><?php esc_html_e( 'Keep a copy', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                    <select id="nppp-f2b-abuse-cc-self">
+                        <option value="no" <?php selected( $abuse_settings['cc_self'], 'no' ); ?>><?php esc_html_e( 'No', 'fastcgi-cache-purge-and-preload-nginx' ); ?></option>
+                        <option value="yes" <?php selected( $abuse_settings['cc_self'], 'yes' ); ?>><?php esc_html_e( 'Cc the Reply-To address', 'fastcgi-cache-purge-and-preload-nginx' ); ?></option>
+                    </select>
+                </div>
+
+                <div class="nppp-f2b-row nppp-f2b-abuse-field">
+                    <label for="nppp-f2b-abuse-org-name"><?php esc_html_e( 'Organisation', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                    <input type="text" id="nppp-f2b-abuse-org-name" value="<?php echo esc_attr( $abuse_settings['org_name'] ); ?>" maxlength="120" />
+                </div>
+
+                <div class="nppp-f2b-row nppp-f2b-abuse-field">
+                    <label for="nppp-f2b-abuse-contact-name"><?php esc_html_e( 'Contact name', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                    <input type="text" id="nppp-f2b-abuse-contact-name" value="<?php echo esc_attr( $abuse_settings['contact_name'] ); ?>" maxlength="120" />
+                    <p class="nppp-f2b-hint-text"><?php esc_html_e( 'Anonymous reports are discarded by most providers.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                </div>
+
+                <div class="nppp-f2b-row nppp-f2b-abuse-field">
+                    <label for="nppp-f2b-abuse-contact-phone"><?php esc_html_e( 'Contact phone (optional)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                    <input type="text" id="nppp-f2b-abuse-contact-phone" value="<?php echo esc_attr( $abuse_settings['contact_phone'] ); ?>" maxlength="60" />
+                </div>
+
+                <div class="nppp-f2b-row nppp-f2b-abuse-field">
+                    <label for="nppp-f2b-abuse-min-bans"><?php esc_html_e( 'Minimum bans to report', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                    <input type="number" id="nppp-f2b-abuse-min-bans" value="<?php echo esc_attr( (string) $abuse_settings['min_bans'] ); ?>" min="1" max="100" step="1" />
+                    <p class="nppp-f2b-hint-text"><?php esc_html_e( 'A single ban is usually noise. Three or more is a pattern worth reporting.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                </div>
+
+                <div class="nppp-f2b-row nppp-f2b-abuse-field">
+                    <label for="nppp-f2b-abuse-cooldown"><?php esc_html_e( 'Cooldown (days)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                    <input type="number" id="nppp-f2b-abuse-cooldown" value="<?php echo esc_attr( (string) $abuse_settings['cooldown_days'] ); ?>" min="1" max="365" step="1" />
+                    <p class="nppp-f2b-hint-text"><?php esc_html_e( 'The same address cannot be reported again until this many days have passed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                </div>
+
+                <div class="nppp-f2b-row nppp-f2b-abuse-field">
+                    <label for="nppp-f2b-abuse-dry-run"><?php esc_html_e( 'Dry run', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                    <select id="nppp-f2b-abuse-dry-run">
+                        <option value="no" <?php selected( $abuse_settings['dry_run'], 'no' ); ?>><?php esc_html_e( 'Off — send for real', 'fastcgi-cache-purge-and-preload-nginx' ); ?></option>
+                        <option value="yes" <?php selected( $abuse_settings['dry_run'], 'yes' ); ?>><?php esc_html_e( 'On — build but never send', 'fastcgi-cache-purge-and-preload-nginx' ); ?></option>
+                    </select>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
     <?php if ( ! $configured ) : ?>
         <div class="nppp-f2b-banner">
             <?php esc_html_e( 'No events received yet. Complete the setup above, then use Test Connection to verify the whole path end to end.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
@@ -197,17 +295,34 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 <th><?php esc_html_e( 'IP Address', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Bans', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                 <th><?php esc_html_e( 'Last Ban', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <?php if ( $abuse_ready ) : ?>
+                    <th class="nppp-f2b-report-col"><?php esc_html_e( 'Abuse', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <?php endif; ?>
             </tr>
         </thead>
         <tbody>
             <?php if ( empty( $recidive ) ) : ?>
-                <tr><td colspan="3" class="nppp-f2b-empty-cell"><?php esc_html_e( 'No repeat offenders — that is a good sign.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></td></tr>
+                <tr><td colspan="<?php echo $abuse_ready ? '4' : '3'; ?>" class="nppp-f2b-empty-cell"><?php esc_html_e( 'No repeat offenders — that is a good sign.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></td></tr>
             <?php else : ?>
                 <?php foreach ( $recidive as $nppp_row ) : ?>
                     <tr>
                         <td><code><?php echo esc_html( $nppp_row['ip'] ); ?></code></td>
                         <td><span class="nppp-f2b-badge nppp-f2b-badge-ban"><?php echo esc_html( (string) (int) $nppp_row['ban_count'] ); ?></span></td>
                         <td><?php echo esc_html( nppp_f2b_local_time( (string) $nppp_row['last_ban'] ) ); ?></td>
+                        <?php if ( $abuse_ready ) : ?>
+                            <td class="nppp-f2b-report-col">
+                                <?php
+                                nppp_f2b_render_report_cell(
+                                    (string) $nppp_row['ip'],
+                                    ! empty( $abuse_contacts[ (string) $nppp_row['ip'] ]['abuse_emails'] ),
+                                    (int) $nppp_row['ban_count'],
+                                    (int) $abuse_settings['min_bans'],
+                                    nppp_f2b_abuse_last_reported( (string) $nppp_row['ip'], $abuse_report_log ),
+                                    (int) $abuse_settings['cooldown_days']
+                                );
+                                ?>
+                            </td>
+                        <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
             <?php endif; ?>
@@ -346,7 +461,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 <?php esc_html_e( 'No events yet.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
             </div>
         <?php else : ?>
-            <table id="nppp-f2b-feed-table" class="nppp-f2b-feed-table">
+            <table id="nppp-f2b-feed-table" class="nppp-f2b-feed-table" data-report-col="<?php echo $abuse_ready ? '1' : '0'; ?>">
                 <thead>
                     <tr>
                         <th><?php esc_html_e( 'Time', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
@@ -358,6 +473,9 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                         <th><?php esc_html_e( 'Range', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                         <th><?php esc_html_e( 'ASN', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
                         <th><?php esc_html_e( 'Abuse', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <?php if ( $abuse_ready ) : ?>
+                            <th><?php esc_html_e( 'Report', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <?php endif; ?>
                     </tr>
                 </thead>
 
@@ -414,6 +532,27 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                             <td>
                                 <?php echo ! empty( $nppp_rdap['abuse_emails'] ) ? esc_html( implode( ', ', $nppp_rdap['abuse_emails'] ) ) : ''; ?>
                             </td>
+
+                            <?php if ( $abuse_ready ) : ?>
+                                <td class="nppp-f2b-report-col">
+                                    <?php if ( 'ban' === $nppp_row['event_type'] ) : ?>
+                                        <?php
+                                        nppp_f2b_render_report_cell(
+                                            (string) $nppp_row['ip'],
+                                            ! empty( $nppp_rdap['abuse_emails'] ),
+                                            // Per-IP totals are resolved server-side on click; the feed
+                                            // row only knows about itself, so never pre-block on count.
+                                            (int) $abuse_settings['min_bans'],
+                                            (int) $abuse_settings['min_bans'],
+                                            nppp_f2b_abuse_last_reported( (string) $nppp_row['ip'], $abuse_report_log ),
+                                            (int) $abuse_settings['cooldown_days']
+                                        );
+                                        ?>
+                                    <?php else : ?>
+                                        <span class="nppp-f2b-report-na">&mdash;</span>
+                                    <?php endif; ?>
+                                </td>
+                            <?php endif; ?>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -430,4 +569,29 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
         );
         ?>
     </p>
+
+    <?php if ( $abuse_ready ) : ?>
+        <div id="nppp-f2b-abuse-modal" class="nppp-f2b-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="nppp-f2b-abuse-modal-title">
+            <div class="nppp-f2b-modal-backdrop"></div>
+            <div class="nppp-f2b-modal-box" role="document">
+                <div class="nppp-f2b-card-titlebar">
+                    <h3 class="nppp-f2b-card-title" id="nppp-f2b-abuse-modal-title"><?php esc_html_e( 'Confirm abuse report', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
+                    <div class="nppp-f2b-card-title-actions">
+                        <button type="button" class="nppp-f2b-btn nppp-f2b-modal-close" aria-label="<?php esc_attr_e( 'Close', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
+                            <?php esc_html_e( 'Close', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </button>
+                    </div>
+                </div>
+                <div class="nppp-f2b-modal-body" id="nppp-f2b-abuse-modal-body"></div>
+                <div class="nppp-f2b-modal-foot">
+                    <p class="nppp-f2b-hint-text">
+                        <?php esc_html_e( 'The recipient is resolved on the server from stored RDAP data — it is never taken from this page.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </p>
+                    <button type="button" class="nppp-f2b-btn nppp-f2b-btn-primary" id="nppp-f2b-abuse-send" data-ip="" disabled>
+                        <?php esc_html_e( 'Send Report', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </button>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
 </div>
