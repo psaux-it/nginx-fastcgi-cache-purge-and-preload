@@ -212,10 +212,11 @@ function nppp_f2b_maybe_install(): void {
 function nppp_f2b_ensure_country_code_column( string $table_name ): void {
     global $wpdb;
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $nppp_f2b_col_exists = $wpdb->get_var(
         $wpdb->prepare(
-            "SHOW COLUMNS FROM {$table_name} LIKE %s", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+            'SHOW COLUMNS FROM %i LIKE %s',
+            $table_name,
             'country_code'
         )
     );
@@ -223,24 +224,28 @@ function nppp_f2b_ensure_country_code_column( string $table_name ): void {
     if ( ! $nppp_f2b_col_exists ) {
         // NULLIF(...,'') treats an empty RDAP country as NULL, excluding it
         // alongside unenriched rows via the country_code IS NOT NULL filter.
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.SchemaChange
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.SchemaChange -- intentional, idempotent schema self-heal on a custom plugin table
         $wpdb->query(
-            "ALTER TABLE {$table_name}
-             ADD COLUMN country_code CHAR(2)
-                 GENERATED ALWAYS AS (
-                     NULLIF(UPPER(JSON_UNQUOTE(JSON_EXTRACT(rdap_json, '$.country'))), '')
-                 ) STORED,
-             ADD INDEX ban_country_idx (event_type, created_at, country_code)" // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+            $wpdb->prepare(
+                'ALTER TABLE %i
+                 ADD COLUMN country_code CHAR(2)
+                     GENERATED ALWAYS AS (
+                         NULLIF(UPPER(JSON_UNQUOTE(JSON_EXTRACT(rdap_json, \'$.country\'))), \'\')
+                     ) STORED,
+                 ADD INDEX ban_country_idx (event_type, created_at, country_code)',
+                $table_name
+            )
         );
     }
 
     // Re-check after ALTER: privilege/support failures may be silent.
     // If unavailable, show a one-time database update notice instead of
     // breaking the Top Attack Countries query.
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $nppp_f2b_col_ok = (bool) $wpdb->get_var(
         $wpdb->prepare(
-            "SHOW COLUMNS FROM {$table_name} LIKE %s", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+            'SHOW COLUMNS FROM %i LIKE %s',
+            $table_name,
             'country_code'
         )
     );
@@ -270,15 +275,16 @@ function nppp_f2b_get_top_countries( int $limit = NPPP_F2B_TOP_COUNTRIES_N ): ar
     global $wpdb;
     $table = nppp_f2b_table_name();
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $rows = $wpdb->get_results(
         $wpdb->prepare(
             "SELECT country_code AS country, COUNT(*) AS attack_count, MAX(created_at) AS last_seen
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'ban' AND created_at >= %s AND country_code IS NOT NULL
              GROUP BY country_code
              ORDER BY attack_count DESC, country ASC
-             LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+             LIMIT %d",
+            $table,
             nppp_f2b_country_window_cutoff(),
             $limit
         ),
@@ -298,15 +304,16 @@ function nppp_f2b_get_top_countries_total_count(): int {
     global $wpdb;
     $table = nppp_f2b_table_name();
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     return (int) $wpdb->get_var(
         $wpdb->prepare(
             "SELECT COUNT(*) FROM (
                 SELECT country_code
-                FROM {$table}
+                FROM %i
                 WHERE event_type = 'ban' AND created_at >= %s AND country_code IS NOT NULL
                 GROUP BY country_code
-             ) AS nppp_top_countries", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+             ) AS nppp_top_countries",
+            $table,
             nppp_f2b_country_window_cutoff()
         )
     );
@@ -339,10 +346,11 @@ function nppp_f2b_cleanup_old_events(): void {
     $batches = 0;
 
     do {
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
         $deleted = $wpdb->query(
             $wpdb->prepare(
-                "DELETE FROM {$table} WHERE created_at < %s LIMIT 1000", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+                'DELETE FROM %i WHERE created_at < %s LIMIT 1000',
+                $table,
                 $cutoff
             )
         );
@@ -510,6 +518,7 @@ function nppp_f2b_dispatch_via_fastcgi( int $event_id, string $ip, array $respon
     header( 'Content-Type: application/json; charset=UTF-8' );
     header( 'Content-Length: ' . strlen( $json ) );
 
+    // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- raw JSON API response body, not HTML; $json is wp_json_encode() output and esc_html() would corrupt it. Content-Type header above prevents any browser HTML interpretation.
     echo $json;
 
     fastcgi_finish_request();
@@ -694,12 +703,13 @@ function nppp_f2b_handle_enrich_loopback( WP_REST_Request $request ) {
     // that ip, or that are already enriched. Only enrich a row this
     // request actually owns: a real, still-unenriched 'ban' event for the
     // SAME ip.
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $owns_row = $wpdb->get_var(
         $wpdb->prepare(
-            "SELECT id FROM {$table}
+            "SELECT id FROM %i
              WHERE id = %d AND ip = %s AND event_type = 'ban' AND rdap_json IS NULL
-             LIMIT 1", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+             LIMIT 1",
+            $table,
             $event_id,
             $ip
         )
@@ -897,18 +907,19 @@ function nppp_f2b_get_jail_summaries( int $since_hours = 24 ): array {
     $table = nppp_f2b_table_name();
     $since = gmdate( 'Y-m-d H:i:s', time() - ( $since_hours * HOUR_IN_SECONDS ) );
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $rows = $wpdb->get_results(
         $wpdb->prepare(
             "SELECT jail,
                     SUM(event_type = 'ban')   AS bans,
                     SUM(event_type = 'unban') AS unbans,
                     MAX(created_at)           AS last_event
-             FROM {$table}
+             FROM %i
              WHERE created_at >= %s
              GROUP BY jail
              ORDER BY bans DESC, jail ASC
-             LIMIT 50", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+             LIMIT 50",
+            $table,
             $since
         ),
         ARRAY_A
@@ -923,16 +934,17 @@ function nppp_f2b_get_recidive_ips( int $min_count = 2, int $limit = 25 ): array
 
     $table = nppp_f2b_table_name();
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $rows = $wpdb->get_results(
         $wpdb->prepare(
             "SELECT ip, COUNT(*) AS ban_count, MAX(created_at) AS last_ban
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'ban' AND created_at >= %s
              GROUP BY ip
              HAVING ban_count >= %d
              ORDER BY ban_count DESC, last_ban DESC
-             LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+             LIMIT %d",
+            $table,
             nppp_f2b_window_cutoff(),
             $min_count,
             $limit
@@ -950,16 +962,17 @@ function nppp_f2b_get_recidive_total_count( int $min_count = 2 ): int {
 
     $table = nppp_f2b_table_name();
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     return (int) $wpdb->get_var(
         $wpdb->prepare(
             "SELECT COUNT(*) FROM (
                 SELECT ip
-                FROM {$table}
+                FROM %i
                 WHERE event_type = 'ban' AND created_at >= %s
                 GROUP BY ip
                 HAVING COUNT(*) >= %d
-             ) AS nppp_recidive_ips", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+             ) AS nppp_recidive_ips",
+            $table,
             nppp_f2b_window_cutoff(),
             $min_count
         )
@@ -983,13 +996,14 @@ function nppp_f2b_get_recent_events( int $limit = 0 ): array {
 
     $limit = ( $limit > 0 ) ? min( $limit, $hard_cap ) : $hard_cap;
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $rows = $wpdb->get_results(
         $wpdb->prepare(
-            "SELECT jail, ip, event_type, created_at, rdap_json
-             FROM {$table}
+            'SELECT jail, ip, event_type, created_at, rdap_json
+             FROM %i
              ORDER BY id DESC
-             LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+             LIMIT %d',
+            $table,
             $limit
         ),
         ARRAY_A
@@ -1005,8 +1019,8 @@ function nppp_f2b_get_total_event_count(): int {
 
     $table = nppp_f2b_table_name();
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-    return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i', $table ) );
 }
 
 // Range-scan COUNT, never an unbounded COUNT(*).
@@ -1015,10 +1029,11 @@ function nppp_f2b_get_window_event_count(): int {
 
     $table = nppp_f2b_table_name();
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     return (int) $wpdb->get_var(
         $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE created_at >= %s", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+            'SELECT COUNT(*) FROM %i WHERE created_at >= %s',
+            $table,
             nppp_f2b_window_cutoff()
         )
     );
@@ -1030,8 +1045,8 @@ function nppp_f2b_has_any_events(): bool {
 
     $table = nppp_f2b_table_name();
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-    return (bool) $wpdb->get_var( "SELECT id FROM {$table} LIMIT 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    return (bool) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM %i LIMIT 1', $table ) );
 }
 
 // UTC column -> site timezone, for display only.
@@ -1077,10 +1092,7 @@ function nppp_f2b_get_jail_local_snippet(): string {
     $token = nppp_f2b_get_token();
 
     $comment = __(
-        "Add this under each nginx-related [jail] section in jail.local.\n" .
-        "If the jail already defines its own \"action = ...\" line, APPEND the\n" .
-        "nppp-webhook[...] line to it instead of replacing it — otherwise you\n" .
-        "disable that jail's real ban action.",
+        "Add this under each nginx-related [jail] section in jail.local.\nIf the jail already defines its own \"action = ...\" line, APPEND the\nnppp-webhook[...] line to it instead of replacing it — otherwise you\ndisable that jail's real ban action.",
         'fastcgi-cache-purge-and-preload-nginx'
     );
     $comment = '# ' . str_replace( "\n", "\n# ", $comment );
@@ -1152,7 +1164,7 @@ function nppp_f2b_load_tab_content_callback() {
     include plugin_dir_path( __FILE__ ) . 'partials/fail2ban-tab.php';
     $html = ob_get_clean();
 
-    // The partial escapes its own output. Do not run wp_kses_post() here.
+    // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $html is the captured output of partials/fail2ban-tab.php, which escapes every dynamic value itself (esc_html/esc_attr/esc_url) at the point of use. Re-escaping the whole buffer here would double-encode entities and break the rendered markup. Do not run wp_kses_post() here.
     echo $html;
     wp_die();
 }
@@ -1177,8 +1189,8 @@ function nppp_f2b_clear_events_callback() {
     $table = nppp_f2b_table_name();
 
     // Use DELETE so the action works without DROP privilege.
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-    $nppp_f2b_deleted = $wpdb->query( "DELETE FROM {$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $nppp_f2b_deleted = $wpdb->query( $wpdb->prepare( 'DELETE FROM %i', $table ) );
 
     if ( false === $nppp_f2b_deleted ) {
         wp_send_json_error(
