@@ -259,18 +259,19 @@ function nppp_f2b_get_abuse_map_for_ips( array $ips ): array {
     $placeholders = implode( ', ', array_fill( 0, count( $ips ), '%s' ) );
 
     // MAX(id) per ip picks the most recently enriched row for that address.
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is a fixed '%s, %s, ...' string built only from count($ips); it carries no user data, every %s is filled by prepare() below
     $rows = $wpdb->get_results(
         $wpdb->prepare(
             "SELECT e.ip, e.rdap_json
-             FROM {$table} AS e
+             FROM %i AS e
              INNER JOIN (
                  SELECT ip, MAX(id) AS max_id
-                 FROM {$table}
+                 FROM %i
                  WHERE ip IN ({$placeholders}) AND rdap_json IS NOT NULL
                  GROUP BY ip
-             ) AS latest ON latest.max_id = e.id", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix; placeholders built from a validated IP list
-            $ips
+             ) AS latest ON latest.max_id = e.id",
+            array_merge( array( $table, $table ), $ips )
         ),
         ARRAY_A
     );
@@ -328,12 +329,13 @@ function nppp_f2b_get_ip_report_data( string $ip ): ?array {
     $table  = nppp_f2b_table_name();
     $cutoff = nppp_f2b_window_cutoff();
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $summary = $wpdb->get_row(
         $wpdb->prepare(
             "SELECT COUNT(*) AS ban_count, MIN(created_at) AS first_ban, MAX(created_at) AS last_ban
-             FROM {$table}
-             WHERE event_type = 'ban' AND created_at >= %s AND ip = %s", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+             FROM %i
+             WHERE event_type = 'ban' AND created_at >= %s AND ip = %s",
+            $table,
             $cutoff,
             $ip
         ),
@@ -349,14 +351,15 @@ function nppp_f2b_get_ip_report_data( string $ip ): ?array {
         $evidence_max = 1;
     }
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $evidence = $wpdb->get_results(
         $wpdb->prepare(
             "SELECT jail, created_at
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'ban' AND created_at >= %s AND ip = %s
              ORDER BY created_at DESC
-             LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+             LIMIT %d",
+            $table,
             $cutoff,
             $ip,
             $evidence_max
@@ -366,14 +369,15 @@ function nppp_f2b_get_ip_report_data( string $ip ): ?array {
 
     $evidence = is_array( $evidence ) ? $evidence : array();
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $jails = $wpdb->get_col(
         $wpdb->prepare(
             "SELECT DISTINCT jail
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'ban' AND created_at >= %s AND ip = %s
              ORDER BY jail ASC
-             LIMIT 50", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+             LIMIT 50",
+            $table,
             $cutoff,
             $ip
         )
@@ -392,14 +396,15 @@ function nppp_f2b_get_ip_report_data( string $ip ): ?array {
     $asns    = array();
     $org     = '';
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $raw_rdap = $wpdb->get_var(
         $wpdb->prepare(
-            "SELECT rdap_json
-             FROM {$table}
+            'SELECT rdap_json
+             FROM %i
              WHERE ip = %s AND rdap_json IS NOT NULL
              ORDER BY id DESC
-             LIMIT 1", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table name derived from $wpdb->prefix
+             LIMIT 1',
+            $table,
             $ip
         )
     );
@@ -942,8 +947,8 @@ function nppp_f2b_save_abuse_settings_callback() {
 
     $input = array();
     foreach ( $fields as $field ) {
-        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth(); every value is whitelisted and sanitized by nppp_f2b_sanitize_abuse_settings()
-        $input[ $field ] = isset( $_POST[ $field ] ) ? wp_unslash( $_POST[ $field ] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce verified in nppp_ajax_auth() above; $field is drawn from the fixed $fields whitelist, and every value is re-sanitized in nppp_f2b_sanitize_abuse_settings() below
+        $input[ $field ] = isset( $_POST[ $field ] ) ? wp_unslash( $_POST[ $field ] ) : '';
     }
 
     $clean = nppp_f2b_sanitize_abuse_settings( $input );
@@ -1058,8 +1063,8 @@ function nppp_f2b_abuse_send_test_callback() {
 
     $input = array();
     foreach ( $fields as $field ) {
-        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth(); every value is whitelisted and sanitized by nppp_f2b_sanitize_abuse_settings()
-        $input[ $field ] = isset( $_POST[ $field ] ) ? wp_unslash( $_POST[ $field ] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce verified in nppp_ajax_auth() above; $field is drawn from the fixed $fields whitelist, and every value is re-sanitized in nppp_f2b_sanitize_abuse_settings() below
+        $input[ $field ] = isset( $_POST[ $field ] ) ? wp_unslash( $_POST[ $field ] ) : '';
     }
 
     $settings = nppp_f2b_sanitize_abuse_settings( $input );
