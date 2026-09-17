@@ -567,6 +567,10 @@ add_action('rest_api_init', function (): void {
     // Get IP
     $nppp_ep10_raw_ip = nppp_resolve_ip();
 
+    // Mask IP for logging. Computed before the allow-list check below so
+    // that an allow-list rejection can be logged too.
+    $nppp_ep10_masked = nppp_mask_ip($nppp_ep10_raw_ip);
+
     // Optional hard allow-list — empty by default, which keeps container and
     // sidecar setups working where fail2ban is not on localhost. Harden a
     // bare-metal install from wp-config.php.
@@ -574,6 +578,8 @@ add_action('rest_api_init', function (): void {
     $nppp_ep10_trusted = apply_filters('nppp_f2b_trusted_ips', []);
     if (!empty($nppp_ep10_trusted) && is_array($nppp_ep10_trusted)
         && !in_array($nppp_ep10_raw_ip, $nppp_ep10_trusted, true)) {
+        // Log AND penalise
+        nppp_ep_gate_log($nppp_ep10_masked, $nppp_ep10_raw_ip, 'ep10', 'nppp_f2b_event', 'ERROR 403 IP NOT IN TRUSTED ALLOW-LIST');
         wp_die('', '', ['response' => 403]);
     }
 
@@ -583,9 +589,6 @@ add_action('rest_api_init', function (): void {
     if ((int) get_transient($nppp_ep10_rate_key) >= 20) {
         wp_die('', '', ['response' => 429]);
     }
-
-    // Mask IP for logging
-    $nppp_ep10_masked = nppp_mask_ip($nppp_ep10_raw_ip);
 
     // Extract the bearer token.
     $nppp_ep10_auth = sanitize_text_field(
