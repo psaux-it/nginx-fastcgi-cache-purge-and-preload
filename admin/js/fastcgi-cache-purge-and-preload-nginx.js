@@ -1355,6 +1355,13 @@ $(document).ready(function() {
                 const $result = $('#nppp-f2b-abuse-save-result');
                 const label = $btn.text();
 
+                // Report buttons, the Report columns and the confirmation
+                // dialog only exist in the DOM when the tab was rendered
+                // with $abuse_ready true. Capture the state before the
+                // request so a flip in either direction can be detected
+                // once the response comes back.
+                const wasReady = $('#nppp-f2b-abuse-pill').hasClass('nppp-f2b-pill-ok');
+
                 $btn.prop('disabled', true).text(__('Saving\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
                 $result.hide().removeClass('nppp-f2b-result-ok nppp-f2b-result-fail').text('');
 
@@ -1379,11 +1386,29 @@ $(document).ready(function() {
                     },
                     success: function(resp) {
                         if (resp && resp.success && resp.data) {
+                            const isReady = !!resp.data.ready;
+
+                            npppF2bToast(resp.data.message, 'success');
+
+                            // Readiness flipped: the Report columns, the
+                            // per-row buttons and the confirmation dialog
+                            // markup itself need to be re-rendered from PHP.
+                            // Reuse the exact reload path "Clear All Events"
+                            // already uses, so behaviour stays consistent.
+                            if (isReady !== wasReady) {
+                                showPreloader();
+                                loadSecurityTabContent();
+                                return;
+                            }
+
+                            // Readiness unchanged — a lighter, in-place
+                            // update is enough, and avoids tearing down the
+                            // Live Feed DataTable for a cooldown/text tweak.
                             const $pill = $('#nppp-f2b-abuse-pill');
                             $pill
                                 .removeClass('nppp-f2b-pill-ok nppp-f2b-pill-wait')
-                                .addClass(resp.data.ready ? 'nppp-f2b-pill-ok' : 'nppp-f2b-pill-wait')
-                                .text(resp.data.ready
+                                .addClass(isReady ? 'nppp-f2b-pill-ok' : 'nppp-f2b-pill-wait')
+                                .text(isReady
                                     ? __('Armed', 'fastcgi-cache-purge-and-preload-nginx')
                                     : __('Not configured', 'fastcgi-cache-purge-and-preload-nginx'));
 
@@ -1397,11 +1422,9 @@ $(document).ready(function() {
                             }
 
                             $result
-                                .addClass(resp.data.ready ? 'nppp-f2b-result-ok' : 'nppp-f2b-result-fail')
+                                .addClass(isReady ? 'nppp-f2b-result-ok' : 'nppp-f2b-result-fail')
                                 .text(resp.data.message)
                                 .slideDown(120);
-
-                            npppF2bToast(__('Abuse Reporter saved.', 'fastcgi-cache-purge-and-preload-nginx'), 'success');
                         } else {
                             npppF2bToast(__('Failed to save the Abuse Reporter.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
                         }
