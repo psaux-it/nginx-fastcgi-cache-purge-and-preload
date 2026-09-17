@@ -1436,6 +1436,64 @@ $(document).ready(function() {
                 });
             });
 
+        // Send a real test email built from dummy ban data to the operator's
+        // own Reply-To/Sender address, using whatever is currently typed in
+        // the form (no need to Save first).
+        $securityPlaceholder.off('click', '#nppp-f2b-abuse-test')
+            .on('click', '#nppp-f2b-abuse-test', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const $result = $('#nppp-f2b-abuse-test-result');
+                const label = $btn.text();
+
+                $btn.prop('disabled', true).text(__('Sending\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
+                $result.hide().removeClass('nppp-f2b-result-ok nppp-f2b-result-fail').text('');
+
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action:        'nppp_f2b_abuse_send_test',
+                        _wpnonce:      nonce,
+                        enabled:       $('#nppp-f2b-abuse-enabled').val(),
+                        from_name:     $('#nppp-f2b-abuse-from-name').val(),
+                        from_email:    $('#nppp-f2b-abuse-from-email').val(),
+                        reply_to:      $('#nppp-f2b-abuse-reply-to').val(),
+                        cc_self:       $('#nppp-f2b-abuse-cc-self').val(),
+                        org_name:      $('#nppp-f2b-abuse-org-name').val(),
+                        contact_name:  $('#nppp-f2b-abuse-contact-name').val(),
+                        contact_phone: $('#nppp-f2b-abuse-contact-phone').val(),
+                        min_bans:      $('#nppp-f2b-abuse-min-bans').val(),
+                        cooldown_days: $('#nppp-f2b-abuse-cooldown').val(),
+                        dry_run:       $('#nppp-f2b-abuse-dry-run').val()
+                    },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            $result
+                                .addClass('nppp-f2b-result-ok')
+                                .text(resp.data.message)
+                                .slideDown(120);
+                            npppF2bToast(__('Test email sent.', 'fastcgi-cache-purge-and-preload-nginx'), 'success');
+                        } else {
+                            $result
+                                .addClass('nppp-f2b-result-fail')
+                                .text((resp && resp.data && resp.data.message)
+                                    ? resp.data.message
+                                    : __('The test email could not be sent.', 'fastcgi-cache-purge-and-preload-nginx'))
+                                .slideDown(120);
+                        }
+                    },
+                    error: function() {
+                        $result
+                            .addClass('nppp-f2b-result-fail')
+                            .text(__('AJAX error while sending the test email.', 'fastcgi-cache-purge-and-preload-nginx'))
+                            .slideDown(120);
+                    },
+                    complete: function() { $btn.prop('disabled', false).text(label); }
+                });
+            });
+
         // Report button -> confirmation dialog. Nothing is sent from here.
         $securityPlaceholder.off('click', '.nppp-f2b-report-btn')
             .on('click', '.nppp-f2b-report-btn', function(e) {
