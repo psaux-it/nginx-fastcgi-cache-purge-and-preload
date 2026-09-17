@@ -136,6 +136,7 @@ require_once dirname(__DIR__) . '/includes/help.php';
 require_once dirname(__DIR__) . '/includes/configuration-parser.php';
 require_once dirname(__DIR__) . '/includes/status.php';
 require_once dirname(__DIR__) . '/includes/fail2ban.php';
+require_once dirname(__DIR__) . '/includes/fail2ban-abuse.php';
 require_once dirname(__DIR__) . '/includes/advanced.php';
 require_once dirname(__DIR__) . '/includes/send-mail.php';
 require_once dirname(__DIR__) . '/includes/schedule.php';
@@ -215,6 +216,9 @@ add_action('wp_ajax_nppp_load_security_content', 'nppp_f2b_load_tab_content_call
 add_action('wp_ajax_nppp_f2b_regenerate_token', 'nppp_f2b_regenerate_token_callback');
 add_action('wp_ajax_nppp_f2b_clear_events', 'nppp_f2b_clear_events_callback');
 add_action('wp_ajax_nppp_f2b_test_connection', 'nppp_f2b_test_connection_callback');
+add_action('wp_ajax_nppp_f2b_save_abuse_settings', 'nppp_f2b_save_abuse_settings_callback');
+add_action('wp_ajax_nppp_f2b_abuse_preview', 'nppp_f2b_abuse_preview_callback');
+add_action('wp_ajax_nppp_f2b_abuse_send', 'nppp_f2b_abuse_send_callback');
 add_action('admin_init', 'nppp_f2b_maybe_install');
 add_action('admin_init', 'nppp_f2b_schedule_cleanup');
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
