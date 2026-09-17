@@ -567,7 +567,7 @@ function nppp_f2b_abuse_render_email( array $data, array $settings, bool $is_tes
         return '';
     }
 
-    $template_file = __DIR__ . '/mail-abuse.html';
+    $template_file = __DIR__ . '/templates/mail-abuse.html';
     if ( ! $wp_filesystem->exists( $template_file ) ) {
         return '';
     }
