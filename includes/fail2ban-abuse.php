@@ -1103,7 +1103,7 @@ function nppp_f2b_abuse_send_test_callback() {
     $result   = nppp_f2b_abuse_send_test_mail( $settings );
 
     if ( empty( $result['ok'] ) ) {
-        wp_send_json_error( array( 'message' => $result['message'] ), 400 );
+        wp_send_json_error( array( 'message' => $result['message'] ) );
     }
 
     wp_send_json_success( array( 'message' => $result['message'] ) );
@@ -1126,7 +1126,7 @@ function nppp_f2b_abuse_send_callback() {
     $result = nppp_f2b_abuse_send_report( $ip );
 
     if ( empty( $result['ok'] ) ) {
-        wp_send_json_error( array( 'message' => $result['message'] ), 409 );
+        wp_send_json_error( array( 'message' => $result['message'] ) );
     }
 
     wp_send_json_success(
