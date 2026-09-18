@@ -5365,7 +5365,7 @@ div.updated.notice-nppp p,
 }
 
 #nppp-f2b-tab .nppp-f2b-jails {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
     min-width: 0;
 }
 
@@ -5903,21 +5903,17 @@ div.updated.notice-nppp p,
 #nppp-f2b-tab .nppp-f2b-badge-cap {
     font-size: 11px;
     color: #646970;
-    margin-right: 6px;
 }
 
-/* Per-jail bans-only change badge (bans vs previous 24h). Reuses the
-   .nppp-f2b-stat-change-up/-down/-flat color classes above so the two
-   are always in sync; this class only sets the smaller jail-card sizing. */
+/* Per-jail bans-only change badge (bans vs previous 24h). */
 #nppp-f2b-tab .nppp-f2b-jail-change {
     display: inline-block;
-    padding: 1px 8px;
+    padding: 2px 9px;
     border-radius: 999px;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 700;
     line-height: 1.5;
     font-variant-numeric: tabular-nums;
-    margin-right: 6px;
 }
 
 #nppp-f2b-tab .nppp-f2b-jail-last {
@@ -6116,6 +6112,7 @@ div.updated.notice-nppp p,
 #nppp-f2b-tab .nppp-obar-count {
     flex: 0 0 26px;
     text-align: right;
+    font-size: 12px;
     font-weight: 700;
     color: #1d2327;
     font-variant-numeric: tabular-nums;
@@ -6429,6 +6426,7 @@ div.updated.notice-nppp p,
 }
 
 #nppp-f2b-tab .nppp-f2b-report-na {
+    font-size: 11px;
     color: #8c8f94;
     cursor: help;
 }
@@ -6549,7 +6547,6 @@ body.nppp-f2b-modal-open { overflow: hidden; }
     #nppp-f2b-tab .nppp-f2b-abuse-grid { grid-template-columns: 1fr; }
     #nppp-f2b-tab .nppp-f2b-abuse-field-wide select { max-width: 100%; }
     #nppp-f2b-tab .nppp-f2b-jail-activity-row { grid-template-columns: 1fr; }
-    #nppp-f2b-tab .nppp-f2b-jails { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
     #nppp-f2b-tab .nppp-f2b-jail-chart-panel { margin-top: 4px; }
     #nppp-f2b-tab .nppp-f2b-modal-box { margin-top: 16px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); }
     #nppp-f2b-tab .nppp-f2b-modal-foot { flex-direction: column; align-items: stretch; }
