@@ -5357,8 +5357,20 @@ div.updated.notice-nppp p,
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
+#nppp-f2b-tab .nppp-f2b-jail-activity-row {
+    display: grid;
+    grid-template-columns: minmax(360px, 480px) 1fr;
+    gap: 16px;
+    align-items: stretch;
+}
+
 #nppp-f2b-tab .nppp-f2b-jails {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
+    min-width: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-wrap {
+    min-width: 0;
 }
 
 /* --- Status pill (now lives in the Connection card titlebar) --- */
@@ -5825,7 +5837,6 @@ div.updated.notice-nppp p,
 /* --- Jail cards --- */
 #nppp-f2b-tab .nppp-f2b-jails {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 14px;
 }
 
@@ -5879,6 +5890,73 @@ div.updated.notice-nppp p,
     margin: 0;
     font-size: 11px;
     color: #646970;
+}
+
+/* --- Jail activity chart: ranked bans-by-jail bar list --- */
+#nppp-f2b-tab .nppp-f2b-jail-chart-panel {
+    height: 100%;
+    box-sizing: border-box;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .06);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-title {
+    margin: 0 0 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #646970;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+    justify-content: space-between;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-row-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1d2327;
+    word-break: break-all;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-value {
+    font-size: 12px;
+    font-weight: 700;
+    color: #ea1919;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-track {
+    height: 10px;
+    background: #f0f0f1;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-fill {
+    height: 100%;
+    background: #ea1919;
+    border-radius: 3px;
+    transition: width .25s ease;
 }
 
 /* --- Repeat offenders table --- */
@@ -6433,6 +6511,9 @@ body.nppp-f2b-modal-open { overflow: hidden; }
 @media screen and (max-width: 782px) {
     #nppp-f2b-tab .nppp-f2b-abuse-grid { grid-template-columns: 1fr; }
     #nppp-f2b-tab .nppp-f2b-abuse-field-wide select { max-width: 100%; }
+    #nppp-f2b-tab .nppp-f2b-jail-activity-row { grid-template-columns: 1fr; }
+    #nppp-f2b-tab .nppp-f2b-jails { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    #nppp-f2b-tab .nppp-f2b-jail-chart-panel { margin-top: 4px; }
     #nppp-f2b-tab .nppp-f2b-modal-box { margin-top: 16px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); }
     #nppp-f2b-tab .nppp-f2b-modal-foot { flex-direction: column; align-items: stretch; }
     #nppp-f2b-tab .nppp-f2b-modal-foot .nppp-f2b-hint-text { flex: 0 1 auto; }
