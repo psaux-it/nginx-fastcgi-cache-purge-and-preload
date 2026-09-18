@@ -1312,7 +1312,7 @@ $(document).ready(function() {
                 const $result = $('#nppp-f2b-test-result');
                 const label = $btn.text();
                 $btn.prop('disabled', true).text(__('Testing\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
-                $result.hide().removeClass('nppp-f2b-result-ok nppp-f2b-result-fail').text('');
+                $result.hide().removeClass('nppp-f2b-result-ok nppp-f2b-result-fail').find('.nppp-f2b-result-msg').text('');
                 $.ajax({
                     url: nppp_admin_data.ajaxurl,
                     type: 'POST',
@@ -1322,25 +1322,35 @@ $(document).ready(function() {
                         if (resp && resp.success && resp.data) {
                             $result
                                 .addClass(resp.data.ok ? 'nppp-f2b-result-ok' : 'nppp-f2b-result-fail')
-                                .text(resp.data.message)
+                                .find('.nppp-f2b-result-msg').text(resp.data.message)
+                                .end()
                                 .slideDown(120);
                         } else {
                             $result
                                 .addClass('nppp-f2b-result-fail')
-                                .text(__('The test did not complete. Check your PHP error log.', 'fastcgi-cache-purge-and-preload-nginx'))
+                                .find('.nppp-f2b-result-msg').text(__('The test did not complete. Check your PHP error log.', 'fastcgi-cache-purge-and-preload-nginx'))
+                                .end()
                                 .slideDown(120);
                         }
                     },
                     error: function() {
                         $result
                             .addClass('nppp-f2b-result-fail')
-                            .text(__('AJAX error while running the connection test.', 'fastcgi-cache-purge-and-preload-nginx'))
+                            .find('.nppp-f2b-result-msg').text(__('AJAX error while running the connection test.', 'fastcgi-cache-purge-and-preload-nginx'))
+                            .end()
                             .slideDown(120);
                     },
                     complete: function() {
                         $btn.prop('disabled', false).text(label);
                     }
                 });
+            });
+
+        // Dismiss (x) button on any inline .nppp-f2b-result banner
+        $securityPlaceholder.off('click', '.nppp-f2b-result-close')
+            .on('click', '.nppp-f2b-result-close', function(e) {
+                e.preventDefault();
+                $(this).closest('.nppp-f2b-result').slideUp(120);
             });
 
         // -----------------------------------------------------------------
@@ -1363,7 +1373,7 @@ $(document).ready(function() {
                 const wasReady = $('#nppp-f2b-abuse-pill').hasClass('nppp-f2b-pill-ok');
 
                 $btn.prop('disabled', true).text(__('Saving\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
-                $result.hide().removeClass('nppp-f2b-result-ok nppp-f2b-result-fail').text('');
+                $result.hide().removeClass('nppp-f2b-result-ok nppp-f2b-result-fail').find('.nppp-f2b-result-msg').text('');
 
                 $.ajax({
                     url: nppp_admin_data.ajaxurl,
@@ -1423,7 +1433,8 @@ $(document).ready(function() {
 
                             $result
                                 .addClass(isReady ? 'nppp-f2b-result-ok' : 'nppp-f2b-result-fail')
-                                .text(resp.data.message)
+                                .find('.nppp-f2b-result-msg').text(resp.data.message)
+                                .end()
                                 .slideDown(120);
                         } else {
                             npppF2bToast(__('Failed to save the Abuse Reporter.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
@@ -1447,7 +1458,7 @@ $(document).ready(function() {
                 const label = $btn.text();
 
                 $btn.prop('disabled', true).text(__('Sending\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
-                $result.hide().removeClass('nppp-f2b-result-ok nppp-f2b-result-fail').text('');
+                $result.hide().removeClass('nppp-f2b-result-ok nppp-f2b-result-fail').find('.nppp-f2b-result-msg').text('');
 
                 $.ajax({
                     url: nppp_admin_data.ajaxurl,
@@ -1472,22 +1483,25 @@ $(document).ready(function() {
                         if (resp && resp.success && resp.data) {
                             $result
                                 .addClass('nppp-f2b-result-ok')
-                                .text(resp.data.message)
+                                .find('.nppp-f2b-result-msg').text(resp.data.message)
+                                .end()
                                 .slideDown(120);
                             npppF2bToast(__('Test email sent.', 'fastcgi-cache-purge-and-preload-nginx'), 'success');
                         } else {
                             $result
                                 .addClass('nppp-f2b-result-fail')
-                                .text((resp && resp.data && resp.data.message)
+                                .find('.nppp-f2b-result-msg').text((resp && resp.data && resp.data.message)
                                     ? resp.data.message
                                     : __('The test email could not be sent.', 'fastcgi-cache-purge-and-preload-nginx'))
+                                .end()
                                 .slideDown(120);
                         }
                     },
                     error: function() {
                         $result
                             .addClass('nppp-f2b-result-fail')
-                            .text(__('AJAX error while sending the test email.', 'fastcgi-cache-purge-and-preload-nginx'))
+                            .find('.nppp-f2b-result-msg').text(__('AJAX error while sending the test email.', 'fastcgi-cache-purge-and-preload-nginx'))
+                            .end()
                             .slideDown(120);
                     },
                     complete: function() { $btn.prop('disabled', false).text(label); }
