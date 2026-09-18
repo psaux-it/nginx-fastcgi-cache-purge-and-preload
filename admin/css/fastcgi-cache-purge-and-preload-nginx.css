@@ -5587,6 +5587,26 @@ div.updated.notice-nppp p,
     letter-spacing: .04em;
 }
 
+/* --- Stat card change badge: % vs the previous 24h/window --- */
+#nppp-f2b-tab .nppp-f2b-stat-change {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+}
+
+#nppp-f2b-tab .nppp-f2b-stat-change-up   { background: #eaf6db; color: #3f7d0f; }
+#nppp-f2b-tab .nppp-f2b-stat-change-down { background: #fdeaea; color: #c81e1e; }
+#nppp-f2b-tab .nppp-f2b-stat-change-flat { background: #f0f0f1; color: #646970; }
+
+#nppp-f2b-tab .nppp-f2b-stat-change-up::before   { content: "\25B2\a0"; }
+#nppp-f2b-tab .nppp-f2b-stat-change-down::before { content: "\25BC\a0"; }
+#nppp-f2b-tab .nppp-f2b-stat-change-flat::before { content: "\25AC\a0"; }
+
 /* --- Connection card (now the first element in the tab) --- */
 #nppp-f2b-tab .nppp-f2b-card {
     background: #fff;
@@ -5886,6 +5906,20 @@ div.updated.notice-nppp p,
     margin-right: 6px;
 }
 
+/* Per-jail bans-only change badge (bans vs previous 24h). Reuses the
+   .nppp-f2b-stat-change-up/-down/-flat color classes above so the two
+   are always in sync; this class only sets the smaller jail-card sizing. */
+#nppp-f2b-tab .nppp-f2b-jail-change {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    margin-right: 6px;
+}
+
 #nppp-f2b-tab .nppp-f2b-jail-last {
     margin: 0;
     font-size: 11px;
@@ -5906,12 +5940,15 @@ div.updated.notice-nppp p,
 }
 
 #nppp-f2b-tab .nppp-f2b-jail-chart-title {
-    margin: 0 0 12px;
+    margin: -14px -16px 12px;
+    padding: 10px 16px;
+    background: #337AB7;
+    border-radius: 6px 6px 0 0;
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .04em;
-    color: #646970;
+    color: #fff;
 }
 
 #nppp-f2b-tab .nppp-f2b-jail-chart-rows {
