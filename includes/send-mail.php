@@ -34,6 +34,17 @@ function nppp_send_mail_now(
         return;
     }
 
+    // Cheap cache-first gate. Preload can be triggered from many roots
+    // (cron, manual button, REST, WP-CLI) and they all funnel through this
+    // one function to send mail — so this is the one place to check.
+    // If the last real attempt below failed, skip straight out here for a
+    // while instead of paying SMTP connect/timeout cost + building the
+    // whole HTML report again on every single preload.
+    $mail_health_key = 'nppp_mail_health_' . md5( 'nppp' );
+    if ( 'fail' === get_transient( $mail_health_key ) ) {
+        return;
+    }
+
     $wp_filesystem = nppp_initialize_wp_filesystem();
     if ( $wp_filesystem === false ) {
         return;
@@ -149,12 +160,29 @@ function nppp_send_mail_now(
         "From: NPP Wordpress <npp-no-reply@$domain>",
     );
 
-    wp_mail(
+    $mail_result = nppp_wp_mail_diagnostic(
         $nginx_cache_email,
         __( 'NPP Wordpress Report', 'fastcgi-cache-purge-and-preload-nginx' ),
         $html_content,
         $headers
     );
+
+    if ( ! $mail_result['sent'] ) {
+        // Cache the failure so the next preloads hit the guard above
+        // instead of retrying a transport that is already known broken.
+        set_transient( $mail_health_key, 'fail', HOUR_IN_SECONDS );
+        nppp_custom_error_log(
+            sprintf(
+                /* translators: %s: underlying mail transport error */
+                __( 'Preload report email could not be sent: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $mail_result['error']
+            )
+        );
+        return;
+    }
+
+    // Transport is healthy again — clear any previously cached failure.
+    delete_transient( $mail_health_key );
 }
 
 /**
