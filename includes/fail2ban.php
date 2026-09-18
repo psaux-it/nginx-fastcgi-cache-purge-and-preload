@@ -928,6 +928,36 @@ function nppp_f2b_get_jail_summaries( int $since_hours = 24 ): array {
     return is_array( $rows ) ? $rows : array();
 }
 
+// Same aggregation as nppp_f2b_get_jail_summaries(), but bounded to an
+// explicit [since, until) range instead of "now minus N hours". Used to
+// compute the prior comparison period for the Jail Activity % change badges.
+function nppp_f2b_get_jail_summaries_between( string $since, string $until ): array {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT jail,
+                    SUM(event_type = 'ban')   AS bans,
+                    SUM(event_type = 'unban') AS unbans,
+                    MAX(created_at)           AS last_event
+             FROM %i
+             WHERE created_at >= %s AND created_at < %s
+             GROUP BY jail
+             ORDER BY bans DESC, jail ASC
+             LIMIT 50",
+            $table,
+            $since,
+            $until
+        ),
+        ARRAY_A
+    );
+
+    return is_array( $rows ) ? $rows : array();
+}
+
 // Bounded repeat-offender query using the event_type/ip composite index.
 function nppp_f2b_get_recidive_ips( int $min_count = 2, int $limit = 25 ): array {
     global $wpdb;
@@ -1039,6 +1069,25 @@ function nppp_f2b_get_window_event_count(): int {
     );
 }
 
+// Same bounded COUNT as nppp_f2b_get_window_event_count(), but for an
+// explicit [since, until) range -- used to compute the prior N-day window
+// for the "Events / Nd" stat card's percentage-change badge.
+function nppp_f2b_get_window_event_count_between( string $since, string $until ): int {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    return (int) $wpdb->get_var(
+        $wpdb->prepare(
+            'SELECT COUNT(*) FROM %i WHERE created_at >= %s AND created_at < %s',
+            $table,
+            $since,
+            $until
+        )
+    );
+}
+
 // Check whether at least one event exists.
 function nppp_f2b_has_any_events(): bool {
     global $wpdb;
@@ -1047,6 +1096,43 @@ function nppp_f2b_has_any_events(): bool {
 
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     return (bool) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM %i LIMIT 1', $table ) );
+}
+
+// Turns a (current, previous) pair into a display-ready change badge:
+// direction (up/down/flat), rounded percentage, and a pre-formatted label.
+// Returns null when there is nothing to compare (both periods empty) so
+// the caller/template can simply skip rendering a badge.
+function nppp_f2b_pct_change( int $current, int $previous ): ?array {
+    if ( $current <= 0 && $previous <= 0 ) {
+        return null;
+    }
+
+    if ( $previous <= 0 ) {
+        // No activity in the prior period but activity now -- percentage
+        // is undefined (division by zero), show "New" instead of a number.
+        return array(
+            'dir'   => 'up',
+            'pct'   => null,
+            'label' => __( 'New', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+
+    $delta = $current - $previous;
+    $pct   = ( $delta / $previous ) * 100;
+
+    if ( 0 === $delta ) {
+        $dir = 'flat';
+    } elseif ( $delta > 0 ) {
+        $dir = 'up';
+    } else {
+        $dir = 'down';
+    }
+
+    return array(
+        'dir'   => $dir,
+        'pct'   => $pct,
+        'label' => sprintf( '%s%d%%', $delta > 0 ? '+' : '', (int) round( $pct ) ),
+    );
 }
 
 // UTC column -> site timezone, for display only.
@@ -1123,6 +1209,18 @@ function nppp_f2b_load_tab_content_callback() {
     $feed_truncated = $total_events > count( $recent );
     $configured     = nppp_f2b_has_any_events();
 
+    // Prior comparison period for the "% vs last period" badges: the 24h
+    // immediately before the current 24h window, and the Nd window
+    // immediately before the current NPPP_F2B_WINDOW_DAYS window. Two
+    // extra bounded queries per tab load/refresh, never on every request.
+    $nppp_prev_24h_since = gmdate( 'Y-m-d H:i:s', time() - ( 48 * HOUR_IN_SECONDS ) );
+    $nppp_prev_24h_until = gmdate( 'Y-m-d H:i:s', time() - ( 24 * HOUR_IN_SECONDS ) );
+    $summaries_prev      = nppp_f2b_get_jail_summaries_between( $nppp_prev_24h_since, $nppp_prev_24h_until );
+
+    $nppp_prev_window_since = gmdate( 'Y-m-d H:i:s', time() - ( 2 * NPPP_F2B_WINDOW_DAYS * DAY_IN_SECONDS ) );
+    $nppp_prev_window_until = gmdate( 'Y-m-d H:i:s', time() - ( NPPP_F2B_WINDOW_DAYS * DAY_IN_SECONDS ) );
+    $nppp_window_prev_count = nppp_f2b_get_window_event_count_between( $nppp_prev_window_since, $nppp_prev_window_until );
+
     // Top Attack Countries — full retention window (90 days by default),
     // deliberately independent of the 30-day Repeat Offenders window above.
     $country_available   = nppp_f2b_country_feature_available();
@@ -1143,6 +1241,37 @@ function nppp_f2b_load_tab_content_callback() {
         'jails'      => count( $summaries ),
         'window'     => nppp_f2b_get_window_event_count(),
     );
+
+    $stats_prev = array(
+        'bans_24h'   => (int) array_sum( array_map( 'intval', array_column( $summaries_prev, 'bans' ) ) ),
+        'unbans_24h' => (int) array_sum( array_map( 'intval', array_column( $summaries_prev, 'unbans' ) ) ),
+        'jails'      => count( $summaries_prev ),
+        'window'     => $nppp_window_prev_count,
+    );
+
+    // Percentage-change badges for the 4 Activity Overview cards.
+    $stats_change = array(
+        'bans_24h'   => nppp_f2b_pct_change( $stats['bans_24h'], $stats_prev['bans_24h'] ),
+        'unbans_24h' => nppp_f2b_pct_change( $stats['unbans_24h'], $stats_prev['unbans_24h'] ),
+        'jails'      => nppp_f2b_pct_change( $stats['jails'], $stats_prev['jails'] ),
+        'window'     => nppp_f2b_pct_change( $stats['window'], $stats_prev['window'] ),
+    );
+
+    // Per-jail bans-only change badge (unbans are deliberately excluded --
+    // the Jail Activity cards only track ban pressure). Indexed by jail
+    // name so the template can look it up in O(1) per row.
+    $nppp_prev_bans_by_jail = array();
+    foreach ( $summaries_prev as $nppp_prev_row ) {
+        $nppp_prev_bans_by_jail[ $nppp_prev_row['jail'] ] = (int) $nppp_prev_row['bans'];
+    }
+
+    $jail_bans_change = array();
+    foreach ( $summaries as $nppp_cur_row ) {
+        $jail_bans_change[ $nppp_cur_row['jail'] ] = nppp_f2b_pct_change(
+            (int) $nppp_cur_row['bans'],
+            $nppp_prev_bans_by_jail[ $nppp_cur_row['jail'] ] ?? 0
+        );
+    }
 
     // Abuse Reporter — one options read plus, only when the reporter is
     // actually armed, a single bounded IN() lookup for the offender contacts.
