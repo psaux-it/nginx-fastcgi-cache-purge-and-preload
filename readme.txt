@@ -283,6 +283,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 
 = 2.1.8 (2026-09-08) =
 
+* NEW: "Fail2Ban" dashboard — a token-authenticated webhook turns fail2ban ban/unban events into a live jail activity dashboard with a "Repeat Offenders" panel and a "Top Attack Countries" map, plus an optional Abuse Reporter that emails the offending network's abuse desk using RDAP-resolved contacts.
 * Fixed: "Purge All" now terminates the preload watchdog before stopping the main preload process, closing a post-completion race window that could leave stale preload state behind.
 * Fixed: WP-CLI "preload --stop" no longer clears the preload pid when the underlying process termination fails (safexec), preventing broken preload state and subsequent workflow failures.
 * Fixed: WP-CLI "preload --stop" now performs complete preload state cleanup, including scheduled cron events, transients, and watchdog tokens.
@@ -297,6 +298,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Improved: Nginx detection refactored — redundant inline detection code removed in favour of the centralised detection logic.
 * Improved: Setup page overhauled — "Assume-Nginx mode" renamed to "Manual Bypass", notices and cards simplified to be less alarming and more actionable.
 * Improved: Moved the Accept-Encoding vary header check to an asynchronous AJAX request to prevent settings page rendering delays.
+* Improved: Preload completion emails now use a connection-bounded mail diagnostic.
 * Improved: Bumped bundled jQuery UI assets to v1.14.2 (WP 7.1).
 * Improved: Bumped bundled DataTables assets to v3.0.3.
 * Added: HTTP Purge support extended to "Purge All" (requires ngx_cache_purge module v3.0.2+) — previously HTTP Purge only accelerated single-page purges; it now also covers full cache purges. Configurable via the new "Purge All Path" and "Custom Base URL" settings.
@@ -305,7 +307,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Added: WP-Cron Reliability check to the Status tab and WP-CLI status output to detect loopback failures or custom system cron setups that could delay post-preload status refreshes.
 * Added: Automatic fallback to enable the Preload Watchdog on fresh plugin activations when DISABLE_WP_CRON is active.
 * UI/UX: Preload All now redirects to the Status tab instead of Settings, taking users directly to the live preload progress section.
-* Tested: Confirmed compatibility with WordPress 7.1.
+* Tested: Confirmed compatibility with WordPress 7.1.1.
 
 = 2.1.7 (2026-06-08) =
 
