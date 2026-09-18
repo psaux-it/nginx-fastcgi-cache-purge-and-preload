@@ -1464,6 +1464,7 @@ $(document).ready(function() {
                     url: nppp_admin_data.ajaxurl,
                     type: 'POST',
                     dataType: 'json',
+                    timeout: 25000,
                     data: {
                         action:        'nppp_f2b_abuse_send_test',
                         _wpnonce:      nonce,
@@ -1497,11 +1498,20 @@ $(document).ready(function() {
                                 .slideDown(120);
                         }
                     },
-                    error: function() {
+                    error: function(jqXHR, textStatus) {
+                        var msg;
+                        if (textStatus === 'timeout') {
+                            msg = __('The request timed out — the mail server did not respond in time. Check your SMTP host and port.', 'fastcgi-cache-purge-and-preload-nginx');
+                        } else if (textStatus === 'parsererror') {
+                            msg = __('The server returned an unexpected (non-JSON) response. Check your PHP error log for a fatal error or stray warning from the mail transport.', 'fastcgi-cache-purge-and-preload-nginx');
+                        } else if (jqXHR.status >= 500) {
+                            msg = __('The server returned an error (HTTP ' + jqXHR.status + ') while sending the test email. Check your PHP error log.', 'fastcgi-cache-purge-and-preload-nginx');
+                        } else {
+                            msg = __('AJAX error while sending the test email.', 'fastcgi-cache-purge-and-preload-nginx');
+                        }
                         $result
                             .addClass('nppp-f2b-result-fail')
-                            .find('.nppp-f2b-result-msg').text(__('AJAX error while sending the test email.', 'fastcgi-cache-purge-and-preload-nginx'))
-                            .end()
+                            .text(msg)
                             .slideDown(120);
                     },
                     complete: function() { $btn.prop('disabled', false).text(label); }
