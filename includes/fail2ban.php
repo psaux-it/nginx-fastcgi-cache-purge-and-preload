@@ -1073,12 +1073,12 @@ function nppp_f2b_get_action_conf_snippet(): string {
     // the jail moves to the next ban immediately instead of waiting on the
     // network round trip.
     return "[Definition]\n" .
-        "actionban   = nohup curl -sS -k -o /dev/null --max-time 5 --connect-timeout 2 -X POST {$endpoint} \\\n" .
+        "actionban   = nohup curl -sS -o /dev/null --max-time 10 --connect-timeout 3 --retry 2 --retry-delay 1 --retry-connrefused -X POST {$endpoint} \\\n" .
         "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
         "                -H \"Content-Type: application/json\" \\\n" .
         "                -d '{\"event\":\"ban\",\"jail\":\"<name>\",\"ip\":\"<ip>\"}' \\\n" .
         "                >/dev/null 2>&1 &\n" .
-        "actionunban = nohup curl -sS -k -o /dev/null --max-time 5 --connect-timeout 2 -X POST {$endpoint} \\\n" .
+        "actionunban = nohup curl -sS -o /dev/null --max-time 10 --connect-timeout 3 --retry 2 --retry-delay 1 --retry-connrefused -X POST {$endpoint} \\\n" .
         "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
         "                -H \"Content-Type: application/json\" \\\n" .
         "                -d '{\"event\":\"unban\",\"jail\":\"<name>\",\"ip\":\"<ip>\"}' \\\n" .
