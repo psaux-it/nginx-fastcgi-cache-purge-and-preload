@@ -6340,6 +6340,7 @@ body.nppp-f2b-modal-open { overflow: hidden; }
     position: relative;
     width: min(720px, calc(100vw - 32px));
     max-height: calc(100vh - 80px);
+    max-height: calc(100dvh - 80px);
     margin: 48px auto 0;
     display: flex;
     flex-direction: column;
@@ -6353,6 +6354,10 @@ body.nppp-f2b-modal-open { overflow: hidden; }
 #nppp-f2b-tab .nppp-f2b-modal-body {
     padding: 18px 16px;
     overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 #nppp-f2b-tab .nppp-f2b-modal-foot {
@@ -6428,8 +6433,9 @@ body.nppp-f2b-modal-open { overflow: hidden; }
 @media screen and (max-width: 782px) {
     #nppp-f2b-tab .nppp-f2b-abuse-grid { grid-template-columns: 1fr; }
     #nppp-f2b-tab .nppp-f2b-abuse-field-wide select { max-width: 100%; }
-    #nppp-f2b-tab .nppp-f2b-modal-box { margin-top: 16px; max-height: calc(100vh - 32px); }
+    #nppp-f2b-tab .nppp-f2b-modal-box { margin-top: 16px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); }
     #nppp-f2b-tab .nppp-f2b-modal-foot { flex-direction: column; align-items: stretch; }
+    #nppp-f2b-tab .nppp-f2b-modal-foot .nppp-f2b-hint-text { flex: 0 1 auto; }
     #nppp-f2b-tab .nppp-f2b-modal-foot .nppp-f2b-btn { width: 100%; }
     #nppp-f2b-tab .nppp-f2b-abuse-preview-table th { width: auto; }
 }
