@@ -839,12 +839,16 @@ function nppp_f2b_abuse_send_test_mail( array $settings ): array {
         nppp_f2b_abuse_subject( $data )
     );
 
-    $sent = wp_mail( $recipient, $subject, $body, $headers );
+    $mail_result = nppp_wp_mail_diagnostic( $recipient, $subject, $body, $headers );
 
-    if ( ! $sent ) {
+    if ( ! $mail_result['sent'] ) {
         return array(
             'ok'      => false,
-            'message' => __( 'WordPress could not hand the test email to the mail transport. This site\'s SMTP setup is outside this plugin\'s scope — check whatever mail plugin or server configuration you use for outgoing mail, then try again.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'message' => sprintf(
+                /* translators: %s: the underlying mail transport error message (e.g. an SMTP connect/auth failure) */
+                __( 'WordPress could not hand the test email to the mail transport: %s. This site\'s SMTP setup is outside this plugin\'s scope — check whatever mail plugin or server configuration you use for outgoing mail, then try again.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $mail_result['error']
+            ),
         );
     }
 
@@ -1046,6 +1050,34 @@ function nppp_f2b_abuse_preview_callback() {
  */
 function nppp_f2b_abuse_send_test_callback() {
     nppp_ajax_auth( 'nppp-security-tab' );
+
+    // Last-resort safety net: if a fatal error kills this request before a
+    // wp_send_json_*() call runs (e.g. a bug in a third-party SMTP plugin
+    // hooked into phpmailer_init), still emit valid JSON instead of a
+    // blank/HTML body — that's what turns into an opaque "AJAX error"
+    // client-side rather than an actionable message. Note this only helps
+    // against a PHP-level fatal; it cannot protect against PHP-FPM's
+    // request_terminate_timeout or nginx's fastcgi_read_timeout killing the
+    // process outright — that's what nppp_wp_mail_diagnostic()'s tightened
+    // connect timeout is for.
+    register_shutdown_function( static function () {
+        if ( headers_sent() ) {
+            return; // A response (JSON or otherwise) was already sent.
+        }
+        $error = error_get_last();
+        if ( null === $error || ! in_array( $error['type'], array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR ), true ) ) {
+            return; // Normal completion, or a non-fatal notice/warning.
+        }
+        if ( ob_get_level() > 0 ) {
+            ob_end_clean();
+        }
+        wp_send_json_error(
+            array(
+                'message' => __( 'The test email could not be sent because the request failed unexpectedly on the server. Check your PHP error log for details.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            ),
+            500
+        );
+    } );
 
     $fields = array(
         'enabled',
