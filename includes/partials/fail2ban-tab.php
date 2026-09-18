@@ -254,22 +254,56 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
     <?php if ( empty( $summaries ) ) : ?>
         <p class="nppp-f2b-empty"><?php esc_html_e( 'No jail activity in the last 24 hours.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
     <?php else : ?>
-        <div class="nppp-f2b-jails">
-            <?php foreach ( $summaries as $nppp_row ) : ?>
-                <div class="nppp-f2b-jail">
-                    <h4><?php echo esc_html( $nppp_row['jail'] ); ?></h4>
-                    <div class="nppp-f2b-jail-nums">
-                        <span class="nppp-f2b-badge nppp-f2b-badge-ban"><?php echo esc_html( (string) (int) $nppp_row['bans'] ); ?></span>
-                        <span class="nppp-f2b-badge-cap"><?php esc_html_e( 'bans', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
-                        <span class="nppp-f2b-badge nppp-f2b-badge-unban"><?php echo esc_html( (string) (int) $nppp_row['unbans'] ); ?></span>
-                        <span class="nppp-f2b-badge-cap"><?php esc_html_e( 'unbans', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+        <?php
+        // $summaries already arrives ORDER BY bans DESC from
+        // nppp_f2b_get_jail_summaries() — reused as-is for chart ranking,
+        // no extra query or re-sort needed.
+        $nppp_jail_ban_max = 1;
+        foreach ( $summaries as $nppp_scale_row ) {
+            $nppp_jail_ban_max = max( $nppp_jail_ban_max, (int) $nppp_scale_row['bans'] );
+        }
+        ?>
+        <div class="nppp-f2b-jail-activity-row">
+            <div class="nppp-f2b-jails">
+                <?php foreach ( $summaries as $nppp_row ) : ?>
+                    <div class="nppp-f2b-jail">
+                        <h4><?php echo esc_html( $nppp_row['jail'] ); ?></h4>
+                        <div class="nppp-f2b-jail-nums">
+                            <span class="nppp-f2b-badge nppp-f2b-badge-ban"><?php echo esc_html( (string) (int) $nppp_row['bans'] ); ?></span>
+                            <span class="nppp-f2b-badge-cap"><?php esc_html_e( 'bans', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                            <span class="nppp-f2b-badge nppp-f2b-badge-unban"><?php echo esc_html( (string) (int) $nppp_row['unbans'] ); ?></span>
+                            <span class="nppp-f2b-badge-cap"><?php esc_html_e( 'unbans', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        </div>
+                        <p class="nppp-f2b-jail-last">
+                            <?php esc_html_e( 'Last event:', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            <?php echo esc_html( nppp_f2b_local_time( (string) $nppp_row['last_event'] ) ); ?>
+                        </p>
                     </div>
-                    <p class="nppp-f2b-jail-last">
-                        <?php esc_html_e( 'Last event:', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                        <?php echo esc_html( nppp_f2b_local_time( (string) $nppp_row['last_event'] ) ); ?>
-                    </p>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="nppp-f2b-jail-chart-wrap">
+                <div class="nppp-f2b-jail-chart-panel">
+                    <p class="nppp-f2b-jail-chart-title"><?php esc_html_e( 'Bans by jail — ranked', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                    <div class="nppp-f2b-jail-chart-rows">
+                        <?php foreach ( $summaries as $nppp_row ) : ?>
+                            <?php
+                            $nppp_bans_n   = (int) $nppp_row['bans'];
+                            $nppp_bans_pct = $nppp_bans_n > 0 ? max( 3, (int) round( ( $nppp_bans_n / $nppp_jail_ban_max ) * 100 ) ) : 0;
+                            ?>
+                            <div class="nppp-f2b-jail-chart-row">
+                                <div class="nppp-f2b-jail-chart-row-head">
+                                    <span class="nppp-f2b-jail-chart-name"><?php echo esc_html( $nppp_row['jail'] ); ?></span>
+                                    <span class="nppp-f2b-jail-chart-value"><?php echo esc_html( (string) $nppp_bans_n ); ?></span>
+                                </div>
+                                <div class="nppp-f2b-jail-chart-track">
+                                    <div class="nppp-f2b-jail-chart-fill" style="width:<?php echo esc_attr( $nppp_bans_pct ); ?>%;"></div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
-            <?php endforeach; ?>
+            </div>
         </div>
     <?php endif; ?>
 
