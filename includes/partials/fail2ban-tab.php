@@ -36,7 +36,10 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
         </div>
         <div class="nppp-f2b-card-body">
 
-            <div id="nppp-f2b-test-result" class="nppp-f2b-result" role="status" aria-live="polite" style="display:none;"></div>
+            <div id="nppp-f2b-test-result" class="nppp-f2b-result" role="status" aria-live="polite" style="display:none;">
+                <button type="button" class="nppp-f2b-result-close" aria-label="<?php esc_attr_e( 'Dismiss', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">&times;</button>
+                <span class="nppp-f2b-result-msg"></span>
+            </div>
 
             <div class="nppp-f2b-row">
                 <label for="nppp-f2b-endpoint-field"><?php esc_html_e( 'Webhook URL', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
@@ -122,8 +125,14 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
         </div>
         <div class="nppp-f2b-card-body">
 
-            <div id="nppp-f2b-abuse-save-result" class="nppp-f2b-result" role="status" aria-live="polite" style="display:none;"></div>
-            <div id="nppp-f2b-abuse-test-result" class="nppp-f2b-result" role="status" aria-live="polite" style="display:none;"></div>
+            <div id="nppp-f2b-abuse-save-result" class="nppp-f2b-result" role="status" aria-live="polite" style="display:none;">
+                <button type="button" class="nppp-f2b-result-close" aria-label="<?php esc_attr_e( 'Dismiss', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">&times;</button>
+                <span class="nppp-f2b-result-msg"></span>
+            </div>
+            <div id="nppp-f2b-abuse-test-result" class="nppp-f2b-result" role="status" aria-live="polite" style="display:none;">
+                <button type="button" class="nppp-f2b-result-close" aria-label="<?php esc_attr_e( 'Dismiss', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">&times;</button>
+                <span class="nppp-f2b-result-msg"></span>
+            </div>
 
             <p class="nppp-f2b-hint-text nppp-f2b-abuse-intro">
                 <?php esc_html_e( 'Sends a formal abuse report to the network owner of a banned IP, built from the ban evidence below and addressed to the abuse contact already resolved for that network. Set this once and the Report buttons stay available in Repeat Offenders and the Live Feed. Use "Send Test Email" above to preview the template and confirm this site can deliver mail before relying on it.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
