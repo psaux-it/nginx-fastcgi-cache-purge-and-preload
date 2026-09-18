@@ -65,7 +65,7 @@ function nppp_send_mail_now(
     $cache_ratio  = '–';
     $cache_hits   = '–';
     $cache_misses = '–';
-    
+
     // Use the pre-computed hit count from the caller when available
     if ( $precomputed_hits !== null && is_int( $precomputed_hits ) && $precomputed_hits >= 0 ) {
         $real_hits_resolved = $precomputed_hits;
@@ -155,4 +155,110 @@ function nppp_send_mail_now(
         $html_content,
         $headers
     );
+}
+
+/**
+ * wp_mail() wrapper for call sites (AJAX handlers in particular) that need
+ * to know *why* a send failed, not just whether it failed.
+ *
+ * Three things a plain wp_mail() call cannot give an AJAX response:
+ *
+ * 1. The real transport error. wp_mail() only returns a bool
+ * 2. A fast failure once SMTP is in use.
+ * 3. A clean response body.
+ *
+ * wp_mail() reuses one $phpmailer instance for the entire PHP request
+ * (`global $phpmailer`), so any property changed here is restored to its
+ * pre-call value afterwards — otherwise a tightened Timeout would silently
+ * leak into every later wp_mail() call in the same request (e.g. a core
+ * notification email sent later in the same admin-ajax.php request).
+ *
+ * @param string|string[] $to
+ * @param string          $subject
+ * @param string          $message
+ * @param string[]        $headers
+ * @param int             $connect_timeout Seconds to allow for the SMTP
+ *                                         connection before giving up.
+ *                                         Only takes effect if SMTP
+ *                                         transport ends up being used.
+ * @return array{sent: bool, error: string} error is '' when sent === true.
+ */
+function nppp_wp_mail_diagnostic( $to, string $subject, string $message, array $headers = array(), int $connect_timeout = 15 ): array {
+    $captured_error      = '';
+    $original_timeout    = null;
+    $original_keepalive  = null;
+
+    $on_failed = static function ( $wp_error ) use ( &$captured_error ) {
+        if ( $wp_error instanceof WP_Error ) {
+            $captured_error = $wp_error->get_error_message();
+        }
+    };
+
+    $tighten_timeout = static function ( $phpmailer ) use ( $connect_timeout, &$original_timeout, &$original_keepalive ) {
+        $original_timeout = isset( $phpmailer->Timeout ) ? $phpmailer->Timeout : null;
+        if ( property_exists( $phpmailer, 'SMTPKeepAlive' ) ) {
+            $original_keepalive = $phpmailer->SMTPKeepAlive;
+        }
+
+        // Only tighten it — never loosen a value that is already stricter.
+        if ( null === $original_timeout || (int) $original_timeout <= 0 || (int) $original_timeout > $connect_timeout ) {
+            $phpmailer->Timeout = $connect_timeout;
+        }
+        if ( property_exists( $phpmailer, 'SMTPKeepAlive' ) ) {
+            $phpmailer->SMTPKeepAlive = false;
+        }
+    };
+
+    add_action( 'wp_mail_failed', $on_failed );
+    // Priority 999: run after any SMTP plugin's own phpmailer_init callback
+    // so we see (and tighten) its real, final Timeout value rather than a
+    // default that gets overwritten right after us.
+    add_action( 'phpmailer_init', $tighten_timeout, 999 );
+
+    ob_start();
+    $sent  = wp_mail( $to, $subject, $message, $headers );
+    $stray = trim( (string) ob_get_clean() );
+
+    remove_action( 'wp_mail_failed', $on_failed );
+    remove_action( 'phpmailer_init', $tighten_timeout, 999 );
+
+    // Restore the shared PHPMailer instance's original properties so this
+    // diagnostic call has no side effect on any wp_mail() call that follows
+    // it later in the same request.
+    global $phpmailer;
+    if ( is_object( $phpmailer ) ) {
+        if ( null !== $original_timeout && property_exists( $phpmailer, 'Timeout' ) ) {
+            $phpmailer->Timeout = $original_timeout;
+        }
+        if ( null !== $original_keepalive && property_exists( $phpmailer, 'SMTPKeepAlive' ) ) {
+            $phpmailer->SMTPKeepAlive = $original_keepalive;
+        }
+    }
+
+    if ( '' !== $stray && function_exists( 'nppp_display_admin_notice' ) ) {
+        // Never let raw PHP output reach the client; log it for the admin.
+        nppp_display_admin_notice(
+            'warning',
+            'wp_mail() produced unexpected output while sending: ' . wp_strip_all_tags( $stray ),
+            true,
+            false
+        );
+    }
+
+    if ( $sent ) {
+        return array( 'sent' => true, 'error' => '' );
+    }
+
+    if ( '' === $captured_error ) {
+        $captured_error = __( 'no further detail was reported by the mail transport', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    // Cap length defensively; some SMTP libraries echo the whole server
+    // banner into the exception message.
+    $captured_error = wp_strip_all_tags( $captured_error );
+    if ( strlen( $captured_error ) > 300 ) {
+        $captured_error = substr( $captured_error, 0, 297 ) . '...';
+    }
+
+    return array( 'sent' => false, 'error' => $captured_error );
 }
