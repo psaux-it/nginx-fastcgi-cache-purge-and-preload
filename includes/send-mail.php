@@ -171,12 +171,15 @@ function nppp_send_mail_now(
         // Cache the failure so the next preloads hit the guard above
         // instead of retrying a transport that is already known broken.
         set_transient( $mail_health_key, 'fail', HOUR_IN_SECONDS );
-        nppp_custom_error_log(
+        nppp_display_admin_notice(
+            'error',
             sprintf(
                 /* translators: %s: underlying mail transport error */
                 __( 'Preload report email could not be sent: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $mail_result['error']
-            )
+            ),
+            true,
+            false
         );
         return;
     }
