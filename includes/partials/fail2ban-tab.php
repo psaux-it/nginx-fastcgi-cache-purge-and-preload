@@ -227,14 +227,29 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
         <div class="nppp-f2b-stat nppp-f2b-stat-ban">
             <span class="nppp-f2b-stat-num"><?php echo esc_html( (string) $stats['bans_24h'] ); ?></span>
             <span class="nppp-f2b-stat-label"><?php esc_html_e( 'Bans / 24h', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+            <?php if ( ! empty( $stats_change['bans_24h'] ) ) : ?>
+                <span class="nppp-f2b-stat-change nppp-f2b-stat-change-<?php echo esc_attr( $stats_change['bans_24h']['dir'] ); ?>">
+                    <?php echo esc_html( $stats_change['bans_24h']['label'] ); ?>
+                </span>
+            <?php endif; ?>
         </div>
         <div class="nppp-f2b-stat nppp-f2b-stat-unban">
             <span class="nppp-f2b-stat-num"><?php echo esc_html( (string) $stats['unbans_24h'] ); ?></span>
             <span class="nppp-f2b-stat-label"><?php esc_html_e( 'Unbans / 24h', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+            <?php if ( ! empty( $stats_change['unbans_24h'] ) ) : ?>
+                <span class="nppp-f2b-stat-change nppp-f2b-stat-change-<?php echo esc_attr( $stats_change['unbans_24h']['dir'] ); ?>">
+                    <?php echo esc_html( $stats_change['unbans_24h']['label'] ); ?>
+                </span>
+            <?php endif; ?>
         </div>
         <div class="nppp-f2b-stat nppp-f2b-stat-jail">
             <span class="nppp-f2b-stat-num"><?php echo esc_html( (string) $stats['jails'] ); ?></span>
             <span class="nppp-f2b-stat-label"><?php esc_html_e( 'Active jails / 24h', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+            <?php if ( ! empty( $stats_change['jails'] ) ) : ?>
+                <span class="nppp-f2b-stat-change nppp-f2b-stat-change-<?php echo esc_attr( $stats_change['jails']['dir'] ); ?>">
+                    <?php echo esc_html( $stats_change['jails']['label'] ); ?>
+                </span>
+            <?php endif; ?>
         </div>
         <div class="nppp-f2b-stat nppp-f2b-stat-total">
             <span class="nppp-f2b-stat-num"><?php echo esc_html( (string) $stats['window'] ); ?></span>
@@ -247,6 +262,11 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 );
                 ?>
             </span>
+            <?php if ( ! empty( $stats_change['window'] ) ) : ?>
+                <span class="nppp-f2b-stat-change nppp-f2b-stat-change-<?php echo esc_attr( $stats_change['window']['dir'] ); ?>">
+                    <?php echo esc_html( $stats_change['window']['label'] ); ?>
+                </span>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -271,6 +291,12 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                         <div class="nppp-f2b-jail-nums">
                             <span class="nppp-f2b-badge nppp-f2b-badge-ban"><?php echo esc_html( (string) (int) $nppp_row['bans'] ); ?></span>
                             <span class="nppp-f2b-badge-cap"><?php esc_html_e( 'bans', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                            <?php if ( ! empty( $jail_bans_change[ $nppp_row['jail'] ] ) ) : ?>
+                                <?php $nppp_jail_change = $jail_bans_change[ $nppp_row['jail'] ]; ?>
+                                <span class="nppp-f2b-jail-change nppp-f2b-stat-change-<?php echo esc_attr( $nppp_jail_change['dir'] ); ?>" title="<?php esc_attr_e( 'Change in bans vs the previous 24h', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
+                                    <?php echo esc_html( $nppp_jail_change['label'] ); ?>
+                                </span>
+                            <?php endif; ?>
                             <span class="nppp-f2b-badge nppp-f2b-badge-unban"><?php echo esc_html( (string) (int) $nppp_row['unbans'] ); ?></span>
                             <span class="nppp-f2b-badge-cap"><?php esc_html_e( 'unbans', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                         </div>
