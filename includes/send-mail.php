@@ -175,7 +175,7 @@ function nppp_send_mail_now(
             'error',
             sprintf(
                 /* translators: %s: underlying mail transport error */
-                __( 'Preload report email could not be sent: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'ERROR MAIL: Preload report email could not be sent: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $mail_result['error']
             ),
             true,
