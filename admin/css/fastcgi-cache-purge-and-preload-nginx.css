@@ -5520,8 +5520,9 @@ div.updated.notice-nppp p,
 
 /* --- Test result banner --- */
 #nppp-f2b-tab .nppp-f2b-result {
+    position: relative;
     margin: 0 0 20px;
-    padding: 12px 16px;
+    padding: 12px 36px 12px 16px;
     border-radius: 4px;
     border-left-width: 5px;
     border-left-style: solid;
@@ -5541,6 +5542,37 @@ div.updated.notice-nppp p,
     border: 1px solid #f2b6b6;
     border-left: 5px solid #ea1919;
     color: #1d2327;
+}
+
+/* Dismiss (x) button rendered inside every dismissible .nppp-f2b-result banner */
+#nppp-f2b-tab .nppp-f2b-result-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    width: 20px;
+    height: 20px;
+    line-height: 18px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 16px;
+    text-align: center;
+    color: #6b7280;
+    opacity: 0.8;
+}
+
+#nppp-f2b-tab .nppp-f2b-result-close:hover,
+#nppp-f2b-tab .nppp-f2b-result-close:focus {
+    color: #1d2327;
+    opacity: 1;
+}
+
+/* The confirmation dialog closes as a whole, so its inline result banner
+   (blockers list) has no separate close button and needs its default padding. */
+#nppp-f2b-tab .nppp-f2b-modal .nppp-f2b-result {
+    padding: 12px 16px;
 }
 
 /* --- Stat cards --- */
