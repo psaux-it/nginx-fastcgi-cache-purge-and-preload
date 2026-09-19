@@ -121,7 +121,9 @@ function nppp_f2b_table_name(): string {
 
 /**
  * @param string $level   ERROR, WARNING or INFO.
- * @param string $message Already translated. Stripped, single-lined and capped here.
+ * @param string $message Already translated, except structured key=value
+ *                        diagnostic lines, which are logged as-is. Stripped,
+ *                        single-lined and capped at 400 characters here.
  */
 function nppp_f2b_log( string $level, string $message ): void {
     $message = wp_html_excerpt( sanitize_text_field( $message ), 400, '...' );
