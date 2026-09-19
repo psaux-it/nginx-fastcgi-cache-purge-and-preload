@@ -1259,7 +1259,7 @@ function nppp_f2b_get_window_event_count(): int {
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     return (int) $wpdb->get_var(
         $wpdb->prepare(
-            'SELECT COUNT(*) FROM %i WHERE created_at >= %s',
+            "SELECT COUNT(*) FROM %i WHERE created_at >= %s AND event_type IN ('ban','unban')",
             $table,
             nppp_f2b_window_cutoff()
         )
@@ -1276,7 +1276,7 @@ function nppp_f2b_get_window_event_count_between( string $since, string $until )
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     return (int) $wpdb->get_var(
         $wpdb->prepare(
-            'SELECT COUNT(*) FROM %i WHERE created_at >= %s AND created_at < %s',
+            "SELECT COUNT(*) FROM %i WHERE created_at >= %s AND created_at < %s AND event_type IN ('ban','unban')",
             $table,
             $since,
             $until
