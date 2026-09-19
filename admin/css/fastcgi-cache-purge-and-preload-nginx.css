@@ -5639,6 +5639,18 @@ div.updated.notice-nppp p,
 #nppp-f2b-tab .nppp-f2b-stat-change-down::before { content: "\25BC\a0"; }
 #nppp-f2b-tab .nppp-f2b-stat-change-flat::before { content: "\25AC\a0"; }
 
+#nppp-f2b-tab .nppp-f2b-stat-sub {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #646970;
+    font-variant-numeric: tabular-nums;
+}
+
+#nppp-f2b-tab .nppp-f2b-stat-sub-ban   { color: #c81e1e; }
+#nppp-f2b-tab .nppp-f2b-stat-sub-unban { color: #3f7d0f; }
+
 /* --- Connection card (now the first element in the tab) --- */
 #nppp-f2b-tab .nppp-f2b-card {
     background: #fff;
