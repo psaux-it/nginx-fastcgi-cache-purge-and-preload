@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants
 // ---------------------------------------------------------------------------
 
-// Token option name, read directly by the EP10 gate before WP boots.
+// Token option name. The EP10 gate (rest_api_init, priority 1) reads it before the plugin bootstrap loads.
 if ( ! defined( 'NPPP_F2B_TOKEN_OPTION' ) ) {
     define( 'NPPP_F2B_TOKEN_OPTION', 'nppp_f2b_token' );
 }
@@ -438,7 +438,7 @@ function nppp_f2b_rdap_apply_whois( $body, array $result ): array {
             } elseif ( '' === $result['netname'] && 'netname' === $key ) {
                 $result['netname'] = $value;
             } elseif ( '' === $result['country'] && 'country' === $key ) {
-                $result['country'] = strtoupper( $value );
+                $result['country'] = nppp_f2b_rdap_clean_country( $value );
             } elseif ( '' === $result['org_id'] && in_array( $key, array( 'org', 'orgid', 'orgname', 'organization', 'custname' ), true ) ) {
                 $result['org_id'] = $value;
             }
@@ -475,6 +475,18 @@ function nppp_f2b_rdap_apply_abuse( $body, array $result ): array {
     $result['abuse_emails'] = array_values( array_unique( $result['abuse_emails'] ) );
 
     return $result;
+}
+
+/**
+ * Reduce a registry "country" value to a bare two-letter code, or ''.
+ * The events table derives a CHAR(2) column from it; registries sometimes
+ * append a comment ("EU # ...") or use a long name.
+ */
+function nppp_f2b_rdap_clean_country( $value ): string {
+    if ( is_string( $value ) && preg_match( '/^\s*([A-Za-z]{2})(?:[\s#]|$)/', $value, $m ) ) {
+        return strtoupper( $m[1] );
+    }
+    return '';
 }
 
 function nppp_f2b_rdap_has_data( array $result ): bool {
@@ -587,7 +599,7 @@ function nppp_f2b_maybe_reuse_cached_rdap( int $event_id, string $ip ): bool {
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->update(
         nppp_f2b_table_name(),
-        array( 'rdap_json' => wp_json_encode( $cached ) ),
+        array( 'rdap_json' => wp_json_encode( array_merge( $cached, array( 'country' => nppp_f2b_rdap_clean_country( $cached['country'] ?? '' ) ) ) ) ),
         array( 'id' => $event_id ),
         array( '%s' ),
         array( '%d' )
@@ -622,7 +634,8 @@ function nppp_f2b_maybe_enrich( int $event_id, string $ip, array $response_paylo
 
 // ---------------------------------------------------------------------------
 // REST route: POST /wp-json/nppp_f2b/v1/event
-// EP10 handles the token check before WP even boots.
+// EP10 (rest_api_init, priority 1) checks the token before the plugin
+// bootstrap loads; WordPress core has already booted by then.
 // ---------------------------------------------------------------------------
 
 function nppp_f2b_register_routes() {
@@ -736,6 +749,26 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
     }
 
     global $wpdb;
+
+    // curl --retry in the fail2ban action can replay an event whose first
+    // attempt already landed (timeout, or 5xx after the INSERT). Same event
+    // for the same jail+ip within 60 s is a replay, not a new ban.
+    if ( ! $is_test ) {
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $nppp_f2b_replay = $wpdb->get_var(
+            $wpdb->prepare(
+                'SELECT id FROM %i WHERE event_type = %s AND created_at >= %s AND ip = %s AND jail = %s LIMIT 1',
+                nppp_f2b_table_name(),
+                $ev_raw,
+                gmdate( 'Y-m-d H:i:s', time() - 60 ),
+                $ip,
+                $jail_raw
+            )
+        );
+        if ( $nppp_f2b_replay ) {
+            return rest_ensure_response( array( 'ok' => true, 'duplicate' => true ) );
+        }
+    }
 
     // Fast insert first, rdap_json stays NULL -- enrichment happens after.
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -1229,7 +1262,7 @@ function nppp_f2b_test_connection_callback() {
         $endpoint,
         array(
             'timeout'   => 8,
-            'sslverify' => apply_filters( 'nppp_f2b_selftest_sslverify', false ),
+            'sslverify' => apply_filters( 'nppp_f2b_selftest_sslverify', apply_filters( 'https_local_ssl_verify', false ) )
             'headers'   => array(
                 'Authorization' => 'Bearer ' . $token,
                 'Content-Type'  => 'application/json',
@@ -1301,7 +1334,7 @@ function nppp_f2b_test_connection_callback() {
         wp_send_json_success(
             array(
                 'ok'      => false,
-                'message' => __( 'HTTP 429 — the per-minute event ceiling is currently saturated. Wait a minute and test again.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'message' => __( 'HTTP 429 — rejected by a rate limit before the test event was recorded. The webhook locks an IP out for up to an hour after 20 rejected tokens (an old token still in jail.local is the usual cause); a web server, WAF or CDN rate limit can return 429 as well.', 'fastcgi-cache-purge-and-preload-nginx' ),
             )
         );
     }
