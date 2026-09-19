@@ -33,6 +33,12 @@ if ( ! defined( 'NPPP_F2B_DB_VERSION_OPTION' ) ) {
     define( 'NPPP_F2B_DB_VERSION_OPTION', 'nppp_f2b_db_version' );
 }
 
+// Timestamp gate for log lines that can fire from many requests. One small
+// non-autoloaded option, see nppp_f2b_log_gate().
+if ( ! defined( 'NPPP_F2B_LOG_GATE_OPTION' ) ) {
+    define( 'NPPP_F2B_LOG_GATE_OPTION', 'nppp_f2b_log_gate' );
+}
+
 // Cron hook name, registered in EP2's cron list.
 if ( ! defined( 'NPPP_F2B_CLEANUP_HOOK' ) ) {
     define( 'NPPP_F2B_CLEANUP_HOOK', 'nppp_f2b_cleanup_event' );
@@ -107,6 +113,97 @@ function nppp_f2b_table_name(): string {
     return $wpdb->prefix . 'nppp_f2b_events';
 }
 
+// ---------------------------------------------------------------------------
+// Logging
+//
+// Direct append to the plugin log, same file and "[Y-m-d H:i:s] LEVEL ..."
+// ---------------------------------------------------------------------------
+
+/**
+ * @param string $level   ERROR, WARNING or INFO.
+ * @param string $message Already translated. Stripped, single-lined and capped here.
+ */
+function nppp_f2b_log( string $level, string $message ): void {
+    $message = wp_html_excerpt( sanitize_text_field( $message ), 400, '...' );
+
+    $line = '[' . current_time( 'Y-m-d H:i:s' ) . '] ' . strtoupper( $level ) . ' F2B: ' . $message . "\n";
+
+    if ( function_exists( 'nppp_get_runtime_file' ) ) {
+        $file = defined( 'NGINX_CACHE_LOG_FILE' ) ? NGINX_CACHE_LOG_FILE : nppp_get_runtime_file( 'fastcgi_ops.log' );
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+        if ( false !== @file_put_contents( $file, $line, FILE_APPEND | LOCK_EX ) ) {
+            return;
+        }
+    }
+
+    // Log file not writable (runtime dir problem): PHP's error log is the last resort.
+    // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+    error_log( '[NPPP] ' . trim( $line ) );
+}
+
+/**
+ * Timestamp gate for log lines that can fire from many requests.
+ *
+ * Returns 0 while $interval seconds have not passed since the last emit for
+ * $key (suppressed). Otherwise returns how many events were seen since then
+ * (at least 1) and re-arms the gate. The caller logs when the result is > 0.
+ *
+ * $count = false: only an emit writes the option. Cheap, for error paths that
+ *                 may repeat on every request.
+ * $count = true:  every call writes it, so the returned number is accurate.
+ *                 Only for events that are rare by nature.
+ *
+ * Concurrent requests can occasionally both emit or lose a count. That is
+ * acceptable for a log throttle.
+ */
+function nppp_f2b_log_gate( string $key, int $interval, bool $count = false ): int {
+    $state = get_option( NPPP_F2B_LOG_GATE_OPTION, array() );
+    if ( ! is_array( $state ) ) {
+        $state = array();
+    }
+
+    $entry = ( isset( $state[ $key ] ) && is_array( $state[ $key ] ) ) ? $state[ $key ] : array();
+    $last  = (int) ( $entry['t'] ?? 0 );
+    $seen  = (int) ( $entry['n'] ?? 0 );
+
+    if ( $count ) {
+        $seen++;
+    }
+
+    $age = time() - $last;
+    if ( $age >= 0 && $age < $interval ) {
+        if ( $count ) {
+            $state[ $key ] = array( 't' => $last, 'n' => $seen );
+            update_option( NPPP_F2B_LOG_GATE_OPTION, $state, false );
+        }
+        return 0;
+    }
+
+    $state[ $key ] = array( 't' => time(), 'n' => 0 );
+    update_option( NPPP_F2B_LOG_GATE_OPTION, $state, false );
+
+    return max( 1, $seen );
+}
+
+/**
+ * In-process throttle for the CLI worker and cron, where a single process
+ * owns the loop and no option write is needed. True means: log now.
+ */
+function nppp_f2b_log_local_gate( string $key, int $interval ): bool {
+    static $last = array();
+
+    $now = time();
+    if ( isset( $last[ $key ] ) ) {
+        $age = $now - $last[ $key ];
+        if ( $age >= 0 && $age < $interval ) {
+            return false;
+        }
+    }
+
+    $last[ $key ] = $now;
+    return true;
+}
+
 // Retention period in days, filterable and clamped.
 function nppp_f2b_retention_days(): int {
     $days = (int) apply_filters( 'nppp_f2b_retention_days', 90 );
@@ -139,6 +236,9 @@ function nppp_f2b_install_table(): void {
     //
     // created_event_jail_idx: used by jail summaries and retention cleanup.
     // event_created_ip_idx: used to group ban events by ip.
+    // ip_event_idx: worker write-back (UPDATE ... WHERE ip = ? AND event_type = 'ban').
+    // queue_idx: enrichment queue (event_type = 'ban' AND rdap_json IS NULL). The
+    //   1-char prefix is enough: only NULL vs non-NULL matters.
     $sql = "CREATE TABLE {$table_name} (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
         jail VARCHAR(64) NOT NULL,
@@ -148,7 +248,9 @@ function nppp_f2b_install_table(): void {
         rdap_json LONGTEXT NULL,
         PRIMARY KEY  (id),
         KEY created_event_jail_idx (created_at, event_type, jail),
-        KEY event_created_ip_idx (event_type, created_at, ip)
+        KEY event_created_ip_idx (event_type, created_at, ip),
+        KEY ip_event_idx (ip, event_type),
+        KEY queue_idx (event_type, rdap_json(1))
     ) {$charset_collate};";
 
     dbDelta( $sql );
@@ -700,6 +802,20 @@ function nppp_f2b_rate_exceeded(): bool {
     }
 
     if ( (int) $bucket['c'] >= NPPP_F2B_RATE_MAX_PER_MIN ) {
+        // Log once per minute window, not once per dropped event. The flag
+        // rides in the same rotating bucket: one extra write per minute.
+        if ( empty( $bucket['l'] ) ) {
+            $bucket['l'] = 1;
+            set_transient( NPPP_F2B_RATE_KEY, $bucket, 120 );
+            nppp_f2b_log(
+                'ERROR',
+                sprintf(
+                    /* translators: %d: number of webhook events allowed per minute before further events are rejected with HTTP 429. */
+                    __( 'Webhook rate limit reached (%d events/min); further events this minute are dropped with 429.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    NPPP_F2B_RATE_MAX_PER_MIN
+                )
+            );
+        }
         return true;
     }
 
@@ -781,6 +897,18 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
             ARRAY_A
         );
         if ( $nppp_f2b_replay ) {
+            // Aggregated: at most one INFO line per 10 minutes, with the count.
+            $nppp_f2b_dups = nppp_f2b_log_gate( 'replay_duplicate', 10 * MINUTE_IN_SECONDS, true );
+            if ( $nppp_f2b_dups > 0 ) {
+                nppp_f2b_log(
+                    'INFO',
+                    sprintf(
+                        /* translators: %d: number of replayed (duplicate) webhook events ignored since the last report. */
+                        __( 'Ignored %d replayed webhook event(s) since the last report (curl retry of an event that was already stored).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $nppp_f2b_dups
+                    )
+                );
+            }
             // The first attempt may have died after its INSERT but before it
             // queued enrichment. Cheap when the row is done or a worker is up.
             if ( 'ban' === $ev_raw && ! empty( $nppp_f2b_replay['pending'] ) ) {
@@ -820,6 +948,21 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
     }
 
     if ( false === $inserted ) {
+        // Read last_error first, the gate below may run queries of its own.
+        $nppp_f2b_db_error = $wpdb->last_error;
+        $nppp_f2b_fails    = nppp_f2b_log_gate( 'insert_fail', MINUTE_IN_SECONDS, true );
+        if ( $nppp_f2b_fails > 0 ) {
+            nppp_f2b_log(
+                'ERROR',
+                sprintf(
+                    /* translators: %1$d: number of insert failures since the last report; %2$s: database error message (not translated, comes from the DB driver). */
+                    __( 'Webhook event insert failed (%1$d since the last report): %2$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $nppp_f2b_fails,
+                    $nppp_f2b_db_error
+                )
+            );
+        }
+
         return new WP_Error(
             'nppp_f2b_db_error',
             __( 'Event could not be stored.', 'fastcgi-cache-purge-and-preload-nginx' ),
