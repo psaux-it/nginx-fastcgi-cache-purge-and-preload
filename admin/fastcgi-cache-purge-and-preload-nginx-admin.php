@@ -136,6 +136,7 @@ require_once dirname(__DIR__) . '/includes/help.php';
 require_once dirname(__DIR__) . '/includes/configuration-parser.php';
 require_once dirname(__DIR__) . '/includes/status.php';
 require_once dirname(__DIR__) . '/includes/fail2ban.php';
+require_once dirname(__DIR__) . '/includes/fail2ban-worker.php';
 require_once dirname(__DIR__) . '/includes/fail2ban-abuse.php';
 require_once dirname(__DIR__) . '/includes/advanced.php';
 require_once dirname(__DIR__) . '/includes/send-mail.php';
