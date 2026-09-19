@@ -290,7 +290,7 @@ function nppp_f2b_maybe_spawn_worker( bool $force = false ): bool {
     // outlives this TTL, so a handoff would clear it anyway -- but that's
     // coincidence, not a guarantee, hence $force.
     $tick_age = time() - (int) get_option( NPPP_F2B_SPAWN_TICK_KEY, 0 );
-    if ( ! $force && $tick_age < NPPP_F2B_SPAWN_TICK_TTL ) {
+    if ( ! $force && $tick_age >= 0 && $tick_age < NPPP_F2B_SPAWN_TICK_TTL ) {
         return true;
     }
 
@@ -656,7 +656,11 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array() ): array
     // the WP HTTP API honours WP_HTTP_BLOCK_EXTERNAL and WP_PROXY_*.
     if ( ! class_exists( '\WpOrg\Requests\Requests' ) || nppp_f2b_http_is_restricted() ) {
         foreach ( $pending as $ip ) {
-            $out[ $ip ] = nppp_f2b_lookup_ip( $ip );
+            $answered   = true;
+            $out[ $ip ] = nppp_f2b_lookup_ip( $ip, $answered );
+            if ( ! $answered ) {
+                $failed[ $ip ] = true; // same retry budget as the parallel path
+            }
         }
         return $out;
     }
@@ -932,6 +936,11 @@ function nppp_f2b_worker_reconcile(): void {
     }
 
     foreach ( nppp_f2b_worker_claim_ips( $limit ) as $ip ) {
-        nppp_f2b_worker_write_result( $ip, nppp_f2b_lookup_ip( $ip ) );
+        $answered = true;
+        $rdap     = nppp_f2b_lookup_ip( $ip, $answered );
+        if ( ! $answered && nppp_f2b_rdap_defer_attempt( $ip ) ) {
+            continue;
+        }
+        nppp_f2b_worker_write_result( $ip, $rdap );
     }
 }
