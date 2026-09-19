@@ -717,6 +717,20 @@ This plugin is developed and maintained by Hasan CALISIR.
 
 Prior to version 2.1.5, NPP optionally collected basic anonymous usage data when users explicitly opted in. As of version 2.1.5, all data collection and the opt-in mechanism have been completely removed. NPP collects no data whatsoever.
 
+== External services ==
+
+The optional Fail2Ban dashboard uses one third-party service.
+
+= RIPEstat Data API (stat.ripe.net) =
+
+Looks up network ownership (network name, country, ASN, abuse contact) for IP addresses that fail2ban reports as banned.
+
+* Data sent: the banned IP address, as a URL parameter to https://stat.ripe.net/data/whois/data.json and https://stat.ripe.net/data/abuse-contact-finder/data.json.
+* When: from a background worker (or WP-Cron) after a ban event arrives and no cached result exists. Nothing is sent unless you configure fail2ban to push events to the plugin's webhook. Results are cached for up to 30 days.
+* Provider: RIPE NCC. Terms: https://www.ripe.net/about-us/legal/ripestat-service-terms-and-conditions/ Privacy: https://www.ripe.net/about-us/legal/privacy-statement/
+
+The optional Abuse Reporter sends email through wp_mail() to the abuse contact returned by that lookup, only when an administrator enables it and sends a report.
+
 == Support ==
 
 For support and assistance, please contact Hasan CALISIR at hasan.calisir@psauxit.com.
