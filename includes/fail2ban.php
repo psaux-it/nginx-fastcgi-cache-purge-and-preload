@@ -523,9 +523,10 @@ function nppp_f2b_rdap_store_cache( string $ip, array $result ): void {
  * through nppp_f2b_lookup_ips_bulk() in the worker, which runs both
  * requests in parallel.
  */
-function nppp_f2b_lookup_ip( string $ip ): array {
+function nppp_f2b_lookup_ip( string $ip, ?bool &$answered = null ): array {
     $cached = get_transient( nppp_f2b_rdap_cache_key( $ip ) );
     if ( is_array( $cached ) ) {
+        $answered = true;
         return $cached;
     }
 
@@ -536,11 +537,13 @@ function nppp_f2b_lookup_ip( string $ip ): array {
         array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
     );
 
+    $whois_ok = false;
     if ( ! is_wp_error( $whois_response ) && 200 === (int) wp_remote_retrieve_response_code( $whois_response ) ) {
-        $result = nppp_f2b_rdap_apply_whois(
-            json_decode( wp_remote_retrieve_body( $whois_response ), true ),
-            $result
-        );
+        $whois_body = json_decode( wp_remote_retrieve_body( $whois_response ), true );
+        if ( is_array( $whois_body ) ) {
+            $whois_ok = true;
+            $result   = nppp_f2b_rdap_apply_whois( $whois_body, $result );
+        }
     }
 
     $abuse_response = wp_remote_get(
@@ -548,14 +551,25 @@ function nppp_f2b_lookup_ip( string $ip ): array {
         array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
     );
 
+    $abuse_ok = false;
     if ( ! is_wp_error( $abuse_response ) && 200 === (int) wp_remote_retrieve_response_code( $abuse_response ) ) {
-        $result = nppp_f2b_rdap_apply_abuse(
-            json_decode( wp_remote_retrieve_body( $abuse_response ), true ),
-            $result
-        );
+        $abuse_body = json_decode( wp_remote_retrieve_body( $abuse_response ), true );
+        if ( is_array( $abuse_body ) ) {
+            $abuse_ok = true;
+            $result   = nppp_f2b_rdap_apply_abuse( $abuse_body, $result );
+        }
     }
 
-    nppp_f2b_rdap_store_cache( $ip, $result );
+    // WP_HTTP_BLOCK_EXTERNAL / request blocking is deterministic -- don't
+    // spend a retry attempt on a request WordPress refused to send.
+    $whois_blocked = is_wp_error( $whois_response ) && 'http_request_not_executed' === $whois_response->get_error_code();
+    $abuse_blocked = is_wp_error( $abuse_response ) && 'http_request_not_executed' === $abuse_response->get_error_code();
+
+    $answered = $whois_ok || $abuse_ok || $whois_blocked || $abuse_blocked;
+
+    if ( $answered ) {
+        nppp_f2b_rdap_store_cache( $ip, $result );
+    }
     return $result;
 }
 
@@ -755,17 +769,23 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
     // for the same jail+ip within 60 s is a replay, not a new ban.
     if ( ! $is_test ) {
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-        $nppp_f2b_replay = $wpdb->get_var(
+        $nppp_f2b_replay = $wpdb->get_row(
             $wpdb->prepare(
-                'SELECT id FROM %i WHERE event_type = %s AND created_at >= %s AND ip = %s AND jail = %s LIMIT 1',
+                'SELECT id, (rdap_json IS NULL) AS pending FROM %i WHERE event_type = %s AND created_at >= %s AND ip = %s AND jail = %s LIMIT 1',
                 nppp_f2b_table_name(),
                 $ev_raw,
                 gmdate( 'Y-m-d H:i:s', time() - 60 ),
                 $ip,
                 $jail_raw
-            )
+            ),
+            ARRAY_A
         );
         if ( $nppp_f2b_replay ) {
+            // The first attempt may have died after its INSERT but before it
+            // queued enrichment. Cheap when the row is done or a worker is up.
+            if ( 'ban' === $ev_raw && ! empty( $nppp_f2b_replay['pending'] ) ) {
+                nppp_f2b_maybe_enrich( (int) $nppp_f2b_replay['id'], $ip );
+            }
             return rest_ensure_response( array( 'ok' => true, 'duplicate' => true ) );
         }
     }
