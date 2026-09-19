@@ -101,8 +101,72 @@ function nppp_f2b_worker_hb_path(): string {
     return nppp_get_runtime_file( NPPP_F2B_WORKER_HB_FILE );
 }
 
-function nppp_f2b_worker_touch_heartbeat(): void {
+/**
+ * Last state recorded by the worker, read back from the heartbeat file body.
+ * Empty when the worker never wrote one (the plain touch() and the bare
+ * timestamp fallback below are not notes).
+ */
+function nppp_f2b_worker_read_hb_note(): string {
     $path = nppp_f2b_worker_hb_path();
+    clearstatcache( true, $path );
+    if ( ! @is_file( $path ) ) {
+        return '';
+    }
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_get_contents
+    $note = trim( (string) @file_get_contents( $path ) );
+    return ( '' !== $note && ! ctype_digit( $note ) ) ? substr( $note, 0, 80 ) : '';
+}
+
+/**
+ * Untranslated diagnostic tail for the "worker died" line: what the dead
+ * worker last reported and how long ago it last checked in. Must run before
+ * nppp_f2b_worker_reset_state(), which deletes the heartbeat file.
+ */
+function nppp_f2b_worker_death_detail(): string {
+    $note = nppp_f2b_worker_read_hb_note();
+    $beat = nppp_f2b_worker_heartbeat_age();
+
+    return sprintf(
+        ' [last state: %1$s; last heartbeat %2$s ago]',
+        '' !== $note ? $note : 'unknown',
+        PHP_INT_MAX === $beat ? '?' : $beat . 's'
+    );
+}
+
+/**
+ * Worker only. Records the stage it is entering: kept in the run state for
+ * nppp_f2b_worker_on_shutdown() and written into the heartbeat, which is all
+ * that survives a SIGKILL or OOM kill.
+ */
+function nppp_f2b_worker_mark( string $stage ): void {
+    if ( ! isset( $GLOBALS['nppp_f2b_worker_state'] ) || ! is_array( $GLOBALS['nppp_f2b_worker_state'] ) ) {
+        return;
+    }
+    $GLOBALS['nppp_f2b_worker_state']['stage'] = $stage;
+
+    nppp_f2b_worker_touch_heartbeat(
+        sprintf(
+            'stage=%1$s ips=%2$d mem=%3$.0fMB',
+            $stage,
+            (int) ( $GLOBALS['nppp_f2b_worker_state']['ips'] ?? 0 ),
+            memory_get_usage( true ) / 1048576
+        )
+    );
+}
+
+/**
+ * Refresh the heartbeat mtime. A $note becomes the file body; writing bumps
+ * the mtime exactly like touch(), so the age check is unaffected.
+ */
+function nppp_f2b_worker_touch_heartbeat( string $note = '' ): void {
+    $path = nppp_f2b_worker_hb_path();
+    if ( '' !== $note ) {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+        if ( false !== @file_put_contents( $path, $note, LOCK_EX ) ) {
+            clearstatcache( true, $path );
+            return;
+        }
+    }
     // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_touch
     if ( ! @touch( $path ) ) {
         // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
@@ -424,7 +488,7 @@ function nppp_f2b_spawn_worker_process(): bool {
                         __( 'Previous worker (PID %1$d) died without a clean exit (killed, out of memory or host restart); %2$d occurrence(s) since the last report.', 'fastcgi-cache-purge-and-preload-nginx' ),
                         $prev_pid,
                         $died
-                    )
+                    ) . nppp_f2b_worker_death_detail()
                 );
             }
         } else {
@@ -567,6 +631,26 @@ function nppp_f2b_kill_worker(): bool {
     wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE ) );
     delete_option( NPPP_F2B_SPAWN_TICK_KEY );
 
+    if ( $dead ) {
+        nppp_f2b_log(
+            'INFO',
+            sprintf(
+                /* translators: %d: process ID of the worker. */
+                __( 'Worker (PID %d) terminated on plugin deactivation.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $pid
+            )
+        );
+    } else {
+        nppp_f2b_log(
+            'ERROR',
+            sprintf(
+                /* translators: %d: process ID of the worker. */
+                __( 'Worker (PID %d) could not be terminated on plugin deactivation.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $pid
+            )
+        );
+    }
+
     return $dead;
 }
 
@@ -586,8 +670,12 @@ function nppp_f2b_kill_worker(): bool {
  *                            block everything queued behind them (the claim
  *                            query is otherwise always MIN(id) ASC, so a
  *                            failed batch would just get reclaimed forever).
+ * @param string|null $error Out-param: DB error text, '' when the query
+ *                           worked. A failed query and an empty queue both
+ *                           return array(); this is how the caller tells
+ *                           them apart.
  */
-function nppp_f2b_worker_claim_ips( int $limit, array $exclude_ips = array() ): array {
+function nppp_f2b_worker_claim_ips( int $limit, array $exclude_ips = array(), ?string &$error = null ): array {
     global $wpdb;
 
     if ( $limit < 1 ) {
@@ -627,8 +715,12 @@ function nppp_f2b_worker_claim_ips( int $limit, array $exclude_ips = array() ): 
         )
     );
 
+    // Handed back to the caller, so a failed query is never mistaken for an
+    // empty queue.
+    $error = (string) $wpdb->last_error;
+
     // Polled up to 4x/s while idle, so a broken DB must not log every time.
-    if ( '' !== $wpdb->last_error && nppp_f2b_log_local_gate( 'db_claim', 5 * MINUTE_IN_SECONDS ) ) {
+    if ( '' !== $error && nppp_f2b_log_local_gate( 'db_claim', 5 * MINUTE_IN_SECONDS ) ) {
         nppp_f2b_log(
             'ERROR',
             sprintf(
@@ -717,10 +809,16 @@ function nppp_f2b_has_pending_enrichment(): bool {
 }
 
 /**
- * Pending queue size and oldest pending age. Feeds the log only. Same 7-day
- * window as the claim query, so the (event_type, rdap_json) index bounds it.
+ * Pending queue size and oldest pending age. Feeds the log and the worker's
+ * shutdown handoff decision. Same 7-day window as the claim query, so the
+ * (event_type, rdap_json) index bounds it.
+ *
+ * Keep the WHERE clause identical to nppp_f2b_worker_claim_ips(): the handoff
+ * relies on "ips > 0" meaning "a claim would find something".
  *
  * @return array{ips:int,oldest_age:int} oldest_age is in seconds, 0 when empty.
+ *                                       ips is -1 when the query itself failed
+ *                                       (unknown, not "empty").
  */
 function nppp_f2b_queue_stats(): array {
     global $wpdb;
@@ -736,6 +834,11 @@ function nppp_f2b_queue_stats(): array {
         ),
         ARRAY_A
     );
+
+    // An aggregate without GROUP BY always returns a row, so null is an error.
+    if ( null === $row ) {
+        return array( 'ips' => -1, 'oldest_age' => 0 );
+    }
 
     if ( ! is_array( $row ) || empty( $row['oldest'] ) ) {
         return array( 'ips' => 0, 'oldest_age' => 0 );
@@ -834,11 +937,22 @@ function nppp_f2b_requests_fail_hint( $response ): string {
  *
  * At most 4 IPs come in per call, so at most 8 requests are in flight --
  * right at RIPEstat's documented per-source concurrency limit.
+ *
+ * @param array $failed Out-param: ip => failure hint string for every IP that
+ *                      got no usable answer at all (plain true on the serial
+ *                      fallback path, which has no per-request detail).
+ * @param array $stats  Out-param, diagnostics for the worker's stop line:
+ *                      cached (transient hits), net (IPs sent to RIPE), ms
+ *                      (wall time of the network round), partial (IPs where only
+ *                      one of whois/abuse answered), hints (reason => count;
+ *                      per failed endpoint response on the parallel path,
+ *                      partial ones included, per failed IP on the serial one).
  */
-function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array() ): array {
+function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &$stats = array() ): array {
     $out     = array();
     $pending = array();
     $failed  = array();
+    $stats   = array( 'cached' => 0, 'net' => 0, 'ms' => 0, 'partial' => 0, 'hints' => array() );
 
     foreach ( $ips as $ip ) {
         $ip = (string) $ip;
@@ -848,6 +962,7 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array() ): array
         $cached = get_transient( nppp_f2b_rdap_cache_key( $ip ) );
         if ( is_array( $cached ) ) {
             $out[ $ip ] = $cached;
+            $stats['cached']++;
             continue;
         }
         $pending[] = $ip;
@@ -857,18 +972,23 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array() ): array
         return $out;
     }
 
+    $stats['net'] = count( $pending );
+
     // Requests should always be loaded, but don't assume -- fall back to
     // the serial path if it's somehow missing. Also use it when the site
     // restricts outbound HTTP: request_multiple() bypasses WP_Http, so only
     // the WP HTTP API honours WP_HTTP_BLOCK_EXTERNAL and WP_PROXY_*.
     if ( ! class_exists( '\WpOrg\Requests\Requests' ) || nppp_f2b_http_is_restricted() ) {
+        $serial_start = microtime( true );
         foreach ( $pending as $ip ) {
             $answered   = true;
             $out[ $ip ] = nppp_f2b_lookup_ip( $ip, $answered );
             if ( ! $answered ) {
                 $failed[ $ip ] = true; // same retry budget as the parallel path
+                $stats['hints']['no response'] = ( $stats['hints']['no response'] ?? 0 ) + 1;
             }
         }
+        $stats['ms'] = (int) round( ( microtime( true ) - $serial_start ) * 1000 );
         return $out;
     }
 
@@ -899,11 +1019,15 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array() ): array
         'useragent'        => 'NPP-Fail2Ban-Monitor/' . ( defined( 'NPPP_PLUGIN_VERSION' ) ? NPPP_PLUGIN_VERSION : '1.0' ),
     );
 
+    $round_start = microtime( true );
+
     try {
         $responses = \WpOrg\Requests\Requests::request_multiple( $requests, $options );
     } catch ( \Exception $nppp_f2b_requests_error ) {
         $responses = array();
     }
+
+    $stats['ms'] = (int) round( ( microtime( true ) - $round_start ) * 1000 );
 
     foreach ( $pending as $index => $ip ) {
         $result   = nppp_f2b_rdap_blank_result();
@@ -919,6 +1043,25 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array() ): array
         if ( null !== $abuse ) {
             $answered = true;
             $result   = nppp_f2b_rdap_apply_abuse( $abuse, $result );
+        }
+
+        // Every endpoint that failed, answered IP or not, so a partial
+        // failure (one of the two) is counted too. The reason is cut at the
+        // first colon so "cURL error 28: ..." variants of the same failure
+        // count together.
+        foreach ( array( 'w' => $whois, 'a' => $abuse ) as $kind => $decoded ) {
+            if ( null !== $decoded ) {
+                continue;
+            }
+            $hint = nppp_f2b_requests_fail_hint( $responses[ $kind . $index ] ?? null );
+            $key  = substr( trim( (string) strtok( $hint, ':' ) ), 0, 40 );
+            if ( '' === $key ) {
+                $key = 'error';
+            }
+            $stats['hints'][ $key ] = ( $stats['hints'][ $key ] ?? 0 ) + 1;
+        }
+        if ( $answered && ( null === $whois || null === $abuse ) ) {
+            $stats['partial']++;
         }
 
         // Neither endpoint gave us a usable response -- that's an outage,
@@ -1002,6 +1145,11 @@ function nppp_f2b_worker_on_shutdown(): void {
             __( ' (ips=%1$d, runtime=%2$ds)', 'fastcgi-cache-purge-and-preload-nginx' ),
             (int) $state['ips'],
             time() - (int) $state['started']
+        ) . sprintf(
+            // Structured tail, untranslated like the worker's stop line.
+            ' [pid=%1$d stage=%2$s]',
+            (int) ( $state['pid'] ?? 0 ),
+            (string) ( $state['stage'] ?? '?' )
         )
         : __( ' (before the worker loop started)', 'fastcgi-cache-purge-and-preload-nginx' );
 
@@ -1068,6 +1216,8 @@ function nppp_f2b_worker_run(): void {
 
     $started     = time();
     $idle_since  = 0;
+    $idle_total  = 0;
+    $err_since   = 0;
     $seen        = array();
     $deferred    = array();
     $written     = 0;
@@ -1075,22 +1225,43 @@ function nppp_f2b_worker_run(): void {
     $batch_fails = 0;
     $stop_reason = 'unknown';
 
+    // Diagnostics for the stop line.
+    $pid          = function_exists( 'getmypid' ) ? (int) getmypid() : 0;
+    $empty        = 0; // answered, but the registry had nothing for the IP
+    $partial      = 0; // only one of whois/abuse answered
+    $cached       = 0; // served from the RDAP transient, no network
+    $unwritten    = 0; // IPs whose write-back touched no row
+    $claim_errors = 0;
+    $lat_batches  = 0; // batches that went to the network
+    $lat_total    = 0;
+    $lat_max      = 0;
+    $fail_hints   = array();
+
     // Read by nppp_f2b_worker_on_shutdown(), which logs a fatal that would
     // otherwise vanish into /dev/null.
     $GLOBALS['nppp_f2b_worker_state'] = array(
         'started' => $started,
+        'pid'     => $pid,
         'ips'     => 0,
+        'stage'   => 'start',
         'clean'   => false,
     );
 
+    // One query per worker lifetime: what is waiting, and for how long. The
+    // oldest pending age is the gap between a ban and this worker reaching it.
+    $queue_start = nppp_f2b_queue_stats();
+
+    // Structured key=value line, untranslated on purpose like the stop line.
     nppp_f2b_log(
         'INFO',
         sprintf(
-            /* translators: %1$d: worker process ID; %2$d: batch size; %3$d: max runtime in seconds. */
-            __( 'Worker started (PID %1$d, batch %2$d, max runtime %3$ds).', 'fastcgi-cache-purge-and-preload-nginx' ),
-            function_exists( 'getmypid' ) ? (int) getmypid() : 0,
+            'Worker started: pid=%d batch=%d max_runtime=%ds queue=%s oldest=%ds mem=%.1fMB',
+            $pid,
             $batch,
-            $max_runtime
+            $max_runtime,
+            $queue_start['ips'] < 0 ? '?' : (string) $queue_start['ips'],
+            $queue_start['oldest_age'],
+            memory_get_usage( true ) / 1048576
         )
     );
 
@@ -1100,13 +1271,35 @@ function nppp_f2b_worker_run(): void {
             break;
         }
 
-        nppp_f2b_worker_touch_heartbeat();
+        nppp_f2b_worker_mark( 'claim' );
 
         // Skip addresses already deferred this run, see
         // nppp_f2b_worker_claim_ips().
-        $ips = nppp_f2b_worker_claim_ips( $batch, array_keys( $deferred ) );
+        $claim_error = '';
+        $ips         = nppp_f2b_worker_claim_ips( $batch, array_keys( $deferred ), $claim_error );
+
+        // A failing claim comes back as an empty array, exactly like an empty
+        // queue. Tracked separately so it is never reported as "idle".
+        if ( '' !== $claim_error ) {
+            $claim_errors++;
+            if ( 0 === $err_since ) {
+                $err_since = time();
+            }
+        } else {
+            $err_since = 0;
+        }
 
         if ( empty( $ips ) ) {
+            if ( 0 !== $err_since ) {
+                // Same tolerance as the idle exit: ride out a short DB blip,
+                // give up on a real outage.
+                if ( ( time() - $err_since ) >= NPPP_F2B_WORKER_IDLE_SECONDS ) {
+                    $stop_reason = 'db_error';
+                    break;
+                }
+                usleep( 250000 );
+                continue;
+            }
             if ( 0 === $idle_since ) {
                 $idle_since = time();
             }
@@ -1118,7 +1311,10 @@ function nppp_f2b_worker_run(): void {
             continue;
         }
 
-        $idle_since = 0;
+        if ( 0 !== $idle_since ) {
+            $idle_total += time() - $idle_since;
+            $idle_since  = 0;
+        }
 
         // Progress guard: if a write-back ever fails (read-only replica,
         // revoked grant, full disk) the same IPs keep coming back and we'd
@@ -1136,8 +1332,25 @@ function nppp_f2b_worker_run(): void {
             break;
         }
 
+        nppp_f2b_worker_mark( 'lookup' );
+
         $failed  = array();
-        $results = nppp_f2b_lookup_ips_bulk( $fresh, $failed );
+        $lstats  = array();
+        $results = nppp_f2b_lookup_ips_bulk( $fresh, $failed, $lstats );
+
+        // Numbers for the stop line. Latency only counts batches that
+        // actually went to the network.
+        $cached  += (int) ( $lstats['cached'] ?? 0 );
+        $partial += (int) ( $lstats['partial'] ?? 0 );
+        if ( ! empty( $lstats['net'] ) ) {
+            $batch_ms = (int) ( $lstats['ms'] ?? 0 );
+            $lat_batches++;
+            $lat_total += $batch_ms;
+            $lat_max    = max( $lat_max, $batch_ms );
+        }
+        foreach ( (array) ( $lstats['hints'] ?? array() ) as $hint => $hint_count ) {
+            $fail_hints[ $hint ] = ( $fail_hints[ $hint ] ?? 0 ) + (int) $hint_count;
+        }
 
         // No IP in the batch got a usable answer: upstream outage, block or
         // timeout. The first one per run is logged with the HTTP code or curl
@@ -1158,6 +1371,8 @@ function nppp_f2b_worker_run(): void {
             }
         }
 
+        nppp_f2b_worker_mark( 'write' );
+
         foreach ( $fresh as $ip ) {
             $seen[ $ip ] = true;
 
@@ -1177,7 +1392,18 @@ function nppp_f2b_worker_run(): void {
                 ? $results[ $ip ]
                 : nppp_f2b_rdap_blank_result();
 
-            $written += nppp_f2b_worker_write_result( $ip, $rdap );
+            // An answer with nothing in it (private range, unallocated block,
+            // or WP_HTTP_BLOCK_EXTERNAL): stored, but worth knowing about.
+            if ( ! isset( $failed[ $ip ] ) && ! nppp_f2b_rdap_has_data( array_merge( nppp_f2b_rdap_blank_result(), $rdap ) ) ) {
+                $empty++;
+            }
+
+            // Zero rows = the write failed, or another path filled them first.
+            $rows = nppp_f2b_worker_write_result( $ip, $rdap );
+            if ( $rows < 1 ) {
+                $unwritten++;
+            }
+            $written += $rows;
         }
 
         $GLOBALS['nppp_f2b_worker_state']['ips'] = count( $seen );
@@ -1196,7 +1422,8 @@ function nppp_f2b_worker_run(): void {
     // Release ownership first, so a successor can actually claim it.
     nppp_f2b_worker_reset_state();
 
-    // Stop summary: warnings first, then one INFO line with the totals.
+    // Stop summary: warnings first, then one structured diagnostic line with
+    // the totals.
     if ( 'deferred_cap' === $stop_reason ) {
         nppp_f2b_log(
             'WARNING',
@@ -1220,28 +1447,76 @@ function nppp_f2b_worker_run(): void {
 
     // Structured key=value diagnostic dump, not a sentence -- left untranslated
     // on purpose, same convention as nppp_ep_gate_log()'s "IP: ... | Action: ..."
-    // lines. $stop_reason is a fixed machine token (idle, max_runtime, ...).
-    $queue = nppp_f2b_queue_stats();
-    nppp_f2b_log(
-        'INFO',
-        sprintf(
-            'Worker stopped: reason=%s ips=%d rows=%d deferred=%d batch_failures=%d runtime=%ds peak_mem=%.1fMB backlog=%d',
-            $stop_reason,
-            count( $seen ),
-            $written,
-            count( $deferred ),
-            $batch_fails,
-            time() - $started,
-            memory_get_peak_usage( true ) / 1048576,
-            $queue['ips']
-        )
-    );
+    // lines. $stop_reason is a fixed machine token: idle, max_runtime,
+    // seen_cap, deferred_cap, no_progress or db_error.
+    if ( 0 !== $idle_since ) {
+        $idle_total += time() - $idle_since;
+    }
+
+    $queue   = nppp_f2b_queue_stats();
+    $runtime = time() - $started;
 
     // Handoff: covers two gaps the cron would otherwise take minutes to
     // notice -- exiting with the queue still full, or a row landing right
     // as this process was shutting down. Gated on $written so a stalled
-    // run (see progress guard) can't chain successors forever.
-    if ( $written > 0 && ! empty( nppp_f2b_worker_claim_ips( 1 ) ) ) {
+    // run (see progress guard) can't chain successors forever. Decided from
+    // the stats read above instead of a second claim query: same WHERE
+    // clause, so "ips > 0" is exactly "a claim would find something".
+    $handoff = ( $written > 0 && $queue['ips'] > 0 );
+
+    $line = sprintf(
+        'Worker stopped: pid=%d reason=%s ips=%d rows=%d deferred=%d batch_failures=%d batches=%d lat_avg=%dms lat_max=%dms runtime=%ds active=%ds peak_mem=%.1fMB backlog=%s handoff=%s',
+        $pid,
+        $stop_reason,
+        count( $seen ),
+        $written,
+        count( $deferred ),
+        $batch_fails,
+        $lat_batches,
+        $lat_batches > 0 ? (int) round( $lat_total / $lat_batches ) : 0,
+        $lat_max,
+        $runtime,
+        max( 0, $runtime - $idle_total ),
+        memory_get_peak_usage( true ) / 1048576,
+        $queue['ips'] < 0 ? '?' : (string) $queue['ips'],
+        $handoff ? 'yes' : 'no'
+    );
+
+    // Anomaly counters only appear when non-zero, so a healthy line stays short.
+    foreach ( array(
+        'empty'        => $empty,
+        'partial'      => $partial,
+        'cached'       => $cached,
+        'blanked'      => $blanked,
+        'unwritten'    => $unwritten,
+        'claim_errors' => $claim_errors,
+    ) as $label => $count ) {
+        if ( $count > 0 ) {
+            $line .= ' ' . $label . '=' . $count;
+        }
+    }
+
+    // Top failure reasons of the run: an HTTP status or a cURL error code.
+    if ( ! empty( $fail_hints ) ) {
+        arsort( $fail_hints );
+        $top = array();
+        foreach ( array_slice( $fail_hints, 0, 3, true ) as $hint => $count ) {
+            $top[] = $hint . ' x' . $count;
+        }
+        $line .= ' errors=' . implode( ', ', $top );
+    }
+
+    if ( 'db_error' === $stop_reason ) {
+        $level = 'ERROR';
+    } elseif ( 'no_progress' === $stop_reason ) {
+        $level = 'WARNING';
+    } else {
+        $level = 'INFO';
+    }
+
+    nppp_f2b_log( $level, $line );
+
+    if ( $handoff ) {
         nppp_f2b_maybe_spawn_worker( true );
     }
 
@@ -1283,7 +1558,17 @@ function nppp_f2b_worker_reconcile(): void {
     }
 
     if ( nppp_f2b_maybe_spawn_worker() ) {
-        nppp_f2b_log( 'WARNING', __( 'Reconcile found pending events with no running worker; a worker spawn was requested.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        // Age of the oldest event tells a dead worker (minutes) from a slow one.
+        $stats = nppp_f2b_queue_stats();
+        nppp_f2b_log(
+            'WARNING',
+            sprintf(
+                /* translators: %1$d: number of pending IPs in the enrichment queue; %2$d: age in seconds of the oldest pending event. */
+                __( 'Reconcile found %1$d pending IP(s), the oldest event is %2$ds old, with no running worker; a worker spawn was requested.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                max( 0, $stats['ips'] ),
+                $stats['oldest_age']
+            )
+        );
         return;
     }
 
