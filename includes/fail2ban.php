@@ -909,15 +909,6 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
     // "test" event comes from the Security tab's connection check.
     $is_test = ( 'test' === $ev_raw );
 
-    // Test events don't count against the rate limit.
-    if ( ! $is_test && nppp_f2b_rate_exceeded() ) {
-        return new WP_Error(
-            'nppp_f2b_rate_limited',
-            __( 'Too many events this minute.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            array( 'status' => 429 )
-        );
-    }
-
     // fail2ban jail names are always plain identifiers, so validate as such.
     if ( ! preg_match( '/^[A-Za-z0-9_\-]{1,64}$/', $jail_raw ) ) {
         return new WP_Error(
@@ -945,6 +936,17 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
         );
     }
 
+    // Rate limit only well-formed events. Malformed requests are rejected
+    // above for free (no DB, no transient write) and must not spend the
+    // shared per-minute budget that legitimate bans need.
+    if ( ! $is_test && nppp_f2b_rate_exceeded() ) {
+        return new WP_Error(
+            'nppp_f2b_rate_limited',
+            __( 'Too many events this minute.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            array( 'status' => 429 )
+        );
+    }
+
     global $wpdb;
 
     // curl --retry in the fail2ban action can replay an event whose first
@@ -954,7 +956,7 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         $nppp_f2b_replay = $wpdb->get_row(
             $wpdb->prepare(
-                'SELECT id, (rdap_json IS NULL) AS pending FROM %i WHERE event_type = %s AND created_at >= %s AND ip = %s AND jail = %s LIMIT 1',
+                'SELECT id, (rdap_json IS NULL) AS pending FROM %i WHERE event_type = %s AND created_at >= %s AND ip = %s AND jail = %s ORDER BY id DESC LIMIT 1',
                 nppp_f2b_table_name(),
                 $ev_raw,
                 gmdate( 'Y-m-d H:i:s', time() - 60 ),
