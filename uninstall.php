@@ -179,6 +179,7 @@ function nppp_clear_scheduled_events_on_uninstall() {
     wp_clear_scheduled_hook('nppp_index_updater_event');
     wp_clear_scheduled_hook('nppp_f2b_cleanup_event');
     wp_clear_scheduled_hook('nppp_f2b_enrich_event');
+    wp_clear_scheduled_hook('nppp_f2b_worker_event');
 
     // Remove tracking cron hooks left by 2.0.1–2.1.4 in case migration never ran
     wp_clear_scheduled_hook('npp_plugin_tracking_event', array('active'));
