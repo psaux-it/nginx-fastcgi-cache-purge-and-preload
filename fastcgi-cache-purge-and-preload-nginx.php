@@ -145,6 +145,7 @@ foreach ([
     'publish_future_post',
     'nppp_f2b_cleanup_event',
     'nppp_f2b_enrich_event',
+    'nppp_f2b_worker_event',
 ] as $nppp_cron_event) {
     add_action($nppp_cron_event, 'nppp_load_bootstrap', 0);
 }
@@ -550,7 +551,7 @@ add_action('rest_api_init', function (): void {
         return;
     }
 
-    if ( ! preg_match( '#^/nppp_f2b/v1/(event|enrich)/?$#i', $nppp_ep10_route ) ) {
+    if ( ! preg_match( '#^/nppp_f2b/v1/event/?$#i', $nppp_ep10_route ) ) {
         return;
     }
 
