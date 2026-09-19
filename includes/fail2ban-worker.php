@@ -1054,7 +1054,10 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
                 continue;
             }
             $hint = nppp_f2b_requests_fail_hint( $responses[ $kind . $index ] ?? null );
-            $key  = substr( trim( (string) strtok( $hint, ':' ) ), 0, 40 );
+            // Cut at the first colon, then drop the variable "after N ms..."
+            // tail so identical timeouts land in one bucket.
+            $key = (string) preg_replace( '/\bafter \d+.*$/i', '', (string) strtok( $hint, ':' ) );
+            $key = substr( trim( $key ), 0, 40 );
             if ( '' === $key ) {
                 $key = 'error';
             }
