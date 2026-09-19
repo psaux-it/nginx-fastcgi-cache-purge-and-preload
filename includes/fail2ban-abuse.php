@@ -150,7 +150,7 @@ function nppp_f2b_abuse_strip_header_breaks( string $value ): string {
  * is discarded by most providers, so a half-filled card must not render
  * report buttons that will only produce silent no-ops.
  */
-function nppp_f2b_abuse_is_ready( array $settings = null ): bool {
+function nppp_f2b_abuse_is_ready( ?array $settings = null ): bool {
     if ( null === $settings ) {
         $settings = nppp_f2b_get_abuse_settings();
     }
@@ -170,7 +170,7 @@ function nppp_f2b_get_abuse_report_log(): array {
     return is_array( $log ) ? $log : array();
 }
 
-function nppp_f2b_abuse_last_reported( string $ip, array $log = null ): int {
+function nppp_f2b_abuse_last_reported( string $ip, ?array $log = null ): int {
     if ( null === $log ) {
         $log = nppp_f2b_get_abuse_report_log();
     }
