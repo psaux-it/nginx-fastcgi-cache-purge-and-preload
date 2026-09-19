@@ -20,12 +20,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants
 // ---------------------------------------------------------------------------
 
-// Bearer token option. Read raw by the EP10 gate in the main plugin file.
+// Token option name, read directly by the EP10 gate before WP boots.
 if ( ! defined( 'NPPP_F2B_TOKEN_OPTION' ) ) {
     define( 'NPPP_F2B_TOKEN_OPTION', 'nppp_f2b_token' );
 }
 
-// Schema stamp. Bump only when the table definition changes.
+// Schema version. Bump only when the table structure changes.
 if ( ! defined( 'NPPP_F2B_DB_VERSION' ) ) {
     define( 'NPPP_F2B_DB_VERSION', '1.0.0' );
 }
@@ -33,7 +33,7 @@ if ( ! defined( 'NPPP_F2B_DB_VERSION_OPTION' ) ) {
     define( 'NPPP_F2B_DB_VERSION_OPTION', 'nppp_f2b_db_version' );
 }
 
-// Retention cron hook. Registered in the EP2 cron list of the main plugin file.
+// Cron hook name, registered in EP2's cron list.
 if ( ! defined( 'NPPP_F2B_CLEANUP_HOOK' ) ) {
     define( 'NPPP_F2B_CLEANUP_HOOK', 'nppp_f2b_cleanup_event' );
 }
@@ -68,15 +68,14 @@ if ( ! defined( 'NPPP_F2B_MAP_COUNTRIES_MAX' ) ) {
     define( 'NPPP_F2B_MAP_COUNTRIES_MAX', 300 );
 }
 
-// Not autoloaded: stamps whether the country_code generated column is
-// present and usable, set once by nppp_f2b_ensure_country_code_column().
-// Read on every Security tab load, so caching it avoids a SHOW COLUMNS
-// round trip per page view.
+// Not autoloaded. Caches whether country_code exists so we don't run
+// SHOW COLUMNS on every Security tab load.
 if ( ! defined( 'NPPP_F2B_COUNTRY_COL_OK_OPTION' ) ) {
     define( 'NPPP_F2B_COUNTRY_COL_OK_OPTION', 'nppp_f2b_country_col_ok' );
 }
 
-// Last-resort async enrichment hook.
+// LEGACY. Plugin no longer schedules this; kept so leftover cron events
+// from <= 2.1.7 can drain. Current enrichment lives in fail2ban-worker.php.
 if ( ! defined( 'NPPP_F2B_ENRICH_HOOK' ) ) {
     define( 'NPPP_F2B_ENRICH_HOOK', 'nppp_f2b_enrich_event' );
 }
@@ -93,9 +92,8 @@ function nppp_f2b_rdap_cache_ttl(): int {
     return $ttl;
 }
 
-// Live Feed safety valve. "All events" is bounded to retention (90 days by
-// default) already, but a jail under sustained attack could still push
-// this table into the tens of thousands of rows.
+// Upper bound for the Live Feed. Retention already caps the table, but
+// a jail under heavy attack can still push this into tens of thousands of rows.
 if ( ! defined( 'NPPP_F2B_FEED_HARD_CAP' ) ) {
     define( 'NPPP_F2B_FEED_HARD_CAP', 5000 );
 }
@@ -139,10 +137,8 @@ function nppp_f2b_install_table(): void {
 
     // UTC storage keeps range queries timezone-safe.
     //
-    // created_event_jail_idx supports the jail summary and retention delete.
-    //
-    // event_created_ip_idx matches event_type = 'ban' + GROUP BY ip and
-    // keeps created_at available for the aggregate.
+    // created_event_jail_idx: used by jail summaries and retention cleanup.
+    // event_created_ip_idx: used to group ban events by ip.
     $sql = "CREATE TABLE {$table_name} (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
         jail VARCHAR(64) NOT NULL,
@@ -164,27 +160,28 @@ function nppp_f2b_install_table(): void {
     );
 
     if ( $nppp_f2b_table_exists !== $table_name ) {
-        // dbDelta() failed silently (e.g. a DB user without CREATE/ALTER).
-        // Leave the version stamp untouched so the next admin_init retries
-        // instead of believing the schema is current when it is not.
+        // dbDelta() failed silently (e.g. no CREATE/ALTER privilege).
+        // Don't stamp the version so the next admin_init retries.
         return;
     }
 
-    // Add the generated country_code column + its covering index. Kept
-    // outside dbDelta() intentionally: dbDelta() cannot reliably diff
-    // GENERATED ALWAYS AS (...) columns and can silently strip the
-    // generation expression on a later run.
+    // country_code column and its index go outside dbDelta() on purpose --
+    // dbDelta() can't diff GENERATED columns properly and may strip the
+    // expression on a later run.
     nppp_f2b_ensure_country_code_column( $table_name );
 
-    // Pre-generate the token so the setup snippets are complete the very first
-    // time an admin opens the Fail2Ban tab.
+    // Generate the token now so the setup snippets aren't empty on first load.
     nppp_f2b_get_token();
 
     nppp_f2b_schedule_cleanup();
 
-    // Not autoloaded: this stamp is read once per admin_init via
-    // nppp_f2b_maybe_install(), never on the front end, so there is no
-    // reason to add it to the autoloaded options blob loaded on every request.
+    // Just a self-heal tick for the worker, not the dispatch path --
+    // the webhook spawns the worker directly (see fail2ban-worker.php).
+    if ( function_exists( 'nppp_f2b_schedule_worker_reconcile' ) ) {
+        nppp_f2b_schedule_worker_reconcile();
+    }
+
+    // Not autoloaded -- only read once per admin_init, never on the front end.
     update_option( NPPP_F2B_DB_VERSION_OPTION, NPPP_F2B_DB_VERSION, false );
 }
 
@@ -199,15 +196,15 @@ function nppp_f2b_maybe_install(): void {
 // ---------------------------------------------------------------------------
 // Country aggregation (Top Attack Countries)
 //
-// STORED country_code + covering index enables index-only GROUP BY without
-// re-parsing rdap_json. Uses the full retention window (90 days by default),
-// since country distribution changes more slowly than Repeat Offenders.
+// STORED country_code + its index means we GROUP BY without re-parsing
+// rdap_json. Uses the full retention window (90 days by default) since
+// country spread shifts slower than the Repeat Offenders window does.
 // ---------------------------------------------------------------------------
 
 /**
- * Ensure the generated country_code column and its covering index exist.
- * Idempotent — safe to call on every install/self-heal. Runs outside
- * dbDelta() because dbDelta() cannot manage GENERATED ALWAYS AS columns.
+ * Adds the country_code column and its index if missing. Idempotent,
+ * safe to call on every install/self-heal. Runs outside dbDelta() since
+ * it can't manage GENERATED columns.
  */
 function nppp_f2b_ensure_country_code_column( string $table_name ): void {
     global $wpdb;
@@ -222,8 +219,8 @@ function nppp_f2b_ensure_country_code_column( string $table_name ): void {
     );
 
     if ( ! $nppp_f2b_col_exists ) {
-        // NULLIF(...,'') treats an empty RDAP country as NULL, excluding it
-        // alongside unenriched rows via the country_code IS NOT NULL filter.
+        // NULLIF turns an empty country into NULL so it's filtered out
+        // together with rows that haven't been enriched yet.
         $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- intentional, idempotent schema self-heal on a custom plugin table; no caching applies to a one-time ALTER TABLE
             $wpdb->prepare(
                 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange -- intentional, idempotent schema self-heal on a custom plugin table, guarded by the SHOW COLUMNS check above
@@ -238,9 +235,9 @@ function nppp_f2b_ensure_country_code_column( string $table_name ): void {
         );
     }
 
-    // Re-check after ALTER: privilege/support failures may be silent.
-    // If unavailable, show a one-time database update notice instead of
-    // breaking the Top Attack Countries query.
+    // Re-check after ALTER since a privilege/support failure can be silent.
+    // If it's still missing, just disable this feature instead of breaking
+    // the Top Attack Countries query.
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $nppp_f2b_col_ok = (bool) $wpdb->get_var(
         $wpdb->prepare(
@@ -250,23 +247,21 @@ function nppp_f2b_ensure_country_code_column( string $table_name ): void {
         )
     );
 
-    // Not autoloaded: read once per admin-rendered Security tab load via
-    // nppp_f2b_country_feature_available(), never on the front end.
+    // Not autoloaded -- only read once per Security tab load, never on the front end.
     update_option( NPPP_F2B_COUNTRY_COL_OK_OPTION, $nppp_f2b_col_ok, false );
 }
 
-// Cached feature flag -- avoids a SHOW COLUMNS round trip on every tab load.
+// Cached flag so we skip SHOW COLUMNS on every tab load.
 function nppp_f2b_country_feature_available(): bool {
     return (bool) get_option( NPPP_F2B_COUNTRY_COL_OK_OPTION, false );
 }
 
-// Full retention window cutoff -- see the note above on why this is NOT
-// nppp_f2b_window_cutoff() (the 30-day Repeat Offenders window).
+// Full retention cutoff -- not the 30-day window used by Repeat Offenders.
 function nppp_f2b_country_window_cutoff(): string {
     return gmdate( 'Y-m-d H:i:s', time() - ( nppp_f2b_retention_days() * DAY_IN_SECONDS ) );
 }
 
-// Index-only GROUP BY over (event_type, created_at, country_code).
+// Index-only GROUP BY, no table access needed.
 function nppp_f2b_get_top_countries( int $limit = NPPP_F2B_TOP_COUNTRIES_N ): array {
     if ( ! nppp_f2b_country_feature_available() ) {
         return array();
@@ -294,8 +289,8 @@ function nppp_f2b_get_top_countries( int $limit = NPPP_F2B_TOP_COUNTRIES_N ): ar
     return is_array( $rows ) ? $rows : array();
 }
 
-// Distinct-country count matching the same window/filter as
-// nppp_f2b_get_top_countries(), used only to detect truncation for the UI.
+// Distinct country count, same filters as above -- just used to detect
+// truncation in the UI.
 function nppp_f2b_get_top_countries_total_count(): int {
     if ( ! nppp_f2b_country_feature_available() ) {
         return 0;
@@ -320,8 +315,7 @@ function nppp_f2b_get_top_countries_total_count(): int {
 }
 
 // ---------------------------------------------------------------------------
-// Retention cleanup
-// Runs on WP-Cron, never on the webhook insert path.
+// Retention cleanup, runs on WP-Cron only -- never on the webhook path.
 // ---------------------------------------------------------------------------
 
 function nppp_f2b_schedule_cleanup(): void {
@@ -336,7 +330,7 @@ function nppp_f2b_schedule_cleanup(): void {
     }
 }
 
-// Delete in bounded batches to avoid long-running cleanup queries.
+// Delete in batches so cleanup doesn't turn into one long-running query.
 function nppp_f2b_cleanup_old_events(): void {
     global $wpdb;
 
@@ -360,8 +354,7 @@ function nppp_f2b_cleanup_old_events(): void {
 add_action( NPPP_F2B_CLEANUP_HOOK, 'nppp_f2b_cleanup_old_events' );
 
 // ---------------------------------------------------------------------------
-// Token management
-// Generates the 64-character token used by EP10.
+// Token management -- generates the 64-char token EP10 checks against.
 // ---------------------------------------------------------------------------
 
 function nppp_f2b_get_token(): string {
@@ -379,17 +372,13 @@ function nppp_f2b_regenerate_token(): string {
 }
 
 // ---------------------------------------------------------------------------
-// RIPE lookup. Used only by enrichment, never by the webhook insert path.
+// RIPE lookup. The webhook only ever triggers this indirectly (via the
+// worker); it never calls RIPE inline itself.
 // ---------------------------------------------------------------------------
 
-function nppp_f2b_lookup_ip( string $ip ): array {
-    $cache_key = 'nppp_f2b_rdap_' . md5( $ip );
-    $cached    = get_transient( $cache_key );
-    if ( is_array( $cached ) ) {
-        return $cached;
-    }
-
-    $result = array(
+// Empty RDAP profile shape, every lookup starts from this.
+function nppp_f2b_rdap_blank_result(): array {
+    return array(
         'inetnum'      => '',
         'netname'      => '',
         'country'      => '',
@@ -397,81 +386,99 @@ function nppp_f2b_lookup_ip( string $ip ): array {
         'origin_asns'  => array(),
         'abuse_emails' => array(),
     );
+}
 
-    $whois_response = wp_remote_get(
-        add_query_arg( 'resource', rawurlencode( $ip ), 'https://stat.ripe.net/data/whois/data.json' ),
-        array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
-    );
+function nppp_f2b_rdap_cache_key( string $ip ): string {
+    return 'nppp_f2b_rdap_' . md5( $ip );
+}
 
-    if ( ! is_wp_error( $whois_response ) && 200 === (int) wp_remote_retrieve_response_code( $whois_response ) ) {
-        $whois_body = json_decode( wp_remote_retrieve_body( $whois_response ), true );
+function nppp_f2b_rdap_whois_url( string $ip ): string {
+    return add_query_arg( 'resource', rawurlencode( $ip ), 'https://stat.ripe.net/data/whois/data.json' );
+}
 
-        if ( is_array( $whois_body ) && isset( $whois_body['data'] ) ) {
-            // RIRs return incompatible whois key sets for the same concepts:
-            //   RIPE/APNIC/AFRINIC/LACNIC (RPSL style): inetnum, netname, country, org
-            //   ARIN (legacy style):  NetRange/CIDR, NetName, Country (in the Org
-            //                         block, never the network block), Organization/
-            //                         OrgName/OrgId
-            // Matching only lowercase RPSL keys against records[0] silently drops
-            // every ARIN-registered IP — the majority of US cloud/hosting ranges
-            // Walk every record block and match case-insensitively against both naming schemes.
-            foreach ( $whois_body['data']['records'] ?? array() as $nppp_f2b_record_block ) {
-                if ( ! is_array( $nppp_f2b_record_block ) ) {
-                    continue;
-                }
+function nppp_f2b_rdap_abuse_url( string $ip ): string {
+    return add_query_arg( 'resource', rawurlencode( $ip ), 'https://stat.ripe.net/data/abuse-contact-finder/data.json' );
+}
 
-                foreach ( $nppp_f2b_record_block as $record ) {
-                    $key   = strtolower( (string) ( $record['key'] ?? '' ) );
-                    $value = trim( (string) ( $record['value'] ?? '' ) );
+/**
+ * Merges a decoded RIPEstat whois response into an RDAP profile.
+ * Kept separate so both the serial (wp_remote_get) and parallel
+ * (curl_multi worker) paths share one parser. $body isn't trusted to
+ * actually be an array.
+ */
+function nppp_f2b_rdap_apply_whois( $body, array $result ): array {
+    if ( ! is_array( $body ) || ! isset( $body['data'] ) ) {
+        return $result;
+    }
 
-                    if ( '' === $value ) {
-                        continue;
-                    }
+    // Different RIRs use different key names for the same fields:
+    //   RIPE/APNIC/AFRINIC/LACNIC use inetnum/netname/country/org
+    //   ARIN uses NetRange/CIDR, NetName, Country (only in the Org block),
+    //   and Organization/OrgName/OrgId
+    // Only matching the first style would silently drop every ARIN IP,
+    // which covers most US cloud/hosting ranges. Check every record block
+    // against both naming schemes, case-insensitively.
+    foreach ( $body['data']['records'] ?? array() as $nppp_f2b_record_block ) {
+        if ( ! is_array( $nppp_f2b_record_block ) ) {
+            continue;
+        }
 
-                    // First non-empty match wins per field; earlier blocks are
-                    // generally the more specific (network-level) registration.
-                    if ( '' === $result['inetnum'] && in_array( $key, array( 'inetnum', 'netrange', 'cidr' ), true ) ) {
-                        $result['inetnum'] = $value;
-                    } elseif ( '' === $result['netname'] && 'netname' === $key ) {
-                        $result['netname'] = $value;
-                    } elseif ( '' === $result['country'] && 'country' === $key ) {
-                        $result['country'] = strtoupper( $value );
-                    } elseif ( '' === $result['org_id'] && in_array( $key, array( 'org', 'orgid', 'orgname', 'organization', 'custname' ), true ) ) {
-                        $result['org_id'] = $value;
-                    }
-                }
+        foreach ( $nppp_f2b_record_block as $record ) {
+            $key   = strtolower( (string) ( $record['key'] ?? '' ) );
+            $value = trim( (string) ( $record['value'] ?? '' ) );
+
+            if ( '' === $value ) {
+                continue;
             }
 
-            foreach ( $whois_body['data']['irr_records'] ?? array() as $route ) {
-                foreach ( $route as $record ) {
-                    if ( 'origin' === ( $record['key'] ?? '' ) && ctype_digit( (string) $record['value'] ) ) {
-                        $result['origin_asns'][] = 'AS' . $record['value'];
-                    }
-                }
+            // First non-empty value wins per field -- earlier blocks tend
+            // to be the more specific registration.
+            if ( '' === $result['inetnum'] && in_array( $key, array( 'inetnum', 'netrange', 'cidr' ), true ) ) {
+                $result['inetnum'] = $value;
+            } elseif ( '' === $result['netname'] && 'netname' === $key ) {
+                $result['netname'] = $value;
+            } elseif ( '' === $result['country'] && 'country' === $key ) {
+                $result['country'] = strtoupper( $value );
+            } elseif ( '' === $result['org_id'] && in_array( $key, array( 'org', 'orgid', 'orgname', 'organization', 'custname' ), true ) ) {
+                $result['org_id'] = $value;
             }
-            $result['origin_asns'] = array_values( array_unique( $result['origin_asns'] ) );
         }
     }
 
-    $abuse_response = wp_remote_get(
-        add_query_arg( 'resource', rawurlencode( $ip ), 'https://stat.ripe.net/data/abuse-contact-finder/data.json' ),
-        array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
-    );
-
-    if ( ! is_wp_error( $abuse_response ) && 200 === (int) wp_remote_retrieve_response_code( $abuse_response ) ) {
-        $abuse_body = json_decode( wp_remote_retrieve_body( $abuse_response ), true );
-        foreach ( $abuse_body['data']['abuse_contacts'] ?? array() as $email ) {
-            $email = sanitize_email( (string) $email );
-            if ( '' !== $email ) { $result['abuse_emails'][] = $email; }
+    foreach ( $body['data']['irr_records'] ?? array() as $route ) {
+        if ( ! is_array( $route ) ) {
+            continue;
         }
-        $result['abuse_emails'] = array_values( array_unique( $result['abuse_emails'] ) );
+        foreach ( $route as $record ) {
+            if ( 'origin' === ( $record['key'] ?? '' ) && ctype_digit( (string) $record['value'] ) ) {
+                $result['origin_asns'][] = 'AS' . $record['value'];
+            }
+        }
+    }
+    $result['origin_asns'] = array_values( array_unique( $result['origin_asns'] ) );
+
+    return $result;
+}
+
+// Merges a decoded RIPEstat abuse-contact response into an RDAP profile.
+function nppp_f2b_rdap_apply_abuse( $body, array $result ): array {
+    if ( ! is_array( $body ) ) {
+        return $result;
     }
 
-    // Only cache for the full TTL when at least one field was actually
-    // populated. A transient RIPE timeout/outage must not freeze an empty
-    // result in place for up to nppp_f2b_rdap_cache_ttl() (30 days by
-    // default) -- that would silently hide real data forever for this IP.
-    $nppp_f2b_lookup_had_data = (
+    foreach ( $body['data']['abuse_contacts'] ?? array() as $email ) {
+        $email = sanitize_email( (string) $email );
+        if ( '' !== $email ) {
+            $result['abuse_emails'][] = $email;
+        }
+    }
+    $result['abuse_emails'] = array_values( array_unique( $result['abuse_emails'] ) );
+
+    return $result;
+}
+
+function nppp_f2b_rdap_has_data( array $result ): bool {
+    return (
         '' !== $result['inetnum']
         || '' !== $result['netname']
         || '' !== $result['country']
@@ -479,98 +486,70 @@ function nppp_f2b_lookup_ip( string $ip ): array {
         || ! empty( $result['origin_asns'] )
         || ! empty( $result['abuse_emails'] )
     );
+}
 
-    $nppp_f2b_cache_ttl = $nppp_f2b_lookup_had_data
+/**
+ * Caches an RDAP profile. Only uses the full TTL if we actually got
+ * data back -- a temporary RIPE timeout shouldn't lock in an empty
+ * result for 30 days and hide real data for this IP forever.
+ */
+function nppp_f2b_rdap_store_cache( string $ip, array $result ): void {
+    $ttl = nppp_f2b_rdap_has_data( $result )
         ? nppp_f2b_rdap_cache_ttl()
-        // Negative cache: retry a genuinely empty/failed lookup after a few
-        // minutes instead of freezing it for the full TTL.
+        // Failed/empty lookups get a short TTL so we retry soon instead
+        // of caching the failure for the full duration.
         : (int) apply_filters( 'nppp_f2b_rdap_negative_cache_ttl', 5 * MINUTE_IN_SECONDS );
 
-    set_transient( $cache_key, $result, $nppp_f2b_cache_ttl );
+    set_transient( nppp_f2b_rdap_cache_key( $ip ), $result, $ttl );
+}
+
+/**
+ * Single-IP lookup, one request at a time.
+ *
+ * Only used as a fallback -- hosts without curl_multi, or the inline
+ * cron batch when shell_exec is disabled. Normal enrichment goes through
+ * nppp_f2b_lookup_ips_bulk() in the CLI worker, which runs both requests
+ * in parallel.
+ */
+function nppp_f2b_lookup_ip( string $ip ): array {
+    $cached = get_transient( nppp_f2b_rdap_cache_key( $ip ) );
+    if ( is_array( $cached ) ) {
+        return $cached;
+    }
+
+    $result = nppp_f2b_rdap_blank_result();
+
+    $whois_response = wp_remote_get(
+        nppp_f2b_rdap_whois_url( $ip ),
+        array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
+    );
+
+    if ( ! is_wp_error( $whois_response ) && 200 === (int) wp_remote_retrieve_response_code( $whois_response ) ) {
+        $result = nppp_f2b_rdap_apply_whois(
+            json_decode( wp_remote_retrieve_body( $whois_response ), true ),
+            $result
+        );
+    }
+
+    $abuse_response = wp_remote_get(
+        nppp_f2b_rdap_abuse_url( $ip ),
+        array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
+    );
+
+    if ( ! is_wp_error( $abuse_response ) && 200 === (int) wp_remote_retrieve_response_code( $abuse_response ) ) {
+        $result = nppp_f2b_rdap_apply_abuse(
+            json_decode( wp_remote_retrieve_body( $abuse_response ), true ),
+            $result
+        );
+    }
+
+    nppp_f2b_rdap_store_cache( $ip, $result );
     return $result;
 }
 
-// ---------------------------------------------------------------------------
-// Enrichment dispatch. Never blocks the webhook response.
-// ---------------------------------------------------------------------------
-
 /**
- * Tier 1: fastcgi_finish_request(). Sends $response_payload to the client
- * immediately, closes the FastCGI connection, then keeps running IN THIS
- * SAME PHP-FPM WORKER to do the RIPE lookup and write it back.
- */
-function nppp_f2b_dispatch_via_fastcgi( int $event_id, string $ip, array $response_payload ): bool {
-    if ( ! function_exists( 'fastcgi_finish_request' ) ) {
-        return false;
-    }
-    if ( ! apply_filters( 'nppp_f2b_use_fastcgi_finish_request', true ) ) {
-        return false;
-    }
-
-    // Clear output buffers before sending the response.
-    while ( ob_get_level() > 0 ) {
-        ob_end_clean();
-    }
-
-    $json = wp_json_encode( $response_payload );
-
-    status_header( 200 );
-    header( 'Content-Type: application/json; charset=UTF-8' );
-    header( 'Content-Length: ' . strlen( $json ) );
-
-    // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- raw JSON API response body, not HTML; $json is wp_json_encode() output and esc_html() would corrupt it. Content-Type header above prevents any browser HTML interpretation.
-    echo $json;
-
-    fastcgi_finish_request();
-    ignore_user_abort( true );
-
-    // Lookup
-    $rdap = nppp_f2b_lookup_ip( $ip );
-
-    global $wpdb;
-
-    // Save enrichment data.
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-    $wpdb->update(
-        nppp_f2b_table_name(),
-        array( 'rdap_json' => wp_json_encode( $rdap ) ),
-        array( 'id' => $event_id ),
-        array( '%s' ),
-        array( '%d' )
-    );
-
-    exit;
-}
-
-/**
- * Tier 2: non-blocking loopback POST
- * Fires a request to our own /enrich route and returns without waiting for
- * a reply.
- */
-function nppp_f2b_dispatch_via_loopback( int $event_id, string $ip ): bool {
-    if ( ! apply_filters( 'nppp_f2b_use_loopback_dispatch', true ) ) {
-        return false;
-    }
-
-    $response = wp_remote_post(
-        nppp_f2b_get_enrich_endpoint_url(),
-        array(
-            'blocking'  => false,
-            'timeout'   => 0.5,
-            'sslverify' => apply_filters( 'nppp_f2b_loopback_sslverify', true ),
-            'headers'   => array(
-                'Authorization' => 'Bearer ' . nppp_f2b_get_token(),
-                'Content-Type'  => 'application/json',
-            ),
-            'body'      => wp_json_encode( array( 'event_id' => $event_id, 'ip' => $ip ) ),
-        )
-    );
-
-    return ! is_wp_error( $response );
-}
-
-/**
- * Tier 3 (fallback target): plain WP-Cron. Slower
+ * LEGACY. Nothing schedules this anymore -- only here to let leftover
+ * per-event jobs from <= 2.1.7 finish once. Safe to remove later.
  */
 add_action( NPPP_F2B_ENRICH_HOOK, 'nppp_f2b_enrich_event_callback', 10, 2 );
 function nppp_f2b_enrich_event_callback( int $event_id, string $ip ): void {
@@ -591,14 +570,11 @@ function nppp_f2b_enrich_event_callback( int $event_id, string $ip ): void {
 }
 
 /**
- * Cache-only enrichment. Never makes a network call -- writes rdap_json
- * ONLY if a prior lookup for this exact IP is still sitting in the
- * transient cache. Used by ban events (as the fast path before falling
- * back to a real dispatch tier) and by unban events (as the ONLY thing
- * that ever touches rdap_json for them.
+ * Reuses cached RDAP data if we have it -- never makes a network call.
+ * Ban events try this first before falling back to a real lookup;
+ * unban events only ever use this path, they never trigger a fresh one.
  *
- * Returns true when it found and wrote cached data, false otherwise, so
- * callers can decide whether to fall through to a real lookup or not.
+ * Returns true if it found and wrote cached data.
  */
 function nppp_f2b_maybe_reuse_cached_rdap( int $event_id, string $ip ): bool {
     $cached = get_transient( 'nppp_f2b_rdap_' . md5( $ip ) );
@@ -621,31 +597,32 @@ function nppp_f2b_maybe_reuse_cached_rdap( int $event_id, string $ip ): bool {
 }
 
 /**
- * Single entry point called from nppp_f2b_handle_event() for 'ban' events.
- * Cache hit -> instant inline UPDATE, no dispatch of any kind. Cache miss ->
- * tier 1, else tier 2, else tier 3.
+ * Called from nppp_f2b_handle_event() for 'ban' events.
+ *
+ * Cache hit: one indexed UPDATE, done, no network call.
+ * Cache miss: leave rdap_json NULL (that's the queue) and make sure the
+ * detached worker is running -- costs a stat, a signal-0 check, a flock
+ * and maybe a backgrounded shell_exec.
+ *
+ * During a burst only the first cache-miss pays the spawn cost; the rest
+ * just find the worker already running and let it drain the backlog.
+ *
+ * $response_payload is unused now (fastcgi_finish_request tier was
+ * removed) but kept for signature compatibility.
  */
-function nppp_f2b_maybe_enrich( int $event_id, string $ip, array $response_payload ): void {
+function nppp_f2b_maybe_enrich( int $event_id, string $ip, array $response_payload = array() ): void {
     if ( nppp_f2b_maybe_reuse_cached_rdap( $event_id, $ip ) ) {
         return;
     }
 
-    if ( nppp_f2b_dispatch_via_fastcgi( $event_id, $ip, $response_payload ) ) {
-        return;
+    if ( function_exists( 'nppp_f2b_maybe_spawn_worker' ) ) {
+        nppp_f2b_maybe_spawn_worker();
     }
-
-    if ( nppp_f2b_dispatch_via_loopback( $event_id, $ip ) ) {
-        return;
-    }
-
-    wp_schedule_single_event( time(), NPPP_F2B_ENRICH_HOOK, array( $event_id, $ip ) );
 }
 
 // ---------------------------------------------------------------------------
 // REST route: POST /wp-json/nppp_f2b/v1/event
-//
-// Dedicated REST namespace for the Fail2Ban webhook.
-// EP10 performs the pre-bootstrap token gate.
+// EP10 handles the token check before WP even boots.
 // ---------------------------------------------------------------------------
 
 function nppp_f2b_register_routes() {
@@ -661,84 +638,8 @@ function nppp_f2b_register_routes() {
 }
 add_action( 'rest_api_init', 'nppp_f2b_register_routes' );
 
-// Internal-only route used by Tier 2 (loopback dispatch).
-function nppp_f2b_register_enrich_route() {
-    register_rest_route(
-        'nppp_f2b/v1',
-        '/enrich',
-        array(
-            'methods'             => 'POST',
-            'callback'            => 'nppp_f2b_handle_enrich_loopback',
-            'permission_callback' => 'nppp_f2b_validate_request',
-        )
-    );
-}
-add_action( 'rest_api_init', 'nppp_f2b_register_enrich_route' );
-
-function nppp_f2b_get_enrich_endpoint_url(): string {
-    return esc_url_raw( rest_url( 'nppp_f2b/v1/enrich' ) );
-}
-
-function nppp_f2b_handle_enrich_loopback( WP_REST_Request $request ) {
-    $body     = $request->get_json_params();
-    $event_id = is_array( $body ) && isset( $body['event_id'] ) ? (int) $body['event_id'] : 0;
-    $ip_raw   = is_array( $body ) && isset( $body['ip'] ) ? (string) $body['ip'] : '';
-    $ip       = filter_var( $ip_raw, FILTER_VALIDATE_IP );
-
-    if ( $event_id <= 0 || false === $ip ) {
-        return new WP_Error(
-            'nppp_f2b_bad_request',
-            __( 'Invalid enrichment payload.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            array( 'status' => 400 )
-        );
-    }
-
-    global $wpdb;
-    $table = nppp_f2b_table_name();
-
-    // Defense in depth: this route shares its bearer token with the public
-    // /event webhook, so anyone who can reach it with a valid token could
-    // otherwise pass an arbitrary event_id/ip pair and overwrite the
-    // rdap_json of ANY row -- including rows that were never banned from
-    // that ip, or that are already enriched. Only enrich a row this
-    // request actually owns: a real, still-unenriched 'ban' event for the
-    // SAME ip.
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
-    $owns_row = $wpdb->get_var(
-        $wpdb->prepare(
-            "SELECT id FROM %i
-             WHERE id = %d AND ip = %s AND event_type = 'ban' AND rdap_json IS NULL
-             LIMIT 1",
-            $table,
-            $event_id,
-            $ip
-        )
-    );
-
-    if ( ! $owns_row ) {
-        return new WP_Error(
-            'nppp_f2b_bad_request',
-            __( 'Nothing to enrich for this event.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            array( 'status' => 400 )
-        );
-    }
-
-    $rdap = nppp_f2b_lookup_ip( $ip );
-
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-    $wpdb->update(
-        $table,
-        array( 'rdap_json' => wp_json_encode( $rdap ) ),
-        array( 'id' => $event_id ),
-        array( '%s' ),
-        array( '%d' )
-    );
-
-    return rest_ensure_response( array( 'ok' => true ) );
-}
-
 function nppp_f2b_validate_request( WP_REST_Request $request ) {
-    // Read the stored token directly; do not self-generate credentials here.
+    // Read the stored token as-is -- don't generate one here.
     $stored = get_option( NPPP_F2B_TOKEN_OPTION, '' );
 
     $auth_header = $request->get_header( 'authorization' );
@@ -759,7 +660,7 @@ function nppp_f2b_validate_request( WP_REST_Request $request ) {
     return true;
 }
 
-// One rotating transient stores the per-minute safety limit.
+// One rotating transient tracks the per-minute limit.
 function nppp_f2b_rate_exceeded(): bool {
     $window = (int) floor( time() / 60 );
     $bucket = get_transient( NPPP_F2B_RATE_KEY );
@@ -795,10 +696,10 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
     $ip_raw   = isset( $body['ip'] ) ? (string) $body['ip'] : '';
     $ev_raw   = isset( $body['event'] ) ? (string) $body['event'] : '';
 
-    // The Security tab uses "test" for its connection diagnostic.
+    // "test" event comes from the Security tab's connection check.
     $is_test = ( 'test' === $ev_raw );
 
-    // Only real ban/unban events consume the rate-limit budget.
+    // Test events don't count against the rate limit.
     if ( ! $is_test && nppp_f2b_rate_exceeded() ) {
         return new WP_Error(
             'nppp_f2b_rate_limited',
@@ -807,7 +708,7 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
         );
     }
 
-    // fail2ban restricts jail names to safe identifier characters.
+    // fail2ban jail names are always plain identifiers, so validate as such.
     if ( ! preg_match( '/^[A-Za-z0-9_\-]{1,64}$/', $jail_raw ) ) {
         return new WP_Error(
             'nppp_f2b_bad_request',
@@ -825,7 +726,7 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
         );
     }
 
-    // Test events use the real INSERT path, then remove their own row.
+    // Test events go through the real INSERT, then delete their own row.
     if ( ! $is_test && ! in_array( $ev_raw, array( 'ban', 'unban' ), true ) ) {
         return new WP_Error(
             'nppp_f2b_bad_request',
@@ -836,8 +737,7 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
 
     global $wpdb;
 
-    // Thin, fast write. rdap_json starts NULL; nppp_f2b_maybe_enrich()
-    // below decides how (and whether) it gets filled in.
+    // Fast insert first, rdap_json stays NULL -- enrichment happens after.
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $inserted = $wpdb->insert(
         nppp_f2b_table_name(),
@@ -874,11 +774,9 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
         );
     }
 
-    // Real bans get the full enrichment pipeline (cache -> fastcgi ->
-    // loopback -> cron). Unbans never justify a fresh RIPE lookup -- the IP
-    // is already leaving the ban list -- but if a prior ban already cached
-    // RDAP data for this same IP, reusing it here is free: one indexed
-    // UPDATE, zero network calls.
+    // Bans get full enrichment (cache first, else spawn the worker).
+    // Unbans never trigger a fresh RIPE lookup, but reuse cached data
+    // if we already have it -- costs nothing.
     if ( $wpdb->insert_id ) {
         if ( 'ban' === $ev_raw ) {
             nppp_f2b_maybe_enrich( (int) $wpdb->insert_id, $ip, array( 'ok' => true ) );
@@ -891,9 +789,8 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
 }
 
 // ---------------------------------------------------------------------------
-// Data access
-// Aggregate queries use bounded time windows and composite indexes.
-// Recent events and existence checks use LIMIT-bounded primary-key lookups.
+// Data access. Aggregates use bounded time windows and composite indexes;
+// recent-events and existence checks use LIMIT-bounded PK lookups.
 // ---------------------------------------------------------------------------
 
 function nppp_f2b_window_cutoff(): string {
@@ -928,9 +825,8 @@ function nppp_f2b_get_jail_summaries( int $since_hours = 24 ): array {
     return is_array( $rows ) ? $rows : array();
 }
 
-// Same aggregation as nppp_f2b_get_jail_summaries(), but bounded to an
-// explicit [since, until) range instead of "now minus N hours". Used to
-// compute the prior comparison period for the Jail Activity % change badges.
+// Same as nppp_f2b_get_jail_summaries() but for an explicit [since, until)
+// range -- used to get the prior period for the % change badges.
 function nppp_f2b_get_jail_summaries_between( string $since, string $until ): array {
     global $wpdb;
 
@@ -958,7 +854,7 @@ function nppp_f2b_get_jail_summaries_between( string $since, string $until ): ar
     return is_array( $rows ) ? $rows : array();
 }
 
-// Bounded repeat-offender query using the event_type/ip composite index.
+// Repeat-offender query, hits the event_type/ip composite index.
 function nppp_f2b_get_recidive_ips( int $min_count = 2, int $limit = 25 ): array {
     global $wpdb;
 
@@ -985,8 +881,8 @@ function nppp_f2b_get_recidive_ips( int $min_count = 2, int $limit = 25 ): array
     return is_array( $rows ) ? $rows : array();
 }
 
-// Distinct-IP count matching the same window/min_count as
-// nppp_f2b_get_recidive_ips(), used only to detect truncation for the UI.
+// Distinct IP count with the same filters as above, just to detect
+// truncation for the UI.
 function nppp_f2b_get_recidive_total_count( int $min_count = 2 ): int {
     global $wpdb;
 
@@ -1009,11 +905,9 @@ function nppp_f2b_get_recidive_total_count( int $min_count = 2 ): int {
     );
 }
 
-// Primary-key descending scan, LIMIT-bounded. $limit = 0 (default) means
-// "all events" -- bounded only by NPPP_F2B_FEED_HARD_CAP as a safety valve,
-// never truly unbounded. Retention cleanup already caps the table to
-// nppp_f2b_retention_days() (90 days by default), so in practice this is
-// the whole table on all but the busiest, longest-retained installs.
+// PK descending scan, always LIMIT-bounded. $limit = 0 means "all events",
+// but that's still capped by NPPP_F2B_FEED_HARD_CAP. Retention cleanup
+// already keeps the table small on most installs anyway.
 function nppp_f2b_get_recent_events( int $limit = 0 ): array {
     global $wpdb;
 
@@ -1042,8 +936,7 @@ function nppp_f2b_get_recent_events( int $limit = 0 ): array {
     return is_array( $rows ) ? $rows : array();
 }
 
-// Total row count, bounded only by retention cleanup (never an arbitrary
-// WHERE). Runs once per Security-tab load, not per request.
+// Total row count. Only ever runs once per Security tab load.
 function nppp_f2b_get_total_event_count(): int {
     global $wpdb;
 
@@ -1053,7 +946,7 @@ function nppp_f2b_get_total_event_count(): int {
     return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i', $table ) );
 }
 
-// Range-scan COUNT, never an unbounded COUNT(*).
+// Bounded COUNT over a time range, not the whole table.
 function nppp_f2b_get_window_event_count(): int {
     global $wpdb;
 
@@ -1069,9 +962,8 @@ function nppp_f2b_get_window_event_count(): int {
     );
 }
 
-// Same bounded COUNT as nppp_f2b_get_window_event_count(), but for an
-// explicit [since, until) range -- used to compute the prior N-day window
-// for the "Events / Nd" stat card's percentage-change badge.
+// Same as above but for an explicit [since, until) range -- used for the
+// "Events / Nd" card's % change badge.
 function nppp_f2b_get_window_event_count_between( string $since, string $until ): int {
     global $wpdb;
 
@@ -1098,18 +990,15 @@ function nppp_f2b_has_any_events(): bool {
     return (bool) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM %i LIMIT 1', $table ) );
 }
 
-// Turns a (current, previous) pair into a display-ready change badge:
-// direction (up/down/flat), rounded percentage, and a pre-formatted label.
-// Returns null when there is nothing to compare (both periods empty) so
-// the caller/template can simply skip rendering a badge.
+// Turns current/previous counts into a change badge (direction, %, label).
+// Returns null if both periods are empty -- template just skips the badge then.
 function nppp_f2b_pct_change( int $current, int $previous ): ?array {
     if ( $current <= 0 && $previous <= 0 ) {
         return null;
     }
 
     if ( $previous <= 0 ) {
-        // No activity in the prior period but activity now -- percentage
-        // is undefined (division by zero), show "New" instead of a number.
+        // Nothing in the prior period, so % is undefined -- show "New" instead.
         return array(
             'dir'   => 'up',
             'pct'   => null,
@@ -1144,8 +1033,7 @@ function nppp_f2b_local_time( string $gmt_datetime ): string {
 }
 
 // ---------------------------------------------------------------------------
-// Setup snippet generators
-// Snippets shown in the UI for fail2ban configuration.
+// Config snippets shown in the UI for setting up fail2ban.
 // ---------------------------------------------------------------------------
 
 function nppp_f2b_get_endpoint_url(): string {
@@ -1155,9 +1043,8 @@ function nppp_f2b_get_endpoint_url(): string {
 function nppp_f2b_get_action_conf_snippet(): string {
     $endpoint = nppp_f2b_get_endpoint_url();
 
-    // nohup detach curl from fail2ban's own action queue —
-    // the jail moves to the next ban immediately instead of waiting on the
-    // network round trip.
+    // nohup + & detaches curl from fail2ban's action queue so the jail
+    // doesn't wait on the network call before banning the next IP.
     return "[Definition]\n" .
         "actionban   = nohup curl -sS -o /dev/null --max-time 10 --connect-timeout 3 --retry 2 --retry-delay 1 --retry-connrefused -X POST {$endpoint} \\\n" .
         "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
@@ -1190,15 +1077,14 @@ function nppp_f2b_get_jail_local_snippet(): string {
 }
 
 // ---------------------------------------------------------------------------
-// AJAX callbacks
-// AJAX callbacks registered centrally by the admin module.
+// AJAX callbacks, registered centrally by the admin module.
 // ---------------------------------------------------------------------------
 
 function nppp_f2b_load_tab_content_callback() {
     nppp_ajax_auth( 'nppp-security-tab' );
 
-    // Defensive: an admin who lands here before nppp_check_for_plugin_update()
-    // has run (or on a multisite sub-site) still gets a working table.
+    // Just a safety net -- covers admins hitting this before the update
+    // check runs, or on a multisite sub-site.
     nppp_f2b_maybe_install();
 
     $summaries      = nppp_f2b_get_jail_summaries( 24 );
@@ -1209,10 +1095,8 @@ function nppp_f2b_load_tab_content_callback() {
     $feed_truncated = $total_events > count( $recent );
     $configured     = nppp_f2b_has_any_events();
 
-    // Prior comparison period for the "% vs last period" badges: the 24h
-    // immediately before the current 24h window, and the Nd window
-    // immediately before the current NPPP_F2B_WINDOW_DAYS window. Two
-    // extra bounded queries per tab load/refresh, never on every request.
+    // Prior periods for the "% vs last period" badges -- the 24h and Nd
+    // windows right before the current ones. Two extra queries per tab load.
     $nppp_prev_24h_since = gmdate( 'Y-m-d H:i:s', time() - ( 48 * HOUR_IN_SECONDS ) );
     $nppp_prev_24h_until = gmdate( 'Y-m-d H:i:s', time() - ( 24 * HOUR_IN_SECONDS ) );
     $summaries_prev      = nppp_f2b_get_jail_summaries_between( $nppp_prev_24h_since, $nppp_prev_24h_until );
@@ -1221,17 +1105,16 @@ function nppp_f2b_load_tab_content_callback() {
     $nppp_prev_window_until = gmdate( 'Y-m-d H:i:s', time() - ( NPPP_F2B_WINDOW_DAYS * DAY_IN_SECONDS ) );
     $nppp_window_prev_count = nppp_f2b_get_window_event_count_between( $nppp_prev_window_since, $nppp_prev_window_until );
 
-    // Top Attack Countries — full retention window (90 days by default),
-    // deliberately independent of the 30-day Repeat Offenders window above.
+    // Top Attack Countries uses the full retention window (90 days by
+    // default), separate from the 30-day Repeat Offenders window above.
     $country_available   = nppp_f2b_country_feature_available();
     $country_days        = nppp_f2b_retention_days();
     $top_countries_n     = (int) apply_filters( 'nppp_f2b_top_countries_n', NPPP_F2B_TOP_COUNTRIES_N );
     $top_countries       = $country_available ? nppp_f2b_get_top_countries( $top_countries_n ) : array();
     $top_countries_total = $country_available ? nppp_f2b_get_top_countries_total_count() : 0;
 
-    // The bubble map shows every attacking country in the window, not just
-    // the top N in the table — same query, same window, no LIMIT that
-    // matters in practice (see NPPP_F2B_MAP_COUNTRIES_MAX).
+    // Bubble map shows every country in the window, not just the top N --
+    // same query, effectively no LIMIT (see NPPP_F2B_MAP_COUNTRIES_MAX).
     $map_countries_max = (int) apply_filters( 'nppp_f2b_map_countries_n', NPPP_F2B_MAP_COUNTRIES_MAX );
     $top_countries_map = $country_available ? nppp_f2b_get_top_countries( $map_countries_max ) : array();
 
@@ -1257,9 +1140,8 @@ function nppp_f2b_load_tab_content_callback() {
         'window'     => nppp_f2b_pct_change( $stats['window'], $stats_prev['window'] ),
     );
 
-    // Per-jail bans-only change badge (unbans are deliberately excluded --
-    // the Jail Activity cards only track ban pressure). Indexed by jail
-    // name so the template can look it up in O(1) per row.
+    // Per-jail change badge, bans only (unbans aren't tracked here).
+    // Indexed by jail name for quick lookup in the template.
     $nppp_prev_bans_by_jail = array();
     foreach ( $summaries_prev as $nppp_prev_row ) {
         $nppp_prev_bans_by_jail[ $nppp_prev_row['jail'] ] = (int) $nppp_prev_row['bans'];
@@ -1273,8 +1155,8 @@ function nppp_f2b_load_tab_content_callback() {
         );
     }
 
-    // Abuse Reporter — one options read plus, only when the reporter is
-    // actually armed, a single bounded IN() lookup for the offender contacts.
+    // Abuse Reporter: one options read, plus one bounded IN() lookup
+    // for offender contacts, only if the reporter is actually enabled.
     $abuse_settings   = nppp_f2b_get_abuse_settings();
     $abuse_ready      = nppp_f2b_abuse_is_ready( $abuse_settings );
     $abuse_report_log = $abuse_ready ? nppp_f2b_get_abuse_report_log() : array();
@@ -1335,7 +1217,7 @@ function nppp_f2b_clear_events_callback() {
 }
 
 /**
- * Test the webhook with the same HTTP path used by fail2ban.
+ * Runs a self-test through the same HTTP path fail2ban uses.
  */
 function nppp_f2b_test_connection_callback() {
     nppp_ajax_auth( 'nppp-security-tab' );
