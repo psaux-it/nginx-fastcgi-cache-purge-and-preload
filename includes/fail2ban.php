@@ -263,7 +263,19 @@ function nppp_f2b_install_table(): void {
 
     if ( $nppp_f2b_table_exists !== $table_name ) {
         // dbDelta() failed silently (e.g. no CREATE/ALTER privilege).
-        // Don't stamp the version so the next admin_init retries.
+        // Don't stamp the version so the next admin_init retries -- but
+        // that retry is silent too, so this needs its own gated ERROR or
+        // the whole feature can stay dark indefinitely with no trace.
+        if ( nppp_f2b_log_gate( 'install_table_fail', DAY_IN_SECONDS ) > 0 ) {
+            nppp_f2b_log(
+                'ERROR',
+                sprintf(
+                    /* translators: %s: name of the database table that could not be created. */
+                    __( 'Fail2ban event table could not be created or verified (%s); the database user likely lacks CREATE/ALTER privilege. Events will not be recorded until this is fixed.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $table_name
+                )
+            );
+        }
         return;
     }
 
@@ -348,6 +360,13 @@ function nppp_f2b_ensure_country_code_column( string $table_name ): void {
             'country_code'
         )
     );
+
+    if ( ! $nppp_f2b_col_ok && nppp_f2b_log_gate( 'country_col_fail', DAY_IN_SECONDS ) > 0 ) {
+        nppp_f2b_log(
+            'ERROR',
+            __( 'country_code column could not be added to the fail2ban event table; the Top Attack Countries panel will stay disabled until this is fixed.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+    }
 
     // Not autoloaded -- only read once per Security tab load, never on the front end.
     update_option( NPPP_F2B_COUNTRY_COL_OK_OPTION, $nppp_f2b_col_ok, false );
@@ -451,6 +470,20 @@ function nppp_f2b_cleanup_old_events(): void {
             )
         );
         $batches++;
+
+        if ( false === $deleted ) {
+            if ( nppp_f2b_log_gate( 'cleanup_fail', HOUR_IN_SECONDS ) > 0 ) {
+                nppp_f2b_log(
+                    'ERROR',
+                    sprintf(
+                        /* translators: %s: database error message (not translated, comes from the DB driver). */
+                        __( 'Retention cleanup DELETE failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $wpdb->last_error
+                    )
+                );
+            }
+            break;
+        }
     } while ( 1000 === $deleted && $batches < 200 && ( microtime( true ) - $started ) < 10 );
 }
 add_action( NPPP_F2B_CLEANUP_HOOK, 'nppp_f2b_cleanup_old_events' );
@@ -688,13 +721,24 @@ function nppp_f2b_enrich_event_callback( int $event_id, string $ip ): void {
 
     global $wpdb;
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-    $wpdb->update(
+    $nppp_f2b_updated = $wpdb->update(
         nppp_f2b_table_name(),
         array( 'rdap_json' => wp_json_encode( $rdap ) ),
         array( 'id' => $event_id ),
         array( '%s' ),
         array( '%d' )
     );
+
+    if ( false === $nppp_f2b_updated && nppp_f2b_log_gate( 'legacy_writeback_fail', 5 * MINUTE_IN_SECONDS, true ) > 0 ) {
+        nppp_f2b_log(
+            'ERROR',
+            sprintf(
+                /* translators: %s: database error message (not translated, comes from the DB driver). */
+                __( 'Legacy enrichment write-back failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $wpdb->last_error
+            )
+        );
+    }
 }
 
 /**
@@ -713,7 +757,7 @@ function nppp_f2b_maybe_reuse_cached_rdap( int $event_id, string $ip ): bool {
 
     global $wpdb;
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-    $wpdb->update(
+    $nppp_f2b_updated = $wpdb->update(
         nppp_f2b_table_name(),
         array( 'rdap_json' => wp_json_encode( array_merge( $cached, array( 'country' => nppp_f2b_rdap_clean_country( $cached['country'] ?? '' ) ) ) ) ),
         array( 'id' => $event_id ),
@@ -721,7 +765,18 @@ function nppp_f2b_maybe_reuse_cached_rdap( int $event_id, string $ip ): bool {
         array( '%d' )
     );
 
-    return true;
+    if ( false === $nppp_f2b_updated && nppp_f2b_log_gate( 'cache_writeback_fail', 5 * MINUTE_IN_SECONDS, true ) > 0 ) {
+        nppp_f2b_log(
+            'ERROR',
+            sprintf(
+                /* translators: %s: database error message (not translated, comes from the DB driver). */
+                __( 'Write-back of a cached RDAP profile failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $wpdb->last_error
+            )
+        );
+    }
+
+    return false !== $nppp_f2b_updated;
 }
 
 /**
@@ -779,6 +834,18 @@ function nppp_f2b_validate_request( WP_REST_Request $request ) {
     $token = sanitize_text_field( (string) $token );
 
     if ( ! is_string( $stored ) || '' === $stored || '' === $token || ! hash_equals( $stored, $token ) ) {
+        $nppp_f2b_bad_tokens = nppp_f2b_log_gate( 'bad_token', 5 * MINUTE_IN_SECONDS, true );
+        if ( $nppp_f2b_bad_tokens > 0 ) {
+            nppp_f2b_log(
+                'WARNING',
+                sprintf(
+                    /* translators: %d: number of rejected webhook auth attempts since the last report. */
+                    __( 'Webhook rejected %d request(s) with an invalid or missing token since the last report.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $nppp_f2b_bad_tokens
+                )
+            );
+        }
+
         return new WP_Error(
             'nppp_f2b_forbidden',
             __( 'Invalid or missing token.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -802,16 +869,14 @@ function nppp_f2b_rate_exceeded(): bool {
     }
 
     if ( (int) $bucket['c'] >= NPPP_F2B_RATE_MAX_PER_MIN ) {
-        // Log once per minute window, not once per dropped event. The flag
-        // rides in the same rotating bucket: one extra write per minute.
-        if ( empty( $bucket['l'] ) ) {
-            $bucket['l'] = 1;
-            set_transient( NPPP_F2B_RATE_KEY, $bucket, 120 );
+        $nppp_f2b_drops = nppp_f2b_log_gate( 'rate_limited', MINUTE_IN_SECONDS, true );
+        if ( $nppp_f2b_drops > 0 ) {
             nppp_f2b_log(
                 'ERROR',
                 sprintf(
-                    /* translators: %d: number of webhook events allowed per minute before further events are rejected with HTTP 429. */
-                    __( 'Webhook rate limit reached (%d events/min); further events this minute are dropped with 429.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    /* translators: %1$d: number of webhook events dropped with HTTP 429 since the last report; %2$d: number of events allowed per minute before the limit kicks in. */
+                    __( 'Webhook rate limit reached: %1$d event(s) dropped with 429 since the last report (limit %2$d/min).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $nppp_f2b_drops,
                     NPPP_F2B_RATE_MAX_PER_MIN
                 )
             );
