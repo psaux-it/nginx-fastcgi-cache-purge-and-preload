@@ -289,7 +289,8 @@ function nppp_f2b_maybe_spawn_worker( bool $force = false ): bool {
     // Backup guard, see NPPP_F2B_SPAWN_TICK_KEY above. A worker always
     // outlives this TTL, so a handoff would clear it anyway -- but that's
     // coincidence, not a guarantee, hence $force.
-    if ( ! $force && false !== get_transient( NPPP_F2B_SPAWN_TICK_KEY ) ) {
+    $tick_age = time() - (int) get_option( NPPP_F2B_SPAWN_TICK_KEY, 0 );
+    if ( ! $force && $tick_age < NPPP_F2B_SPAWN_TICK_TTL ) {
         return true;
     }
 
@@ -394,7 +395,7 @@ function nppp_f2b_spawn_worker_process(): bool {
     }
 
     // Arm the throttle before the process exists, not after.
-    set_transient( NPPP_F2B_SPAWN_TICK_KEY, 1, NPPP_F2B_SPAWN_TICK_TTL );
+    update_option( NPPP_F2B_SPAWN_TICK_KEY, time(), false );
 
     // Reserve the slot before the child exists, or a second request during
     // bootstrap could spawn a duplicate.
@@ -418,7 +419,7 @@ function nppp_f2b_spawn_worker_process(): bool {
         // Spawn failed -- release the throttle so the next attempt isn't
         // blocked for no reason.
         nppp_f2b_worker_reset_state();
-        delete_transient( NPPP_F2B_SPAWN_TICK_KEY );
+        delete_option( NPPP_F2B_SPAWN_TICK_KEY );
         return false;
     }
 
@@ -436,7 +437,7 @@ function nppp_f2b_kill_worker(): bool {
     if ( $pid <= 0 || ! nppp_f2b_pid_alive( $pid ) ) {
         nppp_f2b_worker_reset_state();
         wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE ) );
-        delete_transient( NPPP_F2B_SPAWN_TICK_KEY );
+        delete_option( NPPP_F2B_SPAWN_TICK_KEY );
         return true;
     }
 
@@ -462,7 +463,7 @@ function nppp_f2b_kill_worker(): bool {
     // nothing else could be spawning. Left alone otherwise, see
     // nppp_f2b_worker_reset_state().
     wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE ) );
-    delete_transient( NPPP_F2B_SPAWN_TICK_KEY );
+    delete_option( NPPP_F2B_SPAWN_TICK_KEY );
 
     return $dead;
 }
