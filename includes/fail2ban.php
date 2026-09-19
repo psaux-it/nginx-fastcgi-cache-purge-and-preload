@@ -1262,7 +1262,10 @@ function nppp_f2b_test_connection_callback() {
         $endpoint,
         array(
             'timeout'   => 8,
-            'sslverify' => apply_filters( 'nppp_f2b_selftest_sslverify', apply_filters( 'https_local_ssl_verify', false ) )
+            'sslverify' => apply_filters(
+                'nppp_f2b_selftest_sslverify',
+                apply_filters( 'https_local_ssl_verify', false )
+            ),
             'headers'   => array(
                 'Authorization' => 'Bearer ' . $token,
                 'Content-Type'  => 'application/json',
