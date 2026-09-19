@@ -500,7 +500,10 @@ function nppp_f2b_worker_claim_ips( int $limit, array $exclude_ips = array() ): 
     ) ) );
 
     $exclude_sql = '';
-    $args        = array( $table );
+    // Same 7-day window as nppp_f2b_has_pending_enrichment(): lets the query
+    // use the (event_type, created_at, ...) index range instead of visiting
+    // every ban row in retention.
+    $args        = array( $table, gmdate( 'Y-m-d H:i:s', time() - ( 7 * DAY_IN_SECONDS ) ) );
 
     if ( ! empty( $exclude_ips ) ) {
         $exclude_sql = ' AND ip NOT IN (' . implode( ', ', array_fill( 0, count( $exclude_ips ), '%s' ) ) . ')';
@@ -514,7 +517,7 @@ function nppp_f2b_worker_claim_ips( int $limit, array $exclude_ips = array() ): 
         $wpdb->prepare(
             "SELECT ip
              FROM %i
-             WHERE event_type = 'ban' AND rdap_json IS NULL{$exclude_sql}
+             WHERE event_type = 'ban' AND created_at >= %s AND rdap_json IS NULL{$exclude_sql}
              GROUP BY ip
              ORDER BY MIN(id) ASC
              LIMIT %d",
@@ -539,6 +542,11 @@ function nppp_f2b_worker_claim_ips( int $limit, array $exclude_ips = array() ): 
  */
 function nppp_f2b_worker_write_result( string $ip, array $rdap ): int {
     global $wpdb;
+
+    // Profiles cached before country normalisation may still carry a long value.
+    if ( isset( $rdap['country'] ) ) {
+        $rdap['country'] = nppp_f2b_rdap_clean_country( $rdap['country'] );
+    }
 
     $table = nppp_f2b_table_name();
 
@@ -643,8 +651,10 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array() ): array
     }
 
     // Requests should always be loaded, but don't assume -- fall back to
-    // the serial path if it's somehow missing.
-    if ( ! class_exists( '\WpOrg\Requests\Requests' ) ) {
+    // the serial path if it's somehow missing. Also use it when the site
+    // restricts outbound HTTP: request_multiple() bypasses WP_Http, so only
+    // the WP HTTP API honours WP_HTTP_BLOCK_EXTERNAL and WP_PROXY_*.
+    if ( ! class_exists( '\WpOrg\Requests\Requests' ) || nppp_f2b_http_is_restricted() ) {
         foreach ( $pending as $ip ) {
             $out[ $ip ] = nppp_f2b_lookup_ip( $ip );
         }
@@ -714,6 +724,13 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array() ): array
     }
 
     return $out;
+}
+
+function nppp_f2b_http_is_restricted(): bool {
+    if ( defined( 'WP_HTTP_BLOCK_EXTERNAL' ) && WP_HTTP_BLOCK_EXTERNAL ) {
+        return true;
+    }
+    return defined( 'WP_PROXY_HOST' ) && '' !== (string) WP_PROXY_HOST;
 }
 
 /**
