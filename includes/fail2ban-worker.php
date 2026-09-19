@@ -126,11 +126,47 @@ function nppp_f2b_worker_death_detail(): string {
     $note = nppp_f2b_worker_read_hb_note();
     $beat = nppp_f2b_worker_heartbeat_age();
 
+    $out = nppp_f2b_worker_output_tail();
+
     return sprintf(
         ' [last state: %1$s; last heartbeat %2$s ago]',
         '' !== $note ? $note : 'unknown',
         PHP_INT_MAX === $beat ? '?' : $beat . 's'
-    );
+    ) . ( '' !== $out ? ' Worker output: ' . $out : '' );
+}
+
+/**
+ * Where the worker's stdout/stderr go. Truncated on every spawn, deleted on a
+ * clean stop. A worker that dies while WordPress boots (wrong PHP CLI build
+ * without mysqli, a fatal in another plugin, memory limit) never reaches
+ * nppp_f2b_worker_on_shutdown(); what it printed here is the only trace.
+ */
+function nppp_f2b_worker_out_path(): string {
+    return nppp_get_runtime_file( 'f2b_worker.out' );
+}
+
+// First readable text of the worker's output (WordPress dies with a whole HTML page).
+function nppp_f2b_worker_output_tail( int $max_chars = 300 ): string {
+    $path = nppp_f2b_worker_out_path();
+    if ( ! @is_readable( $path ) || (int) @filesize( $path ) <= 0 ) {
+        return '';
+    }
+
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+    $data = (string) @file_get_contents( $path, false, null, 0, 8192 );
+    $data = trim( (string) preg_replace( '/\s+/', ' ', wp_strip_all_tags( $data ) ) );
+
+    return strlen( $data ) > $max_chars ? substr( $data, 0, $max_chars ) . '...' : $data;
+}
+
+// PHP's "Uncaught ..." message carries a full stack trace: keep the first line.
+function nppp_f2b_worker_short_error( string $message ): string {
+    $cut = strpos( $message, 'Stack trace:' );
+    if ( false !== $cut ) {
+        $message = substr( $message, 0, $cut );
+    }
+
+    return substr( trim( $message ), 0, 220 );
 }
 
 /**
@@ -540,7 +576,7 @@ function nppp_f2b_spawn_worker_process(): bool {
     $command = $prefix
         . escapeshellarg( $env['php'] ) . ' -r '
         . escapeshellarg( nppp_f2b_worker_bootstrap_code() )
-        . ' > /dev/null 2>&1 < /dev/null & echo $!';
+        . ' > ' . escapeshellarg( nppp_f2b_worker_out_path() ) . ' 2>&1 < /dev/null & echo $!';
 
     // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
     $output = shell_exec( $command );
@@ -584,7 +620,7 @@ function nppp_f2b_spawn_worker_process(): bool {
                     $pid,
                     $dead,
                     $env['php']
-                )
+                ) . ( '' !== ( $nppp_f2b_out = nppp_f2b_worker_output_tail() ) ? ' Worker output: ' . $nppp_f2b_out : '' )
             );
         }
         return false;
@@ -1148,14 +1184,36 @@ function nppp_f2b_rdap_defer_attempt( string $ip ): bool {
         $max = 1;
     }
 
-    $attempts = (int) get_transient( $key ) + 1;
+    // The budget counts attempts SPACED IN TIME, not worker runs: a burst
+    // respawns the worker every few seconds, so a per-run count let a ~15 s
+    // upstream blip burn all attempts and store blank profiles for good.
+    $gap = (int) apply_filters( 'nppp_f2b_rdap_retry_gap', 120 );
+    if ( $gap < 0 ) {
+        $gap = 0;
+    }
+
+    $state    = get_transient( $key );
+    $attempts = 0;
+    $last     = 0;
+    if ( is_array( $state ) ) {
+        $attempts = isset( $state['n'] ) ? (int) $state['n'] : 0;
+        $last     = isset( $state['t'] ) ? (int) $state['t'] : 0;
+    } elseif ( is_numeric( $state ) ) {
+        $attempts = (int) $state; // counter written by an older build
+    }
+
+    if ( $last > 0 && ( time() - $last ) < $gap ) {
+        return true;
+    }
+
+    ++$attempts;
 
     if ( $attempts >= $max ) {
         delete_transient( $key );
         return false;
     }
 
-    set_transient( $key, $attempts, NPPP_F2B_RDAP_FAIL_TTL );
+    set_transient( $key, array( 'n' => $attempts, 't' => time() ), NPPP_F2B_RDAP_FAIL_TTL );
     return true;
 }
 
@@ -1199,7 +1257,7 @@ function nppp_f2b_worker_on_shutdown(): void {
             sprintf(
                 /* translators: %1$s: PHP fatal error message (not translated); %2$s: file path; %3$d: line number; %4$s: extra run info, may be empty. */
                 __( 'Worker fatal: %1$s at %2$s:%3$d%4$s', 'fastcgi-cache-purge-and-preload-nginx' ),
-                $error['message'],
+                nppp_f2b_worker_short_error( (string) $error['message'] ),
                 str_replace( ABSPATH, '', $error['file'] ),
                 $error['line'],
                 $tail
@@ -1571,6 +1629,8 @@ function nppp_f2b_worker_run(): void {
     }
 
     nppp_f2b_log( $level, $line );
+
+    wp_delete_file( nppp_f2b_worker_out_path() );
 
     if ( $handoff ) {
         nppp_f2b_maybe_spawn_worker( true );
