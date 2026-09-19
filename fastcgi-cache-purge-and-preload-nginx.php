@@ -591,12 +591,13 @@ add_action('rest_api_init', function (): void {
         wp_die('', '', ['response' => 403]);
     }
 
-    // Early block abusing IP. Its own counter namespace (nppp_ep10_fail_*),
-    // so EP3 and EP10 never share or poison each other's penalty budget.
+    // Strike counter, its own namespace (nppp_ep10_fail_*) so EP3 and EP10
+    // never share a penalty budget. A locked-out IP is refused only if it
+    // also presents a bad token (see the three failure exits below), so a
+    // valid token always gets through and stale fail2ban configs can't lock
+    // out the correct one.
     $nppp_ep10_rate_key = 'nppp_ep10_fail_' . hash('sha256', $nppp_ep10_raw_ip);
-    if ((int) get_transient($nppp_ep10_rate_key) >= 20) {
-        wp_die('', '', ['response' => 429]);
-    }
+    $nppp_ep10_locked   = (int) get_transient($nppp_ep10_rate_key) >= 20;
 
     // Extract the bearer token.
     $nppp_ep10_auth = sanitize_text_field(
@@ -634,12 +635,18 @@ add_action('rest_api_init', function (): void {
     // Missing token — logged and answered 403 rather
     // than left to fall through to a misleading core 404.
     if (empty($nppp_ep10_token)) {
+        if ($nppp_ep10_locked) {
+            wp_die('', '', ['response' => 429]);
+        }
         nppp_ep_gate_log($nppp_ep10_masked, $nppp_ep10_raw_ip, 'ep10', 'nppp_f2b_event', 'ERROR 403 MISSING TOKEN (web server may not be forwarding the Authorization header to PHP)');
         wp_die('', '', ['response' => 403]);
     }
 
     // Wrong format — log and penalise.
     if (!preg_match('/^[a-f0-9]{64}$/i', $nppp_ep10_token)) {
+        if ($nppp_ep10_locked) {
+            wp_die('', '', ['response' => 429]);
+        }
         nppp_ep_gate_log($nppp_ep10_masked, $nppp_ep10_raw_ip, 'ep10', 'nppp_f2b_event', 'ERROR 403 MALFORMED TOKEN');
         wp_die('', '', ['response' => 403]);
     }
@@ -647,6 +654,9 @@ add_action('rest_api_init', function (): void {
     // Validate against the stored token — log and penalise on mismatch.
     $nppp_ep10_stored = get_option('nppp_f2b_token', '');
     if (!is_string($nppp_ep10_stored) || $nppp_ep10_stored === '' || !hash_equals($nppp_ep10_stored, $nppp_ep10_token)) {
+        if ($nppp_ep10_locked) {
+            wp_die('', '', ['response' => 429]);
+        }
         nppp_ep_gate_log($nppp_ep10_masked, $nppp_ep10_raw_ip, 'ep10', 'nppp_f2b_event', 'ERROR 403 TOKEN MISMATCH');
         wp_die('', '', ['response' => 403]);
     }
