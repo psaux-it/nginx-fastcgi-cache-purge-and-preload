@@ -878,6 +878,43 @@ function nppp_f2b_log_queue_health(): void {
     );
 }
 
+/**
+ * The claim query and queue_stats() both bound themselves to the last 7 days
+ * (index-range optimisation, see their comments). Anything that ages past
+ * that line while still un-enriched becomes invisible to the whole pipeline
+ * -- never claimed again, never counted as backlog -- until retention
+ * cleanup deletes it, silently, up to ~83 days later. Gated to once a day;
+ * this is a slow-moving problem, not a per-tick one.
+ */
+function nppp_f2b_log_stale_abandoned(): void {
+    if ( nppp_f2b_log_gate( 'stale_abandoned', DAY_IN_SECONDS ) < 1 ) {
+        return;
+    }
+
+    global $wpdb;
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $stale = (int) $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COUNT(*) FROM %i WHERE event_type = 'ban' AND rdap_json IS NULL AND created_at < %s",
+            $table,
+            gmdate( 'Y-m-d H:i:s', time() - ( 7 * DAY_IN_SECONDS ) )
+        )
+    );
+
+    if ( $stale > 0 ) {
+        nppp_f2b_log(
+            'WARNING',
+            sprintf(
+                /* translators: %d: number of ban events older than 7 days that were never enriched and are now outside the enrichment window. */
+                __( '%d ban event(s) older than 7 days still have no RDAP data; they are outside the enrichment window and will stay blank until retention cleanup removes them.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $stale
+            )
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Parallel RIPE lookup
 //
@@ -1217,16 +1254,17 @@ function nppp_f2b_worker_run(): void {
     }
     nppp_f2b_worker_touch_heartbeat();
 
-    $started     = time();
-    $idle_since  = 0;
-    $idle_total  = 0;
-    $err_since   = 0;
-    $seen        = array();
-    $deferred    = array();
-    $written     = 0;
-    $blanked     = 0;
-    $batch_fails = 0;
-    $stop_reason = 'unknown';
+    $started            = time();
+    $idle_since         = 0;
+    $idle_total         = 0;
+    $err_since          = 0;
+    $seen               = array();
+    $deferred           = array();
+    $written            = 0;
+    $blanked            = 0;
+    $batch_fails        = 0;
+    $consec_batch_fails = 0;
+    $stop_reason        = 'unknown';
 
     // Diagnostics for the stop line.
     $pid          = function_exists( 'getmypid' ) ? (int) getmypid() : 0;
@@ -1360,6 +1398,7 @@ function nppp_f2b_worker_run(): void {
         // error, the stop line carries the total.
         if ( ! empty( $failed ) && empty( array_diff_key( $results, $failed ) ) ) {
             $batch_fails++;
+            $consec_batch_fails++;
             if ( 1 === $batch_fails ) {
                 $first = reset( $failed );
                 nppp_f2b_log(
@@ -1372,6 +1411,8 @@ function nppp_f2b_worker_run(): void {
                     )
                 );
             }
+        } else {
+            $consec_batch_fails = 0;
         }
 
         nppp_f2b_worker_mark( 'write' );
@@ -1420,6 +1461,16 @@ function nppp_f2b_worker_run(): void {
             $stop_reason = 'deferred_cap';
             break;
         }
+
+        // RIPE outage guard: N fully-failed batches in a row means the
+        // problem is upstream, not this batch. Stop early instead of
+        // burning max_runtime at full timeout cost, and be a better
+        // citizen toward a shared public API during its own outage.
+        $consec_fail_limit = (int) apply_filters( 'nppp_f2b_consecutive_batch_fail_limit', 3 );
+        if ( $consec_fail_limit > 0 && $consec_batch_fails >= $consec_fail_limit ) {
+            $stop_reason = 'upstream_down';
+            break;
+        }
     }
 
     // Release ownership first, so a successor can actually claim it.
@@ -1451,7 +1502,7 @@ function nppp_f2b_worker_run(): void {
     // Structured key=value diagnostic dump, not a sentence -- left untranslated
     // on purpose, same convention as nppp_ep_gate_log()'s "IP: ... | Action: ..."
     // lines. $stop_reason is a fixed machine token: idle, max_runtime,
-    // seen_cap, deferred_cap, no_progress or db_error.
+    // seen_cap, deferred_cap, no_progress, upstream_down or db_error.
     if ( 0 !== $idle_since ) {
         $idle_total += time() - $idle_since;
     }
@@ -1465,7 +1516,9 @@ function nppp_f2b_worker_run(): void {
     // run (see progress guard) can't chain successors forever. Decided from
     // the stats read above instead of a second claim query: same WHERE
     // clause, so "ips > 0" is exactly "a claim would find something".
-    $handoff = ( $written > 0 && $queue['ips'] > 0 );
+    // Don't chase an outage into a respawn loop: a successor spawned right
+    // now would just hit the same dead upstream again.
+    $handoff = ( $written > 0 && $queue['ips'] > 0 && 'upstream_down' !== $stop_reason );
 
     $line = sprintf(
         'Worker stopped: pid=%d reason=%s ips=%d rows=%d deferred=%d batch_failures=%d batches=%d lat_avg=%dms lat_max=%dms runtime=%ds active=%ds peak_mem=%.1fMB backlog=%s handoff=%s',
@@ -1511,7 +1564,7 @@ function nppp_f2b_worker_run(): void {
 
     if ( 'db_error' === $stop_reason ) {
         $level = 'ERROR';
-    } elseif ( 'no_progress' === $stop_reason ) {
+    } elseif ( in_array( $stop_reason, array( 'no_progress', 'upstream_down' ), true ) ) {
         $level = 'WARNING';
     } else {
         $level = 'INFO';
@@ -1551,6 +1604,7 @@ function nppp_f2b_worker_reconcile(): void {
     // Before the running-worker check: a worker that is alive but falling
     // behind is exactly the case worth a warning.
     nppp_f2b_log_queue_health();
+    nppp_f2b_log_stale_abandoned();
 
     if ( nppp_f2b_worker_is_running() ) {
         return;
