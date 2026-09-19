@@ -271,6 +271,11 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 );
                 ?>
             </span>
+            <span class="nppp-f2b-stat-sub">
+                <span class="nppp-f2b-stat-sub-ban">&#9650; <?php echo esc_html( (string) $stats['window_bans'] ); ?> <?php esc_html_e( 'bans', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                &middot;
+                <span class="nppp-f2b-stat-sub-unban">&#9660; <?php echo esc_html( (string) $stats['window_unbans'] ); ?> <?php esc_html_e( 'unbans', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+            </span>
             <?php if ( ! empty( $stats_change['window'] ) ) : ?>
                 <span class="nppp-f2b-stat-change nppp-f2b-stat-change-<?php echo esc_attr( $stats_change['window']['dir'] ); ?>">
                     <?php echo esc_html( $stats_change['window']['label'] ); ?>
