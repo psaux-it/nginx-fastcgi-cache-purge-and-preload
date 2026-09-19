@@ -61,6 +61,8 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_cache_key_regex_probe',
         'nppp_f2b_rl',
         'nppp_f2b_abuse_rl',
+        'nppp_f2b_worker_env',
+        'nppp_f2b_abuse_test_rl',
         'nppp_http_probe_' . md5($static_key_base),
         'nppp_setup_strict_detect_' . md5($static_key_base),
         'nppp_requirements_met_' . md5($static_key_base),
