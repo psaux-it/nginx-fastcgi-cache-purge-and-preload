@@ -74,6 +74,12 @@ add_filter( 'cron_schedules', static function ( array $schedules ): array {
             'display'  => 'Every Minute-NPP',
         ];
     }
+    if ( ! isset( $schedules['every_5min_npp'] ) ) {
+        $schedules['every_5min_npp'] = [
+            'interval' => 5 * MINUTE_IN_SECONDS,
+            'display'  => 'Every 5 Minutes-NPP',
+        ];
+    }
     return $schedules;
 } );
 
