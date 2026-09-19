@@ -1241,6 +1241,34 @@ function nppp_f2b_get_window_event_count_between( string $since, string $until )
     );
 }
 
+// Ban/unban split for the "Events / Nd" card's sub-line. One SUM() query
+// over the same window nppp_f2b_get_window_event_count() already counts --
+// test events (event_type = 'test') are excluded from both, same as the
+// total, since they're deleted immediately after the self-test anyway.
+function nppp_f2b_get_window_ban_unban_split(): array {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $row = $wpdb->get_row(
+        $wpdb->prepare(
+            "SELECT SUM(event_type = 'ban')   AS bans,
+                    SUM(event_type = 'unban') AS unbans
+             FROM %i
+             WHERE created_at >= %s",
+            $table,
+            nppp_f2b_window_cutoff()
+        ),
+        ARRAY_A
+    );
+
+    return array(
+        'bans'   => is_array( $row ) ? (int) ( $row['bans'] ?? 0 ) : 0,
+        'unbans' => is_array( $row ) ? (int) ( $row['unbans'] ?? 0 ) : 0,
+    );
+}
+
 // Check whether at least one event exists.
 function nppp_f2b_has_any_events(): bool {
     global $wpdb;
@@ -1379,11 +1407,16 @@ function nppp_f2b_load_tab_content_callback() {
     $map_countries_max = (int) apply_filters( 'nppp_f2b_map_countries_n', NPPP_F2B_MAP_COUNTRIES_MAX );
     $top_countries_map = $country_available ? nppp_f2b_get_top_countries( $map_countries_max ) : array();
 
+    // Ban/unban split for the "Events / Nd" card's sub-line ("↑ N bans · ↓ M unbans").
+    $nppp_window_split = nppp_f2b_get_window_ban_unban_split();
+
     $stats = array(
-        'bans_24h'   => (int) array_sum( array_map( 'intval', array_column( $summaries, 'bans' ) ) ),
-        'unbans_24h' => (int) array_sum( array_map( 'intval', array_column( $summaries, 'unbans' ) ) ),
-        'jails'      => count( $summaries ),
-        'window'     => nppp_f2b_get_window_event_count(),
+        'bans_24h'      => (int) array_sum( array_map( 'intval', array_column( $summaries, 'bans' ) ) ),
+        'unbans_24h'    => (int) array_sum( array_map( 'intval', array_column( $summaries, 'unbans' ) ) ),
+        'jails'         => count( $summaries ),
+        'window'        => nppp_f2b_get_window_event_count(),
+        'window_bans'   => $nppp_window_split['bans'],
+        'window_unbans' => $nppp_window_split['unbans'],
     );
 
     $stats_prev = array(
