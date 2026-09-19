@@ -100,6 +100,7 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_requirements_met_' . md5($static_key_base),
         'nppp_f2b_rl',
         'nppp_f2b_worker_env',
+        'nppp_f2b_spawn_tick',
     );
 
     // Delete each known transient
