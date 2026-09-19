@@ -403,8 +403,8 @@ function nppp_f2b_rdap_abuse_url( string $ip ): string {
 /**
  * Merges a decoded RIPEstat whois response into an RDAP profile.
  * Kept separate so both the serial (wp_remote_get) and parallel
- * (curl_multi worker) paths share one parser. $body isn't trusted to
- * actually be an array.
+ * (WpOrg\Requests worker) paths share one parser. $body isn't trusted
+ * to actually be an array.
  */
 function nppp_f2b_rdap_apply_whois( $body, array $result ): array {
     if ( ! is_array( $body ) || ! isset( $body['data'] ) ) {
@@ -506,10 +506,10 @@ function nppp_f2b_rdap_store_cache( string $ip, array $result ): void {
 /**
  * Single-IP lookup, one request at a time.
  *
- * Only used as a fallback -- hosts without curl_multi, or the inline
- * cron batch when shell_exec is disabled. Normal enrichment goes through
- * nppp_f2b_lookup_ips_bulk() in the CLI worker, which runs both requests
- * in parallel.
+ * Only used as a fallback -- the rare host missing WpOrg\Requests, or the
+ * inline cron batch when shell_exec is disabled. Normal enrichment goes
+ * through nppp_f2b_lookup_ips_bulk() in the worker, which runs both
+ * requests in parallel.
  */
 function nppp_f2b_lookup_ip( string $ip ): array {
     $cached = get_transient( nppp_f2b_rdap_cache_key( $ip ) );
