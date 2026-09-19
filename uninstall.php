@@ -163,6 +163,8 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_f2b_token',                         // Fail2ban webhook bearer token
         'nppp_f2b_db_version',                    // Fail2ban event table schema stamp
         'nppp_f2b_spawn_tick',                    // Fail2ban worker spawn-throttle timestamp
+        'nppp_f2b_log_gate',                      // Fail2ban log-line throttle timestamps
+        'nppp_f2b_rate_win',                      // Fail2ban webhook rate-limit window counter
         'nppp_f2b_country_col_ok',                // Fail2ban generated country_code column flag
         'nppp_f2b_abuse_settings',                // Fail2ban Abuse Reporter configuration
         'nppp_f2b_abuse_reports',                 // Fail2ban Abuse Reporter cooldown map
