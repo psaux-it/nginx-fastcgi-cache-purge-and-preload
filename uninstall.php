@@ -160,6 +160,7 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_cron_notice_dismissed',             // DISABLE_WP_CRON notice dismiss flag
         'nppp_f2b_token',                         // Fail2ban webhook bearer token
         'nppp_f2b_db_version',                    // Fail2ban event table schema stamp
+        'nppp_f2b_spawn_tick',                    // Fail2ban worker spawn-throttle timestamp
         'nppp_f2b_country_col_ok',                // Fail2ban generated country_code column flag
         'nppp_f2b_abuse_settings',                // Fail2ban Abuse Reporter configuration
         'nppp_f2b_abuse_reports',                 // Fail2ban Abuse Reporter cooldown map
