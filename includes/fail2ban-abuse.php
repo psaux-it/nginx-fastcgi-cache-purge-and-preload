@@ -700,10 +700,21 @@ function nppp_f2b_abuse_send_report( string $ip ): array {
         );
     }
 
+    // Shared by every outcome line below. report_id is what the abuse desk
+    // quotes back in a reply; only the first three recipients are listed.
+    $audit = sprintf(
+        'ip=%1$s bans=%2$d to=%3$s report_id=%4$s',
+        $data['ip'],
+        (int) $data['ban_count'],
+        implode( ',', array_slice( $data['abuse_emails'], 0, 3 ) ),
+        nppp_f2b_abuse_report_id( $data['ip'] )
+    );
+
     // Dry run stamps the cooldown too, so an operator testing the workflow
     // sees exactly the same UI state transition a real send produces.
     if ( 'yes' === $settings['dry_run'] ) {
         nppp_f2b_record_abuse_report( $data['ip'] );
+        nppp_f2b_log( 'INFO', 'Abuse report dry run: ' . $audit . ' user=' . get_current_user_id() );
         return array(
             'ok'      => true,
             'message' => sprintf(
@@ -716,6 +727,14 @@ function nppp_f2b_abuse_send_report( string $ip ): array {
     }
 
     if ( nppp_f2b_abuse_rate_exceeded() ) {
+        nppp_f2b_log(
+            'WARNING',
+            sprintf(
+                'Abuse report blocked: hourly limit of %d reports reached; %s',
+                (int) apply_filters( 'nppp_f2b_abuse_hourly_max', NPPP_F2B_ABUSE_HOURLY_MAX ),
+                $audit
+            )
+        );
         return array(
             'ok'      => false,
             'message' => __( 'Hourly abuse report limit reached. Try again later — abuse desks rate-limit senders that flood them.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -737,14 +756,18 @@ function nppp_f2b_abuse_send_report( string $ip ): array {
         }
     }
 
-    $sent = wp_mail(
+    // Same helper the test mail uses: the send itself is the same, but the
+    // SMTP timeout is capped at 15s and the mail transport's own error
+    // message is captured for the log.
+    $mail_result = nppp_wp_mail_diagnostic(
         $data['abuse_emails'],
         nppp_f2b_abuse_subject( $data ),
         $body,
         $headers
     );
 
-    if ( ! $sent ) {
+    if ( ! $mail_result['sent'] ) {
+        nppp_f2b_log( 'ERROR', 'Abuse report failed: ' . $audit . ' error=' . $mail_result['error'] );
         return array(
             'ok'      => false,
             'message' => __( 'WordPress could not hand the report to the mail transport. Check your SMTP configuration, then try again.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -752,6 +775,7 @@ function nppp_f2b_abuse_send_report( string $ip ): array {
     }
 
     nppp_f2b_record_abuse_report( $data['ip'] );
+    nppp_f2b_log( 'INFO', 'Abuse report sent: ' . $audit . ' user=' . get_current_user_id() );
 
     return array(
         'ok'      => true,
@@ -958,6 +982,18 @@ function nppp_f2b_save_abuse_settings_callback() {
     $clean = nppp_f2b_sanitize_abuse_settings( $input );
 
     update_option( NPPP_F2B_ABUSE_OPTION, $clean, false );
+
+    nppp_f2b_log(
+        'INFO',
+        sprintf(
+            'Abuse Reporter settings saved by user #%d: enabled=%s dry_run=%s min_bans=%d cooldown_days=%d',
+            get_current_user_id(),
+            $clean['enabled'],
+            $clean['dry_run'],
+            $clean['min_bans'],
+            $clean['cooldown_days']
+        )
+    );
 
     $ready = nppp_f2b_abuse_is_ready( $clean );
 
