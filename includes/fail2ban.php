@@ -858,38 +858,77 @@ function nppp_f2b_validate_request( WP_REST_Request $request ) {
     return true;
 }
 
-// One rotating transient tracks the per-minute limit.
-function nppp_f2b_rate_exceeded(): bool {
-    $window = (int) floor( time() / 60 );
-    $bucket = get_transient( NPPP_F2B_RATE_KEY );
+/**
+ * Count one event in the given fixed 60 s window and return the new total.
+ *
+ * One row (window:count) in wp_options, rolled over and incremented by a
+ * single UPDATE, so concurrent requests cannot overwrite each other's count.
+ * LAST_INSERT_ID(expr) hands the new count back on the same connection.
+ * Returns 0 on a DB error (fail open: a broken counter must never drop ban events).
+ */
+function nppp_f2b_rate_hit( int $window, bool $retry = true ): int {
+    global $wpdb;
 
-    if ( ! is_array( $bucket ) || ( $bucket['w'] ?? 0 ) !== $window ) {
-        $bucket = array(
-            'w' => $window,
-            'c' => 0,
+    $name = 'nppp_f2b_rate_win';
+    $win  = (string) $window;
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- atomic counter on a single options row
+    $rows = $wpdb->query(
+        $wpdb->prepare(
+            "UPDATE {$wpdb->options}
+             SET option_value = CONCAT( %s, ':', LAST_INSERT_ID( IF( SUBSTRING_INDEX( option_value, ':', 1 ) = %s, CAST( SUBSTRING_INDEX( option_value, ':', -1 ) AS UNSIGNED ) + 1, 1 ) ) )
+             WHERE option_name = %s",
+            $win,
+            $win,
+            $name
+        )
+    );
+
+    if ( false === $rows ) {
+        return 0;
+    }
+
+    if ( 0 === (int) $rows ) {
+        if ( ! $retry ) {
+            return 0;
+        }
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $wpdb->query(
+            $wpdb->prepare(
+                "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
+                $name,
+                $win . ':0'
+            )
+        );
+        return nppp_f2b_rate_hit( $window, false );
+    }
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    return (int) $wpdb->get_var( 'SELECT LAST_INSERT_ID()' );
+}
+
+// Fixed 60 s window (not rolling), counted atomically by nppp_f2b_rate_hit().
+function nppp_f2b_rate_exceeded(): bool {
+    $hits = nppp_f2b_rate_hit( (int) floor( time() / 60 ) );
+
+    if ( $hits <= NPPP_F2B_RATE_MAX_PER_MIN ) {
+        return false;
+    }
+
+    // The count is exact, so exactly one request per window gets MAX + 1:
+    // one log line per window, however many requests arrive at once.
+    if ( NPPP_F2B_RATE_MAX_PER_MIN + 1 === $hits ) {
+        nppp_f2b_log(
+            'ERROR',
+            sprintf(
+                /* translators: %d: number of webhook events allowed per minute. */
+                __( 'Webhook rate limit reached (%d events/min): every further event this minute is rejected with 429 and NOT recorded.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                NPPP_F2B_RATE_MAX_PER_MIN
+            )
         );
     }
 
-    if ( (int) $bucket['c'] >= NPPP_F2B_RATE_MAX_PER_MIN ) {
-        $nppp_f2b_drops = nppp_f2b_log_gate( 'rate_limited', MINUTE_IN_SECONDS, true );
-        if ( $nppp_f2b_drops > 0 ) {
-            nppp_f2b_log(
-                'ERROR',
-                sprintf(
-                    /* translators: %1$d: number of webhook events dropped with HTTP 429 since the last report; %2$d: number of events allowed per minute before the limit kicks in. */
-                    __( 'Webhook rate limit reached: %1$d event(s) dropped with 429 since the last report (limit %2$d/min).', 'fastcgi-cache-purge-and-preload-nginx' ),
-                    $nppp_f2b_drops,
-                    NPPP_F2B_RATE_MAX_PER_MIN
-                )
-            );
-        }
-        return true;
-    }
-
-    $bucket['c'] = (int) $bucket['c'] + 1;
-    set_transient( NPPP_F2B_RATE_KEY, $bucket, 120 );
-
-    return false;
+    return true;
 }
 
 function nppp_f2b_handle_event( WP_REST_Request $request ) {
