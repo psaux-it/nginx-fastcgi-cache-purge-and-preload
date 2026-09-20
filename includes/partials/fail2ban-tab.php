@@ -97,6 +97,28 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                     <code>fastcgi_param HTTP_AUTHORIZATION $http_authorization;</code>
                 </p>
             </details>
+
+            <details class="nppp-f2b-setup">
+                <summary><?php esc_html_e( 'Optional hardening — Nginx request rate limit', 'fastcgi-cache-purge-and-preload-nginx' ); ?></summary>
+
+                <p class="nppp-f2b-note">
+                    <?php esc_html_e( 'The flock in step 1 above only serializes calls made through fail2ban itself. It does not stop this endpoint from accepting unlimited concurrent requests from anything else -- a misconfigured client, a leaked token, a flood. Under a large burst that can pin every PHP-FPM worker in this site\'s pool and slow the whole site down. This caps concurrency in nginx, before PHP starts, with no separate FPM pool required.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </p>
+
+                <p class="nppp-f2b-step"><span class="nppp-f2b-step-n">1</span> <?php esc_html_e( 'nginx.conf (or a conf.d file) and this site\'s server block', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                <div class="nppp-f2b-copy nppp-f2b-copy-block">
+                    <textarea readonly rows="10" class="nppp-f2b-code" id="nppp-f2b-nginx-rl-snippet"><?php echo esc_textarea( $nginx_rl_snippet ); ?></textarea>
+                    <button type="button" class="nppp-f2b-btn nppp-f2b-copy-btn" data-copy-target="nppp-f2b-nginx-rl-snippet">
+                        <?php esc_html_e( 'Copy', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </button>
+                </div>
+
+                <p class="nppp-f2b-step"><span class="nppp-f2b-step-n">2</span> <?php esc_html_e( 'Test config and reload nginx.', 'fastcgi-cache-purge-and-preload-nginx' ); ?> <code>sudo nginx -t && sudo systemctl reload nginx</code></p>
+
+                <p class="nppp-f2b-note">
+                    <?php esc_html_e( 'Requires pretty permalinks (Settings > Permalinks, not "Plain"). Tuning notes are in the comments inside the snippet.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </p>
+            </details>
         </div>
     </div>
 
