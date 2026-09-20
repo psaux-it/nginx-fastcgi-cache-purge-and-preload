@@ -6074,6 +6074,7 @@ div.updated.notice-nppp p,
 #nppp-f2b-tab .nppp-f2b-gate-hint {
     margin: 0 0 12px;
     line-height: 1.5;
+    font-size: 13px;
 }
 
 #nppp-f2b-tab .nppp-f2b-empty-cell {
