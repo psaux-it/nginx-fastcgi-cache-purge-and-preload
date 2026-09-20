@@ -1147,7 +1147,7 @@ function nppp_f2b_get_jail_summaries( int $since_hours = 24 ): array {
                     SUM(event_type = 'unban') AS unbans,
                     MAX(created_at)           AS last_event
              FROM %i
-             WHERE created_at >= %s
+             WHERE created_at >= %s AND event_type IN ('ban','unban')
              GROUP BY jail
              ORDER BY bans DESC, jail ASC
              LIMIT 50",
@@ -1175,7 +1175,7 @@ function nppp_f2b_get_jail_summaries_between( string $since, string $until ): ar
                     SUM(event_type = 'unban') AS unbans,
                     MAX(created_at)           AS last_event
              FROM %i
-             WHERE created_at >= %s AND created_at < %s
+             WHERE created_at >= %s AND created_at < %s AND event_type IN ('ban','unban')
              GROUP BY jail
              ORDER BY bans DESC, jail ASC
              LIMIT 50",
@@ -1258,10 +1258,11 @@ function nppp_f2b_get_recent_events( int $limit = 0 ): array {
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
     $rows = $wpdb->get_results(
         $wpdb->prepare(
-            'SELECT jail, ip, event_type, created_at, rdap_json
+            "SELECT jail, ip, event_type, created_at, rdap_json
              FROM %i
+             WHERE event_type IN ('ban','unban')
              ORDER BY id DESC
-             LIMIT %d',
+             LIMIT %d",
             $table,
             $limit
         ),
@@ -1278,7 +1279,79 @@ function nppp_f2b_get_total_event_count(): int {
     $table = nppp_f2b_table_name();
 
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
-    return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i', $table ) );
+    return (int) $wpdb->get_var(
+        $wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE event_type IN ('ban','unban')", $table )
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Endpoint-gate attacks (EP3 / EP8 / EP10 rejections): a card of their own.
+// event_type = 'gate' rows are excluded from the Live Feed, the Jails card,
+// Repeat Offenders, Top Countries and the "configured" check.
+// ---------------------------------------------------------------------------
+
+// Unknown or future gate names fall back to their raw uppercased form.
+function nppp_f2b_gate_label( string $ep ): string {
+    $labels = array(
+        'ep3'  => __( 'REST API (EP3)', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'ep8'  => __( 'Watchdog AJAX (EP8)', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'ep10' => __( 'Fail2Ban Webhook (EP10)', 'fastcgi-cache-purge-and-preload-nginx' ),
+    );
+
+    return $labels[ $ep ] ?? strtoupper( $ep );
+}
+
+// Per-gate totals. Same window as nppp_f2b_get_gate_summary() so the two tables
+// on the card always describe the same period.
+function nppp_f2b_get_gate_totals( int $since_hours = 24 ): array {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+    $since = gmdate( 'Y-m-d H:i:s', time() - ( $since_hours * HOUR_IN_SECONDS ) );
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT jail, COUNT(*) AS hits, MAX(created_at) AS last_seen
+             FROM %i
+             WHERE event_type = 'gate' AND created_at >= %s
+             GROUP BY jail
+             ORDER BY hits DESC, jail ASC",
+            $table,
+            $since
+        ),
+        ARRAY_A
+    );
+
+    return is_array( $rows ) ? $rows : array();
+}
+
+// One row per gate + IP. Gate rows are never RDAP-enriched (the worker only
+// processes event_type = 'ban'): a flood of rejected requests must not trigger
+// any outbound lookups.
+function nppp_f2b_get_gate_summary( int $limit = 25, int $since_hours = 24 ): array {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+    $since = gmdate( 'Y-m-d H:i:s', time() - ( $since_hours * HOUR_IN_SECONDS ) );
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT jail, ip, COUNT(*) AS hits, MAX(created_at) AS last_seen
+             FROM %i
+             WHERE event_type = 'gate' AND created_at >= %s
+             GROUP BY jail, ip
+             ORDER BY hits DESC, last_seen DESC
+             LIMIT %d",
+            $table,
+            $since,
+            $limit
+        ),
+        ARRAY_A
+    );
+
+    return is_array( $rows ) ? $rows : array();
 }
 
 // Bounded COUNT over a time range, not the whole table.
@@ -1350,7 +1423,9 @@ function nppp_f2b_has_any_events(): bool {
     $table = nppp_f2b_table_name();
 
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
-    return (bool) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM %i LIMIT 1', $table ) );
+    return (bool) $wpdb->get_var(
+        $wpdb->prepare( "SELECT id FROM %i WHERE event_type IN ('ban','unban') LIMIT 1", $table )
+    );
 }
 
 // Turns current/previous counts into a change badge (direction, %, label).
@@ -1531,6 +1606,9 @@ function nppp_f2b_load_tab_content_callback() {
     $abuse_contacts   = ( $abuse_ready && ! empty( $recidive ) )
         ? nppp_f2b_get_abuse_map_for_ips( array_column( $recidive, 'ip' ) )
         : array();
+
+    $gate_totals  = nppp_f2b_get_gate_totals( 24 );
+    $gate_summary = nppp_f2b_get_gate_summary( 25 );
 
     $token          = nppp_f2b_get_token();
     $endpoint       = nppp_f2b_get_endpoint_url();
