@@ -539,6 +539,13 @@ function nppp_f2b_rdap_cache_key( string $ip ): string {
     return 'nppp_f2b_rdap_' . md5( $ip );
 }
 
+// True only for publicly routable addresses. Private (RFC 1918, IPv6 ULA),
+// loopback, link-local and other reserved ranges have no registry record, so
+// they are never sent to RIPEstat. Same flags as the EP-gate recorder.
+function nppp_f2b_ip_is_public( string $ip ): bool {
+    return false !== filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
+}
+
 /**
  * The "sourceapp" identifier sent with every RIPEstat request.
  *
@@ -692,6 +699,11 @@ function nppp_f2b_rdap_store_cache( string $ip, array $result ): void {
  * requests in parallel.
  */
 function nppp_f2b_lookup_ip( string $ip, ?bool &$answered = null ): array {
+    if ( ! nppp_f2b_ip_is_public( $ip ) ) {
+        $answered = true;
+        return nppp_f2b_rdap_blank_result();
+    }
+
     $cached = get_transient( nppp_f2b_rdap_cache_key( $ip ) );
     if ( is_array( $cached ) ) {
         $answered = true;
@@ -827,6 +839,21 @@ function nppp_f2b_maybe_reuse_cached_rdap( int $event_id, string $ip ): bool {
  * removed) but kept for signature compatibility.
  */
 function nppp_f2b_maybe_enrich( int $event_id, string $ip, array $response_payload = array() ): void {
+    // Non-public address: nothing to look up. Store the blank profile right
+    // away, which clears its queue slot, and never spawn a worker for it.
+    if ( ! nppp_f2b_ip_is_public( $ip ) ) {
+        global $wpdb;
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+        $wpdb->update(
+            nppp_f2b_table_name(),
+            array( 'rdap_json' => wp_json_encode( nppp_f2b_rdap_blank_result() ) ),
+            array( 'id' => $event_id ),
+            array( '%s' ),
+            array( '%d' )
+        );
+        return;
+    }
+
     if ( nppp_f2b_maybe_reuse_cached_rdap( $event_id, $ip ) ) {
         return;
     }
