@@ -1550,11 +1550,10 @@ function nppp_f2b_get_jail_local_snippet(): string {
 }
 
 // Optional server-side hardening shown in the tab. flock above only
-// throttles calls made through fail2ban itself; this caps concurrency for
-// ANY caller (a stray script, a leaked token, a flood) before PHP boots at
-// all, with zero new FPM pools. Keyed on $server_name (not the client IP)
-// on purpose: the resource being protected is this site's shared FPM pool,
-// so a distributed flood from many IPs still has to share one bucket.
+// serializes calls made through fail2ban itself; this caps the request rate
+// from any caller before PHP boots, with no separate FPM pool. Keyed on
+// $server_name so every virtual host receives an independent rate-limit
+// bucket, while distributed sources attacking the same site share one bucket.
 function nppp_f2b_get_nginx_rate_limit_snippet(): string {
     $route = nppp_f2b_get_endpoint_url();
     $path  = (string) wp_parse_url( $route, PHP_URL_PATH );
@@ -1562,42 +1561,41 @@ function nppp_f2b_get_nginx_rate_limit_snippet(): string {
         $path = '/wp-json/nppp_f2b/v1/event';
     }
 
-    // Matches NPPP_F2B_RATE_MAX_PER_MIN (300/min = 5r/s) on purpose: that
-    // constant is this plugin's own definition of "a correctly configured
-    // fail2ban never approaches this" (see its comment above). Anything
-    // nginx would reject at this rate gets rejected at the WP layer too --
-    // aligning the two means traffic beyond the legitimate envelope never
-    // pays for a WordPress boot in the first place.
+    // Matches the plugin's 300-events-per-minute application safety valve.
     $rate = (string) apply_filters( 'nppp_f2b_nginx_rl_rate', '5r/s' );
 
-    // burst / rate = worst-case queueing delay before nginx hands the
-    // request to PHP-FPM. The action snippet's curl uses --max-time 10, so
-    // this stays comfortably under it (30 / 5r/s = 6s). flock above already
-    // paces real fail2ban traffic to roughly one request every 1/rate
-    // seconds, so in practice the burst allowance is rarely touched at all;
-    // it exists to absorb a few jails banning close together, not to carry
-    // a standing queue.
+    // At the default values, burst / rate gives an approximate maximum
+    // Nginx queueing delay of 6 seconds, below curl's 10-second timeout.
+    // flock only serializes producer calls; Nginx supplies the pacing.
     $burst = (int) apply_filters( 'nppp_f2b_nginx_rl_burst', 30 );
 
     return "# 1) Once, inside the http { } block (nginx.conf or a conf.d file):\n" .
         "limit_req_zone \$server_name zone=nppp_f2b_rl:1m rate={$rate};\n" .
         "\n" .
-        "# 2) In this site's server { } block, anywhere in the file -- exact\n" .
-        "# match (\"=\") always wins nginx's location selection regardless of\n" .
-        "# file order, so this never has to sit before your existing\n" .
-        "# location / block. It does not touch or duplicate your fastcgi_pass\n" .
-        "# config: it applies the limit, then falls through to whatever\n" .
-        "# location ~ \\.php\$ block already handles PHP on this site.\n" .
+        "# 2) Inside this site's server { } block. The exact-match location\n" .
+        "# takes precedence over prefix and regular-expression locations,\n" .
+        "# regardless of file order. try_files internally redirects the\n" .
+        "# request to index.php, which the existing PHP location handles.\n" .
         "location = {$path} {\n" .
+        "    limit_except POST {\n" .
+        "        deny all;\n" .
+        "    }\n" .
+        "\n" .
+        "    client_max_body_size 1k;\n" .
+        "    client_body_timeout 10s;\n" .
+        "\n" .
         "    limit_req zone=nppp_f2b_rl burst={$burst};\n" .
+        "    limit_req_status 429;\n" .
+        "    limit_req_log_level warn;\n" .
+        "\n" .
         "    try_files \$uri \$uri/ /index.php\$is_args\$args;\n" .
         "}\n" .
         "\n" .
         "# Only matches with pretty permalinks (Settings > Permalinks, not\n" .
-        "# \"Plain\"). On Plain permalinks the REST route is reached as\n" .
-        "# /index.php?rest_route=/nppp_f2b/v1/event instead, which this\n" .
-        "# path-only exact match cannot select -- switch permalinks, or add\n" .
-        "# limit_req directly to your existing PHP location for that case.\n";
+        "# \"Plain\"). With Plain permalinks, the REST route is reached as\n" .
+        "# /index.php?rest_route=/nppp_f2b/v1/event, which this path-only\n" .
+        "# exact location cannot select. Switch to pretty permalinks or add\n" .
+        "# an equivalent conditional limit to the existing PHP location.\n";
 }
 
 // ---------------------------------------------------------------------------
