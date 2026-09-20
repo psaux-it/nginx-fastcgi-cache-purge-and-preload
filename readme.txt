@@ -283,7 +283,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 
 = 2.1.8 (2026-09-08) =
 
-* NEW: "Fail2Ban" dashboard — a token-authenticated webhook turns fail2ban ban/unban events into a live jail activity dashboard with a "Repeat Offenders" panel and a "Top Attack Countries" map, plus an optional Abuse Reporter that emails the offending network's abuse desk using RDAP-resolved contacts.
+* NEW: "Fail2Ban Dashboard" — a token-authenticated webhook turns fail2ban ban/unban events into a live jail activity dashboard with a "Repeat Offenders" panel and a "Top Attack Countries" map, plus an optional Abuse Reporter that emails the offending network's abuse desk using RDAP-resolved contacts.
 * Fixed: "Purge All" now terminates the preload watchdog before stopping the main preload process, closing a post-completion race window that could leave stale preload state behind.
 * Fixed: WP-CLI "preload --stop" no longer clears the preload pid when the underlying process termination fails (safexec), preventing broken preload state and subsequent workflow failures.
 * Fixed: WP-CLI "preload --stop" now performs complete preload state cleanup, including scheduled cron events, transients, and watchdog tokens.
@@ -291,6 +291,8 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Fixed: Several disable-functionality and disable-preload guard were missing coverage for new and existing options introduced before.
 * Fixed: Setup hooks and Settings field registrations were both running on every admin AJAX request and non-Settings admin page, firing redundant HEAD probes on each admin tab switch and registering fields that had no consumers outside the Settings page.
 * Fixed: Removed redundant "jquery-ui.theme.min.css" enqueue and deleted the unused asset file.
+* Fixed: (autoload) Removed PHP 8-only named argument breaking PHP 7.4 compatibility.
+* Fixed: (wp-cli) Replaced PHP 8 match() expressions with if/elseif for PHP 7.4 backward compatibility.
 * Security: Removed the option to atomic write directly to wp-config.php from the Setup page to enable "Assume Nginx Mode".
 * Performance: Merged redirect‑ and KEY‑line cache scans into a single ripgrep pass using -m 2 dual‑pattern matching, cutting directory‑walk cost in half on large caches. (Credit: @apoorva-01)
 * Improved: HTTP Purge timeouts no longer falsely arm the lockout, and the timeout is now configurable via the `nppp_http_purge_timeout` filter.
