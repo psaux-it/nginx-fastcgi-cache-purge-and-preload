@@ -1,0 +1,23 @@
+{
+    "name": "psaux-it/nginx-fastcgi-cache-purge-and-preload",
+    "description": "Development tools for Nginx Cache Purge Preload.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": ">=7.4"
+    },
+    "require-dev": {
+        "phpcompatibility/phpcompatibility-wp": "3.0.0-alpha2"
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "scripts": {
+        "compat": "phpcs -ps --standard=phpcs.xml.dist"
+    }
+}
