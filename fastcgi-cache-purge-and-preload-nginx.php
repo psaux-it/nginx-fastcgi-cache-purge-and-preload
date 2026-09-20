@@ -178,6 +178,8 @@ function nppp_ep_gate_log(
         return;
     }
 
+    nppp_ep_gate_record($ep, $raw);
+
     if (!function_exists('nppp_get_runtime_file')) {
         require_once plugin_dir_path(NPPP_PLUGIN_FILE) . 'includes/runtime-paths.php';
     }
@@ -191,6 +193,47 @@ function nppp_ep_gate_log(
 
     // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
     file_put_contents(NGINX_CACHE_LOG_FILE, $entry, FILE_APPEND | LOCK_EX);
+}
+
+// ---------------------------------------------------------------------------
+// Records a gate rejection for the Fail2Ban dashboard's "Endpoint Attacks"
+// card: ONE prepared single-row INSERT into the existing events table
+// (event_type = 'gate', jail = gate name). Runs only after the throttle in
+// nppp_ep_gate_log() above (attempt #1 and every 5th) and every gate stops
+// counting at its lockout, so the volume per IP is bounded. Gate attacks are
+// never RDAP-enriched and never touch the fail2ban worker; nothing else
+// happens in this request.
+//
+// Opt-in: nothing is recorded until Fail2Ban has pushed at least one ban or
+// unban to the webhook (the same "configured" test the Fail2Ban tab uses), so a
+// site that never set Fail2Ban up stores no client IPs and sends none to RIPEstat.
+// ---------------------------------------------------------------------------
+function nppp_ep_gate_record(string $ep, string $raw_ip): void {
+    // Public addresses only. A private/loopback IP is a proxy misconfiguration
+    // or a LAN client, not an attacker, and must never be sent on to RIPEstat.
+    if (!filter_var($raw_ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+        return;
+    }
+
+    global $wpdb;
+
+    // The table may not exist yet (Fail2Ban tab never opened): a failed insert
+    // must never disturb the gate itself.
+    $nppp_prev = $wpdb->suppress_errors(true);
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $wpdb->query(
+        $wpdb->prepare(
+            "INSERT INTO %i (jail, ip, event_type, created_at)
+             SELECT %s, %s, 'gate', %s FROM DUAL
+             WHERE EXISTS ( SELECT 1 FROM %i WHERE event_type IN ('ban','unban') LIMIT 1 )",
+            $wpdb->prefix . 'nppp_f2b_events',
+            sanitize_key($ep),
+            $raw_ip,
+            gmdate('Y-m-d H:i:s'),
+            $wpdb->prefix . 'nppp_f2b_events'
+        )
+    );
+    $wpdb->suppress_errors($nppp_prev);
 }
 
 // ---------------------------------------------------------------------------
