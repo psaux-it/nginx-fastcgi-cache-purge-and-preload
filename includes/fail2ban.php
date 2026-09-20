@@ -1511,12 +1511,12 @@ function nppp_f2b_get_action_conf_snippet(): string {
     // nohup + & detaches curl from fail2ban's action queue so the jail
     // doesn't wait on the network call before banning the next IP.
     return "[Definition]\n" .
-        "actionban   = nohup curl -sS -o /dev/null --max-time 10 --connect-timeout 3 --retry 2 --retry-delay 1 --retry-connrefused -X POST {$endpoint} \\\n" .
+        "actionban   = nohup flock -w 300 /run/nppp-f2b.lock curl -sS -o /dev/null --max-time 10 --connect-timeout 3 --retry 2 --retry-delay 1 --retry-connrefused -X POST {$endpoint} \\\n" .
         "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
         "                -H \"Content-Type: application/json\" \\\n" .
         "                -d '{\"event\":\"ban\",\"jail\":\"<name>\",\"ip\":\"<ip>\"}' \\\n" .
         "                >/dev/null 2>&1 &\n" .
-        "actionunban = nohup curl -sS -o /dev/null --max-time 10 --connect-timeout 3 --retry 2 --retry-delay 1 --retry-connrefused -X POST {$endpoint} \\\n" .
+        "actionunban = nohup flock -w 300 /run/nppp-f2b.lock curl -sS -o /dev/null --max-time 10 --connect-timeout 3 --retry 2 --retry-delay 1 --retry-connrefused -X POST {$endpoint} \\\n" .
         "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
         "                -H \"Content-Type: application/json\" \\\n" .
         "                -d '{\"event\":\"unban\",\"jail\":\"<name>\",\"ip\":\"<ip>\"}' \\\n" .
