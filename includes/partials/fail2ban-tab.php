@@ -348,64 +348,81 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
     <?php endif; ?>
 
     <?php if ( ! empty( $gate_totals ) ) : ?>
-    <div class="nppp-f2b-card nppp-f2b-card-gate">
-        <div class="nppp-f2b-card-titlebar">
-            <h3 class="nppp-f2b-card-title"><?php esc_html_e( 'Endpoint Attacks — last 24h', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
-        </div>
-        <div class="nppp-f2b-card-body">
-            <p class="nppp-f2b-hint-text">
-                <?php esc_html_e( 'Requests rejected by this plugin\'s own protection gates (bad or missing tokens and keys). Each IP is logged on its first failed attempt and on every 5th after that, until the gate locks it out, so the counts are a sample, not every request. This is not a firewall block: no IP here has been banned, and no external lookups are made for these IPs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-            </p>
+        <?php
+        $nppp_gate_max = 1;
+        foreach ( $gate_totals as $nppp_gate_scale ) {
+            $nppp_gate_max = max( $nppp_gate_max, (int) $nppp_gate_scale['hits'] );
+        }
+        ?>
+        <h3 class="nppp-f2b-section"><?php esc_html_e( 'Endpoint Attacks — last 24 hours', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
+        <p class="nppp-f2b-hint-text nppp-f2b-gate-hint">
+            <?php esc_html_e( 'Requests rejected by this plugin\'s own protection gates (bad or missing tokens and keys). Each IP is logged on its first failed attempt and on every 5th after that, until the gate locks it out, so the counts are a sample, not every request. This is not a firewall block: no IP here has been banned, and no external lookups are made for these IPs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </p>
 
-            <h4 class="nppp-f2b-gate-subtitle"><?php esc_html_e( 'By gate', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
-            <div class="nppp-f2b-gate-scroll">
-                <table class="nppp-f2b-table nppp-f2b-gate-table nppp-f2b-gate-table-totals">
-                    <thead>
-                        <tr>
-                            <th><?php esc_html_e( 'Gate', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                            <th><?php esc_html_e( 'Logged', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                            <th><?php esc_html_e( 'Last Seen', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ( $gate_totals as $nppp_gate_row ) : ?>
-                            <tr>
-                                <td><?php echo esc_html( nppp_f2b_gate_label( (string) $nppp_gate_row['jail'] ) ); ?></td>
-                                <td><span class="nppp-f2b-badge nppp-f2b-badge-ban"><?php echo esc_html( (string) (int) $nppp_gate_row['hits'] ); ?></span></td>
-                                <td><?php echo esc_html( nppp_f2b_local_time( (string) $nppp_gate_row['last_seen'] ) ); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+        <div class="nppp-f2b-jail-activity-row">
+            <div class="nppp-f2b-jails">
+                <?php foreach ( $gate_totals as $nppp_gate_row ) : ?>
+                    <div class="nppp-f2b-jail">
+                        <h4><?php echo esc_html( nppp_f2b_gate_label( (string) $nppp_gate_row['jail'] ) ); ?></h4>
+                        <div class="nppp-f2b-jail-nums">
+                            <span class="nppp-f2b-badge nppp-f2b-badge-ban"><?php echo esc_html( (string) (int) $nppp_gate_row['hits'] ); ?></span>
+                            <span class="nppp-f2b-badge-cap"><?php esc_html_e( 'rejections', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        </div>
+                        <p class="nppp-f2b-jail-last">
+                            <?php esc_html_e( 'Last event:', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            <?php echo esc_html( nppp_f2b_local_time( (string) $nppp_gate_row['last_seen'] ) ); ?>
+                        </p>
+                    </div>
+                <?php endforeach; ?>
             </div>
 
-            <?php if ( ! empty( $gate_summary ) ) : ?>
-                <h4 class="nppp-f2b-gate-subtitle"><?php esc_html_e( 'Top source IPs', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h4>
-                <div class="nppp-f2b-gate-scroll">
-                    <table class="nppp-f2b-table nppp-f2b-gate-table nppp-f2b-gate-table-ips">
-                        <thead>
-                            <tr>
-                                <th><?php esc_html_e( 'Gate', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                                <th><?php esc_html_e( 'IP Address', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                                <th><?php esc_html_e( 'Logged', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                                <th><?php esc_html_e( 'Last Seen', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ( $gate_summary as $nppp_gate_hit ) : ?>
-                                <tr>
-                                    <td><?php echo esc_html( nppp_f2b_gate_label( (string) $nppp_gate_hit['jail'] ) ); ?></td>
-                                    <td><code><?php echo esc_html( (string) $nppp_gate_hit['ip'] ); ?></code></td>
-                                    <td><span class="nppp-f2b-badge nppp-f2b-badge-ban"><?php echo esc_html( (string) (int) $nppp_gate_hit['hits'] ); ?></span></td>
-                                    <td><?php echo esc_html( nppp_f2b_local_time( (string) $nppp_gate_hit['last_seen'] ) ); ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+            <div class="nppp-f2b-jail-chart-wrap">
+                <div class="nppp-f2b-jail-chart-panel">
+                    <p class="nppp-f2b-jail-chart-title"><?php esc_html_e( 'Rejections by gate — ranked', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                    <div class="nppp-f2b-jail-chart-rows">
+                        <?php foreach ( $gate_totals as $nppp_gate_row ) : ?>
+                            <?php
+                            $nppp_gate_hits = (int) $nppp_gate_row['hits'];
+                            $nppp_gate_pct  = $nppp_gate_hits > 0 ? max( 3, (int) round( ( $nppp_gate_hits / $nppp_gate_max ) * 100 ) ) : 0;
+                            ?>
+                            <div class="nppp-f2b-jail-chart-row">
+                                <div class="nppp-f2b-jail-chart-row-head">
+                                    <span class="nppp-f2b-jail-chart-name"><?php echo esc_html( strtoupper( (string) $nppp_gate_row['jail'] ) ); ?></span>
+                                    <span class="nppp-f2b-jail-chart-value"><?php echo esc_html( (string) $nppp_gate_hits ); ?></span>
+                                </div>
+                                <div class="nppp-f2b-jail-chart-track">
+                                    <div class="nppp-f2b-jail-chart-fill" style="width:<?php echo esc_attr( (string) $nppp_gate_pct ); ?>%;"></div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
-            <?php endif; ?>
+            </div>
         </div>
-    </div>
+
+        <?php if ( ! empty( $gate_summary ) ) : ?>
+            <h3 class="nppp-f2b-section"><?php esc_html_e( 'Top source IPs — last 24 hours', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
+            <table class="nppp-f2b-table">
+                <thead>
+                    <tr>
+                        <th><?php esc_html_e( 'Gate', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <th><?php esc_html_e( 'IP Address', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <th><?php esc_html_e( 'Logged', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                        <th><?php esc_html_e( 'Last Seen', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ( $gate_summary as $nppp_gate_hit ) : ?>
+                        <tr>
+                            <td><?php echo esc_html( nppp_f2b_gate_label( (string) $nppp_gate_hit['jail'] ) ); ?></td>
+                            <td><code><?php echo esc_html( (string) $nppp_gate_hit['ip'] ); ?></code></td>
+                            <td><span class="nppp-f2b-badge nppp-f2b-badge-ban"><?php echo esc_html( (string) (int) $nppp_gate_hit['hits'] ); ?></span></td>
+                            <td><?php echo esc_html( nppp_f2b_local_time( (string) $nppp_gate_hit['last_seen'] ) ); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
     <?php endif; ?>
 
     <h3 class="nppp-f2b-section">
