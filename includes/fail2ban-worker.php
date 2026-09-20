@@ -1032,6 +1032,10 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
         if ( '' === $ip ) {
             continue;
         }
+        if ( ! nppp_f2b_ip_is_public( $ip ) ) {
+            $out[ $ip ] = nppp_f2b_rdap_blank_result();
+            continue;
+        }
         $cached = get_transient( nppp_f2b_rdap_cache_key( $ip ) );
         if ( is_array( $cached ) ) {
             $out[ $ip ] = $cached;
