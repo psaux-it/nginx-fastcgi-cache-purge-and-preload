@@ -1508,8 +1508,16 @@ function nppp_f2b_get_endpoint_url(): string {
 function nppp_f2b_get_action_conf_snippet(): string {
     $endpoint = nppp_f2b_get_endpoint_url();
 
-    // nohup + & detaches curl from fail2ban's action queue so the jail
-    // doesn't wait on the network call before banning the next IP.
+    // flock serializes only calls that go through THIS action file, so a
+    // fail2ban ban storm queues its own curl calls one at a time instead of
+    // firing them all concurrently at PHP-FPM. It does not protect the
+    // endpoint from anything else that hits it directly (a misconfigured
+    // client, a leaked token, a flood) -- that has to sit in front of PHP,
+    // in nginx; see the optional hardening snippet in this tab.
+    // nohup + & still detaches the whole pipeline from fail2ban's action
+    // queue so the jail doesn't wait on the network call before banning the
+    // next IP. Using flock's exec form (no -c) avoids re-quoting the -H/-d
+    // arguments through a second shell layer.
     return "[Definition]\n" .
         "actionban   = nohup flock -w 300 /run/nppp-f2b.lock curl -sS -o /dev/null --max-time 10 --connect-timeout 3 --retry 2 --retry-delay 1 --retry-connrefused -X POST {$endpoint} \\\n" .
         "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
@@ -1539,6 +1547,57 @@ function nppp_f2b_get_jail_local_snippet(): string {
         "         nppp-webhook[nppp_token=\"{$token}\"]\n" .
         "\n" .
         $comment . "\n";
+}
+
+// Optional server-side hardening shown in the tab. flock above only
+// throttles calls made through fail2ban itself; this caps concurrency for
+// ANY caller (a stray script, a leaked token, a flood) before PHP boots at
+// all, with zero new FPM pools. Keyed on $server_name (not the client IP)
+// on purpose: the resource being protected is this site's shared FPM pool,
+// so a distributed flood from many IPs still has to share one bucket.
+function nppp_f2b_get_nginx_rate_limit_snippet(): string {
+    $route = nppp_f2b_get_endpoint_url();
+    $path  = (string) wp_parse_url( $route, PHP_URL_PATH );
+    if ( '' === $path ) {
+        $path = '/wp-json/nppp_f2b/v1/event';
+    }
+
+    // Matches NPPP_F2B_RATE_MAX_PER_MIN (300/min = 5r/s) on purpose: that
+    // constant is this plugin's own definition of "a correctly configured
+    // fail2ban never approaches this" (see its comment above). Anything
+    // nginx would reject at this rate gets rejected at the WP layer too --
+    // aligning the two means traffic beyond the legitimate envelope never
+    // pays for a WordPress boot in the first place.
+    $rate = (string) apply_filters( 'nppp_f2b_nginx_rl_rate', '5r/s' );
+
+    // burst / rate = worst-case queueing delay before nginx hands the
+    // request to PHP-FPM. The action snippet's curl uses --max-time 10, so
+    // this stays comfortably under it (30 / 5r/s = 6s). flock above already
+    // paces real fail2ban traffic to roughly one request every 1/rate
+    // seconds, so in practice the burst allowance is rarely touched at all;
+    // it exists to absorb a few jails banning close together, not to carry
+    // a standing queue.
+    $burst = (int) apply_filters( 'nppp_f2b_nginx_rl_burst', 30 );
+
+    return "# 1) Once, inside the http { } block (nginx.conf or a conf.d file):\n" .
+        "limit_req_zone \$server_name zone=nppp_f2b_rl:1m rate={$rate};\n" .
+        "\n" .
+        "# 2) In this site's server { } block, anywhere in the file -- exact\n" .
+        "# match (\"=\") always wins nginx's location selection regardless of\n" .
+        "# file order, so this never has to sit before your existing\n" .
+        "# location / block. It does not touch or duplicate your fastcgi_pass\n" .
+        "# config: it applies the limit, then falls through to whatever\n" .
+        "# location ~ \\.php\$ block already handles PHP on this site.\n" .
+        "location = {$path} {\n" .
+        "    limit_req zone=nppp_f2b_rl burst={$burst};\n" .
+        "    try_files \$uri \$uri/ /index.php\$is_args\$args;\n" .
+        "}\n" .
+        "\n" .
+        "# Only matches with pretty permalinks (Settings > Permalinks, not\n" .
+        "# \"Plain\"). On Plain permalinks the REST route is reached as\n" .
+        "# /index.php?rest_route=/nppp_f2b/v1/event instead, which this\n" .
+        "# path-only exact match cannot select -- switch permalinks, or add\n" .
+        "# limit_req directly to your existing PHP location for that case.\n";
 }
 
 // ---------------------------------------------------------------------------
@@ -1637,12 +1696,13 @@ function nppp_f2b_load_tab_content_callback() {
     $gate_totals  = nppp_f2b_get_gate_totals( 24 );
     $gate_summary = nppp_f2b_get_gate_summary( 25 );
 
-    $token          = nppp_f2b_get_token();
-    $endpoint       = nppp_f2b_get_endpoint_url();
-    $action_snippet = nppp_f2b_get_action_conf_snippet();
-    $jail_snippet   = nppp_f2b_get_jail_local_snippet();
-    $window_days    = NPPP_F2B_WINDOW_DAYS;
-    $retention_days = nppp_f2b_retention_days();
+    $token            = nppp_f2b_get_token();
+    $endpoint         = nppp_f2b_get_endpoint_url();
+    $action_snippet   = nppp_f2b_get_action_conf_snippet();
+    $jail_snippet     = nppp_f2b_get_jail_local_snippet();
+    $nginx_rl_snippet = nppp_f2b_get_nginx_rate_limit_snippet();
+    $window_days      = NPPP_F2B_WINDOW_DAYS;
+    $retention_days   = nppp_f2b_retention_days();
 
     ob_start();
     include plugin_dir_path( __FILE__ ) . 'partials/fail2ban-tab.php';
