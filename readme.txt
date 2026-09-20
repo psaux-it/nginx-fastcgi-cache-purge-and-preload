@@ -723,13 +723,13 @@ The optional Fail2Ban dashboard uses one third-party service.
 
 = RIPEstat Data API (stat.ripe.net) =
 
-Looks up network ownership (network name, country, ASN, abuse contact) for IP addresses that fail2ban reports as banned.
+Looks up network ownership (network name, country, ASN, abuse contact) for IP addresses that Fail2Ban reports as banned.
 
-* Data sent: the banned IP address, as a URL parameter to https://stat.ripe.net/data/whois/data.json and https://stat.ripe.net/data/abuse-contact-finder/data.json.
-* When: from a background worker (or WP-Cron) after a ban event arrives and no cached result exists. Nothing is sent unless you configure fail2ban to push events to the plugin's webhook. Results are cached for up to 30 days.
-* Provider: RIPE NCC. Terms: https://www.ripe.net/about-us/legal/ripestat-service-terms-and-conditions/ Privacy: https://www.ripe.net/about-us/legal/privacy-statement/
+* Data sent: the banned IP address, sent to RIPE NCC's whois and abuse-contact lookup endpoints.
+* When: from a background worker (or WP-Cron) after a ban event arrives and no cached result exists. Nothing is sent unless you configure Fail2Ban to push ban events to the plugin's webhook. Results are cached for up to 30 days.
+* Provider: RIPE NCC.
 
-The optional Abuse Reporter sends email through wp_mail() to the abuse contact returned by that lookup, only when an administrator enables it and sends a report.
+The optional Abuse Reporter sends email to the abuse contact returned by that lookup, only when an administrator enables it and sends a report.
 
 == Support ==
 
