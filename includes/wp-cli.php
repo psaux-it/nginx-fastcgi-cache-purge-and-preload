@@ -293,20 +293,28 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         // Human-readable label helpers for raw internal return values.
         $bool_label = static function ( ?string $v ): string {
-            return match ( $v ) {
-                'true'      => __( 'OK', 'fastcgi-cache-purge-and-preload-nginx' ),
-                'false'     => __( 'Not Available', 'fastcgi-cache-purge-and-preload-nginx' ),
-                'Not Found' => __( 'Cache Path Not Found', 'fastcgi-cache-purge-and-preload-nginx' ),
-                default     => $v ?? __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' ),
-            };
+            if ( 'true' === $v ) {
+                return __( 'OK', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+            if ( 'false' === $v ) {
+                return __( 'Not Available', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+            if ( 'Not Found' === $v ) {
+                return __( 'Cache Path Not Found', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+            return $v ?? __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
         };
         $preload_label = static function ( ?string $v ): string {
-            return match ( $v ) {
-                'progress' => __( 'Running', 'fastcgi-cache-purge-and-preload-nginx' ),
-                'true'     => __( 'Ready', 'fastcgi-cache-purge-and-preload-nginx' ),
-                'false'    => __( 'Not Available', 'fastcgi-cache-purge-and-preload-nginx' ),
-                default    => $v ?? __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' ),
-            };
+            if ( 'progress' === $v ) {
+                return __( 'Running', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+            if ( 'true' === $v ) {
+                return __( 'Ready', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+            if ( 'false' === $v ) {
+                return __( 'Not Available', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+            return $v ?? __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
         };
 
         // ── System checks ─────────────────────────────────────────────────
@@ -980,11 +988,13 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         ) );
 
         foreach ( $lines as $line ) {
-            match ( $type ) {
-                'error'   => WP_CLI::log( WP_CLI::colorize( '%rError:%n ' . $line ) ),
-                'warning' => WP_CLI::warning( $line ),
-                default   => WP_CLI::success( $line ),
-            };
+            if ( 'error' === $type ) {
+                WP_CLI::log( WP_CLI::colorize( '%rError:%n ' . $line ) );
+            } elseif ( 'warning' === $type ) {
+                WP_CLI::warning( $line );
+            } else {
+                WP_CLI::success( $line );
+            }
         }
 
         // Signal shell-level failure for error outcomes without mid-loop exit.
