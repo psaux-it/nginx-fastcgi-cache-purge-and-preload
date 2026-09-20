@@ -15,6 +15,7 @@
         },
         "sort-packages": true
     },
+    "minimum-stability": "dev",
     "prefer-stable": true,
     "scripts": {
         "compat": "phpcs -ps --standard=phpcs.xml.dist"
