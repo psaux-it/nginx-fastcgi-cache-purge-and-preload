@@ -508,6 +508,16 @@ function nppp_f2b_regenerate_token(): string {
     return $token;
 }
 
+// RIPEstat asks regular/high-volume callers to identify themselves via
+// "sourceapp" so they can be told apart from anonymous traffic if an issue
+// ever comes up -- see https://stat.ripe.net/docs/data-api/ripestat-data-api/.
+// This identifies the plugin itself, not the individual site; the value is
+// hardcoded on purpose (RIPE's rule is per-project/per-software, not per-site)
+// but stays filterable for anyone who knows what they're doing.
+if ( ! defined( 'NPPP_F2B_RDAP_SOURCEAPP' ) ) {
+    define( 'NPPP_F2B_RDAP_SOURCEAPP', 'npp-wp-plugin-fail2ban-monitor' );
+}
+
 // ---------------------------------------------------------------------------
 // RIPE lookup. The webhook only ever triggers this indirectly (via the
 // worker); it never calls RIPE inline itself.
@@ -529,12 +539,33 @@ function nppp_f2b_rdap_cache_key( string $ip ): string {
     return 'nppp_f2b_rdap_' . md5( $ip );
 }
 
+/**
+ * The "sourceapp" identifier sent with every RIPEstat request.
+ *
+ * RIPE's own format rule: alphanumeric only, no whitespace, hyphen/underscore
+ * allowed. Enforced here so a bad filter value can never reach the request
+ * (RIPE would just ignore it, but stripping it locally is cheap and safe).
+ */
+function nppp_f2b_rdap_sourceapp(): string {
+    $sourceapp = (string) apply_filters( 'nppp_f2b_rdap_sourceapp', NPPP_F2B_RDAP_SOURCEAPP );
+    $sourceapp = preg_replace( '/[^A-Za-z0-9_-]/', '', $sourceapp );
+    return '' !== $sourceapp ? $sourceapp : NPPP_F2B_RDAP_SOURCEAPP;
+}
+
 function nppp_f2b_rdap_whois_url( string $ip ): string {
-    return add_query_arg( 'resource', rawurlencode( $ip ), 'https://stat.ripe.net/data/whois/data.json' );
+    $args = array(
+        'resource'  => rawurlencode( $ip ),
+        'sourceapp' => nppp_f2b_rdap_sourceapp(),
+    );
+    return add_query_arg( $args, 'https://stat.ripe.net/data/whois/data.json' );
 }
 
 function nppp_f2b_rdap_abuse_url( string $ip ): string {
-    return add_query_arg( 'resource', rawurlencode( $ip ), 'https://stat.ripe.net/data/abuse-contact-finder/data.json' );
+    $args = array(
+        'resource'  => rawurlencode( $ip ),
+        'sourceapp' => nppp_f2b_rdap_sourceapp(),
+    );
+    return add_query_arg( $args, 'https://stat.ripe.net/data/abuse-contact-finder/data.json' );
 }
 
 /**
