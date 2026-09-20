@@ -86,10 +86,7 @@ if (!isset($GLOBALS['NPPP_AUTOLOADER_REGISTERED'])) {
         return false;
     };
 
-    // PHP 8.4+
-    if (PHP_VERSION_ID >= 80400) {
-        spl_autoload_register($nppp_loader, prepend: true);
-    } else {
-        spl_autoload_register($nppp_loader, true, true);
-    }
+    // Positional args work identically on PHP 7.4 through 8.4+; the 3rd
+    // parameter is $prepend, so no named-argument branch is needed.
+    spl_autoload_register($nppp_loader, true, true);
 }
