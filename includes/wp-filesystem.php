@@ -253,7 +253,7 @@ function nppp_delete_tree(string $path): bool {
         return true;
     }
     clearstatcache(true, $path);
-    return !file_exists($path);
+    return !is_link($path) && !file_exists($path);
 }
 
 // Purge cache with WP_Filesystem
