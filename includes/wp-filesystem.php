@@ -195,6 +195,67 @@ function nppp_validate_purge_path($directory_path) {
     return $real_path;
 }
 
+/**
+ * Symlink-safe recursive delete for the cache tree.
+ *
+ * WP_Filesystem_Direct::delete($path, true) recurses through dirlist(), which uses
+ * is_dir() and therefore FOLLOWS symlinks. A link planted anywhere inside the cache
+ * tree made the purge delete the link target's contents (outside the cache).
+ * This helper never follows links: a link is unlinked itself, its target is untouched.
+ *
+ * Tolerates concurrent removal (Nginx cache manager): a vanished path counts as deleted.
+ *
+ * Why raw PHP (is_link/scandir/unlink/rmdir) instead of WP_Filesystem or wp_delete_file():
+ * - WP_Filesystem has no symlink-aware primitive. Its recursive delete() lists children via
+ *   dirlist(), which types entries with is_dir() and therefore follows links. Core has tracked
+ *   this for years without changing it (Trac #15134, #34067, #36710), so the API cannot be used
+ *   to walk a tree that may contain planted links. The is_link() decision must be made on the
+ *   exact entry being removed, which the API cannot express.
+ * - wp_delete_file() runs the 'wp_delete_file' filter, which any plugin can use to rewrite or
+ *   veto the path, and it only returns a status since WP 6.7 (this plugin supports 6.5+).
+ *   A purge removes tens of thousands of entries; the safety of this routine depends on deleting
+ *   exactly the entry it was given and on reliable success reporting.
+ * Single known files elsewhere in the plugin still go through WP_Filesystem.
+ *
+ * @param string $path File, symlink or directory.
+ * @return bool True when $path no longer exists afterwards.
+ */
+function nppp_delete_tree(string $path): bool {
+    // Trailing slash would make is_link() resolve the link target. Never operate on "/".
+    $path = rtrim($path, '/');
+    if ($path === '') {
+        return false;
+    }
+
+    // Anything that is not a real directory (symlink to file/dir/dangling, regular file,
+    // FIFO, socket, or an already-vanished path) is removed as an entry, never followed.
+    if (is_link($path) || !is_dir($path)) {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Intentional, see nppp_delete_tree() docblock: wp_delete_file() applies a path filter and has no return value before WP 6.7.
+        if (@unlink($path)) {
+            return true;
+        }
+        clearstatcache(true, $path);
+        return !is_link($path) && !file_exists($path);
+    }
+
+    $entries = @scandir($path);
+    if ($entries !== false) {
+        foreach ($entries as $name) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            nppp_delete_tree($path . '/' . $name);
+        }
+    }
+
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Intentional, see nppp_delete_tree() docblock: WP_Filesystem has no symlink-safe recursive delete (Trac #36710).
+    if (@rmdir($path)) {
+        return true;
+    }
+    clearstatcache(true, $path);
+    return !file_exists($path);
+}
+
 // Purge cache with WP_Filesystem
 function nppp_wp_purge($directory_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -264,8 +325,8 @@ function nppp_wp_purge($directory_path) {
         return new WP_Error('empty_directory', __('Directory is empty', 'fastcgi-cache-purge-and-preload-nginx'));
     }
 
-    // Step 2: Purge cache. wp_filesystem->delete($path, true) handles
-    // recursion internally — we only need to iterate one level here.
+    // Step 2: Purge cache. nppp_delete_tree() handles recursion (symlink-safe),
+    // so we only need to iterate one level here.
     // SPL caches type info from the directory read so getPathname() costs nothing extra.
     try {
         $dir = new DirectoryIterator($directory_path);
@@ -280,13 +341,16 @@ function nppp_wp_purge($directory_path) {
             }
 
             $entry_path = $entry->getPathname();
-            $deleted = $wp_filesystem->delete($entry_path, true);
+
+            // nppp_delete_tree() instead of $wp_filesystem->delete($entry_path, true):
+            // core's recursive delete follows symlinks out of the cache tree.
+            $deleted = nppp_delete_tree($entry_path);
 
             if (!$deleted) {
                 // Re-check after failure, the cache may have been deleted by Nginx's
                 // cache manager or an external process between our detect and delete passes.
                 // Only surface permission_error if the target genuinely still exists.
-                if ($wp_filesystem->is_file($entry_path) || $wp_filesystem->is_dir($entry_path)) {
+                if (is_link($entry_path) || $wp_filesystem->is_file($entry_path) || $wp_filesystem->is_dir($entry_path)) {
                     return new WP_Error(
                         'permission_error',
                         /* translators: %s: file or directory path */
@@ -327,7 +391,10 @@ function nppp_wp_remove_directory($directory_path, $recursive = true) {
         }
 
         // Attempt to remove the directory
-        $result = $wp_filesystem->delete($directory_path, $recursive);
+        // Symlink-safe: WP_Filesystem_Direct::delete() would follow links out of the tree.
+        $result = $recursive
+            ? nppp_delete_tree($directory_path)
+            : $wp_filesystem->delete($directory_path, false);
 
         if ($result === false) {
             // Error occurred while removing directory
@@ -427,7 +494,9 @@ function nppp_check_permissions_recursive($path) {
         return false;
     }
 
-    $probe_path = rtrim( $probe_dir, '/' ) . '/.nppp_probe_' . getmypid();
+    // Unpredictable name: a pre-planted ".nppp_probe_<pid>" symlink in the cache tree
+    // would otherwise make put_contents() truncate and chmod its target.
+    $probe_path = rtrim( $probe_dir, '/' ) . '/.nppp_probe_' . getmypid() . '_' . wp_generate_password( 12, false );
 
     if ( $wp_filesystem->put_contents( $probe_path, '', FS_CHMOD_FILE ) ) {
         $probe_ok = $wp_filesystem->delete( $probe_path );
