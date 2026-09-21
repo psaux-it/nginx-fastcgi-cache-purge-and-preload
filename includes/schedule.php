@@ -341,12 +341,13 @@ function nppp_create_scheduled_event_preload_status_callback() {
     }
 
     // Prevent duplicate execution when both watchdog and cron tick fire simultaneously.
-    $completion_lock_key = 'nppp_preload_completion_lock_' . md5('nppp');
-    if (get_transient($completion_lock_key)) {
+    // Atomic WP_Upgrader-based lock (single INSERT IGNORE) — the previous
+    // get_transient()/set_transient() pair was a check-then-set and let both
+    // racing callers through.
+    if ( ! nppp_acquire_completion_lock() ) {
         // Another process is already handling post‑preload tasks.
         return;
     }
-    set_transient($completion_lock_key, 1, 30); // 30‑second lock
 
     // Process has finished.
     // If we just finished the desktop phase and mobile is enabled, start mobile now.
@@ -389,7 +390,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
             nppp_custom_error_log(
                 __( 'ERROR ENV: WP-Cron mobile preload skipped — shell_exec or exec is disabled on this server.', 'fastcgi-cache-purge-and-preload-nginx' )
             );
-            delete_transient($completion_lock_key);
+            nppp_release_completion_lock();
             return;
         }
 
@@ -403,7 +404,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
         // The lock was acquired above to prevent desktop's completion from running twice,
         // but it must not carry over into the mobile phase — mobile finishes independently
         // and needs its own uncontested completion run.
-        delete_transient($completion_lock_key);
+        nppp_release_completion_lock();
         return;
     }
 
@@ -569,6 +570,11 @@ function nppp_create_scheduled_event_preload_status_callback() {
         /* translators: %s: elapsed preload time */
         nppp_display_admin_notice('success', sprintf( __( 'SUCCESS: Nginx cache preload completed in %s.', 'fastcgi-cache-purge-and-preload-nginx' ), $elapsed_time_str ), true, false);
     }
+
+    // Completion finished: release the lock explicitly (the TTL is crash-safety only).
+    // Leaving the row behind would push the next completion onto WP core's non-atomic
+    // expired-lock takeover path (release_lock() + re-create — see purge-lock.php).
+    nppp_release_completion_lock();
 
     // Return control to WP-Cron so other due events can continue in this request.
     return;
