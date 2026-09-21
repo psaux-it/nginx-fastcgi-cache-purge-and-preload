@@ -35,7 +35,7 @@ if ( $nppp_auto_purge ) {
         }
     };
 
-    if ( did_action('init') ) {
+    if ( did_action('init') && ! doing_action('init') ) {
         // Bootstrap was loaded after init (e.g. via rest_pre_dispatch for
         // Application Password or WC consumer key requests). init has already
         // fired so add_action('init') would never run — register hooks directly.
@@ -43,7 +43,7 @@ if ( $nppp_auto_purge ) {
     } else {
         // Normal execution path — init has not fired yet.
         // Wait for init so get_post_types() returns all registered post types.
-        add_action('init', $nppp_register_rest_hooks, 20);
+        add_action('init', $nppp_register_rest_hooks, PHP_INT_MAX);
     }
 }
 
