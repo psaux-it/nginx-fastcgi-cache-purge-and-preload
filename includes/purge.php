@@ -1624,8 +1624,12 @@ function nppp_flush_auto_purge_queue() {
     // option in DB only after its loop completes, making is_plugin_active() accurate here.
     $nppp_npp_active = is_plugin_active( plugin_basename( NPPP_PLUGIN_FILE ) );
 
+    $nppp_preload_guard = static function ( $enabled ) {
+        return false;
+    };
+
     if ( ! $nppp_npp_active ) {
-        add_filter( 'nppp_purge_auto_preload', '__return_false', PHP_INT_MAX );
+        add_filter( 'nppp_purge_auto_preload', $nppp_preload_guard, PHP_INT_MAX );
     }
 
     try {
@@ -1641,7 +1645,7 @@ function nppp_flush_auto_purge_queue() {
         }
     } finally {
         if ( ! $nppp_npp_active ) {
-            remove_filter( 'nppp_purge_auto_preload', '__return_false', PHP_INT_MAX );
+            remove_filter( 'nppp_purge_auto_preload', $nppp_preload_guard, PHP_INT_MAX );
         }
     }
 }
