@@ -102,6 +102,47 @@ function nppp_release_purge_lock(): void {
     WP_Upgrader::release_lock( NPPP_PURGE_LOCK_NAME );
 }
 
+// Lock for post-preload completion (watchdog AJAX vs. WP-Cron tick race).
+if ( ! defined( 'NPPP_COMPLETION_LOCK_NAME' ) ) {
+    define( 'NPPP_COMPLETION_LOCK_NAME', 'nppp_preload_completion' );
+}
+
+/**
+ * Acquire the post-preload completion lock.
+ *
+ * Same atomic mechanism as the purge lock (single INSERT IGNORE into wp_options),
+ * so exactly one of the racing callers (watchdog AJAX vs. WP-Cron tick) wins.
+ * get_transient()/set_transient() is a check-then-set and lets both through.
+ *
+ * TTL is crash-safety only: the caller always releases explicitly via
+ * nppp_release_completion_lock() on every exit path, so 120s is pure headroom
+ * for a crashed PHP process (index rebuild on a large cache can run close to
+ * the old 30s default).
+ *
+ * @param int $ttl Seconds before a crashed holder's lock may be taken over.
+ * @return bool true = acquired, false = another process holds it.
+ */
+function nppp_acquire_completion_lock( int $ttl = 120 ): bool {
+    if ( ! class_exists( 'WP_Upgrader' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    }
+
+    return WP_Upgrader::create_lock( NPPP_COMPLETION_LOCK_NAME, $ttl );
+}
+
+/**
+ * Release the post-preload completion lock (no-op if not held).
+ *
+ * @return void
+ */
+function nppp_release_completion_lock(): void {
+    if ( ! class_exists( 'WP_Upgrader' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    }
+
+    WP_Upgrader::release_lock( NPPP_COMPLETION_LOCK_NAME );
+}
+
 /**
  * Returns true when any destructive cache operation is currently active.
  *
