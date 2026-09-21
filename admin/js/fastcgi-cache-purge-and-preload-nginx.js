@@ -442,6 +442,7 @@ $(document).ready(function() {
     let npppPollActive       = false;
     let npppPollTimer        = null;
     let npppPollRetries      = 0;
+    let npppPollGeneration   = 0;
     const NPPP_MAX_RETRIES   = 4;
     let snapshotMissingCount = 0;
 
@@ -467,6 +468,8 @@ $(document).ready(function() {
             return;
         }
 
+        const pollGeneration = npppPollGeneration;
+
         fetch(nppp_admin_data.wget_progress_api, {
             method: 'GET',
             credentials: 'same-origin',
@@ -479,6 +482,7 @@ $(document).ready(function() {
             return res.json();
         })
         .then(data => {
+            if (!npppPollActive || pollGeneration !== npppPollGeneration) return;
             npppPollRetries = 0;
             if (!data.log_found) {
                 const preloadSection = document.getElementById("nppp-preload-progress-section");
@@ -844,6 +848,7 @@ $(document).ready(function() {
             }
         })
         .catch(err => {
+            if (!npppPollActive || pollGeneration !== npppPollGeneration) return;
             console.error('Fetch preload progress failed:', err);
             if (npppPollRetries < NPPP_MAX_RETRIES) {
                 // Transient error — back off and retry rather than killing the poll.
@@ -867,6 +872,7 @@ $(document).ready(function() {
     }
 
     function npppStopWgetPolling(){
+        npppPollGeneration++;
         npppPollActive = false;
         if (npppPollTimer) clearTimeout(npppPollTimer);
         npppPollTimer = null;
