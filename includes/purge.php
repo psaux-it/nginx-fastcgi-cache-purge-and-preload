@@ -1599,6 +1599,86 @@ function nppp_purge_cache_on_term_delete( $term_id, $tt_id, $taxonomy ) {
 
 // Purge cache operation
 function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = false, $nppp_is_admin_bar = false, $nppp_is_auto_purge = false) {
+    // Coalesce automatic full purges triggered multiple times within the same
+    // request. WordPress core fires 'activated_plugin' / 'deactivated_plugin'
+    // once PER PLUGIN inside a foreach loop during bulk (de)activation.
+    // Each call is synchronous and independent; nothing existing (including
+    // the purge lock, which is released before this function even returns)
+    // deduplicates them. N plugins toggled in one bulk action previously
+    // produced N full purges and, with auto-preload on, N preload processes
+    // that killed each other in sequence.
+    //
+    // NOTE: bulk plugin/theme *updates* (upgrader_process_complete) are NOT
+    // affected by this — WP core already fires that hook exactly once per
+    // batch (class-wp-upgrader.php only calls do_action(...) when
+    // $options['is_multi'] is false; bulk_upgrade() sets is_multi=>true and
+    // fires the event itself, once, after its own foreach completes).
+    //
+    // Manual triggers (admin bar, REST endpoint, WP-CLI) pass
+    // $nppp_is_auto_purge = false and always run synchronously, unaffected.
+    static $nppp_pending_auto_purges = [];
+    static $nppp_shutdown_hooked     = false;
+    static $nppp_flushing_queue      = false;
+
+    if ( $nppp_is_auto_purge && ! is_multisite() && ! $nppp_flushing_queue ) {
+        // Keyed by cache path rather than assumed-single-path: every current
+        // auto-purge call site derives its args from the same site-wide
+        // 'nginx_cache_settings' option, so within one request these never
+        // actually differ today — keying just keeps this correct if that
+        // ever changes, at effectively zero cost.
+        $nppp_purge_key = rtrim( (string) $nginx_cache_path, '/\\' );
+
+        $nppp_pending_auto_purges[ $nppp_purge_key ] = [
+            $nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api, $nppp_is_admin_bar,
+        ];
+
+        if ( ! $nppp_shutdown_hooked ) {
+            $nppp_shutdown_hooked = true;
+
+            // Priority -1 is required: it must run BEFORE
+            // compat-cloudflare.php's own 'shutdown' flush (registered at
+            // priority 1), which checks whether a full purge already ran
+            // this request before deciding to send queued per-URL requests.
+            add_action( 'shutdown', static function () use (
+                &$nppp_pending_auto_purges, &$nppp_shutdown_hooked, &$nppp_flushing_queue
+            ) {
+                $jobs = $nppp_pending_auto_purges;
+                $nppp_pending_auto_purges = [];
+                $nppp_shutdown_hooked     = false;
+
+                if ( ! function_exists( 'is_plugin_active' ) ) {
+                    require_once ABSPATH . 'wp-admin/includes/plugin.php';
+                }
+
+                // If NPP itself was deactivated during this request (e.g.
+                // bulk-deactivated together with other plugins), the final
+                // purge still runs — deactivating NPP does not remove the
+                // existing Nginx cache — but no new preload is started for it.
+                $nppp_plugin_active = is_plugin_active( plugin_basename( NPPP_PLUGIN_FILE ) );
+                $preload_guard = static function ( $enabled ) use ( $nppp_plugin_active ) {
+                    return $enabled && $nppp_plugin_active;
+                };
+
+                add_filter( 'nppp_purge_auto_preload', $preload_guard, PHP_INT_MAX );
+
+                // Dedicated re-entry marker (not doing_action('shutdown')):
+                // scoped to exactly this queue-flush, so it can't misfire on
+                // unrelated shutdown-time calls elsewhere.
+                $nppp_flushing_queue = true;
+                try {
+                    foreach ( $jobs as $args ) {
+                        nppp_purge( $args[0], $args[1], $args[2], $args[3], $args[4], true );
+                    }
+                } finally {
+                    $nppp_flushing_queue = false;
+                    remove_filter( 'nppp_purge_auto_preload', $preload_guard, PHP_INT_MAX );
+                }
+            }, -1 );
+        }
+
+        return;
+    }
+
     if (function_exists('set_time_limit')) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
@@ -1622,6 +1702,11 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
     nppp_prepare_request_env(true);
 
     $auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
+
+    // Extension point: lets internal batching (bulk plugin activate/deactivate)
+    // suppress the automatic preload for one specific purge call without
+    // touching the persisted option. Value is unchanged by default.
+    $auto_preload = (bool) apply_filters( 'nppp_purge_auto_preload', $auto_preload, $nppp_is_auto_purge );
 
     // Prevent concurrent Purge All or single-page purge from another admin
     // session racing against this operation. Released via finally on all exits.
