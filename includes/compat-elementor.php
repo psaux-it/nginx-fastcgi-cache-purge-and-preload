@@ -18,9 +18,23 @@ function nppp__el_mark_purged( $set = null ) {
     return $did;
 }
 
+// Preserve the first pre-save status per post for this request.
+function nppp__el_initial_status( $post_id, $old_status = null ) {
+    static $statuses = [];
+
+    if ( $old_status !== null && ! isset( $statuses[ $post_id ] ) ) {
+        $statuses[ $post_id ] = $old_status;
+    }
+
+    return $statuses[ $post_id ] ?? null;
+}
+
 // Elementor-specific purge triggers.
 // Register directly so lazy bootstrap loading on init does not miss plugins_loaded timing.
 if ( defined('ELEMENTOR_VERSION') && $nppp_auto_purge ) {
+    add_action( 'transition_post_status', static function ( $new_status, $old_status, $post ) {
+        nppp__el_initial_status( $post->ID, $old_status );
+    }, 0, 3 );
     // When an Elementor document is saved
     add_action('elementor/editor/after_save', 'nppp__el_after_save', 10, 2);
     add_action('elementor/document/after_save', 'nppp__el_document_after_save', 10, 2);
@@ -72,6 +86,15 @@ function nppp__el_after_save( $post_id, $editor_data ) {
     // Skip internal Elementor library types with no cacheable frontend URL.
     $internal_types = [ 'kit', 'floating-buttons', 'section', 'container', 'page' ];
     if ( in_array( $tpl_type, $internal_types, true ) ) {
+        return;
+    }
+
+    // Skip first publication, matching the existing post auto-purge policy.
+    if ( in_array(
+        nppp__el_initial_status( $post_id ),
+        [ 'new', 'auto-draft', 'draft', 'pending' ],
+        true
+    ) ) {
         return;
     }
 
@@ -156,6 +179,15 @@ function nppp__el_document_after_save( $document, $data ) {
     // Skip internal Elementor documents that have no cacheable frontend URL.
     $internal_types = [ 'kit', 'floating-buttons', 'section', 'container', 'page' ];
     if ( in_array( $tpl_type, $internal_types, true ) ) {
+        return;
+    }
+
+    // Skip first publication, matching the existing post auto-purge policy.
+    if ( in_array(
+        nppp__el_initial_status( $post_id ),
+        [ 'new', 'auto-draft', 'draft', 'pending' ],
+        true
+    ) ) {
         return;
     }
 
