@@ -158,6 +158,7 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_url_filepath_index',                // URL→filepath index for single/related purge fast-path
         'nppp_ping_token_db',                     // Watchdog token DB fallback (nppp_watcher_generate_token)
         'nppp_cache_purge.lock',                  // Purge operation lock (WP_Upgrader)
+        'nppp_preload_completion.lock',           // Post-preload completion lock (WP_Upgrader)
         'nppp_vary_notice_dismissed',             // Vary: Accept-Encoding probe dismiss flag
         'nppp_cron_notice_dismissed',             // DISABLE_WP_CRON notice dismiss flag
         'nppp_f2b_token',                         // Fail2ban webhook bearer token
