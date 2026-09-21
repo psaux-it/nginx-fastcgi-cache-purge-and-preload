@@ -147,7 +147,15 @@ function nppp__rest_after_insert( $post, $request, $creating ) {
             ['draft', 'private', 'pending'],
             true
         );
-        if ( ! $being_unpublished ) return;
+        // Only invalidate an existing published page taken offline.
+        // Saving a new or existing draft is not an unpublish operation.
+        if (
+            ! $being_unpublished
+            || $creating
+            || nppp__gut_old_status( $post->ID ) !== 'publish'
+        ) {
+            return;
+        }
     }
 
     $cache_path = $opts['nginx_cache_path'] ?? '/dev/shm/change-me-now';
