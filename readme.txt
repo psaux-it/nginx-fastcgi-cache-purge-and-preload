@@ -281,7 +281,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 
 == Changelog ==
 
-= 2.1.8 (2026-09-08) =
+= 2.1.8 (2026-09-25) =
 
 * NEW: "Fail2Ban Dashboard" — a token-authenticated webhook turns fail2ban ban/unban events into a live jail activity dashboard with a "Repeat Offenders" panel and a "Top Attack Countries" map, plus an optional Abuse Reporter that emails the offending network's abuse desk using RDAP-resolved contacts.
 * Fixed: "Purge All" now terminates the preload watchdog before stopping the main preload process, closing a post-completion race window that could leave stale preload state behind.
@@ -297,8 +297,8 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Fixed: Suppressed automatic preloading when the plugin itself is deactivated during a bulk-deactivation request, while ensuring the initial cache flush still completes cleanly.
 * Fixed: Gutenberg draft saves, including those triggered by "Edit with Elementor", no longer cause unnecessary cache purges or target the homepage when the draft has no slug.
 * Fixed: First-time publishing through Elementor now skips single-page and related cache purges, matching the existing auto-purge policy while preserving purges for published content updates and global templates.
-* Fixed: Auto-purge listeners for CPTs failed to register during admin sessions, causing Gutenberg publish and deletion actions to skip cache purging.
-* Security: "Purge All" and the preload temp-directory cleanup no longer follow symbolic links inside the Nginx cache tree. Previously, a symlink planted in the cache directory could make a purge delete the contents of the link's target outside the cache. Links are now removed themselves and never traversed.
+* Fixed: Auto-purge listeners for CPTs failed to register during admin sessions, causing Gutenberg publish and deletion actions to skip cache purging. (Credit: @claude)
+* Security: "Purge All" and the preload temp-directory cleanup no longer follow symbolic links inside the Nginx cache tree. Previously, a symlink planted in the cache directory could make a purge delete the contents of the link's target outside the cache. Links are now removed themselves and never traversed. (Credit: @claude)
 * Security: Removed the option to atomic write directly to wp-config.php from the Setup page to enable "Assume Nginx Mode".
 * Performance: Merged redirect‑ and KEY‑line cache scans into a single ripgrep pass using -m 2 dual‑pattern matching, cutting directory‑walk cost in half on large caches. (Credit: @apoorva-01)
 * Improved: HTTP Purge timeouts no longer falsely arm the lockout, and the timeout is now configurable via the `nppp_http_purge_timeout` filter.
@@ -315,7 +315,8 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Added: WP-Cron Reliability check to the Status tab and WP-CLI status output to detect loopback failures or custom system cron setups that could delay post-preload status refreshes.
 * Added: Automatic fallback to enable the Preload Watchdog on fresh plugin activations when DISABLE_WP_CRON is active.
 * UI/UX: Preload All now redirects to the Status tab instead of Settings, taking users directly to the live preload progress section.
-* Tested: Confirmed compatibility with WordPress 7.1.1.
+* Updated: Confirmed compatibility with WordPress 7.1.2.
+* Tested: Tested with Nginx (1.31.5), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.6), ripgrep (15.2.0), wget (1.25.0) and aaPanel (8.0.6).
 
 = 2.1.7 (2026-06-08) =
 
