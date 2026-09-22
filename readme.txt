@@ -283,7 +283,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 
 = 2.1.8 (2026-09-25) =
 
-* NEW: "Fail2Ban Dashboard" — a token-authenticated webhook turns fail2ban ban/unban events into a live jail activity dashboard with a "Repeat Offenders" panel and a "Top Attack Countries" map, plus an optional Abuse Reporter that emails the offending network's abuse desk using RDAP-resolved contacts.
+* NEW: "Fail2Ban Dashboard" — a token-authenticated webhook turns fail2ban ban/unban events into a live jail activity dashboard with a "Repeat Offenders" panel and a "Top Attack Countries" map, plus an optional Abuse Reporter that emails the offending network's abuse desk using RIPEstat-resolved contacts.
 * Fixed: "Purge All" now terminates the preload watchdog before stopping the main preload process, closing a post-completion race window that could leave stale preload state behind.
 * Fixed: WP-CLI "preload --stop" no longer clears the preload pid when the underlying process termination fails (safexec), preventing broken preload state and subsequent workflow failures.
 * Fixed: WP-CLI "preload --stop" now performs complete preload state cleanup, including scheduled cron events, transients, and watchdog tokens.
@@ -314,6 +314,8 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Added: Nginx detection results to the Status Tab.
 * Added: WP-Cron Reliability check to the Status tab and WP-CLI status output to detect loopback failures or custom system cron setups that could delay post-preload status refreshes.
 * Added: Automatic fallback to enable the Preload Watchdog on fresh plugin activations when DISABLE_WP_CRON is active.
+* Added: Bundled jsVectorMap (themustafaomar/jsvectormap) to power the new Fail2Ban "Top Attack Countries" bubble map.
+* Added: Bundled flag-icons (lipis/flag-icons) for the country flag icons shown in the Fail2Ban dashboard's Live Feed, Repeat Offenders, and Top Attack Countries panels.
 * UI/UX: Preload All now redirects to the Status tab instead of Settings, taking users directly to the live preload progress section.
 * Updated: Confirmed compatibility with WordPress 7.1.2.
 * Tested: Tested with Nginx (1.31.5), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.6), ripgrep (15.2.0), wget (1.25.0) and aaPanel (8.0.6).
@@ -700,6 +702,9 @@ For the complete changelog, see
 
 == Upgrade Notice ==
 
+= 2.1.8 =
+New Fail2Ban dashboard ready! Enjoy.
+
 = 2.1.7 =
 Cache coverage release. Read Changelog for best results.
 
@@ -722,6 +727,8 @@ Important fixes for function/class/define/namespace/option names. Internationali
 
 This plugin is developed and maintained by Hasan CALISIR.
 
+Bundled libraries, all MIT licensed: DataTables (datatables.net), jQuery UI (jqueryui.com), Tempus Dominus (github.com/Eonasdan/tempus-dominus), Popper.js (popperjs.org), jsVectorMap (github.com/themustafaomar/jsvectormap), and flag-icons (github.com/lipis/flag-icons).
+
 == Privacy Policy ==
 
 Prior to version 2.1.5, NPP optionally collected basic anonymous usage data when users explicitly opted in. As of version 2.1.5, all data collection and the opt-in mechanism have been completely removed. NPP collects no data whatsoever.
@@ -734,9 +741,10 @@ The optional Fail2Ban dashboard uses one third-party service.
 
 Looks up network ownership (network name, country, ASN, abuse contact) for IP addresses that Fail2Ban reports as banned.
 
-* Data sent: the banned IP address, sent to RIPE NCC's whois and abuse-contact lookup endpoints.
-* When: from a background worker (or WP-Cron) after a ban event arrives and no cached result exists. Nothing is sent unless you configure Fail2Ban to push ban events to the plugin's webhook. Results are cached for up to 30 days.
-* Provider: RIPE NCC.
+* Data sent: The banned IP address, sent to RIPE NCC's whois and abuse-contact lookup endpoints.
+* When: From a background worker (or WP-Cron) after a ban event arrives and no cached result exists. Nothing is sent unless you configure Fail2Ban to push ban events to the plugin's webhook.
+* Provider:  RIPE NCC.
+* sourceapp: npp-wp-plugin-fail2ban-monitor
 
 The optional Abuse Reporter sends email to the abuse contact returned by that lookup, only when an administrator enables it and sends a report.
 
