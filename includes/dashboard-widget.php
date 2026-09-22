@@ -283,6 +283,11 @@ function nppp_dashboard_widget() {
     $setup_url   = admin_url('admin.php?page=' . ( $nppp_setup_loaded ? \NPPP\Setup::PAGE_SLUG : 'nppp-setup' ));
     $settings_url = admin_url('options-general.php?page=nginx_cache_settings');
 
+    // Fail2Ban Monitor — three states just like the Fail2Ban tab's Connection
+    // pill: no toggle to be "Disabled", so it's either receiving events
+    // (green) or still waiting on the first one (amber "waiting" state).
+    $f2b_configured = function_exists( 'nppp_f2b_has_any_events' ) && nppp_f2b_has_any_events();
+
     // Check if the preload process is running
     $is_preload_alive = nppp_check_preload_status_widget();
 
@@ -369,6 +374,12 @@ function nppp_dashboard_widget() {
             'label' => __('Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx'),
             'status' => isset($settings['nginx_cache_bypass_path_restriction']) && $settings['nginx_cache_bypass_path_restriction'] === 'yes' ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Disabled', 'fastcgi-cache-purge-and-preload-nginx'),
             'icon' => 'dashicons-shield-alt'
+        ],
+        'fail2ban' => [
+            'label'   => __('Fail2Ban Monitor', 'fastcgi-cache-purge-and-preload-nginx'),
+            'status'  => $f2b_configured ? __('Enabled', 'fastcgi-cache-purge-and-preload-nginx') : __('Waiting', 'fastcgi-cache-purge-and-preload-nginx'),
+            'icon'    => 'dashicons-shield',
+            'waiting' => ! $f2b_configured,
         ],
     ];
 
@@ -501,14 +512,21 @@ function nppp_dashboard_widget() {
                 $icon = $status_info['icon'];
 
                 // Determine the Dashicon and color based on status
-                // Three possible states: Enabled (green), Disabled (red), Unavailable (gray + lock)
+                // Four possible states: Enabled (green), Disabled (red),
+                // Unavailable (gray + lock), Waiting (amber + clock — set up
+                // but no activity observed yet, e.g. Fail2Ban before its
+                // first event).
                 $is_unavailable = ! empty($status_info['unavailable']);
+                $is_waiting     = ! empty($status_info['waiting']);
                 if ($is_unavailable) {
                     $status_icon  = 'dashicons-lock';
                     $status_color = '#999999';
                 } elseif ($status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) {
                     $status_icon  = 'dashicons-yes-alt';
                     $status_color = '#5cb85c';
+                } elseif ($is_waiting) {
+                    $status_icon  = 'dashicons-clock';
+                    $status_color = '#f0ad4e';
                 } else {
                     $status_icon  = 'dashicons-dismiss';
                     $status_color = '#d9534f';
