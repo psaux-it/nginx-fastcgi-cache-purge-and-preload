@@ -5871,6 +5871,7 @@ div.updated.notice-nppp p,
    card's plain disclosure list (setup steps, hardening) is unaffected. --- */
 #nppp-f2b-tab .nppp-f2b-card-options .nppp-f2b-hint-text {
     margin: 0 0 14px;
+    font-size: 13px;
 }
 
 #nppp-f2b-tab .nppp-f2b-opt-tabs {
