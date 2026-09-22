@@ -727,7 +727,7 @@ Important fixes for function/class/define/namespace/option names. Internationali
 
 This plugin is developed and maintained by Hasan CALISIR.
 
-Bundled libraries, all MIT licensed: DataTables (datatables.net), jQuery UI (jqueryui.com), Tempus Dominus (github.com/Eonasdan/tempus-dominus), Popper.js (popperjs.org), jsVectorMap (github.com/themustafaomar/jsvectormap), and flag-icons (github.com/lipis/flag-icons).
+Bundled libraries, all MIT licensed: DataTables (datatables.net), jQuery UI (jqueryui.com), Tempus Dominus (github.com/Eonasdan/tempus-dominus), Popper.js (github.com/popperjs/popper-core), jsVectorMap (github.com/themustafaomar/jsvectormap), and flag-icons (github.com/lipis/flag-icons).
 
 == Privacy Policy ==
 
