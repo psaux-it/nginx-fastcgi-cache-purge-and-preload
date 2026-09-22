@@ -273,6 +273,29 @@ add_filter( 'nppp_f2b_abuse_evidence_max', function( $max ) {
     return 30;
 } );
 PHP;
+
+    $nppp_opt_webhook_snippet = <<<'PHP'
+// NPP - Fail2Ban Monitor: webhook endpoint security.
+
+// Hard IP allow-list for the Fail2Ban webhook route (/nppp_f2b/v1/event).
+// Empty by default, which keeps container and sidecar setups working
+// where Fail2Ban is not on localhost. Harden a bare-metal install by
+// restricting to the loopback address(es) fail2ban actually runs on --
+// still requires a valid Bearer token from the Connection card above.
+// Default: [] (no allow-list)
+add_filter( 'nppp_f2b_trusted_ips', function( $ips ) {
+    return array( '127.0.0.1', '::1', 'FB_PUBLIC_IP', 'PROXY_IP' );
+} );
+
+// SSL verification for the "Test Connection" button's own loopback
+// request to this site's webhook endpoint. Defaults to WordPress core's
+// https_local_ssl_verify filter (false by default) -- relevant on hosts
+// using a self-signed or otherwise untrusted local certificate.
+// Default: false
+add_filter( 'nppp_f2b_selftest_sslverify', function( $verify ) {
+    return true;
+} );
+PHP;
     ?>
 
     <div class="nppp-f2b-card nppp-f2b-card-options">
@@ -300,6 +323,9 @@ PHP;
                 </button>
                 <button type="button" class="nppp-f2b-opt-tab" role="tab" aria-selected="false" aria-controls="nppp-f2b-opt-panel-abuse" data-opt-panel="nppp-f2b-opt-panel-abuse">
                     <?php esc_html_e( 'Abuse Reporter limits', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </button>
+                <button type="button" class="nppp-f2b-opt-tab" role="tab" aria-selected="false" aria-controls="nppp-f2b-opt-panel-webhook" data-opt-panel="nppp-f2b-opt-panel-webhook">
+                    <?php esc_html_e( 'Webhook security', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                 </button>
             </div>
 
@@ -347,6 +373,15 @@ PHP;
                     </p>
                     <div class="nppp-f2b-copy nppp-f2b-copy-block">
                         <textarea readonly rows="12" class="nppp-f2b-code" id="nppp-f2b-opt-abuse"><?php echo esc_textarea( $nppp_opt_abuse_snippet ); ?></textarea>
+                    </div>
+                </div>
+
+                <div class="nppp-f2b-opt-panel" id="nppp-f2b-opt-panel-webhook" role="tabpanel">
+                    <p class="nppp-f2b-note">
+                        <?php esc_html_e( 'Hardening for the fail2ban webhook endpoint itself -- an optional IP allow-list on top of the Bearer token, and SSL verification for the Test Connection button above.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </p>
+                    <div class="nppp-f2b-copy nppp-f2b-copy-block">
+                        <textarea readonly rows="19" class="nppp-f2b-code" id="nppp-f2b-opt-webhook"><?php echo esc_textarea( $nppp_opt_webhook_snippet ); ?></textarea>
                     </div>
                 </div>
 
