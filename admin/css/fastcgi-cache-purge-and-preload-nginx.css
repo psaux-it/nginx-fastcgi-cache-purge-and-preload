@@ -5865,6 +5865,76 @@ div.updated.notice-nppp p,
 
 #nppp-f2b-tab .nppp-f2b-note code { background: #fff; }
 
+/* --- Options card: a fixed row of category tabs that never reposition
+   on click, plus one shared content panel below that always spans the
+   full card width. Scoped to .nppp-f2b-card-options so the Connection
+   card's plain disclosure list (setup steps, hardening) is unaffected. --- */
+#nppp-f2b-tab .nppp-f2b-card-options .nppp-f2b-hint-text {
+    margin: 0 0 14px;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-tab {
+    flex: 1 1 180px;
+    padding: 10px 14px;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-top: 4px solid #337AB7;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .08);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #1d2327;
+    text-align: left;
+    cursor: pointer;
+    transition: box-shadow .15s ease, transform .15s ease, background .15s ease;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-tab:hover {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .12);
+    transform: translateY(-1px);
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-tab.is-active {
+    background: #f3f7fb;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .12);
+}
+
+/* Same accent palette as the Activity Overview stat cards
+   (.nppp-f2b-stat-ban / -unban / -jail), one color per category so the
+   five tabs are easy to tell apart at a glance. */
+#nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(1) { border-top-color: #337AB7; }
+#nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(2) { border-top-color: #5bc0de; }
+#nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(3) { border-top-color: #f8b334; }
+#nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(4) { border-top-color: #66b317; }
+#nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(5) { border-top-color: #ea1919; }
+
+#nppp-f2b-tab .nppp-f2b-opt-panels {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    padding: 16px;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-panel {
+    display: none;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-panel.is-active {
+    display: block;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-panel .nppp-f2b-note {
+    margin-top: 0;
+}
+
 /* --- Empty-state banner --- */
 #nppp-f2b-tab .nppp-f2b-banner {
     margin: 0 0 24px;
