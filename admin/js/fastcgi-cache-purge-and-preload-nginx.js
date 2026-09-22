@@ -1236,6 +1236,29 @@ $(document).ready(function() {
                 npppF2bToast(__('Copied to clipboard.', 'fastcgi-cache-purge-and-preload-nginx'), 'success');
             });
 
+        // Options card tabs
+        $securityPlaceholder.off('click', '.nppp-f2b-opt-tab')
+            .on('click', '.nppp-f2b-opt-tab', function(e) {
+                e.preventDefault();
+                const $tab = $(this);
+                const $tabs = $tab.closest('.nppp-f2b-opt-tabs').find('.nppp-f2b-opt-tab');
+                const $panelsWrap = $tab.closest('.nppp-f2b-card-body').find('.nppp-f2b-opt-panels');
+                const $panels = $panelsWrap.find('.nppp-f2b-opt-panel');
+                const wasActive = $tab.hasClass('is-active');
+
+                $tabs.removeClass('is-active').attr('aria-selected', 'false');
+                $panels.removeClass('is-active');
+
+                if (wasActive) {
+                    $panelsWrap.removeClass('is-open');
+                    return;
+                }
+
+                $tab.addClass('is-active').attr('aria-selected', 'true');
+                $('#' + $tab.data('opt-panel')).addClass('is-active');
+                $panelsWrap.addClass('is-open');
+            });
+
         // Refresh the whole panel
         $securityPlaceholder.off('click', '#nppp-f2b-refresh')
             .on('click', '#nppp-f2b-refresh', function(e) {
