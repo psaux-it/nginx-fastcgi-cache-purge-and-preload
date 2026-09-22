@@ -5917,10 +5917,15 @@ div.updated.notice-nppp p,
 #nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(5) { border-top-color: #ea1919; }
 
 #nppp-f2b-tab .nppp-f2b-opt-panels {
+    display: none;
     background: #fff;
     border: 1px solid #dcdcde;
     border-radius: 6px;
     padding: 16px;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-panels.is-open {
+    display: block;
 }
 
 #nppp-f2b-tab .nppp-f2b-opt-panel {
