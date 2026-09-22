@@ -314,8 +314,8 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Added: Nginx detection results to the Status Tab.
 * Added: WP-Cron Reliability check to the Status tab and WP-CLI status output to detect loopback failures or custom system cron setups that could delay post-preload status refreshes.
 * Added: Automatic fallback to enable the Preload Watchdog on fresh plugin activations when DISABLE_WP_CRON is active.
-* Added: Bundled jsVectorMap (themustafaomar/jsvectormap) to power the new Fail2Ban "Top Attack Countries" bubble map.
-* Added: Bundled flag-icons (lipis/flag-icons) for the country flag icons shown in the Fail2Ban dashboard's Live Feed, Repeat Offenders, and Top Attack Countries panels.
+* Added: Bundled jsVectorMap to power the new Fail2Ban "Top Attack Countries" bubble map.
+* Added: Bundled flag-icons for the country flag icons shown in the Fail2Ban dashboard's Live Feed, Repeat Offenders, and Top Attack Countries panels.
 * UI/UX: Preload All now redirects to the Status tab instead of Settings, taking users directly to the live preload progress section.
 * Updated: Confirmed compatibility with WordPress 7.1.2.
 * Tested: Tested with Nginx (1.31.5), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.6), ripgrep (15.2.0), wget (1.25.0) and aaPanel (8.0.6).
