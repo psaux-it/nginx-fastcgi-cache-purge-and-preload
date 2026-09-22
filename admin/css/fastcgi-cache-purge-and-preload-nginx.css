@@ -6184,6 +6184,8 @@ div.updated.notice-nppp p,
     font-family: Consolas, Menlo, monospace;
     font-size: 12px;
     line-height: 1.6;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 #nppp-f2b-tab .nppp-f2b-feed-empty { color: #bdbdbd; }
