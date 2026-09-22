@@ -161,19 +161,19 @@ PHP;
     $nppp_opt_rdap_snippet = <<<'PHP'
 // NPP - Fail2Ban Monitor: RIPEstat lookups (country / network / ASN / abuse contact).
 
-// How long a successful RDAP profile is cached per IP, in seconds.
+// How long a successful RIPEstat profile is cached per IP, in seconds.
 // Default: 30 days
 add_filter( 'nppp_f2b_rdap_cache_ttl', function( $ttl ) {
     return 60 * DAY_IN_SECONDS;
 } );
 
-// How long a failed/empty RDAP lookup is cached before the worker retries it.
+// How long a failed/empty RIPEstat lookup is cached before the worker retries it.
 // Default: 5 minutes
 add_filter( 'nppp_f2b_rdap_negative_cache_ttl', function( $ttl ) {
     return 10 * MINUTE_IN_SECONDS;
 } );
 
-// HTTP timeout, in seconds, for each outgoing RDAP request.
+// HTTP timeout, in seconds, for each outgoing RIPEstat request.
 // Default: 3
 add_filter( 'nppp_f2b_rdap_timeout', function( $seconds ) {
     return 5;
@@ -191,7 +191,7 @@ add_filter( 'nppp_f2b_rdap_retry_gap', function( $seconds ) {
     return 180;
 } );
 
-// The "sourceapp" identifier sent with every RDAP request (RIPE convention).
+// The "sourceapp" identifier sent with every RIPEstat request (RIPE convention).
 // Default: npp-wp-plugin-fail2ban-monitor
 add_filter( 'nppp_f2b_rdap_sourceapp', function( $sourceapp ) {
     return 'my-site-fail2ban-monitor';
@@ -199,9 +199,9 @@ add_filter( 'nppp_f2b_rdap_sourceapp', function( $sourceapp ) {
 PHP;
 
     $nppp_opt_worker_snippet = <<<'PHP'
-// NPP - Fail2Ban Monitor: background RDAP worker & cron fallback.
+// NPP - Fail2Ban Monitor: background RIPEstat worker & cron fallback.
 
-// Disable the CLI worker entirely and force all RDAP enrichment through
+// Disable the CLI worker entirely and force all RIPEstat enrichment through
 // the small inline cron batch instead. Default: true (worker enabled)
 add_filter( 'nppp_f2b_enable_cli_worker', '__return_false' );
 
@@ -224,7 +224,7 @@ add_filter( 'nppp_f2b_cron_inline_batch', function( $limit ) {
 } );
 
 // Consecutive failed RDAP batches before the worker stops early, assuming
-// an upstream RDAP outage rather than burning its full runtime. Default: 3
+// an upstream RIPEstat outage rather than burning its full runtime. Default: 3
 add_filter( 'nppp_f2b_consecutive_batch_fail_limit', function( $limit ) {
     return 5;
 } );
@@ -282,7 +282,7 @@ PHP;
         <div class="nppp-f2b-card-body">
 
             <p class="nppp-f2b-hint-text">
-                <?php esc_html_e( 'Every value below has a sane default and needs no action. They are plain WordPress filters, not settings stored by this plugin -- add the ones you want to change to your child theme\'s functions.php (or a site-specific mu-plugin) and reload the page; there is nothing to save here.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                <?php esc_html_e( 'Every value below has a sane default and needs no action. They are plain WordPress filters, not settings stored by this plugin -- add the ones you want to change to your child theme\'s functions.php and reload the page; there is nothing to save here.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
             </p>
 
             <div class="nppp-f2b-opt-tabs" role="tablist">
