@@ -5916,6 +5916,7 @@ div.updated.notice-nppp p,
 #nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(3) { border-top-color: #f8b334; }
 #nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(4) { border-top-color: #66b317; }
 #nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(5) { border-top-color: #ea1919; }
+#nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(6) { border-top-color: #6b5ecd; }
 
 #nppp-f2b-tab .nppp-f2b-opt-panels {
     display: none;
