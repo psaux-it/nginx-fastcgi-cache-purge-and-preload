@@ -159,7 +159,7 @@ add_filter( 'nppp_f2b_map_countries_n', function( $n ) {
 PHP;
 
     $nppp_opt_rdap_snippet = <<<'PHP'
-// NPP - Fail2Ban Monitor: RDAP lookups (country / network / ASN / abuse contact).
+// NPP - Fail2Ban Monitor: RIPEstat lookups (country / network / ASN / abuse contact).
 
 // How long a successful RDAP profile is cached per IP, in seconds.
 // Default: 30 days
@@ -290,7 +290,7 @@ PHP;
                     <?php esc_html_e( 'Data retention & list sizes', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                 </button>
                 <button type="button" class="nppp-f2b-opt-tab" role="tab" aria-selected="false" aria-controls="nppp-f2b-opt-panel-rdap" data-opt-panel="nppp-f2b-opt-panel-rdap">
-                    <?php esc_html_e( 'RDAP lookups', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    <?php esc_html_e( 'RIPEstat Lookups', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                 </button>
                 <button type="button" class="nppp-f2b-opt-tab" role="tab" aria-selected="false" aria-controls="nppp-f2b-opt-panel-worker" data-opt-panel="nppp-f2b-opt-panel-worker">
                     <?php esc_html_e( 'Background worker & cron fallback', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
@@ -316,7 +316,7 @@ PHP;
 
                 <div class="nppp-f2b-opt-panel" id="nppp-f2b-opt-panel-rdap" role="tabpanel">
                     <p class="nppp-f2b-note">
-                        <?php esc_html_e( 'Caching, timeout, and retry behaviour for the per-IP RDAP lookups that resolve country, network, ASN, and abuse contact.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        <?php esc_html_e( 'Caching, timeout, and retry behaviour for the per-IP RIPEstat lookups that resolve country, network, ASN, and abuse contact.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     </p>
                     <div class="nppp-f2b-copy nppp-f2b-copy-block">
                         <textarea readonly rows="24" class="nppp-f2b-code" id="nppp-f2b-opt-rdap"><?php echo esc_textarea( $nppp_opt_rdap_snippet ); ?></textarea>
