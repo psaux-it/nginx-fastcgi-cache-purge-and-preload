@@ -884,8 +884,9 @@ PHP;
                         );
                     ?>"
                 ></div>
+                <div id="nppp-f2b-world-map-legend" class="nppp-f2b-geo-legend" aria-hidden="true"></div>
                 <p class="nppp-f2b-geo-hint">
-                    <?php esc_html_e( 'Bubble size and color reflect ban volume. Drag to pan, use the +/- buttons to zoom, hover a bubble for the exact count.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    <?php esc_html_e( 'Bubble size and color reflect ban volume — the hottest countries pulse. Drag to pan, use the +/- buttons to zoom, hover a bubble for the exact count.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                 </p>
             </div>
         </div>
