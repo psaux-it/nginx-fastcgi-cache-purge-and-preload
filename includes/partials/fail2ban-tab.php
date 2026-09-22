@@ -122,6 +122,238 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
         </div>
     </div>
 
+    <?php
+    // Static, non-dynamic reference snippets for the Options card below.
+    $nppp_opt_retention_snippet = <<<'PHP'
+// NPP - Fail2Ban Monitor: data retention & list sizes.
+
+// Days an event stays in the database before the cleanup cron purges it.
+// Default: 90
+add_filter( 'nppp_f2b_retention_days', function( $days ) {
+    return 180;
+} );
+
+// Hard ceiling on rows ever pulled into the Live Feed table.
+// Default: 5000
+add_filter( 'nppp_f2b_feed_hard_cap', function( $cap ) {
+    return 10000;
+} );
+
+// How many IPs are listed in "Repeat Offenders".
+// Default: 5
+add_filter( 'nppp_f2b_recidive_top_n', function( $n ) {
+    return 10;
+} );
+
+// How many countries are listed in "Top Attack Countries".
+// Default: 8
+add_filter( 'nppp_f2b_top_countries_n', function( $n ) {
+    return 12;
+} );
+
+// How many countries are plotted on the Top Attack Countries bubble map.
+// Default: 300
+add_filter( 'nppp_f2b_map_countries_n', function( $n ) {
+    return 500;
+} );
+PHP;
+
+    $nppp_opt_rdap_snippet = <<<'PHP'
+// NPP - Fail2Ban Monitor: RDAP lookups (country / network / ASN / abuse contact).
+
+// How long a successful RDAP profile is cached per IP, in seconds.
+// Default: 30 days
+add_filter( 'nppp_f2b_rdap_cache_ttl', function( $ttl ) {
+    return 60 * DAY_IN_SECONDS;
+} );
+
+// How long a failed/empty RDAP lookup is cached before the worker retries it.
+// Default: 5 minutes
+add_filter( 'nppp_f2b_rdap_negative_cache_ttl', function( $ttl ) {
+    return 10 * MINUTE_IN_SECONDS;
+} );
+
+// HTTP timeout, in seconds, for each outgoing RDAP request.
+// Default: 3
+add_filter( 'nppp_f2b_rdap_timeout', function( $seconds ) {
+    return 5;
+} );
+
+// Max retry attempts per IP before the worker gives up on that lookup.
+// Default: 3
+add_filter( 'nppp_f2b_rdap_max_attempts', function( $attempts ) {
+    return 5;
+} );
+
+// Minimum spacing, in seconds, enforced between retry attempts for the same IP.
+// Default: 120
+add_filter( 'nppp_f2b_rdap_retry_gap', function( $seconds ) {
+    return 180;
+} );
+
+// The "sourceapp" identifier sent with every RDAP request (RIPE convention).
+// Default: npp-wp-plugin-fail2ban-monitor
+add_filter( 'nppp_f2b_rdap_sourceapp', function( $sourceapp ) {
+    return 'my-site-fail2ban-monitor';
+} );
+PHP;
+
+    $nppp_opt_worker_snippet = <<<'PHP'
+// NPP - Fail2Ban Monitor: background RDAP worker & cron fallback.
+
+// Disable the CLI worker entirely and force all RDAP enrichment through
+// the small inline cron batch instead. Default: true (worker enabled)
+add_filter( 'nppp_f2b_enable_cli_worker', '__return_false' );
+
+// IPs processed per CLI worker batch.
+// Default: 4
+add_filter( 'nppp_f2b_worker_batch', function( $batch ) {
+    return 8;
+} );
+
+// Max seconds the CLI worker keeps running before exiting cleanly.
+// Default: 600
+add_filter( 'nppp_f2b_worker_max_runtime', function( $seconds ) {
+    return 300;
+} );
+
+// IPs processed inline per WP-Cron tick -- only used when shell_exec()
+// is unavailable on this host. Default: 3
+add_filter( 'nppp_f2b_cron_inline_batch', function( $limit ) {
+    return 5;
+} );
+
+// Consecutive failed RDAP batches before the worker stops early, assuming
+// an upstream RDAP outage rather than burning its full runtime. Default: 3
+add_filter( 'nppp_f2b_consecutive_batch_fail_limit', function( $limit ) {
+    return 5;
+} );
+
+// Thresholds that trigger a "queue is backing up" WARNING log entry:
+// pending IPs, then oldest pending age in seconds. Defaults: 100 / 10 minutes
+add_filter( 'nppp_f2b_backlog_warn_ips', function( $ips ) {
+    return 200;
+} );
+add_filter( 'nppp_f2b_backlog_warn_age', function( $seconds ) {
+    return 20 * MINUTE_IN_SECONDS;
+} );
+PHP;
+
+    $nppp_opt_nginx_snippet = <<<'PHP'
+// NPP - Fail2Ban Monitor: values used by the auto-generated Nginx
+// rate-limit snippet under "Optional hardening" above. Changing these
+// regenerates the snippet text on next page load -- you still need to
+// re-copy it into Nginx and reload.
+
+// Request rate passed to Nginx's limit_req_zone.
+// Default: 5r/s
+add_filter( 'nppp_f2b_nginx_rl_rate', function( $rate ) {
+    return '10r/s';
+} );
+
+// Burst allowance passed to Nginx's limit_req.
+// Default: 30
+add_filter( 'nppp_f2b_nginx_rl_burst', function( $burst ) {
+    return 50;
+} );
+PHP;
+
+    $nppp_opt_abuse_snippet = <<<'PHP'
+// NPP - Fail2Ban Monitor: Abuse Reporter limits.
+
+// Max abuse reports this site will send in a rolling hour, across all IPs.
+// Default: 20
+add_filter( 'nppp_f2b_abuse_hourly_max', function( $max ) {
+    return 40;
+} );
+
+// Max recent ban events attached as evidence lines to a single report.
+// Default: 20
+add_filter( 'nppp_f2b_abuse_evidence_max', function( $max ) {
+    return 30;
+} );
+PHP;
+    ?>
+
+    <div class="nppp-f2b-card nppp-f2b-card-options">
+        <div class="nppp-f2b-card-titlebar">
+            <h3 class="nppp-f2b-card-title"><?php esc_html_e( 'Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
+        </div>
+        <div class="nppp-f2b-card-body">
+
+            <p class="nppp-f2b-hint-text">
+                <?php esc_html_e( 'Every value below has a sane default and needs no action. They are plain WordPress filters, not settings stored by this plugin -- add the ones you want to change to your child theme\'s functions.php (or a site-specific mu-plugin) and reload the page; there is nothing to save here.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            </p>
+
+            <div class="nppp-f2b-opt-tabs" role="tablist">
+                <button type="button" class="nppp-f2b-opt-tab is-active" role="tab" aria-selected="true" aria-controls="nppp-f2b-opt-panel-retention" data-opt-panel="nppp-f2b-opt-panel-retention">
+                    <?php esc_html_e( 'Data retention & list sizes', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </button>
+                <button type="button" class="nppp-f2b-opt-tab" role="tab" aria-selected="false" aria-controls="nppp-f2b-opt-panel-rdap" data-opt-panel="nppp-f2b-opt-panel-rdap">
+                    <?php esc_html_e( 'RDAP lookups', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </button>
+                <button type="button" class="nppp-f2b-opt-tab" role="tab" aria-selected="false" aria-controls="nppp-f2b-opt-panel-worker" data-opt-panel="nppp-f2b-opt-panel-worker">
+                    <?php esc_html_e( 'Background worker & cron fallback', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </button>
+                <button type="button" class="nppp-f2b-opt-tab" role="tab" aria-selected="false" aria-controls="nppp-f2b-opt-panel-nginx" data-opt-panel="nppp-f2b-opt-panel-nginx">
+                    <?php esc_html_e( 'Nginx rate-limit snippet values', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </button>
+                <button type="button" class="nppp-f2b-opt-tab" role="tab" aria-selected="false" aria-controls="nppp-f2b-opt-panel-abuse" data-opt-panel="nppp-f2b-opt-panel-abuse">
+                    <?php esc_html_e( 'Abuse Reporter limits', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </button>
+            </div>
+
+            <div class="nppp-f2b-opt-panels">
+
+                <div class="nppp-f2b-opt-panel is-active" id="nppp-f2b-opt-panel-retention" role="tabpanel">
+                    <p class="nppp-f2b-note">
+                        <?php esc_html_e( 'How long events are kept, and how many rows the Live Feed, Repeat Offenders, Top Attack Countries list, and bubble map each show.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </p>
+                    <div class="nppp-f2b-copy nppp-f2b-copy-block">
+                        <textarea readonly rows="21" class="nppp-f2b-code" id="nppp-f2b-opt-retention"><?php echo esc_textarea( $nppp_opt_retention_snippet ); ?></textarea>
+                    </div>
+                </div>
+
+                <div class="nppp-f2b-opt-panel" id="nppp-f2b-opt-panel-rdap" role="tabpanel">
+                    <p class="nppp-f2b-note">
+                        <?php esc_html_e( 'Caching, timeout, and retry behaviour for the per-IP RDAP lookups that resolve country, network, ASN, and abuse contact.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </p>
+                    <div class="nppp-f2b-copy nppp-f2b-copy-block">
+                        <textarea readonly rows="24" class="nppp-f2b-code" id="nppp-f2b-opt-rdap"><?php echo esc_textarea( $nppp_opt_rdap_snippet ); ?></textarea>
+                    </div>
+                </div>
+
+                <div class="nppp-f2b-opt-panel" id="nppp-f2b-opt-panel-worker" role="tabpanel">
+                    <p class="nppp-f2b-note">
+                        <?php esc_html_e( 'Batch sizes, runtime caps, and backlog warning thresholds for the CLI worker that enriches events in the background, and its inline cron fallback for hosts without shell_exec().', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </p>
+                    <div class="nppp-f2b-copy nppp-f2b-copy-block">
+                        <textarea readonly rows="27" class="nppp-f2b-code" id="nppp-f2b-opt-worker"><?php echo esc_textarea( $nppp_opt_worker_snippet ); ?></textarea>
+                    </div>
+                </div>
+
+                <div class="nppp-f2b-opt-panel" id="nppp-f2b-opt-panel-nginx" role="tabpanel">
+                    <p class="nppp-f2b-note">
+                        <?php esc_html_e( 'Feeds the auto-generated Nginx snippet in "Optional hardening" above -- change these, then re-copy the regenerated snippet into Nginx.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </p>
+                    <div class="nppp-f2b-copy nppp-f2b-copy-block">
+                        <textarea readonly rows="13" class="nppp-f2b-code" id="nppp-f2b-opt-nginx"><?php echo esc_textarea( $nppp_opt_nginx_snippet ); ?></textarea>
+                    </div>
+                </div>
+
+                <div class="nppp-f2b-opt-panel" id="nppp-f2b-opt-panel-abuse" role="tabpanel">
+                    <p class="nppp-f2b-note">
+                        <?php esc_html_e( 'Caps that apply on top of the Abuse Reporter settings below, regardless of what is configured there.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </p>
+                    <div class="nppp-f2b-copy nppp-f2b-copy-block">
+                        <textarea readonly rows="12" class="nppp-f2b-code" id="nppp-f2b-opt-abuse"><?php echo esc_textarea( $nppp_opt_abuse_snippet ); ?></textarea>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
     <div class="nppp-f2b-card nppp-f2b-card-abuse">
         <div class="nppp-f2b-card-titlebar">
             <h3 class="nppp-f2b-card-title"><?php esc_html_e( 'Abuse Reporter', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
