@@ -1,7 +1,9 @@
 /**
  * Top Attack Countries — world bubble map for Nginx Cache Purge Preload
  * Description: Renders bubble markers on the jsVectorMap "world" map, sized
- *              and colored by ban count, for the Fail2Ban Security tab.
+ *              and colored by ban count, for the Fail2Ban Security tab. Dark
+ *              "threat radar" theme, pulsing rings on the hottest countries,
+ *              and a severity legend to match the console-style Live Feed.
  * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
@@ -142,6 +144,13 @@
     var MIN_RADIUS = 6;
     var MAX_RADIUS = 22;
 
+    // A country only earns a pulsing "hot" ring if it is both a top-3
+    // offender AND meaningfully ahead of the pack — avoids animating
+    // every bubble when ban counts are all roughly the same (near-empty
+    // or evenly-distributed data would otherwise pulse everything).
+    var HOT_MAX_COUNT = 3;
+    var HOT_MIN_RATIO = 0.4;
+
     // Perceptual (square-root) area scale — a 10x count difference should
     // not look 10x scarier on screen than it actually is.
     function nppp_f2b_radius_for(count, maxCount) {
@@ -166,9 +175,121 @@
 
     var nppp_f2b_map_instance = null;
 
+    // Pulse rings currently on screen, paired with the real marker <circle>
+    // they must stay glued to. Populated by nppp_f2b_add_pulse_ring(),
+    // drained by nppp_f2b_stop_pulse_sync().
+    var nppp_f2b_pulse_rings = [];
+    var nppp_f2b_pulse_raf = null;
+
+    // Adds a non-interactive "radar ping" ring behind a marker circle.
+    // jsVectorMap renders each marker as <circle class="jvm-element
+    // jvm-marker" data-index="N">, so the ring is a plain attribute clone
+    // (same cx/cy/r/fill) with its own CSS animation class — the original
+    // marker (and its hover/tooltip behavior) is left completely untouched.
+    function nppp_f2b_add_pulse_ring(container, index, color) {
+        var marker = container.querySelector('circle.jvm-marker[data-index="' + index + '"]');
+        if (!marker || !marker.parentNode) {
+            return;
+        }
+
+        var ring = marker.cloneNode(false);
+        ring.removeAttribute('data-index');
+        ring.removeAttribute('style');
+        ring.setAttribute('class', 'nppp-f2b-pulse-ring');
+        ring.setAttribute('fill', color);
+        ring.setAttribute('stroke', 'none');
+        ring.setAttribute('pointer-events', 'none');
+        ring.setAttribute('aria-hidden', 'true');
+
+        // Behind the real marker so the pulse never intercepts hover/click.
+        marker.parentNode.insertBefore(ring, marker);
+        nppp_f2b_pulse_rings.push({ ring: ring, marker: marker });
+    }
+
+    // Keeps every pulse ring glued to its marker's live on-screen position.
+    //
+    // jsVectorMap does NOT move markers via an SVG group transform (the
+    // markers group is a sibling of the transformed regions group, not a
+    // child of it) — it repositions each marker by rewriting that single
+    // <circle>'s cx/cy attributes directly, on every zoom AND drag tick.
+    // Zooming emits a public `onViewportChange` event, but dragging calls
+    // the internal repositioning path directly and emits nothing.
+    //
+    // Rather than depend on that internal, version-fragile mechanism, we
+    // just copy the real marker's own current cx/cy onto the ring every
+    // animation frame. Whatever moved the marker — click-zoom, scroll-zoom,
+    // an animated zoom transition, or a drag — the marker's attributes are
+    // always the source of truth, so the ring can never fall out of sync.
+    function nppp_f2b_sync_pulse_rings() {
+        for (var i = 0; i < nppp_f2b_pulse_rings.length; i++) {
+            var pair = nppp_f2b_pulse_rings[i];
+            var cx = pair.marker.getAttribute('cx');
+            var cy = pair.marker.getAttribute('cy');
+            if (cx !== null) {
+                pair.ring.setAttribute('cx', cx);
+            }
+            if (cy !== null) {
+                pair.ring.setAttribute('cy', cy);
+            }
+        }
+        nppp_f2b_pulse_raf = window.requestAnimationFrame(nppp_f2b_sync_pulse_rings);
+    }
+
+    function nppp_f2b_start_pulse_sync() {
+        if (nppp_f2b_pulse_raf === null && nppp_f2b_pulse_rings.length) {
+            nppp_f2b_sync_pulse_rings();
+        }
+    }
+
+    function nppp_f2b_stop_pulse_sync() {
+        if (nppp_f2b_pulse_raf !== null) {
+            window.cancelAnimationFrame(nppp_f2b_pulse_raf);
+            nppp_f2b_pulse_raf = null;
+        }
+        nppp_f2b_pulse_rings = [];
+    }
+
+    // Builds the compact severity legend shown under the map. Pure DOM
+    // construction (no innerHTML with interpolated data) — the only
+    // dynamic values are integers formatted with toLocaleString().
+    function nppp_f2b_render_legend(legendEl, minCount, maxCount) {
+        legendEl.innerHTML = '';
+
+        if (maxCount <= 0) {
+            return;
+        }
+
+        var i18n = window.nppp_f2b_map_i18n || {};
+        var fewerLabel = i18n.fewerLabel || 'Fewer bans';
+        var moreLabel = i18n.moreLabel || 'More bans';
+
+        var wrap = document.createElement('div');
+        wrap.className = 'nppp-f2b-geo-legend-inner';
+
+        var minLabel = document.createElement('span');
+        minLabel.className = 'nppp-f2b-geo-legend-label';
+        minLabel.textContent = fewerLabel + ' (' + minCount.toLocaleString() + ')';
+
+        var bar = document.createElement('span');
+        bar.className = 'nppp-f2b-geo-legend-bar';
+
+        var maxLabel = document.createElement('span');
+        maxLabel.className = 'nppp-f2b-geo-legend-label';
+        maxLabel.textContent = moreLabel + ' (' + maxCount.toLocaleString() + ')';
+
+        wrap.appendChild(minLabel);
+        wrap.appendChild(bar);
+        wrap.appendChild(maxLabel);
+        legendEl.appendChild(wrap);
+    }
+
     /**
      * @param {string} containerSelector  CSS selector for the map container.
-     * @param {Array}  data               [{ code: 'US', count: 42 }, ...]
+     * @param {Array}  data               [{ code: 'US', count: 42 }, ...],
+     *                                    expected pre-sorted by count DESC
+     *                                    (the PHP query already orders this
+     *                                    way; the hot-ring logic below
+     *                                    relies on that order).
      */
     window.nppp_f2b_init_country_map = function (containerSelector, data) {
         var container = document.querySelector(containerSelector);
@@ -184,44 +305,68 @@
             } catch (e) { /* no-op: container is about to be wiped anyway */ }
             nppp_f2b_map_instance = null;
         }
+        nppp_f2b_stop_pulse_sync();
         container.innerHTML = '';
+
+        var legendEl = document.querySelector('#nppp-f2b-world-map-legend');
+        if (legendEl) {
+            legendEl.innerHTML = '';
+        }
 
         if (!data || !data.length) {
             return;
         }
 
         var maxCount = 0;
+        var minCount = null;
         for (var i = 0; i < data.length; i++) {
             if (data[i].count > maxCount) {
                 maxCount = data[i].count;
             }
+            if (minCount === null || data[i].count < minCount) {
+                minCount = data[i].count;
+            }
         }
 
         var markers = [];
+        // Marker index -> color, for countries that qualify for a pulse
+        // ring. Built while iterating so it stays in sync with whatever
+        // rows actually resolve to a plotted marker (missing geo codes
+        // are skipped, same as before).
+        var hotMarkers = [];
+
         for (var j = 0; j < data.length; j++) {
             var row = data[j];
             var geo = NPPP_F2B_GEO[row.code];
             if (!geo) {
                 continue;
             }
+
+            var color = nppp_f2b_color_for(row.count, maxCount);
+            var markerIndex = markers.length;
+
             markers.push({
                 name: geo[2] + ' \u2014 ' + row.count.toLocaleString() + ' ' + (window.nppp_f2b_map_i18n && window.nppp_f2b_map_i18n.bansLabel ? window.nppp_f2b_map_i18n.bansLabel : 'bans'),
                 coords: [geo[0], geo[1]],
                 style: {
                     initial: {
                         r: nppp_f2b_radius_for(row.count, maxCount),
-                        fill: nppp_f2b_color_for(row.count, maxCount),
-                        'fill-opacity': 0.72,
+                        fill: color,
+                        'fill-opacity': 0.85,
                         stroke: '#fff',
                         'stroke-width': 1,
                         'stroke-opacity': 0.9
                     },
                     hover: {
-                        'fill-opacity': 0.95,
+                        'fill-opacity': 1,
                         cursor: 'pointer'
                     }
                 }
             });
+
+            if (hotMarkers.length < HOT_MAX_COUNT && maxCount > 0 && (row.count / maxCount) >= HOT_MIN_RATIO) {
+                hotMarkers.push({ index: markerIndex, color: color });
+            }
         }
 
         nppp_f2b_map_instance = new window.jsVectorMap({
@@ -232,13 +377,32 @@
             draggable: true,
             backgroundColor: 'transparent',
             regionStyle: {
-                initial: { fill: '#e4e9ef', stroke: '#c9d2dc', 'stroke-width': 0.5 },
-                hover: { fill: '#d3ddea', cursor: 'default' }
+                initial: {
+                    fill: '#1c2e44',
+                    stroke: '#4d7295',
+                    'stroke-width': 0.75,
+                    'stroke-opacity': 0.9
+                },
+                hover: {
+                    fill: '#2d4a68',
+                    stroke: '#6fa0c9',
+                    cursor: 'default'
+                }
             },
             markersSelectable: false,
             markers: markers,
-            showTooltip: true
+            showTooltip: true,
+            onLoaded: function () {
+                for (var k = 0; k < hotMarkers.length; k++) {
+                    nppp_f2b_add_pulse_ring(container, hotMarkers[k].index, hotMarkers[k].color);
+                }
+                nppp_f2b_start_pulse_sync();
+            }
         });
+
+        if (legendEl) {
+            nppp_f2b_render_legend(legendEl, minCount, maxCount);
+        }
     };
 
     // Destroy hook exposed for the admin JS teardown path (tab switch away).
@@ -248,6 +412,12 @@
                 nppp_f2b_map_instance.destroy();
             } catch (e) { /* no-op */ }
             nppp_f2b_map_instance = null;
+        }
+        nppp_f2b_stop_pulse_sync();
+
+        var legendEl = document.querySelector('#nppp-f2b-world-map-legend');
+        if (legendEl) {
+            legendEl.innerHTML = '';
         }
     };
 })(window, document);
