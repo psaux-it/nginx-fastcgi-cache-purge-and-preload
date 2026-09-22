@@ -6378,13 +6378,19 @@ div.updated.notice-nppp p,
     min-width: 0;
 }
 
+/* Dark "threat radar" background */
 #nppp-f2b-tab .nppp-f2b-world-map {
     width: 100%;
     height: 380px;
-    background: #f6f7f7;
-    border: 1px solid #dcdcde;
+    position: relative;
+    background-color: #0b1420;
+    background-image:
+        radial-gradient(ellipse at 30% 20%, rgba(51, 122, 183, .18), transparent 60%),
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, .035) 0, rgba(255, 255, 255, .035) 1px, transparent 1px, transparent 40px),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, .035) 0, rgba(255, 255, 255, .035) 1px, transparent 1px, transparent 40px);
+    border: 1px solid #10202f;
     border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, .06);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .35), inset 0 0 40px rgba(0, 0, 0, .4);
     overflow: hidden;
 }
 
@@ -6396,13 +6402,14 @@ div.updated.notice-nppp p,
 
 /* jsVectorMap chrome */
 #nppp-f2b-tab .nppp-f2b-world-map .jvm-zoom-btn {
-    background: #337AB7;
+    background: rgba(51, 122, 183, .85);
+    color: #fff;
     border-radius: 3px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
 }
 
 #nppp-f2b-tab .nppp-f2b-world-map .jvm-zoom-btn:hover {
-    background: #2c6698;
+    background: #337AB7;
 }
 
 #nppp-f2b-tab .nppp-f2b-world-map .jvm-tooltip {
@@ -6412,6 +6419,48 @@ div.updated.notice-nppp p,
     padding: 4px 9px;
     border-radius: 4px;
     box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+}
+
+/* Radar-ping ring drawn behind the top offenders' bubbles */
+#nppp-f2b-tab .nppp-f2b-world-map .nppp-f2b-pulse-ring {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: nppp-f2b-pulse 2.2s ease-out infinite;
+}
+
+@keyframes nppp-f2b-pulse {
+    0%   { transform: scale(1);    opacity: .55; }
+    70%  { transform: scale(2.6);  opacity: 0; }
+    100% { transform: scale(2.6);  opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #nppp-f2b-tab .nppp-f2b-world-map .nppp-f2b-pulse-ring {
+        animation: none;
+        opacity: 0;
+    }
+}
+
+/* Severity legend rendered under the map by nppp_f2b_render_legend(). */
+#nppp-f2b-tab .nppp-f2b-geo-legend-inner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-legend-bar {
+    flex: 1 1 auto;
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #f8b334, #ea1919);
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-legend-label {
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: #646970;
+    white-space: nowrap;
 }
 
 /* --- Narrow screens --- */
