@@ -282,7 +282,7 @@ PHP;
         <div class="nppp-f2b-card-body">
 
             <p class="nppp-f2b-hint-text">
-                <?php esc_html_e( 'Every value below has a sane default and needs no action. They are plain WordPress filters, not settings stored by this plugin -- add the ones you want to change to your child theme\'s functions.php and reload the page; there is nothing to save here.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                <?php esc_html_e( 'Every value below has a sane default and needs no action. They are plain WordPress filters, not settings stored by this plugin -- add the ones you want to change to your child theme\'s functions.php and reload the page.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
             </p>
 
             <div class="nppp-f2b-opt-tabs" role="tablist">
