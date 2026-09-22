@@ -286,7 +286,7 @@ PHP;
             </p>
 
             <div class="nppp-f2b-opt-tabs" role="tablist">
-                <button type="button" class="nppp-f2b-opt-tab is-active" role="tab" aria-selected="true" aria-controls="nppp-f2b-opt-panel-retention" data-opt-panel="nppp-f2b-opt-panel-retention">
+                <button type="button" class="nppp-f2b-opt-tab" role="tab" aria-selected="false" aria-controls="nppp-f2b-opt-panel-retention" data-opt-panel="nppp-f2b-opt-panel-retention">
                     <?php esc_html_e( 'Data retention & list sizes', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                 </button>
                 <button type="button" class="nppp-f2b-opt-tab" role="tab" aria-selected="false" aria-controls="nppp-f2b-opt-panel-rdap" data-opt-panel="nppp-f2b-opt-panel-rdap">
@@ -305,7 +305,7 @@ PHP;
 
             <div class="nppp-f2b-opt-panels">
 
-                <div class="nppp-f2b-opt-panel is-active" id="nppp-f2b-opt-panel-retention" role="tabpanel">
+                <div class="nppp-f2b-opt-panel" id="nppp-f2b-opt-panel-retention" role="tabpanel">
                     <p class="nppp-f2b-note">
                         <?php esc_html_e( 'How long events are kept, and how many rows the Live Feed, Repeat Offenders, Top Attack Countries list, and bubble map each show.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     </p>
