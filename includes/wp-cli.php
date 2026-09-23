@@ -771,7 +771,6 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( $cancel ) {
             wp_clear_scheduled_hook( 'npp_cache_preload_event' );
-            wp_clear_scheduled_hook( 'npp_cache_preload_status_event' );
             wp_clear_scheduled_hook( 'nppp_index_updater_event' );
             WP_CLI::success( __( 'All NPP scheduled events cancelled.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
@@ -1446,7 +1445,6 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         if ( $key === 'nginx_cache_schedule' && $value === 'no' ) {
             wp_clear_scheduled_hook( 'npp_cache_preload_event' );
             wp_clear_scheduled_hook( 'nppp_index_updater_event' );
-            wp_clear_scheduled_hook( 'npp_cache_preload_status_event' );
             WP_CLI::line( __( 'Schedule disabled, all preload crons cleared.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         }
     }
