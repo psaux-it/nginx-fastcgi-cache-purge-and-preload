@@ -287,6 +287,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Fixed: "Purge All" now terminates the preload watchdog before stopping the main preload process, closing a post-completion race window that could leave stale preload state behind.
 * Fixed: WP-CLI "preload --stop" no longer clears the preload pid when the underlying process termination fails (safexec), preventing broken preload state and subsequent workflow failures.
 * Fixed: WP-CLI "preload --stop" now performs complete preload state cleanup, including scheduled cron events, transients, and watchdog tokens.
+* Fixed: Cancelling the schedule (CLI or Settings) no longer interrupts an already-running preload's completion tick — it now only prevents future scheduled runs. (Credit: @claude sonnet)
 * Fixed: Active WP cron events are now cancelled immediately when plugin requirements fail mid-operation, preventing orphaned cron jobs from firing after functionality is disabled.
 * Fixed: Several disable-functionality and disable-preload guard were missing coverage for new and existing options introduced before.
 * Fixed: Setup hooks and Settings field registrations were both running on every admin AJAX request and non-Settings admin page, firing redundant HEAD probes on each admin tab switch and registering fields that had no consumers outside the Settings page.
