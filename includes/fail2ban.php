@@ -1824,10 +1824,22 @@ function nppp_f2b_test_connection_callback() {
             );
         }
 
+        $nppp_f2b_success_message = __( 'Success. The webhook endpoint is reachable, the token was accepted and a test event was written and removed. Fail2Ban will be able to reach it too.', 'fastcgi-cache-purge-and-preload-nginx' );
+
+        // This test request is sent by WordPress's own server. If fail2ban
+        // runs on that same server, that's a faithful stand-in for its real
+        // request. If fail2ban runs elsewhere (remote host, sidecar
+        // container) and the IP allow-list is turned on, this success does
+        // NOT guarantee fail2ban's own request will pass -- it will arrive
+        // from a different source IP than this test did.
+        if ( ! empty( apply_filters( 'nppp_f2b_trusted_ips', array() ) ) ) {
+            $nppp_f2b_success_message .= ' ' . __( 'Note: This test only confirms WordPress\'s own server can reach the endpoint. If Fail2Ban runs on a different host or container than WordPress, its real request may arrive from a different IP than this test did, and could still be blocked by your nppp_f2b_trusted_ips allow-list, even if it works for this test.', 'fastcgi-cache-purge-and-preload-nginx' );
+        }
+
         wp_send_json_success(
             array(
                 'ok'      => true,
-                'message' => __( 'Success. The webhook endpoint is reachable, the token was accepted and a test event was written and removed. fail2ban will be able to reach it too.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'message' => $nppp_f2b_success_message,
             )
         );
     }
@@ -1836,16 +1848,39 @@ function nppp_f2b_test_connection_callback() {
         wp_send_json_success(
             array(
                 'ok'      => false,
-                'message' => __( 'HTTP 404 — the route never registered, which almost always means your web server is not forwarding the Authorization header to PHP. On Nginx + PHP-FPM, add fastcgi_param HTTP_AUTHORIZATION $http_authorization; inside the PHP location block, reload Nginx, then test again.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'message' => __( 'HTTP 404 — The route never registered, which almost always means your web server is not forwarding the Authorization header to PHP. On Nginx + PHP-FPM, add fastcgi_param HTTP_AUTHORIZATION $http_authorization; inside the PHP location block, reload Nginx, then test again.', 'fastcgi-cache-purge-and-preload-nginx' ),
             )
         );
     }
 
     if ( 403 === $code ) {
+        // wp_send_json_error() on the EP10 gate wraps the payload in
+        // "data". A "nppp_f2b_ip_not_trusted" code means the token was
+        // already accepted and only the allow-list rejected it; every
+        // other 403 on this route (missing/malformed/mismatched token)
+        // still comes back as the generic "wp_die" body.
+        $nppp_f2b_gate_code = is_array( $body ) && isset( $body['data']['code'] )
+            ? (string) $body['data']['code']
+            : '';
+
+        if ( 'nppp_f2b_ip_not_trusted' === $nppp_f2b_gate_code ) {
+            $nppp_observed_ip = isset( $body['data']['observed_ip'] ) ? (string) $body['data']['observed_ip'] : '';
+            wp_send_json_success(
+                array(
+                    'ok'      => false,
+                    'message' => sprintf(
+                        /* translators: %s: the IP address this server observed for its own request */
+                        __( 'HTTP 403 — The token was accepted, but the source IP is not in your nppp_f2b_trusted_ips allow-list. This server\'s own request was seen coming from %s. Add that IP to your nppp_f2b_trusted_ips filter.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        '' !== $nppp_observed_ip ? $nppp_observed_ip : __( '(unknown — check your Nginx access log for this request)', 'fastcgi-cache-purge-and-preload-nginx' )
+                    ),
+                )
+            );
+        }
+
         wp_send_json_success(
             array(
                 'ok'      => false,
-                'message' => __( 'HTTP 403 — the token was rejected. Use Regenerate, re-copy the jail.local snippet and reload fail2ban.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'message' => __( 'HTTP 403 — The token was rejected. Use Regenerate, re-copy the jail.local snippet and reload Fail2Ban.', 'fastcgi-cache-purge-and-preload-nginx' ),
             )
         );
     }
@@ -1854,7 +1889,7 @@ function nppp_f2b_test_connection_callback() {
         wp_send_json_success(
             array(
                 'ok'      => false,
-                'message' => __( 'HTTP 429 — rejected by a rate limit before the test event was recorded. The webhook locks an IP out for up to an hour after 20 rejected tokens (an old token still in jail.local is the usual cause); a web server, WAF or CDN rate limit can return 429 as well.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'message' => __( 'HTTP 429 — Rejected by a rate limit before the test event was recorded. The webhook locks an IP out for up to an hour after 20 rejected tokens (an old token still in jail.local is the usual cause); a web server, WAF or CDN rate limit can return 429 as well.', 'fastcgi-cache-purge-and-preload-nginx' ),
             )
         );
     }
