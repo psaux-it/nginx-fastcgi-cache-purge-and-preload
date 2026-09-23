@@ -299,6 +299,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Fixed: First-time publishing through Elementor now skips single-page and related cache purges, matching the existing auto-purge policy while preserving purges for published content updates and global templates.
 * Fixed: Auto-purge listeners for CPTs failed to register during admin sessions, causing Gutenberg publish and deletion actions to skip cache purging. (Credit: @claude)
 * Fixed: Updating the parent of an active child theme now correctly triggers the themes auto-purge.
+* Fixed: Deactivating the plugin no longer leaves a safexec-owned (privilege-dropped) preload process running.
 * Security: "Purge All" and the preload temp-directory cleanup no longer follow symbolic links inside the Nginx cache tree. Previously, a symlink planted in the cache directory could make a purge delete the contents of the link's target outside the cache. Links are now removed themselves and never traversed. (Credit: @claude)
 * Security: Removed the option to atomic write directly to wp-config.php from the Setup page to enable "Assume Nginx Mode".
 * Performance: Merged redirect‑ and KEY‑line cache scans into a single ripgrep pass using -m 2 dual‑pattern matching, cutting directory‑walk cost in half on large caches. (Credit: @apoorva-01)
