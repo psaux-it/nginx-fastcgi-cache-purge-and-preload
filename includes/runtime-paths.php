@@ -40,6 +40,19 @@ if (!function_exists('nppp_get_runtime_dir')) {
             wp_mkdir_p($runtime_dir);
         }
 
+        // Block direct web access. .htaccess covers Apache only; on Nginx a
+        // `location ^~ .../nginx-cache-purge-preload-runtime/ { return 404; }`
+        // rule is required. Self-heals on existing installs (checked via index.php).
+        if (is_dir($runtime_dir) && !is_file($runtime_dir . '/index.php')) {
+            // phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+            @file_put_contents($runtime_dir . '/index.php', "<?php // Silence is golden\n");
+            @file_put_contents(
+                $runtime_dir . '/.htaccess',
+                "<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\nDeny from all\n</IfModule>\n"
+            );
+            // phpcs:enable WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+        }
+
         return $runtime_dir;
     }
 }
