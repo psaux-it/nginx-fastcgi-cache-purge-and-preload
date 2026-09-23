@@ -1319,11 +1319,19 @@ function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
         // Check for the theme update — respects themes sub-trigger
         if ( isset( $hook_extra['type'] ) && $hook_extra['type'] === 'theme' ) {
             if ( ( $nginx_cache_settings['nppp_autopurge_themes'] ?? 'no' ) === 'yes' ) {
-                $active_theme   = wp_get_theme()->get_stylesheet();
+                // Cover both the active stylesheet (child theme, if any) and the
+                // active template (parent theme). With an active child theme these
+                // differ, and the parent still supplies active rendering code
+                // (templates, functions.php), so a parent-only update must purge too.
+                $active_theme_obj   = wp_get_theme();
+                $active_theme_slugs = array_unique( array_filter( [
+                    $active_theme_obj->get_stylesheet(),
+                    $active_theme_obj->get_template(),
+                ] ) );
                 $updated_themes = $hook_extra['themes']                                        // bulk
                     ?? ( isset( $hook_extra['theme'] ) ? [ $hook_extra['theme'] ] : [] );      // single
 
-                if ( ! empty( $updated_themes ) && in_array( $active_theme, $updated_themes, true ) ) {
+                if ( ! empty( $updated_themes ) && array_intersect( $active_theme_slugs, $updated_themes ) ) {
                     nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
                 }
             }
