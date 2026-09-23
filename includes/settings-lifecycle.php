@@ -54,24 +54,76 @@ function nppp_reset_plugin_settings_on_deactivation() {
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            // Try SIGTERM first (graceful).
-            if (function_exists('posix_kill') && defined('SIGTERM')) {
-                posix_kill($pid, SIGTERM);
-                usleep(300000);
-            }
+            // safexec-aware termination
+            $process_user = function_exists('shell_exec')
+                ? trim((string) shell_exec('ps -o user= -p ' . escapeshellarg((string) $pid) . ' 2>/dev/null'))
+                : '';
 
-            // Fall back to SIGKILL if still alive.
-            if (nppp_is_process_alive($pid)) {
-                $kill_path = function_exists( 'shell_exec' ) ? trim((string) shell_exec('command -v kill')) : '';
-                if (!empty($kill_path)) {
-                    shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $pid);
+            if ($process_user === 'nobody') {
+                $sfx = '/usr/bin/safexec';
+                if (!file_exists($sfx) && function_exists('shell_exec')) {
+                    $detected = trim((string) shell_exec('command -v safexec 2>/dev/null'));
+                    $sfx = ($detected !== '') ? $detected : '';
+                }
+
+                $sfx_ls = ($sfx !== '' && function_exists('nppp_safexec_ls_check')) ? nppp_safexec_ls_check($sfx) : null;
+                if ($sfx_ls && $sfx_ls['is_root'] && $sfx_ls['has_suid']) {
+                    shell_exec(escapeshellarg($sfx) . ' --kill=' . (int) $pid . ' 2>&1');
                     usleep(300000);
+                }
+
+                if (nppp_is_process_alive($pid)) {
+                    // Could not verify the safexec-owned process was stopped.
+                    // Do not delete the PID file — it is the only ownership
+                    // evidence that a `nobody`-owned crawler is still running.
+                    nppp_display_admin_notice(
+                        'error',
+                        sprintf(
+                            /* translators: 1: process ID that could not be stopped, 2: same process ID for the safexec --kill example */
+                            __('ERROR DEACTIVATE: Could not stop safexec-owned preload process (PID %1$d); it may still be running as `nobody`. Stop it manually with: safexec --kill=%2$d', 'fastcgi-cache-purge-and-preload-nginx'),
+                            $pid,
+                            $pid
+                        ),
+                        true,
+                        false
+                    );
+                    return;
+                }
+            } else {
+                // Standard (non-safexec) process — SIGTERM, verify, SIGKILL, verify.
+                if (function_exists('posix_kill') && defined('SIGTERM')) {
+                    posix_kill($pid, SIGTERM);
+                    usleep(300000);
+                }
+
+                if (nppp_is_process_alive($pid)) {
+                    $kill_path = function_exists( 'shell_exec' ) ? trim((string) shell_exec('command -v kill')) : '';
+                    if (!empty($kill_path)) {
+                        shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $pid);
+                        usleep(300000);
+                    }
+                }
+
+                if (nppp_is_process_alive($pid)) {
+                    // Still alive after SIGTERM + SIGKILL — keep the PID file
+                    // so a leaked process is not silently forgotten.
+                    nppp_display_admin_notice(
+                        'error',
+                        sprintf(
+                            /* translators: %d: process ID that could not be stopped */
+                            __('ERROR DEACTIVATE: Failed to stop preload process (PID %d) after SIGTERM and SIGKILL.', 'fastcgi-cache-purge-and-preload-nginx'),
+                            $pid
+                        ),
+                        true,
+                        false
+                    );
+                    return;
                 }
             }
         }
 
-        // Remove PID file regardless of whether the process was alive,
-        // so a stale file from a previously crashed preload is also cleaned up.
+        // Reached only when there was no live process to begin with, or
+        // termination was just confirmed above — safe to remove the PID file.
         nppp_perform_file_operation($PIDFILE, 'delete');
     }
 }
