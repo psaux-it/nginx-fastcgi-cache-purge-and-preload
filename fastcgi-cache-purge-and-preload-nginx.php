@@ -23,14 +23,52 @@ if (!defined('ABSPATH')) {
 // NPP is designed for administrators — direct UI interaction and limited
 // remote access — but also supports non-admin users (e.g. Editors) who
 // hold the nppp_purge_cache capability for auto-purge on content saves.
-// Bootstrap loads 26+ files including shell_exec/proc_open (preload),
-// WP_Filesystem recursive ops (purge), and binary detection (pre-checks).
-// Loading this stack unconditionally is a performance and security
-// liability — so the plugin stays dormant on 99% of requests.
+// Bootstrap loads ~40 files including shell_exec/proc_open (preload),
+// cache-tree scanning and WP_Filesystem file deletion (purge), and external
+// binary detection (pre-checks). Loading this stack unconditionally is a
+// performance and security liability — so the plugin stays dormant on
+// anonymous and non-privileged requests.
 //
-// Each entry point below is a narrow gate. Only authenticated requests
-// from users who can trigger a cache operation pass through. Everything
-// else bails before a single plugin file loads.
+// SECURITY MODEL
+// Each entry point below is a narrow gate. A credential is verified BEFORE
+// nppp_load_bootstrap() runs, so unauthenticated traffic can never force the
+// plugin stack to load. Everything else bails before a single plugin file loads.
+//
+//   Session-based (logged-in user, capability checked):
+//     EP1  wp-admin UI            manage_options, or nppp_purge_cache when
+//                                 auto-purge is enabled
+//     EP4  Frontend admin bar/FAB manage_options
+//     EP5  Setup wizard           manage_options
+//     EP6  Remote WP/WC REST      logged-in + manage_options or nppp_purge_cache,
+//                                 content-modifying methods only
+//
+//   Trusted internal triggers (no user session):
+//     EP2  WP-Cron               trusted hook names only
+//     EP7  Background updates    only when auto-purge options are enabled
+//     EP9  WP-CLI                only for `wp npp ...` invocations
+//
+//   Token/key-gated remote endpoints (credential verified pre-bootstrap):
+//     EP3  REST API (nppp_nginx_cache/v2)  API key, feature toggle required
+//     EP8  Watchdog AJAX (nppp_cron_wake)  ping token, feature toggle required
+//     EP10 Fail2Ban webhook (nppp_f2b/v1)  bearer token, POST only, optional
+//                                          IP allow-list checked AFTER the token
+//   Each of these is a two-layer gate: a lightweight pre-bootstrap check here,
+//   then the handler validates again as defense-in-depth.
+//
+// ABUSE HANDLING (EP3 / EP8 / EP10)
+//   - Failed credentials add a per-IP strike; at the lockout threshold the IP
+//     is refused early (429) without touching the plugin stack. EP10 refuses
+//     a locked-out IP only when it also presents a bad token, so a valid token
+//     is never locked out.
+//   - Only real credential failures count as attacks: they feed the strike
+//     counter and the Fail2Ban dashboard's "Endpoint Attacks" card.
+//     Configuration problems (e.g. a valid EP10 token from an IP missing in
+//     nppp_f2b_trusted_ips) are logged but never counted as attacks.
+//   - Log lines are throttled (attempt #1, then every 5th) and client IPs are
+//     masked in the plugin log. Dashboard recording is opt-in (only after
+//     Fail2Ban has sent a ban/unban) and stores public IPs only.
+//   - Client IP comes from REMOTE_ADDR unless the site owner explicitly sets
+//     NPPP_PROXY_IP_HEADER to one of a fixed set of trusted proxy headers.
 //
 // Admin users (manage_options): full UI access via EP1, EP4, EP6.
 // Capability holders (nppp_purge_cache): bootstrap loaded only when
@@ -158,18 +196,30 @@ foreach ([
 unset($nppp_cron_event);
 
 // ---------------------------------------------------------------------------
-// Shared pre-bootstrap abuse logger — used by EP3 and EP8 gates.
-// Increments the per-IP fail counter and writes to the plugin log at
+// Shared pre-bootstrap abuse logger — used by EP3, EP8 and EP10 gates.
+// Increments the per-IP counter and writes to the plugin log at
 // attempt #1 and every 5th attempt thereafter to avoid log flooding.
+//
+// $is_attack = true  (default): real abuse. Uses the _fail_ strike counter
+//                    (feeds the gate lockout) and records the rejection for
+//                    the Fail2Ban dashboard's "Endpoint Attacks" card.
+// $is_attack = false: config problem, not abuse (e.g. EP10 valid token from
+//                    an IP missing in nppp_f2b_trusted_ips). Uses a separate
+//                    _cfg_ counter, so no strikes and no dashboard record.
+//                    Only the throttled plugin log line is written.
 // ---------------------------------------------------------------------------
 function nppp_ep_gate_log(
     string $masked,
     string $raw,
     string $ep,
     string $action,
-    string $status
+    string $status,
+    bool $is_attack = true
 ): void {
-    $rate_key   = 'nppp_' . $ep . '_fail_' . hash( 'sha256', $raw );
+    // Real abuse uses the _fail_ strike counter. Config problems (e.g. valid
+    // token from a non-allow-listed IP) use a separate _cfg_ key, so they
+    // never add strikes.
+    $rate_key   = 'nppp_' . $ep . ( $is_attack ? '_fail_' : '_cfg_' ) . hash( 'sha256', $raw );
     $fail_count = (int) get_transient($rate_key);
     $fail_count++;
     set_transient($rate_key, $fail_count, HOUR_IN_SECONDS);
@@ -178,7 +228,9 @@ function nppp_ep_gate_log(
         return;
     }
 
-    nppp_ep_gate_record($ep, $raw);
+    if ($is_attack) {
+        nppp_ep_gate_record($ep, $raw);
+    }
 
     if (!function_exists('nppp_get_runtime_file')) {
         require_once plugin_dir_path(NPPP_PLUGIN_FILE) . 'includes/runtime-paths.php';
@@ -713,7 +765,7 @@ add_action('rest_api_init', function (): void {
         // Log only (no strike/lockout penalty here) -- the caller already
         // proved it holds a valid token, so this isn't abuse, just a
         // config gap/issue.
-        nppp_ep_gate_log($nppp_ep10_masked, $nppp_ep10_raw_ip, 'ep10', 'nppp_f2b_event', 'ERROR 403 IP NOT IN TRUSTED ALLOW-LIST (valid token -- possible misconfiguration in the nppp_f2b_trusted_ips allow-list)');
+        nppp_ep_gate_log($nppp_ep10_masked, $nppp_ep10_raw_ip, 'ep10', 'nppp_f2b_event', 'ERROR 403 IP NOT IN TRUSTED ALLOW-LIST (valid token -- possible misconfiguration in the nppp_f2b_trusted_ips allow-list)', false);
         // Hand the caller back its own observed source IP. That discloses
         // nothing it doesn't already know (it's the IP it connected
         // from), and since the token already checked out, it's safe to
