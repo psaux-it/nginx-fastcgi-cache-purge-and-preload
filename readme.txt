@@ -305,6 +305,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Fixed: Related URL purge now covers the blog index and custom post type archives. On sites using a static front page with a separate Posts page, updating a post now also purges (and preloads, when enabled) the Posts page under "Always Purge the Homepage". Custom post types with a public archive now have that archive purged under "Always Purge Archives & Related URLs". WooCommerce products continue to use the Shop setting.
 * Security: "Purge All" and the preload temp-directory cleanup no longer follow symbolic links inside the Nginx cache tree. Previously, a symlink planted in the cache directory could make a purge delete the contents of the link's target outside the cache. Links are now removed themselves and never traversed. (Credit: @claude sonnet)
 * Security: Removed the option to atomic write directly to wp-config.php from the Setup page to enable "Assume Nginx Mode".
+* Security: Runtime directory in uploads is now protected from direct web access (index.php + Apache .htaccess, applied automatically). Nginx ignores .htaccess, so users must add a location rule; see the new Help entry.
 * Performance: Merged redirect‑ and KEY‑line cache scans into a single ripgrep pass using -m 2 dual‑pattern matching, cutting directory‑walk cost in half on large caches. (Credit: @apoorva-01)
 * Improved: HTTP Purge timeouts no longer falsely arm the lockout, and the timeout is now configurable via the `nppp_http_purge_timeout` filter.
 * Improved: Reduced open_basedir requirements – the plugin now needs fewer paths in the whitelist, eliminating unnecessary warnings on strict PHP configurations.
@@ -321,6 +322,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Added: Automatic fallback to enable the Preload Watchdog on fresh plugin activations when DISABLE_WP_CRON is active.
 * Added: Bundled jsVectorMap to power the new Fail2Ban "Top Attack Countries" bubble map.
 * Added: Bundled flag-icons for the country flag icons shown in the Fail2Ban dashboard's Live Feed, Repeat Offenders, and Top Attack Countries panels.
+* Added: Help entry explaining how to block direct web access to the runtime directory on Nginx, with a rule generated from your actual uploads path and a verification command.
 * UI/UX: Preload All now redirects to the Status tab instead of Settings, taking users directly to the live preload progress section.
 * Updated: Confirmed compatibility with WordPress 7.1.2.
 * Tested: Tested with Nginx (1.31.5), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.6), ripgrep (15.2.0), wget (1.25.0) and aaPanel (8.0.6).
@@ -708,7 +710,7 @@ For the complete changelog, see
 == Upgrade Notice ==
 
 = 2.1.8 =
-New Fail2Ban dashboard ready! Enjoy.
+New Fail2Ban dashboard ready! Enjoy. SECURITY: Add a location rule to block direct web access to the plugin runtime directory! (see Help tab).
 
 = 2.1.7 =
 Cache coverage release. Read Changelog for best results.
