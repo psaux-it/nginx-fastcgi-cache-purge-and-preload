@@ -277,14 +277,24 @@ PHP;
     $nppp_opt_webhook_snippet = <<<'PHP'
 // NPP - Fail2Ban Monitor: webhook endpoint security.
 
-// Hard IP allow-list for the Fail2Ban webhook route (/nppp_f2b/v1/event).
-// Empty by default, which keeps container and sidecar setups working
-// where Fail2Ban is not on localhost. Harden a bare-metal install by
-// restricting to the loopback address(es) fail2ban actually runs on --
-// still requires a valid Bearer token from the Connection card above.
+// Optional hard IP allow-list for the Fail2Ban webhook route
+// (/nppp_f2b/v1/event). Empty by default, which means this route
+// already accepts requests from ANY IP as long as they carry a valid
+// Bearer token -- the token is the real security boundary; this
+// allow-list is only optional defense-in-depth on top of it.
+//
+// Do NOT just paste '127.0.0.1' below and assume it's correct:
+// nppp-webhook.conf posts to your site's real FQDN even when Fail2Ban
+// runs on the same server, so WordPress often sees that server's own
+// real interface IP, not loopback. Click "Test Connection" above (or
+// let one real ban/unban fire) and read the reported IP first, then
+// use that exact value here. If Fail2Ban runs on a different host or
+// container than WordPress, Test Connection cannot discover the right
+// value for you -- it only reports WordPress's own IP -- so trigger a
+// real ban/unban instead and read the IP from the resulting error.
 // Default: [] (no allow-list)
 add_filter( 'nppp_f2b_trusted_ips', function( $ips ) {
-    return array( '127.0.0.1', '::1', 'FB_PUBLIC_IP', 'PROXY_IP' );
+    return array( 'FB2_CLIENT_REAL_IP' );
 } );
 
 // SSL verification for the "Test Connection" button's own loopback
