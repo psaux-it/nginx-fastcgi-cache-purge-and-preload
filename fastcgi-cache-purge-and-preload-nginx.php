@@ -618,21 +618,8 @@ add_action('rest_api_init', function (): void {
     // Get IP
     $nppp_ep10_raw_ip = nppp_resolve_ip();
 
-    // Mask IP for logging. Computed before the allow-list check below so
-    // that an allow-list rejection can be logged too.
+    // Mask IP for logging.
     $nppp_ep10_masked = nppp_mask_ip($nppp_ep10_raw_ip);
-
-    // Optional hard allow-list — empty by default, which keeps container and
-    // sidecar setups working where fail2ban is not on localhost. Harden a
-    // bare-metal install from child theme's functions.php;
-    //   add_filter('nppp_f2b_trusted_ips', fn() => ['127.0.0.1', '::1']);
-    $nppp_ep10_trusted = apply_filters('nppp_f2b_trusted_ips', []);
-    if (!empty($nppp_ep10_trusted) && is_array($nppp_ep10_trusted)
-        && !in_array($nppp_ep10_raw_ip, $nppp_ep10_trusted, true)) {
-        // Log AND penalise
-        nppp_ep_gate_log($nppp_ep10_masked, $nppp_ep10_raw_ip, 'ep10', 'nppp_f2b_event', 'ERROR 403 IP NOT IN TRUSTED ALLOW-LIST');
-        wp_die('', '', ['response' => 403]);
-    }
 
     // Strike counter, its own namespace (nppp_ep10_fail_*) so EP3 and EP10
     // never share a penalty budget. A locked-out IP is refused only if it
@@ -702,6 +689,43 @@ add_action('rest_api_init', function (): void {
         }
         nppp_ep_gate_log($nppp_ep10_masked, $nppp_ep10_raw_ip, 'ep10', 'nppp_f2b_event', 'ERROR 403 TOKEN MISMATCH');
         wp_die('', '', ['response' => 403]);
+    }
+
+    // Optional hard allow-list — empty by default, which accepts a
+    // connection from any IP as long as it carries a valid token.
+    //
+    // Checked ONLY after the token above has already been verified. An
+    // IP with no valid token never reaches this check -- it already got
+    // rejected above with the generic "token rejected" response. So if
+    // you see the allow-list error below, it means: right token, wrong
+    // IP. That's a strong sign the caller really is your fail2ban, from
+    // an IP you simply haven't added to the allow-list yet -- or a
+    // misconfiguration of that allow-list.
+    //
+    // To turn this on, add the IP(s) fail2ban actually connects from to
+    // a child theme's functions.php -- REPLACE_WITH_YOUR_IP below is not
+    // a real address, it must be replaced with the value fail2ban's
+    // requests actually show (see the Fail2Ban tab for how to find it):
+    //   add_filter('nppp_f2b_trusted_ips', fn() => ['REPLACE_WITH_YOUR_IP']);
+    $nppp_ep10_trusted = apply_filters('nppp_f2b_trusted_ips', []);
+    if (!empty($nppp_ep10_trusted) && is_array($nppp_ep10_trusted)
+        && !in_array($nppp_ep10_raw_ip, $nppp_ep10_trusted, true)) {
+        // Log only (no strike/lockout penalty here) -- the caller already
+        // proved it holds a valid token, so this isn't abuse, just a
+        // config gap/issue.
+        nppp_ep_gate_log($nppp_ep10_masked, $nppp_ep10_raw_ip, 'ep10', 'nppp_f2b_event', 'ERROR 403 IP NOT IN TRUSTED ALLOW-LIST (valid token -- possible misconfiguration in the nppp_f2b_trusted_ips allow-list)');
+        // Hand the caller back its own observed source IP. That discloses
+        // nothing it doesn't already know (it's the IP it connected
+        // from), and since the token already checked out, it's safe to
+        // suggest adding this exact IP to the allow-list.
+        wp_send_json_error(
+            array(
+                'code'        => 'nppp_f2b_ip_not_trusted',
+                'message'     => 'Token accepted, but the source IP is not in the nppp_f2b_trusted_ips allow-list.',
+                'observed_ip' => $nppp_ep10_raw_ip,
+            ),
+            403
+        );
     }
 
     // Token verified pre-bootstrap — safe to load the full plugin stack now.
