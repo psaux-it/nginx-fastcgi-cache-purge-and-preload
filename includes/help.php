@@ -786,6 +786,43 @@ curl -v -X POST \
                     </div>
                 </div>
 
+                <h3 class="nppp-question">How do I protect the NPP runtime directory from direct web access?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <?php
+                        // Public URL path of the runtime dir, derived from the real uploads URL so the
+                        // Nginx rule matches custom uploads locations, multisite and subdirectory installs.
+                        $nppp_rt_base = wp_parse_url( (string) ( wp_upload_dir()['baseurl'] ?? '' ), PHP_URL_PATH );
+                        $nppp_rt_loc  = '/' . trim( trim( (string) $nppp_rt_base, '/' ) . '/' . NPPP_RUNTIME_SUBDIR, '/' ) . '/';
+                        ?>
+                        <h3><strong>Protecting the NPP Runtime Directory</strong></h3>
+                        <p>NPP keeps its operational files (plugin log, preload PID and lock files, wget logs, Fail2Ban worker files) in a runtime directory inside your uploads directory. Uploads is used because it is the one location WordPress guarantees the PHP-FPM user can write to. These files are for NPP only and must never be downloadable over HTTP, because logs can reveal internal paths and error details.</p>
+
+                        <h4><strong>What NPP does automatically</strong></h4>
+                        <p>NPP creates an <code>index.php</code> and an Apache <code>.htaccess</code> (deny all) in the runtime directory. This covers Apache and prevents directory listing.</p>
+
+                        <h4><strong>What you must do on Nginx</strong></h4>
+                        <p>⚠️ <strong>Important:</strong> Nginx ignores <code>.htaccess</code> files completely. On Nginx, files in the runtime directory stay directly downloadable unless you add a <code>location</code> rule. Add this to your <code>server {}</code> block:</p>
+<pre>location ^~ <?php echo esc_html( $nppp_rt_loc ); ?> {
+    return 404;
+}</pre>
+                        <p>The <code>^~</code> modifier makes this prefix location win over regex locations such as your static file or PHP locations, so it does not matter where you place it. Then test and reload Nginx:</p>
+<pre>nginx -t &amp;&amp; systemctl reload nginx</pre>
+
+                        <h4><strong>Verification</strong></h4>
+                        <p>Request any existing file from the runtime directory, for example the plugin log (it exists once NPP has written its first log entry):</p>
+<pre>curl -I https://yourdomain.com<?php echo esc_html( $nppp_rt_loc ); ?>fastcgi_ops.log</pre>
+                        <p><strong>404</strong> (or 403) means the directory is protected. <strong>200</strong> means the file is publicly downloadable, so the rule is missing or another location block is taking precedence.</p>
+
+                        <h4><strong>Notes</strong></h4>
+                        <ul>
+                            <li><strong>Multisite:</strong> each site has its own uploads path (e.g. <code>/wp-content/uploads/sites/2/</code>) and therefore its own runtime directory. Use one rule that covers all of them, placed before your other regex locations: <code>location ~* /<?php echo esc_html( NPPP_RUNTIME_SUBDIR ); ?>/ { return 404; }</code></li>
+                            <li><strong>Permissions:</strong> the directory must be writable by the PHP-FPM user. Run WP-CLI as that same user (for example <code>sudo -u www-data wp npp status</code>), otherwise files created as root cannot be written by the web process later.</li>
+                            <li><strong>Nginx does not need access:</strong> NPP runs preload and other processes as the PHP-FPM user, so blocking the directory in Nginx does not affect any NPP feature.</li>
+                        </ul>
+                    </div>
+                </div>
+
                 <h3 class="nppp-question">How do I clear the entire cache on every post update instead of just the updated page?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
