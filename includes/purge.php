@@ -566,6 +566,20 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
         return 'skip';
     }
 
+    // The rg prefilter below only mirrors the built-in Cache Key Regex. A custom
+    // regex may capture host/URI from layouts rg cannot pre-match (suffix/prefix
+    // tokens, split captures), so let the PHP scanner decide instead of rg
+    // reporting a false "not in cache".
+    if ( $ctx['regex'] !== nppp_fetch_default_regex_for_cache_key() ) {
+        nppp_display_admin_notice(
+            'info',
+            __( 'INFO RG SCAN: Custom Cache Key Regex detected, skipping ripgrep prefilter (falling back to PHP recursive scanner) to avoid false cache misses.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            true,
+            false
+        );
+        return 'skip';
+    }
+
     nppp_prepare_request_env();
     if ( ! function_exists( 'shell_exec' ) || ! function_exists( 'exec' ) ) {
         return 'skip';
@@ -624,7 +638,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
             $probe_exit
         );
 
-        if ( $probe_exit === 2 ) {
+        if ( ! in_array( $probe_exit, [ 0, 1 ], true ) ) {
             $rg_sfx_try = nppp_find_safexec_path();
             if ( $rg_sfx_try && nppp_is_safexec_usable( $rg_sfx_try, false ) ) {
                 $rg_use_safexec = true;
@@ -656,7 +670,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     }
 
     $url_alts = implode( '|', array_map(
-        fn( string $u ): string => preg_quote( $u, '/' ) . '$',
+        fn( string $u ): string => preg_quote( $u, '/' ) . '(?:[[:space:]]|$)',
         array_keys( $ctx['pending'] )
     ) );
 
@@ -672,6 +686,16 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     $exit = 0;
     exec( $cmd, $out, $exit );
 
+    // rg/wrapper could not be executed: nothing was scanned, so fall back to the PHP scanner.
+    if ( $exit === 126 || $exit === 127 ) {
+        nppp_display_admin_notice( 'info', sprintf(
+            /* translators: %d: Exit code returned by ripgrep or its wrapper. */
+            __( 'WARNING RG SCAN: ripgrep could not be executed (exit code %d). Falling back to PHP recursive scanner.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $exit
+        ), true, false );
+        return 'skip';
+    }
+
     if ( $exit === 2 ) {
         nppp_display_admin_notice( 'error', sprintf(
             /* translators: %s: Page URL */
@@ -679,6 +703,18 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
             $primary_decoded
         ) );
         nppp_purge_post_purge( $ctx );
+        return 'error';
+    }
+
+    // Only 0 (match) and 1 (no match) are completed scans. Anything else
+    // (killed, timed out, wrapper failure) is not proof the page is uncached.
+    if ( $exit !== 0 && $exit !== 1 ) {
+        nppp_display_admin_notice( 'error', sprintf(
+            /* translators: 1: Page URL 2: Exit code returned by ripgrep or its wrapper. */
+            __( 'ERROR RG SCAN: Nginx cache purge for page %1$s was aborted because the ripgrep scan failed (exit code %2$d).', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $primary_decoded,
+            $exit
+        ) );
         return 'error';
     }
 
