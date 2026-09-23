@@ -108,6 +108,39 @@ function nppp_get_related_urls_for_single(string $primary_url): array {
                 }
             }
         }
+
+        // 5a) Separate "Posts page" (blog index) - Home scope.
+        //     With Settings > Reading set to a static front page plus a
+        //     "Posts page", home_url('/') is the static front page and the blog
+        //     listing lives at a different URL. Core maps the built-in 'post'
+        //     archive to that page in get_post_type_archive_link(), but falls
+        //     back to the home URL in every other configuration, so the
+        //     show_on_front / page_for_posts guard below is required to keep the
+        //     Home switch semantics unchanged. Only page 1 of the listing is
+        //     added; deeper pagination pages are not enumerated here.
+        if ( $include_home && 'post' === $post_type && 'page' === get_option( 'show_on_front' ) ) {
+            $nppp_posts_page_id = (int) get_option( 'page_for_posts' );
+            if ( $nppp_posts_page_id > 0 && 'publish' === get_post_status( $nppp_posts_page_id ) ) {
+                $nppp_posts_page_url = get_post_type_archive_link( 'post' );
+                if ( is_string( $nppp_posts_page_url ) && $nppp_posts_page_url !== '' ) {
+                    $urls[] = $nppp_posts_page_url;
+                }
+            }
+        }
+
+        // 5b) Custom post type archive (has_archive) - Archives scope.
+        //     'post' is excluded because core resolves it to the home URL,
+        //     which is governed by the Home switch. 'product' is excluded
+        //     because WooCommerce's archive is the Shop page, governed by the
+        //     Shop switch (2). is_post_type_viewable() mirrors the check core
+        //     uses before serving a post type archive; get_post_type_archive_link()
+        //     returns false when the type has no archive.
+        if ( $include_cat && is_string( $post_type ) && ! in_array( $post_type, array( 'post', 'product' ), true ) && is_post_type_viewable( $post_type ) ) {
+            $nppp_pt_archive_url = get_post_type_archive_link( $post_type );
+            if ( is_string( $nppp_pt_archive_url ) && $nppp_pt_archive_url !== '' ) {
+                $urls[] = $nppp_pt_archive_url;
+            }
+        }
     } else {
         // 2b) WooCommerce Shop page for product taxonomy archive URLs.
         if ( $include_shop && function_exists( 'wc_get_page_id' ) ) {
