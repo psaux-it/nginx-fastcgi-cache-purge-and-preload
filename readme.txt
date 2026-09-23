@@ -297,10 +297,11 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Fixed: Suppressed automatic preloading when the plugin itself is deactivated during a bulk-deactivation request, while ensuring the initial cache flush still completes cleanly.
 * Fixed: Gutenberg draft saves, including those triggered by "Edit with Elementor", no longer cause unnecessary cache purges or target the homepage when the draft has no slug.
 * Fixed: First-time publishing through Elementor now skips single-page and related cache purges, matching the existing auto-purge policy while preserving purges for published content updates and global templates.
-* Fixed: Auto-purge listeners for CPTs failed to register during admin sessions, causing Gutenberg publish and deletion actions to skip cache purging. (Credit: @claude)
+* Fixed: Auto-purge listeners for CPTs failed to register during admin sessions, causing Gutenberg publish and deletion actions to skip cache purging. (Credit: @claude sonnet)
 * Fixed: Updating the parent of an active child theme now correctly triggers the themes auto-purge.
 * Fixed: Deactivating the plugin no longer leaves a safexec-owned (privilege-dropped) preload process running.
-* Security: "Purge All" and the preload temp-directory cleanup no longer follow symbolic links inside the Nginx cache tree. Previously, a symlink planted in the cache directory could make a purge delete the contents of the link's target outside the cache. Links are now removed themselves and never traversed. (Credit: @claude)
+* Fixed: The ripgrep fast-path for single-page purges could silently report a cached page as not found — with a custom Cache Key Regex, a whitespace-suffixed key, or a ripgrep exit code other than match/no-match. All three now fall back to the PHP scanner instead of silently no-op'ing. (Credit: @claude sonnet)
+* Security: "Purge All" and the preload temp-directory cleanup no longer follow symbolic links inside the Nginx cache tree. Previously, a symlink planted in the cache directory could make a purge delete the contents of the link's target outside the cache. Links are now removed themselves and never traversed. (Credit: @claude sonnet)
 * Security: Removed the option to atomic write directly to wp-config.php from the Setup page to enable "Assume Nginx Mode".
 * Performance: Merged redirect‑ and KEY‑line cache scans into a single ripgrep pass using -m 2 dual‑pattern matching, cutting directory‑walk cost in half on large caches. (Credit: @apoorva-01)
 * Improved: HTTP Purge timeouts no longer falsely arm the lockout, and the timeout is now configurable via the `nppp_http_purge_timeout` filter.
