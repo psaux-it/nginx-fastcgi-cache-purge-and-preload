@@ -163,6 +163,24 @@ function nppp_purge_single_init( $nginx_cache_path, $current_page_url, $nppp_aut
         return false;
     }
 
+    // Re-check for a preload now that the purge lock is held. The PID check above ran
+    // before the lock was taken, so a Preload All that started in between (or is still
+    // inside its start sequence and has not written its PID yet) was invisible to it.
+    // Once we hold the purge lock no new start can begin, which makes this check final:
+    // nppp_preload_cache_on_update() (called at the end of this purge, under this lock)
+    // may then spawn its short wget and write cache_preload.pid without clobbering the
+    // PID of a running Preload All crawler.
+    $nppp_recheck_pid = $wp_filesystem->exists( $PIDFILE ) ? intval( nppp_perform_file_operation( $PIDFILE, 'read' ) ) : 0;
+    if ( nppp_preload_start_in_flight() || ( $nppp_recheck_pid > 0 && nppp_is_process_alive( $nppp_recheck_pid ) ) ) {
+        nppp_release_purge_lock();
+        nppp_display_admin_notice( 'info', sprintf(
+            /* translators: %s: Current page URL */
+            __( 'INFO: Single-page purge for %s skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion or use "Purge All" to cancel.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $decoded
+        ) );
+        return false;
+    }
+
     $auto_preload = ! empty( $settings['nginx_cache_auto_preload'] ) && $settings['nginx_cache_auto_preload'] === 'yes';
     $chain_autopreload = $auto_preload;
     $regex = nppp_get_cache_key_regex();
@@ -1768,6 +1786,17 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         );
         return;
     }
+
+    // A Preload All that is still inside its start sequence (PID check -> purge ->
+    // spawn -> PID write) has no live PID yet, so the PID check below cannot see it:
+    // Purge All would purge underneath a crawler that is about to spawn, or leave a
+    // freshly started crawl (and its watchdog) running after the purge. We already
+    // hold the purge lock, so no NEW start can begin (nppp_preload_locked() probes
+    // the purge lock right after it takes its start lock). Wait for one that is
+    // already in flight to finish; the PID file is then authoritative and the normal
+    // kill path below stops the crawl. Bounded and fail-open: on timeout Purge All
+    // proceeds exactly as it did before this guard existed.
+    nppp_wait_for_preload_start_idle();
 
     // Tracks whether the lock has been released inside the try block on
     // the success path. Prevents the finally block from double-releasing.
