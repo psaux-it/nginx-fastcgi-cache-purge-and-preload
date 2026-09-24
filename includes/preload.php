@@ -324,20 +324,36 @@ function nppp_detect_premature_process(
                 $test_process = false;
             }
         } else {
-            // Two strictly separate kill paths.
+            // Two kill paths.
             // safexec path: wget ran as nobody (SUID drop). Only safexec
             // itself has the privilege to kill its own nobody child.
+            // If safexec was in pass-through mode (nosuid mount / inherited
+            // no_new_privs) wget still runs as the PHP user, safexec --kill
+            // refuses it, so fall through to the direct kill path below.
+            $safexec_kill_pending = false;
             if ($use_safexec) {
                 $kill_cmd = escapeshellarg($safexec_path) . ' --kill=' . (int) $test_pid . ' 2>/dev/null';
                 shell_exec($kill_cmd);
-            } else {
+
+                // Wait up to ~1s for the process to actually exit.
+                for ($i = 0; $i < 10; $i++) {
+                    usleep(100000);
+                    $kill_status = proc_get_status($process);
+                    if (empty($kill_status['running'])) {
+                        break;
+                    }
+                }
+                $safexec_kill_pending = !empty($kill_status['running']);
+            }
+
+            if (!$use_safexec || $safexec_kill_pending) {
                 // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
                 if (!defined('SIGTERM')) {
                     define('SIGTERM', 15); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
                 }
 
                 // Fallback to hard SIGKILL
-                if (!@posix_kill($test_pid, SIGTERM)) {
+                if (!function_exists('posix_kill') || !@posix_kill($test_pid, SIGTERM)) {
                     $kill_path = trim((string) shell_exec('command -v kill 2>/dev/null'));
                     if ($kill_path !== '') {
                         shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $test_pid . ' 2>/dev/null');
