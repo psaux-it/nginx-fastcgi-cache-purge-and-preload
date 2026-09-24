@@ -308,6 +308,7 @@ No other Nginx cache plugin offers this kind of resilient, self‑optimizing pur
 * Security: "Purge All" and the preload temp-directory cleanup no longer follow symbolic links inside the Nginx cache tree. Previously, a symlink planted in the cache directory could make a purge delete the contents of the link's target outside the cache. Links are now removed themselves and never traversed. (Credit: @claude sonnet)
 * Security: Removed the option to atomic write directly to wp-config.php from the Setup page to enable "Assume Nginx Mode".
 * Security: Runtime directory in uploads is now protected from direct web access (index.php + Apache .htaccess, applied automatically). Nginx ignores .htaccess, so users must add a location rule; see the new Help entry.
+* Security: `nppp_custom_error_log()` no longer lets `wp_trigger_error()` write debug output into REST/AJAX/CRON/WP-CLI response bodies — routed to the PHP error log instead.
 * Performance: Merged redirect‑ and KEY‑line cache scans into a single ripgrep pass using -m 2 dual‑pattern matching, cutting directory‑walk cost in half on large caches. (Credit: @apoorva-01)
 * Improved: HTTP Purge timeouts no longer falsely arm the lockout, and the timeout is now configurable via the `nppp_http_purge_timeout` filter.
 * Improved: Reduced open_basedir requirements – the plugin now needs fewer paths in the whitelist, eliminating unnecessary warnings on strict PHP configurations.
