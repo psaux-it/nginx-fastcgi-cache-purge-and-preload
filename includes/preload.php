@@ -371,7 +371,44 @@ function nppp_detect_premature_process(
 }
 
 // Preload operation
+//
+// Public entry point. Serializes the start sequence with an atomic lock so
+// simultaneous callers — CLI, REST, UI, admin bar, cron, auto-preload —
+// cannot each pass the PID check before any of them has written a real PID,
+// and each spawn its own untracked wget crawler. Signature is unchanged;
+// every real caller (schedule.php x2, rest-api.php, wp-cli.php, purge.php,
+// admin-bar.php) treats this as void, so the wrap is transparent to them.
+// The original function body, unmodified, now lives in nppp_preload_locked().
 function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nppp_is_auto_preload = false, $nppp_is_rest_api = false, $nppp_is_wp_cron = false, $nppp_is_admin_bar = false, $preload_mobile = false) {
+    if ( ! nppp_acquire_preload_start_lock() ) {
+        nppp_display_admin_notice('info', __( 'INFO: Nginx cache preloading is already starting from another request. Please wait a few seconds and check the Status tab.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        return;
+    }
+
+    // register_shutdown_function covers exit()/fatal errors (e.g. a hard
+    // PHP timeout) that skip a plain try/finally, so the lock never sits
+    // idle until its 300s crash-safety TTL expires. The flag prevents a
+    // double-release when both the finally block and the shutdown
+    // callback would otherwise fire.
+    $nppp_start_lock_held    = true;
+    $nppp_release_start_lock = static function () use ( &$nppp_start_lock_held ): void {
+        if ( $nppp_start_lock_held ) {
+            $nppp_start_lock_held = false;
+            nppp_release_preload_start_lock();
+        }
+    };
+    register_shutdown_function( $nppp_release_start_lock );
+
+    try {
+        nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nppp_is_auto_preload, $nppp_is_rest_api, $nppp_is_wp_cron, $nppp_is_admin_bar, $preload_mobile);
+    } finally {
+        $nppp_release_start_lock();
+    }
+}
+
+// Original nppp_preload() body, unchanged and renamed. Do not call this
+// directly — call nppp_preload() above, which holds the start lock around it.
+function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nppp_is_auto_preload = false, $nppp_is_rest_api = false, $nppp_is_wp_cron = false, $nppp_is_admin_bar = false, $preload_mobile = false) {
     if (function_exists('set_time_limit')) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
