@@ -1627,7 +1627,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
  * Result is captured by the admin-bar action buffer and shown as a redirect
  * notice on the Status tab.
  *
- * @since v2.1.9
+ * @since v2.1.8
  * @param string $pid_file Absolute path to the cache_preload.pid runtime file.
  * @return void
  */
@@ -1641,6 +1641,10 @@ function nppp_stop_preload_ui( string $pid_file ): void {
         );
         return;
     }
+
+    // A Preload that is still inside its start sequence has no live PID yet.
+    // Wait (bounded) for it to finish so the PID file below is authoritative.
+    nppp_wait_for_preload_start_idle();
 
     // No PID file — no active preload to stop.
     if ( ! $wp_filesystem->exists( $pid_file ) ) {
