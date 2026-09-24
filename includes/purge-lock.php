@@ -360,3 +360,24 @@ function nppp_is_purge_lock_held(): bool {
 
     return false;
 }
+
+/**
+ * Fresh (cache-bypassing) probe: true while a purge lock is currently held.
+ *
+ * Same reasoning as nppp_preload_start_in_flight(): nppp_is_purge_lock_held()
+ * reads through get_option(), which on a persistent object cache (Redis/
+ * Memcached) can answer from a request-local negative ('notoptions') cached
+ * before the lock existed. That's fine for a one-shot informational check,
+ * but the preload start sequence uses this result to decide whether it's
+ * safe to spawn wget into a cache tree that may be actively being deleted —
+ * a false negative there is the unsafe direction, so the cached copies are
+ * dropped first.
+ *
+ * @return bool true = a purge operation is in progress, false = idle.
+ */
+function nppp_purge_lock_in_flight(): bool {
+    wp_cache_delete( NPPP_PURGE_LOCK_NAME . '.lock', 'options' );
+    wp_cache_delete( 'notoptions', 'options' );
+
+    return nppp_is_purge_lock_held();
+}
