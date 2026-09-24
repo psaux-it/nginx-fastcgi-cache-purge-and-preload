@@ -143,13 +143,100 @@ function nppp_release_completion_lock(): void {
     WP_Upgrader::release_lock( NPPP_COMPLETION_LOCK_NAME );
 }
 
+// Lock for the "Preload All" start sequence (PID check -> purge -> spawn -> PID write).
+if ( ! defined( 'NPPP_PRELOAD_START_LOCK_NAME' ) ) {
+    define( 'NPPP_PRELOAD_START_LOCK_NAME', 'nppp_preload_start' );
+}
+
+/**
+ * Acquire the preload start lock.
+ *
+ * Serializes the check-then-spawn window in nppp_preload() (PID check ->
+ * purge -> cpulimit probe -> premature-process test -> wget spawn -> PID
+ * write) so simultaneous starts from any entry point — CLI, REST, UI,
+ * admin bar, cron, auto-preload — cannot each pass the PID check before
+ * any of them has written a real PID, and each spawn its own untracked
+ * wget crawler. Same atomic mechanism as the purge lock: a single
+ * INSERT IGNORE into wp_options via WP_Upgrader::create_lock(), so it
+ * works across PHP-FPM and WP-CLI processes alike.
+ *
+ * TTL is crash-safety only — the caller always releases via a shutdown
+ * hook on every exit path (return, exception, or hard timeout). 300s
+ * mirrors the purge lock's 'single' context (180s) plus headroom for the
+ * proxy probe and premature-process test that sit inside this window.
+ *
+ * @param int $ttl Seconds before a crashed holder's lock may be taken over.
+ * @return bool true = acquired, false = another process is starting a preload.
+ */
+function nppp_acquire_preload_start_lock( int $ttl = 300 ): bool {
+    if ( ! class_exists( 'WP_Upgrader' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    }
+
+    $ttl = (int) apply_filters( 'nppp_preload_start_lock_ttl', $ttl );
+
+    return WP_Upgrader::create_lock( NPPP_PRELOAD_START_LOCK_NAME, $ttl );
+}
+
+/**
+ * Release the preload start lock (no-op if not held).
+ *
+ * @return void
+ */
+function nppp_release_preload_start_lock(): void {
+    if ( ! class_exists( 'WP_Upgrader' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    }
+
+    WP_Upgrader::release_lock( NPPP_PRELOAD_START_LOCK_NAME );
+}
+
+/**
+ * Non-destructive probe: true if the preload start lock is currently held.
+ *
+ * Same reconstruction approach as nppp_is_purge_lock_held() — reads the
+ * raw option with zero side-effects, treats a lock older than its TTL as
+ * stale. Wired into nppp_is_operation_active() below so the settings-change
+ * guard also blocks during the brief in-flight window before a starting
+ * preload has written its real PID — a window nppp_is_preload_running()
+ * cannot see, since it also only trusts the PID file.
+ *
+ * @return bool true = a preload start is in progress, false = idle.
+ */
+function nppp_is_preload_start_lock_held(): bool {
+    $lock_option = NPPP_PRELOAD_START_LOCK_NAME . '.lock';
+    $lock_time   = get_option( $lock_option );
+
+    if ( ! $lock_time ) {
+        return false;
+    }
+
+    $lock_time = (int) $lock_time;
+
+    if ( $lock_time <= 0 ) {
+        return false;
+    }
+
+    $ttl = (int) apply_filters( 'nppp_preload_start_lock_ttl', 300 );
+
+    if ( $lock_time > ( time() - $ttl ) ) {
+        return true;
+    }
+
+    delete_option( $lock_option );
+
+    return false;
+}
+
 /**
  * Returns true when any destructive cache operation is currently active.
  *
- * Combines both the purge lock (nppp_is_purge_lock_held) and the
- * preload PID check (nppp_is_preload_running) into one call so that
- * callers — settings form, AJAX handlers, WP-CLI — can gate option
- * writes without duplicating logic.
+ * Combines the purge lock (nppp_is_purge_lock_held), the preload start
+ * lock (nppp_is_preload_start_lock_held), and the preload PID check
+ * (nppp_is_preload_running) so that callers — settings form, AJAX
+ * handlers, WP-CLI — can gate option writes without duplicating logic.
+ * Both current callers (settings-page.php, wp-cli.php) only ever use this
+ * to block, never to allow, so widening it is safe by construction.
  *
  * Uses the Direct filesystem driver because bootstrap is always loaded
  * before this is called; nppp_initialize_wp_filesystem() is safe here.
@@ -158,6 +245,9 @@ function nppp_release_completion_lock(): void {
  */
 function nppp_is_operation_active(): bool {
     if ( nppp_is_purge_lock_held() ) {
+        return true;
+    }
+    if ( nppp_is_preload_start_lock_held() ) {
         return true;
     }
     $wp_filesystem = nppp_initialize_wp_filesystem();
