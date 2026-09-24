@@ -785,6 +785,69 @@ add_action('rest_api_init', function (): void {
 }, 1);
 
 // ---------------------------------------------------------------------------
+// Front-end footprint — optional HTML comment in the page source.
+// On by default. Disable in wp-config.php: define('NPPP_DISABLE_FOOTPRINT', true);
+// The timestamp shows when this copy was generated; an old value means the
+// page is being served from cache.
+// ---------------------------------------------------------------------------
+add_action('wp_head', static function (): void {
+    // On by default. Opt out in wp-config.php: define('NPPP_DISABLE_FOOTPRINT', true);
+    if (defined('NPPP_DISABLE_FOOTPRINT') && NPPP_DISABLE_FOOTPRINT) {
+        return;
+    }
+
+    // Non-page contexts where comments have leaked in other plugins
+    // (AJAX, CLI, cron, REST, JSON, XML-RPC, iframes, embeds).
+    if (
+        (defined('WP_CLI') && WP_CLI) ||
+        (defined('DOING_CRON') && DOING_CRON) ||
+        (defined('REST_REQUEST') && REST_REQUEST) ||
+        (defined('XMLRPC_REQUEST') && XMLRPC_REQUEST) ||
+        (defined('IFRAME_REQUEST') && IFRAME_REQUEST) ||
+        wp_doing_ajax() ||
+        (function_exists('wp_is_json_request') && wp_is_json_request()) ||
+        is_embed() || is_feed() || is_customize_preview()
+    ) {
+        return;
+    }
+
+    // Arm only once per request, even if a theme calls wp_head() twice.
+    static $armed = false;
+    if ($armed) {
+        return;
+    }
+    $armed = true;
+
+    // Priority 0 runs before WordPress flushes its output buffers (shutdown
+    // priority 1), so the comment lands inside any buffer, after </html>.
+    add_action('shutdown', static function (): void {
+        // Bail out if something switched the response to a non-HTML type.
+        foreach (headers_list() as $header) {
+            if (stripos($header, 'content-type:') === 0 && stripos($header, 'html') === false) {
+                return;
+            }
+        }
+
+        $text = sprintf(
+            'Performance optimized by Nginx Cache Purge Preload. Generated: %s GMT. Learn more: %s',
+            gmdate('Y-m-d H:i:s'),
+            'https://npp.psauxit.com/'
+        );
+
+        // Let sites customize or suppress it (return '' to disable).
+        $text = apply_filters('nppp_footprint_comment', $text);
+        if (!is_string($text) || $text === '') {
+            return;
+        }
+
+        // A comment must never contain "--" (it could close the comment early).
+        $text = preg_replace('/-{2,}/', '-', $text);
+
+        printf("\n<!-- %s -->\n", esc_html((string) $text));
+    }, 0);
+}, PHP_INT_MAX);
+
+// ---------------------------------------------------------------------------
 // ACTIVATION — generates API key, writes default settings, triggers setup wizard.
 // DEACTIVATION — clears scheduled cron events, terminates active preload process.
 // ---------------------------------------------------------------------------
