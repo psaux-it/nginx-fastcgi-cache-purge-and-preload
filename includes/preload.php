@@ -440,7 +440,7 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
     // into a cache directory being concurrently deleted can produce partial
     // cache entries, stall on blocked I/O, or write files that are immediately
     // removed. The admin can retry once the purge finishes.
-    if ( function_exists('nppp_is_purge_lock_held') && nppp_is_purge_lock_held() ) {
+    if ( function_exists('nppp_purge_lock_in_flight') && nppp_purge_lock_in_flight() ) {
         nppp_display_admin_notice('info', __( 'INFO: Nginx cache preload skipped — a cache purge operation is currently in progress. Please try again after the purge completes.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
@@ -1033,7 +1033,7 @@ function nppp_preload_single_locked($current_page_url, $PIDFILE, $tmp_path, $ngi
     }
 
     // Abort if a purge is in progress — same race-condition guard as nppp_preload().
-    if ( function_exists('nppp_is_purge_lock_held') && nppp_is_purge_lock_held() ) {
+    if ( function_exists('nppp_purge_lock_in_flight') && nppp_purge_lock_in_flight() ) {
         nppp_display_admin_notice('info', __( 'INFO: Nginx cache preload skipped — a cache purge operation is currently in progress. Please try again after the purge completes.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
