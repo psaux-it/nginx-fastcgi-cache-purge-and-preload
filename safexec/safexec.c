@@ -170,6 +170,10 @@
 #define SAFEXEC_VERSION  "1.9.6"
 #define SAFEXEC_AUTHOR   "Hasan Calisir"
 
+// safexec-detected failure before exec; distinct from normal rg statuses 0/1/2.
+// Other tools may independently return 3. --kill retains its 0/1 contract.
+#define SAFEXEC_LAUNCH_FAIL 3
+
 // Safe DIR
 #ifndef SAFEXEC_SAFE_CWD_DEFAULT
 #define SAFEXEC_SAFE_CWD_DEFAULT (-1)
@@ -657,7 +661,7 @@ static void report_summary(const char *abs_tool, const char *cgroup_hint) {
         SHOW("cpuset.mems","cpuset.mems");
         #undef SHOW
     } else {
-        s_fprintf(stderr, "Summary: cgroup=(none; rlimits in effect)\n");  
+        s_fprintf(stderr, "Summary: cgroup=(none; rlimits in effect)\n");
     }
 }
 
@@ -1593,7 +1597,7 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    if (argc < 2) { print_usage(argv[0]); return 1; }
+    if (argc < 2) { print_usage(argv[0]); return SAFEXEC_LAUNCH_FAIL; }
 
     if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
         print_usage(argv[0]);
@@ -1603,7 +1607,7 @@ int main(int argc, char *argv[]) {
     // Reject --kill without '=' (e.g., "--kill" or "--kill 123")
     if (strncmp(argv[1], "--kill", 6) == 0 && argv[1][6] != '=') {
         print_usage(argv[0]);
-        return 1;
+        return SAFEXEC_LAUNCH_FAIL;
     }
 
     {
@@ -1616,33 +1620,33 @@ int main(int argc, char *argv[]) {
     // From here, only "<program> [args...]" is allowed.
     if (argv[1][0] == '-' || is_all_digits(argv[1])) {
         print_usage(argv[0]);
-        return 1;
+        return SAFEXEC_LAUNCH_FAIL;
     }
 
     // Enforce a tight allowlist (plugin only needs wget), handling "safexec nohup wget ..."
     int prog_i = find_target_prog_index(argc, argv);
     if (prog_i >= argc) {
         print_usage(argv[0]);
-        return 1;
+        return SAFEXEC_LAUNCH_FAIL;
     }
     const char *prog_base = base_of(argv[prog_i]);
     if (!is_allowed_bin(prog_base)) {
         s_fprintf(stderr, "Error: '%s' is not allowed by safexec.\n", prog_base);
-        return 1;
+        return SAFEXEC_LAUNCH_FAIL;
     }
 
     // Resolve allowed tool to an absolute, trusted path and pin argv[prog_i]
     char abs_tool[PATH_MAX];
     if (find_in_trusted_path(prog_base, abs_tool, sizeof abs_tool) != 0) {
         s_fprintf(stderr, "Error: cannot resolve trusted path for '%s'\n", prog_base);
-        return 1;
+        return SAFEXEC_LAUNCH_FAIL;
     }
 
     /* Pin the argv token so wrappers (env/timeout/nice) exec the same path */
     argv[prog_i] = strdup(abs_tool);
     if (!argv[prog_i]) {
         s_fprintf(stderr, "Error: OOM while pinning tool path\n");
-        return 1;
+        return SAFEXEC_LAUNCH_FAIL;
     }
 
     s_fprintf(stderr, "Info: pinned tool '%s' -> '%s'\n", prog_base, abs_tool);
@@ -1660,12 +1664,12 @@ int main(int argc, char *argv[]) {
         if (find_in_trusted_path(wb, abs_wrapper, sizeof abs_wrapper) != 0) {
             s_fprintf(stderr,
                 "Error: cannot resolve trusted path for wrapper '%s'\n", wb);
-            return 1;
+            return SAFEXEC_LAUNCH_FAIL;
         }
         argv[wi] = strdup(abs_wrapper);
         if (!argv[wi]) {
             s_fprintf(stderr, "Error: OOM while pinning wrapper path\n");
-            return 1;
+            return SAFEXEC_LAUNCH_FAIL;
         }
         s_fprintf(stderr, "Info: pinned wrapper '%s' -> '%s'\n", wb, abs_wrapper);
     }
@@ -1691,7 +1695,7 @@ int main(int argc, char *argv[]) {
 
         execvp(argv[1], &argv[1]);
         s_perror("safexec: execvp");
-        _exit(1);
+        _exit(SAFEXEC_LAUNCH_FAIL);
     }
 
     // Read isolation preferences & limits
@@ -1715,7 +1719,7 @@ int main(int argc, char *argv[]) {
     if (safe_snprintf(cgname, sizeof cgname, "nppp.%ld", (long)getpid()) != 0) {
         s_fprintf(stderr, "Error: failed to compose cgroup name\n");
         FREE_PCT();
-        return 1;
+        return SAFEXEC_LAUNCH_FAIL;
     }
 
     // Cleanup empty stale groups first, enable controllers
@@ -1738,12 +1742,12 @@ int main(int argc, char *argv[]) {
             } else if (mode == DET_CGV2) {
                 s_fprintf(stderr, "Error: cgroup v2 requested but join failed\n");
                 FREE_PCT();
-                return 1;
+                return SAFEXEC_LAUNCH_FAIL;
             }
         } else if (mode == DET_CGV2) {
             s_fprintf(stderr, "Error: cgroup v2 requested but not available\n");
             FREE_PCT();
-            return 1;
+            return SAFEXEC_LAUNCH_FAIL;
         }
     }
 
@@ -1782,7 +1786,7 @@ int main(int argc, char *argv[]) {
             s_fprintf(stderr,
                 "Error: safexec: root-owned or invalid path; refusing exec\n");
             FREE_PCT();
-            return 1;
+            return SAFEXEC_LAUNCH_FAIL;
         }
 
         if (cache_owner == ruid) {
@@ -1798,7 +1802,7 @@ int main(int argc, char *argv[]) {
                 "Error: safexec: uid %lu not in passwd; refusing exec\n",
                 (unsigned long)cache_owner);
             FREE_PCT();
-            return 1;
+            return SAFEXEC_LAUNCH_FAIL;
         }
 
         s_fprintf(stderr,
@@ -1825,7 +1829,7 @@ post_drop:
     if (geteuid() == 0) {
         s_fprintf(stderr, "Fatal: safexec cannot be used as root; refusing to exec (privilege drop failed).\n");
         FREE_PCT();
-        return 1;
+        return SAFEXEC_LAUNCH_FAIL;
     }
 
     // Safe DIR
@@ -1886,16 +1890,16 @@ post_drop:
         FREE_PCT();
         errno = saved;
         s_perror("safexec: execvp");
-        _exit(1);
+        _exit(SAFEXEC_LAUNCH_FAIL);
     }
 
 drop_to_fpm_user:
 
     // Drop to original FPM user (ruid/rgid). If this fails, refuse to run.
     if (was_root) {
-        if (setgroups(0, NULL) != 0) { s_perror("setgroups (fallback)"); FREE_PCT(); return 1; }
-        if (setgid(rgid) != 0)       { s_perror("setgid (fallback)");    FREE_PCT(); return 1; }
-        if (setuid(ruid) != 0)       { s_perror("setuid (fallback)");    FREE_PCT(); return 1; }
+        if (setgroups(0, NULL) != 0) { s_perror("setgroups (fallback)"); FREE_PCT(); return SAFEXEC_LAUNCH_FAIL; }
+        if (setgid(rgid) != 0)       { s_perror("setgid (fallback)");    FREE_PCT(); return SAFEXEC_LAUNCH_FAIL; }
+        if (setuid(ruid) != 0)       { s_perror("setuid (fallback)");    FREE_PCT(); return SAFEXEC_LAUNCH_FAIL; }
     }
 
     // If not was_root, we’re already the caller; nothing to do
