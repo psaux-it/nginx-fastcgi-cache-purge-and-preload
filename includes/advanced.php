@@ -1105,6 +1105,15 @@ function nppp_extract_cached_urls_rg(
     if ( $exit === 2 ) {
         return null;
     }
+
+    // Only 0 (match) and 1 (no match) are completed rg scans. Any other exit
+    // code (e.g. a safexec launch refusal) means the scan never actually ran,
+    // so it is not proof the cache is empty — treat it like the permission
+    // case above and let the caller fall back / report a real error.
+    if ( $exit !== 0 && $exit !== 1 ) {
+        return null;
+    }
+
     if ( $exit === 1 || empty( $out ) ) {
         return [ 'error' => 'NPPP_EMPTY_CACHE' ];
     }
