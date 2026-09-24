@@ -1315,6 +1315,28 @@ function nppp_preload_single_locked($current_page_url, $PIDFILE, $tmp_path, $ngi
 // Only preloads cache for single post/page if Auto Purge triggered before for this modified/updated post/page
 // This functions not trgiggers after On-Page purge actions
 function nppp_preload_cache_on_update($current_page_url, $found = false, $is_manual = false) {
+    // Defense-in-depth: this function writes cache_preload.pid and spawns wget
+    // directly (below), with no lock acquisition of its own. It is only safe
+    // to do so because its sole caller, nppp_purge_post_purge(), only ever runs
+    // from inside nppp_purge_single()'s try block — while that function's own
+    // purge lock is still held. That invariant currently holds by inheritance,
+    // not by anything in this function, so if a future call site ever reaches
+    // this function outside a held purge lock it would spawn an untracked wget
+    // crawler exactly like the race the start lock was built to close. Bail
+    // rather than silently do that.
+    //
+    // Uses the row-existence check, not nppp_is_purge_lock_held(): this call
+    // runs on our OWN still-held lock, and the TTL-aware probe would delete a
+    // lock that's simply running past its crash-recovery TTL on a slow scan —
+    // turning a false alarm into a real concurrent-operation race.
+    if ( ! nppp_purge_lock_row_exists() ) {
+        nppp_display_admin_notice(
+            'error',
+            __( 'ERROR: Auto-preload skipped — internal safeguard triggered (purge lock not held). Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
