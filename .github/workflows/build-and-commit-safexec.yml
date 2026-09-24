@@ -377,7 +377,7 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          docker run --rm -v "$PWD":/src -w /src debian:bullseye-slim bash -euxo pipefail -c '
+          docker run --rm -v "$PWD":/src -w /src debian:bookworm-slim bash -euxo pipefail -c '
             apt-get update
             apt-get install -y --no-install-recommends devscripts debhelper dpkg-dev lintian build-essential sudo fakeroot
             chmod +x safexec/helpers/deb.sh
@@ -394,7 +394,7 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src debian:bullseye-slim bash -euxo pipefail -c '
+          docker run --rm --platform=linux/arm64 -v "$PWD":/src -w /src debian:bookworm-slim bash -euxo pipefail -c '
             apt-get update
             apt-get install -y --no-install-recommends devscripts debhelper dpkg-dev lintian build-essential sudo fakeroot
             chmod +x safexec/helpers/deb.sh
