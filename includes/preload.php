@@ -974,7 +974,41 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
 }
 
 // Single page preload
+//
+// Public entry point. nppp_preload_single() writes its wget PID into the SAME
+// cache_preload.pid that Preload All uses, and its PID check -> spawn -> PID write
+// sequence was not atomic, so a single preload landing in Preload All's start window
+// could overwrite the PID of the recursive crawler (untracked crawler, same symptom
+// as the concurrent-start bug). It now takes the same start lock as nppp_preload().
+// Signature is unchanged; callers (admin bar, Advanced tab AJAX, WP-CLI) are untouched.
+// The original function body, unmodified, now lives in nppp_preload_single_locked().
 function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path) {
+    if ( ! nppp_acquire_preload_start_lock() ) {
+        nppp_display_admin_notice('info', __( 'INFO: Nginx cache preloading is already starting from another request. Please wait a few seconds and check the Status tab.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        return;
+    }
+
+    // Same release pattern as nppp_preload(): finally covers every return path,
+    // the shutdown hook covers exit()/fatals, the flag prevents a double release.
+    $nppp_start_lock_held    = true;
+    $nppp_release_start_lock = static function () use ( &$nppp_start_lock_held ): void {
+        if ( $nppp_start_lock_held ) {
+            $nppp_start_lock_held = false;
+            nppp_release_preload_start_lock();
+        }
+    };
+    register_shutdown_function( $nppp_release_start_lock );
+
+    try {
+        nppp_preload_single_locked($current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
+    } finally {
+        $nppp_release_start_lock();
+    }
+}
+
+// Original nppp_preload_single() body, unchanged and renamed. Do not call this
+// directly — call nppp_preload_single() above, which holds the start lock around it.
+function nppp_preload_single_locked($current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
