@@ -636,13 +636,22 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
             // Start cpulimit conditionally
             if ($cpulimit === 1 && (int) $nginx_cache_cpu_limit < 100) {
-                $command = sprintf(
-                    'cpulimit -p %d -l %d -zb >/dev/null 2>&1',
-                    (int) $pid,
-                    (int) $nginx_cache_cpu_limit
-                );
+                if ($use_safexec) {
+                    // safexec drops wget's credentials (to 'nobody'). A cpulimit process
+                    // started here would run as the PHP-FPM user and the kernel will refuse to
+                    // let it deliver SIGSTOP/SIGCONT to a process owned by a different UID, so
+                    // the configured CPU limit cannot be enforced while safexec is active.
+                    // Log it instead of silently spawning a no-op.
+                    nppp_display_admin_notice('info', __( 'INFO CPU LIMIT: CPU limit is not enforced while safexec is active, because cpulimit cannot signal a process running under a different UID.', 'fastcgi-cache-purge-and-preload-nginx' ), true, false);
+                } else {
+                    $command = sprintf(
+                        'cpulimit -p %d -l %d -zb >/dev/null 2>&1',
+                        (int) $pid,
+                        (int) $nginx_cache_cpu_limit
+                    );
 
-                shell_exec($command);
+                    shell_exec($command);
+                }
             }
 
             // Define a default success message
@@ -870,13 +879,22 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
         // Start cpulimit conditionally
         if ($cpulimit === 1 && (int) $nginx_cache_cpu_limit < 100) {
-            $command = sprintf(
-                'cpulimit -p %d -l %d -zb >/dev/null 2>&1',
-                (int) $pid,
-                (int) $nginx_cache_cpu_limit
-            );
+            if ($use_safexec) {
+                // safexec drops wget's credentials (e.g. to 'nobody'). A cpulimit process
+                // started here would run as the PHP-FPM user and the kernel will refuse to
+                // let it deliver SIGSTOP/SIGCONT to a process owned by a different UID, so
+                // the configured CPU limit cannot be enforced while safexec is active.
+                // Log it instead of silently spawning a no-op.
+                nppp_display_admin_notice('info', __( 'INFO CPU LIMIT: CPU limit is not enforced while safexec is active, because cpulimit cannot signal a process running under a different UID.', 'fastcgi-cache-purge-and-preload-nginx' ), true, false);
+            } else {
+                $command = sprintf(
+                    'cpulimit -p %d -l %d -zb >/dev/null 2>&1',
+                    (int) $pid,
+                    (int) $nginx_cache_cpu_limit
+                );
 
-            shell_exec($command);
+                shell_exec($command);
+            }
         }
 
         // Display the deferred message as admin notice
