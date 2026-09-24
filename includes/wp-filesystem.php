@@ -42,6 +42,29 @@ function nppp_custom_error_log($message, $error_type = E_USER_WARNING) {
     }
 
     if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+        // Never let wp_trigger_error() print into a response NPP does not fully
+        // own. REST, AJAX, CRON, and WP-CLI output all become part of a live
+        // JSON/response/script body, and trigger_error()'s default display
+        // writes straight into whatever output stream is active — unlike
+        // nppp_display_admin_notice(), this path had no context guard, so a
+        // filesystem-init failure inside an auto-purge hook (transition_post_status,
+        // woocommerce_update_product, a third-party purge-all action, etc.) could
+        // splice raw warning text into someone else's REST/AJAX response body.
+        // Route these contexts to the plain PHP error log instead; admin/plain
+        // request behavior below is unchanged.
+        if (
+            (defined('REST_REQUEST') && REST_REQUEST) ||
+            (function_exists('wp_doing_ajax') && wp_doing_ajax()) ||
+            (defined('DOING_AJAX') && DOING_AJAX) ||
+            (function_exists('wp_doing_cron') && wp_doing_cron()) ||
+            (defined('DOING_CRON') && DOING_CRON) ||
+            (defined('WP_CLI') && WP_CLI)
+        ) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+            error_log('[NPPP] ' . ($caller ? $caller . '(): ' : '') . $sanitized_message);
+            return;
+        }
+
         wp_trigger_error($caller, $sanitized_message, $error_type);
     }
 }
