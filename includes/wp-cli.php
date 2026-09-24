@@ -1014,6 +1014,10 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             return;
         }
 
+        // A Preload still inside its start sequence has no live PID yet.
+        // Wait (bounded) for it to finish so the PID file below is authoritative.
+        nppp_wait_for_preload_start_idle();
+
         if ( ! $wp_filesystem->exists( $pid_file ) ) {
             nppp_cleanup_preload_state();
             $porcelain
