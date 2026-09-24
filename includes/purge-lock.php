@@ -229,6 +229,55 @@ function nppp_is_preload_start_lock_held(): bool {
 }
 
 /**
+ * Fresh (cache-bypassing) probe: true while a Preload start sequence is in flight.
+ *
+ * nppp_is_preload_start_lock_held() reads the lock through get_option(), which is
+ * answered from the object cache after the first read in a request. That is fine
+ * for a one-shot settings guard, but a caller that must observe another process
+ * releasing the lock (Purge All waiting for a start to finish) or that needs the
+ * lock state as of NOW (Single Purge re-check under the purge lock) has to see the
+ * database row, so the cached copies are dropped first.
+ *
+ * @return bool true = a Preload start is in flight, false = idle.
+ */
+function nppp_preload_start_in_flight(): bool {
+    wp_cache_delete( NPPP_PRELOAD_START_LOCK_NAME . '.lock', 'options' );
+    wp_cache_delete( 'notoptions', 'options' );
+
+    return nppp_is_preload_start_lock_held();
+}
+
+/**
+ * Wait (bounded) until no Preload start sequence is in flight.
+ *
+ * Used by Purge All right after it takes the purge lock. A Preload that is still
+ * inside its start sequence has no live PID yet, so Purge All's PID check cannot
+ * see it. Once the purge lock is held no new start can begin (nppp_preload_locked()
+ * probes the purge lock right after taking its start lock), so this only has to
+ * outwait a start that was already running. The wait ends as soon as that start
+ * releases its lock; a start that crashed is cleaned up by the stale-lock TTL.
+ *
+ * Fail-open: on timeout returns false and the caller carries on exactly as it did
+ * before this guard existed. It must stay well below the purge lock TTL (60s).
+ *
+ * @param int $max_wait Maximum seconds to wait.
+ * @return bool true = idle, false = timed out while a start was still in flight.
+ */
+function nppp_wait_for_preload_start_idle( int $max_wait = 20 ): bool {
+    $max_wait = max( 0, (int) apply_filters( 'nppp_preload_start_wait_timeout', $max_wait ) );
+    $deadline = microtime( true ) + $max_wait;
+
+    while ( nppp_preload_start_in_flight() ) {
+        if ( microtime( true ) >= $deadline ) {
+            return false;
+        }
+        usleep( 200000 );
+    }
+
+    return true;
+}
+
+/**
  * Returns true when any destructive cache operation is currently active.
  *
  * Combines the purge lock (nppp_is_purge_lock_held), the preload start
