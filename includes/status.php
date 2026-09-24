@@ -697,6 +697,11 @@ function nppp_get_in_cache_page_count() {
         if ( $redirect_exit === 2 ) {
             return 'Undetermined';
         }
+        // Only 0/1 are completed rg scans; anything else (e.g. a safexec
+        // launch refusal) is not proof there are no redirect entries.
+        if ( $redirect_exit !== 0 && $redirect_exit !== 1 ) {
+            return 'Undetermined';
+        }
 
         $redirect_set = array_flip( array_filter( array_map( 'trim', $redirect_out ), 'strlen' ) );
         unset( $redirect_out );
@@ -716,6 +721,11 @@ function nppp_get_in_cache_page_count() {
         exec( $key_cmd, $key_out, $key_exit );
 
         if ( $key_exit === 2 ) {
+            return 'Undetermined';
+        }
+        // Only 0/1 are completed rg scans; anything else (e.g. a safexec
+        // launch refusal) is not proof the cache is empty.
+        if ( $key_exit !== 0 && $key_exit !== 1 ) {
             return 'Undetermined';
         }
         if ( $key_exit === 1 || empty( $key_out ) ) {
