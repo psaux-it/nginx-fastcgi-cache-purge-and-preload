@@ -362,6 +362,26 @@ function nppp_is_purge_lock_held(): bool {
 }
 
 /**
+ * Structural check: true if the purge lock row is currently present,
+ * regardless of its TTL.
+ *
+ * Unlike nppp_is_purge_lock_held(), this never deletes the option as a
+ * side effect. It exists for callers that run WHILE they already hold the
+ * purge lock and only need to assert that fact structurally — e.g. a slow
+ * FP4 filesystem scan that legitimately runs past the TTL's crash-recovery
+ * window is still validly holding the lock, and nppp_is_purge_lock_held()
+ * would misfire there: it would report "not held" AND delete the still-
+ * owned lock row, opening a real window for a second process to acquire it
+ * before this process's own release. Use this instead anywhere the caller
+ * is asserting its own lock, not probing someone else's.
+ *
+ * @return bool true = the lock row is present, false = no lock row at all.
+ */
+function nppp_purge_lock_row_exists(): bool {
+    return (bool) get_option( NPPP_PURGE_LOCK_NAME . '.lock' );
+}
+
+/**
  * Fresh (cache-bypassing) probe: true while a purge lock is currently held.
  *
  * Same reasoning as nppp_preload_start_in_flight(): nppp_is_purge_lock_held()
