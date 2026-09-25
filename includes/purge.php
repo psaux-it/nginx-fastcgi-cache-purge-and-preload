@@ -147,7 +147,7 @@ function nppp_purge_single_init( $nginx_cache_path, $current_page_url, $nppp_aut
         if ( $pid > 0 && nppp_is_process_alive( $pid ) ) {
             nppp_display_admin_notice( 'info', sprintf(
                 /* translators: %s: Current page URL */
-                __( 'INFO: Single-page purge for %s skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion or use "Purge All" to cancel.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'INFO: Single-page purge for %s skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion, use "Stop Preload" to cancel it, or "Purge All" to cancel it and purge the cache.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $decoded
             ) );
             return false;
@@ -175,7 +175,7 @@ function nppp_purge_single_init( $nginx_cache_path, $current_page_url, $nppp_aut
         nppp_release_purge_lock();
         nppp_display_admin_notice( 'info', sprintf(
             /* translators: %s: Current page URL */
-            __( 'INFO: Single-page purge for %s skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion or use "Purge All" to cancel.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'INFO: Single-page purge for %s skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion, use "Stop Preload" to cancel it, or "Purge All" to cancel it and purge the cache.', 'fastcgi-cache-purge-and-preload-nginx' ),
             $decoded
         ) );
         return false;
