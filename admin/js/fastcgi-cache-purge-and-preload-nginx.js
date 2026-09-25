@@ -2111,6 +2111,18 @@ $(document).ready(function() {
         });
     });
 
+    // Refresh (Advanced tab) — manual reload of the premium table without switching tabs
+    $(document).on('click', '#nppp-premium-refresh-btn', function (e) {
+        e.preventDefault();
+
+        var $btn = $(this);
+        if ($btn.prop('disabled')) return;
+
+        $btn.prop('disabled', true).addClass('nppp-premium-refresh-spinning');
+        showPreloader();
+        loadPremiumTabContent();
+    });
+
     // Preload All MISS (Advanced tab)
     $(document).on('click', '#nppp-preload-miss-all', function (e) {
         e.preventDefault();
