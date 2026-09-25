@@ -392,9 +392,14 @@ function nppp_plugin_requirements_met(bool $bypass_cache = false) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
+        // Runs on every admin AND front-end page load (asset-enqueue gate), never
+        // as the result of a user click — log only, don't rely on the screen
+        // allowlist alone to keep it off unrelated pages.
         nppp_display_admin_notice(
             'error',
-            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+            __( 'Failed to initialize the WordPress filesystem. Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            true,
+            false
         );
         return;
     }
