@@ -498,6 +498,12 @@ function nppp_premium_html($nginx_cache_path) {
     );
     ?>
     <h2></h2>
+    <div class="nppp-premium-refresh-wrap">
+        <button type="button" id="nppp-premium-refresh-btn" class="nppp-premium-refresh-btn" title="<?php esc_attr_e( 'Refresh table data', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
+            <span class="dashicons dashicons-update" style="font-size:16px;margin:0 4px 0 0;padding:0;vertical-align:middle;"></span>
+            <?php esc_html_e( 'Refresh', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </button>
+    </div>
     <?php
     $nppp_miss_count  = 0;
     $nppp_total_count = count( $mergedRows );
