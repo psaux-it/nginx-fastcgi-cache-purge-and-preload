@@ -431,7 +431,7 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            nppp_display_admin_notice('info', __( 'INFO: Nginx cache preloading is already running. If you want to stop it, please use Purge All!', 'fastcgi-cache-purge-and-preload-nginx' ));
+            nppp_display_admin_notice('info', __( 'INFO: Nginx cache preloading is already running. If you want to stop it, use "Stop Preload", or "Purge All" to also purge the cache.', 'fastcgi-cache-purge-and-preload-nginx' ));
             return;
         }
     }
@@ -1024,7 +1024,7 @@ function nppp_preload_single_locked($current_page_url, $PIDFILE, $tmp_path, $ngi
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            nppp_display_admin_notice('info', __( 'INFO: Nginx cache preloading is already running. If you want to stop it, please use Purge All', 'fastcgi-cache-purge-and-preload-nginx' ));
+            nppp_display_admin_notice('info', __( 'INFO: Nginx cache preloading is already running. If you want to stop it, use "Stop Preload", or "Purge All" to also purge the cache.', 'fastcgi-cache-purge-and-preload-nginx' ));
             return;
         }
     } elseif (!nppp_perform_file_operation($PIDFILE, 'create')) {
