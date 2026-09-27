@@ -6411,7 +6411,7 @@ div.updated.notice-nppp p,
     text-align: right;
 }
 
-#nppp-f2b-tab .nppp-f2b-geo-table .fi {
+#nppp-f2b-tab .nppp-f2b-geo-table .nppp-flag {
     margin-right: 6px;
     vertical-align: middle;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, .08);
