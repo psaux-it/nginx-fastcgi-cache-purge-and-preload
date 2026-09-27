@@ -862,7 +862,7 @@ PHP;
                             <?php $nppp_cc = strtolower( (string) $nppp_country_row['country'] ); ?>
                             <tr>
                                 <td>
-                                    <span class="fi fi-<?php echo esc_attr( $nppp_cc ); ?>"></span>
+                                    <span class="nppp-flag nppp-flag-<?php echo esc_attr($nppp_cc); ?>"></span>
                                     <?php echo esc_html( strtoupper( (string) $nppp_country_row['country'] ) ); ?>
                                 </td>
                                 <td>
@@ -974,7 +974,7 @@ PHP;
 
                             <td>
                                 <?php if ( ! empty( $nppp_rdap['country'] ) ) : ?>
-                                    <span class="fi fi-<?php echo esc_attr( strtolower( $nppp_rdap['country'] ) ); ?>"></span>
+                                    <span class="nppp-flag nppp-flag-<?php echo esc_attr( strtolower( $nppp_rdap['country'] ) ); ?>"></span>
                                     <?php echo esc_html( strtoupper( $nppp_rdap['country'] ) ); ?>
                                 <?php endif; ?>
                             </td>
