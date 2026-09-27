@@ -110,13 +110,32 @@ jobs:
           # sanity: release exists
           gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null
 
+          delete_with_retry() {
+            local asset="$1"
+            local attempt
+            for attempt in 1 2 3 4 5; do
+              if gh release delete-asset "${TAG_NAME}" "$asset" --repo "${GITHUB_REPOSITORY}" --yes; then
+                return 0
+              fi
+              if [[ "$attempt" -lt 5 ]]; then
+                local backoff=$(( attempt * 3 ))
+                echo "::warning::Delete of '$asset' failed (attempt ${attempt}/5), retrying in ${backoff}s..."
+                sleep "$backoff"
+              fi
+            done
+            echo "::error::Failed to delete stale asset '$asset' after 5 attempts (~30s window)."
+            return 1
+          }
+
           # Delete old versions
           stale=$(gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" --json assets \
             --jq '.assets[].name | select(endswith(".deb"))')
           if [[ -n "$stale" ]]; then
             echo "Deleting stale deb assets:"
             printf '  %s\n' $stale
-            printf '%s\n' $stale | xargs -r -I{} gh release delete-asset "${TAG_NAME}" {} --repo "${GITHUB_REPOSITORY}" --yes
+            while IFS= read -r asset; do
+              [[ -n "$asset" ]] && delete_with_retry "$asset"
+            done <<< "$stale"
           fi
 
           # read multiline output variable into an array
