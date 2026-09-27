@@ -49,6 +49,7 @@ jobs:
           zig cc \
             -target x86_64-linux-musl \
             -D_GNU_SOURCE \
+            -DSAFEXEC_NPP \
             -static -O2 -pipe -fPIE \
             -Wall -Wextra -Wformat=2 -Werror=format-security \
             -fstack-protector-strong \
@@ -68,6 +69,7 @@ jobs:
           zig cc \
             -target aarch64-linux-musl \
             -D_GNU_SOURCE \
+            -DSAFEXEC_NPP \
             -static -O2 -pipe -fPIE \
             -Wall -Wextra -Wformat=2 -Werror=format-security \
             -fstack-protector-strong \
@@ -197,6 +199,15 @@ jobs:
           file safexec/safexec-*-linux-musl
           for f in safexec/safexec-*-linux-musl; do
             ! readelf -lW "$f" | grep -q INTERP
+          done
+
+      - name: Verify NPP-restricted allowlist banner
+        run: |
+          set -euo pipefail
+          for f in safexec/safexec-*-linux-musl; do
+            echo "Checking $f"
+            strings "$f" | grep -Fq 'Build: NPP-restricted' \
+              || { echo "::error::$f was built WITHOUT -DSAFEXEC_NPP (allowlist not restricted to wget/rg)"; exit 1; }
           done
 
       # All remaining steps
