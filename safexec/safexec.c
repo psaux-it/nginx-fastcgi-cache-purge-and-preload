@@ -96,6 +96,16 @@
  *  Enable extra allowlisted tools with:
  *    -DSAFEXEC_WITH_GS, -DSAFEXEC_WITH_POPPLER, -DSAFEXEC_WITH_DB, -DSAFEXEC_WITH_RSYNC_GIT
  *
+* Restricted NPP build (build-time)
+ * ----------------------------------
+ *  -DSAFEXEC_NPP restricts ALLOWED_BINS to exactly "wget" and "rg",
+ *  overriding (ignoring) any SAFEXEC_WITH_* bucket passed alongside it.
+ *  It also restricts the allowed prelude wrapper to "nohup" only (the sole
+ *  wrapper NPP's plugin code ever passes ahead of wget); nice/timeout/
+ *  stdbuf/ionice/taskset/setsid/chrt/time are rejected in this build.
+ *  Use this for deployments that only ever need NPP's own wget/rg calls.
+ *  Example: gcc -O2 -DSAFEXEC_NPP -o safexec safexec.c
+ *
  * Install (recommended)
  * ---------------------
  *   chown root:root safexec && chmod 4755 safexec   (avoid nosuid mounts)
@@ -214,6 +224,18 @@
   #define SAFEXEC_SYNC_VCS_TOOLS
 #endif
 
+#ifdef SAFEXEC_NPP
+
+// NPP-restricted build: exactly wget + rg, no other bucket applies
+// even if -DSAFEXEC_WITH_* was also passed at build time.
+static const char *const ALLOWED_BINS[] = {
+    "wget",
+    "rg",
+    NULL
+};
+
+#else
+
 // Rebuild the final table including optional buckets
 static const char *const ALLOWED_BINS[] = {
     // Scan
@@ -237,6 +259,8 @@ static const char *const ALLOWED_BINS[] = {
 
     NULL
 };
+
+#endif /* SAFEXEC_NPP */
 
 static int is_allowed_bin(const char *base) {
     for (size_t i = 0; ALLOWED_BINS[i]; ++i)
@@ -977,7 +1001,11 @@ static void print_version(void) {
     printf(
         "%s %s\n"
         "Copyright (C) 2025 %s.\n"
-        "Used by: NPP – Nginx Cache Purge Preload for WordPress.\n",
+        "Used by: NPP – Nginx Cache Purge Preload for WordPress.\n"
+#ifdef SAFEXEC_NPP
+        "Build: NPP-restricted (allowlist limited to wget, rg)\n"
+#endif
+        ,
         SAFEXEC_NAME, SAFEXEC_VERSION, SAFEXEC_AUTHOR
     );
 }
@@ -1110,6 +1138,29 @@ static int is_shell_name(const char *b) {
            strcmp(b, "fish") == 0;
 }
 
+#ifdef SAFEXEC_NPP
+
+// NPP-restricted build: the plugin only ever passes "nohup" ahead of wget.
+static int is_wrapper_name(const char *b) {
+    return strcmp(b, "nohup") == 0;
+}
+
+// Diagnostic-only (NPP build): recognizes wrapper names that the unrestricted
+// build accepts but this build does not, so we can print a clearer reason
+// instead of the generic "not allowed" message.
+static int is_full_build_wrapper_name(const char *b) {
+    return strcmp(b, "nice")    == 0 ||
+           strcmp(b, "timeout") == 0 ||
+           strcmp(b, "stdbuf")  == 0 ||
+           strcmp(b, "ionice")  == 0 ||
+           strcmp(b, "taskset") == 0 ||
+           strcmp(b, "setsid")  == 0 ||
+           strcmp(b, "chrt")    == 0 ||
+           strcmp(b, "time")    == 0;
+}
+
+#else
+
 static int is_wrapper_name(const char *b) {
     return strcmp(b, "nohup")   == 0 ||
            strcmp(b, "nice")    == 0 ||
@@ -1121,6 +1172,8 @@ static int is_wrapper_name(const char *b) {
            strcmp(b, "chrt")    == 0 ||
            strcmp(b, "time")    == 0;
 }
+
+#endif /* SAFEXEC_NPP */
 
 // Return 1 if NAME=VALUE is allowed to appear in the prelude; 0 => reject.
 static int is_assignment_allowed(const char *s) {
@@ -1248,6 +1301,14 @@ static int find_target_prog_index(int argc, char **argv) {
             continue;
         }
         if (is_signed_int(tok))        continue;
+#ifdef SAFEXEC_NPP
+        if (is_full_build_wrapper_name(b)) {
+            s_fprintf(stderr,
+                "Info: '%s' is only accepted as a prelude wrapper in the "
+                "unrestricted safexec build; this NPP-restricted build "
+                "accepts 'nohup' only.\n", b);
+        }
+#endif
         break;
     }
     return i;
