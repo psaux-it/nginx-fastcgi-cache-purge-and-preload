@@ -1646,6 +1646,327 @@ static int try_kill_mode(const char *arg) {
 #endif
 }
 
+#ifdef SAFEXEC_NPP
+#ifdef __linux__
+
+#include <linux/audit.h>
+#include <linux/filter.h>
+#include <linux/seccomp.h>
+#include <stddef.h>   /* offsetof */
+
+/* 
+ * SAFEXEC_NPP seccomp denylist for post-exec wget/rg.
+ * 
+ * Why a denylist? Allowlists drift across libc versions (glibc/musl), 
+ * Rust runtimes, and container runtimes (e.g., Docker seccomp fallbacks), 
+ * causing silent SIGSYS crashes. A denylist avoids this maintenance trap.
+ * 
+ * Modeled after systemd and Docker restricted syscall groups (privileges, 
+ * mounting, raw I/O, debug), verified via strace against real wget/rg workloads, 
+ * and guarded with #ifdef __NR_* for cross-architecture safety.
+ */
+static const int npp_denied_syscalls[] = {
+#ifdef __NR_init_module
+    __NR_init_module,
+#endif
+#ifdef __NR_finit_module
+    __NR_finit_module,
+#endif
+#ifdef __NR_delete_module
+    __NR_delete_module,
+#endif
+#ifdef __NR_create_module
+    __NR_create_module,
+#endif
+#ifdef __NR_get_kernel_syms
+    __NR_get_kernel_syms,
+#endif
+#ifdef __NR_query_module
+    __NR_query_module,
+#endif
+#ifdef __NR_kexec_load
+    __NR_kexec_load,
+#endif
+#ifdef __NR_kexec_file_load
+    __NR_kexec_file_load,
+#endif
+#ifdef __NR_reboot
+    __NR_reboot,
+#endif
+#ifdef __NR_mount
+    __NR_mount,
+#endif
+#ifdef __NR_umount
+    __NR_umount,
+#endif
+#ifdef __NR_umount2
+    __NR_umount2,
+#endif
+#ifdef __NR_pivot_root
+    __NR_pivot_root,
+#endif
+#ifdef __NR_chroot
+    __NR_chroot,
+#endif
+#ifdef __NR_move_mount
+    __NR_move_mount,
+#endif
+#ifdef __NR_open_tree
+    __NR_open_tree,
+#endif
+#ifdef __NR_fsopen
+    __NR_fsopen,
+#endif
+#ifdef __NR_fsmount
+    __NR_fsmount,
+#endif
+#ifdef __NR_fsconfig
+    __NR_fsconfig,
+#endif
+#ifdef __NR_fspick
+    __NR_fspick,
+#endif
+#ifdef __NR_unshare
+    __NR_unshare,
+#endif
+#ifdef __NR_setns
+    __NR_setns,
+#endif
+#ifdef __NR_ptrace
+    __NR_ptrace,
+#endif
+#ifdef __NR_process_vm_readv
+    __NR_process_vm_readv,
+#endif
+#ifdef __NR_process_vm_writev
+    __NR_process_vm_writev,
+#endif
+#ifdef __NR_kcmp
+    __NR_kcmp,
+#endif
+#ifdef __NR_bpf
+    __NR_bpf,
+#endif
+#ifdef __NR_perf_event_open
+    __NR_perf_event_open,
+#endif
+#ifdef __NR_swapon
+    __NR_swapon,
+#endif
+#ifdef __NR_swapoff
+    __NR_swapoff,
+#endif
+#ifdef __NR_iopl
+    __NR_iopl,
+#endif
+#ifdef __NR_ioperm
+    __NR_ioperm,
+#endif
+#ifdef __NR_pciconfig_iobase
+    __NR_pciconfig_iobase,
+#endif
+#ifdef __NR_pciconfig_read
+    __NR_pciconfig_read,
+#endif
+#ifdef __NR_pciconfig_write
+    __NR_pciconfig_write,
+#endif
+#ifdef __NR_add_key
+    __NR_add_key,
+#endif
+#ifdef __NR_request_key
+    __NR_request_key,
+#endif
+#ifdef __NR_keyctl
+    __NR_keyctl,
+#endif
+#ifdef __NR_settimeofday
+    __NR_settimeofday,
+#endif
+#ifdef __NR_stime
+    __NR_stime,
+#endif
+#ifdef __NR_clock_settime
+    __NR_clock_settime,
+#endif
+#ifdef __NR_clock_adjtime
+    __NR_clock_adjtime,
+#endif
+#ifdef __NR_adjtimex
+    __NR_adjtimex,
+#endif
+#ifdef __NR_uselib
+    __NR_uselib,
+#endif
+#ifdef __NR_personality
+    __NR_personality,
+#endif
+#ifdef __NR_name_to_handle_at
+    __NR_name_to_handle_at,
+#endif
+#ifdef __NR_open_by_handle_at
+    __NR_open_by_handle_at,
+#endif
+#ifdef __NR_userfaultfd
+    __NR_userfaultfd,
+#endif
+#ifdef __NR_mbind
+    __NR_mbind,
+#endif
+#ifdef __NR_set_mempolicy
+    __NR_set_mempolicy,
+#endif
+#ifdef __NR_get_mempolicy
+    __NR_get_mempolicy,
+#endif
+#ifdef __NR_move_pages
+    __NR_move_pages,
+#endif
+#ifdef __NR_migrate_pages
+    __NR_migrate_pages,
+#endif
+#ifdef __NR_acct
+    __NR_acct,
+#endif
+#ifdef __NR_syslog
+    __NR_syslog,
+#endif
+#ifdef __NR_quotactl
+    __NR_quotactl,
+#endif
+#ifdef __NR_nfsservctl
+    __NR_nfsservctl,
+#endif
+#ifdef __NR_lookup_dcookie
+    __NR_lookup_dcookie,
+#endif
+#ifdef __NR_ustat
+    __NR_ustat,
+#endif
+#ifdef __NR__sysctl
+    __NR__sysctl,
+#endif
+#ifdef __NR_sysfs
+    __NR_sysfs,
+#endif
+#ifdef __NR_vhangup
+    __NR_vhangup,
+#endif
+    /*
+     * io_uring: called out separately from the @privileged-style groups
+     * above because it's blocked purely on track record, not capability
+     * checks -- Docker, containerd and GKE's default profiles all deny it
+     * explicitly (moby/moby#46762; CVE-2025-40364 is one recent example
+     * of why). wget/rg have no legitimate use for it.
+     */
+#ifdef __NR_io_uring_setup
+    __NR_io_uring_setup,
+#endif
+#ifdef __NR_io_uring_enter
+    __NR_io_uring_enter,
+#endif
+#ifdef __NR_io_uring_register
+    __NR_io_uring_register,
+#endif
+};
+
+#define NPP_DENY_COUNT (sizeof(npp_denied_syscalls) / sizeof(npp_denied_syscalls[0]))
+
+/* BPF jump targets are 8-bit, so the denylist cannot exceed 254 entries 
+ * without causing jump offsets to wrap. */
+_Static_assert(NPP_DENY_COUNT <= 254,
+    "npp_denied_syscalls exceeds the 8-bit BPF jump-offset budget (max 254 entries)");
+
+/* Native audit arch for this target only. Since Zig compiles
+ * safexec.c separately per architecture, only one branch is ever active. */
+#if defined(__x86_64__)
+#  define NPP_AUDIT_ARCH AUDIT_ARCH_X86_64
+#elif defined(__aarch64__)
+#  define NPP_AUDIT_ARCH AUDIT_ARCH_AARCH64
+#else
+#  error "SAFEXEC_NPP seccomp: built for an architecture outside CI's x86_64/aarch64 matrix"
+#endif
+
+/*
+ * Installs the seccomp-BPF denylist right before execvp(). 
+ * Persists across execve to cover the dynamic linker, libc, and startup.
+ * 
+ * BPF layout (using raw kernel headers, no libseccomp):
+ *   [0-2] Verify native arch (mandatory to prevent x32/x86_64 collisions)
+ *   [3]   Load syscall number
+ *   [4+]  JEQ checks for denied syscalls -> jump to kill
+ *   [...` RET ALLOW (default: allow everything else)
+ *   [...` RET KILL
+ * 
+ * Uses SECCOMP_RET_KILL_PROCESS (Linux 4.14+) to terminate the entire 
+ * process. Plain KILL only kills the offending thread; for multithreaded 
+ * tools like rg, a worker could die silently while other threads keep 
+ * running. Linux 4.14 is old enough now for safe shared-hosting usage.
+ * 
+ * Best-effort: warns and continues if seccomp isn't supported, 
+ * matching our fail-open posture for optional isolation features.
+ */
+static void install_npp_seccomp_denylist(void) {
+    const size_t n = NPP_DENY_COUNT;
+
+#if defined(__x86_64__)
+    /* x86_64 accepts x32 ABI syscalls with 0x40000000 OR'd in. 
+     * A plain denylist would miss these and fall through to ALLOW (the 
+     * seccomp(2) x32 bypass). Defined locally since musl lacks the header. */
+    #define NPP_X32_SYSCALL_BIT 0x40000000u
+    const size_t prologue_len = 5;
+#else
+    const size_t prologue_len = 4;
+#endif
+
+    const size_t total = prologue_len + n + 2;
+
+    struct sock_filter *prog = calloc(total, sizeof *prog);
+    if (!prog) {
+        s_fprintf(stderr, "Warning: seccomp: OOM building filter (%zu insns); running unfiltered\n", total);
+        return;
+    }
+
+    size_t i = 0;
+    prog[i++] = (struct sock_filter)BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+                    offsetof(struct seccomp_data, arch));
+    prog[i++] = (struct sock_filter)BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K,
+                    NPP_AUDIT_ARCH, 1, 0);
+    prog[i++] = (struct sock_filter)BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_KILL_PROCESS);
+    prog[i++] = (struct sock_filter)BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+                    offsetof(struct seccomp_data, nr));
+
+#if defined(__x86_64__)
+    /* Kill x32 ABI syscalls; jump past remaining checks and ALLOW to hit KILL. */
+    prog[i++] = (struct sock_filter)BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K,
+                    NPP_X32_SYSCALL_BIT, (unsigned char)(n + 1), 0);
+#endif
+
+    for (size_t k = 0; k < n; ++k) {
+        unsigned char jt = (unsigned char)(n - k);
+        prog[i++] = (struct sock_filter)BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K,
+                        (unsigned int)npp_denied_syscalls[k], jt, 0);
+    }
+
+    prog[i++] = (struct sock_filter)BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW);
+    prog[i++] = (struct sock_filter)BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_KILL_PROCESS);
+
+    struct sock_fprog fprog = { .len = (unsigned short)i, .filter = prog };
+
+    /* PR_SET_NO_NEW_PRIVS is set earlier in main() to allow installing 
+     * seccomp filters without needing CAP_SYS_ADMIN. */
+    if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &fprog) != 0) {
+        s_perror("Warning: seccomp: prctl(PR_SET_SECCOMP) failed; running unfiltered");
+    } else {
+        s_fprintf(stderr, "Info: seccomp: denylist active (%zu syscalls blocked)\n", n);
+    }
+
+    free(prog);
+}
+
+#endif /* __linux__ */
+#endif /* SAFEXEC_NPP */
+
 int main(int argc, char *argv[]) {
     QUIET = env_quiet_enabled();
 
@@ -1944,6 +2265,13 @@ post_drop:
     closefrom_safe(3);
 
     fflush(NULL);
+
+#ifdef SAFEXEC_NPP
+#ifdef __linux__
+    install_npp_seccomp_denylist();
+#endif
+#endif
+
     execvp(argv[1], &argv[1]);
 
     {
