@@ -57,7 +57,7 @@ $nppp_abuse_dash = '—';
             <td>
                 <code><?php echo esc_html( $data['ip'] ); ?></code>
                 <?php if ( '' !== $data['country'] ) : ?>
-                    <span class="fi fi-<?php echo esc_attr( strtolower( $data['country'] ) ); ?>"></span>
+                    <span class="nppp-flag nppp-flag-<?php echo esc_attr( strtolower( $data['country'] ) ); ?>"></span>
                     <?php echo esc_html( strtoupper( $data['country'] ) ); ?>
                 <?php endif; ?>
             </td>
