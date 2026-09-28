@@ -10,7 +10,7 @@ set -euo pipefail
 #   - Postinst:
 #       * Create/update convenience symlink:
 #           /usr/lib/npp/libnpp_norm.so -> ../<multiarch>/npp/libnpp_norm.so
-#   - SUID via dpkg-statoverride
+#   - SUID (4755) shipped in the .deb
 #   - No compilation; uses prebuilt artifacts
 # =========================================================
 
@@ -151,7 +151,7 @@ safexec (${VERSION}) ${SUITE}; urgency=medium
     - Installs safexec to /usr/bin/safexec (static musl).
     - Installs glibc shim to multiarch path.
     - Creates convenience symlink under /usr/lib/npp.
-    - Sets SUID via dpkg-statoverride.
+    - Ships safexec setuid root (4755).
     - Adds man page and portability notes.
 
  -- $MAINT  ${DATE_RFC2822}
@@ -176,19 +176,25 @@ override_dh_auto_build:
 override_dh_auto_install:
 > set -e; \
 > install -m 0755 -D "$(SAFEEXEC_BIN)" debian/safexec/usr/bin/safexec; \
-> install -m 0644 -D "$(SHIM_GLIBC)" "debian/safexec/usr/lib/$(TRIPLET_GLIBC)/npp/libnpp_norm.so"; \
-> install -d -m 0755 debian/safexec/usr/lib/npp
+> install -m 0644 -D "$(SHIM_GLIBC)" "debian/safexec/usr/lib/$(TRIPLET_GLIBC)/npp/libnpp_norm.so"
 
 override_dh_missing:
 > dh_missing --fail-missing
 
 override_dh_shlibdeps:
 > dh_shlibdeps -X/usr/bin/safexec
+
+# dh_fixperms strips setuid; re-apply afterwards
+execute_after_dh_fixperms:
+> chmod 4755 debian/safexec/usr/bin/safexec
 MAKE
 sed -i "s|#SAFEEXEC_BIN#|$SAFEEXEC_BIN|g" debian/rules
 sed -i "s|#SHIM_GLIBC#|$SHIM_GLIBC|g"   debian/rules
 sed -i "s|#TRIPLET_GLIBC#|$CPU_TRIPLET_GLIBC|g" debian/rules
 chmod +x debian/rules
+
+# tracked convenience symlink (dh_link): removed cleanly on remove/purge
+echo "usr/lib/${CPU_TRIPLET_GLIBC}/npp/libnpp_norm.so usr/lib/npp/libnpp_norm.so" > debian/safexec.links
 
 # copyright
 cat > debian/copyright <<'EOF'
@@ -248,17 +254,6 @@ _check_nosuid() {
 
 case "$1" in
   configure)
-    # Ensure suid bit via statoverride (policy-compliant)
-    if ! dpkg-statoverride --list /usr/bin/safexec >/dev/null 2>&1; then
-      dpkg-statoverride --update --add root root 4755 /usr/bin/safexec
-    fi
-
-    TRIPLET_GLIBC="#TRIPLET_GLIBC#"
-
-    # Create convenience symlink /usr/lib/npp/libnpp_norm.so -> ../<triplet>/npp/libnpp_norm.so
-    mkdir -p /usr/lib/npp
-    ln -snf "../${TRIPLET_GLIBC}/npp/libnpp_norm.so" /usr/lib/npp/libnpp_norm.so
-
     _check_nosuid "/usr/bin/safexec"
     ;;
 esac
@@ -266,16 +261,16 @@ esac
 #DEBHELPER#
 exit 0
 EOF
-sed -i "s|#TRIPLET_GLIBC#|$CPU_TRIPLET_GLIBC|g" debian/safexec.postinst
 chmod +x debian/safexec.postinst
 
-# postrm: tidy statoverride on remove
+# postrm: on purge, drop the legacy statoverride older safexec versions added
 cat > debian/safexec.postrm <<'EOF'
 #!/bin/sh
 set -e
 case "$1" in
-  remove)
-    if dpkg-statoverride --list /usr/bin/safexec >/dev/null 2>&1; then
+  purge)
+    # legacy cleanup: drop only the override older safexec versions added
+    if [ "$(dpkg-statoverride --list /usr/bin/safexec 2>/dev/null)" = "root root 4755 /usr/bin/safexec" ]; then
       dpkg-statoverride --remove /usr/bin/safexec || true
     fi
     ;;
@@ -327,18 +322,27 @@ On install, a convenience symlink is created:
 At runtime you may override explicitly:
   SAFEXEC_PCTNORM_SO=/usr/lib/\$(dpkg-architecture -qDEB_HOST_MULTIARCH)/npp/libnpp_norm.so
 
-SUID is applied with dpkg-statoverride in postinst (policy-compliant).
+The binary ships setuid root (mode 4755).
 To change locally:
   sudo dpkg-statoverride --update --add root root 0755 /usr/bin/safexec
 EOF
 
 # lintian overrides
 cat > debian/safexec.lintian-overrides <<'EOF'
-safexec: setuid-binary usr/bin/safexec
-# SUID is set via dpkg-statoverride (policy-compliant)
+safexec: elevated-privileges 4755 root/root [usr/bin/safexec]
+# setuid root is intentional (safexec sanitizes env and drops privileges before exec)
 
 safexec: statically-linked-binary
 # safexec is intentionally a static musl binary for portability/isolation.
+
+safexec: shared-library-lacks-prerequisites [usr/bin/safexec]
+# static-pie musl binary: ELF type DYN with no DT_NEEDED by design. Depending on the
+# lintian/file(1) version it is reported as statically-linked-binary (above) or
+# misdetected as a shared library (this tag). See Debian bug #1068304.
+
+safexec: spelling-error-in-readme-debian root root (duplicate word) root [usr/share/doc/safexec/README.Debian]
+# false positive: the documented 'dpkg-statoverride --add root root 0755' command
+# legitimately repeats 'root' (owner and group).
 EOF
 
 # deps
