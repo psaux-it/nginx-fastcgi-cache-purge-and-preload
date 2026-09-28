@@ -17,7 +17,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: attach-apks-${{ github.event.release.tag_name || github.event.workflow_run.head_branch || inputs.tag || 'manual' }}
+  group: attach-release-assets-${{ github.event.release.tag_name || github.event.workflow_run.head_branch || inputs.tag || 'manual' }}
   cancel-in-progress: false
 
 jobs:
