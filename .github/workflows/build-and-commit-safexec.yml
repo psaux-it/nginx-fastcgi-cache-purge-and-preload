@@ -8,6 +8,7 @@ on:
       - "safexec/helpers/deb.sh"
       - "safexec/helpers/rpm.sh"
       - "safexec/helpers/apk.sh"
+      - "safexec/helpers/smoke.sh"
       - ".github/workflows/build-and-commit-safexec.yml"
   workflow_dispatch: {}
 
@@ -231,6 +232,14 @@ jobs:
           done
           sha256sum safexec-*-linux-musl libnpp_norm-*.so | sort > SHA256SUMS
 
+      - name: Smoke test raw binaries (-v, both arches)
+        run: |
+          set -euo pipefail
+          chmod 755 safexec/bin/safexec-*-linux-musl
+          safexec/bin/safexec-x86_64-linux-musl -v | grep -q 'NPP-restricted'
+          docker run --rm --platform=linux/arm64 -v "$PWD":/src alpine:3.21 \
+            sh -c '/src/safexec/bin/safexec-aarch64-linux-musl -v | grep -q NPP-restricted'
+
       - name: Generate SLSA provenance for build artifacts
         uses: actions/attest-build-provenance@v3
         with:
@@ -435,6 +444,17 @@ jobs:
           set -euo pipefail
           sudo rm -rf pkg-safexec-*-single || true
 
+      - name: Smoke test .deb (Debian + Ubuntu, amd64 + arm64)
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          for a in amd64 arm64; do
+            for img in debian:bookworm ubuntu:24.04; do
+              docker run --rm --platform=linux/$a -v "$PWD":/src -w /src "$img" \
+                bash safexec/helpers/smoke.sh "safexec/deb/safexec_${{ steps.ver.outputs.deb }}_${a}.deb"
+            done
+          done
+
       - name: Generate SLSA provenance (deb packages)
         if: steps.guard.outputs.skip != 'true'
         uses: actions/attest-build-provenance@v3
@@ -625,6 +645,18 @@ jobs:
           cd safexec/rpm
           ls -1 *.rpm
           sha256sum *.rpm | sort > SHA256SUMS
+
+      - name: Smoke test RPM (Rocky 10, x86_64 + aarch64)
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          for a in x86_64 aarch64; do
+            p="$(ls safexec/rpm/safexec-${{ steps.ver.outputs.rpm }}.el*."$a".rpm 2>/dev/null | sort -V | tail -n1)"
+            [[ -n "$p" && -f "$p" ]] || { echo "No rpm found for $a matching version ${{ steps.ver.outputs.rpm }}"; exit 1; }
+            plat=$([ "$a" = x86_64 ] && echo amd64 || echo arm64)
+            docker run --rm --platform=linux/$plat -v "$PWD":/src -w /src \
+              quay.io/rockylinux/rockylinux:10 bash safexec/helpers/smoke.sh "$p"
+          done
 
       - name: Generate SLSA provenance (RPM packages)
         if: steps.guard.outputs.skip != 'true'
@@ -837,6 +869,18 @@ jobs:
         run: |
           sudo chown -R "$(id -u)":"$(id -g)" pkg-safexec-*-apk 2>/dev/null || true
           sudo rm -rf pkg-safexec-*-apk || true
+
+      - name: Smoke test APK (Alpine 3.21, x86_64 + aarch64)
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          for a in x86_64 aarch64; do
+            p="$(ls safexec/apk/$a/safexec-${{ steps.ver.outputs.apk }}.apk 2>/dev/null | sort -V | tail -n1)"
+            [[ -n "$p" && -f "$p" ]] || { echo "No apk found for $a matching version ${{ steps.ver.outputs.apk }}"; exit 1; }
+            plat=$([ "$a" = x86_64 ] && echo amd64 || echo arm64)
+            docker run --rm --platform=linux/$plat -v "$PWD":/src -w /src alpine:3.21 \
+              sh -c "apk add -q bash && bash safexec/helpers/smoke.sh '$p'"
+          done
 
       - name: Generate SLSA provenance (APK packages)
         if: steps.guard.outputs.skip != 'true'
