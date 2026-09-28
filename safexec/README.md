@@ -1,11 +1,25 @@
 | <img width="90" height="90" alt="Image" src="https://github.com/user-attachments/assets/fc121fa8-813c-4eb3-bf7a-6628f4d8353a" />  | safexec (secure, privilege-dropping wrapper) |
 |---|---|
 
-
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](./LICENSE) [![safexec CI](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/actions/workflows/build-and-commit-safexec.yml/badge.svg)](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/actions/workflows/build-and-commit-safexec.yml)
 
-`safexec` is a secure, privilege-dropping wrapper for executing a restricted set of tools (e.g., `wget`, `curl`, `rg`) from higher-level contexts such as **PHP’s `shell_exec()`**.  
-It is written as the backend for **NPP (Nginx Cache Purge Preload for Wordpress)** and pairs with an optional LD_PRELOAD library, **`libnpp_norm.so`**, that normalizes percent-encoded HTTP request-lines during cache preloading to ensure consistent Nginx cache HITs.
+> [!IMPORTANT]
+> **Hardened NPP build.** Every binary and package published from this repository
+> (`.deb`, `.rpm`, `.apk`, and the one-liner installer) is compiled with `-DSAFEXEC_NPP`,
+> a hardened build made specifically for the **NPP WordPress plugin**:
+>
+> - **Allowlist is fixed to exactly `wget` and `rg`.** Nothing else can be executed.
+> - **Prelude wrapper is limited to `nohup`.** `nice`, `timeout`, `stdbuf`, `ionice`,
+>   `taskset`, `setsid`, `chrt` and `time` are rejected.
+> - **Seccomp-BPF syscall denylist** is applied for extra hardening when installed setuid-root.
+>
+> **Need the full allowlisted toolset** (`curl`, `tar`, `ffmpeg`, `pandoc`, optional
+> tool buckets, custom builds)? Use the main **safexec** repository instead:
+> **https://github.com/psaux-it/safexec**
+
+`safexec` is a secure, privilege-dropping wrapper for executing a restricted set of tools from higher-level contexts such as **PHP’s `shell_exec()`**. It is a general-purpose sysadmin tool, maintained in the [main safexec repository](https://github.com/psaux-it/safexec).
+
+This repository publishes the **NPP-hardened builds** for **NPP (Nginx Cache Purge Preload for WordPress)**. They pair with an optional LD_PRELOAD library, **`libnpp_norm.so`**, that normalizes percent-encoded HTTP request-lines during cache preloading to ensure consistent Nginx cache HITs.
 
 ---
 
@@ -21,19 +35,22 @@ curl -fsSL https://psaux-it.github.io/install-safexec.sh | sudo sh
 
 ---
 
+Manual install: first download the checksums (used by all packages below):
+
+```bash
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.7/SHA256SUMS
+```
+
 ### 🔹Debian / Ubuntu (DEB)
 
 ```bash
-# Download checksums
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.6/SHA256SUMS
-
 # For x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.6/safexec_1.9.6-1_amd64.deb
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.7/safexec_1.9.6-1_amd64.deb
 sha256sum -c SHA256SUMS --ignore-missing
 sudo apt install --reinstall ./safexec_1.9.6-1_amd64.deb
 
 # For AArch64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.6/safexec_1.9.6-1_arm64.deb
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.7/safexec_1.9.6-1_arm64.deb
 sha256sum -c SHA256SUMS --ignore-missing
 sudo apt install --reinstall ./safexec_1.9.6-1_arm64.deb
 ```
@@ -41,35 +58,29 @@ sudo apt install --reinstall ./safexec_1.9.6-1_arm64.deb
 ### 🔹RHEL / CentOS / Fedora (RPM)
 
 ```bash
-# Download checksums
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.6/SHA256SUMS
-
 # For x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.6/safexec-1.9.6-1.el10.x86_64.rpm
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.7/safexec-1.9.6-1.el10.x86_64.rpm
 sha256sum -c SHA256SUMS --ignore-missing
-sudo dnf install   ./safexec-1.9.6-1.el10.x86_64.rpm
-sudo dnf reinstall ./safexec-1.9.6-1.el10.x86_64.rpm
+sudo dnf install   ./safexec-1.9.6-1.el10.x86_64.rpm   # fresh install
+sudo dnf reinstall ./safexec-1.9.6-1.el10.x86_64.rpm   # if already installed
 
 # For AArch64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.6/safexec-1.9.6-1.el10.aarch64.rpm
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.7/safexec-1.9.6-1.el10.aarch64.rpm
 sha256sum -c SHA256SUMS --ignore-missing
-sudo dnf install   ./safexec-1.9.6-1.el10.aarch64.rpm
-sudo dnf reinstall ./safexec-1.9.6-1.el10.aarch64.rpm
+sudo dnf install   ./safexec-1.9.6-1.el10.aarch64.rpm  # fresh install
+sudo dnf reinstall ./safexec-1.9.6-1.el10.aarch64.rpm  # if already installed
 ```
 
-### 🔹 Alpine Linux (APK)
+### 🔹Alpine Linux (APK)
 
 ```bash
-# Download checksums
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.6/SHA256SUMS
-
 # For x86_64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.6/safexec-1.9.6-r1.x86_64.apk
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.7/safexec-1.9.6-r1.x86_64.apk
 sha256sum -c SHA256SUMS --ignore-missing
 sudo apk add --allow-untrusted --force-overwrite ./safexec-1.9.6-r1.x86_64.apk
 
 # For AArch64
-wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.6/safexec-1.9.6-r1.aarch64.apk
+wget https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/releases/download/v2.1.7/safexec-1.9.6-r1.aarch64.apk
 sha256sum -c SHA256SUMS --ignore-missing
 sudo apk add --allow-untrusted --force-overwrite ./safexec-1.9.6-r1.aarch64.apk
 ```
@@ -84,96 +95,39 @@ sudo apk add --allow-untrusted --force-overwrite ./safexec-1.9.6-r1.aarch64.apk
 
 ## Features
 
-### safexec
-- ✅ **Strict allowlist** of safe binaries (e.g., `rg`, `wget`, `curl`, `tar`, `ffmpeg`, `pandoc`, etc.)
-- ✅ **Absolute path pinning** — refuses symlinks or untrusted paths
-- ✅ **Privilege dropping**
-  - Runs as `nobody` (or caller if fallback)
-  - Aborts if still `root`
-- ✅ **Environment sanitization**
-  - Clears environment, resets `PATH`, enforces `umask 077`
-  - Disables core dumps (`PR_SET_DUMPABLE=0`)
-  - Enables `PR_SET_NO_NEW_PRIVS`
-- ✅ **Isolation**
-  - Cgroup v2 support under `/sys/fs/cgroup/nppp`
-  - Fallback to rlimits + nice/ionice if unavailable
-- ✅ **Safe temp handling**
-  - Ensures `/tmp/nppp-cache` root-owned sticky dir
-  - Rewrites unsafe `-P /tmp` destinations for `wget`
-- ✅ **Kill support**
-  - `--kill=<pid>` terminates only `nppp.*` jobs owned by `nobody`
-  - Uses race-safe `pidfd` if available
-- 🔒 **Pass-through mode** if not installed setuid-root (still enforces allowlist, no isolation)
+### safexec (NPP-hardened build)
+- ✅ **Strict allowlist**: exactly `wget` and `rg`; only `nohup` accepted as a prelude wrapper
+- ✅ **Absolute path pinning**: tools resolve only under trusted system dirs; symlinks are followed only if the target stays inside them
+- ✅ **Never runs as root**
+  - `wget` runs as `nobody`
+  - `rg` runs as the owner of the nginx cache path (root-owned or symlinked paths are refused)
+  - Falls back to the calling user (e.g. PHP-FPM); aborts if still `root`
+- ✅ **Clean environment**: cleared env, reset `PATH`, `umask 077`, no core dumps (`PR_SET_DUMPABLE=0`), `PR_SET_NO_NEW_PRIVS`
+- ✅ **Seccomp-BPF denylist** (Linux x86_64/aarch64, setuid-root mode): blocks module loading, mount/namespace ops, ptrace, bpf, io_uring, keyring and clock-setting syscalls
+- ✅ **Isolation**: cgroup v2 under `/sys/fs/cgroup/nppp`, with fallback to rlimits + nice/ionice
+- ✅ **Safe temp handling**: root-owned sticky `/tmp/nppp-cache`; unsafe `-P /tmp` destinations for `wget` are rewritten
+- ✅ **Kill support**: `--kill=<pid>` terminates only safexec-launched jobs owned by `nobody` (race-safe `pidfd` if available)
+- 🔒 **Pass-through mode** if not installed setuid-root: the allowlist is still enforced, but there is no privilege drop, isolation or seccomp
 
 ### libnpp_norm.so
-- 🔄 Intercepts `send`, `write`, `SSL_write`, `gnutls_record_send` etc.
+- 🔄 Intercepts `send`, `write`, `SSL_write`, `gnutls_record_send`, etc.
 - 🔄 Normalizes percent-encoded triplets (`%xx`) in HTTP request-lines
-  - Configurable via `PCTNORM_CASE=upper|lower|off`
-  - Default: uppercase hex
-- 🔄 Prevents cache-key inconsistencies due to mixed-case encodings.
-- 🔄 Optional “repaint” mode preserves original triplet case from CLI URL
-- ⚡ Compatible with `wget`, `curl`, TLS (OpenSSL & GnuTLS)
-- ⚡ Linux-first (glibc/musl), may work on BSD/macOS
-
----
-
-## Security Model
-
-- 🚫 **Never executes as root** (drops to `nobody` or caller UID).  
-- ✅ **Only allowlisted tools** (wget, curl, tar, ffmpeg, etc. — extendable at build time).  
-- 🔒 **Absolute path verification** (no symlinks, trusted system dirs only).  
-- 🧹 **Clean environment** (removes unsafe variables, minimal safe defaults).  
-- 🛡 **Isolation** via:
-  - cgroup v2 (`/sys/fs/cgroup/nppp`) when available.  
-  - Fallback to rlimits if cgroup is not supported.  
-- 📂 **Safe /tmp handling**:
-  - Uses `/tmp/nppp-cache` with strict root-owned sticky permissions.  
-  - Prevents unsafe writes to `/tmp`.
+  - Configurable via `PCTNORM_CASE=upper|lower|off` (default: uppercase)
+  - Optional “repaint” mode preserves original triplet case from the CLI URL
+- 🔄 Prevents cache-key inconsistencies caused by mixed-case encodings
+- ⚡ Injected for `wget` in this build (`curl` is not allowlisted here); TLS via OpenSSL & GnuTLS
+- ⚡ Linux-first (glibc/musl)
 
 ---
 
 ## Environment Variables
 
-| Variable              | Description                                                                 | Default |
-|------------------------|-----------------------------------------------------------------------------|---------|
-| **SAFEXEC_PCTNORM**   | Enable/disable preload of `libnpp_norm.so` for wget/curl                    | `1`     |
-| **SAFEXEC_PCTNORM_SO** | Path to normalization `.so` (must be `root:root`, non-writable, trusted)    | —       |
+| Variable                 | Description                                                              | Default |
+|--------------------------|--------------------------------------------------------------------------|---------|
+| **SAFEXEC_PCTNORM**      | Enable/disable preload of `libnpp_norm.so` for wget                      | `1`     |
+| **SAFEXEC_PCTNORM_SO**   | Path to normalization `.so` (must be `root:root`, non-writable, trusted) | —       |
 | **SAFEXEC_PCTNORM_CASE** | Percent triplet case: `upper`, `lower`, or `off`                         | `upper` |
-| **SAFEXEC_DETACH**    | Isolation mode: `auto`, `cgv2`, `rlimits`, `off`                           | `auto`  |
-| **SAFEXEC_QUIET**     | Suppress informational messages                                             | `0`     |
-| **SAFEXEC_SAFE_CWD**  | Handle inaccessible CWDs: `1` always, `-1` interactive only, `0` never      | `-1`    |
+| **SAFEXEC_DETACH**       | Isolation mode: `auto`, `cgv2`, `rlimits`, `off`                         | `auto`  |
+| **SAFEXEC_QUIET**        | Suppress informational messages                                          | `0`     |
+| **SAFEXEC_SAFE_CWD**     | Handle inaccessible CWDs: `1` always, `-1` interactive only, `0` never   | `-1`    |
 
----
-
-## ⚒️ Build-time Flags
-
-`safexec` can be compiled with extra buckets of tools enabled at build time.  
-Pass `-D<FLAG>` to `make` or `gcc` to include additional allowlisted binaries:
-
-| Flag                        | Enables                                                                                  |
-|-----------------------------|------------------------------------------------------------------------------------------|
-| **SAFEXEC_WITH_GS**         | Ghostscript (`gs`) for PS/PDF rasterization (⚠️ riskier, disabled by default).           |
-| **SAFEXEC_WITH_POPPLER**    | Poppler utils: `pdfinfo`, `pdftoppm`, `pdftocairo`.                                      |
-| **SAFEXEC_WITH_DB**         | Database clients/dumpers: `mysqldump`, `mysql`, `mariadb-dump`, `mariadb`, `pg_dump`, `pg_restore`, `psql`, `redis-cli`. |
-| **SAFEXEC_WITH_RSYNC_GIT**  | File sync / VCS tools: `rsync`, `git` (⚠️ may indirectly use SSH, use carefully).        |
-
-Default build includes only the **core safe set** (wget, curl, tar, ffmpeg, pandoc, etc.).  
-
----
-
-## 🔗 Intended Use
-
-- Backend for **NPP (Nginx Cache Purge Preload for WordPress)**
-- Safe execution of fetchers (`wget`, `curl`), converters (`ffmpeg`, `pandoc`), and archive tools.
-- Works seamlessly with **libnpp_norm.so** to normalize HTTP request-lines for cache consistency.
-
----
-
-## 📜 License
-
-GPL-2.0-only — see [LICENSE](./LICENSE).
-
----
-
-**Author:** Hasan Calisir  
-**Version:** 1.9.6 (2025)
