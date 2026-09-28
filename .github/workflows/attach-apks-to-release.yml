@@ -17,7 +17,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: attach-release-assets-${{ github.event.release.tag_name || github.event.workflow_run.head_branch || inputs.tag || 'manual' }}
+  group: attach-apks-${{ github.event.release.tag_name || github.event.workflow_run.head_branch || inputs.tag || 'manual' }}
   cancel-in-progress: false
 
 jobs:
@@ -99,8 +99,6 @@ jobs:
             cp "$ARM" "$DEST"
             FILES+=("$DEST")
           fi
-
-          [[ -f safexec/apk/SHA256SUMS ]] && FILES+=("safexec/apk/SHA256SUMS")
 
           if ((${#FILES[@]}==0)); then
             echo "No matching .apk files under safexec/apk/"; exit 1
