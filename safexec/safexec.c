@@ -1238,10 +1238,15 @@ static int find_target_prog_index(int argc, char **argv) {
         if (is_wrapper_name(b)) {
             if (strchr(tok, '/') != NULL) {
                 /* Explicit path supplied — validate it is inside a trusted dir */
+                /* The path must be exactly "<trusted dir>/<name>": no extra path
+                 * components, so ".." or a symlinked directory inside a trusted
+                 * dir cannot redirect it, and no attacker-writable component
+                 * exists that could be swapped between this check and exec. */
                 int trusted = 0;
                 for (const char *const *d = TRUSTED_BIN_DIRS; *d; ++d) {
                     size_t n = strlen(*d);
-                    if (strncmp(tok, *d, n) == 0 && tok[n] == '/') {
+                    if (strncmp(tok, *d, n) == 0 && tok[n] == '/' &&
+                        strchr(tok + n + 1, '/') == NULL) {
                         trusted = 1; break;
                     }
                 }
