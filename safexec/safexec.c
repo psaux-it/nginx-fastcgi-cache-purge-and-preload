@@ -132,6 +132,7 @@
 #include <string.h>
 #include <strings.h>
 #include <fcntl.h>
+#include <ctype.h>
 #include <errno.h>
 #include <signal.h>
 #include <pwd.h>
@@ -1430,6 +1431,197 @@ static const char *find_rg_cache_path(int argc, char **argv, int prog_i) {
     return last;
 }
 
+#ifdef SAFEXEC_NPP
+/*
+ * NPP-restricted build: validates rg's options and positional arguments.
+ *
+ * Prevents local users from abusing setuid/privilege-drop execution via:
+ *  1. Extra path operands: ensures only the final path (argv[argc-1]) is scanned.
+ *  2. Arbitrary code execution: blocks flags like --pre, --pre-glob, and -z
+ *     (--search-zip) that invoke external binaries as the dropped-to UID.
+ *
+ * Returns 1 if arguments are safe, 0 otherwise.
+ */
+static int npp_validate_rg_argv(int argc, char **argv, int prog_i) {
+    if (argc <= prog_i + 1) {
+        s_fprintf(stderr, "Error: safexec: rg requires arguments\n");
+        return 0;
+    }
+
+    /*
+     * Allowlist: only the flags NPP's own PHP code,
+     * actually emits when invoking rg. Anything else — known-
+     * dangerous or simply unanticipated — is refused by default.
+     */
+    static const char *const flag_no_value[] = {
+        "-q", "-l", "-F",
+        "--text", "--no-ignore", "--no-config", "--no-mmap",
+        "--no-messages", "--no-unicode", "--no-heading",
+        NULL
+    };
+    /* -e may repeat (NPP uses it up to twice); -m and -E are each used at
+     * most once, but repetition is harmless (rg just keeps the last one). */
+    static const char *const flag_takes_value[] = {
+        "-m", "-E", "-e",
+        NULL
+    };
+
+    /*
+     * Pass 1: Check if -e (explicit pattern) is present in argv.
+     * Since ripgrep treats positional arguments as paths when -e is used regardless
+     * of flag ordering, this must be known upfront to correctly parse positional args.
+     */
+    int pattern_via_flag = 0;
+    {
+        int pv = 0;
+        for (int i = prog_i + 1; i < argc; i++) {
+            const char *a = argv[i];
+            if (!a) continue;
+            if (pv) { pv = 0; continue; }
+            if (a[0] != '-') continue;
+            for (int k = 0; flag_takes_value[k]; k++) {
+                if (strcmp(a, flag_takes_value[k]) == 0) {
+                    pv = 1;
+                    if (strcmp(a, "-e") == 0) pattern_via_flag = 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    /*
+     * Pass 2: Enforce exact allowlist matching for flags (no clustering allowed).
+     * Validates positional arguments using ripgrep's grammar: if -e was absent, the
+     * first positional is the search pattern. Exactly one path argument is permitted,
+     * and it must be the final argv element.
+     */
+    int prev_takes_value = 0;
+    int pattern_consumed = 0;
+    int path_count = 0;
+
+    for (int i = prog_i + 1; i < argc; i++) {
+        const char *a = argv[i];
+        if (!a) continue;
+
+        if (prev_takes_value) {
+            prev_takes_value = 0;
+            continue;
+        }
+
+        if (a[0] == '-') {
+            int matched = 0;
+            for (int k = 0; flag_no_value[k]; k++) {
+                if (strcmp(a, flag_no_value[k]) == 0) { matched = 1; break; }
+            }
+            if (!matched) {
+                for (int k = 0; flag_takes_value[k]; k++) {
+                    if (strcmp(a, flag_takes_value[k]) == 0) {
+                        matched = 1;
+                        prev_takes_value = 1;
+                        break;
+                    }
+                }
+            }
+            if (!matched) {
+                s_fprintf(stderr,
+                    "Error: safexec: rg option '%s' is not allowed in the NPP-restricted build\n", a);
+                return 0;
+            }
+            continue;
+        }
+
+        /* Positional operand. */
+        if (!pattern_via_flag && !pattern_consumed) {
+            pattern_consumed = 1;
+            continue;
+        }
+
+        path_count++;
+        if (path_count > 1 || i != argc - 1) {
+            s_fprintf(stderr,
+                "Error: safexec: multiple path operands are not allowed for rg\n");
+            return 0;
+        }
+    }
+
+    if (path_count != 1 || argv[argc - 1][0] != '/') {
+        s_fprintf(stderr, "Error: safexec: rg requires exactly one trailing absolute path\n");
+        return 0;
+    }
+    return 1;
+}
+
+/*
+ * NPP-restricted build: verifies via /proc/self/mountinfo that scan_path
+ * is the source directory of a root-provisioned FUSE mount (user_id=0).
+ *
+ * Prevents unauthorized cross-UID scans. While bindfs's -u/-g flags change
+ * file stat() ownership, the kernel-recorded user_id superblock option
+ * reflects the actual process UID that invoked mount().
+ *
+ * Returns 1 if scan_path matches a FUSE mount source created by user_id=0;
+ * returns 0 otherwise (e.g., non-root mounts, missing entries, or read errors).
+ */
+static int npp_path_is_root_fuse_source(const char *scan_path) {
+    if (!scan_path || !*scan_path) return 0;
+
+    char want[PATH_MAX];
+    if (!realpath(scan_path, want)) return 0;
+
+    FILE *f = fopen("/proc/self/mountinfo", "r");
+    if (!f) return 0;
+
+    char line[4096];
+    int authorized = 0;
+
+    while (!authorized && fgets(line, sizeof line, f)) {
+        char *sep = strstr(line, " - ");
+        if (!sep) continue;
+        *sep = '\0';
+        char *right = sep + 3;
+
+        char fstype[64] = {0};
+        char raw_source[PATH_MAX] = {0};
+        char superopts[2048] = {0};
+        if (sscanf(right, "%63s %4095s %2047s", fstype, raw_source, superopts) < 3) {
+            continue;
+        }
+        if (strncmp(fstype, "fuse", 4) != 0) continue;
+
+        /* Unescape octal \NNN sequences (kernel escapes space, tab, \n,
+         * backslash in mountinfo fields) the same way runtime-paths.php's
+         * nppp_fuse_source_path() does. */
+        char source[PATH_MAX] = {0};
+        size_t si = 0;
+        for (size_t ri = 0; raw_source[ri] && si + 1 < sizeof(source); ) {
+            if (raw_source[ri] == '\\' && isdigit((unsigned char)raw_source[ri+1]) &&
+                isdigit((unsigned char)raw_source[ri+2]) && isdigit((unsigned char)raw_source[ri+3])) {
+                int val = (raw_source[ri+1]-'0')*64 + (raw_source[ri+2]-'0')*8 + (raw_source[ri+3]-'0');
+                source[si++] = (char) val;
+                ri += 4;
+            } else {
+                source[si++] = raw_source[ri++];
+            }
+        }
+        source[si] = '\0';
+
+        char real_source[PATH_MAX];
+        if (!realpath(source, real_source)) continue;
+        if (strcmp(real_source, want) != 0) continue;
+
+        char *uid_pos = strstr(superopts, "user_id=");
+        if (!uid_pos) continue;
+        long uid_val = strtol(uid_pos + 8, NULL, 10);
+        if (uid_val == 0) {
+            authorized = 1;
+        }
+    }
+
+    fclose(f);
+    return authorized;
+}
+#endif /* SAFEXEC_NPP */
+
 // Sanitize environment & process state early
 static void sanitize_process_early(void) {
     clearenv_portable();
@@ -2164,6 +2356,13 @@ int main(int argc, char *argv[]) {
     struct passwd *pw = NULL;
 
     if (is_prog(argv[prog_i], "rg")) {
+#ifdef SAFEXEC_NPP
+        if (!npp_validate_rg_argv(argc, argv, prog_i)) {
+            FREE_PCT();
+            return SAFEXEC_LAUNCH_FAIL;
+        }
+#endif
+
         const char *rg_cache_path = find_rg_cache_path(argc, argv, prog_i);
         uid_t cache_owner = (rg_cache_path)
             ? resolve_cache_path_owner(rg_cache_path)
@@ -2182,6 +2381,19 @@ int main(int argc, char *argv[]) {
                 (unsigned long)ruid);
             goto drop_to_fpm_user;
         }
+
+#ifdef SAFEXEC_NPP
+        /* Crossing a uid boundary: independently verify this is a
+         * root-provisioned bindfs cache source, not an arbitrary
+         * directory that merely happens to be owned by someone else. */
+        if (!npp_path_is_root_fuse_source(rg_cache_path)) {
+            s_fprintf(stderr,
+                "Error: safexec: '%s' is not a root-provisioned FUSE cache source; refusing cross-user rg\n",
+                rg_cache_path);
+            FREE_PCT();
+            return SAFEXEC_LAUNCH_FAIL;
+        }
+#endif
 
         pw = getpwuid(cache_owner);
         if (!pw) {
