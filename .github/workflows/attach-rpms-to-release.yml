@@ -83,6 +83,7 @@ jobs:
           FILES=()
           [[ -n "${AMD:-}" && -f "$AMD" ]] && FILES+=("$AMD")
           [[ -n "${ARM:-}" && -f "$ARM" ]] && FILES+=("$ARM")
+          [[ -f safexec/rpm/SHA256SUMS ]] && FILES+=("safexec/rpm/SHA256SUMS")
 
           if ((${#FILES[@]}==0)); then
             echo "No matching .rpm files under safexec/rpm/"; exit 1
