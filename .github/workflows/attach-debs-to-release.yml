@@ -86,6 +86,7 @@ jobs:
           FILES=()
           [[ -n "${AMD:-}" && -f "$AMD" ]] && FILES+=("$AMD")
           [[ -n "${ARM:-}" && -f "$ARM" ]] && FILES+=("$ARM")
+          [[ -f safexec/deb/SHA256SUMS ]] && FILES+=("safexec/deb/SHA256SUMS")
 
           if ((${#FILES[@]}==0)); then
             echo "No matching .deb files under safexec/deb/"; exit 1
