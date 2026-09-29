@@ -1,128 +1,86 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * safexec.c — Secure privilege-dropping wrapper for controlled shell execution
+ * safexec - privilege-dropping exec wrapper for a fixed set of tools
  *
- * Purpose
- * -------
- * Safely execute a *restricted* set of external programs (wget, curl, etc.)
- * from higher-level contexts such as PHP. Designed primarily as the backend
- * for shell_exec() in NPP (Nginx Cache Purge Preload).
+ * Runs an allowlisted program (typically from PHP's shell_exec()) without
+ * ever executing it as root. Built for NPP (Nginx Cache Purge Preload for
+ * WordPress); usable as a general-purpose sysadmin tool.
  *
- * Security model
- * ---------------
- *  - Strict allowlist: only known-safe binaries run (see ALLOWED_BINS).
- *  - Absolute-path pinning: the chosen tool is resolved to an absolute path
- *    under trusted system dirs before exec (e.g. /usr/bin, /bin, /usr/local/bin,
- *    /usr/sbin, /sbin, /usr/local/sbin, /run/current-system/sw/bin,
- *    /usr/pkg/{bin,sbin} for NetBSD pkgsrc, /opt/homebrew/{bin,sbin} for
- *    macOS Apple Silicon, /opt/local/{bin,sbin} for MacPorts).
- *    Regular files are accepted directly. Symlinks are followed only when the
- *    resolved target still resides under a trusted dir (Alpine/BusyBox multi-call
- *    binaries such as nohup -> coreutils). The symlink path is exec'd so the
- *    kernel sets argv[0] correctly for multi-call binaries.
- *    If not found or resolved target is outside trusted dirs, execution is refused.
- *  - Never exec as root: drop to 'nobody' first; if that fails, drop to the
- *    original caller (e.g., PHP-FPM worker). If we still have euid==0, abort.
- *  - Environment is sanitized early (clearenv); minimal PATH/LANG/LC_CTYPE/CHARSET
- *    are set, umask is forced to 077, and PR_SET_DUMPABLE(0) disables core dumps.
- *    PR_SET_NO_NEW_PRIVS(1) is set before exec to prevent privilege regain.
- *  - All inherited FDs >= 3 are closed before exec via /proc/self/fd (with a
- *    sysconf fallback).
- *  - Linux: process is moved into its own cgroup v2 child "nppp.<pid>" **under
- *    /sys/fs/cgroup/nppp**; if unavailable, fall back to rlimits (+ optional
- *    nice/ionice). Controllers are enabled on the parent when possible; cpuset
- *    values are propagated to the child. Threaded subtrees are handled with
- *    cgroup.threads and child marked "threaded" when required.
- *  - --kill=<pid>: only succeeds if the target is owned by 'nobody' *and*
- *    belongs to an "nppp.*" safexec cgroup; uses pidfd when available (race-safe),
- *    otherwise falls back to kill(). Ownership is checked via /proc/<pid>/status.
+ * Usage
+ *   safexec [wrapper ...] <tool> [args ...]
+ *   safexec --kill=<pid> | --help | --version
  *
- * Optional normalization (pctnorm)
- * --------------------------------
- * If enabled, safexec can normalize percent-encodings for wget/curl by
- * preloading a shared object:
- *    - SAFEXEC_PCTNORM=1|0         (default 1)
- *    - SAFEXEC_PCTNORM_SO=/path/to/libnpp_norm.so
- *    - SAFEXEC_PCTNORM_CASE=upper|lower|off  (default upper)
- * The .so is injected *only* for wget/curl, and only if it is a regular file,
- * root:root, not group/other-writable, and located beneath a trusted lib root
- * (/usr/lib, /lib, /usr/lib64, /lib64). The basename must be "libnpp_norm.so".
- * When injected, safexec sets:
- *    - LD_PRELOAD=<SO>, PCTNORM_CASE=<value>
- * Otherwise, env remains minimal (PATH, LANG/LC_CTYPE/CHARSET).
+ * Exit status: 3 = refused or failed before exec (rg itself uses 0/1/2);
+ *              --kill returns 0 on success, 1 otherwise; else the tool's own.
  *
- * Detach / isolation mode
- * -----------------------
- * SAFEXEC_DETACH=auto|cgv2|rlimits|off
- *    auto     : prefer cgroup v2; fall back to rlimits if unavailable.
- *    cgv2     : require cgroup v2; fail if not possible.
- *    rlimits  : skip cgroup; apply rlimits (+ optional nice/ionice).
- *    off      : no isolation tweaks.
- * On glibc builds, SAFEXEC_DETACH is read via secure_getenv(); on musl,
- * getenv() is used (musl does not provide secure_getenv()).
+ * Builds
+ *   default        Wide allowlist (rg, wget, curl, archives, checksums, media,
+ *                  docs) plus optional buckets: -DSAFEXEC_WITH_GS, _POPPLER,
+ *                  _DB, _RSYNC_GIT.
+ *   -DSAFEXEC_NPP  Hardened NPP build, the one this project ships: allowlist
+ *                  is exactly wget and rg (SAFEXEC_WITH_* is ignored), "nohup"
+ *                  is the only prelude wrapper, rg arguments are allowlisted,
+ *                  and a seccomp-BPF denylist is installed before exec
+ *                  (Linux x86_64/aarch64, best effort).
+ *   Install: chown root:root safexec && chmod 4755 safexec (avoid nosuid).
  *
- * Other controls
- * --------------
- * SAFEXEC_QUIET=0|1            : suppress informational messages (default 0)
- * SAFEXEC_SAFE_CWD=-1|0|1      : if 1, chdir to /tmp (or /) when CWD is
- *                                inaccessible; if -1 (default), enable only
- *                                for interactive sessions (any stdio is a TTY).
+ * Execution model
+ *   1. Allowlist   The tool is matched by basename. Shells are rejected in the
+ *                  prelude; other wrappers are nohup, nice, timeout, stdbuf,
+ *                  ionice, taskset, setsid, chrt, time (default build).
+ *   2. Pinning     Tool and wrappers are resolved to absolute paths under
+ *                  trusted bin dirs (/usr/bin, /bin, /usr/local/{bin,sbin},
+ *                  /usr/sbin, /sbin, NixOS, pkgsrc; Homebrew/MacPorts on
+ *                  macOS). A symlink is accepted only if its realpath is also
+ *                  trusted; the symlink path is exec'd so multi-call binaries
+ *                  (BusyBox, coreutils) keep the right argv[0].
+ *   3. Setuid      With euid 0: clear env, fixed PATH and UTF-8 locale, umask
+ *                  077, PR_SET_DUMPABLE=0; join cgroup v2 child
+ *                  <cgroup root>/nppp/nppp.<pid> or fall back to rlimits plus
+ *                  optional nice/ionice; drop privileges; PR_SET_NO_NEW_PRIVS;
+ *                  close fds >= 3; exec. Drop target is 'nobody', except rg
+ *                  (below). If the drop fails, fall back to the invoking
+ *                  user; abort if euid is still 0.
+ *   4. Pass-through  Without setuid root, only steps 1-2 apply: no env
+ *                  sanitizing, privilege drop, isolation or seccomp.
  *
- * Behavior notes
- * --------------
- *  - If not installed setuid-root (or euid!=0 at runtime), safexec enters
- *    *pass-through* mode: it still enforces the allowlist and absolute-path
- *    pinning, but does not sanitize the environment, drop privileges, or apply
- *    isolation (no cgroups/rlimits/NNP).
- *  - A per-run cgroup name "nppp.<pid>" is used to avoid stale limits. Empty
- *    stale "nppp.*" groups may be cleaned up automatically.
- *  - Locale: attempts C.UTF-8 → en_US.UTF-8 → C; sets CHARSET to aid BusyBox wget.
- *  - When /tmp is not writable by the final euid and the command is wget with
- *    "-P /tmp", safexec rewrites the destination to "/tmp/nppp-cache/<euid>"
- *    if a safe, root-owned sticky parent exists ("/tmp/nppp-cache" is ensured
- *    root:root 01777). Otherwise it leaves "-P /tmp" untouched and warns.
- *  - Symlink note: on platforms without O_NOFOLLOW, open-time symlink protection
- *    is reduced (compile-time fallback).
+ * Tool-specific behavior
+ *   rg      Last argument must be an absolute path to a directory that is
+ *           not a symlink and not root-owned; rg runs as that directory's
+ *           owner. NPP build: only the flags NPP emits and exactly one
+ *           trailing path are accepted, and crossing to another uid
+ *           requires the path to be the source of a root-provisioned FUSE
+ *           mount (user_id=0 in /proc/self/mountinfo).
+ *   wget    If /tmp is not writable by the final euid, "-P /tmp" is rewritten
+ *           to /tmp/nppp-cache/<euid> (root-owned, sticky 01777 parent).
+ *   wget/curl  Optionally preloads libnpp_norm.so to normalize percent-
+ *           encoding. The .so must be a regular root:root file, not group/
+ *           other-writable, named libnpp_norm.so, under /usr/lib, /lib,
+ *           /usr/lib64 or /lib64. Sets LD_PRELOAD and PCTNORM_CASE.
+ *   --kill  Linux only. Sends SIGTERM if the target is owned by 'nobody' and
+ *           sits in an "nppp" cgroup; without cgroup delegation, NoNewPrivs=1
+ *           is accepted instead. Uses pidfd_send_signal when available,
+ *           otherwise kill().
  *
- * Portability / features
- * ----------------------
- *  - Linux:   cgroup v2 join (under /sys/fs/cgroup/nppp), pidfd-based kill (when
- *             kernel supports it), ioprio (when available), rlimits, closefrom
- *             via /proc/self/fd, PR_SET_NO_NEW_PRIVS, PR_SET_DUMPABLE(0).
- *  - BSD/macOS/other POSIX: rlimits + FD closing; no cgroup/pidfd.
+ * Environment (read before the env is cleared)
+ *   SAFEXEC_DETACH=auto|cgv2|rlimits|off   Isolation mode (auto). Read with
+ *                  secure_getenv() on glibc, getenv() on musl.
+ *   SAFEXEC_PCTNORM=1|0                    Enable the preload shim (1).
+ *   SAFEXEC_PCTNORM_SO=<path>              Shim path (/usr/lib/npp/...).
+ *   SAFEXEC_PCTNORM_CASE=upper|lower|off   Triplet case (upper).
+ *   SAFEXEC_QUIET=0|1                      Suppress info messages (0).
+ *   SAFEXEC_SAFE_CWD=-1|0|1                chdir to /tmp (or /) when the CWD
+ *                  is not writable; -1 = only if a stdio fd is a TTY (-1).
  *
- * Optional tool buckets (build-time)
- * ----------------------------------
- *  Enable extra allowlisted tools with:
- *    -DSAFEXEC_WITH_GS, -DSAFEXEC_WITH_POPPLER, -DSAFEXEC_WITH_DB, -DSAFEXEC_WITH_RSYNC_GIT
+ * Platforms: Linux gets the full feature set. Other POSIX systems get the
+ * allowlist, pinning, rlimits and fd closing, but no cgroup, pidfd, seccomp
+ * or --kill.
  *
-* Restricted NPP build (build-time)
- * ----------------------------------
- *  -DSAFEXEC_NPP restricts ALLOWED_BINS to exactly "wget" and "rg",
- *  overriding (ignoring) any SAFEXEC_WITH_* bucket passed alongside it.
- *  It also restricts the allowed prelude wrapper to "nohup" only (the sole
- *  wrapper NPP's plugin code ever passes ahead of wget); nice/timeout/
- *  stdbuf/ionice/taskset/setsid/chrt/time are rejected in this build.
- *  Use this for deployments that only ever need NPP's own wget/rg calls.
- *  Example: gcc -O2 -DSAFEXEC_NPP -o safexec safexec.c
+ * Limits: not a general-purpose sandbox. It constrains only the process it
+ * launches (and descendants), and only allowlisted tools may run.
  *
- * Install (recommended)
- * ---------------------
- *   chown root:root safexec && chmod 4755 safexec   (avoid nosuid mounts)
- * Without setuid root, you only get pass-through mode (still allowlisted).
- *
- * Limitations
- * -----------
- *  - Not a general-purpose sandbox: only constrains *this* child process and
- *    its descendants. It does not provide syscall-level filtering.
- *  - Only allowlisted tools may run; arbitrary commands/pipelines are rejected.
- *
- * Copyright
- * ---------
- * (C) 2025 Hasan Calisir <hasan.calisir@psauxit.com>
- * Version: 1.9.6 (2025)
+ * Copyright (C) 2025-2026 Hasan Calisir <hasan.calisir@psauxit.com>
  */
-
 
 #define _GNU_SOURCE 1
 
