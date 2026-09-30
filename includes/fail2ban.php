@@ -511,11 +511,24 @@ function nppp_f2b_regenerate_token(): string {
 // RIPEstat asks regular/high-volume callers to identify themselves via
 // "sourceapp" so they can be told apart from anonymous traffic if an issue
 // ever comes up -- see https://stat.ripe.net/docs/data-api/ripestat-data-api/.
-// This identifies the plugin itself, not the individual site; the value is
-// hardcoded on purpose (RIPE's rule is per-project/per-software, not per-site)
-// but stays filterable for anyone who knows what they're doing.
+// This always identifies the plugin itself (RIPE's rule is per-project/per-
+// software, not per-site), so the prefix below is fixed. Admins may append an
+// optional suffix in the Fail2Ban tab so RIPE can tell sites apart, and the
+// whole value stays filterable for anyone who knows what they're doing.
 if ( ! defined( 'NPPP_F2B_RDAP_SOURCEAPP' ) ) {
     define( 'NPPP_F2B_RDAP_SOURCEAPP', 'npp-wp-plugin-fail2ban-monitor' );
+}
+
+// Optional, admin-chosen suffix appended to the fixed sourceapp prefix above
+// (Fail2Ban tab > RIPEstat Lookups). Not autoloaded: read by the tab, the
+// save callback and the RIPEstat lookup path only.
+if ( ! defined( 'NPPP_F2B_SOURCEAPP_SUFFIX_OPTION' ) ) {
+    define( 'NPPP_F2B_SOURCEAPP_SUFFIX_OPTION', 'nppp_f2b_sourceapp_suffix' );
+}
+
+// Max length of the suffix (prefix + "-" + suffix stays well under 100 chars).
+if ( ! defined( 'NPPP_F2B_SOURCEAPP_SUFFIX_MAX' ) ) {
+    define( 'NPPP_F2B_SOURCEAPP_SUFFIX_MAX', 40 );
 }
 
 // ---------------------------------------------------------------------------
@@ -554,9 +567,75 @@ function nppp_f2b_ip_is_public( string $ip ): bool {
  * (RIPE would just ignore it, but stripping it locally is cheap and safe).
  */
 function nppp_f2b_rdap_sourceapp(): string {
-    $sourceapp = (string) apply_filters( 'nppp_f2b_rdap_sourceapp', NPPP_F2B_RDAP_SOURCEAPP );
+    $sourceapp = (string) apply_filters( 'nppp_f2b_rdap_sourceapp', nppp_f2b_compose_sourceapp( nppp_f2b_get_sourceapp_suffix() ) );
     $sourceapp = preg_replace( '/[^A-Za-z0-9_-]/', '', $sourceapp );
     return '' !== $sourceapp ? $sourceapp : NPPP_F2B_RDAP_SOURCEAPP;
+}
+
+/**
+ * Normalises a user-supplied sourceapp suffix to RIPE's allowed alphabet.
+ *
+ * Every run of characters outside [A-Za-z0-9_-] (dots, "@", spaces, non-ASCII)
+ * becomes one "_", so a domain like "example.com" survives as "example_com"
+ * instead of being silently mangled. The JS live preview in the tab mirrors
+ * these exact steps -- keep the two in sync.
+ */
+function nppp_f2b_sanitize_sourceapp_suffix( $raw ): string {
+    $suffix = preg_replace( '/[^A-Za-z0-9_-]+/', '_', (string) $raw );
+    $suffix = preg_replace( '/_{2,}/', '_', (string) $suffix );
+    $suffix = trim( (string) $suffix, '_-' );
+    $suffix = substr( $suffix, 0, NPPP_F2B_SOURCEAPP_SUFFIX_MAX );
+    return trim( $suffix, '_-' );
+}
+
+// Saved suffix, re-sanitised on read so a hand-edited option row is harmless.
+function nppp_f2b_get_sourceapp_suffix(): string {
+    return nppp_f2b_sanitize_sourceapp_suffix( get_option( NPPP_F2B_SOURCEAPP_SUFFIX_OPTION, '' ) );
+}
+
+// Fixed prefix + optional "-suffix". The prefix is the identifier registered with RIPE NCC.
+function nppp_f2b_compose_sourceapp( string $suffix ): string {
+    return NPPP_F2B_RDAP_SOURCEAPP . ( '' !== $suffix ? '-' . $suffix : '' );
+}
+
+// AJAX: save the suffix from the "RIPEstat Lookups" card.
+function nppp_f2b_save_sourceapp_callback() {
+    nppp_ajax_auth( 'nppp-security-tab' );
+
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce verified in nppp_ajax_auth() above; value is normalised by nppp_f2b_sanitize_sourceapp_suffix() below
+    $raw    = isset( $_POST['suffix'] ) ? wp_unslash( $_POST['suffix'] ) : '';
+    $suffix = nppp_f2b_sanitize_sourceapp_suffix( $raw );
+
+    if ( '' === $suffix ) {
+        delete_option( NPPP_F2B_SOURCEAPP_SUFFIX_OPTION );
+    } else {
+        update_option( NPPP_F2B_SOURCEAPP_SUFFIX_OPTION, $suffix, false );
+    }
+
+    $composed  = nppp_f2b_compose_sourceapp( $suffix );
+    $effective = nppp_f2b_rdap_sourceapp();
+
+    nppp_f2b_log(
+        'INFO',
+        sprintf(
+            'RIPEstat sourceapp suffix %s by user #%d: %s',
+            '' === $suffix ? 'cleared' : 'saved',
+            get_current_user_id(),
+            $composed
+        )
+    );
+
+    wp_send_json_success(
+        array(
+            'suffix'    => $suffix,
+            'sourceapp' => $effective,
+            'custom'    => '' !== $suffix,
+            'filtered'  => $effective !== $composed,
+            'message'   => '' === $suffix
+                ? __( 'Suffix cleared. Only the default identifier is sent to RIPEstat.', 'fastcgi-cache-purge-and-preload-nginx' )
+                : __( 'Saved. New RIPEstat lookups will use this identifier.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        )
+    );
 }
 
 function nppp_f2b_rdap_whois_url( string $ip ): string {
