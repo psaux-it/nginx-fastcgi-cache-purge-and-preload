@@ -219,6 +219,8 @@ add_action('wp_ajax_nppp_f2b_clear_events', 'nppp_f2b_clear_events_callback');
 add_action('wp_ajax_nppp_f2b_test_connection', 'nppp_f2b_test_connection_callback');
 add_action('wp_ajax_nppp_f2b_save_abuse_settings', 'nppp_f2b_save_abuse_settings_callback');
 add_action('wp_ajax_nppp_f2b_save_sourceapp', 'nppp_f2b_save_sourceapp_callback');
+add_action('wp_ajax_nppp_f2b_ripe_reg_preview', 'nppp_f2b_ripe_reg_preview_callback');
+add_action('wp_ajax_nppp_f2b_ripe_reg_send', 'nppp_f2b_ripe_reg_send_callback');
 add_action('wp_ajax_nppp_f2b_abuse_send_test', 'nppp_f2b_abuse_send_test_callback');
 add_action('wp_ajax_nppp_f2b_abuse_preview', 'nppp_f2b_abuse_preview_callback');
 add_action('wp_ajax_nppp_f2b_abuse_send', 'nppp_f2b_abuse_send_callback');
