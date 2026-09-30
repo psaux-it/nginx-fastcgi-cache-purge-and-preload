@@ -1476,6 +1476,88 @@ $(document).ready(function() {
                 });
             });
 
+        // -----------------------------------------------------------------
+        // RIPEstat Lookups -- optional sourceapp suffix
+        // -----------------------------------------------------------------
+
+        // Mirrors nppp_f2b_sanitize_sourceapp_suffix() in fail2ban.php so the
+        // preview matches what the server will actually store. Keep in sync.
+        const npppF2bSourceappSuffix = function(raw) {
+            return String(raw || '')
+                .replace(/[^A-Za-z0-9_-]+/g, '_')
+                .replace(/_{2,}/g, '_')
+                .replace(/^[_-]+|[_-]+$/g, '')
+                .slice(0, 40)
+                .replace(/[_-]+$/, '');
+        };
+
+        // Live preview while typing. Skipped when a PHP filter overrides the
+        // value, because the preview then shows the filtered identifier.
+        $securityPlaceholder.off('input', '#nppp-f2b-sourceapp-suffix')
+            .on('input', '#nppp-f2b-sourceapp-suffix', function() {
+                const $preview = $('#nppp-f2b-sourceapp-preview');
+                if ($preview.attr('data-filtered') === '1') {
+                    return;
+                }
+                const suffix = npppF2bSourceappSuffix($(this).val());
+                $preview.val($preview.attr('data-prefix') + (suffix ? '-' + suffix : ''));
+            });
+
+        // Enter saves, like pressing the Save button.
+        $securityPlaceholder.off('keydown', '#nppp-f2b-sourceapp-suffix')
+            .on('keydown', '#nppp-f2b-sourceapp-suffix', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    $('#nppp-f2b-sourceapp-save').trigger('click');
+                }
+            });
+
+        $securityPlaceholder.off('click', '#nppp-f2b-sourceapp-save')
+            .on('click', '#nppp-f2b-sourceapp-save', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const label = $btn.text();
+
+                $btn.prop('disabled', true).text(__('Saving\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
+
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action:   'nppp_f2b_save_sourceapp',
+                        _wpnonce: nonce,
+                        suffix:   $('#nppp-f2b-sourceapp-suffix').val()
+                    },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            const d = resp.data;
+
+                            // Reflect the server-normalised value.
+                            $('#nppp-f2b-sourceapp-suffix').val(d.suffix);
+                            $('#nppp-f2b-sourceapp-preview')
+                                .val(d.sourceapp)
+                                .attr('data-filtered', d.filtered ? '1' : '0');
+                            $('#nppp-f2b-sourceapp-filtered').toggle(!!d.filtered);
+                            $('#nppp-f2b-sourceapp-pill')
+                                .removeClass('nppp-f2b-pill-ok nppp-f2b-pill-idle')
+                                .addClass(d.custom ? 'nppp-f2b-pill-ok' : 'nppp-f2b-pill-idle')
+                                .text(d.custom
+                                    ? __('Custom suffix', 'fastcgi-cache-purge-and-preload-nginx')
+                                    : __('Default', 'fastcgi-cache-purge-and-preload-nginx'));
+
+                            npppF2bToast(d.message, 'success');
+                        } else {
+                            npppF2bToast(__('Failed to save the RIPEstat identifier.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                        }
+                    },
+                    error: function() {
+                        npppF2bToast(__('AJAX error while saving the RIPEstat identifier.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                    },
+                    complete: function() { $btn.prop('disabled', false).text(label); }
+                });
+            });
+
         // Send a real test email built from dummy ban data to the operator's
         // own Reply-To/Sender address, using whatever is currently typed in
         // the form (no need to Save first).
