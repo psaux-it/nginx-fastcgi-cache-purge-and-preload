@@ -131,6 +131,9 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
     // "Register now" is offered only for a saved custom suffix that is not overridden by a filter.
     $nppp_rr_show      = '' !== $nppp_sa_suffix && ! $nppp_sa_filtered;
     $nppp_rr_sent_at   = nppp_f2b_ripe_reg_sent_at();
+    // Setup gate: locked until the Fail2Ban webhook has delivered real ban events.
+    $nppp_rr_gate      = nppp_f2b_ripe_reg_traffic_gate();
+    $nppp_rr_locked    = '' !== $nppp_rr_gate;
     ?>
     <div class="nppp-f2b-card nppp-f2b-card-sourceapp">
         <div class="nppp-f2b-card-titlebar">
@@ -179,6 +182,9 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                     </button>
                     <button type="button" class="nppp-f2b-btn nppp-f2b-btn-primary" id="nppp-f2b-ripe-register"
                         data-saved="<?php echo esc_attr( $nppp_sa_suffix ); ?>"
+                        data-locked="<?php echo $nppp_rr_locked ? '1' : '0'; ?>"
+                        data-lock-title="<?php echo esc_attr( $nppp_rr_gate ); ?>"
+                        <?php echo $nppp_rr_locked ? 'disabled title="' . esc_attr( $nppp_rr_gate ) . '"' : ''; ?>
                         <?php echo $nppp_rr_show ? '' : 'style="display:none;"'; ?>>
                         <?php esc_html_e( 'Register now', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     </button>
@@ -194,6 +200,9 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                         ?>
                     </span>
                     <?php esc_html_e( 'Optional. Emails this identifier and your Abuse Reporter contact details to RIPE NCC after you review the message. Worthwhile mainly for sites making more than about 1,000 requests per day. It is never sent automatically.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    <?php if ( $nppp_rr_locked ) : ?>
+                        <br><strong id="nppp-f2b-ripe-gate-note"><?php echo esc_html( $nppp_rr_gate ); ?></strong>
+                    <?php endif; ?>
                 </p>
                 <p class="nppp-f2b-hint-text"><?php esc_html_e( 'This value is sent to RIPE NCC, a third party, with every lookup. A domain or project name is enough; do not enter personal data.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
             </div>
