@@ -1501,6 +1501,12 @@ $(document).ready(function() {
                 }
                 const suffix = npppF2bSourceappSuffix($(this).val());
                 $preview.val($preview.attr('data-prefix') + (suffix ? '-' + suffix : ''));
+
+                // Registration always uses the saved suffix, so block it while edits are unsaved.
+                const $reg = $('#nppp-f2b-ripe-register');
+                const dirty = suffix !== String($reg.attr('data-saved') || '');
+                $reg.prop('disabled', dirty)
+                    .attr('title', dirty ? __('Save the new suffix first.', 'fastcgi-cache-purge-and-preload-nginx') : '');
             });
 
         // Enter saves, like pressing the Save button.
@@ -1539,6 +1545,16 @@ $(document).ready(function() {
                                 .val(d.sourceapp)
                                 .attr('data-filtered', d.filtered ? '1' : '0');
                             $('#nppp-f2b-sourceapp-filtered').toggle(!!d.filtered);
+                            // Register button: only for a saved custom suffix not overridden by a filter.
+                            const showRegister = !!d.custom && !d.filtered;
+                            $('#nppp-f2b-ripe-register')
+                                .attr('data-saved', d.suffix || '')
+                                .prop('disabled', false)
+                                .attr('title', '')
+                                .toggle(showRegister);
+                            $('#nppp-f2b-ripe-register-hint').toggle(showRegister);
+                            $('#nppp-f2b-ripe-date').text(d.reg_date || '');
+                            $('#nppp-f2b-ripe-pill').toggle(!!d.reg_date);
                             $('#nppp-f2b-sourceapp-pill')
                                 .removeClass('nppp-f2b-pill-ok nppp-f2b-pill-idle')
                                 .addClass(d.custom ? 'nppp-f2b-pill-ok' : 'nppp-f2b-pill-idle')
@@ -1555,6 +1571,87 @@ $(document).ready(function() {
                         npppF2bToast(__('AJAX error while saving the RIPEstat identifier.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
                     },
                     complete: function() { $btn.prop('disabled', false).text(label); }
+                });
+            });
+
+        // RIPEstat registration email: preview first, nothing is sent from here.
+        $securityPlaceholder.off('click', '#nppp-f2b-ripe-register')
+            .on('click', '#nppp-f2b-ripe-register', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const label = $btn.text();
+
+                $btn.prop('disabled', true).text(__('\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
+
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: { action: 'nppp_f2b_ripe_reg_preview', _wpnonce: nonce },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            npppF2bOpenRipeModal(resp.data);
+                        } else {
+                            npppF2bToast(__('Could not build the registration preview.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                        }
+                    },
+                    error: function() {
+                        npppF2bToast(__('AJAX error while building the registration preview.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                    },
+                    complete: function() { $btn.prop('disabled', false).text(label); }
+                });
+            });
+
+        // Close the registration dialog: button, backdrop click, Escape key.
+        $securityPlaceholder.off('click', '#nppp-f2b-ripe-modal .nppp-f2b-modal-close, #nppp-f2b-ripe-modal .nppp-f2b-modal-backdrop')
+            .on('click', '#nppp-f2b-ripe-modal .nppp-f2b-modal-close, #nppp-f2b-ripe-modal .nppp-f2b-modal-backdrop', function(e) {
+                e.preventDefault();
+                npppF2bCloseRipeModal();
+            });
+
+        $(document).off('keydown.npppF2bRipe')
+            .on('keydown.npppF2bRipe', function(e) {
+                if (e.key === 'Escape' && $('#nppp-f2b-ripe-modal').is(':visible')) {
+                    npppF2bCloseRipeModal();
+                }
+            });
+
+        // Confirmed send.
+        $securityPlaceholder.off('click', '#nppp-f2b-ripe-send')
+            .on('click', '#nppp-f2b-ripe-send', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const label = $btn.text();
+
+                $btn.prop('disabled', true).text(__('Sending\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
+
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: { action: 'nppp_f2b_ripe_reg_send', _wpnonce: nonce },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            npppF2bToast(resp.data.message, 'success');
+                            if (resp.data.reg_date) {
+                                $('#nppp-f2b-ripe-date').text(resp.data.reg_date);
+                                $('#nppp-f2b-ripe-pill').show();
+                            }
+                            npppF2bCloseRipeModal();
+                        } else {
+                            npppF2bToast(
+                                (resp && resp.data && resp.data.message)
+                                    ? resp.data.message
+                                    : __('The registration email could not be sent.', 'fastcgi-cache-purge-and-preload-nginx'),
+                                'error'
+                            );
+                            $btn.prop('disabled', false).text(label);
+                        }
+                    },
+                    error: function() {
+                        npppF2bToast(__('AJAX error while sending the registration email.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                        $btn.prop('disabled', false).text(label);
+                    }
                 });
             });
 
@@ -1744,6 +1841,35 @@ $(document).ready(function() {
         $('#nppp-f2b-abuse-modal').hide();
         $('#nppp-f2b-abuse-modal-body').empty();
         $('#nppp-f2b-abuse-send').attr('data-ip', '').data('ip', '').prop('disabled', true);
+        $('body').removeClass('nppp-f2b-modal-open');
+    }
+
+    // RIPEstat registration dialog. Body is server-rendered and already escaped.
+    function npppF2bOpenRipeModal(payload) {
+        const $modal = $('#nppp-f2b-ripe-modal');
+        if (!$modal.length) { return; }
+
+        const $send = $('#nppp-f2b-ripe-send');
+
+        $('#nppp-f2b-ripe-modal-body').html(payload.html || '');
+        $send
+            .prop('disabled', !payload.can_send)
+            .text(payload.dry_run
+                ? __('Send Email (dry run)', 'fastcgi-cache-purge-and-preload-nginx')
+                : __('Send Email', 'fastcgi-cache-purge-and-preload-nginx'));
+
+        $modal.css('display', 'block');
+        $('body').addClass('nppp-f2b-modal-open');
+
+        if (payload.can_send) {
+            $send.trigger('focus');
+        }
+    }
+
+    function npppF2bCloseRipeModal() {
+        $('#nppp-f2b-ripe-modal').hide();
+        $('#nppp-f2b-ripe-modal-body').empty();
+        $('#nppp-f2b-ripe-send').prop('disabled', true);
         $('body').removeClass('nppp-f2b-modal-open');
     }
 
