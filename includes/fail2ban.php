@@ -1518,7 +1518,24 @@ function nppp_f2b_get_action_conf_snippet(): string {
     // queue so the jail doesn't wait on the network call before banning the
     // next IP. Using flock's exec form (no -c) avoids re-quoting the -H/-d
     // arguments through a second shell layer.
-    return "[Definition]\n" .
+    //
+    // norestored skips ban notifications for restored tickets.
+    // actionflush suppresses per-IP webhook unbans during bulk flush,
+    // including shutdown.
+    // actionreban suppresses notifications when an existing ban is
+    // reapplied. New bans still run actionban.
+    // The aim is to protect the WordPress webhook from excessive requests.
+    return "# Save as /etc/fail2ban/action.d/nppp-webhook.conf; copy and paste ready.\n" .
+        "# Sends ban/unban events to this site's webhook in the background.\n" .
+        "# Serializes requests and suppresses restore/reban and bulk-unban\n" .
+        "# notifications to reduce webhook load. Delivery is best-effort.\n" .
+        "# Enable per jail using the jail.local snippet below.\n" .
+        "\n" .
+        "[Definition]\n" .
+        "norestored  = 1\n" .
+        "actionflush = true\n" .
+        "actionreban = true\n" .
+        "\n" .
         "actionban   = nohup flock -w 300 /run/nppp-f2b.lock curl -sS -o /dev/null --max-time 10 --connect-timeout 3 --retry 2 --retry-delay 1 --retry-connrefused -X POST {$endpoint} \\\n" .
         "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
         "                -H \"Content-Type: application/json\" \\\n" .
