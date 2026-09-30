@@ -128,6 +128,9 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
     $nppp_sa_composed  = nppp_f2b_compose_sourceapp( $nppp_sa_suffix );
     $nppp_sa_effective = nppp_f2b_rdap_sourceapp();
     $nppp_sa_filtered  = $nppp_sa_effective !== $nppp_sa_composed;
+    // "Register now" is offered only for a saved custom suffix that is not overridden by a filter.
+    $nppp_rr_show      = '' !== $nppp_sa_suffix && ! $nppp_sa_filtered;
+    $nppp_rr_sent_at   = nppp_f2b_ripe_reg_sent_at();
     ?>
     <div class="nppp-f2b-card nppp-f2b-card-sourceapp">
         <div class="nppp-f2b-card-titlebar">
@@ -174,7 +177,24 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                     <button type="button" class="nppp-f2b-btn nppp-f2b-copy-btn" data-copy-target="nppp-f2b-sourceapp-preview">
                         <?php esc_html_e( 'Copy', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     </button>
+                    <button type="button" class="nppp-f2b-btn nppp-f2b-btn-primary" id="nppp-f2b-ripe-register"
+                        data-saved="<?php echo esc_attr( $nppp_sa_suffix ); ?>"
+                        <?php echo $nppp_rr_show ? '' : 'style="display:none;"'; ?>>
+                        <?php esc_html_e( 'Register now', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </button>
                 </div>
+                <p class="nppp-f2b-hint-text" id="nppp-f2b-ripe-register-hint" <?php echo $nppp_rr_show ? '' : 'style="display:none;"'; ?>>
+                    <span class="nppp-f2b-pill nppp-f2b-pill-ok" id="nppp-f2b-ripe-pill" <?php echo $nppp_rr_sent_at > 0 ? '' : 'style="display:none;"'; ?>>
+                        <?php
+                        printf(
+                            /* translators: %s: date the registration email was sent, e.g. 2026-09-30 */
+                            esc_html__( 'Registration email sent %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            '<span id="nppp-f2b-ripe-date">' . esc_html( $nppp_rr_sent_at > 0 ? wp_date( 'Y-m-d', $nppp_rr_sent_at ) : '' ) . '</span>'
+                        );
+                        ?>
+                    </span>
+                    <?php esc_html_e( 'Optional. Emails this identifier and your Abuse Reporter contact details to RIPE NCC after you review the message. Worthwhile mainly for sites making more than about 1,000 requests per day. It is never sent automatically.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </p>
                 <p class="nppp-f2b-hint-text"><?php esc_html_e( 'This value is sent to RIPE NCC, a third party, with every lookup. A domain or project name is enough; do not enter personal data.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
             </div>
 
@@ -1136,4 +1156,28 @@ PHP;
             </div>
         </div>
     <?php endif; ?>
+
+    <?php // RIPEstat registration dialog. Separate from the abuse modal above, which only exists when the reporter is enabled. ?>
+    <div id="nppp-f2b-ripe-modal" class="nppp-f2b-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="nppp-f2b-ripe-modal-title">
+        <div class="nppp-f2b-modal-backdrop"></div>
+        <div class="nppp-f2b-modal-box" role="document">
+            <div class="nppp-f2b-card-titlebar">
+                <h3 class="nppp-f2b-card-title" id="nppp-f2b-ripe-modal-title"><?php esc_html_e( 'Confirm RIPEstat registration email', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
+                <div class="nppp-f2b-card-title-actions">
+                    <button type="button" class="nppp-f2b-btn nppp-f2b-modal-close" aria-label="<?php esc_attr_e( 'Close', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
+                        <?php esc_html_e( 'Close', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </button>
+                </div>
+            </div>
+            <div class="nppp-f2b-modal-body" id="nppp-f2b-ripe-modal-body"></div>
+            <div class="nppp-f2b-modal-foot">
+                <p class="nppp-f2b-hint-text">
+                    <?php esc_html_e( 'This email, including the contact details above, goes to RIPE NCC, a third party. The recipient is fixed and cannot be changed from this page.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </p>
+                <button type="button" class="nppp-f2b-btn nppp-f2b-btn-primary" id="nppp-f2b-ripe-send" disabled>
+                    <?php esc_html_e( 'Send Email', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
