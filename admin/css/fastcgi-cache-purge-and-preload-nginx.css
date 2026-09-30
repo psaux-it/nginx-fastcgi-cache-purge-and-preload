@@ -5909,6 +5909,46 @@ div.updated.notice-nppp p,
 
 #nppp-f2b-tab .nppp-f2b-note code { background: #fff; }
 
+/* Register-now setup gate: same amber palette as the "Waiting" pill and notes, but louder. */
+#nppp-f2b-tab .nppp-f2b-gate {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 12px 0 0;
+    padding: 12px 14px;
+    background: #fdf6e7;
+    border: 1px solid #f2d08a;
+    border-left: 5px solid #f8b334;
+    border-radius: 0 4px 4px 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #4a3200;
+}
+
+#nppp-f2b-tab .nppp-f2b-gate-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #f8b334;
+    color: #4a3200;
+}
+
+#nppp-f2b-tab .nppp-f2b-gate-icon .dashicons {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+}
+
+#nppp-f2b-tab .nppp-f2b-gate-text strong {
+    display: block;
+    font-size: 13px;
+    letter-spacing: .02em;
+}
+
 /* --- Options card: a fixed row of category tabs that never reposition
    on click, plus one shared content panel below that always spans the
    full card width. Scoped to .nppp-f2b-card-options so the Connection
