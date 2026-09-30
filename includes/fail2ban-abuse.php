@@ -1243,13 +1243,13 @@ function nppp_f2b_ripe_reg_has_recent_bans(): bool {
 // produced a single lookup would only put noise in RIPE's inbox.
 function nppp_f2b_ripe_reg_traffic_gate(): string {
     if ( ! nppp_f2b_has_any_events() ) {
-        return __( 'Finish the Fail2Ban setup first. Registration unlocks after the webhook has delivered its first real event.', 'fastcgi-cache-purge-and-preload-nginx' );
+        return __( 'Finish the Fail2Ban setup first. It unlocks after the webhook delivers its first real event.', 'fastcgi-cache-purge-and-preload-nginx' );
     }
 
     if ( ! nppp_f2b_ripe_reg_has_recent_bans() ) {
         return sprintf(
             /* translators: %d: number of days in the statistics window */
-            __( 'No ban events were received in the last %d days, so this identifier has not made any RIPEstat lookups yet. Try again once Fail2Ban is actively banning.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'No bans received in the last %d days, so this identifier has not made any lookups yet.', 'fastcgi-cache-purge-and-preload-nginx' ),
             NPPP_F2B_WINDOW_DAYS
         );
     }
