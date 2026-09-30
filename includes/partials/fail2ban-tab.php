@@ -153,7 +153,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 <?php
                 printf(
                     /* translators: %s: the fixed default identifier, wrapped in <code> tags */
-                    esc_html__( 'Every IP lookup on this tab is sent to RIPEstat, the public Data API of RIPE NCC, together with a "sourceapp" identifier. RIPE asks regular API users to provide one so they can help you if something goes wrong. This plugin always sends %s. Add a suffix below, such as your domain or project name, so RIPE can tell your site apart from other installations. Leave it empty to send only the default.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    esc_html__( 'Every IP lookup on this tab goes to RIPEstat, the public Data API of RIPE NCC, with a "sourceapp" identifier so RIPE can reach out if something goes wrong. This plugin always sends %s. Add a suffix, such as your domain or project name, to tell your site apart from other installations, or leave it empty.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     '<code>' . esc_html( NPPP_F2B_RDAP_SOURCEAPP ) . '</code>'
                 );
                 ?>
@@ -167,7 +167,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                         maxlength="80" placeholder="example-com"
                         autocomplete="off" spellcheck="false" />
                 </div>
-                <p class="nppp-f2b-hint-text"><?php esc_html_e( 'Letters, numbers, hyphens and underscores only. Dots and other characters are converted to "_", so example.com becomes example_com. Up to 40 characters.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                <p class="nppp-f2b-hint-text"><?php esc_html_e( 'Letters, numbers, hyphens and underscores, up to 40 characters; dots become "_" (example.com is sent as example_com). Sent to RIPE NCC with every lookup, so use a domain or project name, not personal data.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
             </div>
 
             <div class="nppp-f2b-row">
@@ -199,12 +199,15 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                         );
                         ?>
                     </span>
-                    <?php esc_html_e( 'Optional. Emails this identifier and your Abuse Reporter contact details to RIPE NCC after you review the message. Worthwhile mainly for sites making more than about 1,000 requests per day. It is never sent automatically.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                    <?php if ( $nppp_rr_locked ) : ?>
-                        <br><strong id="nppp-f2b-ripe-gate-note"><?php echo esc_html( $nppp_rr_gate ); ?></strong>
-                    <?php endif; ?>
+                    <?php esc_html_e( 'Emails this identifier and your Abuse Reporter contact details to RIPE NCC after you review the message.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                 </p>
-                <p class="nppp-f2b-hint-text"><?php esc_html_e( 'This value is sent to RIPE NCC, a third party, with every lookup. A domain or project name is enough; do not enter personal data.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                <div class="nppp-f2b-gate" id="nppp-f2b-ripe-gate" role="status" <?php echo ( $nppp_rr_show && $nppp_rr_locked ) ? '' : 'style="display:none;"'; ?>>
+                    <span class="nppp-f2b-gate-icon" aria-hidden="true"><span class="dashicons dashicons-lock"></span></span>
+                    <span class="nppp-f2b-gate-text">
+                        <strong><?php esc_html_e( 'Register now is locked', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                        <?php echo esc_html( $nppp_rr_gate ); ?>
+                    </span>
+                </div>
             </div>
 
             <p class="nppp-f2b-note" id="nppp-f2b-sourceapp-filtered" <?php echo $nppp_sa_filtered ? '' : 'style="display:none;"'; ?>>
@@ -221,7 +224,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 <?php
                 printf(
                     /* translators: %s: RIPE stat contact address as a mailto link */
-                    esc_html__( 'RIPE asks callers that send more than about 1,000 requests per day to identify themselves. On a busy site, consider also sending a short email to %s mentioning your identifier, so they know who to contact if your traffic ever needs attention.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    esc_html__( 'RIPE asks callers sending more than about 1,000 requests per day to identify themselves. If that is your site, set a suffix and use Register now, or email %s yourself. Nothing is ever sent automatically.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     '<a href="mailto:stat@ripe.net">stat@ripe.net</a>'
                 );
                 ?>
