@@ -5429,6 +5429,7 @@ div.updated.notice-nppp p,
 
 #nppp-f2b-tab .nppp-f2b-pill-ok   { background: #66b317; }
 #nppp-f2b-tab .nppp-f2b-pill-wait { background: #f8b334; color: #4a3200; }
+#nppp-f2b-tab .nppp-f2b-pill-idle { background: #8c8f94; }
 
 #nppp-f2b-tab .nppp-f2b-toolbar {
     display: flex;
@@ -6576,7 +6577,8 @@ div.updated.notice-nppp p,
    Fail2Ban tab — Abuse Reporter
    ========================================================================= */
 
-#nppp-f2b-tab .nppp-f2b-abuse-intro {
+#nppp-f2b-tab .nppp-f2b-abuse-intro,
+#nppp-f2b-tab .nppp-f2b-sourceapp-intro {
     margin: 0 0 18px;
     padding-bottom: 14px;
     border-bottom: 1px solid #f0f0f1;
@@ -6613,6 +6615,15 @@ div.updated.notice-nppp p,
     margin-top: 5px;
     line-height: 1.5;
 }
+
+/* --- RIPEstat Lookups card --- */
+#nppp-f2b-tab .nppp-f2b-card-sourceapp .nppp-f2b-copy input[type="text"] {
+    flex: 0 1 520px;
+}
+
+#nppp-f2b-tab #nppp-f2b-sourceapp-suffix { background: #fff; }
+
+#nppp-f2b-tab .nppp-f2b-card-sourceapp .nppp-f2b-hint-text { line-height: 1.5; }
 
 /* --- Report cells, shared by Repeat Offenders and the Live Feed --- */
 #nppp-f2b-tab .nppp-f2b-report-col { white-space: nowrap; }
