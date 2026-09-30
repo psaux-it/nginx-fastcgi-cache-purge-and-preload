@@ -1172,3 +1172,295 @@ function nppp_f2b_abuse_send_callback() {
         )
     );
 }
+
+
+// ---------------------------------------------------------------------------
+// RIPEstat sourceapp registration mail (optional, admin-initiated only)
+//
+// Lets an admin who set a custom sourceapp suffix (Fail2Ban tab > RIPEstat
+// Lookups) email that identifier plus their contact details to RIPE NCC's
+// RIPEstat team, as RIPE asks of regular/high-volume API users. Never runs
+// automatically: the admin reviews the exact message in a dialog first. Reuses
+// the Abuse Reporter's sender/organisation/contact fields and mail helper, but
+// does NOT require the reporter itself to be switched on.
+// ---------------------------------------------------------------------------
+
+// Hard-coded recipient. Deliberately not filterable or user-editable, so this
+// button can never be turned into a generic "send mail to anyone" primitive.
+if ( ! defined( 'NPPP_F2B_RIPE_REG_TO' ) ) {
+    define( 'NPPP_F2B_RIPE_REG_TO', 'stat@ripe.net' );
+}
+
+// { sourceapp, sent_at }. Not autoloaded; read by the tab and the two callbacks.
+if ( ! defined( 'NPPP_F2B_RIPE_REG_OPTION' ) ) {
+    define( 'NPPP_F2B_RIPE_REG_OPTION', 'nppp_f2b_ripe_registration' );
+}
+
+// Same identifier cannot be re-sent inside this window.
+if ( ! defined( 'NPPP_F2B_RIPE_REG_COOLDOWN_DAYS' ) ) {
+    define( 'NPPP_F2B_RIPE_REG_COOLDOWN_DAYS', 30 );
+}
+
+// Site-wide lock: at most one registration mail per day, whatever the
+// identifier, so changing the suffix back and forth cannot flood RIPE's inbox.
+if ( ! defined( 'NPPP_F2B_RIPE_REG_RATE_KEY' ) ) {
+    define( 'NPPP_F2B_RIPE_REG_RATE_KEY', 'nppp_f2b_ripe_reg_rl' );
+}
+
+// Unix time the current identifier was last emailed to RIPE, or 0. A record
+// for a different identifier counts as "not registered", so changing the
+// suffix resets the state without any extra bookkeeping.
+function nppp_f2b_ripe_reg_sent_at(): int {
+    $rec = get_option( NPPP_F2B_RIPE_REG_OPTION, array() );
+    if ( ! is_array( $rec ) || ! isset( $rec['sourceapp'], $rec['sent_at'] ) ) {
+        return 0;
+    }
+    return hash_equals( (string) $rec['sourceapp'], nppp_f2b_rdap_sourceapp() ) ? (int) $rec['sent_at'] : 0;
+}
+
+// The three reporter fields RIPE needs to be able to contact the operator.
+function nppp_f2b_ripe_reg_identity_ready( array $settings ): bool {
+    return '' !== $settings['from_email'] && '' !== $settings['org_name'] && '' !== $settings['contact_name'];
+}
+
+// Everything that must be true before a registration mail may leave.
+// Shared by the preview dialog and the send path so they can never disagree.
+function nppp_f2b_ripe_reg_blockers( array $settings ): array {
+    $blockers = array();
+
+    if ( '' === nppp_f2b_get_sourceapp_suffix() ) {
+        $blockers[] = __( 'Set and save an identifier suffix first. The default identifier is already registered by the plugin author.', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( nppp_f2b_rdap_sourceapp() !== nppp_f2b_compose_sourceapp( nppp_f2b_get_sourceapp_suffix() ) ) {
+        $blockers[] = __( 'A filter overrides the identifier, so the saved suffix is not what is being sent.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    if ( ! nppp_f2b_ripe_reg_identity_ready( $settings ) ) {
+        $blockers[] = __( 'Fill in the sender address, organisation and contact name in the Abuse Reporter card and save it first. The Reporter does not have to be enabled.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    $sent_at = nppp_f2b_ripe_reg_sent_at();
+    if ( $sent_at > 0 && ( time() - $sent_at ) < ( NPPP_F2B_RIPE_REG_COOLDOWN_DAYS * DAY_IN_SECONDS ) ) {
+        $blockers[] = sprintf(
+            /* translators: %s: human readable time difference, e.g. "2 days" */
+            __( 'A registration email for this identifier was already sent %s ago.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            human_time_diff( $sent_at, time() )
+        );
+    }
+
+    return $blockers;
+}
+
+// Single plain-text line: tags and any line breaks removed.
+function nppp_f2b_ripe_reg_line( string $value ): string {
+    return trim( (string) preg_replace( '/\s+/', ' ', wp_strip_all_tags( $value ) ) );
+}
+
+// Unique banned IPs recorded in the window. Upper bound for distinct lookups.
+function nppp_f2b_ripe_reg_unique_ips(): int {
+    global $wpdb;
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    return (int) $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COUNT(DISTINCT ip) FROM %i WHERE event_type = 'ban' AND created_at >= %s",
+            nppp_f2b_table_name(),
+            nppp_f2b_window_cutoff()
+        )
+    );
+}
+
+/**
+ * Subject, plain-text body and headers of the registration mail.
+ * Plain text on purpose: the recipient is a human-read mailbox.
+ *
+ * @return array array( 'to' => string, 'subject' => string, 'body' => string, 'headers' => string[] )
+ */
+function nppp_f2b_ripe_reg_build( array $settings ): array {
+    $sourceapp = nppp_f2b_rdap_sourceapp();
+    $unique    = nppp_f2b_ripe_reg_unique_ips();
+    $ttl_days  = (int) round( nppp_f2b_rdap_cache_ttl() / DAY_IN_SECONDS );
+    $reply_to  = '' !== $settings['reply_to'] ? $settings['reply_to'] : $settings['from_email'];
+    $line      = 'nppp_f2b_ripe_reg_line';
+
+    $rows = array(
+        'Sourceapp identifier' => $sourceapp,
+        'Base identifier'      => NPPP_F2B_RDAP_SOURCEAPP,
+        'Plugin'               => 'Nginx Cache Purge Preload ' . ( defined( 'NPPP_PLUGIN_VERSION' ) ? NPPP_PLUGIN_VERSION : '' ),
+        'Plugin page'          => 'https://wordpress.org/plugins/fastcgi-cache-purge-and-preload-nginx/',
+        'Site'                 => nppp_f2b_abuse_site_domain(),
+        'Endpoints used'       => 'data/whois, data/abuse-contact-finder',
+        'Purpose'              => 'Enrichment of IP addresses banned by Fail2Ban with whois and abuse-contact data, shown in the site\'s own WordPress admin dashboard.',
+        'Observed volume'      => sprintf(
+            '%1$d unique banned IP addresses in the last %2$d days (2 requests each at most; results are cached for %3$d days)',
+            $unique,
+            NPPP_F2B_WINDOW_DAYS,
+            $ttl_days
+        ),
+        'Organisation'         => $settings['org_name'],
+        'Contact name'         => $settings['contact_name'],
+        'Contact email'        => $reply_to,
+    );
+
+    if ( '' !== $settings['contact_phone'] ) {
+        $rows['Contact phone'] = $settings['contact_phone'];
+    }
+
+    $body  = "Hello RIPEstat team,\n\n";
+    $body .= "This message identifies one installation of a WordPress plugin that uses the RIPEstat Data API.\n";
+    $body .= 'The base identifier "' . NPPP_F2B_RDAP_SOURCEAPP . "\" is already registered with you by the plugin author;\n";
+    $body .= "this site appends its own suffix so you can tell installations apart and reach the operator.\n\n";
+
+    foreach ( $rows as $label => $value ) {
+        $body .= str_pad( $label, 21 ) . ': ' . $line( (string) $value ) . "\n";
+    }
+
+    $body .= "\nThe site administrator reviewed this message in the plugin's admin screen before it was sent.\n";
+    $body .= "It is never sent automatically. Please reply to the contact address above if anything needs to change.\n";
+
+    $from_name = '' !== $settings['from_name'] ? $settings['from_name'] : 'NPP RIPEstat Registration';
+
+    $headers = array(
+        'Content-Type: text/plain; charset=UTF-8',
+        sprintf( 'From: %s <%s>', $from_name, $settings['from_email'] ),
+        'Reply-To: ' . $reply_to,
+    );
+
+    if ( 'yes' === $settings['cc_self'] ) {
+        $headers[] = 'Cc: ' . $reply_to;
+    }
+
+    return array(
+        'to'      => NPPP_F2B_RIPE_REG_TO,
+        'subject' => $line( 'RIPEstat sourceapp registration: ' . $sourceapp ),
+        'body'    => $body,
+        'headers' => $headers,
+    );
+}
+
+// Server-side gatekeeper + dispatcher. Returns array( 'ok' => bool, 'message' => string ).
+function nppp_f2b_ripe_reg_send(): array {
+    $settings = nppp_f2b_get_abuse_settings();
+    $blockers = nppp_f2b_ripe_reg_blockers( $settings );
+
+    if ( ! empty( $blockers ) ) {
+        return array( 'ok' => false, 'message' => $blockers[0] );
+    }
+
+    $mail = nppp_f2b_ripe_reg_build( $settings );
+
+    if ( 'yes' === $settings['dry_run'] ) {
+        nppp_f2b_log( 'INFO', 'RIPEstat registration dry run: sourceapp=' . nppp_f2b_rdap_sourceapp() . ' user=' . get_current_user_id() );
+        return array(
+            'ok'      => true,
+            'dry_run' => true,
+            'message' => sprintf(
+                /* translators: %s: recipient email address */
+                __( 'Dry run — no mail sent. A live registration would go to %s.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $mail['to']
+            ),
+        );
+    }
+
+    if ( false !== get_transient( NPPP_F2B_RIPE_REG_RATE_KEY ) ) {
+        return array(
+            'ok'      => false,
+            'message' => __( 'A registration email was already sent in the last 24 hours. Please wait before sending another.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+
+    // Lock before sending so a double click cannot produce two mails; released
+    // again below if the transport rejects the message.
+    set_transient( NPPP_F2B_RIPE_REG_RATE_KEY, time(), DAY_IN_SECONDS );
+
+    $result = nppp_wp_mail_diagnostic( $mail['to'], $mail['subject'], $mail['body'], $mail['headers'] );
+
+    if ( ! $result['sent'] ) {
+        delete_transient( NPPP_F2B_RIPE_REG_RATE_KEY );
+        nppp_f2b_log( 'ERROR', 'RIPEstat registration failed: sourceapp=' . nppp_f2b_rdap_sourceapp() . ' error=' . $result['error'] );
+        return array(
+            'ok'      => false,
+            'message' => __( 'WordPress could not hand the message to the mail transport. Check your SMTP configuration, then try again.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+
+    update_option(
+        NPPP_F2B_RIPE_REG_OPTION,
+        array(
+            'sourceapp' => nppp_f2b_rdap_sourceapp(),
+            'sent_at'   => time(),
+        ),
+        false
+    );
+    nppp_f2b_log( 'INFO', 'RIPEstat registration sent: sourceapp=' . nppp_f2b_rdap_sourceapp() . ' user=' . get_current_user_id() );
+
+    return array(
+        'ok'      => true,
+        'message' => sprintf(
+            /* translators: %s: recipient email address */
+            __( 'Registration email sent to %s. RIPE does not send an automatic confirmation.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $mail['to']
+        ),
+    );
+}
+
+// AJAX: build the confirmation dialog. Nothing is sent from here.
+function nppp_f2b_ripe_reg_preview_callback() {
+    nppp_ajax_auth( 'nppp-security-tab' );
+
+    $settings = nppp_f2b_get_abuse_settings();
+    $blockers = nppp_f2b_ripe_reg_blockers( $settings );
+    $mail     = nppp_f2b_ripe_reg_build( $settings );
+
+    ob_start();
+    ?>
+    <?php if ( ! empty( $blockers ) ) : ?>
+        <div class="nppp-f2b-result nppp-f2b-result-fail">
+            <?php foreach ( $blockers as $nppp_blocker ) : ?>
+                <div><?php echo esc_html( $nppp_blocker ); ?></div>
+            <?php endforeach; ?>
+        </div>
+    <?php elseif ( 'yes' === $settings['dry_run'] ) : ?>
+        <div class="nppp-f2b-note"><?php esc_html_e( 'Dry run is enabled in the Abuse Reporter card. Pressing Send only logs the attempt — no mail leaves this server.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></div>
+    <?php endif; ?>
+    <table class="nppp-f2b-table nppp-f2b-abuse-preview-table">
+        <tbody>
+            <tr><th scope="row"><?php esc_html_e( 'To', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th><td><code><?php echo esc_html( $mail['to'] ); ?></code></td></tr>
+            <tr><th scope="row"><?php esc_html_e( 'From', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th><td><code><?php echo esc_html( $settings['from_name'] . ' <' . $settings['from_email'] . '>' ); ?></code></td></tr>
+            <tr><th scope="row"><?php esc_html_e( 'Reply-To', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th><td><code><?php echo esc_html( '' !== $settings['reply_to'] ? $settings['reply_to'] : $settings['from_email'] ); ?></code></td></tr>
+            <tr><th scope="row"><?php esc_html_e( 'Subject', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th><td><?php echo esc_html( $mail['subject'] ); ?></td></tr>
+        </tbody>
+    </table>
+    <p class="nppp-f2b-abuse-preview-label"><?php esc_html_e( 'Message that will be sent (plain text)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+    <pre class="nppp-f2b-abuse-evidence"><?php echo esc_html( $mail['body'] ); ?></pre>
+    <?php
+    $html = ob_get_clean();
+
+    wp_send_json_success(
+        array(
+            'can_send' => empty( $blockers ),
+            'dry_run'  => 'yes' === $settings['dry_run'],
+            'html'     => $html,
+        )
+    );
+}
+
+// AJAX: confirmed send.
+function nppp_f2b_ripe_reg_send_callback() {
+    nppp_ajax_auth( 'nppp-security-tab' );
+
+    $result = nppp_f2b_ripe_reg_send();
+
+    if ( empty( $result['ok'] ) ) {
+        wp_send_json_error( array( 'message' => $result['message'] ) );
+    }
+
+    $sent_at = empty( $result['dry_run'] ) ? nppp_f2b_ripe_reg_sent_at() : 0;
+
+    wp_send_json_success(
+        array(
+            'message'  => $result['message'],
+            'dry_run'  => ! empty( $result['dry_run'] ),
+            'reg_date' => $sent_at > 0 ? wp_date( 'Y-m-d', $sent_at ) : '',
+        )
+    );
+}
