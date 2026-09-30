@@ -169,6 +169,7 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_f2b_country_col_ok',                // Fail2ban generated country_code column flag
         'nppp_f2b_abuse_settings',                // Fail2ban Abuse Reporter configuration
         'nppp_f2b_abuse_reports',                 // Fail2ban Abuse Reporter cooldown map
+        'nppp_f2b_sourceapp_suffix',              // Fail2ban RIPEstat sourceapp suffix
     );
 
     foreach ($option_keys as $option_key) {
