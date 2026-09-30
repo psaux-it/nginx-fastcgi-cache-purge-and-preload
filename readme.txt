@@ -752,10 +752,10 @@ The optional Fail2Ban dashboard uses one free third-party service.
 
 Looks up network ownership (network name, country, ASN, abuse contact) for IP addresses that Fail2Ban reports as banned.
 
-* Data sent: The banned IP address, sent to RIPE NCC's whois and abuse-contact lookup endpoints.
+* Data sent: The banned IP address, sent to RIPE NCC's whois and abuse-contact lookup endpoints, plus the "sourceapp" identifier described below.
 * When: From a background worker (or WP-Cron) after a ban event arrives and no cached result exists. Nothing is sent unless you configure Fail2Ban to push ban events to the plugin's webhook.
 * Provider:  RIPE NCC.
-* sourceapp: npp-wp-plugin-fail2ban-monitor
+* sourceapp: npp-wp-plugin-fail2ban-monitor. An administrator can optionally append a suffix (for example a domain or project name) under Fail2Ban > RIPEstat Lookups, which is then sent to RIPE NCC as part of this identifier. It is empty by default.
 
 The optional Abuse Reporter sends email to the abuse contact returned by that lookup, only when an administrator enables it and sends a report.
 
