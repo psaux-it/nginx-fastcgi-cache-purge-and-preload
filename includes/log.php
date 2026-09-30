@@ -153,6 +153,8 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_f2b_test_connection'                     => 'nppp-security-tab',
             'nppp_f2b_save_abuse_settings'                 => 'nppp-security-tab',
             'nppp_f2b_save_sourceapp'                      => 'nppp-security-tab',
+            'nppp_f2b_ripe_reg_preview'                    => 'nppp-security-tab',
+            'nppp_f2b_ripe_reg_send'                       => 'nppp-security-tab',
             'nppp_f2b_abuse_preview'                       => 'nppp-security-tab',
             'nppp_f2b_abuse_send'                          => 'nppp-security-tab',
         ];
