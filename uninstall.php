@@ -63,6 +63,7 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_f2b_abuse_rl',
         'nppp_f2b_worker_env',
         'nppp_f2b_abuse_test_rl',
+        'nppp_f2b_ripe_reg_rl',
         'nppp_http_probe_' . md5($static_key_base),
         'nppp_setup_strict_detect_' . md5($static_key_base),
         'nppp_requirements_met_' . md5($static_key_base),
@@ -170,6 +171,7 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_f2b_abuse_settings',                // Fail2ban Abuse Reporter configuration
         'nppp_f2b_abuse_reports',                 // Fail2ban Abuse Reporter cooldown map
         'nppp_f2b_sourceapp_suffix',              // Fail2ban RIPEstat sourceapp suffix
+        'nppp_f2b_ripe_registration',             // Fail2ban RIPEstat registration mail record
     );
 
     foreach ($option_keys as $option_key) {
