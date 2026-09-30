@@ -1505,8 +1505,11 @@ $(document).ready(function() {
                 // Registration always uses the saved suffix, so block it while edits are unsaved.
                 const $reg = $('#nppp-f2b-ripe-register');
                 const dirty = suffix !== String($reg.attr('data-saved') || '');
-                $reg.prop('disabled', dirty)
-                    .attr('title', dirty ? __('Save the new suffix first.', 'fastcgi-cache-purge-and-preload-nginx') : '');
+                const locked = String($reg.attr('data-locked') || '0') === '1';
+                $reg.prop('disabled', dirty || locked)
+                    .attr('title', dirty
+                        ? __('Save the new suffix first.', 'fastcgi-cache-purge-and-preload-nginx')
+                        : (locked ? String($reg.attr('data-lock-title') || '') : ''));
             });
 
         // Enter saves, like pressing the Save button.
@@ -1547,12 +1550,14 @@ $(document).ready(function() {
                             $('#nppp-f2b-sourceapp-filtered').toggle(!!d.filtered);
                             // Register button: only for a saved custom suffix not overridden by a filter.
                             const showRegister = !!d.custom && !d.filtered;
-                            $('#nppp-f2b-ripe-register')
+                            const $regBtn = $('#nppp-f2b-ripe-register');
+                            const regLocked = String($regBtn.attr('data-locked') || '0') === '1';
+                            $regBtn
                                 .attr('data-saved', d.suffix || '')
-                                .prop('disabled', false)
-                                .attr('title', '')
+                                .prop('disabled', regLocked)
+                                .attr('title', regLocked ? String($regBtn.attr('data-lock-title') || '') : '')
                                 .toggle(showRegister);
-                            $('#nppp-f2b-ripe-register-hint').toggle(showRegister);
+                            $('#nppp-f2b-ripe-gate').toggle(showRegister && regLocked);
                             $('#nppp-f2b-ripe-date').text(d.reg_date || '');
                             $('#nppp-f2b-ripe-pill').toggle(!!d.reg_date);
                             $('#nppp-f2b-sourceapp-pill')
