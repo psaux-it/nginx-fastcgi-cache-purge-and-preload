@@ -123,6 +123,84 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
     </div>
 
     <?php
+    // RIPEstat Lookups card: optional sourceapp suffix.
+    $nppp_sa_suffix    = nppp_f2b_get_sourceapp_suffix();
+    $nppp_sa_composed  = nppp_f2b_compose_sourceapp( $nppp_sa_suffix );
+    $nppp_sa_effective = nppp_f2b_rdap_sourceapp();
+    $nppp_sa_filtered  = $nppp_sa_effective !== $nppp_sa_composed;
+    ?>
+    <div class="nppp-f2b-card nppp-f2b-card-sourceapp">
+        <div class="nppp-f2b-card-titlebar">
+            <h3 class="nppp-f2b-card-title"><?php esc_html_e( 'RIPEstat Lookups', 'fastcgi-cache-purge-and-preload-nginx' ); ?></h3>
+            <div class="nppp-f2b-card-title-actions">
+                <span class="nppp-f2b-pill <?php echo '' !== $nppp_sa_suffix ? 'nppp-f2b-pill-ok' : 'nppp-f2b-pill-idle'; ?>" id="nppp-f2b-sourceapp-pill">
+                    <?php echo '' !== $nppp_sa_suffix ? esc_html__( 'Custom suffix', 'fastcgi-cache-purge-and-preload-nginx' ) : esc_html__( 'Default', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </span>
+                <button type="button" class="nppp-f2b-btn nppp-f2b-btn-primary" id="nppp-f2b-sourceapp-save">
+                    <?php esc_html_e( 'Save', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                </button>
+            </div>
+        </div>
+        <div class="nppp-f2b-card-body">
+
+            <p class="nppp-f2b-hint-text nppp-f2b-sourceapp-intro">
+                <?php
+                printf(
+                    /* translators: %s: the fixed default identifier, wrapped in <code> tags */
+                    esc_html__( 'Every IP lookup on this tab is sent to RIPEstat, the public Data API of RIPE NCC, together with a "sourceapp" identifier. RIPE asks regular API users to provide one so they can help you if something goes wrong. This plugin always sends %s. Add a suffix below, such as your domain or project name, so RIPE can tell your site apart from other installations. Leave it empty to send only the default.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    '<code>' . esc_html( NPPP_F2B_RDAP_SOURCEAPP ) . '</code>'
+                );
+                ?>
+            </p>
+
+            <div class="nppp-f2b-row">
+                <label for="nppp-f2b-sourceapp-suffix"><?php esc_html_e( 'Identifier suffix (optional)', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                <div class="nppp-f2b-copy">
+                    <input type="text" id="nppp-f2b-sourceapp-suffix"
+                        value="<?php echo esc_attr( $nppp_sa_suffix ); ?>"
+                        maxlength="80" placeholder="example-com"
+                        autocomplete="off" spellcheck="false" />
+                </div>
+                <p class="nppp-f2b-hint-text"><?php esc_html_e( 'Letters, numbers, hyphens and underscores only. Dots and other characters are converted to "_", so example.com becomes example_com. Up to 40 characters.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+            </div>
+
+            <div class="nppp-f2b-row">
+                <label for="nppp-f2b-sourceapp-preview"><?php esc_html_e( 'Sent to RIPEstat as', 'fastcgi-cache-purge-and-preload-nginx' ); ?></label>
+                <div class="nppp-f2b-copy">
+                    <input type="text" readonly id="nppp-f2b-sourceapp-preview"
+                        value="<?php echo esc_attr( $nppp_sa_effective ); ?>"
+                        data-prefix="<?php echo esc_attr( NPPP_F2B_RDAP_SOURCEAPP ); ?>"
+                        data-filtered="<?php echo $nppp_sa_filtered ? '1' : '0'; ?>" />
+                    <button type="button" class="nppp-f2b-btn nppp-f2b-copy-btn" data-copy-target="nppp-f2b-sourceapp-preview">
+                        <?php esc_html_e( 'Copy', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </button>
+                </div>
+                <p class="nppp-f2b-hint-text"><?php esc_html_e( 'This value is sent to RIPE NCC, a third party, with every lookup. A domain or project name is enough; do not enter personal data.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+            </div>
+
+            <p class="nppp-f2b-note" id="nppp-f2b-sourceapp-filtered" <?php echo $nppp_sa_filtered ? '' : 'style="display:none;"'; ?>>
+                <?php
+                printf(
+                    /* translators: %s: filter name, wrapped in <code> tags */
+                    esc_html__( 'A filter in your theme or another plugin (%s) currently overrides this value. The identifier shown above is what is actually sent.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    '<code>nppp_f2b_rdap_sourceapp</code>'
+                );
+                ?>
+            </p>
+
+            <p class="nppp-f2b-note">
+                <?php
+                printf(
+                    /* translators: %s: RIPE stat contact address as a mailto link */
+                    esc_html__( 'RIPE asks callers that send more than about 1,000 requests per day to identify themselves. On a busy site, consider also sending a short email to %s mentioning your identifier, so they know who to contact if your traffic ever needs attention.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    '<a href="mailto:stat@ripe.net">stat@ripe.net</a>'
+                );
+                ?>
+            </p>
+        </div>
+    </div>
+
+    <?php
     // Static, non-dynamic reference snippets for the Options card below.
     $nppp_opt_retention_snippet = <<<'PHP'
 // NPP - Fail2Ban Monitor: data retention & list sizes.
@@ -191,8 +269,10 @@ add_filter( 'nppp_f2b_rdap_retry_gap', function( $seconds ) {
     return 180;
 } );
 
-// The "sourceapp" identifier sent with every RIPEstat request (RIPE convention).
-// Default: npp-wp-plugin-fail2ban-monitor
+// The full "sourceapp" identifier sent with every RIPEstat request (RIPE convention).
+// Overrides the suffix set in the "RIPEstat Lookups" card above, so most sites
+// do not need this filter.
+// Default: npp-wp-plugin-fail2ban-monitor[-suffix]
 add_filter( 'nppp_f2b_rdap_sourceapp', function( $sourceapp ) {
     return 'my-site-fail2ban-monitor';
 } );
