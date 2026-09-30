@@ -631,6 +631,7 @@ function nppp_f2b_save_sourceapp_callback() {
             'sourceapp' => $effective,
             'custom'    => '' !== $suffix,
             'filtered'  => $effective !== $composed,
+            'reg_date'  => nppp_f2b_ripe_reg_sent_at() > 0 ? wp_date( 'Y-m-d', nppp_f2b_ripe_reg_sent_at() ) : '',
             'message'   => '' === $suffix
                 ? __( 'Suffix cleared. Only the default identifier is sent to RIPEstat.', 'fastcgi-cache-purge-and-preload-nginx' )
                 : __( 'Saved. New RIPEstat lookups will use this identifier.', 'fastcgi-cache-purge-and-preload-nginx' ),
