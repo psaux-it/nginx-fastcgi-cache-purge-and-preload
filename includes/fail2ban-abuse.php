@@ -1223,6 +1223,40 @@ function nppp_f2b_ripe_reg_identity_ready( array $settings ): bool {
     return '' !== $settings['from_email'] && '' !== $settings['org_name'] && '' !== $settings['contact_name'];
 }
 
+// True when a real ban event exists inside the stats window. Test-connection
+// rows (event_type 'test') and endpoint-gate rows never count.
+function nppp_f2b_ripe_reg_has_recent_bans(): bool {
+    global $wpdb;
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    return (bool) $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT id FROM %i WHERE event_type = 'ban' AND created_at >= %s LIMIT 1",
+            nppp_f2b_table_name(),
+            nppp_f2b_window_cutoff()
+        )
+    );
+}
+
+// Setup gate. Returns '' when the Fail2Ban pipeline is live, otherwise the
+// reason the registration has to wait. Registering an identifier that has never
+// produced a single lookup would only put noise in RIPE's inbox.
+function nppp_f2b_ripe_reg_traffic_gate(): string {
+    if ( ! nppp_f2b_has_any_events() ) {
+        return __( 'Finish the Fail2Ban setup first. Registration unlocks after the webhook has delivered its first real event.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    if ( ! nppp_f2b_ripe_reg_has_recent_bans() ) {
+        return sprintf(
+            /* translators: %d: number of days in the statistics window */
+            __( 'No ban events were received in the last %d days, so this identifier has not made any RIPEstat lookups yet. Try again once Fail2Ban is actively banning.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            NPPP_F2B_WINDOW_DAYS
+        );
+    }
+
+    return '';
+}
+
 // Everything that must be true before a registration mail may leave.
 // Shared by the preview dialog and the send path so they can never disagree.
 function nppp_f2b_ripe_reg_blockers( array $settings ): array {
@@ -1232,6 +1266,11 @@ function nppp_f2b_ripe_reg_blockers( array $settings ): array {
         $blockers[] = __( 'Set and save an identifier suffix first. The default identifier is already registered by the plugin author.', 'fastcgi-cache-purge-and-preload-nginx' );
     } elseif ( nppp_f2b_rdap_sourceapp() !== nppp_f2b_compose_sourceapp( nppp_f2b_get_sourceapp_suffix() ) ) {
         $blockers[] = __( 'A filter overrides the identifier, so the saved suffix is not what is being sent.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    $traffic_gate = nppp_f2b_ripe_reg_traffic_gate();
+    if ( '' !== $traffic_gate ) {
+        $blockers[] = $traffic_gate;
     }
 
     if ( ! nppp_f2b_ripe_reg_identity_ready( $settings ) ) {
