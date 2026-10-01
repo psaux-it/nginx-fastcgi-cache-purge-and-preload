@@ -6617,13 +6617,16 @@ div.updated.notice-nppp p,
    Fail2Ban tab — Abuse Reporter
    ========================================================================= */
 
-#nppp-f2b-tab .nppp-f2b-abuse-intro,
-#nppp-f2b-tab .nppp-f2b-sourceapp-intro {
+/* Shared intro paragraph at the top of the Options, Abuse Reporter and
+   RIPEstat Lookups cards. Selector specificity is deliberately higher than
+   the per-card .nppp-f2b-hint-text rules so all three render identically. */
+#nppp-f2b-tab .nppp-f2b-card-body > .nppp-f2b-hint-text.nppp-f2b-card-intro {
     margin: 0 0 18px;
     padding-bottom: 14px;
     border-bottom: 1px solid #f0f0f1;
-    line-height: 1.7;
     font-size: 13px;
+    line-height: 1.7;
+    color: #646970;
 }
 
 #nppp-f2b-tab .nppp-f2b-abuse-grid {
