@@ -1259,6 +1259,18 @@ $(document).ready(function() {
                 $panelsWrap.addClass('is-open');
             });
 
+        // Setup scope selector (Connection card)
+        $securityPlaceholder.off('click', '.nppp-f2b-scope-opt')
+            .on('click', '.nppp-f2b-scope-opt', function(e) {
+                e.preventDefault();
+                const $opt = $(this);
+                const $wrap = $opt.closest('.nppp-f2b-scope');
+                $wrap.find('.nppp-f2b-scope-opt').removeClass('is-active').attr('aria-selected', 'false');
+                $wrap.find('.nppp-f2b-scope-panel').removeClass('is-active');
+                $opt.addClass('is-active').attr('aria-selected', 'true');
+                $('#' + $opt.data('scope-panel')).addClass('is-active');
+            });
+
         // Refresh the whole panel
         $securityPlaceholder.off('click', '#nppp-f2b-refresh')
             .on('click', '#nppp-f2b-refresh', function(e) {
@@ -1290,6 +1302,10 @@ $(document).ready(function() {
                             $tokenField.val(masked);
                             $('#nppp-f2b-reveal-token').text(__('Show', 'fastcgi-cache-purge-and-preload-nginx'));
                             $('#nppp-f2b-jail-snippet').val(resp.data.jail_snippet);
+                            // Keep the per-domain jail example in sync with the new token.
+                            $('#nppp-f2b-scope-jail').val(function(i, v) {
+                                return v.replace(/nppp_token="[^"]*"/, function() { return 'nppp_token="' + resp.data.token + '"'; });
+                            });
                             $('#nppp-f2b-tab').find('.nppp-f2b-setup').prop('open', true);
                             npppF2bToast(__('Token regenerated. Update jail.local and reload fail2ban.', 'fastcgi-cache-purge-and-preload-nginx'), 'success');
                         } else {
