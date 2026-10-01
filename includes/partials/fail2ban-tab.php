@@ -71,6 +71,71 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 <p class="nppp-f2b-hint-text"><?php esc_html_e( 'Regenerating invalidates the current token immediately. Update jail.local and reload fail2ban straight afterwards or events stop arriving.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
             </div>
 
+            <?php
+            // Setup scope selector. Names are derived from this site's host as a naming convention only;
+            // fail2ban can run on any machine that can reach the Webhook URL.
+            $nppp_scope_host = (string) wp_parse_url( home_url(), PHP_URL_HOST );
+            $nppp_scope_slug = nppp_f2b_sanitize_sourceapp_suffix( $nppp_scope_host );
+            if ( '' === $nppp_scope_slug ) {
+                $nppp_scope_slug = 'site';
+            }
+            $nppp_scope_action = 'nppp-webhook-' . $nppp_scope_slug;
+            $nppp_scope_jail   = "# /etc/fail2ban/jail.local on the fail2ban host -- one block like this per domain\n" .
+                "[nginx-botsearch-{$nppp_scope_slug}]\n" .
+                "enabled = true\n" .
+                "filter  = nginx-botsearch\n" .
+                "# Adjust to your log naming. Globs (* ?) work, but only files that exist when fail2ban starts are used.\n" .
+                "logpath = /var/log/nginx/{$nppp_scope_host}.access.log\n" .
+                "action  = %(action_)s\n" .
+                "          {$nppp_scope_action}[nppp_token=\"{$token}\"]\n";
+            ?>
+            <details class="nppp-f2b-scope" <?php echo $configured ? '' : 'open'; ?>>
+                <summary><?php esc_html_e( 'Setup scope — one dashboard for all domains, or one per domain', 'fastcgi-cache-purge-and-preload-nginx' ); ?></summary>
+
+                <div class="nppp-f2b-scope-opts" role="tablist">
+                    <button type="button" class="nppp-f2b-scope-opt is-active" role="tab" aria-selected="true" aria-controls="nppp-f2b-scope-panel-central" data-scope-panel="nppp-f2b-scope-panel-central">
+                        <span class="nppp-f2b-scope-opt-title"><?php esc_html_e( 'Centralized dashboard', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="nppp-f2b-scope-opt-desc"><?php esc_html_e( 'All jails on your Fail2Ban host report to this site.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    </button>
+                    <button type="button" class="nppp-f2b-scope-opt" role="tab" aria-selected="false" aria-controls="nppp-f2b-scope-panel-domain" data-scope-panel="nppp-f2b-scope-panel-domain">
+                        <span class="nppp-f2b-scope-opt-title"><?php esc_html_e( 'One site per domain', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                        <span class="nppp-f2b-scope-opt-desc"><?php esc_html_e( 'Each WordPress site only sees the bans you point at it.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    </button>
+                </div>
+
+                <div id="nppp-f2b-scope-panel-central" class="nppp-f2b-scope-panel is-active" role="tabpanel">
+                    <p class="nppp-f2b-hint-text"><?php esc_html_e( 'Use this when one WordPress install is your main security dashboard. Add the jail.local snippet to every jail you want reported, on any Fail2Ban host that can reach this site\'s Webhook URL, and their bans appear here. Follow the server-side setup below exactly as shown.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                </div>
+
+                <div id="nppp-f2b-scope-panel-domain" class="nppp-f2b-scope-panel" role="tabpanel">
+                    <p class="nppp-f2b-hint-text"><?php esc_html_e( 'Use this when each WordPress site should only see its own bans. Every site needs its own action file, its own token and its own jails on the Fail2Ban host, which can be a different machine from WordPress. Repeat the setup once per site, using that site\'s Webhook URL and token.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+
+                    <p class="nppp-f2b-step"><span class="nppp-f2b-step-n">1</span>
+                        <?php
+                        printf(
+                            /* translators: %s: action file path, wrapped in <code>. */
+                            esc_html__( 'On the fail2ban host, save the action file from step 1 below as %s instead of nppp-webhook.conf. The webhook URL is stored inside it, so another site cannot reuse the same file.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            '<code>/etc/fail2ban/action.d/' . esc_html( $nppp_scope_action ) . '.conf</code>'
+                        );
+                        ?>
+                    </p>
+
+                    <p class="nppp-f2b-step"><span class="nppp-f2b-step-n">2</span> <?php esc_html_e( 'Add a jail that watches only this domain\'s log.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                    <div class="nppp-f2b-copy nppp-f2b-copy-block">
+                        <textarea readonly rows="8" class="nppp-f2b-code" id="nppp-f2b-scope-jail"><?php echo esc_textarea( $nppp_scope_jail ); ?></textarea>
+                        <button type="button" class="nppp-f2b-btn nppp-f2b-copy-btn" data-copy-target="nppp-f2b-scope-jail">
+                            <?php esc_html_e( 'Copy', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </button>
+                    </div>
+
+                    <p class="nppp-f2b-step"><span class="nppp-f2b-step-n">3</span> <?php esc_html_e( 'Reload fail2ban, then press Test Connection above. Do the same on each other site with its own values.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+
+                    <p class="nppp-f2b-note">
+                        <?php esc_html_e( 'The jail must watch a log that contains only this domain\'s traffic, such as a per-site access log. A jail that watches a shared log sees every domain, so the separation will not work. The jail name, filter and log path above are examples; adapt them to your own setup. A glob such as *.access.log is supported, but only log files that exist when fail2ban starts are picked up, so reload fail2ban after adding a new site.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                    </p>
+                </div>
+            </details>
+
             <details class="nppp-f2b-setup" <?php echo $configured ? '' : 'open'; ?>>
                 <summary><?php esc_html_e( 'Server-side setup — one time, over SSH', 'fastcgi-cache-purge-and-preload-nginx' ); ?></summary>
 
