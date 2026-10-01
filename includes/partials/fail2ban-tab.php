@@ -1030,7 +1030,7 @@ PHP;
         </p>
     <?php elseif ( empty( $top_countries ) ) : ?>
         <p class="nppp-f2b-empty">
-            <?php esc_html_e( 'No enriched ban events yet. Countries appear here once RDAP lookups complete for banned IPs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            <?php esc_html_e( 'No enriched ban events yet. Countries appear here once RIPEstat lookups complete for banned IPs.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
         </p>
     <?php else : ?>
         <div class="nppp-f2b-geo">
