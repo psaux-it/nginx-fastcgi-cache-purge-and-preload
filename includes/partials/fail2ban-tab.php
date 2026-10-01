@@ -105,7 +105,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 </div>
 
                 <div id="nppp-f2b-scope-panel-central" class="nppp-f2b-scope-panel is-active" role="tabpanel">
-                    <p class="nppp-f2b-hint-text"><?php esc_html_e( 'Use this when one WordPress install is your main security dashboard. Add the jail.local snippet to every jail you want reported, on any Fail2Ban host that can reach this site\'s Webhook URL, and their bans appear here. Follow the server-side setup below exactly as shown.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                    <p class="nppp-f2b-hint-text"><?php esc_html_e( 'Use this when one WordPress install is your main security dashboard. Add the jail.local snippet to every jail you want reported, on any Fail2Ban host that can reach this site\'s Webhook URL, and their bans appear here. Follow the centralized dashboard setup below exactly as shown.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                 </div>
 
                 <div id="nppp-f2b-scope-panel-domain" class="nppp-f2b-scope-panel" role="tabpanel">
@@ -145,7 +145,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
             </details>
 
             <details class="nppp-f2b-setup" id="nppp-f2b-setup-server" <?php echo $configured ? '' : 'open'; ?>>
-                <summary><?php esc_html_e( 'Server-side setup — one time, over SSH', 'fastcgi-cache-purge-and-preload-nginx' ); ?></summary>
+                <summary><?php esc_html_e( 'Centralized dashboard setup — one time, over SSH', 'fastcgi-cache-purge-and-preload-nginx' ); ?></summary>
 
                 <p class="nppp-f2b-step"><span class="nppp-f2b-step-n">1</span> <code>/etc/fail2ban/action.d/nppp-webhook.conf</code></p>
                 <div class="nppp-f2b-copy nppp-f2b-copy-block">
