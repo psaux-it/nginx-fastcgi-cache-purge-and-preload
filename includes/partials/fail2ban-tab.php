@@ -356,10 +356,11 @@ add_filter( 'nppp_f2b_rdap_negative_cache_ttl', function( $ttl ) {
     return 10 * MINUTE_IN_SECONDS;
 } );
 
-// HTTP timeout, in seconds, for each outgoing RIPEstat request.
-// Default: 3
+// HTTP timeout, in seconds, for each outgoing RIPEstat request made by the
+// background worker (clamped to 1-30).
+// Default: 6
 add_filter( 'nppp_f2b_rdap_timeout', function( $seconds ) {
-    return 5;
+    return 10;
 } );
 
 // Max retry attempts per IP before the worker gives up on that lookup.
