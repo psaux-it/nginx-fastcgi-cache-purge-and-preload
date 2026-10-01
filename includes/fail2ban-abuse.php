@@ -1223,35 +1223,14 @@ function nppp_f2b_ripe_reg_identity_ready( array $settings ): bool {
     return '' !== $settings['from_email'] && '' !== $settings['org_name'] && '' !== $settings['contact_name'];
 }
 
-// True when a real ban event exists inside the stats window. Test-connection
-// rows (event_type 'test') and endpoint-gate rows never count.
-function nppp_f2b_ripe_reg_has_recent_bans(): bool {
-    global $wpdb;
-
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
-    return (bool) $wpdb->get_var(
-        $wpdb->prepare(
-            "SELECT id FROM %i WHERE event_type = 'ban' AND created_at >= %s LIMIT 1",
-            nppp_f2b_table_name(),
-            nppp_f2b_window_cutoff()
-        )
-    );
-}
-
 // Setup gate. Returns '' when the Fail2Ban pipeline is live, otherwise the
 // reason the registration has to wait. Registering an identifier that has never
 // produced a single lookup would only put noise in RIPE's inbox.
 function nppp_f2b_ripe_reg_traffic_gate(): string {
+    // Same test as the "Receiving events" pill: any real ban OR unban proves the
+    // remote client, webhook token and endpoint all work.
     if ( ! nppp_f2b_has_any_events() ) {
         return __( 'Finish the Fail2Ban setup first. It unlocks after the webhook delivers its first real event.', 'fastcgi-cache-purge-and-preload-nginx' );
-    }
-
-    if ( ! nppp_f2b_ripe_reg_has_recent_bans() ) {
-        return sprintf(
-            /* translators: %d: number of days in the statistics window */
-            __( 'No bans received in the last %d days, so this identifier has not made any lookups yet.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            NPPP_F2B_WINDOW_DAYS
-        );
     }
 
     return '';
@@ -1308,6 +1287,25 @@ function nppp_f2b_ripe_reg_unique_ips(): int {
     );
 }
 
+// Date (UTC, Y-m-d) of the earliest real ban/unban still on record, or ''.
+// Events older than the retention period are pruned, so this is "since at
+// least", which is all the mail claims.
+function nppp_f2b_ripe_reg_first_event_date(): string {
+    global $wpdb;
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $first = $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT MIN(created_at) FROM %i WHERE event_type IN ('ban','unban')",
+            nppp_f2b_table_name()
+        )
+    );
+
+    $ts = $first ? strtotime( $first . ' UTC' ) : false;
+
+    return $ts ? gmdate( 'Y-m-d', $ts ) : '';
+}
+
 /**
  * Subject, plain-text body and headers of the registration mail.
  * Plain text on purpose: the recipient is a human-read mailbox.
@@ -1321,6 +1319,24 @@ function nppp_f2b_ripe_reg_build( array $settings ): array {
     $reply_to  = '' !== $settings['reply_to'] ? $settings['reply_to'] : $settings['from_email'];
     $line      = 'nppp_f2b_ripe_reg_line';
 
+    if ( $unique > 0 ) {
+        $volume = sprintf(
+            '%1$d unique banned IP addresses in the last %2$d days (2 requests each at most; results are cached for %3$d days)',
+            $unique,
+            NPPP_F2B_WINDOW_DAYS,
+            $ttl_days
+        );
+    } else {
+        // Unlocked by unban events or by bans older than the window: say so plainly.
+        $since  = nppp_f2b_ripe_reg_first_event_date();
+        $volume = sprintf(
+            'No bans in the last %1$d days, so no lookups in that period. The Fail2Ban webhook is active%2$s (results are cached for %3$d days)',
+            NPPP_F2B_WINDOW_DAYS,
+            '' !== $since ? '; the earliest event on record is ' . $since : '',
+            $ttl_days
+        );
+    }
+
     $rows = array(
         'Sourceapp identifier' => $sourceapp,
         'Base identifier'      => NPPP_F2B_RDAP_SOURCEAPP,
@@ -1329,12 +1345,7 @@ function nppp_f2b_ripe_reg_build( array $settings ): array {
         'Site'                 => nppp_f2b_abuse_site_domain(),
         'Endpoints used'       => 'data/whois, data/abuse-contact-finder',
         'Purpose'              => 'Enrichment of IP addresses banned by Fail2Ban with whois and abuse-contact data, shown in the site\'s own WordPress admin dashboard.',
-        'Observed volume'      => sprintf(
-            '%1$d unique banned IP addresses in the last %2$d days (2 requests each at most; results are cached for %3$d days)',
-            $unique,
-            NPPP_F2B_WINDOW_DAYS,
-            $ttl_days
-        ),
+        'Observed volume'      => $volume,
         'Organisation'         => $settings['org_name'],
         'Contact name'         => $settings['contact_name'],
         'Contact email'        => $reply_to,
