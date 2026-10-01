@@ -639,6 +639,24 @@ function nppp_f2b_save_sourceapp_callback() {
     );
 }
 
+/**
+ * Per-request timeout (seconds) for the parallel RIPEstat lookups in the
+ * worker. 3 s was tight enough that a slow whois OR abuse-contact answer got
+ * cut off and the IP was stored with a partial profile. Clamped to 1..30: the
+ * worker heartbeat goes stale after NPPP_F2B_WORKER_STALE_SECONDS (120 s) and
+ * a batch can take up to one full timeout.
+ *
+ * Deliberately NOT used by nppp_f2b_lookup_ip(): that serial fallback also
+ * runs inline in the WP-Cron request on hosts without shell_exec, where the
+ * worst case is IPs x 2 requests x timeout and must stay short.
+ *
+ * Filter: nppp_f2b_rdap_timeout.
+ */
+function nppp_f2b_rdap_timeout(): int {
+    $timeout = (int) apply_filters( 'nppp_f2b_rdap_timeout', 6 );
+    return min( 30, max( 1, $timeout ) );
+}
+
 function nppp_f2b_rdap_whois_url( string $ip ): string {
     $args = array(
         'resource'  => rawurlencode( $ip ),
