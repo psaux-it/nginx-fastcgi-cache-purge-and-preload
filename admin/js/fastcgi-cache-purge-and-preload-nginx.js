@@ -1557,6 +1557,7 @@ $(document).ready(function() {
                                 .prop('disabled', regLocked)
                                 .attr('title', regLocked ? String($regBtn.attr('data-lock-title') || '') : '')
                                 .toggle(showRegister);
+                            $('#nppp-f2b-ripe-register-hint').toggle(showRegister);
                             $('#nppp-f2b-ripe-gate').toggle(showRegister && regLocked);
                             $('#nppp-f2b-ripe-date').text(d.reg_date || '');
                             $('#nppp-f2b-ripe-pill').toggle(!!d.reg_date);
