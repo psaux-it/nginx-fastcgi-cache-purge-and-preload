@@ -80,6 +80,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 $nppp_scope_slug = 'site';
             }
             $nppp_scope_action = 'nppp-webhook-' . $nppp_scope_slug;
+            $nppp_scope_conf   = str_replace( 'nppp-webhook.conf', $nppp_scope_action . '.conf', $action_snippet );
             $nppp_scope_jail   = "# /etc/fail2ban/jail.local on the fail2ban host -- one block like this per domain\n" .
                 "[nginx-botsearch-{$nppp_scope_slug}]\n" .
                 "enabled = true\n" .
@@ -114,11 +115,18 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                         <?php
                         printf(
                             /* translators: %s: action file path, wrapped in <code>. */
-                            esc_html__( 'On the fail2ban host, save the action file from step 1 below as %s instead of nppp-webhook.conf. The webhook URL is stored inside it, so another site cannot reuse the same file.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            esc_html__( 'On the Fail2Ban host, save this as %s. It contains this site\'s webhook URL, so each site needs its own file.', 'fastcgi-cache-purge-and-preload-nginx' ),
                             '<code>/etc/fail2ban/action.d/' . esc_html( $nppp_scope_action ) . '.conf</code>'
                         );
                         ?>
                     </p>
+
+                    <div class="nppp-f2b-copy nppp-f2b-copy-block">
+                        <textarea readonly rows="12" class="nppp-f2b-code" id="nppp-f2b-scope-action"><?php echo esc_textarea( $nppp_scope_conf ); ?></textarea>
+                        <button type="button" class="nppp-f2b-btn nppp-f2b-copy-btn" data-copy-target="nppp-f2b-scope-action">
+                            <?php esc_html_e( 'Copy', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </button>
+                    </div>
 
                     <p class="nppp-f2b-step"><span class="nppp-f2b-step-n">2</span> <?php esc_html_e( 'Add a jail that watches only this domain\'s log.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                     <div class="nppp-f2b-copy nppp-f2b-copy-block">
@@ -128,7 +136,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                         </button>
                     </div>
 
-                    <p class="nppp-f2b-step"><span class="nppp-f2b-step-n">3</span> <?php esc_html_e( 'Reload fail2ban, then press Test Connection above. Do the same on each other site with its own values.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                    <p class="nppp-f2b-step"><span class="nppp-f2b-step-n">3</span> <?php esc_html_e( 'Reload fail2ban, then press Test Connection above.', 'fastcgi-cache-purge-and-preload-nginx' ); ?> <code>sudo systemctl reload fail2ban</code> <?php esc_html_e( 'Do the same on each other site with its own values.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
 
                     <p class="nppp-f2b-note">
                         <?php esc_html_e( 'The jail must watch a log that contains only this domain\'s traffic, such as a per-site access log. A jail that watches a shared log sees every domain, so the separation will not work. The jail name, filter and log path above are examples; adapt them to your own setup. A glob such as *.access.log is supported, but only log files that exist when fail2ban starts are picked up, so reload fail2ban after adding a new site.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
