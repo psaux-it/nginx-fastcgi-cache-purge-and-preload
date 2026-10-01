@@ -149,7 +149,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
         </div>
         <div class="nppp-f2b-card-body">
 
-            <p class="nppp-f2b-hint-text nppp-f2b-sourceapp-intro">
+            <p class="nppp-f2b-hint-text nppp-f2b-card-intro">
                 <?php
                 printf(
                     /* translators: %s: the fixed default identifier, wrapped in <code> tags */
@@ -426,7 +426,7 @@ PHP;
         </div>
         <div class="nppp-f2b-card-body">
 
-            <p class="nppp-f2b-hint-text">
+            <p class="nppp-f2b-hint-text nppp-f2b-card-intro">
                 <?php esc_html_e( 'Every value below has a sane default and needs no action. They are plain WordPress filters, not settings stored by this plugin -- add the ones you want to change to your child theme\'s functions.php and reload the page.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
             </p>
 
@@ -545,7 +545,7 @@ PHP;
                 <span class="nppp-f2b-result-msg"></span>
             </div>
 
-            <p class="nppp-f2b-hint-text nppp-f2b-abuse-intro">
+            <p class="nppp-f2b-hint-text nppp-f2b-card-intro">
                 <?php esc_html_e( 'Sends a formal abuse report to the network owner of a banned IP, built from the ban evidence below and addressed to the abuse contact already resolved for that network. Set this once and the Report buttons stay available in Repeat Offenders and the Live Feed. Use "Send Test Email" above to preview the template and confirm this site can deliver mail before relying on it.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
             </p>
 
