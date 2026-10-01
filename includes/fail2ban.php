@@ -1878,6 +1878,7 @@ function nppp_f2b_test_connection_callback() {
             'timeout'   => 8,
             'sslverify' => apply_filters(
                 'nppp_f2b_selftest_sslverify',
+                // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Uses the WordPress core https_local_ssl_verify hook.
                 apply_filters( 'https_local_ssl_verify', false )
             ),
             'headers'   => array(
