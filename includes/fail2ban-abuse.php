@@ -259,8 +259,7 @@ function nppp_f2b_get_abuse_map_for_ips( array $ips ): array {
     $placeholders = implode( ', ', array_fill( 0, count( $ips ), '%s' ) );
 
     // MAX(id) per ip picks the most recently enriched row for that address.
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
-    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is a fixed '%s, %s, ...' string built only from count($ips); it carries no user data, every %s is filled by prepare() below
+    /* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber */
     $rows = $wpdb->get_results(
         $wpdb->prepare(
             "SELECT e.ip, e.rdap_json
@@ -275,6 +274,7 @@ function nppp_f2b_get_abuse_map_for_ips( array $ips ): array {
         ),
         ARRAY_A
     );
+    /* phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber */
 
     $map = array();
 
