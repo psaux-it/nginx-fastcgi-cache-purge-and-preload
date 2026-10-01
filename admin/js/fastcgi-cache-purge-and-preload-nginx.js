@@ -1269,6 +1269,8 @@ $(document).ready(function() {
                 $wrap.find('.nppp-f2b-scope-panel').removeClass('is-active');
                 $opt.addClass('is-active').attr('aria-selected', 'true');
                 $('#' + $opt.data('scope-panel')).addClass('is-active');
+                // One set of instructions at a time: per-domain closes the generic server-side setup, centralized shows it.
+                $('#nppp-f2b-setup-server').prop('open', 'nppp-f2b-scope-panel-central' === $opt.data('scope-panel'));
             });
 
         // Refresh the whole panel
@@ -1307,6 +1309,10 @@ $(document).ready(function() {
                                 return v.replace(/nppp_token="[^"]*"/, function() { return 'nppp_token="' + resp.data.token + '"'; });
                             });
                             $('#nppp-f2b-tab').find('.nppp-f2b-setup').prop('open', true);
+                            // Per-domain mode has its own instructions; keep the generic setup closed.
+                            if ($('#nppp-f2b-scope-panel-domain').hasClass('is-active')) {
+                                $('#nppp-f2b-setup-server').prop('open', false);
+                            }
                             npppF2bToast(__('Token regenerated. Update jail.local and reload fail2ban.', 'fastcgi-cache-purge-and-preload-nginx'), 'success');
                         } else {
                             npppF2bToast(__('Failed to regenerate token.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
