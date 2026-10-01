@@ -553,6 +553,8 @@ function nppp_f2b_spawn_worker_process(): bool {
     // Without a writable runtime dir the PID/heartbeat files cannot be kept,
     // so only the spawn throttle guards against duplicate workers.
     $runtime_dir = dirname( nppp_f2b_worker_pid_path() );
+
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
     if ( ( ! is_dir( $runtime_dir ) || ! is_writable( $runtime_dir ) )
         && nppp_f2b_log_gate( 'spawn_dir', DAY_IN_SECONDS ) > 0
     ) {
@@ -738,7 +740,7 @@ function nppp_f2b_worker_claim_ips( int $limit, array $exclude_ips = array(), ?s
 
     $args[] = $limit;
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, PluginCheck.Security.DirectDB.UnescapedDBParameter -- custom plugin table; {$exclude_sql} is built only from count($exclude_ips) '%s' placeholders and every value is bound through prepare() via $args
     $rows = $wpdb->get_col(
         $wpdb->prepare(
             "SELECT ip
@@ -750,6 +752,7 @@ function nppp_f2b_worker_claim_ips( int $limit, array $exclude_ips = array(), ?s
             $args
         )
     );
+    // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
     // Handed back to the caller, so a failed query is never mistaken for an
     // empty queue.
