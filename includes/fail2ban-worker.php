@@ -1072,10 +1072,7 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
         return $out;
     }
 
-    $timeout = (int) apply_filters( 'nppp_f2b_rdap_timeout', 3 );
-    if ( $timeout < 1 ) {
-        $timeout = 1;
-    }
+    $timeout = nppp_f2b_rdap_timeout();
 
     $requests = array();
     foreach ( $pending as $index => $ip ) {
