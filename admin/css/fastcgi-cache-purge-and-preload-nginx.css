@@ -5392,7 +5392,10 @@ div.updated.notice-nppp p,
    ========================================================================= */
 
 #nppp-f2b-tab {
-    max-width: clamp(1000px, 92vw, 1440px);
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    box-sizing: border-box;
     margin-left: 0;
 }
 
