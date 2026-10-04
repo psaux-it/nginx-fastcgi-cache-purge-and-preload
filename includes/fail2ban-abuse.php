@@ -694,6 +694,9 @@ function nppp_f2b_abuse_send_report( string $ip ): array {
     $body = nppp_f2b_abuse_render_email( $data, $settings );
 
     if ( '' === $body ) {
+        if ( nppp_f2b_log_gate( 'abuse_template', HOUR_IN_SECONDS ) > 0 ) {
+            nppp_f2b_log( 'ERROR', 'Abuse report template could not be read or rendered; no report was sent: ip=' . $data['ip'] );
+        }
         return array(
             'ok'      => false,
             'message' => __( 'The abuse report template could not be read. Reinstall the plugin files and try again.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -866,6 +869,7 @@ function nppp_f2b_abuse_send_test_mail( array $settings ): array {
     $mail_result = nppp_wp_mail_diagnostic( $recipient, $subject, $body, $headers );
 
     if ( ! $mail_result['sent'] ) {
+        nppp_f2b_log( 'ERROR', 'Abuse test mail failed: user=' . get_current_user_id() . ' error=' . $mail_result['error'] );
         return array(
             'ok'      => false,
             'message' => sprintf(
