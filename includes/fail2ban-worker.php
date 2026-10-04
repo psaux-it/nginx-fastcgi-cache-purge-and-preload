@@ -33,6 +33,11 @@ if ( ! defined( 'NPPP_F2B_WORKER_HB_FILE' ) ) {
 if ( ! defined( 'NPPP_F2B_WORKER_LOCK_FILE' ) ) {
     define( 'NPPP_F2B_WORKER_LOCK_FILE', 'f2b_rdap_worker.lock' );
 }
+// Held by the running worker for its whole life; separate from the short-lived
+// spawn lock above.
+if ( ! defined( 'NPPP_F2B_WORKER_RUN_LOCK_FILE' ) ) {
+    define( 'NPPP_F2B_WORKER_RUN_LOCK_FILE', 'f2b_rdap_worker.run.lock' );
+}
 
 // RIPEstat allows max 8 concurrent requests per source IP. Each IP needs
 // 2 requests (whois + abuse), so 4 IPs per batch sits right at that limit.
@@ -53,6 +58,14 @@ if ( ! defined( 'NPPP_F2B_WORKER_MAX_RUNTIME' ) ) {
 // Heartbeat older than this? Don't trust the PID, could be reused.
 if ( ! defined( 'NPPP_F2B_WORKER_STALE_SECONDS' ) ) {
     define( 'NPPP_F2B_WORKER_STALE_SECONDS', 120 );
+}
+
+// A worker that holds the run lock but has not touched its heartbeat for this
+// long is hung (DB/network stall, SIGSTOP) and is terminated so the queue can
+// move again. Must stay well above STALE_SECONDS plus the longest legitimate
+// stall (a 30 s HTTP timeout), or a busy worker could be killed.
+if ( ! defined( 'NPPP_F2B_WORKER_KILL_SECONDS' ) ) {
+    define( 'NPPP_F2B_WORKER_KILL_SECONDS', 180 );
 }
 
 // Self-heal cron only, never the main dispatch path.
@@ -256,6 +269,79 @@ function nppp_f2b_worker_reset_state(): void {
 }
 
 /**
+ * Release only this process's worker ownership. Never unlink the run lock:
+ * flock() ownership belongs to its inode, and the OS releases it on a crash.
+ */
+function nppp_f2b_worker_release_run_lock(): void {
+    $lock = $GLOBALS['nppp_f2b_worker_run_lock'] ?? null;
+    if ( ! is_resource( $lock ) ) {
+        return;
+    }
+
+    // Clear shared state while we still own the run lock.
+    nppp_f2b_worker_reset_state();
+    @flock( $lock, LOCK_UN );
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+    @fclose( $lock );
+    unset( $GLOBALS['nppp_f2b_worker_run_lock'] );
+}
+
+/**
+ * True when no process holds the run lock, null when the lock file cannot be
+ * opened. The probe lock is released before returning, so a child spawned
+ * afterwards can never inherit it.
+ */
+function nppp_f2b_worker_run_lock_is_free(): ?bool {
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+    $probe = @fopen( nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE ), 'c' );
+    if ( ! $probe ) {
+        return null;
+    }
+    $free = @flock( $probe, LOCK_EX | LOCK_NB );
+    if ( $free ) {
+        @flock( $probe, LOCK_UN );
+    }
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+    @fclose( $probe );
+    return (bool) $free;
+}
+
+/**
+ * Watchdog. The run lock holder is alive, but if its heartbeat is older than
+ * NPPP_F2B_WORKER_KILL_SECONDS it is hung and blocks the queue forever.
+ * Terminates it and reports whether the run lock is free afterwards.
+ *
+ * The PID file alone is never trusted: the process must be a Linux process
+ * whose command line carries the worker bootstrap, otherwise nothing is
+ * signalled. SIGKILL is the fallback because a stopped process cannot act on
+ * SIGTERM. The kernel drops the flock when the process dies; the next spawn
+ * logs the death with its last heartbeat state.
+ */
+function nppp_f2b_worker_terminate_hung(): bool {
+    if ( nppp_f2b_worker_heartbeat_age() <= NPPP_F2B_WORKER_KILL_SECONDS ) {
+        return false;
+    }
+    $pid = nppp_f2b_worker_read_pid();
+    if ( $pid <= 0 || ! function_exists( 'posix_kill' ) || ! defined( 'SIGKILL' ) ) {
+        return false;
+    }
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+    $cmd = @file_get_contents( '/proc/' . $pid . '/cmdline' );
+    if ( ! is_string( $cmd ) || false === strpos( $cmd, 'nppp_f2b_worker_run' ) ) {
+        return false;
+    }
+
+    @posix_kill( $pid, SIGTERM );
+    usleep( 300000 );
+    if ( true !== nppp_f2b_worker_run_lock_is_free() ) {
+        @posix_kill( $pid, SIGKILL );
+        usleep( 300000 );
+    }
+
+    return true === nppp_f2b_worker_run_lock_is_free();
+}
+
+/**
  * Liveness check. posix_kill($pid, 0) is nearly free, which matters since
  * this runs on every cache-missing ban event. Falls back to the existing
  * ps-based probe if ext-posix isn't available.
@@ -401,10 +487,20 @@ function nppp_f2b_maybe_spawn_worker( bool $force = false ): bool {
     // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
     $lock = @fopen( $lock_path, 'c' );
 
-    // Couldn't open the lock file -- spawn anyway, the throttle above still
-    // bounds this.
+    // Without a spawn lock, do not race another parent's PID/state writes.
+    // Reconciliation's inline fallback picks the work up later.
     if ( ! $lock ) {
-        return nppp_f2b_spawn_worker_process();
+        if ( nppp_f2b_log_gate( 'spawn_dir', DAY_IN_SECONDS ) > 0 ) {
+            nppp_f2b_log(
+                'ERROR',
+                sprintf(
+                    /* translators: %s: filesystem path to the runtime directory. */
+                    __( 'Runtime directory is not writable, worker PID/heartbeat files cannot be kept: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    dirname( $lock_path )
+                )
+            );
+        }
+        return false;
     }
 
     // Someone else is already spawning. Their worker will pick up whatever
@@ -420,6 +516,19 @@ function nppp_f2b_maybe_spawn_worker( bool $force = false ): bool {
         if ( nppp_f2b_worker_is_running() ) {
             return true;
         }
+
+        // The heartbeat is a hint, the run lock is the proof. A live worker
+        // with a stale heartbeat is still the owner and is not replaced, unless
+        // it has been silent long enough to be hung (watchdog below).
+        $free = nppp_f2b_worker_run_lock_is_free();
+        if ( null === $free ) {
+            return false;
+        }
+        if ( ! $free && ! nppp_f2b_worker_terminate_hung() ) {
+            // A worker still owns the queue.
+            return true;
+        }
+
         return nppp_f2b_spawn_worker_process();
     } finally {
         @flock( $lock, LOCK_UN );
@@ -641,6 +750,7 @@ function nppp_f2b_kill_worker(): bool {
     if ( $pid <= 0 || ! nppp_f2b_pid_alive( $pid ) ) {
         nppp_f2b_worker_reset_state();
         wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE ) );
+        wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE ) );
         delete_option( NPPP_F2B_SPAWN_TICK_KEY );
         return true;
     }
@@ -667,6 +777,7 @@ function nppp_f2b_kill_worker(): bool {
     // nothing else could be spawning. Left alone otherwise, see
     // nppp_f2b_worker_reset_state().
     wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE ) );
+    wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE ) );
     delete_option( NPPP_F2B_SPAWN_TICK_KEY );
 
     if ( $dead ) {
@@ -778,12 +889,49 @@ function nppp_f2b_worker_claim_ips( int $limit, array $exclude_ips = array(), ?s
 }
 
 /**
+ * Skip cooling-down IPs without spending a network batch on them.
+ * Known cooling IPs are excluded in the claim SQL itself (one query, however
+ * many are waiting); $waiting only catches the ones the list missed and
+ * persists within a worker run so later claims do not rescan them.
+ * The 5000-IP scan bound matches the worker's existing per-run safety cap.
+ */
+function nppp_f2b_worker_claim_ready_ips( int $limit, array $exclude_ips = array(), ?string &$error = null, array &$waiting = array() ): array {
+    $ready = array();
+    $skip  = array_fill_keys( array_merge( $exclude_ips, array_keys( $waiting ), array_keys( nppp_f2b_rdap_cooling_get() ) ), true );
+    $limit = max( 1, $limit );
+    $error = '';
+    $scanned = count( $waiting );
+
+    while ( count( $ready ) < $limit && $scanned < 5000 ) {
+        $ips = nppp_f2b_worker_claim_ips( min( 32, 5000 - $scanned ), array_keys( $skip ), $error );
+        if ( '' !== $error ) {
+            return array();
+        }
+        if ( empty( $ips ) ) {
+            break;
+        }
+        foreach ( $ips as $ip ) {
+            $scanned++;
+            $skip[ $ip ] = true;
+            if ( nppp_f2b_rdap_retry_waiting( $ip ) ) {
+                $waiting[ $ip ] = true;
+                continue;
+            }
+            $ready[] = $ip;
+            if ( count( $ready ) >= $limit ) {
+                break;
+            }
+        }
+    }
+    return $ready;
+}
+
+/**
  * Write one RDAP profile to every pending row for this IP.
  *
- * Writes even when the profile is empty, on purpose -- it clears the row
- * so the worker can't loop on it forever. A genuine "nothing found" result
- * is retried via the 5-minute negative cache; total upstream failures get
- * a few retries first, see nppp_f2b_rdap_defer_attempt().
+ * Call only for a finished lookup: complete (including a valid empty result)
+ * or one the retry budget gave up on. Incomplete lookups that still have
+ * retries left stay NULL and are retried by the worker/cron.
  */
 function nppp_f2b_worker_write_result( string $ip, array $rdap ): int {
     global $wpdb;
@@ -855,24 +1003,34 @@ function nppp_f2b_has_pending_enrichment(): bool {
  * Keep the WHERE clause identical to nppp_f2b_worker_claim_ips(): the handoff
  * relies on "ips > 0" meaning "a claim would find something".
  *
+ * @param array $exclude_ips IPs to leave out (cooling-down ones, for the health
+ *                           warning). Default: none, same WHERE as the claim.
  * @return array{ips:int,oldest_age:int} oldest_age is in seconds, 0 when empty.
  *                                       ips is -1 when the query itself failed
  *                                       (unknown, not "empty").
  */
-function nppp_f2b_queue_stats(): array {
+function nppp_f2b_queue_stats( array $exclude_ips = array() ): array {
     global $wpdb;
 
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $args        = array( nppp_f2b_table_name(), gmdate( 'Y-m-d H:i:s', time() - ( 7 * DAY_IN_SECONDS ) ) );
+    $exclude_sql = '';
+    $exclude_ips = array_values( array_filter( array_map( 'strval', $exclude_ips ), 'strlen' ) );
+    if ( ! empty( $exclude_ips ) ) {
+        $exclude_sql = ' AND ip NOT IN (' . implode( ', ', array_fill( 0, count( $exclude_ips ), '%s' ) ) . ')';
+        $args        = array_merge( $args, $exclude_ips );
+    }
+
+    // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, PluginCheck.Security.DirectDB.UnescapedDBParameter -- custom plugin table; {$exclude_sql} is built only from count($exclude_ips) '%s' placeholders and every value is bound through prepare() via $args
     $row = $wpdb->get_row(
         $wpdb->prepare(
             "SELECT COUNT(DISTINCT ip) AS ips, MIN(created_at) AS oldest
              FROM %i
-             WHERE event_type = 'ban' AND created_at >= %s AND rdap_json IS NULL",
-            nppp_f2b_table_name(),
-            gmdate( 'Y-m-d H:i:s', time() - ( 7 * DAY_IN_SECONDS ) )
+             WHERE event_type = 'ban' AND created_at >= %s AND rdap_json IS NULL{$exclude_sql}",
+            $args
         ),
         ARRAY_A
     );
+    // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
     // An aggregate without GROUP BY always returns a row, so null is an error.
     if ( null === $row ) {
@@ -896,7 +1054,8 @@ function nppp_f2b_log_queue_health(): void {
     $max_ips = (int) apply_filters( 'nppp_f2b_backlog_warn_ips', 100 );
     $max_age = (int) apply_filters( 'nppp_f2b_backlog_warn_age', 10 * MINUTE_IN_SECONDS );
 
-    $stats = nppp_f2b_queue_stats();
+    // IPs waiting out a retry gap are expected, not a backlog.
+    $stats = nppp_f2b_queue_stats( array_keys( nppp_f2b_rdap_cooling_get() ) );
 
     if ( $stats['ips'] < 1 || ( $stats['ips'] <= $max_ips && $stats['oldest_age'] <= $max_age ) ) {
         return;
@@ -969,7 +1128,7 @@ function nppp_f2b_log_stale_abandoned(): void {
  * instead of a response, so checking for the expected properties is the
  * safest test.
  */
-function nppp_f2b_requests_json( $response ) {
+function nppp_f2b_requests_json( $response, string $field ) {
     if ( ! is_object( $response ) || ! isset( $response->status_code ) ) {
         return null;
     }
@@ -979,7 +1138,9 @@ function nppp_f2b_requests_json( $response ) {
     if ( ! is_string( $response->body ) || '' === $response->body ) {
         return null;
     }
-    return json_decode( $response->body, true );
+
+    $body = json_decode( $response->body, true );
+    return nppp_f2b_rdap_response_is_valid( $body, $field ) ? $body : null;
 }
 
 /**
@@ -1015,8 +1176,8 @@ function nppp_f2b_requests_fail_hint( $response ): string {
  * right at RIPEstat's documented per-source concurrency limit.
  *
  * @param array $failed Out-param: ip => failure hint string for every IP that
- *                      got no usable answer at all (plain true on the serial
- *                      fallback path, which has no per-request detail).
+ *                      still lacks a validated endpoint answer (plain true
+ *                      on the serial fallback path).
  * @param array $stats  Out-param, diagnostics for the worker's stop line:
  *                      cached (transient hits), net (IPs sent to RIPE), ms
  *                      (wall time of the network round), partial (IPs where only
@@ -1028,7 +1189,7 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
     $out     = array();
     $pending = array();
     $failed  = array();
-    $stats   = array( 'cached' => 0, 'net' => 0, 'ms' => 0, 'partial' => 0, 'hints' => array() );
+    $stats   = array( 'cached' => 0, 'net' => 0, 'ms' => 0, 'partial' => 0, 'hints' => array(), 'waiting' => array() );
 
     foreach ( $ips as $ip ) {
         $ip = (string) $ip;
@@ -1043,6 +1204,13 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
         if ( is_array( $cached ) ) {
             $out[ $ip ] = $cached;
             $stats['cached']++;
+            continue;
+        }
+        if ( nppp_f2b_rdap_retry_waiting( $ip ) ) {
+            $state = nppp_f2b_rdap_work_get( $ip );
+            $out[ $ip ] = $state['result'];
+            $failed[ $ip ] = 'retry waiting';
+            $stats['waiting'][ $ip ] = true;
             continue;
         }
         $pending[] = $ip;
@@ -1062,9 +1230,18 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
         $serial_start = microtime( true );
         foreach ( $pending as $ip ) {
             $answered   = true;
-            $out[ $ip ] = nppp_f2b_lookup_ip( $ip, $answered );
+            $attempted = false;
+            $out[ $ip ] = nppp_f2b_lookup_ip( $ip, $answered, $attempted );
             if ( ! $answered ) {
-                $failed[ $ip ] = true; // same retry budget as the parallel path
+                $failed[ $ip ] = true;
+                if ( ! $attempted ) {
+                    $stats['waiting'][ $ip ] = true;
+                    $stats['net']--;
+                    continue;
+                }
+                if ( nppp_f2b_rdap_has_partial( $ip ) ) {
+                    $stats['partial']++;
+                }
                 $stats['hints']['no response'] = ( $stats['hints']['no response'] ?? 0 ) + 1;
             }
         }
@@ -1075,7 +1252,9 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
     $timeout = nppp_f2b_rdap_timeout();
 
     $requests = array();
+    $states   = array();
     foreach ( $pending as $index => $ip ) {
+        $states[ $ip ] = nppp_f2b_rdap_work_get( $ip );
         $requests[ 'w' . $index ] = array(
             'url'     => nppp_f2b_rdap_whois_url( $ip ),
             'type'    => 'GET',
@@ -1086,6 +1265,12 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
             'type'    => 'GET',
             'headers' => array( 'Accept' => 'application/json' ),
         );
+        if ( $states[ $ip ]['whois'] ) {
+            unset( $requests[ 'w' . $index ] );
+        }
+        if ( $states[ $ip ]['abuse'] ) {
+            unset( $requests[ 'a' . $index ] );
+        }
     }
 
     $options = array(
@@ -1107,30 +1292,38 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
     $stats['ms'] = (int) round( ( microtime( true ) - $round_start ) * 1000 );
 
     foreach ( $pending as $index => $ip ) {
-        $result   = nppp_f2b_rdap_blank_result();
-        $answered = false;
+        $state    = $states[ $ip ];
+        $result   = $state['result'];
+        $answered = $state['whois'] || $state['abuse'];
 
-        $whois = nppp_f2b_requests_json( $responses[ 'w' . $index ] ?? null );
+        $whois = nppp_f2b_requests_json( $responses[ 'w' . $index ] ?? null, 'records' );
         if ( null !== $whois ) {
             $answered = true;
+            $state['whois'] = true;
             $result   = nppp_f2b_rdap_apply_whois( $whois, $result );
         }
 
-        $abuse = nppp_f2b_requests_json( $responses[ 'a' . $index ] ?? null );
+        $abuse = nppp_f2b_requests_json( $responses[ 'a' . $index ] ?? null, 'abuse_contacts' );
         if ( null !== $abuse ) {
             $answered = true;
+            $state['abuse'] = true;
             $result   = nppp_f2b_rdap_apply_abuse( $abuse, $result );
         }
+
+        $permanent = true;
 
         // Every endpoint that failed, answered IP or not, so a partial
         // failure (one of the two) is counted too. The reason is cut at the
         // first colon so "cURL error 28: ..." variants of the same failure
         // count together.
         foreach ( array( 'w' => $whois, 'a' => $abuse ) as $kind => $decoded ) {
-            if ( null !== $decoded ) {
+            if ( null !== $decoded || ! isset( $requests[ $kind . $index ] ) ) {
                 continue;
             }
-            $hint = nppp_f2b_requests_fail_hint( $responses[ $kind . $index ] ?? null );
+            $reply     = $responses[ $kind . $index ] ?? null;
+            $permanent = $permanent && is_object( $reply ) && isset( $reply->status_code )
+                && nppp_f2b_rdap_reply_is_permanent( (int) $reply->status_code, $reply->body ?? '' );
+            $hint = nppp_f2b_requests_fail_hint( $reply );
             // Cut at the first colon, then drop the variable "after N ms..."
             // tail so identical timeouts land in one bucket.
             $key = (string) preg_replace( '/\bafter \d+.*$/i', '', (string) strtok( $hint, ':' ) );
@@ -1140,24 +1333,21 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
             }
             $stats['hints'][ $key ] = ( $stats['hints'][ $key ] ?? 0 ) + 1;
         }
-        if ( $answered && ( null === $whois || null === $abuse ) ) {
+        if ( $answered && ! ( $state['whois'] && $state['abuse'] ) ) {
             $stats['partial']++;
         }
 
-        // Neither endpoint gave us a usable response -- that's an outage,
-        // not an answer, so don't cache it. Caching would make the retry
-        // below pointless.
-        if ( ! $answered ) {
-            // Keep the transport detail for the worker's log line. Callers
-            // only test isset().
-            $hint_w        = nppp_f2b_requests_fail_hint( $responses[ 'w' . $index ] ?? null );
-            $hint_a        = nppp_f2b_requests_fail_hint( $responses[ 'a' . $index ] ?? null );
-            $failed[ $ip ] = ( $hint_w === $hint_a ) ? $hint_w : $hint_w . ' / ' . $hint_a;
-            $out[ $ip ]    = $result;
-            continue;
+        $state['result'] = $result;
+        if ( ! nppp_f2b_rdap_work_save( $ip, $state, $permanent ) ) {
+            $hints = array();
+            if ( ! $state['whois'] ) {
+                $hints[] = nppp_f2b_requests_fail_hint( $responses[ 'w' . $index ] ?? null );
+            }
+            if ( ! $state['abuse'] ) {
+                $hints[] = nppp_f2b_requests_fail_hint( $responses[ 'a' . $index ] ?? null );
+            }
+            $failed[ $ip ] = implode( ' / ', array_unique( $hints ) );
         }
-
-        nppp_f2b_rdap_store_cache( $ip, $result );
         $out[ $ip ] = $result;
     }
 
@@ -1169,56 +1359,6 @@ function nppp_f2b_http_is_restricted(): bool {
         return true;
     }
     return defined( 'WP_PROXY_HOST' ) && '' !== (string) WP_PROXY_HOST;
-}
-
-/**
- * Should a total upstream failure for $ip get another try?
- *
- * True means defer -- leave the row NULL, stays queued. False means the
- * attempt budget is spent, so the caller writes the blank profile instead.
- *
- * Counter lives in a transient, not a DB column -- outages last minutes,
- * not days, this shouldn't need a schema change.
- */
-function nppp_f2b_rdap_defer_attempt( string $ip ): bool {
-    $key = NPPP_F2B_RDAP_FAIL_PREFIX . md5( $ip );
-
-    $max = (int) apply_filters( 'nppp_f2b_rdap_max_attempts', 3 );
-    if ( $max < 1 ) {
-        $max = 1;
-    }
-
-    // The budget counts attempts SPACED IN TIME, not worker runs: a burst
-    // respawns the worker every few seconds, so a per-run count let a ~15 s
-    // upstream blip burn all attempts and store blank profiles for good.
-    $gap = (int) apply_filters( 'nppp_f2b_rdap_retry_gap', 120 );
-    if ( $gap < 0 ) {
-        $gap = 0;
-    }
-
-    $state    = get_transient( $key );
-    $attempts = 0;
-    $last     = 0;
-    if ( is_array( $state ) ) {
-        $attempts = isset( $state['n'] ) ? (int) $state['n'] : 0;
-        $last     = isset( $state['t'] ) ? (int) $state['t'] : 0;
-    } elseif ( is_numeric( $state ) ) {
-        $attempts = (int) $state; // counter written by an older build
-    }
-
-    if ( $last > 0 && ( time() - $last ) < $gap ) {
-        return true;
-    }
-
-    ++$attempts;
-
-    if ( $attempts >= $max ) {
-        delete_transient( $key );
-        return false;
-    }
-
-    set_transient( $key, array( 'n' => $attempts, 't' => time() ), NPPP_F2B_RDAP_FAIL_TTL );
-    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1278,14 +1418,68 @@ function nppp_f2b_worker_on_shutdown(): void {
         );
     }
 
-    // Leave a clean slate, or the next spawn would report this same death again.
-    nppp_f2b_worker_reset_state();
+    // A bootstrap failure or rejected duplicate must not clear another owner.
+    nppp_f2b_worker_release_run_lock();
 }
 
 function nppp_f2b_worker_run(): void {
     if ( 'cli' !== PHP_SAPI ) {
         return;
     }
+
+    // Wait for the parent to publish its PID, but never wait indefinitely:
+    // an inherited descriptor may retain its lock if the parent dies.
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+    $spawn_lock = @fopen( nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE ), 'c' );
+    $got_spawn  = false;
+
+    if ( $spawn_lock ) {
+        $deadline = microtime( true ) + 5;
+
+        do {
+            $got_spawn = @flock( $spawn_lock, LOCK_EX | LOCK_NB );
+
+            if ( $got_spawn ) {
+                break;
+            }
+
+            usleep( 50000 );
+        } while ( microtime( true ) < $deadline );
+    }
+
+    if ( ! $got_spawn ) {
+        if ( is_resource( $spawn_lock ) ) {
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+            @fclose( $spawn_lock );
+        }
+        // Marked clean so the shutdown hook does not clear another owner.
+        $GLOBALS['nppp_f2b_worker_state'] = array( 'clean' => true );
+        nppp_f2b_log( 'ERROR', 'Worker cannot acquire its startup lock; enrichment was not started.' );
+        return;
+    }
+
+    // Lifetime ownership, taken while the spawn lock is still held so the
+    // parent's own checks never see a gap. The handle stays open until exit.
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+    $run_lock      = @fopen( nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE ), 'c' );
+    $owns_run_lock = $run_lock && @flock( $run_lock, LOCK_EX | LOCK_NB );
+    @flock( $spawn_lock, LOCK_UN );
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+    @fclose( $spawn_lock );
+
+    if ( ! $owns_run_lock ) {
+        if ( is_resource( $run_lock ) ) {
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+            @fclose( $run_lock );
+        } else {
+            nppp_f2b_log( 'ERROR', 'Worker cannot open its run lock; enrichment was not started.' );
+        }
+        // Another worker owns the queue. Marked clean so the shutdown hook
+        // neither reports a death nor clears the owner's PID/heartbeat.
+        $GLOBALS['nppp_f2b_worker_state'] = array( 'clean' => true );
+        return;
+    }
+    $GLOBALS['nppp_f2b_worker_run_lock'] = $run_lock;
 
     if ( function_exists( 'set_time_limit' ) ) {
         @set_time_limit( 0 ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
@@ -1322,8 +1516,8 @@ function nppp_f2b_worker_run(): void {
     $err_since          = 0;
     $seen               = array();
     $deferred           = array();
+    $waiting            = array();
     $written            = 0;
-    $blanked            = 0;
     $batch_fails        = 0;
     $consec_batch_fails = 0;
     $stop_reason        = 'unknown';
@@ -1379,7 +1573,7 @@ function nppp_f2b_worker_run(): void {
         // Skip addresses already deferred this run, see
         // nppp_f2b_worker_claim_ips().
         $claim_error = '';
-        $ips         = nppp_f2b_worker_claim_ips( $batch, array_keys( $deferred ), $claim_error );
+        $ips         = nppp_f2b_worker_claim_ready_ips( $batch, array_keys( $deferred ), $claim_error, $waiting );
 
         // A failing claim comes back as an empty array, exactly like an empty
         // queue. Tracked separately so it is never reported as "idle".
@@ -1458,7 +1652,8 @@ function nppp_f2b_worker_run(): void {
         // No IP in the batch got a usable answer: upstream outage, block or
         // timeout. The first one per run is logged with the HTTP code or curl
         // error, the stop line carries the total.
-        if ( ! empty( $failed ) && empty( array_diff_key( $results, $failed ) ) ) {
+        if ( ! empty( $failed ) && empty( array_diff_key( $results, $failed ) )
+            && empty( $lstats['partial'] ) && ! empty( $lstats['net'] ) ) {
             $batch_fails++;
             $consec_batch_fails++;
             if ( 1 === $batch_fails ) {
@@ -1480,18 +1675,17 @@ function nppp_f2b_worker_run(): void {
         nppp_f2b_worker_mark( 'write' );
 
         foreach ( $fresh as $ip ) {
-            $seen[ $ip ] = true;
-
-            // No response at all -- leave it NULL for another try, until
-            // the attempt budget runs out.
-            if ( isset( $failed[ $ip ] ) && nppp_f2b_rdap_defer_attempt( $ip ) ) {
-                $deferred[ $ip ] = true;
+            if ( isset( $lstats['waiting'][ $ip ] ) ) {
+                $waiting[ $ip ] = true;
                 continue;
             }
+            $seen[ $ip ] = true;
 
-            // Retry budget spent: a blank profile is about to be stored.
+            // Incomplete is never a successful empty profile.
+            // Retry timing and failure counts were saved by the lookup.
             if ( isset( $failed[ $ip ] ) ) {
-                $blanked++;
+                $deferred[ $ip ] = true;
+                continue;
             }
 
             $rdap = isset( $results[ $ip ] ) && is_array( $results[ $ip ] )
@@ -1535,8 +1729,11 @@ function nppp_f2b_worker_run(): void {
         }
     }
 
-    // Release ownership first, so a successor can actually claim it.
-    nppp_f2b_worker_reset_state();
+    // Shared-file cleanup first, while still the owner: deleting the output
+    // file after release could remove a successor's. Then release ownership
+    // so a successor can actually claim it.
+    wp_delete_file( nppp_f2b_worker_out_path() );
+    nppp_f2b_worker_release_run_lock();
 
     // Stop summary: warnings first, then one structured diagnostic line with
     // the totals.
@@ -1547,16 +1744,6 @@ function nppp_f2b_worker_run(): void {
                 /* translators: %d: number of IPs deferred to the next run. */
                 __( 'Worker stopped early: %d IP(s) deferred after upstream failures (cap reached). They stay queued for the next run.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 count( $deferred )
-            )
-        );
-    }
-    if ( $blanked > 0 ) {
-        nppp_f2b_log(
-            'WARNING',
-            sprintf(
-                /* translators: %d: number of IPs for which the retry budget ran out and a blank profile was stored. */
-                __( 'Retry budget spent for %d IP(s); blank profiles were stored for them.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                $blanked
             )
         );
     }
@@ -1572,15 +1759,19 @@ function nppp_f2b_worker_run(): void {
     $queue   = nppp_f2b_queue_stats();
     $runtime = time() - $started;
 
-    // Handoff: covers two gaps the cron would otherwise take minutes to
-    // notice -- exiting with the queue still full, or a row landing right
-    // as this process was shutting down. Gated on $written so a stalled
-    // run (see progress guard) can't chain successors forever. Decided from
-    // the stats read above instead of a second claim query: same WHERE
-    // clause, so "ips > 0" is exactly "a claim would find something".
-    // Don't chase an outage into a respawn loop: a successor spawned right
-    // now would just hit the same dead upstream again.
-    $handoff = ( $written > 0 && $queue['ips'] > 0 && 'upstream_down' !== $stop_reason );
+    // Pending backlog alone is not a reason to spawn: retry times matter.
+    $handoff = false;
+    $late_arrival = false;
+    if ( $queue['ips'] > 0 && 'upstream_down' !== $stop_reason
+        && ( $written > 0 || 'idle' === $stop_reason ) ) {
+        $handoff_error = '';
+        $exclude = $written > 0
+            ? array()
+            : array_merge( array_keys( $deferred ), array_keys( $seen ) );
+        $ready = nppp_f2b_worker_claim_ready_ips( 1, $exclude, $handoff_error );
+        $handoff = ( '' === $handoff_error && ! empty( $ready ) );
+        $late_arrival = ( $handoff && 0 === $written && 'idle' === $stop_reason );
+    }
 
     $line = sprintf(
         'Worker stopped: pid=%d reason=%s ips=%d rows=%d deferred=%d batch_failures=%d batches=%d lat_avg=%dms lat_max=%dms runtime=%ds active=%ds peak_mem=%.1fMB backlog=%s handoff=%s',
@@ -1605,9 +1796,9 @@ function nppp_f2b_worker_run(): void {
         'empty'        => $empty,
         'partial'      => $partial,
         'cached'       => $cached,
-        'blanked'      => $blanked,
         'unwritten'    => $unwritten,
         'claim_errors' => $claim_errors,
+        'late_arrival' => $late_arrival ? 1 : 0,
     ) as $label => $count ) {
         if ( $count > 0 ) {
             $line .= ' ' . $label . '=' . $count;
@@ -1634,14 +1825,12 @@ function nppp_f2b_worker_run(): void {
 
     nppp_f2b_log( $level, $line );
 
-    wp_delete_file( nppp_f2b_worker_out_path() );
+    // Ownership was released before the queue recheck above.
+    $GLOBALS['nppp_f2b_worker_state']['clean'] = true;
 
     if ( $handoff ) {
         nppp_f2b_maybe_spawn_worker( true );
     }
-
-    // Everything above ran, so the shutdown hook has nothing to report.
-    $GLOBALS['nppp_f2b_worker_state']['clean'] = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1678,7 +1867,19 @@ function nppp_f2b_worker_reconcile(): void {
         return;
     }
 
+    // Pending rows that are all cooling down need no worker yet.
+    $ready_error = '';
+    $ready_ips   = nppp_f2b_worker_claim_ready_ips( 1, array(), $ready_error );
+    if ( '' === $ready_error && empty( $ready_ips ) ) {
+        return;
+    }
+
     if ( nppp_f2b_maybe_spawn_worker() ) {
+        // True is also returned when a live worker still owns the run lock
+        // (heartbeat stale but not yet hung): nothing was spawned then.
+        if ( ! nppp_f2b_worker_is_running() ) {
+            return;
+        }
         // Age of the oldest event tells a dead worker (minutes) from a slow one.
         $stats = nppp_f2b_queue_stats();
         nppp_f2b_log(
@@ -1708,10 +1909,11 @@ function nppp_f2b_worker_reconcile(): void {
         $limit = 5;
     }
 
-    foreach ( nppp_f2b_worker_claim_ips( $limit ) as $ip ) {
+    foreach ( nppp_f2b_worker_claim_ready_ips( $limit ) as $ip ) {
         $answered = true;
-        $rdap     = nppp_f2b_lookup_ip( $ip, $answered );
-        if ( ! $answered && nppp_f2b_rdap_defer_attempt( $ip ) ) {
+        $attempted = false;
+        $rdap     = nppp_f2b_lookup_ip( $ip, $answered, $attempted );
+        if ( ! $answered ) {
             continue;
         }
         nppp_f2b_worker_write_result( $ip, $rdap );
