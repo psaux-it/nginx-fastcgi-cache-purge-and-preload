@@ -123,10 +123,12 @@ function nppp_f2b_table_name(): string {
  * @param string $level   ERROR, WARNING or INFO.
  * @param string $message Already translated, except structured key=value
  *                        diagnostic lines, which are logged as-is. Stripped,
- *                        single-lined and capped at 400 characters here.
+ *                        single-lined and capped at 600 characters here (the
+ *                        "worker died" and "worker stopped" lines can reach
+ *                        ~450 with worst-case values).
  */
 function nppp_f2b_log( string $level, string $message ): void {
-    $message = wp_html_excerpt( sanitize_text_field( $message ), 400, '...' );
+    $message = wp_html_excerpt( sanitize_text_field( $message ), 600, '...' );
 
     $line = '[' . current_time( 'Y-m-d H:i:s' ) . '] ' . strtoupper( $level ) . ' F2B: ' . $message . "\n";
 
@@ -461,6 +463,7 @@ function nppp_f2b_cleanup_old_events(): void {
     $cutoff  = gmdate( 'Y-m-d H:i:s', time() - ( nppp_f2b_retention_days() * DAY_IN_SECONDS ) );
     $started = microtime( true );
     $batches = 0;
+    $total   = 0;
 
     do {
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
@@ -472,6 +475,9 @@ function nppp_f2b_cleanup_old_events(): void {
             )
         );
         $batches++;
+        if ( false !== $deleted ) {
+            $total += (int) $deleted;
+        }
 
         if ( false === $deleted ) {
             if ( nppp_f2b_log_gate( 'cleanup_fail', HOUR_IN_SECONDS ) > 0 ) {
@@ -487,6 +493,33 @@ function nppp_f2b_cleanup_old_events(): void {
             break;
         }
     } while ( 1000 === $deleted && $batches < 200 && ( microtime( true ) - $started ) < 10 );
+
+    // Structured, untranslated. A full last batch means the loop stopped on its
+    // batch/time limit with rows still waiting: the table is outgrowing the
+    // cleanup, which nothing else reports. A normal run is summarised once a day.
+    if ( 1000 === $deleted ) {
+        nppp_f2b_log(
+            'WARNING',
+            sprintf(
+                'Retention cleanup hit its batch/time limit with rows still pending: deleted=%d batches=%d elapsed=%dms retention=%dd',
+                $total,
+                $batches,
+                (int) round( ( microtime( true ) - $started ) * 1000 ),
+                nppp_f2b_retention_days()
+            )
+        );
+    } elseif ( $total > 0 && nppp_f2b_log_gate( 'cleanup_summary', DAY_IN_SECONDS ) > 0 ) {
+        nppp_f2b_log(
+            'INFO',
+            sprintf(
+                'Retention cleanup: deleted=%d batches=%d elapsed=%dms retention=%dd',
+                $total,
+                $batches,
+                (int) round( ( microtime( true ) - $started ) * 1000 ),
+                nppp_f2b_retention_days()
+            )
+        );
+    }
 }
 add_action( NPPP_F2B_CLEANUP_HOOK, 'nppp_f2b_cleanup_old_events' );
 
@@ -932,6 +965,20 @@ function nppp_f2b_rdap_reply_is_permanent( int $code, $raw_body ): bool {
     return $code >= 400 && $code < 500 && ! in_array( $code, array( 408, 429 ), true );
 }
 
+/**
+ * Short, log-safe reason a wp_remote_get() reply is unusable: the transport
+ * error (cut at the first colon), an HTTP status, or a bad body. Serial path
+ * counterpart of nppp_f2b_requests_fail_hint() in the worker.
+ */
+function nppp_f2b_rdap_http_hint( $response ): string {
+    if ( is_wp_error( $response ) ) {
+        $hint = trim( (string) strtok( $response->get_error_message(), ':' ) );
+        return substr( '' !== $hint ? $hint : (string) $response->get_error_code(), 0, 40 );
+    }
+    $code = (int) wp_remote_retrieve_response_code( $response );
+    return 200 === $code ? 'unusable body' : 'HTTP ' . $code;
+}
+
 function nppp_f2b_rdap_retry_waiting( string $ip ): bool {
     $state = nppp_f2b_rdap_work_get( $ip );
     return (int) ( $state['retry_at'] ?? 0 ) > time();
@@ -956,6 +1003,14 @@ function nppp_f2b_rdap_work_save( string $ip, array $state, bool $permanent = fa
     $max = max( 1, (int) apply_filters( 'nppp_f2b_rdap_max_attempts', 3 ) );
     $state['failures'] = max( 0, (int) ( $state['failures'] ?? 0 ) ) + 1;
 
+    $missing = array();
+    if ( ! $state['whois'] ) {
+        $missing[] = 'whois';
+    }
+    if ( ! $state['abuse'] ) {
+        $missing[] = 'abuse';
+    }
+
     // Give up (return true, the caller writes what it has) when retrying
     // cannot help -- $permanent: every missing answer was a 4xx or a wrong
     // shape -- or when transient trouble outlasts the long-run ceiling. This
@@ -970,14 +1025,27 @@ function nppp_f2b_rdap_work_save( string $ip, array $state, bool $permanent = fa
         );
         delete_transient( nppp_f2b_rdap_work_key( $ip ) );
         nppp_f2b_rdap_cooling_set( $ip, 0 );
+        // Per-process tally, read by the worker's stop line (gave_up=N).
+        $GLOBALS['nppp_f2b_rdap_gave_up_run'] = (int) ( $GLOBALS['nppp_f2b_rdap_gave_up_run'] ?? 0 ) + 1;
+
         $gave_up = nppp_f2b_log_gate( 'rdap_gave_up', 5 * MINUTE_IN_SECONDS, true );
         if ( $gave_up > 0 ) {
+            // permanent = every missing answer was a 4xx or a wrong shape;
+            // ceiling = transient trouble outlasted the long-run attempt limit.
+            // The sample is the IP that triggered this report, not all of them.
             nppp_f2b_log(
                 'WARNING',
                 sprintf(
                     /* translators: %d: number of IPs for which the retry budget ran out and an incomplete or blank profile was stored. */
                     __( 'Retry budget spent for %d IP(s); incomplete or blank profiles were stored for them.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     $gave_up
+                ) . sprintf(
+                    ' [sample_ip=%s failures=%d reason=%s unresolved=%s last=%s]',
+                    $ip,
+                    $state['failures'],
+                    $permanent ? 'permanent' : 'ceiling',
+                    implode( '+', $missing ),
+                    '' !== (string) ( $state['last_hint'] ?? '' ) ? $state['last_hint'] : '?'
                 )
             );
         }
@@ -989,13 +1057,6 @@ function nppp_f2b_rdap_work_save( string $ip, array $state, bool $permanent = fa
         $gap = max( $gap, 1, (int) apply_filters( 'nppp_f2b_rdap_exhausted_retry_gap', 15 * MINUTE_IN_SECONDS ) );
     }
 
-    $missing = array();
-    if ( ! $state['whois'] ) {
-        $missing[] = 'whois';
-    }
-    if ( ! $state['abuse'] ) {
-        $missing[] = 'abuse';
-    }
     $state['last_error'] = 'Unresolved endpoints: ' . implode( ', ', $missing );
     $state['retry_at'] = time() + $gap;
     set_transient( nppp_f2b_rdap_work_key( $ip ), $state, max( DAY_IN_SECONDS, $gap + 1 ) );
@@ -1040,6 +1101,7 @@ function nppp_f2b_lookup_ip( string $ip, ?bool &$answered = null, ?bool &$attemp
     $whois_blocked = false;
     $abuse_blocked = false;
     $permanent     = true;
+    $hints         = array();
 
     if ( ! $state['whois'] ) {
         $response = wp_remote_get(
@@ -1056,6 +1118,7 @@ function nppp_f2b_lookup_ip( string $ip, ?bool &$answered = null, ?bool &$attemp
         }
         if ( ! $state['whois'] ) {
             $permanent = $permanent && nppp_f2b_rdap_reply_is_permanent( (int) wp_remote_retrieve_response_code( $response ), wp_remote_retrieve_body( $response ) );
+            $hints[]   = nppp_f2b_rdap_http_hint( $response );
         }
     }
 
@@ -1074,6 +1137,7 @@ function nppp_f2b_lookup_ip( string $ip, ?bool &$answered = null, ?bool &$attemp
         }
         if ( ! $state['abuse'] ) {
             $permanent = $permanent && nppp_f2b_rdap_reply_is_permanent( (int) wp_remote_retrieve_response_code( $response ), wp_remote_retrieve_body( $response ) );
+            $hints[]   = nppp_f2b_rdap_http_hint( $response );
         }
     }
 
@@ -1087,8 +1151,9 @@ function nppp_f2b_lookup_ip( string $ip, ?bool &$answered = null, ?bool &$attemp
         return $result;
     }
 
-    $state['result'] = $result;
-    $answered = nppp_f2b_rdap_work_save( $ip, $state, $permanent );
+    $state['result']    = $result;
+    $state['last_hint'] = substr( implode( ' / ', array_unique( $hints ) ), 0, 80 );
+    $answered           = nppp_f2b_rdap_work_save( $ip, $state, $permanent );
     return $result;
 }
 
@@ -1261,6 +1326,27 @@ function nppp_f2b_validate_request( WP_REST_Request $request ) {
 }
 
 /**
+ * The rate counter cannot be read or written, so nppp_f2b_rate_hit() fails open
+ * and the per-minute limit is NOT enforced. Aggregated, because every webhook
+ * event would otherwise repeat it.
+ */
+function nppp_f2b_log_rate_counter_fail( string $db_error ): void {
+    $seen = nppp_f2b_log_gate( 'rate_counter_fail', 10 * MINUTE_IN_SECONDS, true );
+    if ( $seen < 1 ) {
+        return;
+    }
+    $db_error = trim( $db_error );
+    nppp_f2b_log(
+        'WARNING',
+        sprintf(
+            'Webhook rate counter unavailable, the per-minute limit is not enforced (events are still accepted): occurrences=%d%s',
+            $seen,
+            '' !== $db_error ? ' db_error="' . substr( $db_error, 0, 80 ) . '"' : ''
+        )
+    );
+}
+
+/**
  * Count one event in the given fixed 60 s window and return the new total.
  *
  * One row (window:count) in wp_options, rolled over and incremented by a
@@ -1287,11 +1373,14 @@ function nppp_f2b_rate_hit( int $window, bool $retry = true ): int {
     );
 
     if ( false === $rows ) {
+        nppp_f2b_log_rate_counter_fail( (string) $wpdb->last_error );
         return 0;
     }
 
     if ( 0 === (int) $rows ) {
         if ( ! $retry ) {
+            // The counter row is missing and could not be created.
+            nppp_f2b_log_rate_counter_fail( (string) $wpdb->last_error );
             return 0;
         }
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -1350,9 +1439,37 @@ function nppp_f2b_event_unlock( string $name ): void {
     $wpdb->insert_id  = $insert_id;
 }
 
+/**
+ * A request that passed the token check but is malformed: the caller is
+ * fail2ban (or its action file), not an attacker, so a silent 400 means a jail
+ * that looks healthy while every event is dropped (typically an unreplaced
+ * <name>/<ip> placeholder, or a body that is not JSON). Aggregated per reason.
+ * The value is reduced to a harmless alphabet: nppp_f2b_log() strips tags, which
+ * would erase a literal "<ip>".
+ *
+ * $reason: bad_json, bad_jail, bad_ip, bad_event.
+ */
+function nppp_f2b_log_bad_event( string $reason, string $value = '' ): void {
+    $seen = nppp_f2b_log_gate( 'bad_event_' . $reason, 10 * MINUTE_IN_SECONDS, true );
+    if ( $seen < 1 ) {
+        return;
+    }
+    $value = substr( (string) preg_replace( '/[^A-Za-z0-9._:@{}",-]/', '?', $value ), 0, 48 );
+    nppp_f2b_log(
+        'WARNING',
+        sprintf(
+            'Webhook rejected a request that has a valid token: reason=%s status=400 value=[%s] occurrences=%d',
+            $reason,
+            $value,
+            $seen
+        )
+    );
+}
+
 function nppp_f2b_handle_event( WP_REST_Request $request ) {
     $body = $request->get_json_params();
     if ( ! is_array( $body ) ) {
+        nppp_f2b_log_bad_event( 'bad_json', (string) $request->get_body() );
         return new WP_Error(
             'nppp_f2b_bad_request',
             __( 'Invalid JSON body.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -1369,6 +1486,7 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
 
     // fail2ban jail names are always plain identifiers, so validate as such.
     if ( ! preg_match( '/^[A-Za-z0-9_\-]{1,64}$/', $jail_raw ) ) {
+        nppp_f2b_log_bad_event( 'bad_jail', $jail_raw );
         return new WP_Error(
             'nppp_f2b_bad_request',
             __( 'Invalid jail name.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -1378,6 +1496,7 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
 
     $ip = filter_var( $ip_raw, FILTER_VALIDATE_IP );
     if ( false === $ip ) {
+        nppp_f2b_log_bad_event( 'bad_ip', $ip_raw );
         return new WP_Error(
             'nppp_f2b_bad_request',
             __( 'Invalid IP address.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -1387,6 +1506,7 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
 
     // Test events go through the real INSERT, then delete their own row.
     if ( ! $is_test && ! in_array( $ev_raw, array( 'ban', 'unban' ), true ) ) {
+        nppp_f2b_log_bad_event( 'bad_event', $ev_raw );
         return new WP_Error(
             'nppp_f2b_bad_request',
             __( 'Invalid event type.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -1417,8 +1537,25 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
         // out, the event is still recorded (as before this lock existed).
         $nppp_f2b_ev_lock = 'nppp_f2b_ev_' . md5( nppp_f2b_table_name() . '|' . $jail_raw . '|' . $ip );
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-        if ( 1 !== (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK( %s, 2 )', $nppp_f2b_ev_lock ) ) ) {
-            $nppp_f2b_ev_lock = '';
+        $nppp_f2b_lock_got = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK( %s, 2 )', $nppp_f2b_ev_lock ) );
+        if ( 1 !== (int) $nppp_f2b_lock_got ) {
+            // MySQL: 0 = timed out, NULL = error. A DB proxy or an engine without
+            // GET_LOCK() lands in the error case. Dedup protection is off for this
+            // event, so say so (aggregated, not per event).
+            $nppp_f2b_lock_err = trim( (string) $wpdb->last_error );
+            $nppp_f2b_ev_lock  = '';
+            $nppp_f2b_lock_seen = nppp_f2b_log_gate( 'event_lock_failed', 10 * MINUTE_IN_SECONDS, true );
+            if ( $nppp_f2b_lock_seen > 0 ) {
+                nppp_f2b_log(
+                    'WARNING',
+                    sprintf(
+                        'Event dedup lock unavailable, replay protection is off for these events: reason=%s wait=2s occurrences=%d%s',
+                        null === $nppp_f2b_lock_got ? 'error' : 'timeout',
+                        $nppp_f2b_lock_seen,
+                        '' !== $nppp_f2b_lock_err ? ' db_error="' . substr( $nppp_f2b_lock_err, 0, 80 ) . '"' : ''
+                    )
+                );
+            }
         }
 
         // Latest ban/unban of ANY type for this jail+ip: a replay only if it is
@@ -2160,6 +2297,26 @@ function nppp_f2b_clear_events_callback() {
 }
 
 /**
+ * Failed self-test, for the log: the admin sees the message in the UI, but a
+ * support request later has nothing to go on. Gated so a repeatedly clicked
+ * button cannot flood the log. Untranslated key=value.
+ */
+function nppp_f2b_log_selftest_fail( string $reason, string $detail = '' ): void {
+    if ( nppp_f2b_log_gate( 'selftest_fail', 5 * MINUTE_IN_SECONDS ) < 1 ) {
+        return;
+    }
+    nppp_f2b_log(
+        'WARNING',
+        sprintf(
+            'Webhook self-test failed: reason=%s user=%d%s',
+            $reason,
+            get_current_user_id(),
+            '' !== $detail ? ' detail="' . substr( $detail, 0, 100 ) . '"' : ''
+        )
+    );
+}
+
+/**
  * Runs a self-test through the same HTTP path fail2ban uses.
  */
 function nppp_f2b_test_connection_callback() {
@@ -2193,6 +2350,7 @@ function nppp_f2b_test_connection_callback() {
     );
 
     if ( is_wp_error( $response ) ) {
+        nppp_f2b_log_selftest_fail( 'transport', $response->get_error_message() );
         wp_send_json_success(
             array(
                 'ok'      => false,
@@ -2210,6 +2368,7 @@ function nppp_f2b_test_connection_callback() {
 
     if ( 200 === $code && is_array( $body ) && ! empty( $body['ok'] ) ) {
         if ( empty( $body['write'] ) ) {
+            nppp_f2b_log_selftest_fail( 'write_failed', 'token accepted, test row not written' );
             wp_send_json_success(
                 array(
                     'ok'      => false,
@@ -2288,6 +2447,7 @@ function nppp_f2b_test_connection_callback() {
         );
     }
 
+    nppp_f2b_log_selftest_fail( 'unexpected_http', 'HTTP ' . $code );
     wp_send_json_success(
         array(
             'ok'      => false,
