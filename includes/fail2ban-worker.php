@@ -159,7 +159,9 @@ function nppp_f2b_worker_out_path(): string {
 }
 
 // First readable text of the worker's output (WordPress dies with a whole HTML page).
-function nppp_f2b_worker_output_tail( int $max_chars = 300 ): string {
+// Default 150: the "died" and "exited right after spawn" lines already carry
+// ~200 chars of message and state, and nppp_f2b_log() cuts at 400.
+function nppp_f2b_worker_output_tail( int $max_chars = 150 ): string {
     $path = nppp_f2b_worker_out_path();
     if ( ! @is_readable( $path ) || (int) @filesize( $path ) <= 0 ) {
         return '';
@@ -307,6 +309,90 @@ function nppp_f2b_worker_run_lock_is_free(): ?bool {
 }
 
 /**
+ * Raw /proc/<pid>/cmdline, NULs turned into spaces. Null when unreadable
+ * (no /proc, or the process is gone).
+ */
+function nppp_f2b_worker_proc_cmdline( int $pid ): ?string {
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+    $cmd = @file_get_contents( '/proc/' . $pid . '/cmdline' );
+    return is_string( $cmd ) ? str_replace( "\0", ' ', $cmd ) : null;
+}
+
+/**
+ * One-letter kernel state of a process (S sleeping, D disk wait, T stopped,
+ * Z zombie ...) or '?' when /proc is unavailable. Tells a SIGSTOP or an I/O
+ * stall from a plain sleep when a worker is hung.
+ */
+function nppp_f2b_worker_proc_state( int $pid ): string {
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+    $stat = @file_get_contents( '/proc/' . $pid . '/stat' );
+    $pos  = is_string( $stat ) ? strrpos( $stat, ')' ) : false;
+    if ( false === $pos ) {
+        return '?';
+    }
+    $state = substr( ltrim( substr( $stat, $pos + 1 ) ), 0, 1 );
+    return '' !== $state ? $state : '?';
+}
+
+function nppp_f2b_worker_fmt_age( int $age ): string {
+    return PHP_INT_MAX === $age ? '?' : $age . 's';
+}
+
+/**
+ * PID that /proc/locks reports as holder of the run lock, 0 when unknown (no
+ * /proc/locks, lock not held, or a PID namespace that hides it). Diagnostics
+ * only: when the PID file names the wrong process (a rejected duplicate worker
+ * overwrites it), this is the only way to see who really blocks the queue.
+ */
+function nppp_f2b_worker_lock_holder_pid(): int {
+    $inode = @fileinode( nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE ) );
+    if ( ! $inode ) {
+        return 0;
+    }
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+    $locks = @file_get_contents( '/proc/locks' );
+    if ( ! is_string( $locks ) || '' === $locks ) {
+        return 0;
+    }
+    foreach ( explode( "\n", $locks ) as $line ) {
+        if ( preg_match( '/FLOCK\s+\S+\s+\S+\s+(\d+)\s+[0-9a-f]+:[0-9a-f]+:(\d+)\s/i', $line, $m ) && (int) $m[2] === (int) $inode ) {
+            return (int) $m[1];
+        }
+    }
+    return 0;
+}
+
+/**
+ * Watchdog could not act on a worker that is past the kill threshold. This is
+ * the most dangerous silence in the whole pipeline: a hung worker that cannot
+ * be removed blocks the queue indefinitely. Gated, because every spawn attempt
+ * would otherwise repeat it.
+ *
+ * Untranslated key=value line, same convention as the "Worker stopped" line.
+ * $reason: no_pid, no_posix, no_proc, pid_gone, cmdline_mismatch, lock_held.
+ */
+function nppp_f2b_worker_log_unkillable( string $reason, int $pid, int $hb_age, string $extra = '' ): void {
+    $seen = nppp_f2b_log_gate( 'worker_unkillable', 5 * MINUTE_IN_SECONDS, true );
+    if ( $seen < 1 ) {
+        return;
+    }
+    $holder = nppp_f2b_worker_lock_holder_pid();
+    nppp_f2b_log(
+        'ERROR',
+        sprintf(
+            'Hung worker cannot be terminated: pid=%d hb_age=%s kill_after=%ds reason=%s%s lock_holder=%s occurrences=%d',
+            $pid,
+            nppp_f2b_worker_fmt_age( $hb_age ),
+            NPPP_F2B_WORKER_KILL_SECONDS,
+            $reason,
+            $extra,
+            $holder > 0 ? (string) $holder : '?',
+            $seen
+        )
+    );
+}
+
+/**
  * Watchdog. The run lock holder is alive, but if its heartbeat is older than
  * NPPP_F2B_WORKER_KILL_SECONDS it is hung and blocks the queue forever.
  * Terminates it and reports whether the run lock is free afterwards.
@@ -314,31 +400,84 @@ function nppp_f2b_worker_run_lock_is_free(): ?bool {
  * The PID file alone is never trusted: the process must be a Linux process
  * whose command line carries the worker bootstrap, otherwise nothing is
  * signalled. SIGKILL is the fallback because a stopped process cannot act on
- * SIGTERM. The kernel drops the flock when the process dies; the next spawn
- * logs the death with its last heartbeat state.
+ * SIGTERM. The kernel drops the flock when the process dies.
+ *
+ * Every outcome past the threshold is logged: a kill is an incident, and a
+ * failed kill is the one case where the queue stays blocked with no other
+ * trace. A heartbeat below the threshold is the normal case and stays silent.
+ * After a confirmed kill the PID/heartbeat files are cleared here, otherwise
+ * the next spawn would report the intentional kill as "died without a clean
+ * exit (killed, out of memory ...)".
  */
 function nppp_f2b_worker_terminate_hung(): bool {
-    if ( nppp_f2b_worker_heartbeat_age() <= NPPP_F2B_WORKER_KILL_SECONDS ) {
-        return false;
-    }
-    $pid = nppp_f2b_worker_read_pid();
-    if ( $pid <= 0 || ! function_exists( 'posix_kill' ) || ! defined( 'SIGKILL' ) ) {
-        return false;
-    }
-    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-    $cmd = @file_get_contents( '/proc/' . $pid . '/cmdline' );
-    if ( ! is_string( $cmd ) || false === strpos( $cmd, 'nppp_f2b_worker_run' ) ) {
+    $hb_age = nppp_f2b_worker_heartbeat_age();
+    if ( $hb_age <= NPPP_F2B_WORKER_KILL_SECONDS ) {
         return false;
     }
 
+    $pid = nppp_f2b_worker_read_pid();
+    if ( $pid <= 0 ) {
+        nppp_f2b_worker_log_unkillable( 'no_pid', 0, $hb_age );
+        return false;
+    }
+    if ( ! function_exists( 'posix_kill' ) || ! defined( 'SIGKILL' ) ) {
+        nppp_f2b_worker_log_unkillable( 'no_posix', $pid, $hb_age );
+        return false;
+    }
+
+    $cmd = nppp_f2b_worker_proc_cmdline( $pid );
+    if ( null === $cmd ) {
+        // No /proc at all (not Linux), or the PID file names a process that no
+        // longer exists while something else still holds the run lock.
+        nppp_f2b_worker_log_unkillable( @is_dir( '/proc/self' ) ? 'pid_gone' : 'no_proc', $pid, $hb_age );
+        return false;
+    }
+    if ( false === strpos( $cmd, 'nppp_f2b_worker_run' ) ) {
+        // PID reuse or a stale PID file. Only the binary name is logged, never
+        // the arguments of an unrelated process.
+        $bin = basename( (string) strtok( trim( $cmd ), ' ' ) );
+        nppp_f2b_worker_log_unkillable( 'cmdline_mismatch', $pid, $hb_age, ' proc=' . substr( $bin, 0, 40 ) );
+        return false;
+    }
+
+    // Read before signalling: the heartbeat note says where the worker stopped,
+    // the process state says why (T stopped, D I/O wait, S sleeping).
+    $note       = nppp_f2b_worker_read_hb_note();
+    $proc_state = nppp_f2b_worker_proc_state( $pid );
+
+    $signal = 'SIGTERM';
     @posix_kill( $pid, SIGTERM );
     usleep( 300000 );
     if ( true !== nppp_f2b_worker_run_lock_is_free() ) {
+        $signal = 'SIGTERM+SIGKILL';
         @posix_kill( $pid, SIGKILL );
         usleep( 300000 );
     }
 
-    return true === nppp_f2b_worker_run_lock_is_free();
+    if ( true === nppp_f2b_worker_run_lock_is_free() ) {
+        nppp_f2b_worker_reset_state();
+        nppp_f2b_log(
+            'WARNING',
+            sprintf(
+                'Hung worker terminated: pid=%d hb_age=%s kill_after=%ds proc_state=%s last_state="%s" signal=%s lock_freed=yes',
+                $pid,
+                nppp_f2b_worker_fmt_age( $hb_age ),
+                NPPP_F2B_WORKER_KILL_SECONDS,
+                $proc_state,
+                '' !== $note ? $note : 'unknown',
+                $signal
+            )
+        );
+        return true;
+    }
+
+    nppp_f2b_worker_log_unkillable(
+        'lock_held',
+        $pid,
+        $hb_age,
+        sprintf( ' signal=%s proc_state=%s last_state="%s"', $signal, nppp_f2b_worker_proc_state( $pid ), '' !== $note ? $note : 'unknown' )
+    );
+    return false;
 }
 
 /**
@@ -490,13 +629,21 @@ function nppp_f2b_maybe_spawn_worker( bool $force = false ): bool {
     // Without a spawn lock, do not race another parent's PID/state writes.
     // Reconciliation's inline fallback picks the work up later.
     if ( ! $lock ) {
-        if ( nppp_f2b_log_gate( 'spawn_dir', DAY_IN_SECONDS ) > 0 ) {
+        // Own gate key: 'spawn_dir' belongs to the unwritable-directory notice in
+        // nppp_f2b_spawn_worker_process(); sharing it would let one hide the other
+        // for a whole day.
+        if ( nppp_f2b_log_gate( 'spawn_dir_lock', DAY_IN_SECONDS ) > 0 ) {
+            $nppp_f2b_dir = dirname( $lock_path );
             nppp_f2b_log(
                 'ERROR',
                 sprintf(
-                    /* translators: %s: filesystem path to the runtime directory. */
-                    __( 'Runtime directory is not writable, worker PID/heartbeat files cannot be kept: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-                    dirname( $lock_path )
+                    /* translators: %s: filesystem path of the worker spawn lock file. */
+                    __( 'Worker spawn lock file cannot be opened, so no worker was started: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $lock_path
+                ) . sprintf(
+                    ' [dir_exists=%s dir_writable=%s]',
+                    is_dir( $nppp_f2b_dir ) ? 'yes' : 'no',
+                    is_writable( $nppp_f2b_dir ) ? 'yes' : 'no' // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
                 )
             );
         }
@@ -522,6 +669,16 @@ function nppp_f2b_maybe_spawn_worker( bool $force = false ): bool {
         // it has been silent long enough to be hung (watchdog below).
         $free = nppp_f2b_worker_run_lock_is_free();
         if ( null === $free ) {
+            if ( nppp_f2b_log_gate( 'spawn_run_lock', DAY_IN_SECONDS ) > 0 ) {
+                nppp_f2b_log(
+                    'ERROR',
+                    sprintf(
+                        /* translators: %s: filesystem path of the worker run lock file. */
+                        __( 'Worker run lock file cannot be opened, so no worker was started and a hung worker cannot be detected: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE )
+                    )
+                );
+            }
             return false;
         }
         if ( ! $free && ! nppp_f2b_worker_terminate_hung() ) {
@@ -637,6 +794,9 @@ function nppp_f2b_spawn_worker_process(): bool {
                 );
             }
         } else {
+            // Spawning is only reached with the run lock free, so this live PID
+            // does not own the worker lock: a stale PID file, PID reuse, or a
+            // process that inherited the lock descriptor. Nothing is killed.
             $hb_age = nppp_f2b_worker_heartbeat_age();
             if ( $hb_age > NPPP_F2B_WORKER_STALE_SECONDS && nppp_f2b_log_gate( 'worker_stale', 5 * MINUTE_IN_SECONDS ) > 0 ) {
                 $hb_desc = ( PHP_INT_MAX === $hb_age )
@@ -646,13 +806,18 @@ function nppp_f2b_spawn_worker_process(): bool {
                         __( 'stale (%ds old)', 'fastcgi-cache-purge-and-preload-nginx' ),
                         $hb_age
                     );
+                $nppp_f2b_cmd = nppp_f2b_worker_proc_cmdline( $prev_pid );
                 nppp_f2b_log(
                     'WARNING',
                     sprintf(
-                        /* translators: %1$d: worker process ID; %2$s: heartbeat status ("missing" or "stale (Ns old)"). */
-                        __( 'Worker PID %1$d is still alive but its heartbeat is %2$s; declared dead and replaced.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        /* translators: %1$d: process ID from the PID file; %2$s: heartbeat status ("missing" or "stale (Ns old)"). */
+                        __( 'PID file points to a live process (PID %1$d) that does not own the worker lock and whose heartbeat is %2$s; the entry is ignored and a new worker is started.', 'fastcgi-cache-purge-and-preload-nginx' ),
                         $prev_pid,
                         $hb_desc
+                    ) . sprintf(
+                        ' [proc_state=%s worker_cmdline=%s]',
+                        nppp_f2b_worker_proc_state( $prev_pid ),
+                        null === $nppp_f2b_cmd ? '?' : ( false !== strpos( $nppp_f2b_cmd, 'nppp_f2b_worker_run' ) ? 'yes' : 'no' )
                     )
                 );
             }
@@ -1055,7 +1220,40 @@ function nppp_f2b_log_queue_health(): void {
     $max_age = (int) apply_filters( 'nppp_f2b_backlog_warn_age', 10 * MINUTE_IN_SECONDS );
 
     // IPs waiting out a retry gap are expected, not a backlog.
-    $stats = nppp_f2b_queue_stats( array_keys( nppp_f2b_rdap_cooling_get() ) );
+    $cooling = nppp_f2b_rdap_cooling_get();
+    $stats   = nppp_f2b_queue_stats( array_keys( $cooling ) );
+
+    // ips = -1 is a failed query, not an empty queue; without this the backlog
+    // check below would read a broken database as a healthy one.
+    if ( $stats['ips'] < 0 ) {
+        global $wpdb;
+        if ( nppp_f2b_log_gate( 'queue_stats_fail', 30 * MINUTE_IN_SECONDS ) > 0 ) {
+            nppp_f2b_log(
+                'ERROR',
+                sprintf(
+                    'Queue statistics query failed, backlog cannot be assessed: db_error="%s"',
+                    substr( trim( (string) $wpdb->last_error ), 0, 80 )
+                )
+            );
+        }
+        return;
+    }
+
+    // Cooling IPs are excluded from the backlog above and reported nowhere
+    // else: one line every 6 hours while any are waiting. Untranslated key=value.
+    if ( ! empty( $cooling ) && nppp_f2b_log_gate( 'rdap_cooling', 6 * HOUR_IN_SECONDS ) > 0 ) {
+        $now = time();
+        nppp_f2b_log(
+            'INFO',
+            sprintf(
+                'RDAP retry queue: cooling=%d next_retry_in=%ds last_retry_in=%ds ready_pending=%d',
+                count( $cooling ),
+                max( 0, (int) min( $cooling ) - $now ),
+                max( 0, (int) max( $cooling ) - $now ),
+                $stats['ips']
+            )
+        );
+    }
 
     if ( $stats['ips'] < 1 || ( $stats['ips'] <= $max_ips && $stats['oldest_age'] <= $max_age ) ) {
         return;
@@ -1287,6 +1485,19 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
         $responses = \WpOrg\Requests\Requests::request_multiple( $requests, $options );
     } catch ( \Exception $nppp_f2b_requests_error ) {
         $responses = array();
+        // The whole batch is lost and every slot below reads "no response";
+        // the exception is the only place that says why.
+        if ( nppp_f2b_log_gate( 'rdap_batch_exception', 5 * MINUTE_IN_SECONDS ) > 0 ) {
+            nppp_f2b_log(
+                'ERROR',
+                sprintf(
+                    'RDAP batch request threw an exception, the whole batch counts as failed: ips=%d class=%s message="%s"',
+                    count( $pending ),
+                    get_class( $nppp_f2b_requests_error ),
+                    substr( trim( $nppp_f2b_requests_error->getMessage() ), 0, 120 )
+                )
+            );
+        }
     }
 
     $stats['ms'] = (int) round( ( microtime( true ) - $round_start ) * 1000 );
@@ -1338,14 +1549,19 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
         }
 
         $state['result'] = $result;
+
+        // Built before the save: the retry budget log needs the last reason
+        // even when this very save is the one that gives up on the IP.
+        $hints = array();
+        if ( ! $state['whois'] ) {
+            $hints[] = nppp_f2b_requests_fail_hint( $responses[ 'w' . $index ] ?? null );
+        }
+        if ( ! $state['abuse'] ) {
+            $hints[] = nppp_f2b_requests_fail_hint( $responses[ 'a' . $index ] ?? null );
+        }
+        $state['last_hint'] = substr( implode( ' / ', array_unique( $hints ) ), 0, 80 );
+
         if ( ! nppp_f2b_rdap_work_save( $ip, $state, $permanent ) ) {
-            $hints = array();
-            if ( ! $state['whois'] ) {
-                $hints[] = nppp_f2b_requests_fail_hint( $responses[ 'w' . $index ] ?? null );
-            }
-            if ( ! $state['abuse'] ) {
-                $hints[] = nppp_f2b_requests_fail_hint( $responses[ 'a' . $index ] ?? null );
-            }
             $failed[ $ip ] = implode( ' / ', array_unique( $hints ) );
         }
         $out[ $ip ] = $result;
@@ -1468,15 +1684,33 @@ function nppp_f2b_worker_run(): void {
     @fclose( $spawn_lock );
 
     if ( ! $owns_run_lock ) {
+        // Marked clean before anything is logged, so a failing log call can never
+        // make the shutdown hook report a death or clear another owner's state.
+        $GLOBALS['nppp_f2b_worker_state'] = array( 'clean' => true );
         if ( is_resource( $run_lock ) ) {
             // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
             @fclose( $run_lock );
+            // Two workers were spawned for one queue. The spawn lock and the run
+            // lock make this a race indicator, so it must leave a trace. The
+            // spawner already rewrote the PID/heartbeat files for this process,
+            // so pidfile_pid equal to pid means the owner's PID was overwritten.
+            $nppp_f2b_rejected = nppp_f2b_log_gate( 'worker_rejected', 10 * MINUTE_IN_SECONDS, true );
+            if ( $nppp_f2b_rejected > 0 ) {
+                nppp_f2b_log(
+                    'WARNING',
+                    sprintf(
+                        'Worker rejected, another worker owns the run lock: pid=%d pidfile_pid=%d hb_age=%s occurrences=%d',
+                        (int) getmypid(),
+                        nppp_f2b_worker_read_pid(),
+                        nppp_f2b_worker_fmt_age( nppp_f2b_worker_heartbeat_age() ),
+                        $nppp_f2b_rejected
+                    )
+                );
+            }
         } else {
             nppp_f2b_log( 'ERROR', 'Worker cannot open its run lock; enrichment was not started.' );
         }
-        // Another worker owns the queue. Marked clean so the shutdown hook
-        // neither reports a death nor clears the owner's PID/heartbeat.
-        $GLOBALS['nppp_f2b_worker_state'] = array( 'clean' => true );
+        // Another worker owns the queue (clean marker set above).
         return;
     }
     $GLOBALS['nppp_f2b_worker_run_lock'] = $run_lock;
@@ -1796,6 +2030,9 @@ function nppp_f2b_worker_run(): void {
         'empty'        => $empty,
         'partial'      => $partial,
         'cached'       => $cached,
+        'waiting'      => count( $waiting ),
+        'cooling'      => count( nppp_f2b_rdap_cooling_get() ),
+        'gave_up'      => (int) ( $GLOBALS['nppp_f2b_rdap_gave_up_run'] ?? 0 ),
         'unwritten'    => $unwritten,
         'claim_errors' => $claim_errors,
         'late_arrival' => $late_arrival ? 1 : 0,
@@ -1878,6 +2115,24 @@ function nppp_f2b_worker_reconcile(): void {
         // True is also returned when a live worker still owns the run lock
         // (heartbeat stale but not yet hung): nothing was spawned then.
         if ( ! nppp_f2b_worker_is_running() ) {
+            // The worker owns the run lock but its heartbeat is stale; nothing was
+            // spawned. Visible here so a slow-but-alive worker is told apart from
+            // a dead one before the watchdog threshold is reached.
+            // The run lock must really be held: the same "true" also covers a
+            // spawn that is merely throttled or in progress in another request.
+            if ( false === nppp_f2b_worker_run_lock_is_free() && nppp_f2b_log_gate( 'reconcile_owner_stale', 30 * MINUTE_IN_SECONDS ) > 0 ) {
+                $stats = nppp_f2b_queue_stats();
+                nppp_f2b_log(
+                    'WARNING',
+                    sprintf(
+                        'Reconcile: a worker still owns the run lock but its heartbeat is stale, no new worker was started: hb_age=%s kill_after=%ds pending=%d oldest=%ds',
+                        nppp_f2b_worker_fmt_age( nppp_f2b_worker_heartbeat_age() ),
+                        NPPP_F2B_WORKER_KILL_SECONDS,
+                        max( 0, $stats['ips'] ),
+                        $stats['oldest_age']
+                    )
+                );
+            }
             return;
         }
         // Age of the oldest event tells a dead worker (minutes) from a slow one.
@@ -1889,7 +2144,7 @@ function nppp_f2b_worker_reconcile(): void {
                 __( 'Reconcile found %1$d pending IP(s), the oldest event is %2$ds old, with no running worker; a worker spawn was requested.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 max( 0, $stats['ips'] ),
                 $stats['oldest_age']
-            )
+            ) . sprintf( ' [cooling=%d]', count( nppp_f2b_rdap_cooling_get() ) )
         );
         return;
     }
@@ -1909,13 +2164,30 @@ function nppp_f2b_worker_reconcile(): void {
         $limit = 5;
     }
 
+    $inline = array( 'ips' => 0, 'rows' => 0, 'unanswered' => 0 );
     foreach ( nppp_f2b_worker_claim_ready_ips( $limit ) as $ip ) {
         $answered = true;
         $attempted = false;
         $rdap     = nppp_f2b_lookup_ip( $ip, $answered, $attempted );
+        $inline['ips']++;
         if ( ! $answered ) {
+            $inline['unanswered']++;
             continue;
         }
-        nppp_f2b_worker_write_result( $ip, $rdap );
+        $inline['rows'] += nppp_f2b_worker_write_result( $ip, $rdap );
+    }
+
+    // This path has no stop line of its own: once an hour, say whether the
+    // inline batch actually makes progress. Untranslated key=value.
+    if ( $inline['ips'] > 0 && nppp_f2b_log_gate( 'inline_batch', HOUR_IN_SECONDS ) > 0 ) {
+        nppp_f2b_log(
+            'INFO',
+            sprintf(
+                'Inline enrichment batch: ips=%d rows=%d unanswered=%d',
+                $inline['ips'],
+                $inline['rows'],
+                $inline['unanswered']
+            )
+        );
     }
 }
