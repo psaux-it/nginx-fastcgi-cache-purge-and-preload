@@ -549,14 +549,68 @@ function nppp_f2b_rdap_blank_result(): array {
 }
 
 function nppp_f2b_rdap_cache_key( string $ip ): string {
-    return 'nppp_f2b_rdap_' . md5( $ip );
+    // v2 contains only profiles with validated answers from both endpoints.
+    return 'nppp_f2b_rdap_v2_' . md5( $ip );
 }
 
 // True only for publicly routable addresses. Private (RFC 1918, IPv6 ULA),
 // loopback, link-local and other reserved ranges have no registry record, so
-// they are never sent to RIPEstat. Same flags as the EP-gate recorder.
+// they are never sent to RIPEstat. Also covers a few special-purpose ranges
+// the PHP flags let through, see nppp_f2b_ip_in_special_range().
 function nppp_f2b_ip_is_public( string $ip ): bool {
-    return false !== filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
+    if ( false === filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
+        return false;
+    }
+    return ! nppp_f2b_ip_in_special_range( $ip );
+}
+
+/**
+ * True for special-purpose ranges that PHP's FILTER_FLAG_NO_RES_RANGE lets
+ * through (PHP 8.3: CGNAT, TEST-NETs, benchmarking, multicast ...). 6to4
+ * (2002::/16) is deliberately not listed: those hosts are routable and have
+ * real registry data.
+ * RIPEstat has no registry record for them and answers the whois call with
+ * a bogus "best match" profile, which would be cached and shown as real data.
+ */
+function nppp_f2b_ip_in_special_range( string $ip ): bool {
+    static $ranges = array(
+        '100.64.0.0/10',   // RFC 6598 CGNAT
+        '192.0.0.0/24',    // RFC 6890 IETF protocol assignments
+        '192.0.2.0/24',    // RFC 5737 TEST-NET-1
+        '198.18.0.0/15',   // RFC 2544 benchmarking
+        '198.51.100.0/24', // RFC 5737 TEST-NET-2
+        '203.0.113.0/24',  // RFC 5737 TEST-NET-3
+        '224.0.0.0/4',     // multicast
+        '100::/64',        // RFC 6666 discard-only
+        'ff00::/8',        // multicast
+    );
+
+    $packed = @inet_pton( $ip );
+    if ( false === $packed ) {
+        return false;
+    }
+
+    foreach ( $ranges as $range ) {
+        list( $net, $bits ) = explode( '/', $range );
+        $net_packed = inet_pton( $net );
+        if ( false === $net_packed || strlen( $net_packed ) !== strlen( $packed ) ) {
+            continue;
+        }
+        $bits  = (int) $bits;
+        $bytes = intdiv( $bits, 8 );
+        $rest  = $bits % 8;
+        if ( $bytes > 0 && substr( $packed, 0, $bytes ) !== substr( $net_packed, 0, $bytes ) ) {
+            continue;
+        }
+        if ( $rest > 0 ) {
+            $mask = ( 0xFF << ( 8 - $rest ) ) & 0xFF;
+            if ( ( ord( $packed[ $bytes ] ) & $mask ) !== ( ord( $net_packed[ $bytes ] ) & $mask ) ) {
+                continue;
+            }
+        }
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -684,6 +738,17 @@ function nppp_f2b_rdap_apply_whois( $body, array $result ): array {
         return $result;
     }
 
+    // RIPEstat answers resources it cannot place with HTTP 200 plus a warning
+    // and a made-up "best match" (e.g. 0.0.0.0/0 IANA-BLK, country EU). That
+    // is not registry data, so treat it as an empty answer.
+    foreach ( $body['messages'] ?? array() as $nppp_f2b_message ) {
+        if ( is_array( $nppp_f2b_message )
+            && 'warning' === ( $nppp_f2b_message[0] ?? '' )
+            && false !== stripos( (string) ( $nppp_f2b_message[1] ?? '' ), 'authoritative rir could not be identified' ) ) {
+            return $result;
+        }
+    }
+
     // Different RIRs use different key names for the same fields:
     //   RIPE/APNIC/AFRINIC/LACNIC use inetnum/netname/country/org
     //   ARIN uses NetRange/CIDR, NetName, Country (only in the Org block),
@@ -706,7 +771,7 @@ function nppp_f2b_rdap_apply_whois( $body, array $result ): array {
 
             // First non-empty value wins per field -- earlier blocks tend
             // to be the more specific registration.
-            if ( '' === $result['inetnum'] && in_array( $key, array( 'inetnum', 'netrange', 'cidr' ), true ) ) {
+            if ( '' === $result['inetnum'] && in_array( $key, array( 'inetnum', 'inet6num', 'netrange', 'cidr' ), true ) ) {
                 $result['inetnum'] = $value;
             } elseif ( '' === $result['netname'] && 'netname' === $key ) {
                 $result['netname'] = $value;
@@ -789,6 +854,161 @@ function nppp_f2b_rdap_store_cache( string $ip, array $result ): void {
 }
 
 /**
+ * Accept only a successful RIPEstat envelope with the expected data list.
+ * An empty list is a valid answer; a missing or malformed list is not.
+ */
+function nppp_f2b_rdap_response_is_valid( $body, string $field ): bool {
+    return (
+        is_array( $body )
+        && 'ok' === ( $body['status'] ?? null )
+        && isset( $body['data'] )
+        && is_array( $body['data'] )
+        && isset( $body['data'][ $field ] )
+        && is_array( $body['data'][ $field ] )
+    );
+}
+
+// In-progress data is separate from the completed profile cache.
+function nppp_f2b_rdap_work_key( string $ip ): string {
+    return 'nppp_f2b_rdap_work_' . md5( $ip );
+}
+
+function nppp_f2b_rdap_work_get( string $ip ): array {
+    $state = get_transient( nppp_f2b_rdap_work_key( $ip ) );
+    if ( is_array( $state ) && isset( $state['result'], $state['whois'], $state['abuse'] )
+        && is_array( $state['result'] ) ) {
+        return $state;
+    }
+    return array(
+        'result' => nppp_f2b_rdap_blank_result(),
+        'whois'  => false,
+        'abuse'  => false,
+    );
+}
+
+// IPs waiting out a retry gap (ip => retry_at), kept in one transient so the
+// claim queries can skip them in SQL instead of scanning them every time. Only
+// an optimisation: the per-IP retry_at check stays authoritative, so a lost or
+// capped entry costs one extra look, never a wrong result.
+function nppp_f2b_rdap_cooling_get(): array {
+    $list = get_transient( 'nppp_f2b_rdap_cooling' );
+    if ( ! is_array( $list ) ) {
+        return array();
+    }
+    $now = time();
+    return array_filter( $list, static function ( $until ) use ( $now ) {
+        return (int) $until > $now;
+    } );
+}
+
+// $until = 0 removes the IP.
+function nppp_f2b_rdap_cooling_set( string $ip, int $until ): void {
+    $list = nppp_f2b_rdap_cooling_get();
+    if ( $until > time() ) {
+        $list[ $ip ] = $until;
+    } else {
+        unset( $list[ $ip ] );
+    }
+    if ( empty( $list ) ) {
+        delete_transient( 'nppp_f2b_rdap_cooling' );
+        return;
+    }
+    if ( count( $list ) > 5000 ) {
+        asort( $list );
+        $list = array_slice( $list, -5000, null, true );
+    }
+    set_transient( 'nppp_f2b_rdap_cooling', $list, max( $list ) - time() + 60 );
+}
+
+/**
+ * True when a reply arrived but retrying cannot make it usable: HTTP 4xx
+ * (except 408/429), or HTTP 200 whose valid JSON has the wrong shape.
+ * Timeouts, 5xx, 429 and unparsable bodies are transient.
+ */
+function nppp_f2b_rdap_reply_is_permanent( int $code, $raw_body ): bool {
+    if ( 200 === $code ) {
+        return is_string( $raw_body ) && '' !== $raw_body && null !== json_decode( $raw_body, true );
+    }
+    return $code >= 400 && $code < 500 && ! in_array( $code, array( 408, 429 ), true );
+}
+
+function nppp_f2b_rdap_retry_waiting( string $ip ): bool {
+    $state = nppp_f2b_rdap_work_get( $ip );
+    return (int) ( $state['retry_at'] ?? 0 ) > time();
+}
+
+function nppp_f2b_rdap_work_save( string $ip, array $state, bool $permanent = false ): bool {
+    if ( $state['whois'] && $state['abuse'] ) {
+        nppp_f2b_rdap_store_cache( $ip, $state['result'] );
+        delete_transient( nppp_f2b_rdap_work_key( $ip ) );
+        if ( ! empty( $state['retry_at'] ) ) {
+            nppp_f2b_rdap_cooling_set( $ip, 0 );
+        }
+        // Remove the old counter too, when upgrading from earlier patches.
+        if ( defined( 'NPPP_F2B_RDAP_FAIL_PREFIX' ) ) {
+            delete_transient( NPPP_F2B_RDAP_FAIL_PREFIX . md5( $ip ) );
+        }
+        return true;
+    }
+
+    // One incomplete network round counts once, even if both endpoints fail.
+    // A call skipped by the retry gate never reaches this function.
+    $max = max( 1, (int) apply_filters( 'nppp_f2b_rdap_max_attempts', 3 ) );
+    $state['failures'] = max( 0, (int) ( $state['failures'] ?? 0 ) ) + 1;
+
+    // Give up (return true, the caller writes what it has) when retrying
+    // cannot help -- $permanent: every missing answer was a 4xx or a wrong
+    // shape -- or when transient trouble outlasts the long-run ceiling. This
+    // bounds the work for one bad IP. The profile is cached only briefly: it
+    // is not verified data.
+    $ceiling = max( $max, (int) apply_filters( 'nppp_f2b_rdap_terminal_attempts', 12 ) );
+    if ( $state['failures'] >= $ceiling || ( $permanent && $state['failures'] >= $max ) ) {
+        set_transient(
+            nppp_f2b_rdap_cache_key( $ip ),
+            $state['result'],
+            max( 1, (int) apply_filters( 'nppp_f2b_rdap_negative_cache_ttl', 5 * MINUTE_IN_SECONDS ) )
+        );
+        delete_transient( nppp_f2b_rdap_work_key( $ip ) );
+        nppp_f2b_rdap_cooling_set( $ip, 0 );
+        $gave_up = nppp_f2b_log_gate( 'rdap_gave_up', 5 * MINUTE_IN_SECONDS, true );
+        if ( $gave_up > 0 ) {
+            nppp_f2b_log(
+                'WARNING',
+                sprintf(
+                    /* translators: %d: number of IPs for which the retry budget ran out and an incomplete or blank profile was stored. */
+                    __( 'Retry budget spent for %d IP(s); incomplete or blank profiles were stored for them.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $gave_up
+                )
+            );
+        }
+        return true;
+    }
+
+    $gap = max( 0, (int) apply_filters( 'nppp_f2b_rdap_retry_gap', 120 ) );
+    if ( $state['failures'] >= $max ) {
+        $gap = max( $gap, 1, (int) apply_filters( 'nppp_f2b_rdap_exhausted_retry_gap', 15 * MINUTE_IN_SECONDS ) );
+    }
+
+    $missing = array();
+    if ( ! $state['whois'] ) {
+        $missing[] = 'whois';
+    }
+    if ( ! $state['abuse'] ) {
+        $missing[] = 'abuse';
+    }
+    $state['last_error'] = 'Unresolved endpoints: ' . implode( ', ', $missing );
+    $state['retry_at'] = time() + $gap;
+    set_transient( nppp_f2b_rdap_work_key( $ip ), $state, max( DAY_IN_SECONDS, $gap + 1 ) );
+    nppp_f2b_rdap_cooling_set( $ip, (int) $state['retry_at'] );
+    return false;
+}
+
+function nppp_f2b_rdap_has_partial( string $ip ): bool {
+    $state = nppp_f2b_rdap_work_get( $ip );
+    return (bool) ( $state['whois'] || $state['abuse'] );
+}
+
+/**
  * Single-IP lookup, one request at a time.
  *
  * Only used as a fallback -- the rare host missing WpOrg\Requests, or the
@@ -796,7 +1016,8 @@ function nppp_f2b_rdap_store_cache( string $ip, array $result ): void {
  * through nppp_f2b_lookup_ips_bulk() in the worker, which runs both
  * requests in parallel.
  */
-function nppp_f2b_lookup_ip( string $ip, ?bool &$answered = null ): array {
+function nppp_f2b_lookup_ip( string $ip, ?bool &$answered = null, ?bool &$attempted = null ): array {
+    $attempted = false;
     if ( ! nppp_f2b_ip_is_public( $ip ) ) {
         $answered = true;
         return nppp_f2b_rdap_blank_result();
@@ -808,46 +1029,66 @@ function nppp_f2b_lookup_ip( string $ip, ?bool &$answered = null ): array {
         return $cached;
     }
 
-    $result = nppp_f2b_rdap_blank_result();
+    $state  = nppp_f2b_rdap_work_get( $ip );
+    $result = $state['result'];
+    if ( (int) ( $state['retry_at'] ?? 0 ) > time() ) {
+        $answered = false;
+        return $result;
+    }
+    $attempted = true;
 
-    $whois_response = wp_remote_get(
-        nppp_f2b_rdap_whois_url( $ip ),
-        array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
-    );
+    $whois_blocked = false;
+    $abuse_blocked = false;
+    $permanent     = true;
 
-    $whois_ok = false;
-    if ( ! is_wp_error( $whois_response ) && 200 === (int) wp_remote_retrieve_response_code( $whois_response ) ) {
-        $whois_body = json_decode( wp_remote_retrieve_body( $whois_response ), true );
-        if ( is_array( $whois_body ) ) {
-            $whois_ok = true;
-            $result   = nppp_f2b_rdap_apply_whois( $whois_body, $result );
+    if ( ! $state['whois'] ) {
+        $response = wp_remote_get(
+            nppp_f2b_rdap_whois_url( $ip ),
+            array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
+        );
+        $whois_blocked = is_wp_error( $response ) && 'http_request_not_executed' === $response->get_error_code();
+        if ( ! is_wp_error( $response ) && 200 === (int) wp_remote_retrieve_response_code( $response ) ) {
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( nppp_f2b_rdap_response_is_valid( $body, 'records' ) ) {
+                $state['whois'] = true;
+                $result = nppp_f2b_rdap_apply_whois( $body, $result );
+            }
+        }
+        if ( ! $state['whois'] ) {
+            $permanent = $permanent && nppp_f2b_rdap_reply_is_permanent( (int) wp_remote_retrieve_response_code( $response ), wp_remote_retrieve_body( $response ) );
         }
     }
 
-    $abuse_response = wp_remote_get(
-        nppp_f2b_rdap_abuse_url( $ip ),
-        array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
-    );
-
-    $abuse_ok = false;
-    if ( ! is_wp_error( $abuse_response ) && 200 === (int) wp_remote_retrieve_response_code( $abuse_response ) ) {
-        $abuse_body = json_decode( wp_remote_retrieve_body( $abuse_response ), true );
-        if ( is_array( $abuse_body ) ) {
-            $abuse_ok = true;
-            $result   = nppp_f2b_rdap_apply_abuse( $abuse_body, $result );
+    if ( ! $state['abuse'] ) {
+        $response = wp_remote_get(
+            nppp_f2b_rdap_abuse_url( $ip ),
+            array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
+        );
+        $abuse_blocked = is_wp_error( $response ) && 'http_request_not_executed' === $response->get_error_code();
+        if ( ! is_wp_error( $response ) && 200 === (int) wp_remote_retrieve_response_code( $response ) ) {
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( nppp_f2b_rdap_response_is_valid( $body, 'abuse_contacts' ) ) {
+                $state['abuse'] = true;
+                $result = nppp_f2b_rdap_apply_abuse( $body, $result );
+            }
+        }
+        if ( ! $state['abuse'] ) {
+            $permanent = $permanent && nppp_f2b_rdap_reply_is_permanent( (int) wp_remote_retrieve_response_code( $response ), wp_remote_retrieve_body( $response ) );
         }
     }
 
-    // WP_HTTP_BLOCK_EXTERNAL / request blocking is deterministic -- don't
-    // spend a retry attempt on a request WordPress refused to send.
-    $whois_blocked = is_wp_error( $whois_response ) && 'http_request_not_executed' === $whois_response->get_error_code();
-    $abuse_blocked = is_wp_error( $abuse_response ) && 'http_request_not_executed' === $abuse_response->get_error_code();
-
-    $answered = $whois_ok || $abuse_ok || $whois_blocked || $abuse_blocked;
-
-    if ( $answered ) {
+    // WP_HTTP_BLOCK_EXTERNAL / request blocking is deterministic: WordPress
+    // refused to send both requests, so a retry can never succeed. Keep the
+    // pre-existing outcome (short-lived empty profile) instead of retrying
+    // forever.
+    if ( $whois_blocked && $abuse_blocked && ! $state['whois'] && ! $state['abuse'] ) {
         nppp_f2b_rdap_store_cache( $ip, $result );
+        $answered = true;
+        return $result;
     }
+
+    $state['result'] = $result;
+    $answered = nppp_f2b_rdap_work_save( $ip, $state, $permanent );
     return $result;
 }
 
@@ -860,7 +1101,12 @@ function nppp_f2b_enrich_event_callback( int $event_id, string $ip ): void {
     if ( $event_id <= 0 || '' === $ip ) {
         return;
     }
-    $rdap = nppp_f2b_lookup_ip( $ip );
+    $answered = false;
+    $rdap     = nppp_f2b_lookup_ip( $ip, $answered );
+    if ( ! $answered ) {
+        // Leave pending rows for the worker/reconciliation retry path.
+        return;
+    }
 
     global $wpdb;
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -892,7 +1138,7 @@ function nppp_f2b_enrich_event_callback( int $event_id, string $ip ): void {
  * Returns true if it found and wrote cached data.
  */
 function nppp_f2b_maybe_reuse_cached_rdap( int $event_id, string $ip ): bool {
-    $cached = get_transient( 'nppp_f2b_rdap_' . md5( $ip ) );
+    $cached = get_transient( nppp_f2b_rdap_cache_key( $ip ) );
 
     if ( ! is_array( $cached ) ) {
         return false;
@@ -1087,6 +1333,23 @@ function nppp_f2b_rate_exceeded(): bool {
     return true;
 }
 
+// Releases the per-jail+ip event lock taken in nppp_f2b_handle_event(). No-op
+// when no lock is held (test events, or GET_LOCK was unavailable or timed out).
+function nppp_f2b_event_unlock( string $name ): void {
+    if ( '' === $name ) {
+        return;
+    }
+    global $wpdb;
+    // Every wpdb query resets last_error, and the caller reads last_error and
+    // insert_id of its INSERT after this runs. Put both back.
+    $last_error = $wpdb->last_error;
+    $insert_id  = $wpdb->insert_id;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK( %s )', $name ) );
+    $wpdb->last_error = $last_error;
+    $wpdb->insert_id  = $insert_id;
+}
+
 function nppp_f2b_handle_event( WP_REST_Request $request ) {
     $body = $request->get_json_params();
     if ( ! is_array( $body ) ) {
@@ -1147,20 +1410,34 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
     // curl --retry in the fail2ban action can replay an event whose first
     // attempt already landed (timeout, or 5xx after the INSERT). Same event
     // for the same jail+ip within 60 s is a replay, not a new ban.
+    $nppp_f2b_ev_lock = '';
     if ( ! $is_test ) {
+        // Serialise check + insert per jail+ip so concurrent retries cannot
+        // both pass the check. Fail-open: if the lock is unavailable or times
+        // out, the event is still recorded (as before this lock existed).
+        $nppp_f2b_ev_lock = 'nppp_f2b_ev_' . md5( nppp_f2b_table_name() . '|' . $jail_raw . '|' . $ip );
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        if ( 1 !== (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK( %s, 2 )', $nppp_f2b_ev_lock ) ) ) {
+            $nppp_f2b_ev_lock = '';
+        }
+
+        // Latest ban/unban of ANY type for this jail+ip: a replay only if it is
+        // the same type. ban -> unban -> ban inside the window is a real reban.
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         $nppp_f2b_replay = $wpdb->get_row(
             $wpdb->prepare(
-                'SELECT id, (rdap_json IS NULL) AS pending FROM %i WHERE event_type = %s AND created_at >= %s AND ip = %s AND jail = %s ORDER BY id DESC LIMIT 1',
+                'SELECT id, event_type, (rdap_json IS NULL) AS pending FROM %i WHERE event_type IN ( %s, %s ) AND created_at >= %s AND ip = %s AND jail = %s ORDER BY id DESC LIMIT 1',
                 nppp_f2b_table_name(),
-                $ev_raw,
+                'ban',
+                'unban',
                 gmdate( 'Y-m-d H:i:s', time() - 60 ),
                 $ip,
                 $jail_raw
             ),
             ARRAY_A
         );
-        if ( $nppp_f2b_replay ) {
+        if ( $nppp_f2b_replay && $ev_raw === $nppp_f2b_replay['event_type'] ) {
+            nppp_f2b_event_unlock( $nppp_f2b_ev_lock );
             // Aggregated: at most one INFO line per 10 minutes, with the count.
             $nppp_f2b_dups = nppp_f2b_log_gate( 'replay_duplicate', 10 * MINUTE_IN_SECONDS, true );
             if ( $nppp_f2b_dups > 0 ) {
@@ -1195,6 +1472,7 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
         ),
         array( '%s', '%s', '%s', '%s', '%s' )
     );
+    nppp_f2b_event_unlock( $nppp_f2b_ev_lock );
 
     if ( $is_test ) {
         if ( $inserted && $wpdb->insert_id ) {
