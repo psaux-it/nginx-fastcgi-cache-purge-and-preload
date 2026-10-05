@@ -534,6 +534,10 @@ class NPPP_CLI_F2B_Command extends WP_CLI_Command {
             WP_CLI::error( sprintf( __( 'Invalid --ip: %s', 'fastcgi-cache-purge-and-preload-nginx' ), $ip ) );
         }
 
+        if ( $ip !== '' ) {
+            $ip = (string) inet_ntop( (string) inet_pton( $ip ) ); // canonical form, as Fail2Ban sends it
+        }
+
         $clauses = [];
         $params  = [ nppp_f2b_table_name() ];
 
@@ -1329,6 +1333,7 @@ class NPPP_CLI_F2B_Command extends WP_CLI_Command {
             return;
         }
 
+        $ip       = (string) inet_ntop( (string) inet_pton( $ip ) ); // $ip is already validated above
         $settings = nppp_f2b_get_abuse_settings();
 
         // Preview: same inputs the sender uses, but no mail, no cooldown stamp,
