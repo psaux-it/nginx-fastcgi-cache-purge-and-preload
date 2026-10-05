@@ -38,7 +38,7 @@ $nppp_abuse_dash = '—';
                 <?php if ( ! empty( $data['abuse_emails'] ) ) : ?>
                     <code><?php echo esc_html( implode( ', ', $data['abuse_emails'] ) ); ?></code>
                 <?php else : ?>
-                    <span class="nppp-f2b-abuse-muted"><?php esc_html_e( 'Unknown — RDAP lookup has not returned an abuse contact.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                    <span class="nppp-f2b-abuse-muted"><?php esc_html_e( 'Unknown — RIPEstat lookup has not returned an abuse contact.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                 <?php endif; ?>
             </td>
         </tr>
