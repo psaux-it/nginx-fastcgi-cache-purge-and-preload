@@ -48,7 +48,7 @@ What it does:
    fake can own `:443` without clashing with nginx on `127.0.0.1`.
 3. Adds the lab CA to the **system** trust store. The worker uses `request_multiple()`,
    whose curl handles ignore the WordPress CA bundle and fall back to libcurl's system CAs.
-4. Writes `wp-content/mu-plugins/f2b-lab.php`, which shortens the RDAP retry timers so
+4. Writes `wp-content/mu-plugins/f2b-lab.php`, which shortens the RIPEstat retry timers so
    fault tests finish in seconds:
 
    | Filter | Lab value | Production default |
@@ -89,7 +89,7 @@ The webhook token is read with `wp option get nppp_f2b_token`.
 
 ### Phases
 
-Every phase starts from a clean slate: events table, RDAP transients, rate counter,
+Every phase starts from a clean slate: events table, RIPEstat enrichment transients, rate counter,
 worker state, plugin log and fake-server statistics.
 
 | Phase | What it verifies |
@@ -315,7 +315,7 @@ docker exec $C getent ahosts stat.ripe.net                                      
 Notes:
 
 - `f2b-lab.php` lives in the WordPress tree, not in this directory. If you skip step 2, the site keeps
-  the 2-second RDAP retry timers (production default is 120 s) after the lab is gone.
+  the 2-second RIPEstat retry timers (production default is 120 s) after the lab is gone.
 - `pki/` is kept by `--remove` on purpose, so the next setup reuses the same CA. Step 3 deletes it.
 - If you plan to run the lab again soon, steps 1 and 2 are enough. Skip steps 3 and 4.
 - Step 4 recreates the container, so `python3` installed with `apt-get` is gone. Install it again before the next run.
@@ -336,6 +336,6 @@ Notes:
 | `sed: cannot rename /etc/hosts: Device or resource busy` | Running in Docker without `LAB_IN_DOCKER=1`. |
 | `wp-cli failed` | Wrong `WP_PATH`, plugin inactive, or NPP older than 2.1.8 (no Fail2Ban subsystem). |
 | `producer ... all accepted` fails with 4xx | Wrong `SITE_URL`, the Fail2Ban feature is off, or the token changed. Read the detail printed under the FAIL line. |
-| `queue drained` fails | The webhook accepted events but no worker ran or the RDAP calls never reached the fake. Read `run/fake_ripestat.log` and the plugin log. |
+| `queue drained` fails | The webhook accepted events but no worker ran or the RIPEstat calls never reached the fake. Read `run/fake_ripestat.log` and the plugin log. |
 || `lab files in /opt/npp-fail2ban-test` wait times out, or `$D` is empty | The stack was not started with `docker-compose.lab.yml` (no `npp_lab` mount), `NPP_EDGE_=1` is not set, or the stack image predates the lab relocation. Start with `-f docker-compose.yml -f docker-compose.lab.yml`, run `./actionstart-fail2ban.sh --build`, then check `docker exec $C ls -la $D`. |
 | `ratelimit` makes later runs fail for a minute | It fills the plugin's 300 events per 60 s counter. Wait a minute or run it last. |
