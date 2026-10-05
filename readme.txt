@@ -17,6 +17,8 @@ The most comprehensive free solution for managing Nginx (FastCGI, Proxy, SCGI, U
 
 NPP is the only Nginx cache plugin that doesn’t just clear the table — it sets the whole banquet. No other Nginx cache plugin comes close to its feature list, purge architecture, preload intelligence on WordPress.
 
+Already running Fail2Ban on your Nginx server? Bring its ban activity into the same WordPress dashboard you use to manage your cache.
+
 == 🖥️ Quick WP-CLI ==
 
 Manage your Nginx cache entirely from the command line. Perfect for automation, cron jobs, panels, and headless workflows.
@@ -73,6 +75,8 @@ Get Full command list: `wp help npp` | `wp help npp <subcommand>`
 
 📊 **Monitor Plugin and Nginx Cache Status**: Monitor plugin status, cache status, and Nginx status from the Status tab.
 
+🛡️ **Fail2Ban Monitoring for Nginx**: See ban and unban activity, spot repeat offenders, and explore network details directly in WordPress. Connect your existing Fail2Ban setup, with optional abuse reporting to the relevant network's abuse contact.
+
 📈 **Cache Coverage Ratio**: Live gauge in the WordPress dashboard widget showing the cache coverage ratio, based on the last preload snapshot. Refreshable on demand without a page reload.
 
 ☁️ **Cloudflare APO Sync**: Automatically mirrors NPP purge actions to Cloudflare APO to keep edge cache synchronized with your Nginx cache.
@@ -120,6 +124,10 @@ For hardened environment security, it also ships with its own secure privilege-d
 Yes. Nginx must be part of your web server stack. It does not matter if Nginx is configured as a frontend reverse proxy or as the direct backend server—as long as Nginx is handling the caching layer on a Linux environment, the plugin works perfectly.
 
 It does not work on standalone Apache setups, restricted shared hosting, or environments where `shell_exec` and `exec` are disabled.
+
+= Can I monitor Fail2Ban from WordPress? =
+
+Yes. Connect your existing server-side Fail2Ban installation to NPP using the setup snippets in the Fail2Ban tab. View reported ban activity, repeat offenders, and network details directly in WordPress. Fail2Ban handles blocking on your server; NPP provides the dashboard and optional abuse reporting. This integration is optional for cache management.
 
 = Does NPP require the ngx_cache_purge Nginx module? =
 
@@ -715,7 +723,7 @@ For the complete changelog, see
 == Upgrade Notice ==
 
 = 2.1.8 =
-New Fail2Ban dashboard! URGENT: Update safexec to 1.9.7 URGENT: Block direct web access to the runtime directory (see Help tab).
+New Fail2Ban dashboard! | URGENT: Update safexec to 1.9.7 | URGENT: Block direct web access to the runtime directory (see Help tab).
 
 = 2.1.7 =
 Cache coverage release. Read Changelog for best results.
@@ -743,22 +751,29 @@ Bundled libraries, all MIT licensed: DataTables (datatables.net), Tempus Dominus
 
 == Privacy Policy ==
 
-Prior to version 2.1.5, NPP optionally collected basic anonymous usage data when users explicitly opted in. As of version 2.1.5, all data collection and the opt-in mechanism have been completely removed. NPP collects no data whatsoever.
+NPP does not collect usage telemetry. The optional anonymous usage reporting available before version 2.1.5, including its opt-in mechanism, has been removed.
+
+When configured, the optional Fail2Ban integration stores reported ban and unban events in your WordPress database. Network lookups and administrator-initiated emails may send data to third parties as described below.
 
 == External services ==
 
-The optional Fail2Ban dashboard uses one free third-party service.
+The optional Fail2Ban integration uses RIPEstat for network lookups. It also provides optional, administrator-initiated email features.
 
 = RIPEstat Data API (stat.ripe.net) =
 
-Looks up network ownership (network name, country, ASN, abuse contact) for IP addresses that Fail2Ban reports as banned.
+Provides network registration details, including network name, country, ASN, and abuse contacts, for public IP addresses reported as banned by Fail2Ban.
 
-* Data sent: The banned IP address, sent to RIPE NCC's whois and abuse-contact lookup endpoints, plus the "sourceapp" identifier described below.
-* When: From a background worker (or WP-Cron) after a ban event arrives and no cached result exists. Nothing is sent unless you configure Fail2Ban to push ban events to the plugin's webhook.
-* Provider:  RIPE NCC.
-* sourceapp: npp-wp-plugin-fail2ban-monitor. An administrator can optionally append a suffix (for example a domain or project name) under Fail2Ban > RIPEstat Lookups, which is then sent to RIPE NCC as part of this identifier. It is empty by default.
+* Data sent: The public IP address reported as banned, sent to RIPEstat's whois and abuse-contact lookup endpoints, plus the "sourceapp" identifier described below.
+* When: From a background worker or WP-Cron after a ban event arrives and no cached result is available. These lookups require you to configure Fail2Ban to send events to the plugin's webhook.
+* Provider: RIPE NCC.
+* Identifier: The plugin sends "npp-wp-plugin-fail2ban-monitor" by default. An administrator can optionally append a suffix, such as a domain or project name, under Fail2Ban > RIPEstat Lookups. The suffix is empty by default.
 
-The optional Abuse Reporter sends email to the abuse contact returned by that lookup, only when an administrator enables it and sends a report.
+= Optional emails =
+
+* Abuse reports: When an administrator enables the Abuse Reporter and sends a report, the email includes the reported IP address, recorded ban evidence, and configured sender/contact details. It is addressed to the network's abuse contact obtained through RIPEstat.
+* RIPEstat registration: When an administrator reviews and sends a registration email, the configured identifier and contact details are sent to the RIPEstat team at RIPE NCC.
+
+Neither abuse reports nor registration emails are sent automatically.
 
 == Support ==
 
