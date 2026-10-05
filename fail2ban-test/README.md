@@ -36,7 +36,7 @@ IP lists) are created at runtime and are git-ignored.
 ## Setup
 
 ```bash
-cd /path/to/wp-content/plugins/fastcgi-cache-purge-and-preload-nginx/fail2ban-test
+cd /path/to/fail2ban-test                # checkout of this directory, keep it outside the web root
 sudo ./setup-lab.sh /var/www/html        # path of the WordPress install
 ```
 
@@ -141,6 +141,16 @@ Works with [wordpress-nginx-cache-docker](https://github.com/psaux-it/wordpress-
 which deploys the latest `v*` branch of this plugin, including this directory, into the
 `wordpress-fpm` container.
 
+The stack repo also ships `actionstart-fail2ban.sh`, which does steps 1 to 4 below for you
+(run it on the Docker host, in the stack directory):
+
+````bash
+./actionstart-fail2ban.sh                    # prepare everything, run all phases
+./actionstart-fail2ban.sh --only happy,faults
+````
+
+The manual steps below show what it does.
+
 Everything runs **inside the `wordpress-fpm` container**: the driver, the fake RIPEstat and the
 plugin's PHP worker must share one `/etc/hosts` and one loopback. You start each step from the
 Docker host with `docker exec`. Do not run the lab on the host against a containerized site.
@@ -149,11 +159,22 @@ Set two shell variables once on the Docker host. The commands below use them:
 
 ```bash
 C=wordpress-fpm
-D=/var/www/html/wp-content/plugins/fastcgi-cache-purge-and-preload-nginx/fail2ban-test
+D=/opt/npp-fail2ban-test
 ```
 
 `-u root` is required for `setup-lab.sh` and `run-e2e.sh` (CA store, port 443 on `127.0.0.2`).
 The driver itself drops to `WP_USER` when it calls WP-CLI.
+
+The lab directory is `root:root`: `0755` on the directory itself, `0700` on its files and
+`pki/`, `0600` on keys. Everything runs as root through `docker exec -u root`, and WP-CLI never
+reads these files, so no extra permissions are needed.
+
+The lab is only installed when the stack runs with `docker-compose.lab.yml` (it mounts the
+`npp_lab` volume) and `NPP_EDGE_=1` is set in `.env`. After the first start, check it:
+
+````bash
+docker exec $C ls -la $D
+````
 
 ### 1. Add the hosts entry (once)
 
@@ -168,10 +189,17 @@ docker exec $C getent ahosts stat.ripe.net    # the first line must be 127.0.0.2
 
 Using your own compose file? Add this to the `wordpress` service instead:
 
-```yaml
-extra_hosts:
-  - "stat.ripe.net:127.0.0.2"
-```
+````yaml
+services:
+  wordpress:
+    extra_hosts:
+      - "stat.ripe.net:127.0.0.2"
+    volumes:
+      - npp_lab:/opt/npp-fail2ban-test
+
+volumes:
+  npp_lab:
+````
 
 ### 2. Install python3 (after every container recreate)
 
@@ -192,7 +220,7 @@ docker exec -u root $C sh -c 'for t in python3 openssl curl wp pkill runuser upd
 
 (`pkill` is in `procps`, `update-ca-certificates` and `openssl` come with `ca-certificates`, `runuser` is in `util-linux`.)
 
-### 3. Wire the lab (once, and again after every plugin update)
+### 3. Wire the lab (once)
 
 ```bash
 docker exec -u root -e LAB_IN_DOCKER=1 $C $D/setup-lab.sh /var/www/html
@@ -218,14 +246,15 @@ Notes for the Docker stack:
 
 - The worker runs inside the same container as the driver, which is why the driver belongs
   there and not on the host.
-- The stack's updater syncs the plugin directory with `rsync --delete`. After a plugin update
-  `pki/` and `run/` are gone. Run step 3 again.
-- Files under `wp-content/plugins/` are served by nginx. Deny the directory so the lab CA
-  private key in `pki/` cannot be downloaded:
-
-```nginx
-  location ^~ /wp-content/plugins/fastcgi-cache-purge-and-preload-nginx/fail2ban-test/ { deny all; }
-```
+- The stack's updater syncs the plugin directory with `rsync --delete`. The lab lives on the
+  `npp_lab` volume outside the plugin directory, so a plugin update refreshes the lab files but
+  keeps `pki/` and `run/`. You do not need to run step 3 again.
+- The lab is outside the web root and nginx does not mount the volume, so the lab CA private key
+  in `pki/` cannot be downloaded. No `deny all` rule is needed.
+- Older stack deployments kept `fail2ban-test/` inside the plugin directory. On the next start
+  the stack moves it to `/opt/npp-fail2ban-test` (keeping `pki/` and `run/`) and removes the old copy.
+- `docker compose down -v` with `docker-compose.lab.yml` also deletes the `npp_lab` volume
+  (including `pki/`). A plain `down` keeps it.
 
 ## Cleanup
 
@@ -243,7 +272,7 @@ Run these on the Docker host, in this order. Same `C` and `D` variables as above
 
 ```bash
 C=wordpress-fpm
-D=/var/www/html/wp-content/plugins/fastcgi-cache-purge-and-preload-nginx/fail2ban-test
+D=/opt/npp-fail2ban-test
 ```
 
 **1. Stop the fake RIPEstat and delete its pid file**
@@ -290,6 +319,9 @@ Notes:
 - `pki/` is kept by `--remove` on purpose, so the next setup reuses the same CA. Step 3 deletes it.
 - If you plan to run the lab again soon, steps 1 and 2 are enough. Skip steps 3 and 4.
 - Step 4 recreates the container, so `python3` installed with `apt-get` is gone. Install it again before the next run.
+- Step 4 only drops the mount and the hosts entry. The `npp_lab` volume (lab files, `pki/`) is kept.
+  Remove it with `docker volume rm <project>_npp_lab` if you want it gone.
+- The stack's `./actionstart-fail2ban.sh --clean` runs steps 1 and 2, and `--purge` runs steps 1 to 4.
 - Recreating the container is safe. WordPress files and the database live in volumes, and
   `wp-post.sh` re-runs on start and only re-deploys the plugin if the upstream commit changed.
 
@@ -305,4 +337,5 @@ Notes:
 | `wp-cli failed` | Wrong `WP_PATH`, plugin inactive, or NPP older than 2.1.8 (no Fail2Ban subsystem). |
 | `producer ... all accepted` fails with 4xx | Wrong `SITE_URL`, the Fail2Ban feature is off, or the token changed. Read the detail printed under the FAIL line. |
 | `queue drained` fails | The webhook accepted events but no worker ran or the RDAP calls never reached the fake. Read `run/fake_ripestat.log` and the plugin log. |
+|| `lab files in /opt/npp-fail2ban-test` wait times out, or `$D` is empty | The stack was not started with `docker-compose.lab.yml` (no `npp_lab` mount), `NPP_EDGE_=1` is not set, or the stack image predates the lab relocation. Start with `-f docker-compose.yml -f docker-compose.lab.yml`, run `./actionstart-fail2ban.sh --build`, then check `docker exec $C ls -la $D`. |
 | `ratelimit` makes later runs fail for a minute | It fills the plugin's 300 events per 60 s counter. Wait a minute or run it last. |
