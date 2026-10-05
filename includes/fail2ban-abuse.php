@@ -71,7 +71,7 @@ if ( ! defined( 'NPPP_F2B_ABUSE_TEST_COOLDOWN' ) ) {
 function nppp_f2b_abuse_site_domain(): string {
     $parts = wp_parse_url( get_site_url() );
     $host  = isset( $parts['host'] ) ? (string) $parts['host'] : '';
-    return str_replace( 'www.', '', $host );
+    return (string) preg_replace( '/^www\./i', '', $host );
 }
 
 function nppp_f2b_abuse_default_settings(): array {
