@@ -17,7 +17,9 @@ The most comprehensive free solution for managing Nginx (FastCGI, Proxy, SCGI, U
 
 NPP is the only Nginx cache plugin that doesn’t just clear the table — it sets the whole banquet. No other Nginx cache plugin comes close to its feature list, purge architecture, preload intelligence on WordPress.
 
-Already running Fail2Ban on your Nginx server? Bring its ban activity into the same WordPress dashboard you use to manage your cache.
+== 🛡️ Fail2Ban Integration ==
+
+Already running Fail2Ban on your Nginx server? Unify your site’s security by bringing live ban activity, threat visualization, and IP intelligence directly into your WordPress dashboard. Track attack sources in real time with automatic RIPEstat lookups, monitor global threat heatmaps, and send formal, evidence-backed abuse reports to network operators with a single click.
 
 == 🖥️ Quick WP-CLI ==
 
