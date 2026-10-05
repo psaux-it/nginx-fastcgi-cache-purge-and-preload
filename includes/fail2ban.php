@@ -591,10 +591,38 @@ function nppp_f2b_rdap_cache_key( string $ip ): string {
 // they are never sent to RIPEstat. Also covers a few special-purpose ranges
 // the PHP flags let through, see nppp_f2b_ip_in_special_range().
 function nppp_f2b_ip_is_public( string $ip ): bool {
-    if ( false === filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
+    // Judge the canonical form: an IPv4-mapped address (::ffff:10.0.0.1) must be
+    // treated as the IPv4 host it carries, never as a public IPv6 address.
+    $canon = nppp_f2b_canonical_ip( $ip );
+    if ( false === $canon ) {
         return false;
     }
-    return ! nppp_f2b_ip_in_special_range( $ip );
+    if ( false === filter_var( $canon, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
+        return false;
+    }
+    return ! nppp_f2b_ip_in_special_range( $canon );
+}
+
+/**
+ * One canonical text form per host, or false when $ip is not an IP address.
+ *
+ * inet_ntop() gives lower-case, fully compressed IPv6 ("2a00:1450:4001:81b::200e"
+ * for every spelling), and an IPv4-mapped address (::ffff:8.8.8.8) is unwrapped
+ * to the IPv4 host it stands for. Without this, one host becomes several rows,
+ * several dedup keys and several RIPEstat lookups.
+ */
+function nppp_f2b_canonical_ip( string $ip ) {
+    if ( false === filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+        return false;
+    }
+    $packed = @inet_pton( $ip );
+    if ( false === $packed ) {
+        return false;
+    }
+    if ( 16 === strlen( $packed ) && "\0\0\0\0\0\0\0\0\0\0\xff\xff" === substr( $packed, 0, 12 ) ) {
+        $packed = substr( $packed, 12 );
+    }
+    return @inet_ntop( $packed );
 }
 
 /**
@@ -614,7 +642,18 @@ function nppp_f2b_ip_in_special_range( string $ip ): bool {
         '198.51.100.0/24', // RFC 5737 TEST-NET-2
         '203.0.113.0/24',  // RFC 5737 TEST-NET-3
         '224.0.0.0/4',     // multicast
+        '192.88.99.0/24',  // RFC 7526 deprecated 6to4 relay anycast
         '100::/64',        // RFC 6666 discard-only
+        '64:ff9b::/96',    // RFC 6052 NAT64 well-known prefix
+        '64:ff9b:1::/48',  // RFC 8215 local-use NAT64
+        '2001::/32',       // RFC 4380 Teredo
+        '2001:2::/48',     // RFC 5180 benchmarking
+        '2001:10::/28',    // RFC 4843 deprecated ORCHID
+        '2001:20::/28',    // RFC 7343 ORCHIDv2
+        '2001:db8::/32',   // RFC 3849 documentation
+        '3fff::/20',       // RFC 9637 documentation
+        '5f00::/16',       // RFC 9602 SRv6 SIDs
+        'fec0::/10',       // RFC 3879 deprecated site-local
         'ff00::/8',        // multicast
     );
 
@@ -1400,11 +1439,19 @@ function nppp_f2b_rate_hit( int $window, bool $retry = true ): int {
 
 // Fixed 60 s window (not rolling), counted atomically by nppp_f2b_rate_hit().
 function nppp_f2b_rate_exceeded(): bool {
-    $hits = nppp_f2b_rate_hit( (int) floor( time() / 60 ) );
+    $window = (int) floor( time() / 60 );
+    $hits   = nppp_f2b_rate_hit( $window );
 
     if ( $hits <= NPPP_F2B_RATE_MAX_PER_MIN ) {
+        // First event of a new window: say what earlier windows dropped.
+        if ( 1 === $hits ) {
+            nppp_f2b_rate_report_rejected( $window );
+        }
         return false;
     }
+
+    // Count what is dropped; the total is logged once the window has closed.
+    nppp_f2b_rate_reject_hit( $window );
 
     // The count is exact, so exactly one request per window gets MAX + 1:
     // one log line per window, however many requests arrive at once.
@@ -1413,13 +1460,82 @@ function nppp_f2b_rate_exceeded(): bool {
             'ERROR',
             sprintf(
                 /* translators: %d: number of webhook events allowed per minute. */
-                __( 'Webhook rate limit reached (%d events/min): every further event this minute is rejected with 429 and NOT recorded.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'Webhook rate limit reached (%d events/min): every further event this minute is rejected with 429 and NOT recorded. The total dropped is logged when the window closes.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 NPPP_F2B_RATE_MAX_PER_MIN
             )
         );
     }
 
     return true;
+}
+
+// One row per window that rejected events, bumped by a single atomic upsert.
+// Best effort: a failure here must never change the 429 decision.
+function nppp_f2b_rate_reject_hit( int $window ): void {
+    global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- atomic counter on a single options row
+    $wpdb->query(
+        $wpdb->prepare(
+            "INSERT INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, '1', 'no')
+             ON DUPLICATE KEY UPDATE option_value = CAST( option_value AS UNSIGNED ) + 1",
+            'nppp_f2b_rate_rej_' . $window
+        )
+    );
+}
+
+/**
+ * Logs and clears the rejected-event counters of every CLOSED window.
+ *
+ * Called from the first event of a new window and from the 5 min reconcile
+ * cron, so the report arrives even when no further event follows a storm.
+ * The DELETE is the claim: only the request that deletes a row reports it.
+ */
+function nppp_f2b_rate_report_rejected( int $current_window = 0 ): void {
+    global $wpdb;
+
+    if ( $current_window < 1 ) {
+        $current_window = (int) floor( time() / 60 );
+    }
+
+    $prefix = 'nppp_f2b_rate_rej_';
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $wpdb->esc_like( $prefix ) . '%'
+        ),
+        ARRAY_A
+    );
+    if ( empty( $rows ) ) {
+        return;
+    }
+
+    $dropped = 0;
+    $windows = 0;
+    foreach ( $rows as $row ) {
+        $win = (int) substr( (string) $row['option_name'], strlen( $prefix ) );
+        if ( $win >= $current_window ) {
+            continue; // window still open
+        }
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        if ( 1 !== (int) $wpdb->delete( $wpdb->options, array( 'option_name' => $row['option_name'] ), array( '%s' ) ) ) {
+            continue; // another request already claimed it
+        }
+        $dropped += (int) $row['option_value'];
+        $windows++;
+    }
+
+    if ( $dropped > 0 ) {
+        nppp_f2b_log(
+            'ERROR',
+            sprintf(
+                'Webhook rate limit dropped %d event(s) in %d one-minute window(s) (limit %d/min): rejected with 429 and NOT recorded. The bans themselves are unaffected; only this event log is missing them.',
+                $dropped,
+                $windows,
+                NPPP_F2B_RATE_MAX_PER_MIN
+            )
+        );
+    }
 }
 
 // Releases the per-jail+ip event lock taken in nppp_f2b_handle_event(). No-op
@@ -1484,8 +1600,9 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
     // "test" event comes from the Security tab's connection check.
     $is_test = ( 'test' === $ev_raw );
 
-    // fail2ban jail names are always plain identifiers, so validate as such.
-    if ( ! preg_match( '/^[A-Za-z0-9_\-]{1,64}$/', $jail_raw ) ) {
+    // fail2ban accepts dots in jail names (per-vhost jails such as
+    // "nppp.example.com" are common). Column is VARCHAR(64).
+    if ( ! preg_match( '/^[A-Za-z0-9_.\-]{1,64}$/', $jail_raw ) ) {
         nppp_f2b_log_bad_event( 'bad_jail', $jail_raw );
         return new WP_Error(
             'nppp_f2b_bad_request',
@@ -1494,7 +1611,7 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
         );
     }
 
-    $ip = filter_var( $ip_raw, FILTER_VALIDATE_IP );
+    $ip = nppp_f2b_canonical_ip( $ip_raw );
     if ( false === $ip ) {
         nppp_f2b_log_bad_event( 'bad_ip', $ip_raw );
         return new WP_Error(
