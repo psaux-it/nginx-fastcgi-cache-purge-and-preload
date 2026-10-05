@@ -25,7 +25,7 @@ function nppp_reset_plugin_settings_on_deactivation() {
     // deactivation.
     wp_clear_scheduled_hook('nppp_f2b_cleanup_event');
 
-    // Fail2ban RDAP enrichment worker: stop its reconciliation tick and
+    // Fail2ban RIPEstat enrichment worker: stop its reconciliation tick and
     // terminate the detached CLI process. Like preload, it is a nohup child
     // that would otherwise outlive deactivation.
     wp_clear_scheduled_hook('nppp_f2b_worker_event');
