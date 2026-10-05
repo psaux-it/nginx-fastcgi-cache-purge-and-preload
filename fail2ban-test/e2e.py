@@ -17,7 +17,7 @@ Run it through run-e2e.sh (which starts the fake server), or directly:
     python3 e2e.py --with-ratelimit
 
 Phases: happy, edge, lifecycle, faults, ratelimit.
-Every phase starts from a clean slate (events table, RDAP transients, rate
+Every phase starts from a clean slate (events table, RIPEstat enrichment transients, rate
 counter, worker state, plugin log, fake-server stats). Standard library only.
 """
 import argparse
