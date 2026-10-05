@@ -526,8 +526,8 @@ class NPPP_CLI_F2B_Command extends WP_CLI_Command {
         if ( ! in_array( $type, [ 'all', 'ban', 'unban', 'gate' ], true ) ) {
             WP_CLI::error( __( 'Invalid --type. Use: all, ban, unban or gate.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         }
-        if ( $jail !== '' && ! preg_match( '/^[A-Za-z0-9_\-]{1,64}$/', $jail ) ) {
-            WP_CLI::error( __( 'Invalid --jail. Jail names contain only letters, digits, "_" and "-".', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        if ( $jail !== '' && ! preg_match( '/^[A-Za-z0-9_.\-]{1,64}$/', $jail ) ) {
+            WP_CLI::error( __( 'Invalid --jail. Jail names contain only letters, digits, ".", "_" and "-".', 'fastcgi-cache-purge-and-preload-nginx' ) );
         }
         if ( $ip !== '' && false === filter_var( $ip, FILTER_VALIDATE_IP ) ) {
             /* translators: %s: the invalid IP address provided */
@@ -535,7 +535,7 @@ class NPPP_CLI_F2B_Command extends WP_CLI_Command {
         }
 
         if ( $ip !== '' ) {
-            $ip = (string) inet_ntop( (string) inet_pton( $ip ) ); // canonical form, as Fail2Ban sends it
+            $ip = (string) nppp_f2b_canonical_ip( $ip ); // same canonical form the webhook stores
         }
 
         $clauses = [];
@@ -1333,7 +1333,7 @@ class NPPP_CLI_F2B_Command extends WP_CLI_Command {
             return;
         }
 
-        $ip       = (string) inet_ntop( (string) inet_pton( $ip ) ); // $ip is already validated above
+        $ip       = (string) nppp_f2b_canonical_ip( $ip ); // $ip is already validated above
         $settings = nppp_f2b_get_abuse_settings();
 
         // Preview: same inputs the sender uses, but no mail, no cooldown stamp,
