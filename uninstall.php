@@ -177,6 +177,11 @@ function nppp_delete_plugin_options_on_uninstall() {
     foreach ($option_keys as $option_key) {
         delete_option($option_key);
     }
+
+    // Per-window dropped-event counters (nppp_f2b_rate_rej_<window>).
+    global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('nppp_f2b_rate_rej_') . '%'));
 }
 
 /**
