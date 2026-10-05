@@ -2108,6 +2108,9 @@ function nppp_f2b_schedule_worker_reconcile(): void {
 
 add_action( NPPP_F2B_WORKER_HOOK, 'nppp_f2b_worker_reconcile' );
 function nppp_f2b_worker_reconcile(): void {
+    // A storm may end without any later event to trigger the dropped-event report.
+    nppp_f2b_rate_report_rejected();
+
     // Before the running-worker check: a worker that is alive but falling
     // behind is exactly the case worth a warning.
     nppp_f2b_log_queue_health();
