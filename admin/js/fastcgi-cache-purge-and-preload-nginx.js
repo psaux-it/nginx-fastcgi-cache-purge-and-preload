@@ -1081,7 +1081,7 @@ $(document).ready(function() {
     function npppF2bFeedColumnDefs($tbl) {
         var defs = [
             { responsivePriority: 1,     targets: [0, 1, 2, 3] },       // Time/Event/Jail/IP always visible
-            { responsivePriority: 10000, targets: [4, 5, 6, 7, 8] },    // RDAP columns collapse first on mobile
+            { responsivePriority: 10000, targets: [4, 5, 6, 7, 8] },    // RIPEstat enrichment columns collapse first on mobile
             { defaultContent: '', targets: '_all' }                     // renders even if a cell is empty (not yet enriched)
         ];
 
