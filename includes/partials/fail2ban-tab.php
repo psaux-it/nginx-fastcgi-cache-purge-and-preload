@@ -226,7 +226,7 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
                 <?php
                 printf(
                     /* translators: %s: the fixed default identifier, wrapped in <code> tags */
-                    esc_html__( 'Every IP lookup on this tab goes to RIPEstat, the public Data API of RIPE NCC, with a "sourceapp" identifier so RIPE can reach out if something goes wrong. This plugin always sends %s. Add a suffix, such as your domain or project name, to tell your site apart from other installations, or leave it empty.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    esc_html__( 'Every IP lookup on this tab goes to RIPEstat, the public Data API of RIPE NCC, with a "sourceapp" identifier so the RIPEstat team can reach out if something goes wrong. This plugin always sends %s. Add a suffix, such as your domain or project name, to tell your site apart from other installations, or leave it empty.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     '<code>' . esc_html( NPPP_F2B_RDAP_SOURCEAPP ) . '</code>'
                 );
                 ?>
@@ -296,8 +296,8 @@ $nppp_masked_token = substr( $token, 0, 8 ) . str_repeat( '•', 24 );
             <p class="nppp-f2b-note">
                 <?php
                 printf(
-                    /* translators: %s: RIPE stat contact address as a mailto link */
-                    esc_html__( 'RIPE asks callers sending more than about 1,000 requests per day to identify themselves. If that is your site, set a suffix and use Register now, or email %s yourself. Nothing is ever sent automatically.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    /* translators: %s: RIPEstat contact address as a mailto link */
+                    esc_html__( 'RIPE NCC asks callers sending more than about 1,000 requests per day to identify themselves. If that is your site, set a suffix and use Register now, or email %s yourself. Nothing is ever sent automatically.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     '<a href="mailto:stat@ripe.net">stat@ripe.net</a>'
                 );
                 ?>
@@ -375,7 +375,7 @@ add_filter( 'nppp_f2b_rdap_retry_gap', function( $seconds ) {
     return 180;
 } );
 
-// The full "sourceapp" identifier sent with every RIPEstat request (RIPE convention).
+// The full "sourceapp" identifier sent with every RIPEstat request (RIPEstat convention).
 // Overrides the suffix set in the "RIPEstat Lookups" card above, so most sites
 // do not need this filter.
 // Default: npp-wp-plugin-fail2ban-monitor[-suffix]
@@ -409,7 +409,7 @@ add_filter( 'nppp_f2b_cron_inline_batch', function( $limit ) {
     return 5;
 } );
 
-// Consecutive failed RDAP batches before the worker stops early, assuming
+// Consecutive failed RIPEstat batches before the worker stops early, assuming
 // an upstream RIPEstat outage rather than burning its full runtime. Default: 3
 add_filter( 'nppp_f2b_consecutive_batch_fail_limit', function( $limit ) {
     return 5;
@@ -1233,7 +1233,7 @@ PHP;
                 <div class="nppp-f2b-modal-body" id="nppp-f2b-abuse-modal-body"></div>
                 <div class="nppp-f2b-modal-foot">
                     <p class="nppp-f2b-hint-text">
-                        <?php esc_html_e( 'The recipient is resolved on the server from stored RDAP data — it is never taken from this page.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        <?php esc_html_e( 'The recipient is resolved on the server from stored RIPEstat enrichment data — it is never taken from this page.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     </p>
                     <button type="button" class="nppp-f2b-btn nppp-f2b-btn-primary" id="nppp-f2b-abuse-send" data-ip="" disabled>
                         <?php esc_html_e( 'Send Report', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
