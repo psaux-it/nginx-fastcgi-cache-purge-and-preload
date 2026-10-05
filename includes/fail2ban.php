@@ -1477,9 +1477,9 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
         );
     }
 
-    $jail_raw = isset( $body['jail'] ) ? (string) $body['jail'] : '';
-    $ip_raw   = isset( $body['ip'] ) ? (string) $body['ip'] : '';
-    $ev_raw   = isset( $body['event'] ) ? (string) $body['event'] : '';
+    $jail_raw = ( isset( $body['jail'] ) && is_scalar( $body['jail'] ) ) ? (string) $body['jail'] : '';
+    $ip_raw   = ( isset( $body['ip'] ) && is_scalar( $body['ip'] ) ) ? (string) $body['ip'] : '';
+    $ev_raw   = ( isset( $body['event'] ) && is_scalar( $body['event'] ) ) ? (string) $body['event'] : '';
 
     // "test" event comes from the Security tab's connection check.
     $is_test = ( 'test' === $ev_raw );
