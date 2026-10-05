@@ -920,6 +920,23 @@ function nppp_f2b_kill_worker(): bool {
         return true;
     }
 
+    // The PID file is untrusted (stale file / PID reuse, and it sits in a
+    // web-writable directory). Never signal a process that is not our worker.
+    $nppp_f2b_cmd = nppp_f2b_worker_proc_cmdline( $pid );
+    if ( null === $nppp_f2b_cmd ) {
+        nppp_f2b_log( 'WARNING', sprintf( 'Deactivation: cannot verify PID %d (no /proc); nothing was signalled.', $pid ) );
+        return false;
+    }
+    if ( false === strpos( $nppp_f2b_cmd, 'nppp_f2b_worker_run' ) ) {
+        // The worker is gone and its PID was reused by a stranger: clean up only.
+        nppp_f2b_worker_reset_state();
+        wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE ) );
+        wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE ) );
+        delete_option( NPPP_F2B_SPAWN_TICK_KEY );
+        nppp_f2b_log( 'INFO', sprintf( 'Deactivation: PID %d from the PID file is not an NPP worker; nothing was signalled.', $pid ) );
+        return true;
+    }
+
     if ( function_exists( 'posix_kill' ) && defined( 'SIGTERM' ) ) {
         @posix_kill( $pid, SIGTERM );
         usleep( 300000 );
