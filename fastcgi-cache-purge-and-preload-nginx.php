@@ -253,7 +253,7 @@ function nppp_ep_gate_log(
 // (event_type = 'gate', jail = gate name). Runs only after the throttle in
 // nppp_ep_gate_log() above (attempt #1 and every 5th) and every gate stops
 // counting at its lockout, so the volume per IP is bounded. Gate attacks are
-// never RDAP-enriched and never touch the fail2ban worker; nothing else
+// never enriched via RIPEstat and never touch the fail2ban worker; nothing else
 // happens in this request.
 //
 // Opt-in: nothing is recorded until Fail2Ban has pushed at least one ban or
