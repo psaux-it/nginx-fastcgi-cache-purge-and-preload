@@ -17,7 +17,7 @@
      * Approximate ISO 3166-1 alpha-2 country centroids [lat, lng] and
      * English display names. Static, offline, public-domain reference
      * data — used only to position bubble markers on the map. A country
-     * code returned by RIPE RDAP but missing from this table is simply
+     * code returned by RIPEstat but missing from this table is simply
      * skipped as a marker; it still appears in the ranked list, which is
      * rendered server-side from the same data and does not depend on
      * this table at all.
