@@ -1583,3 +1583,6 @@ WP_CLI::add_command(
             . "  https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload",
     ]
 );
+
+// Fail2Ban sub-group
+require_once __DIR__ . '/wp-cli-f2b.php';
