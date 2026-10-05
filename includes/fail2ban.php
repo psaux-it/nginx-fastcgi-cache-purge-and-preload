@@ -2318,10 +2318,13 @@ function nppp_f2b_log_selftest_fail( string $reason, string $detail = '' ): void
 
 /**
  * Runs a self-test through the same HTTP path fail2ban uses.
+ *
+ * Pure logic: no capability check and no output, so the AJAX button and
+ * WP-CLI (`wp npp f2b test`) share one implementation. Callers authorise.
+ *
+ * @return array{ok:bool,message:string}
  */
-function nppp_f2b_test_connection_callback() {
-    nppp_ajax_auth( 'nppp-security-tab' );
-
+function nppp_f2b_run_selftest(): array {
     $endpoint = nppp_f2b_get_endpoint_url();
     $token    = nppp_f2b_get_token();
 
@@ -2351,15 +2354,13 @@ function nppp_f2b_test_connection_callback() {
 
     if ( is_wp_error( $response ) ) {
         nppp_f2b_log_selftest_fail( 'transport', $response->get_error_message() );
-        wp_send_json_success(
-            array(
-                'ok'      => false,
-                'message' => sprintf(
-                    /* translators: %s: transport level error message */
-                    __( 'Connection failed: %s. Check that this server can reach its own public URL over loopback and that no firewall rule blocks it.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                    $response->get_error_message()
-                ),
-            )
+        return array(
+            'ok'      => false,
+            'message' => sprintf(
+                /* translators: %s: transport level error message */
+                __( 'Connection failed: %s. Check that this server can reach its own public URL over loopback and that no firewall rule blocks it.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $response->get_error_message()
+            ),
         );
     }
 
@@ -2369,11 +2370,9 @@ function nppp_f2b_test_connection_callback() {
     if ( 200 === $code && is_array( $body ) && ! empty( $body['ok'] ) ) {
         if ( empty( $body['write'] ) ) {
             nppp_f2b_log_selftest_fail( 'write_failed', 'token accepted, test row not written' );
-            wp_send_json_success(
-                array(
-                    'ok'      => false,
-                    'message' => __( 'The endpoint is reachable and the token was accepted, but the test row could not be written. Check that the database user can write to the event table, then reload this tab.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                )
+            return array(
+                'ok'      => false,
+                'message' => __( 'The endpoint is reachable and the token was accepted, but the test row could not be written. Check that the database user can write to the event table, then reload this tab.', 'fastcgi-cache-purge-and-preload-nginx' ),
             );
         }
 
@@ -2389,20 +2388,16 @@ function nppp_f2b_test_connection_callback() {
             $nppp_f2b_success_message .= ' ' . __( 'Note: This test only confirms WordPress\'s own server can reach the endpoint. If Fail2Ban runs on a different host or container than WordPress, its real request may arrive from a different IP than this test did, and could still be blocked by your nppp_f2b_trusted_ips allow-list, even if it works for this test.', 'fastcgi-cache-purge-and-preload-nginx' );
         }
 
-        wp_send_json_success(
-            array(
-                'ok'      => true,
-                'message' => $nppp_f2b_success_message,
-            )
+        return array(
+            'ok'      => true,
+            'message' => $nppp_f2b_success_message,
         );
     }
 
     if ( 404 === $code ) {
-        wp_send_json_success(
-            array(
-                'ok'      => false,
-                'message' => __( 'HTTP 404 — The route never registered, which almost always means your web server is not forwarding the Authorization header to PHP. On Nginx + PHP-FPM, add fastcgi_param HTTP_AUTHORIZATION $http_authorization; inside the PHP location block, reload Nginx, then test again.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            )
+        return array(
+            'ok'      => false,
+            'message' => __( 'HTTP 404 — The route never registered, which almost always means your web server is not forwarding the Authorization header to PHP. On Nginx + PHP-FPM, add fastcgi_param HTTP_AUTHORIZATION $http_authorization; inside the PHP location block, reload Nginx, then test again.', 'fastcgi-cache-purge-and-preload-nginx' ),
         );
     }
 
@@ -2418,44 +2413,44 @@ function nppp_f2b_test_connection_callback() {
 
         if ( 'nppp_f2b_ip_not_trusted' === $nppp_f2b_gate_code ) {
             $nppp_observed_ip = isset( $body['data']['observed_ip'] ) ? (string) $body['data']['observed_ip'] : '';
-            wp_send_json_success(
-                array(
-                    'ok'      => false,
-                    'message' => sprintf(
-                        /* translators: %s: the IP address this server observed for its own request */
-                        __( 'HTTP 403 — The token was accepted, but the source IP is not in your nppp_f2b_trusted_ips allow-list. This server\'s own request was seen coming from %s. Add that IP to your nppp_f2b_trusted_ips filter.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                        '' !== $nppp_observed_ip ? $nppp_observed_ip : __( '(unknown — check your Nginx access log for this request)', 'fastcgi-cache-purge-and-preload-nginx' )
-                    ),
-                )
+            return array(
+                'ok'      => false,
+                'message' => sprintf(
+                    /* translators: %s: the IP address this server observed for its own request */
+                    __( 'HTTP 403 — The token was accepted, but the source IP is not in your nppp_f2b_trusted_ips allow-list. This server\'s own request was seen coming from %s. Add that IP to your nppp_f2b_trusted_ips filter.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    '' !== $nppp_observed_ip ? $nppp_observed_ip : __( '(unknown — check your Nginx access log for this request)', 'fastcgi-cache-purge-and-preload-nginx' )
+                ),
             );
         }
 
-        wp_send_json_success(
-            array(
-                'ok'      => false,
-                'message' => __( 'HTTP 403 — The token was rejected. Use Regenerate, re-copy the jail.local snippet and reload Fail2Ban.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            )
+        return array(
+            'ok'      => false,
+            'message' => __( 'HTTP 403 — The token was rejected. Use Regenerate, re-copy the jail.local snippet and reload Fail2Ban.', 'fastcgi-cache-purge-and-preload-nginx' ),
         );
     }
 
     if ( 429 === $code ) {
-        wp_send_json_success(
-            array(
-                'ok'      => false,
-                'message' => __( 'HTTP 429 — Rejected by a rate limit before the test event was recorded. The webhook locks an IP out for up to an hour after 20 rejected tokens (an old token still in jail.local is the usual cause); a web server, WAF or CDN rate limit can return 429 as well.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            )
+        return array(
+            'ok'      => false,
+            'message' => __( 'HTTP 429 — Rejected by a rate limit before the test event was recorded. The webhook locks an IP out for up to an hour after 20 rejected tokens (an old token still in jail.local is the usual cause); a web server, WAF or CDN rate limit can return 429 as well.', 'fastcgi-cache-purge-and-preload-nginx' ),
         );
     }
 
     nppp_f2b_log_selftest_fail( 'unexpected_http', 'HTTP ' . $code );
-    wp_send_json_success(
-        array(
-            'ok'      => false,
-            'message' => sprintf(
-                /* translators: %d: HTTP status code */
-                __( 'Unexpected response (HTTP %d). Check your PHP and Nginx error logs.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                $code
-            ),
-        )
+    return array(
+        'ok'      => false,
+        'message' => sprintf(
+            /* translators: %d: HTTP status code */
+            __( 'Unexpected response (HTTP %d). Check your PHP and Nginx error logs.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $code
+        ),
     );
+}
+
+/**
+ * AJAX wrapper for the "Test" button in the Fail2Ban tab.
+ */
+function nppp_f2b_test_connection_callback() {
+    nppp_ajax_auth( 'nppp-security-tab' );
+    wp_send_json_success( nppp_f2b_run_selftest() );
 }
