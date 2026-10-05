@@ -71,7 +71,7 @@ cat > "$MU" <<PHP
 <?php
 /**
  * Plugin Name: F2B Lab (test environment only - do not deploy)
- * Description: Shortens the NPP RDAP retry timers so fault tests finish in seconds.
+ * Description: Shortens the NPP RIPEstat retry timers so fault tests finish in seconds.
  */
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
