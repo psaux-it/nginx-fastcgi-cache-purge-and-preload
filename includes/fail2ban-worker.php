@@ -1,9 +1,9 @@
 <?php
 /**
- * Fail2ban RDAP enrichment worker for Nginx Cache Purge Preload
+ * Fail2ban RIPEstat enrichment worker for Nginx Cache Purge Preload
  * Description: Background consumer for the Fail2Ban event queue. The
  *              webhook just records the event and makes sure a worker is
- *              running; the worker itself claims pending IPs, looks up RIPE
+ *              running; the worker itself claims pending IPs, looks up RIPEstat
  *              whois + abuse contacts in parallel (via WordPress's bundled
  *              WpOrg\Requests library), writes results back, and exits when
  *              idle.
@@ -90,7 +90,7 @@ if ( ! defined( 'NPPP_F2B_SPAWN_TICK_TTL' ) ) {
 }
 
 // Retry counter for total upstream failures. "RIPE has nothing on this IP"
-// and "RIPE didn't respond" used to be treated the same and both
+// and "RIPEstat didn't respond" used to be treated the same and both
 // permanently blanked the row. Now a real outage gets a few retries first.
 if ( ! defined( 'NPPP_F2B_RDAP_FAIL_PREFIX' ) ) {
     define( 'NPPP_F2B_RDAP_FAIL_PREFIX', 'nppp_f2b_rdap_fail_' );
@@ -1125,7 +1125,7 @@ function nppp_f2b_worker_write_result( string $ip, array $rdap ): int {
             'ERROR',
             sprintf(
                 /* translators: %s: database error message (not translated, comes from the DB driver). */
-                __( 'Write-back of an RDAP profile failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'Write-back of a RIPEstat enrichment profile failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $wpdb->last_error
             )
         );
@@ -1246,7 +1246,7 @@ function nppp_f2b_log_queue_health(): void {
         nppp_f2b_log(
             'INFO',
             sprintf(
-                'RDAP retry queue: cooling=%d next_retry_in=%ds last_retry_in=%ds ready_pending=%d',
+                'RIPEstat retry queue: cooling=%d next_retry_in=%ds last_retry_in=%ds ready_pending=%d',
                 count( $cooling ),
                 max( 0, (int) min( $cooling ) - $now ),
                 max( 0, (int) max( $cooling ) - $now ),
@@ -1304,7 +1304,7 @@ function nppp_f2b_log_stale_abandoned(): void {
             'WARNING',
             sprintf(
                 /* translators: %d: number of ban events older than 7 days that were never enriched and are now outside the enrichment window. */
-                __( '%d ban event(s) older than 7 days still have no RDAP data; they are outside the enrichment window and will stay blank until retention cleanup removes them.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( '%d ban event(s) older than 7 days still have no RIPEstat enrichment data; they are outside the enrichment window and will stay blank until retention cleanup removes them.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $stale
             )
         );
@@ -1312,7 +1312,7 @@ function nppp_f2b_log_stale_abandoned(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Parallel RIPE lookup
+// Parallel RIPEstat lookup
 //
 // The two upstream calls per IP used to run one after another, so one IP
 // cost up to timeout+timeout. Running them together turns that into
@@ -1354,7 +1354,7 @@ function nppp_f2b_requests_fail_hint( $response ): string {
         return 200 === (int) $response->status_code
             ? __( 'unusable response body', 'fastcgi-cache-purge-and-preload-nginx' )
             : sprintf(
-                /* translators: %d: HTTP status code returned by the upstream RDAP/abuse-contact service. */
+                /* translators: %d: HTTP status code returned by a RIPEstat API endpoint. */
                 __( 'HTTP %d', 'fastcgi-cache-purge-and-preload-nginx' ),
                 (int) $response->status_code
             );
@@ -1377,7 +1377,7 @@ function nppp_f2b_requests_fail_hint( $response ): string {
  *                      still lacks a validated endpoint answer (plain true
  *                      on the serial fallback path).
  * @param array $stats  Out-param, diagnostics for the worker's stop line:
- *                      cached (transient hits), net (IPs sent to RIPE), ms
+ *                      cached (transient hits), net (IPs sent to RIPEstat), ms
  *                      (wall time of the network round), partial (IPs where only
  *                      one of whois/abuse answered), hints (reason => count;
  *                      per failed endpoint response on the parallel path,
@@ -1491,7 +1491,7 @@ function nppp_f2b_lookup_ips_bulk( array $ips, array &$failed = array(), array &
             nppp_f2b_log(
                 'ERROR',
                 sprintf(
-                    'RDAP batch request threw an exception, the whole batch counts as failed: ips=%d class=%s message="%s"',
+                    'RIPEstat batch request threw an exception, the whole batch counts as failed: ips=%d class=%s message="%s"',
                     count( $pending ),
                     get_class( $nppp_f2b_requests_error ),
                     substr( trim( $nppp_f2b_requests_error->getMessage() ), 0, 120 )
@@ -1726,7 +1726,7 @@ function nppp_f2b_worker_run(): void {
     if ( $batch < 1 ) {
         $batch = 1;
     }
-    // Hard ceiling -- batch*2 requests must stay within RIPE's 8 concurrent
+    // Hard ceiling -- batch*2 requests must stay within RIPEstat's 8 concurrent
     // limit.
     if ( $batch > 4 ) {
         $batch = 4;
@@ -1760,7 +1760,7 @@ function nppp_f2b_worker_run(): void {
     $pid          = function_exists( 'getmypid' ) ? (int) getmypid() : 0;
     $empty        = 0; // answered, but the registry had nothing for the IP
     $partial      = 0; // only one of whois/abuse answered
-    $cached       = 0; // served from the RDAP transient, no network
+    $cached       = 0; // served from the RIPEstat enrichment cache, no network
     $unwritten    = 0; // IPs whose write-back touched no row
     $claim_errors = 0;
     $lat_batches  = 0; // batches that went to the network
@@ -1849,7 +1849,7 @@ function nppp_f2b_worker_run(): void {
 
         // Progress guard: if a write-back ever fails (read-only replica,
         // revoked grant, full disk) the same IPs keep coming back and we'd
-        // spin on RIPE forever. Skip anything already handled this run, and
+        // spin on RIPEstat forever. Skip anything already handled this run, and
         // stop once a claim has nothing new.
         $fresh = array();
         foreach ( $ips as $ip ) {
@@ -1896,7 +1896,7 @@ function nppp_f2b_worker_run(): void {
                     'WARNING',
                     sprintf(
                         /* translators: %1$d: number of IPs in the batch; %2$s: failure reason (HTTP status or transport error, not translated). */
-                        __( 'RDAP batch failed for all %1$d IP(s): %2$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        __( 'RIPEstat batch failed for all %1$d IP(s): %2$s', 'fastcgi-cache-purge-and-preload-nginx' ),
                         count( $fresh ),
                         is_string( $first ) ? $first : __( 'no response', 'fastcgi-cache-purge-and-preload-nginx' )
                     )
@@ -1952,7 +1952,7 @@ function nppp_f2b_worker_run(): void {
             break;
         }
 
-        // RIPE outage guard: N fully-failed batches in a row means the
+        // RIPEstat outage guard: N fully-failed batches in a row means the
         // problem is upstream, not this batch. Stop early instead of
         // burning max_runtime at full timeout cost, and be a better
         // citizen toward a shared public API during its own outage.
@@ -2154,7 +2154,7 @@ function nppp_f2b_worker_reconcile(): void {
     }
 
     // Last resort for shell_exec-disabled hosts: a small bounded batch
-    // right here in the cron request. Only place RDAP I/O still runs
+    // right here in the cron request. Only place RIPEstat I/O still runs
     // inside PHP-FPM, capped to a few seconds per tick.
     $limit = (int) apply_filters( 'nppp_f2b_cron_inline_batch', 3 );
     if ( $limit < 1 ) {
