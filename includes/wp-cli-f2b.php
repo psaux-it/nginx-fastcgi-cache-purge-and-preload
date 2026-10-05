@@ -1,7 +1,8 @@
 <?php
 /**
- * WP-CLI commands for Nginx Cache Purge Preload
- * Description: Exposes cache purge, preload, status, log, settings, and scheduler to WP-CLI.
+ * WP-CLI Fail2ban commands for Nginx Cache Purge Preload
+ * Description: Exposes the Fail2ban webhook, jail monitor, RIPEstat enrichment
+ *              worker, and Abuse Reporter to WP-CLI as `wp npp f2b`.
  * Version: 2.1.7
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
