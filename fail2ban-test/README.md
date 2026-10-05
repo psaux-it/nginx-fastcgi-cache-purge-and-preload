@@ -141,59 +141,157 @@ Works with [wordpress-nginx-cache-docker](https://github.com/psaux-it/wordpress-
 which deploys the latest `v*` branch of this plugin, including this directory, into the
 `wordpress-fpm` container.
 
-1. Give the container the hosts entry. `/etc/hosts` is bind-mounted by Docker and cannot be
-   edited with `sed -i`, so `setup-lab.sh` must not write it. Use a compose override
-   (`docker-compose.lab.yml`):
+Everything runs **inside the `wordpress-fpm` container**: the driver, the fake RIPEstat and the
+plugin's PHP worker must share one `/etc/hosts` and one loopback. You start each step from the
+Docker host with `docker exec`. Do not run the lab on the host against a containerized site.
 
-   ```yaml
-   services:
-     wordpress:
-       extra_hosts:
-         - "stat.ripe.net:127.0.0.2"
-   ```
+Set two shell variables once on the Docker host. The commands below use them:
 
-   ```bash
-   docker compose -f docker-compose.yml -f docker-compose.lab.yml up -d --force-recreate wordpress
-   ```
+```bash
+C=wordpress-fpm
+D=/var/www/html/wp-content/plugins/fastcgi-cache-purge-and-preload-nginx/fail2ban-test
+```
 
-2. Make sure `python3` exists in the container (install it, or add it to the image).
+`-u root` is required for `setup-lab.sh` and `run-e2e.sh` (CA store, port 443 on `127.0.0.2`).
+The driver itself drops to `WP_USER` when it calls WP-CLI.
 
-3. Run the lab:
+### 1. Add the hosts entry (once)
 
-   ```bash
-   D=/var/www/html/wp-content/plugins/fastcgi-cache-purge-and-preload-nginx/fail2ban-test
-   docker exec wordpress-fpm getent ahosts stat.ripe.net          # first line must be 127.0.0.2
-   docker exec -e LAB_IN_DOCKER=1 wordpress-fpm $D/setup-lab.sh /var/www/html
-   docker exec -e WP_USER=npp -e SITE_URL=https://nginx wordpress-fpm $D/run-e2e.sh
-   ```
+`/etc/hosts` is bind-mounted by Docker and cannot be edited with `sed -i`, so `setup-lab.sh`
+must not write it in Docker. The stack repo already ships `docker-compose.lab.yml`, which adds
+`stat.ripe.net:127.0.0.2` to the `wordpress` service. Run in the stack directory:
 
-   - `LAB_IN_DOCKER=1` makes `setup-lab.sh` check for the hosts entry instead of writing it.
-   - `WP_USER=npp` is the PHP-FPM pool user of the stack.
-   - `SITE_URL=https://nginx` reaches nginx over the compose network.
+```bash
+docker compose -f docker-compose.yml -f docker-compose.lab.yml up -d --force-recreate wordpress
+docker exec $C getent ahosts stat.ripe.net    # the first line must be 127.0.0.2
+```
+
+Using your own compose file? Add this to the `wordpress` service instead:
+
+```yaml
+extra_hosts:
+  - "stat.ripe.net:127.0.0.2"
+```
+
+### 2. Install python3 (after every container recreate)
+
+The stack image does not install Python:
+
+```bash
+docker exec -u root $C sh -c 'apt-get update && apt-get install -y --no-install-recommends python3'
+```
+
+This is lost when the container is recreated (step 1 recreates it, so install after step 1).
+To keep it, add `python3` to the `apt-get install` list in the stack's `wordpress/Dockerfile` and rebuild.
+
+Then check that every tool is present. No `MISSING:` line means you are good:
+
+```bash
+docker exec -u root $C sh -c 'for t in python3 openssl curl wp pkill runuser update-ca-certificates getent; do command -v $t >/dev/null || echo "MISSING: $t"; done'
+```
+
+(`pkill` is in `procps`, `update-ca-certificates` and `openssl` come with `ca-certificates`, `runuser` is in `util-linux`.)
+
+### 3. Wire the lab (once, and again after every plugin update)
+
+```bash
+docker exec -u root -e LAB_IN_DOCKER=1 $C $D/setup-lab.sh /var/www/html
+```
+
+`LAB_IN_DOCKER=1` makes the script check for the hosts entry instead of writing it. It still
+creates the CA and certificate in `$D/pki`, adds the CA to the container's trust store and
+writes `f2b-lab.php` into the WordPress `mu-plugins` directory.
+
+### 4. Run the tests
+
+```bash
+docker exec -u root -e WP_USER=npp -e SITE_URL=https://nginx $C $D/run-e2e.sh
+docker exec -u root -e WP_USER=npp -e SITE_URL=https://nginx $C $D/run-e2e.sh --only happy,faults
+```
+
+- `WP_USER=npp` is the PHP-FPM pool user of the stack, so runtime files stay writable.
+- `SITE_URL=https://nginx` reaches nginx over the compose network. TLS verification is skipped for `https://` URLs.
+- Arguments after `run-e2e.sh` are passed through (`--only`, `--with-ratelimit`, `--count`, `--timeout`).
+- The first run starts `fake_ripestat.py` inside the container and keeps it running. Its log is `$D/run/fake_ripestat.log`.
 
 Notes for the Docker stack:
 
 - The worker runs inside the same container as the driver, which is why the driver belongs
   there and not on the host.
 - The stack's updater syncs the plugin directory with `rsync --delete`. After a plugin update
-  `pki/` and `run/` are gone. Run `setup-lab.sh` again.
+  `pki/` and `run/` are gone. Run step 3 again.
 - Files under `wp-content/plugins/` are served by nginx. Deny the directory so the lab CA
   private key in `pki/` cannot be downloaded:
 
-  ```nginx
+```nginx
   location ^~ /wp-content/plugins/fastcgi-cache-purge-and-preload-nginx/fail2ban-test/ { deny all; }
-  ```
+```
 
 ## Cleanup
 
+### On a normal host
+
 ```bash
 sudo pkill -f 'fake_ripestat[.]py'
+sudo rm -f run/fake_ripestat.pid
 sudo ./setup-lab.sh --remove /var/www/html    # hosts entry, mu-plugin, system CA (pki/ is kept)
 ```
 
-In Docker, prefix with `docker exec -e LAB_IN_DOCKER=1 wordpress-fpm $D/` and drop `sudo`.
-`f2b-lab.php` lives in the WordPress tree. If you skip `--remove`, a site with 2-second retry
-timers stays behind.
+### In the Docker stack
+
+Run these on the Docker host, in this order. Same `C` and `D` variables as above:
+
+```bash
+C=wordpress-fpm
+D=/var/www/html/wp-content/plugins/fastcgi-cache-purge-and-preload-nginx/fail2ban-test
+```
+
+**1. Stop the fake RIPEstat and delete its pid file**
+
+```bash
+docker exec -u root $C sh -c "pkill -f 'fake_ripestat[.]py'; rm -f $D/run/fake_ripestat.pid"
+```
+
+**2. Remove the mu-plugin and the lab CA from the container trust store**
+
+```bash
+docker exec -u root -e LAB_IN_DOCKER=1 $C $D/setup-lab.sh --remove /var/www/html
+```
+
+Expected output: `removed hosts entry, mu-plugin and system CA (pki kept in ...)`.
+With `LAB_IN_DOCKER=1` it does not touch `/etc/hosts`, so the `stat.ripe.net` entry is still there after this step.
+
+**3. Optional: delete the lab CA, its private key and the runtime files**
+
+```bash
+docker exec -u root $C rm -rf $D/pki $D/run
+```
+
+**4. Remove the hosts entry by recreating the container without the lab override**
+
+Run it in the stack directory (the one with `docker-compose.yml`):
+
+```bash
+docker compose -f docker-compose.yml up -d --force-recreate wordpress
+```
+
+**5. Verify**
+
+```bash
+docker exec $C sh -c "pgrep -fl 'fake_ripestat[.]py' || echo 'fake RIPEstat: stopped'"
+docker exec $C sh -c "ls /var/www/html/wp-content/mu-plugins/f2b-lab.php 2>&1 || true"   # No such file
+docker exec $C getent ahosts stat.ripe.net                                             # must NOT start with 127.0.0.2
+```
+
+Notes:
+
+- `f2b-lab.php` lives in the WordPress tree, not in this directory. If you skip step 2, the site keeps
+  the 2-second RDAP retry timers (production default is 120 s) after the lab is gone.
+- `pki/` is kept by `--remove` on purpose, so the next setup reuses the same CA. Step 3 deletes it.
+- If you plan to run the lab again soon, steps 1 and 2 are enough. Skip steps 3 and 4.
+- Step 4 recreates the container, so `python3` installed with `apt-get` is gone. Install it again before the next run.
+- Recreating the container is safe. WordPress files and the database live in volumes, and
+  `wp-post.sh` re-runs on start and only re-deploys the plugin if the upstream commit changed.
 
 ## Troubleshooting
 
