@@ -86,7 +86,7 @@ if ( ! defined( 'NPPP_F2B_ENRICH_HOOK' ) ) {
     define( 'NPPP_F2B_ENRICH_HOOK', 'nppp_f2b_enrich_event' );
 }
 
-// Per-IP RDAP cache.
+// Per-IP RIPEstat enrichment cache.
 function nppp_f2b_rdap_cache_ttl(): int {
     $ttl = (int) apply_filters( 'nppp_f2b_rdap_cache_ttl', NPPP_F2B_WINDOW_DAYS * DAY_IN_SECONDS );
     if ( $ttl < HOUR_IN_SECONDS ) {
@@ -544,9 +544,9 @@ function nppp_f2b_regenerate_token(): string {
 // RIPEstat asks regular/high-volume callers to identify themselves via
 // "sourceapp" so they can be told apart from anonymous traffic if an issue
 // ever comes up -- see https://stat.ripe.net/docs/data-api/ripestat-data-api/.
-// This always identifies the plugin itself (RIPE's rule is per-project/per-
+// This always identifies the plugin itself (RIPEstat's rule is per-project/per-
 // software, not per-site), so the prefix below is fixed. Admins may append an
-// optional suffix in the Fail2Ban tab so RIPE can tell sites apart, and the
+// optional suffix in the Fail2Ban tab so the RIPEstat team can tell sites apart, and the
 // whole value stays filterable for anyone who knows what they're doing.
 if ( ! defined( 'NPPP_F2B_RDAP_SOURCEAPP' ) ) {
     define( 'NPPP_F2B_RDAP_SOURCEAPP', 'npp-wp-plugin-fail2ban-monitor' );
@@ -565,11 +565,11 @@ if ( ! defined( 'NPPP_F2B_SOURCEAPP_SUFFIX_MAX' ) ) {
 }
 
 // ---------------------------------------------------------------------------
-// RIPE lookup. The webhook only ever triggers this indirectly (via the
-// worker); it never calls RIPE inline itself.
+// RIPEstat lookup. The webhook only ever triggers this indirectly (via the
+// worker); it never calls RIPEstat inline itself.
 // ---------------------------------------------------------------------------
 
-// Empty RDAP profile shape, every lookup starts from this.
+// Empty RIPEstat enrichment profile shape, every lookup starts from this.
 function nppp_f2b_rdap_blank_result(): array {
     return array(
         'inetnum'      => '',
@@ -649,9 +649,9 @@ function nppp_f2b_ip_in_special_range( string $ip ): bool {
 /**
  * The "sourceapp" identifier sent with every RIPEstat request.
  *
- * RIPE's own format rule: alphanumeric only, no whitespace, hyphen/underscore
+ * RIPEstat's own format rule: alphanumeric only, no whitespace, hyphen/underscore
  * allowed. Enforced here so a bad filter value can never reach the request
- * (RIPE would just ignore it, but stripping it locally is cheap and safe).
+ * (RIPEstat would just ignore it, but stripping it locally is cheap and safe).
  */
 function nppp_f2b_rdap_sourceapp(): string {
     $sourceapp = (string) apply_filters( 'nppp_f2b_rdap_sourceapp', nppp_f2b_compose_sourceapp( nppp_f2b_get_sourceapp_suffix() ) );
@@ -660,7 +660,7 @@ function nppp_f2b_rdap_sourceapp(): string {
 }
 
 /**
- * Normalises a user-supplied sourceapp suffix to RIPE's allowed alphabet.
+ * Normalises a user-supplied sourceapp suffix to RIPEstat's allowed alphabet.
  *
  * Every run of characters outside [A-Za-z0-9_-] (dots, "@", spaces, non-ASCII)
  * becomes one "_", so a domain like "example.com" survives as "example_com"
@@ -831,7 +831,7 @@ function nppp_f2b_rdap_apply_whois( $body, array $result ): array {
     return $result;
 }
 
-// Merges a decoded RIPEstat abuse-contact response into an RDAP profile.
+// Merges a decoded RIPEstat abuse-contact response into an enrichment profile.
 function nppp_f2b_rdap_apply_abuse( $body, array $result ): array {
     if ( ! is_array( $body ) ) {
         return $result;
@@ -872,8 +872,8 @@ function nppp_f2b_rdap_has_data( array $result ): bool {
 }
 
 /**
- * Caches an RDAP profile. Only uses the full TTL if we actually got
- * data back -- a temporary RIPE timeout shouldn't lock in an empty
+ * Caches a RIPEstat enrichment profile. Only uses the full TTL if we actually got
+ * data back -- a temporary RIPEstat timeout shouldn't lock in an empty
  * result for 30 days and hide real data for this IP forever.
  */
 function nppp_f2b_rdap_store_cache( string $ip, array $result ): void {
@@ -1196,7 +1196,7 @@ function nppp_f2b_enrich_event_callback( int $event_id, string $ip ): void {
 }
 
 /**
- * Reuses cached RDAP data if we have it -- never makes a network call.
+ * Reuses cached RIPEstat enrichment data if we have it -- never makes a network call.
  * Ban events try this first before falling back to a real lookup;
  * unban events only ever use this path, they never trigger a fresh one.
  *
@@ -1224,7 +1224,7 @@ function nppp_f2b_maybe_reuse_cached_rdap( int $event_id, string $ip ): bool {
             'ERROR',
             sprintf(
                 /* translators: %s: database error message (not translated, comes from the DB driver). */
-                __( 'Write-back of a cached RDAP profile failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'Write-back of a cached RIPEstat enrichment profile failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $wpdb->last_error
             )
         );
@@ -1650,7 +1650,7 @@ function nppp_f2b_handle_event( WP_REST_Request $request ) {
     }
 
     // Bans get full enrichment (cache first, else spawn the worker).
-    // Unbans never trigger a fresh RIPE lookup, but reuse cached data
+    // Unbans never trigger a fresh RIPEstat lookup, but reuse cached data
     // if we already have it -- costs nothing.
     if ( $wpdb->insert_id ) {
         if ( 'ban' === $ev_raw ) {
@@ -1866,7 +1866,7 @@ function nppp_f2b_get_gate_totals( int $since_hours = 24 ): array {
     return is_array( $rows ) ? $rows : array();
 }
 
-// One row per gate + IP. Gate rows are never RDAP-enriched (the worker only
+// One row per gate + IP. Gate rows are never enriched via RIPEstat (the worker only
 // processes event_type = 'ban'): a flood of rejected requests must not trigger
 // any outbound lookups.
 function nppp_f2b_get_gate_summary( int $limit = 25, int $since_hours = 24 ): array {
