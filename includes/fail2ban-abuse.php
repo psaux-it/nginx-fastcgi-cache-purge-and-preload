@@ -4,7 +4,7 @@
  * Description: Builds and sends RFC-style abuse reports to the network owner's
  *              abuse desk, using ban evidence already stored by the fail2ban
  *              webhook monitor and the abuse contacts already resolved by the
- *              RDAP/RIPE enrichment pipeline.
+ *              RIPEstat enrichment pipeline.
  * Drop-in Version: 1.0.0
  * Version: 2.1.7
  * Author: Hasan CALISIR
@@ -294,7 +294,7 @@ function nppp_f2b_get_abuse_map_for_ips( array $ips ): array {
     return $map;
 }
 
-// Validate + de-duplicate whatever the RDAP enrichment stored.
+// Validate + de-duplicate whatever the RIPEstat enrichment stored.
 function nppp_f2b_abuse_clean_emails( $emails ): array {
     if ( ! is_array( $emails ) ) {
         return array();
@@ -673,7 +673,7 @@ function nppp_f2b_abuse_send_report( string $ip ): array {
     if ( empty( $data['abuse_emails'] ) ) {
         return array(
             'ok'      => false,
-            'message' => __( 'No abuse contact is known for this network yet. It appears once the RDAP lookup for this address completes.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'message' => __( 'No abuse contact is known for this network yet. It appears once the RIPEstat lookup for this address completes.', 'fastcgi-cache-purge-and-preload-nginx' ),
         );
     }
 
@@ -1183,7 +1183,7 @@ function nppp_f2b_abuse_send_callback() {
 //
 // Lets an admin who set a custom sourceapp suffix (Fail2Ban tab > RIPEstat
 // Lookups) email that identifier plus their contact details to RIPE NCC's
-// RIPEstat team, as RIPE asks of regular/high-volume API users. Never runs
+// RIPEstat team, as RIPE NCC asks of regular/high-volume API users. Never runs
 // automatically: the admin reviews the exact message in a dialog first. Reuses
 // the Abuse Reporter's sender/organisation/contact fields and mail helper, but
 // does NOT require the reporter itself to be switched on.
@@ -1206,12 +1206,12 @@ if ( ! defined( 'NPPP_F2B_RIPE_REG_COOLDOWN_DAYS' ) ) {
 }
 
 // Site-wide lock: at most one registration mail per day, whatever the
-// identifier, so changing the suffix back and forth cannot flood RIPE's inbox.
+// identifier, so changing the suffix back and forth cannot flood the RIPEstat team's inbox.
 if ( ! defined( 'NPPP_F2B_RIPE_REG_RATE_KEY' ) ) {
     define( 'NPPP_F2B_RIPE_REG_RATE_KEY', 'nppp_f2b_ripe_reg_rl' );
 }
 
-// Unix time the current identifier was last emailed to RIPE, or 0. A record
+// Unix time the current identifier was last emailed to the RIPEstat team, or 0. A record
 // for a different identifier counts as "not registered", so changing the
 // suffix resets the state without any extra bookkeeping.
 function nppp_f2b_ripe_reg_sent_at(): int {
@@ -1222,14 +1222,14 @@ function nppp_f2b_ripe_reg_sent_at(): int {
     return hash_equals( (string) $rec['sourceapp'], nppp_f2b_rdap_sourceapp() ) ? (int) $rec['sent_at'] : 0;
 }
 
-// The three reporter fields RIPE needs to be able to contact the operator.
+// The three reporter fields the RIPEstat team needs to contact the operator.
 function nppp_f2b_ripe_reg_identity_ready( array $settings ): bool {
     return '' !== $settings['from_email'] && '' !== $settings['org_name'] && '' !== $settings['contact_name'];
 }
 
 // Setup gate. Returns '' when the Fail2Ban pipeline is live, otherwise the
 // reason the registration has to wait. Registering an identifier that has never
-// produced a single lookup would only put noise in RIPE's inbox.
+// produced a single lookup would only put noise in the RIPEstat team's inbox.
 function nppp_f2b_ripe_reg_traffic_gate(): string {
     // Same test as the "Receiving events" pill: any real ban OR unban proves the
     // remote client, webhook token and endpoint all work.
@@ -1451,7 +1451,7 @@ function nppp_f2b_ripe_reg_send(): array {
         'ok'      => true,
         'message' => sprintf(
             /* translators: %s: recipient email address */
-            __( 'Registration email sent to %s. RIPE does not send an automatic confirmation.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'Registration email sent to %s.', 'fastcgi-cache-purge-and-preload-nginx' ),
             $mail['to']
         ),
     );
