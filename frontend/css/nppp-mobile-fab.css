@@ -9,14 +9,19 @@
  * License: GPL-2.0+
  */
 
-/* Hidden on desktop — only rendered on mobile where WP hides the admin bar */
-#nppp-mobile-fab {
+/* Hidden on desktop — only rendered on mobile where WP hides the admin bar.
+ * The container also carries the HTML `hidden` attribute, so it stays hidden
+ * even if this stylesheet is blocked, delayed or stripped by a theme or
+ * optimization plugin. The media query below reveals it on mobile. */
+#nppp-mobile-fab,
+#nppp-mobile-fab[hidden] {
     display: none;
 }
 
 @media screen and (max-width: 600px) {
 
-    #nppp-mobile-fab {
+    #nppp-mobile-fab,
+    #nppp-mobile-fab[hidden] {
         display: block;
         position: fixed;
         bottom: 20px;
