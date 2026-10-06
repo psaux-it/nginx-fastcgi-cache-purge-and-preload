@@ -1197,17 +1197,21 @@ class NPPP_CLI_F2B_Command extends WP_CLI_Command {
             return;
         }
 
-        if ( ! function_exists( 'posix_kill' ) || ! defined( 'SIGTERM' ) || ! defined( 'SIGKILL' ) ) {
+        if ( ! function_exists( 'posix_kill' ) ) {
             WP_CLI::error( __( 'The PHP posix extension is required to stop the worker.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
+        // SIGTERM/SIGKILL belong to ext-pcntl, which may be missing even when
+        // posix_kill() works. The numbers are fixed on Linux.
+        $sigterm = defined( 'SIGTERM' ) ? SIGTERM : 15;
+        $sigkill = defined( 'SIGKILL' ) ? SIGKILL : 9;
 
         // The worker has no signal handler, so SIGTERM ends it at once.
         // The kernel drops its flock when the process dies.
-        @posix_kill( $pid, SIGTERM );
+        @posix_kill( $pid, $sigterm );
         usleep( 300000 );
         if ( true !== nppp_f2b_worker_run_lock_is_free() ) {
-            @posix_kill( $pid, SIGKILL );
+            @posix_kill( $pid, $sigkill );
             usleep( 300000 );
         }
 
