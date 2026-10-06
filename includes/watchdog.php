@@ -44,7 +44,7 @@ function nppp_watchdog_rate_limit_check(): array {
         $parts[3]  = '**';
         $masked_ip = implode( '.', $parts );
     } elseif ( filter_var( $raw_ip, FILTER_VALIDATE_IP ) ) {
-        $masked_ip = $raw_ip;
+        $masked_ip = nppp_mask_ip( $raw_ip );
     } else {
         $raw_ip    = 'unknown';
         $masked_ip = 'unknown';
