@@ -486,7 +486,7 @@ function nppp_f2b_abuse_dummy_report_data(): array {
 
 // Stable, human-quotable identifier an abuse desk can reference in a reply.
 function nppp_f2b_abuse_report_id( string $ip ): string {
-    return 'NPP-' . strtoupper( substr( md5( $ip . '|' . gmdate( 'Y-m-d' ) . '|' . get_site_url() ), 0, 10 ) );
+    return 'NPP-' . strtoupper( substr( hash_hmac( 'sha256', $ip . '|' . gmdate( 'Y-m-d' ), wp_salt( 'auth' ) ), 0, 10 ) );
 }
 
 // Public IP of this server, for the "attacked target" block. Best effort:
