@@ -2344,7 +2344,13 @@
   }
 
   function start() {
-    if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) return;
+    if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+      // Walkie sleeps on small screens, so nothing advances the shared
+      // godmode "exit" timer the aurora ribbons read. Mark it as settled
+      // so the ribbons keep their wave instead of going flat.
+      if (window.NPPPAurora) window.NPPPAurora.__godmodeExiting = 0.6;
+      return;
+    }
     S.host = pickHost();
     if (!S.host) return;
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
