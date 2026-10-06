@@ -1,7 +1,7 @@
 === Nginx Cache Purge Preload ===
 Contributors: psauxit
 Donate link: https://github.com/sponsors/psaux-it
-Tags: nginx, cache, purge, preload, performance
+Tags: nginx, cache, purge, preload, fail2ban
 Requires at least: 6.5
 Requires PHP: 7.4
 Tested up to: 7.0
