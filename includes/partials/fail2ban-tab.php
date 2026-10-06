@@ -1109,7 +1109,7 @@ PHP;
                 <?php esc_html_e( 'No events yet.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
             </div>
         <?php else : ?>
-            <table id="nppp-f2b-feed-table" class="nppp-f2b-feed-table" data-report-col="<?php echo $abuse_ready ? '1' : '0'; ?>">
+            <table id="nppp-f2b-feed-table" class="nppp-f2b-feed-table" data-report-col="<?php echo $abuse_ready ? '1' : '0'; ?>" data-total="<?php echo esc_attr( (string) (int) $total_events ); ?>">
                 <thead>
                     <tr>
                         <th><?php esc_html_e( 'Time', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
