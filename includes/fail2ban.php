@@ -128,7 +128,10 @@ function nppp_f2b_table_name(): string {
  *                        ~450 with worst-case values).
  */
 function nppp_f2b_log( string $level, string $message ): void {
-    $message = wp_html_excerpt( sanitize_text_field( $message ), 600, '...' );
+    // Every address is masked here, whatever the call site, DB error, exception
+    // text or request body it came from. Scrub first, truncate after, so a cut
+    // can never leave half of an address behind.
+    $message = wp_html_excerpt( nppp_f2b_scrub_ips( sanitize_text_field( $message ) ), 600, '...' );
 
     $line = '[' . current_time( 'Y-m-d H:i:s' ) . '] ' . strtoupper( $level ) . ' F2B: ' . $message . "\n";
 
@@ -143,6 +146,38 @@ function nppp_f2b_log( string $level, string $message ): void {
     // Log file not writable (runtime dir problem): PHP's error log is the last resort.
     // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
     error_log( '[NPPP] ' . trim( $line ) );
+}
+
+/**
+ * Masks every IPv4/IPv6 address found in a log message with nppp_mask_ip()
+ * (IPv4: x.x.x.**, IPv6: last 80 bits zeroed). Idempotent: an already masked
+ * value is left as it is. IPv6 candidates are validated first, so clock times
+ * such as 01:16:22 are never touched.
+ */
+function nppp_f2b_scrub_ips( string $text ): string {
+    $mask = static function ( string $ip ): string {
+        return function_exists( 'nppp_mask_ip' ) ? nppp_mask_ip( $ip ) : 'unknown';
+    };
+
+    // IPv4: any dotted quad, valid or not, loses its last octet.
+    $text = (string) preg_replace_callback(
+        '/(?<![0-9.])(?:\d{1,3}\.){3}\d{1,3}(?![0-9]|\.\d)/',
+        static function ( array $m ) use ( $mask ): string {
+            return filter_var( $m[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 )
+                ? $mask( $m[0] )
+                : (string) preg_replace( '/\d{1,3}$/', '**', $m[0] );
+        },
+        $text
+    );
+
+    // IPv6.
+    return (string) preg_replace_callback(
+        '/(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![0-9A-Fa-f:]|\.\d)/',
+        static function ( array $m ) use ( $mask ): string {
+            return filter_var( $m[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ? $mask( $m[0] ) : $m[0];
+        },
+        $text
+    );
 }
 
 /**
