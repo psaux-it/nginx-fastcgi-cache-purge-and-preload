@@ -367,7 +367,7 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 * Added: A manual Refresh button to the Advanced tab, allowing users to reload the premium table data directly without switching tabs.
 * UI/UX: Preload All now redirects to the Status tab instead of Settings, taking users directly to the live preload progress section.
 * Updated: Confirmed compatibility with WordPress 7.1.2.
-* Tested: Tested with Nginx (1.31.5), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.7), ripgrep (15.2.0), wget (1.25.0) and aaPanel (8.0.6).
+* Tested: Tested with Nginx (1.31.6), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.7), ripgrep (15.2.0), wget (1.25.0) and aaPanel (8.0.6).
 
 = 2.1.7 (2026-06-08) =
 
