@@ -420,10 +420,17 @@ function nppp_f2b_worker_terminate_hung(): bool {
         nppp_f2b_worker_log_unkillable( 'no_pid', 0, $hb_age );
         return false;
     }
-    if ( ! function_exists( 'posix_kill' ) || ! defined( 'SIGKILL' ) ) {
+    if ( ! function_exists( 'posix_kill' ) ) {
         nppp_f2b_worker_log_unkillable( 'no_posix', $pid, $hb_age );
         return false;
     }
+    // SIGTERM/SIGKILL are constants of the pcntl extension, not of posix. Debian
+    // and Ubuntu ship pcntl for the CLI only, so under PHP-FPM (the webhook and
+    // wp-cron paths that reach this function) they are undefined even though
+    // posix_kill() works. The numbers are fixed on Linux, the only platform
+    // with the /proc check below.
+    $sigterm = defined( 'SIGTERM' ) ? SIGTERM : 15;
+    $sigkill = defined( 'SIGKILL' ) ? SIGKILL : 9;
 
     $cmd = nppp_f2b_worker_proc_cmdline( $pid );
     if ( null === $cmd ) {
@@ -446,11 +453,11 @@ function nppp_f2b_worker_terminate_hung(): bool {
     $proc_state = nppp_f2b_worker_proc_state( $pid );
 
     $signal = 'SIGTERM';
-    @posix_kill( $pid, SIGTERM );
+    @posix_kill( $pid, $sigterm );
     usleep( 300000 );
     if ( true !== nppp_f2b_worker_run_lock_is_free() ) {
         $signal = 'SIGTERM+SIGKILL';
-        @posix_kill( $pid, SIGKILL );
+        @posix_kill( $pid, $sigkill );
         usleep( 300000 );
     }
 
