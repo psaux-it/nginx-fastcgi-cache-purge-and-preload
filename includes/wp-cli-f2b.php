@@ -563,7 +563,7 @@ class NPPP_CLI_F2B_Command extends WP_CLI_Command {
         }
         $params[] = $limit;
 
-        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, PluginCheck.Security.DirectDB.UnescapedDBParameter -- custom plugin table; the WHERE clause is built only from fixed fragments and every value is bound through prepare()
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, PluginCheck.Security.DirectDB.UnescapedDBParameter -- custom plugin table; the WHERE clause is built only from fixed fragments and every value is bound through prepare()
         $found = $wpdb->get_results(
             $wpdb->prepare(
                 'SELECT id, jail, ip, event_type, created_at, rdap_json FROM %i WHERE ' . implode( ' AND ', $clauses ) . ' ORDER BY id DESC LIMIT %d',
@@ -571,7 +571,7 @@ class NPPP_CLI_F2B_Command extends WP_CLI_Command {
             ),
             ARRAY_A
         );
-        // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, PluginCheck.Security.DirectDB.UnescapedDBParameter
+        // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
         $rows = [];
         foreach ( (array) $found as $row ) {
@@ -1008,7 +1008,9 @@ class NPPP_CLI_F2B_Command extends WP_CLI_Command {
 
         $table = nppp_f2b_table_name();
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
-        if ( $table !== $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table ) ) ) ) {
+        $found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table ) ) );
+
+        if ( $table !== $found ) {
             /* translators: %s: name of the missing database table */
             WP_CLI::error( sprintf( __( 'The Fail2Ban event table is missing (%s). The database user likely lacks CREATE/ALTER privilege; see: wp npp log', 'fastcgi-cache-purge-and-preload-nginx' ), $table ) );
         }
