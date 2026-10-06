@@ -1054,6 +1054,11 @@ $(document).ready(function() {
             return;
         }
 
+        // Rows loaded in the DOM vs. total stored (the feed is capped server-side).
+        var f2bLoaded = $tbl.find('tbody tr').length;
+        var f2bTotal  = parseInt($tbl.attr('data-total'), 10) || 0;
+        var f2bHidden = f2bTotal > f2bLoaded ? f2bTotal - f2bLoaded : 0;
+
         $tbl.DataTable({
             autoWidth: false,
             responsive: true,
@@ -1064,6 +1069,13 @@ $(document).ready(function() {
             order: [],
             searching: true,
             language: {
+                infoPostFix:  f2bHidden > 0
+                    ? ' ' + sprintf(
+                        /* translators: %s: number of older events not loaded into the table */
+                        __('(+%s older events not loaded, feed cap)', 'fastcgi-cache-purge-and-preload-nginx'),
+                        f2bHidden.toLocaleString()
+                    )
+                    : '',
                 search:       __('Search:', 'fastcgi-cache-purge-and-preload-nginx'),
                 info:         __('Showing _START_ to _END_ of _TOTAL_ events', 'fastcgi-cache-purge-and-preload-nginx'),
                 infoEmpty:    __('No events yet.', 'fastcgi-cache-purge-and-preload-nginx'),
