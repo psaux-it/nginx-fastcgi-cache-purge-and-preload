@@ -315,6 +315,13 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 16. Dashboard Widget
 17. Setup Page
 18. Mail Template
+19. Fail2Ban Tab (Connection: Webhook URL, Bearer Token, Setup Scope)
+20. Fail2Ban Tab (RIPEstat Lookups, Options)
+21. Fail2Ban Tab (Abuse Reporter)
+22. Fail2Ban Tab (Activity Overview, Jail Activity)
+23. Fail2Ban Tab (Repeat Offenders, Top Attack Countries Map)
+24. Fail2Ban Tab (Live Feed)
+25. Fail2Ban Tab (Abuse Report Modal)
 
 == Changelog ==
 
