@@ -1,0 +1,2608 @@
+<?php
+/**
+ * Fail2ban Nginx jail monitor for Nginx Cache Purge Preload
+ * Description: Webhook-based, read-only monitor for nginx-related fail2ban jails.
+ *              fail2ban pushes ban/unban events to a token-authenticated REST endpoint.
+ * Drop-in Version: 1.0.0
+ * Version: 2.1.8
+ * Author: Hasan CALISIR
+ * Author Email: hasan.calisir@psauxit.com
+ * Author URI: https://www.psauxit.com
+ * License: GPL-2.0+
+ */
+
+// Exit if accessed directly.
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+// Token option name. The EP10 gate (rest_api_init, priority 1) reads it before the plugin bootstrap loads.
+if ( ! defined( 'NPPP_F2B_TOKEN_OPTION' ) ) {
+    define( 'NPPP_F2B_TOKEN_OPTION', 'nppp_f2b_token' );
+}
+
+// Schema version. Bump only when the table structure changes.
+if ( ! defined( 'NPPP_F2B_DB_VERSION' ) ) {
+    define( 'NPPP_F2B_DB_VERSION', '1.0.0' );
+}
+if ( ! defined( 'NPPP_F2B_DB_VERSION_OPTION' ) ) {
+    define( 'NPPP_F2B_DB_VERSION_OPTION', 'nppp_f2b_db_version' );
+}
+
+// Timestamp gate for log lines that can fire from many requests. One small
+// non-autoloaded option, see nppp_f2b_log_gate().
+if ( ! defined( 'NPPP_F2B_LOG_GATE_OPTION' ) ) {
+    define( 'NPPP_F2B_LOG_GATE_OPTION', 'nppp_f2b_log_gate' );
+}
+
+// Cron hook name, registered in EP2's cron list.
+if ( ! defined( 'NPPP_F2B_CLEANUP_HOOK' ) ) {
+    define( 'NPPP_F2B_CLEANUP_HOOK', 'nppp_f2b_cleanup_event' );
+}
+
+// Single, self-rotating rate-limit transient. One row, never N-per-minute.
+if ( ! defined( 'NPPP_F2B_RATE_KEY' ) ) {
+    define( 'NPPP_F2B_RATE_KEY', 'nppp_f2b_rl' );
+}
+
+// Safety valve only. A correctly configured fail2ban never approaches this.
+if ( ! defined( 'NPPP_F2B_RATE_MAX_PER_MIN' ) ) {
+    define( 'NPPP_F2B_RATE_MAX_PER_MIN', 300 );
+}
+
+// Rolling window for repeat-offender and event panels.
+if ( ! defined( 'NPPP_F2B_WINDOW_DAYS' ) ) {
+    define( 'NPPP_F2B_WINDOW_DAYS', 30 );
+}
+
+// Repeat Offenders panel — how many top IPs to display.
+if ( ! defined( 'NPPP_F2B_RECIDIVE_TOP_N' ) ) {
+    define( 'NPPP_F2B_RECIDIVE_TOP_N', 5 );
+}
+
+// Top Attack Countries panel — how many countries to display.
+if ( ! defined( 'NPPP_F2B_TOP_COUNTRIES_N' ) ) {
+    define( 'NPPP_F2B_TOP_COUNTRIES_N', 8 );
+}
+
+// World map bubbles — effectively "all of them" default.
+if ( ! defined( 'NPPP_F2B_MAP_COUNTRIES_MAX' ) ) {
+    define( 'NPPP_F2B_MAP_COUNTRIES_MAX', 300 );
+}
+
+// Not autoloaded. Caches whether country_code exists so we don't run
+// SHOW COLUMNS on every Security tab load.
+if ( ! defined( 'NPPP_F2B_COUNTRY_COL_OK_OPTION' ) ) {
+    define( 'NPPP_F2B_COUNTRY_COL_OK_OPTION', 'nppp_f2b_country_col_ok' );
+}
+
+// LEGACY. Plugin no longer schedules this; kept so leftover cron events
+// from <= 2.1.7 can drain. Current enrichment lives in fail2ban-worker.php.
+if ( ! defined( 'NPPP_F2B_ENRICH_HOOK' ) ) {
+    define( 'NPPP_F2B_ENRICH_HOOK', 'nppp_f2b_enrich_event' );
+}
+
+// Per-IP RIPEstat enrichment cache.
+function nppp_f2b_rdap_cache_ttl(): int {
+    $ttl = (int) apply_filters( 'nppp_f2b_rdap_cache_ttl', NPPP_F2B_WINDOW_DAYS * DAY_IN_SECONDS );
+    if ( $ttl < HOUR_IN_SECONDS ) {
+        $ttl = HOUR_IN_SECONDS;
+    }
+    if ( $ttl > 365 * DAY_IN_SECONDS ) {
+        $ttl = 365 * DAY_IN_SECONDS;
+    }
+    return $ttl;
+}
+
+// Upper bound for the Live Feed. Retention already caps the table, but
+// a jail under heavy attack can still push this into tens of thousands of rows.
+if ( ! defined( 'NPPP_F2B_FEED_HARD_CAP' ) ) {
+    define( 'NPPP_F2B_FEED_HARD_CAP', 5000 );
+}
+
+// ---------------------------------------------------------------------------
+// Schema
+// ---------------------------------------------------------------------------
+
+function nppp_f2b_table_name(): string {
+    global $wpdb;
+    return $wpdb->prefix . 'nppp_f2b_events';
+}
+
+// ---------------------------------------------------------------------------
+// Logging
+//
+// Direct append to the plugin log, same file and "[Y-m-d H:i:s] LEVEL ..."
+// ---------------------------------------------------------------------------
+
+/**
+ * @param string $level   ERROR, WARNING or INFO.
+ * @param string $message Already translated, except structured key=value
+ *                        diagnostic lines, which are logged as-is. Stripped,
+ *                        single-lined and capped at 600 characters here (the
+ *                        "worker died" and "worker stopped" lines can reach
+ *                        ~450 with worst-case values).
+ */
+function nppp_f2b_log( string $level, string $message ): void {
+    // Every address is masked here, whatever the call site, DB error, exception
+    // text or request body it came from. Scrub first, truncate after, so a cut
+    // can never leave half of an address behind.
+    $message = wp_html_excerpt( nppp_f2b_scrub_ips( sanitize_text_field( $message ) ), 600, '...' );
+
+    $line = '[' . current_time( 'Y-m-d H:i:s' ) . '] ' . strtoupper( $level ) . ' F2B: ' . $message . "\n";
+
+    if ( function_exists( 'nppp_get_runtime_file' ) ) {
+        $file = defined( 'NGINX_CACHE_LOG_FILE' ) ? NGINX_CACHE_LOG_FILE : nppp_get_runtime_file( 'fastcgi_ops.log' );
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+        if ( false !== @file_put_contents( $file, $line, FILE_APPEND | LOCK_EX ) ) {
+            return;
+        }
+    }
+
+    // Log file not writable (runtime dir problem): PHP's error log is the last resort.
+    // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+    error_log( '[NPPP] ' . trim( $line ) );
+}
+
+/**
+ * Masks every IPv4/IPv6 address found in a log message with nppp_mask_ip()
+ * (IPv4: x.x.x.**, IPv6: last 80 bits zeroed). Idempotent: an already masked
+ * value is left as it is. IPv6 candidates are validated first, so clock times
+ * such as 01:16:22 are never touched.
+ */
+function nppp_f2b_scrub_ips( string $text ): string {
+    $mask = static function ( string $ip ): string {
+        return function_exists( 'nppp_mask_ip' ) ? nppp_mask_ip( $ip ) : 'unknown';
+    };
+
+    // IPv4: any dotted quad, valid or not, loses its last octet.
+    $text = (string) preg_replace_callback(
+        '/(?<![0-9.])(?:\d{1,3}\.){3}\d{1,3}(?![0-9]|\.\d)/',
+        static function ( array $m ) use ( $mask ): string {
+            return filter_var( $m[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 )
+                ? $mask( $m[0] )
+                : (string) preg_replace( '/\d{1,3}$/', '**', $m[0] );
+        },
+        $text
+    );
+
+    // IPv6.
+    return (string) preg_replace_callback(
+        '/(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![0-9A-Fa-f:]|\.\d)/',
+        static function ( array $m ) use ( $mask ): string {
+            return filter_var( $m[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ? $mask( $m[0] ) : $m[0];
+        },
+        $text
+    );
+}
+
+/**
+ * Timestamp gate for log lines that can fire from many requests.
+ *
+ * Returns 0 while $interval seconds have not passed since the last emit for
+ * $key (suppressed). Otherwise returns how many events were seen since then
+ * (at least 1) and re-arms the gate. The caller logs when the result is > 0.
+ *
+ * $count = false: only an emit writes the option. Cheap, for error paths that
+ *                 may repeat on every request.
+ * $count = true:  every call writes it, so the returned number is accurate.
+ *                 Only for events that are rare by nature.
+ *
+ * Concurrent requests can occasionally both emit or lose a count. That is
+ * acceptable for a log throttle.
+ */
+function nppp_f2b_log_gate( string $key, int $interval, bool $count = false ): int {
+    $state = get_option( NPPP_F2B_LOG_GATE_OPTION, array() );
+    if ( ! is_array( $state ) ) {
+        $state = array();
+    }
+
+    $entry = ( isset( $state[ $key ] ) && is_array( $state[ $key ] ) ) ? $state[ $key ] : array();
+    $last  = (int) ( $entry['t'] ?? 0 );
+    $seen  = (int) ( $entry['n'] ?? 0 );
+
+    if ( $count ) {
+        $seen++;
+    }
+
+    $age = time() - $last;
+    if ( $age >= 0 && $age < $interval ) {
+        if ( $count ) {
+            $state[ $key ] = array( 't' => $last, 'n' => $seen );
+            update_option( NPPP_F2B_LOG_GATE_OPTION, $state, false );
+        }
+        return 0;
+    }
+
+    $state[ $key ] = array( 't' => time(), 'n' => 0 );
+    update_option( NPPP_F2B_LOG_GATE_OPTION, $state, false );
+
+    return max( 1, $seen );
+}
+
+/**
+ * In-process throttle for the CLI worker and cron, where a single process
+ * owns the loop and no option write is needed. True means: log now.
+ */
+function nppp_f2b_log_local_gate( string $key, int $interval ): bool {
+    static $last = array();
+
+    $now = time();
+    if ( isset( $last[ $key ] ) ) {
+        $age = $now - $last[ $key ];
+        if ( $age >= 0 && $age < $interval ) {
+            return false;
+        }
+    }
+
+    $last[ $key ] = $now;
+    return true;
+}
+
+// Retention period in days, filterable and clamped.
+function nppp_f2b_retention_days(): int {
+    $days = (int) apply_filters( 'nppp_f2b_retention_days', 90 );
+    if ( $days < 1 ) {
+        $days = 1;
+    }
+    if ( $days > 365 ) {
+        $days = 365;
+    }
+    return $days;
+}
+
+/**
+ * Create the event table (or heal it if the version stamp is stale) and
+ * ensure its token and cleanup cron exist.
+ *
+ * Called on activation, from nppp_migration_218() on update-in-place
+ * installs, and from admin_init self-heal. Schema version is stamped
+ * only after confirming the table exists.
+ */
+function nppp_f2b_install_table(): void {
+    global $wpdb;
+
+    $table_name      = nppp_f2b_table_name();
+    $charset_collate = $wpdb->get_charset_collate();
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+    // UTC storage keeps range queries timezone-safe.
+    //
+    // created_event_jail_idx: used by jail summaries and retention cleanup.
+    // event_created_ip_idx: used to group ban events by ip.
+    // ip_event_idx: worker write-back (UPDATE ... WHERE ip = ? AND event_type = 'ban').
+    // queue_idx: enrichment queue (event_type = 'ban' AND rdap_json IS NULL). The
+    //   1-char prefix is enough: only NULL vs non-NULL matters.
+    $sql = "CREATE TABLE {$table_name} (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        jail VARCHAR(64) NOT NULL,
+        ip VARCHAR(45) NOT NULL,
+        event_type VARCHAR(8) NOT NULL,
+        created_at DATETIME NOT NULL,
+        rdap_json LONGTEXT NULL,
+        PRIMARY KEY  (id),
+        KEY created_event_jail_idx (created_at, event_type, jail),
+        KEY event_created_ip_idx (event_type, created_at, ip),
+        KEY ip_event_idx (ip, event_type),
+        KEY queue_idx (event_type, rdap_json(1))
+    ) {$charset_collate};";
+
+    dbDelta( $sql );
+
+    // Confirm the table actually exists before stamping the schema version.
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $nppp_f2b_table_exists = $wpdb->get_var(
+        $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name )
+    );
+
+    if ( $nppp_f2b_table_exists !== $table_name ) {
+        // dbDelta() failed silently (e.g. no CREATE/ALTER privilege).
+        // Don't stamp the version so the next admin_init retries -- but
+        // that retry is silent too, so this needs its own gated ERROR or
+        // the whole feature can stay dark indefinitely with no trace.
+        if ( nppp_f2b_log_gate( 'install_table_fail', DAY_IN_SECONDS ) > 0 ) {
+            nppp_f2b_log(
+                'ERROR',
+                sprintf(
+                    /* translators: %s: name of the database table that could not be created. */
+                    __( 'Fail2ban event table could not be created or verified (%s); the database user likely lacks CREATE/ALTER privilege. Events will not be recorded until this is fixed.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $table_name
+                )
+            );
+        }
+        return;
+    }
+
+    // country_code column and its index go outside dbDelta() on purpose --
+    // dbDelta() can't diff GENERATED columns properly and may strip the
+    // expression on a later run.
+    nppp_f2b_ensure_country_code_column( $table_name );
+
+    // Generate the token now so the setup snippets aren't empty on first load.
+    nppp_f2b_get_token();
+
+    nppp_f2b_schedule_cleanup();
+
+    // Just a self-heal tick for the worker, not the dispatch path --
+    // the webhook spawns the worker directly (see fail2ban-worker.php).
+    if ( function_exists( 'nppp_f2b_schedule_worker_reconcile' ) ) {
+        nppp_f2b_schedule_worker_reconcile();
+    }
+
+    // Not autoloaded -- only read once per admin_init, never on the front end.
+    update_option( NPPP_F2B_DB_VERSION_OPTION, NPPP_F2B_DB_VERSION, false );
+}
+
+// Admin-only schema self-heal. REST requests do not run admin_init.
+function nppp_f2b_maybe_install(): void {
+    if ( get_option( NPPP_F2B_DB_VERSION_OPTION ) === NPPP_F2B_DB_VERSION ) {
+        return;
+    }
+    nppp_f2b_install_table();
+}
+
+// ---------------------------------------------------------------------------
+// Country aggregation (Top Attack Countries)
+//
+// STORED country_code + its index means we GROUP BY without re-parsing
+// rdap_json. Uses the full retention window (90 days by default) since
+// country spread shifts slower than the Repeat Offenders window does.
+// ---------------------------------------------------------------------------
+
+/**
+ * Adds the country_code column and its index if missing. Idempotent,
+ * safe to call on every install/self-heal. Runs outside dbDelta() since
+ * it can't manage GENERATED columns.
+ */
+function nppp_f2b_ensure_country_code_column( string $table_name ): void {
+    global $wpdb;
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $nppp_f2b_col_exists = $wpdb->get_var(
+        $wpdb->prepare(
+            'SHOW COLUMNS FROM %i LIKE %s',
+            $table_name,
+            'country_code'
+        )
+    );
+
+    if ( ! $nppp_f2b_col_exists ) {
+        // NULLIF turns an empty country into NULL so it's filtered out
+        // together with rows that haven't been enriched yet.
+        $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- intentional, idempotent schema self-heal on a custom plugin table; no caching applies to a one-time ALTER TABLE
+            $wpdb->prepare(
+                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange -- intentional, idempotent schema self-heal on a custom plugin table, guarded by the SHOW COLUMNS check above
+                'ALTER TABLE %i
+                 ADD COLUMN country_code CHAR(2)
+                     GENERATED ALWAYS AS (
+                         NULLIF(UPPER(JSON_UNQUOTE(JSON_EXTRACT(rdap_json, \'$.country\'))), \'\')
+                     ) STORED,
+                 ADD INDEX ban_country_idx (event_type, created_at, country_code)',
+                $table_name
+            )
+        );
+    }
+
+    // Re-check after ALTER since a privilege/support failure can be silent.
+    // If it's still missing, just disable this feature instead of breaking
+    // the Top Attack Countries query.
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $nppp_f2b_col_ok = (bool) $wpdb->get_var(
+        $wpdb->prepare(
+            'SHOW COLUMNS FROM %i LIKE %s',
+            $table_name,
+            'country_code'
+        )
+    );
+
+    if ( ! $nppp_f2b_col_ok && nppp_f2b_log_gate( 'country_col_fail', DAY_IN_SECONDS ) > 0 ) {
+        nppp_f2b_log(
+            'ERROR',
+            __( 'country_code column could not be added to the fail2ban event table; the Top Attack Countries panel will stay disabled until this is fixed.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+    }
+
+    // Not autoloaded -- only read once per Security tab load, never on the front end.
+    update_option( NPPP_F2B_COUNTRY_COL_OK_OPTION, $nppp_f2b_col_ok, false );
+}
+
+// Cached flag so we skip SHOW COLUMNS on every tab load.
+function nppp_f2b_country_feature_available(): bool {
+    return (bool) get_option( NPPP_F2B_COUNTRY_COL_OK_OPTION, false );
+}
+
+// Full retention cutoff -- not the 30-day window used by Repeat Offenders.
+function nppp_f2b_country_window_cutoff(): string {
+    return gmdate( 'Y-m-d H:i:s', time() - ( nppp_f2b_retention_days() * DAY_IN_SECONDS ) );
+}
+
+// Index-only GROUP BY, no table access needed.
+function nppp_f2b_get_top_countries( int $limit = NPPP_F2B_TOP_COUNTRIES_N ): array {
+    if ( ! nppp_f2b_country_feature_available() ) {
+        return array();
+    }
+
+    global $wpdb;
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT country_code AS country, COUNT(*) AS attack_count, MAX(created_at) AS last_seen
+             FROM %i
+             WHERE event_type = 'ban' AND created_at >= %s AND country_code IS NOT NULL
+             GROUP BY country_code
+             ORDER BY attack_count DESC, country ASC
+             LIMIT %d",
+            $table,
+            nppp_f2b_country_window_cutoff(),
+            $limit
+        ),
+        ARRAY_A
+    );
+
+    return is_array( $rows ) ? $rows : array();
+}
+
+// Distinct country count, same filters as above -- just used to detect
+// truncation in the UI.
+function nppp_f2b_get_top_countries_total_count(): int {
+    if ( ! nppp_f2b_country_feature_available() ) {
+        return 0;
+    }
+
+    global $wpdb;
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    return (int) $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COUNT(*) FROM (
+                SELECT country_code
+                FROM %i
+                WHERE event_type = 'ban' AND created_at >= %s AND country_code IS NOT NULL
+                GROUP BY country_code
+             ) AS nppp_top_countries",
+            $table,
+            nppp_f2b_country_window_cutoff()
+        )
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Retention cleanup, runs on WP-Cron only -- never on the webhook path.
+// ---------------------------------------------------------------------------
+
+function nppp_f2b_schedule_cleanup(): void {
+    if ( wp_next_scheduled( NPPP_F2B_CLEANUP_HOOK )
+        && wp_get_schedule( NPPP_F2B_CLEANUP_HOOK ) !== 'every_3hours_npp'
+    ) {
+        wp_clear_scheduled_hook( NPPP_F2B_CLEANUP_HOOK );
+    }
+
+    if ( ! wp_next_scheduled( NPPP_F2B_CLEANUP_HOOK ) ) {
+        wp_schedule_event( time(), 'every_3hours_npp', NPPP_F2B_CLEANUP_HOOK );
+    }
+}
+
+// Delete in batches so cleanup doesn't turn into one long-running query.
+function nppp_f2b_cleanup_old_events(): void {
+    global $wpdb;
+
+    $table   = nppp_f2b_table_name();
+    $cutoff  = gmdate( 'Y-m-d H:i:s', time() - ( nppp_f2b_retention_days() * DAY_IN_SECONDS ) );
+    $started = microtime( true );
+    $batches = 0;
+    $total   = 0;
+
+    do {
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+        $deleted = $wpdb->query(
+            $wpdb->prepare(
+                'DELETE FROM %i WHERE created_at < %s LIMIT 1000',
+                $table,
+                $cutoff
+            )
+        );
+        $batches++;
+        if ( false !== $deleted ) {
+            $total += (int) $deleted;
+        }
+
+        if ( false === $deleted ) {
+            if ( nppp_f2b_log_gate( 'cleanup_fail', HOUR_IN_SECONDS ) > 0 ) {
+                nppp_f2b_log(
+                    'ERROR',
+                    sprintf(
+                        /* translators: %s: database error message (not translated, comes from the DB driver). */
+                        __( 'Retention cleanup DELETE failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $wpdb->last_error
+                    )
+                );
+            }
+            break;
+        }
+    } while ( 1000 === $deleted && $batches < 200 && ( microtime( true ) - $started ) < 10 );
+
+    // Structured, untranslated. A full last batch means the loop stopped on its
+    // batch/time limit with rows still waiting: the table is outgrowing the
+    // cleanup, which nothing else reports. A normal run is summarised once a day.
+    if ( 1000 === $deleted ) {
+        nppp_f2b_log(
+            'WARNING',
+            sprintf(
+                'Retention cleanup hit its batch/time limit with rows still pending: deleted=%d batches=%d elapsed=%dms retention=%dd',
+                $total,
+                $batches,
+                (int) round( ( microtime( true ) - $started ) * 1000 ),
+                nppp_f2b_retention_days()
+            )
+        );
+    } elseif ( $total > 0 && nppp_f2b_log_gate( 'cleanup_summary', DAY_IN_SECONDS ) > 0 ) {
+        nppp_f2b_log(
+            'INFO',
+            sprintf(
+                'Retention cleanup: deleted=%d batches=%d elapsed=%dms retention=%dd',
+                $total,
+                $batches,
+                (int) round( ( microtime( true ) - $started ) * 1000 ),
+                nppp_f2b_retention_days()
+            )
+        );
+    }
+}
+add_action( NPPP_F2B_CLEANUP_HOOK, 'nppp_f2b_cleanup_old_events' );
+
+// ---------------------------------------------------------------------------
+// Token management -- generates the 64-char token EP10 checks against.
+// ---------------------------------------------------------------------------
+
+function nppp_f2b_get_token(): string {
+    $token = get_option( NPPP_F2B_TOKEN_OPTION, '' );
+    if ( ! is_string( $token ) || ! preg_match( '/^[a-f0-9]{64}$/i', $token ) ) {
+        $token = nppp_f2b_regenerate_token();
+    }
+    return $token;
+}
+
+function nppp_f2b_regenerate_token(): string {
+    $token = bin2hex( random_bytes( 32 ) );
+    update_option( NPPP_F2B_TOKEN_OPTION, $token, false );
+    return $token;
+}
+
+// RIPEstat asks regular/high-volume callers to identify themselves via
+// "sourceapp" so they can be told apart from anonymous traffic if an issue
+// ever comes up -- see https://stat.ripe.net/docs/data-api/ripestat-data-api/.
+// This always identifies the plugin itself (RIPEstat's rule is per-project/per-
+// software, not per-site), so the prefix below is fixed. Admins may append an
+// optional suffix in the Fail2Ban tab so the RIPEstat team can tell sites apart, and the
+// whole value stays filterable for anyone who knows what they're doing.
+if ( ! defined( 'NPPP_F2B_RDAP_SOURCEAPP' ) ) {
+    define( 'NPPP_F2B_RDAP_SOURCEAPP', 'npp-wp-plugin-fail2ban-monitor' );
+}
+
+// Optional, admin-chosen suffix appended to the fixed sourceapp prefix above
+// (Fail2Ban tab > RIPEstat Lookups). Not autoloaded: read by the tab, the
+// save callback and the RIPEstat lookup path only.
+if ( ! defined( 'NPPP_F2B_SOURCEAPP_SUFFIX_OPTION' ) ) {
+    define( 'NPPP_F2B_SOURCEAPP_SUFFIX_OPTION', 'nppp_f2b_sourceapp_suffix' );
+}
+
+// Max length of the suffix (prefix + "-" + suffix stays well under 100 chars).
+if ( ! defined( 'NPPP_F2B_SOURCEAPP_SUFFIX_MAX' ) ) {
+    define( 'NPPP_F2B_SOURCEAPP_SUFFIX_MAX', 40 );
+}
+
+// ---------------------------------------------------------------------------
+// RIPEstat lookup. The webhook only ever triggers this indirectly (via the
+// worker); it never calls RIPEstat inline itself.
+// ---------------------------------------------------------------------------
+
+// Empty RIPEstat enrichment profile shape, every lookup starts from this.
+function nppp_f2b_rdap_blank_result(): array {
+    return array(
+        'inetnum'      => '',
+        'netname'      => '',
+        'country'      => '',
+        'org_id'       => '',
+        'origin_asns'  => array(),
+        'abuse_emails' => array(),
+    );
+}
+
+function nppp_f2b_rdap_cache_key( string $ip ): string {
+    // v2 contains only profiles with validated answers from both endpoints.
+    return 'nppp_f2b_rdap_v2_' . md5( $ip );
+}
+
+// True only for publicly routable addresses. Private (RFC 1918, IPv6 ULA),
+// loopback, link-local and other reserved ranges have no registry record, so
+// they are never sent to RIPEstat. Also covers a few special-purpose ranges
+// the PHP flags let through, see nppp_f2b_ip_in_special_range().
+function nppp_f2b_ip_is_public( string $ip ): bool {
+    // Judge the canonical form: an IPv4-mapped address (::ffff:10.0.0.1) must be
+    // treated as the IPv4 host it carries, never as a public IPv6 address.
+    $canon = nppp_f2b_canonical_ip( $ip );
+    if ( false === $canon ) {
+        return false;
+    }
+    if ( false === filter_var( $canon, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
+        return false;
+    }
+    return ! nppp_f2b_ip_in_special_range( $canon );
+}
+
+/**
+ * One canonical text form per host, or false when $ip is not an IP address.
+ *
+ * inet_ntop() gives lower-case, fully compressed IPv6 ("2a00:1450:4001:81b::200e"
+ * for every spelling), and an IPv4-mapped address (::ffff:8.8.8.8) is unwrapped
+ * to the IPv4 host it stands for. Without this, one host becomes several rows,
+ * several dedup keys and several RIPEstat lookups.
+ */
+function nppp_f2b_canonical_ip( string $ip ) {
+    if ( false === filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+        return false;
+    }
+    $packed = @inet_pton( $ip );
+    if ( false === $packed ) {
+        return false;
+    }
+    if ( 16 === strlen( $packed ) && "\0\0\0\0\0\0\0\0\0\0\xff\xff" === substr( $packed, 0, 12 ) ) {
+        $packed = substr( $packed, 12 );
+    }
+    return @inet_ntop( $packed );
+}
+
+/**
+ * True for special-purpose ranges that PHP's FILTER_FLAG_NO_RES_RANGE lets
+ * through (PHP 8.3: CGNAT, TEST-NETs, benchmarking, multicast ...). 6to4
+ * (2002::/16) is deliberately not listed: those hosts are routable and have
+ * real registry data.
+ * RIPEstat has no registry record for them and answers the whois call with
+ * a bogus "best match" profile, which would be cached and shown as real data.
+ */
+function nppp_f2b_ip_in_special_range( string $ip ): bool {
+    static $ranges = array(
+        '100.64.0.0/10',   // RFC 6598 CGNAT
+        '192.0.0.0/24',    // RFC 6890 IETF protocol assignments
+        '192.0.2.0/24',    // RFC 5737 TEST-NET-1
+        '198.18.0.0/15',   // RFC 2544 benchmarking
+        '198.51.100.0/24', // RFC 5737 TEST-NET-2
+        '203.0.113.0/24',  // RFC 5737 TEST-NET-3
+        '224.0.0.0/4',     // multicast
+        '192.88.99.0/24',  // RFC 7526 deprecated 6to4 relay anycast
+        '100::/64',        // RFC 6666 discard-only
+        '64:ff9b::/96',    // RFC 6052 NAT64 well-known prefix
+        '64:ff9b:1::/48',  // RFC 8215 local-use NAT64
+        '2001::/32',       // RFC 4380 Teredo
+        '2001:2::/48',     // RFC 5180 benchmarking
+        '2001:10::/28',    // RFC 4843 deprecated ORCHID
+        '2001:20::/28',    // RFC 7343 ORCHIDv2
+        '2001:db8::/32',   // RFC 3849 documentation
+        '3fff::/20',       // RFC 9637 documentation
+        '5f00::/16',       // RFC 9602 SRv6 SIDs
+        'fec0::/10',       // RFC 3879 deprecated site-local
+        'ff00::/8',        // multicast
+    );
+
+    $packed = @inet_pton( $ip );
+    if ( false === $packed ) {
+        return false;
+    }
+
+    foreach ( $ranges as $range ) {
+        list( $net, $bits ) = explode( '/', $range );
+        $net_packed = inet_pton( $net );
+        if ( false === $net_packed || strlen( $net_packed ) !== strlen( $packed ) ) {
+            continue;
+        }
+        $bits  = (int) $bits;
+        $bytes = intdiv( $bits, 8 );
+        $rest  = $bits % 8;
+        if ( $bytes > 0 && substr( $packed, 0, $bytes ) !== substr( $net_packed, 0, $bytes ) ) {
+            continue;
+        }
+        if ( $rest > 0 ) {
+            $mask = ( 0xFF << ( 8 - $rest ) ) & 0xFF;
+            if ( ( ord( $packed[ $bytes ] ) & $mask ) !== ( ord( $net_packed[ $bytes ] ) & $mask ) ) {
+                continue;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+/**
+ * The "sourceapp" identifier sent with every RIPEstat request.
+ *
+ * RIPEstat's own format rule: alphanumeric only, no whitespace, hyphen/underscore
+ * allowed. Enforced here so a bad filter value can never reach the request
+ * (RIPEstat would just ignore it, but stripping it locally is cheap and safe).
+ */
+function nppp_f2b_rdap_sourceapp(): string {
+    $sourceapp = (string) apply_filters( 'nppp_f2b_rdap_sourceapp', nppp_f2b_compose_sourceapp( nppp_f2b_get_sourceapp_suffix() ) );
+    $sourceapp = preg_replace( '/[^A-Za-z0-9_-]/', '', $sourceapp );
+    return '' !== $sourceapp ? $sourceapp : NPPP_F2B_RDAP_SOURCEAPP;
+}
+
+/**
+ * Normalises a user-supplied sourceapp suffix to RIPEstat's allowed alphabet.
+ *
+ * Every run of characters outside [A-Za-z0-9_-] (dots, "@", spaces, non-ASCII)
+ * becomes one "_", so a domain like "example.com" survives as "example_com"
+ * instead of being silently mangled. The JS live preview in the tab mirrors
+ * these exact steps -- keep the two in sync.
+ */
+function nppp_f2b_sanitize_sourceapp_suffix( $raw ): string {
+    $suffix = preg_replace( '/[^A-Za-z0-9_-]+/', '_', (string) $raw );
+    $suffix = preg_replace( '/_{2,}/', '_', (string) $suffix );
+    $suffix = trim( (string) $suffix, '_-' );
+    $suffix = substr( $suffix, 0, NPPP_F2B_SOURCEAPP_SUFFIX_MAX );
+    return trim( $suffix, '_-' );
+}
+
+// Saved suffix, re-sanitised on read so a hand-edited option row is harmless.
+function nppp_f2b_get_sourceapp_suffix(): string {
+    return nppp_f2b_sanitize_sourceapp_suffix( get_option( NPPP_F2B_SOURCEAPP_SUFFIX_OPTION, '' ) );
+}
+
+// Fixed prefix + optional "-suffix". The prefix is the identifier registered with RIPE NCC.
+function nppp_f2b_compose_sourceapp( string $suffix ): string {
+    return NPPP_F2B_RDAP_SOURCEAPP . ( '' !== $suffix ? '-' . $suffix : '' );
+}
+
+// AJAX: save the suffix from the "RIPEstat Lookups" card.
+function nppp_f2b_save_sourceapp_callback() {
+    nppp_ajax_auth( 'nppp-security-tab' );
+
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce verified in nppp_ajax_auth() above; value is normalised by nppp_f2b_sanitize_sourceapp_suffix() below
+    $raw    = isset( $_POST['suffix'] ) ? wp_unslash( $_POST['suffix'] ) : '';
+    $suffix = nppp_f2b_sanitize_sourceapp_suffix( $raw );
+
+    if ( '' === $suffix ) {
+        delete_option( NPPP_F2B_SOURCEAPP_SUFFIX_OPTION );
+    } else {
+        update_option( NPPP_F2B_SOURCEAPP_SUFFIX_OPTION, $suffix, false );
+    }
+
+    $composed  = nppp_f2b_compose_sourceapp( $suffix );
+    $effective = nppp_f2b_rdap_sourceapp();
+
+    nppp_f2b_log(
+        'INFO',
+        sprintf(
+            'RIPEstat sourceapp suffix %s by user #%d: %s',
+            '' === $suffix ? 'cleared' : 'saved',
+            get_current_user_id(),
+            $composed
+        )
+    );
+
+    wp_send_json_success(
+        array(
+            'suffix'    => $suffix,
+            'sourceapp' => $effective,
+            'custom'    => '' !== $suffix,
+            'filtered'  => $effective !== $composed,
+            'reg_date'  => nppp_f2b_ripe_reg_sent_at() > 0 ? wp_date( 'Y-m-d', nppp_f2b_ripe_reg_sent_at() ) : '',
+            'message'   => '' === $suffix
+                ? __( 'Suffix cleared. Only the default identifier is sent to RIPEstat.', 'fastcgi-cache-purge-and-preload-nginx' )
+                : __( 'Saved. New RIPEstat lookups will use this identifier.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        )
+    );
+}
+
+/**
+ * Per-request timeout (seconds) for the parallel RIPEstat lookups in the
+ * worker. 3 s was tight enough that a slow whois OR abuse-contact answer got
+ * cut off and the IP was stored with a partial profile. Clamped to 1..30: the
+ * worker heartbeat goes stale after NPPP_F2B_WORKER_STALE_SECONDS (120 s) and
+ * a batch can take up to one full timeout.
+ *
+ * Deliberately NOT used by nppp_f2b_lookup_ip(): that serial fallback also
+ * runs inline in the WP-Cron request on hosts without shell_exec, where the
+ * worst case is IPs x 2 requests x timeout and must stay short.
+ *
+ * Filter: nppp_f2b_rdap_timeout.
+ */
+function nppp_f2b_rdap_timeout(): int {
+    $timeout = (int) apply_filters( 'nppp_f2b_rdap_timeout', 6 );
+    return min( 30, max( 1, $timeout ) );
+}
+
+function nppp_f2b_rdap_whois_url( string $ip ): string {
+    $args = array(
+        'resource'  => rawurlencode( $ip ),
+        'sourceapp' => nppp_f2b_rdap_sourceapp(),
+    );
+    return add_query_arg( $args, 'https://stat.ripe.net/data/whois/data.json' );
+}
+
+function nppp_f2b_rdap_abuse_url( string $ip ): string {
+    $args = array(
+        'resource'  => rawurlencode( $ip ),
+        'sourceapp' => nppp_f2b_rdap_sourceapp(),
+    );
+    return add_query_arg( $args, 'https://stat.ripe.net/data/abuse-contact-finder/data.json' );
+}
+
+/**
+ * Merges a decoded RIPEstat whois response into an RDAP profile.
+ * Kept separate so both the serial (wp_remote_get) and parallel
+ * (WpOrg\Requests worker) paths share one parser. $body isn't trusted
+ * to actually be an array.
+ */
+function nppp_f2b_rdap_apply_whois( $body, array $result ): array {
+    if ( ! is_array( $body ) || ! isset( $body['data'] ) ) {
+        return $result;
+    }
+
+    // RIPEstat answers resources it cannot place with HTTP 200 plus a warning
+    // and a made-up "best match" (e.g. 0.0.0.0/0 IANA-BLK, country EU). That
+    // is not registry data, so treat it as an empty answer.
+    foreach ( $body['messages'] ?? array() as $nppp_f2b_message ) {
+        if ( is_array( $nppp_f2b_message )
+            && 'warning' === ( $nppp_f2b_message[0] ?? '' )
+            && false !== stripos( (string) ( $nppp_f2b_message[1] ?? '' ), 'authoritative rir could not be identified' ) ) {
+            return $result;
+        }
+    }
+
+    // Different RIRs use different key names for the same fields:
+    //   RIPE/APNIC/AFRINIC/LACNIC use inetnum/netname/country/org
+    //   ARIN uses NetRange/CIDR, NetName, Country (only in the Org block),
+    //   and Organization/OrgName/OrgId
+    // Only matching the first style would silently drop every ARIN IP,
+    // which covers most US cloud/hosting ranges. Check every record block
+    // against both naming schemes, case-insensitively.
+    foreach ( $body['data']['records'] ?? array() as $nppp_f2b_record_block ) {
+        if ( ! is_array( $nppp_f2b_record_block ) ) {
+            continue;
+        }
+
+        foreach ( $nppp_f2b_record_block as $record ) {
+            $key   = strtolower( (string) ( $record['key'] ?? '' ) );
+            $value = trim( (string) ( $record['value'] ?? '' ) );
+
+            if ( '' === $value ) {
+                continue;
+            }
+
+            // First non-empty value wins per field -- earlier blocks tend
+            // to be the more specific registration.
+            if ( '' === $result['inetnum'] && in_array( $key, array( 'inetnum', 'inet6num', 'netrange', 'cidr' ), true ) ) {
+                $result['inetnum'] = $value;
+            } elseif ( '' === $result['netname'] && 'netname' === $key ) {
+                $result['netname'] = $value;
+            } elseif ( '' === $result['country'] && 'country' === $key ) {
+                $result['country'] = nppp_f2b_rdap_clean_country( $value );
+            } elseif ( '' === $result['org_id'] && in_array( $key, array( 'org', 'orgid', 'orgname', 'organization', 'custname' ), true ) ) {
+                $result['org_id'] = $value;
+            }
+        }
+    }
+
+    foreach ( $body['data']['irr_records'] ?? array() as $route ) {
+        if ( ! is_array( $route ) ) {
+            continue;
+        }
+        foreach ( $route as $record ) {
+            if ( 'origin' === ( $record['key'] ?? '' ) && ctype_digit( (string) $record['value'] ) ) {
+                $result['origin_asns'][] = 'AS' . $record['value'];
+            }
+        }
+    }
+    $result['origin_asns'] = array_values( array_unique( $result['origin_asns'] ) );
+
+    return $result;
+}
+
+// Merges a decoded RIPEstat abuse-contact response into an enrichment profile.
+function nppp_f2b_rdap_apply_abuse( $body, array $result ): array {
+    if ( ! is_array( $body ) ) {
+        return $result;
+    }
+
+    foreach ( $body['data']['abuse_contacts'] ?? array() as $email ) {
+        $email = sanitize_email( (string) $email );
+        if ( '' !== $email ) {
+            $result['abuse_emails'][] = $email;
+        }
+    }
+    $result['abuse_emails'] = array_values( array_unique( $result['abuse_emails'] ) );
+
+    return $result;
+}
+
+/**
+ * Reduce a registry "country" value to a bare two-letter code, or ''.
+ * The events table derives a CHAR(2) column from it; registries sometimes
+ * append a comment ("EU # ...") or use a long name.
+ */
+function nppp_f2b_rdap_clean_country( $value ): string {
+    if ( is_string( $value ) && preg_match( '/^\s*([A-Za-z]{2})(?:[\s#]|$)/', $value, $m ) ) {
+        return strtoupper( $m[1] );
+    }
+    return '';
+}
+
+function nppp_f2b_rdap_has_data( array $result ): bool {
+    return (
+        '' !== $result['inetnum']
+        || '' !== $result['netname']
+        || '' !== $result['country']
+        || '' !== $result['org_id']
+        || ! empty( $result['origin_asns'] )
+        || ! empty( $result['abuse_emails'] )
+    );
+}
+
+/**
+ * Caches a RIPEstat enrichment profile. Only uses the full TTL if we actually got
+ * data back -- a temporary RIPEstat timeout shouldn't lock in an empty
+ * result for 30 days and hide real data for this IP forever.
+ */
+function nppp_f2b_rdap_store_cache( string $ip, array $result ): void {
+    $ttl = nppp_f2b_rdap_has_data( $result )
+        ? nppp_f2b_rdap_cache_ttl()
+        // Failed/empty lookups get a short TTL so we retry soon instead
+        // of caching the failure for the full duration.
+        : (int) apply_filters( 'nppp_f2b_rdap_negative_cache_ttl', 5 * MINUTE_IN_SECONDS );
+
+    set_transient( nppp_f2b_rdap_cache_key( $ip ), $result, $ttl );
+}
+
+/**
+ * Accept only a successful RIPEstat envelope with the expected data list.
+ * An empty list is a valid answer; a missing or malformed list is not.
+ */
+function nppp_f2b_rdap_response_is_valid( $body, string $field ): bool {
+    return (
+        is_array( $body )
+        && 'ok' === ( $body['status'] ?? null )
+        && isset( $body['data'] )
+        && is_array( $body['data'] )
+        && isset( $body['data'][ $field ] )
+        && is_array( $body['data'][ $field ] )
+    );
+}
+
+// In-progress data is separate from the completed profile cache.
+function nppp_f2b_rdap_work_key( string $ip ): string {
+    return 'nppp_f2b_rdap_work_' . md5( $ip );
+}
+
+function nppp_f2b_rdap_work_get( string $ip ): array {
+    $state = get_transient( nppp_f2b_rdap_work_key( $ip ) );
+    if ( is_array( $state ) && isset( $state['result'], $state['whois'], $state['abuse'] )
+        && is_array( $state['result'] ) ) {
+        return $state;
+    }
+    return array(
+        'result' => nppp_f2b_rdap_blank_result(),
+        'whois'  => false,
+        'abuse'  => false,
+    );
+}
+
+// IPs waiting out a retry gap (ip => retry_at), kept in one transient so the
+// claim queries can skip them in SQL instead of scanning them every time. Only
+// an optimisation: the per-IP retry_at check stays authoritative, so a lost or
+// capped entry costs one extra look, never a wrong result.
+function nppp_f2b_rdap_cooling_get(): array {
+    $list = get_transient( 'nppp_f2b_rdap_cooling' );
+    if ( ! is_array( $list ) ) {
+        return array();
+    }
+    $now = time();
+    return array_filter( $list, static function ( $until ) use ( $now ) {
+        return (int) $until > $now;
+    } );
+}
+
+// $until = 0 removes the IP.
+function nppp_f2b_rdap_cooling_set( string $ip, int $until ): void {
+    $list = nppp_f2b_rdap_cooling_get();
+    if ( $until > time() ) {
+        $list[ $ip ] = $until;
+    } else {
+        unset( $list[ $ip ] );
+    }
+    if ( empty( $list ) ) {
+        delete_transient( 'nppp_f2b_rdap_cooling' );
+        return;
+    }
+    if ( count( $list ) > 5000 ) {
+        asort( $list );
+        $list = array_slice( $list, -5000, null, true );
+    }
+    set_transient( 'nppp_f2b_rdap_cooling', $list, max( $list ) - time() + 60 );
+}
+
+/**
+ * True when a reply arrived but retrying cannot make it usable: HTTP 4xx
+ * (except 408/429), or HTTP 200 whose valid JSON has the wrong shape.
+ * Timeouts, 5xx, 429 and unparsable bodies are transient.
+ */
+function nppp_f2b_rdap_reply_is_permanent( int $code, $raw_body ): bool {
+    if ( 200 === $code ) {
+        return is_string( $raw_body ) && '' !== $raw_body && null !== json_decode( $raw_body, true );
+    }
+    return $code >= 400 && $code < 500 && ! in_array( $code, array( 408, 429 ), true );
+}
+
+/**
+ * Short, log-safe reason a wp_remote_get() reply is unusable: the transport
+ * error (cut at the first colon), an HTTP status, or a bad body. Serial path
+ * counterpart of nppp_f2b_requests_fail_hint() in the worker.
+ */
+function nppp_f2b_rdap_http_hint( $response ): string {
+    if ( is_wp_error( $response ) ) {
+        $hint = trim( (string) strtok( $response->get_error_message(), ':' ) );
+        return substr( '' !== $hint ? $hint : (string) $response->get_error_code(), 0, 40 );
+    }
+    $code = (int) wp_remote_retrieve_response_code( $response );
+    return 200 === $code ? 'unusable body' : 'HTTP ' . $code;
+}
+
+function nppp_f2b_rdap_retry_waiting( string $ip ): bool {
+    $state = nppp_f2b_rdap_work_get( $ip );
+    return (int) ( $state['retry_at'] ?? 0 ) > time();
+}
+
+function nppp_f2b_rdap_work_save( string $ip, array $state, bool $permanent = false ): bool {
+    if ( $state['whois'] && $state['abuse'] ) {
+        nppp_f2b_rdap_store_cache( $ip, $state['result'] );
+        delete_transient( nppp_f2b_rdap_work_key( $ip ) );
+        if ( ! empty( $state['retry_at'] ) ) {
+            nppp_f2b_rdap_cooling_set( $ip, 0 );
+        }
+        // Remove the old counter too, when upgrading from earlier patches.
+        if ( defined( 'NPPP_F2B_RDAP_FAIL_PREFIX' ) ) {
+            delete_transient( NPPP_F2B_RDAP_FAIL_PREFIX . md5( $ip ) );
+        }
+        return true;
+    }
+
+    // One incomplete network round counts once, even if both endpoints fail.
+    // A call skipped by the retry gate never reaches this function.
+    $max = max( 1, (int) apply_filters( 'nppp_f2b_rdap_max_attempts', 3 ) );
+    $state['failures'] = max( 0, (int) ( $state['failures'] ?? 0 ) ) + 1;
+
+    $missing = array();
+    if ( ! $state['whois'] ) {
+        $missing[] = 'whois';
+    }
+    if ( ! $state['abuse'] ) {
+        $missing[] = 'abuse';
+    }
+
+    // Give up (return true, the caller writes what it has) when retrying
+    // cannot help -- $permanent: every missing answer was a 4xx or a wrong
+    // shape -- or when transient trouble outlasts the long-run ceiling. This
+    // bounds the work for one bad IP. The profile is cached only briefly: it
+    // is not verified data.
+    $ceiling = max( $max, (int) apply_filters( 'nppp_f2b_rdap_terminal_attempts', 12 ) );
+    if ( $state['failures'] >= $ceiling || ( $permanent && $state['failures'] >= $max ) ) {
+        set_transient(
+            nppp_f2b_rdap_cache_key( $ip ),
+            $state['result'],
+            max( 1, (int) apply_filters( 'nppp_f2b_rdap_negative_cache_ttl', 5 * MINUTE_IN_SECONDS ) )
+        );
+        delete_transient( nppp_f2b_rdap_work_key( $ip ) );
+        nppp_f2b_rdap_cooling_set( $ip, 0 );
+        // Per-process tally, read by the worker's stop line (gave_up=N).
+        $GLOBALS['nppp_f2b_rdap_gave_up_run'] = (int) ( $GLOBALS['nppp_f2b_rdap_gave_up_run'] ?? 0 ) + 1;
+
+        $gave_up = nppp_f2b_log_gate( 'rdap_gave_up', 5 * MINUTE_IN_SECONDS, true );
+        if ( $gave_up > 0 ) {
+            // permanent = every missing answer was a 4xx or a wrong shape;
+            // ceiling = transient trouble outlasted the long-run attempt limit.
+            // The sample is the IP that triggered this report, not all of them.
+            nppp_f2b_log(
+                'WARNING',
+                sprintf(
+                    /* translators: %d: number of IPs for which the retry budget ran out and an incomplete or blank profile was stored. */
+                    __( 'Retry budget spent for %d IP(s); incomplete or blank profiles were stored for them.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $gave_up
+                ) . sprintf(
+                    ' [sample_ip=%s failures=%d reason=%s unresolved=%s last=%s]',
+                    $ip,
+                    $state['failures'],
+                    $permanent ? 'permanent' : 'ceiling',
+                    implode( '+', $missing ),
+                    '' !== (string) ( $state['last_hint'] ?? '' ) ? $state['last_hint'] : '?'
+                )
+            );
+        }
+        return true;
+    }
+
+    $gap = max( 0, (int) apply_filters( 'nppp_f2b_rdap_retry_gap', 120 ) );
+    if ( $state['failures'] >= $max ) {
+        $gap = max( $gap, 1, (int) apply_filters( 'nppp_f2b_rdap_exhausted_retry_gap', 15 * MINUTE_IN_SECONDS ) );
+    }
+
+    $state['last_error'] = 'Unresolved endpoints: ' . implode( ', ', $missing );
+    $state['retry_at'] = time() + $gap;
+    set_transient( nppp_f2b_rdap_work_key( $ip ), $state, max( DAY_IN_SECONDS, $gap + 1 ) );
+    nppp_f2b_rdap_cooling_set( $ip, (int) $state['retry_at'] );
+    return false;
+}
+
+function nppp_f2b_rdap_has_partial( string $ip ): bool {
+    $state = nppp_f2b_rdap_work_get( $ip );
+    return (bool) ( $state['whois'] || $state['abuse'] );
+}
+
+/**
+ * Single-IP lookup, one request at a time.
+ *
+ * Only used as a fallback -- the rare host missing WpOrg\Requests, or the
+ * inline cron batch when shell_exec is disabled. Normal enrichment goes
+ * through nppp_f2b_lookup_ips_bulk() in the worker, which runs both
+ * requests in parallel.
+ */
+function nppp_f2b_lookup_ip( string $ip, ?bool &$answered = null, ?bool &$attempted = null ): array {
+    $attempted = false;
+    if ( ! nppp_f2b_ip_is_public( $ip ) ) {
+        $answered = true;
+        return nppp_f2b_rdap_blank_result();
+    }
+
+    $cached = get_transient( nppp_f2b_rdap_cache_key( $ip ) );
+    if ( is_array( $cached ) ) {
+        $answered = true;
+        return $cached;
+    }
+
+    $state  = nppp_f2b_rdap_work_get( $ip );
+    $result = $state['result'];
+    if ( (int) ( $state['retry_at'] ?? 0 ) > time() ) {
+        $answered = false;
+        return $result;
+    }
+    $attempted = true;
+
+    $whois_blocked = false;
+    $abuse_blocked = false;
+    $permanent     = true;
+    $hints         = array();
+
+    if ( ! $state['whois'] ) {
+        $response = wp_remote_get(
+            nppp_f2b_rdap_whois_url( $ip ),
+            array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
+        );
+        $whois_blocked = is_wp_error( $response ) && 'http_request_not_executed' === $response->get_error_code();
+        if ( ! is_wp_error( $response ) && 200 === (int) wp_remote_retrieve_response_code( $response ) ) {
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( nppp_f2b_rdap_response_is_valid( $body, 'records' ) ) {
+                $state['whois'] = true;
+                $result = nppp_f2b_rdap_apply_whois( $body, $result );
+            }
+        }
+        if ( ! $state['whois'] ) {
+            $permanent = $permanent && nppp_f2b_rdap_reply_is_permanent( (int) wp_remote_retrieve_response_code( $response ), wp_remote_retrieve_body( $response ) );
+            $hints[]   = nppp_f2b_rdap_http_hint( $response );
+        }
+    }
+
+    if ( ! $state['abuse'] ) {
+        $response = wp_remote_get(
+            nppp_f2b_rdap_abuse_url( $ip ),
+            array( 'timeout' => 3, 'headers' => array( 'Accept' => 'application/json' ) )
+        );
+        $abuse_blocked = is_wp_error( $response ) && 'http_request_not_executed' === $response->get_error_code();
+        if ( ! is_wp_error( $response ) && 200 === (int) wp_remote_retrieve_response_code( $response ) ) {
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( nppp_f2b_rdap_response_is_valid( $body, 'abuse_contacts' ) ) {
+                $state['abuse'] = true;
+                $result = nppp_f2b_rdap_apply_abuse( $body, $result );
+            }
+        }
+        if ( ! $state['abuse'] ) {
+            $permanent = $permanent && nppp_f2b_rdap_reply_is_permanent( (int) wp_remote_retrieve_response_code( $response ), wp_remote_retrieve_body( $response ) );
+            $hints[]   = nppp_f2b_rdap_http_hint( $response );
+        }
+    }
+
+    // WP_HTTP_BLOCK_EXTERNAL / request blocking is deterministic: WordPress
+    // refused to send both requests, so a retry can never succeed. Keep the
+    // pre-existing outcome (short-lived empty profile) instead of retrying
+    // forever.
+    if ( $whois_blocked && $abuse_blocked && ! $state['whois'] && ! $state['abuse'] ) {
+        nppp_f2b_rdap_store_cache( $ip, $result );
+        $answered = true;
+        return $result;
+    }
+
+    $state['result']    = $result;
+    $state['last_hint'] = substr( implode( ' / ', array_unique( $hints ) ), 0, 80 );
+    $answered           = nppp_f2b_rdap_work_save( $ip, $state, $permanent );
+    return $result;
+}
+
+/**
+ * LEGACY. Nothing schedules this anymore -- only here to let leftover
+ * per-event jobs from <= 2.1.7 finish once. Safe to remove later.
+ */
+add_action( NPPP_F2B_ENRICH_HOOK, 'nppp_f2b_enrich_event_callback', 10, 2 );
+function nppp_f2b_enrich_event_callback( int $event_id, string $ip ): void {
+    if ( $event_id <= 0 || '' === $ip ) {
+        return;
+    }
+    $answered = false;
+    $rdap     = nppp_f2b_lookup_ip( $ip, $answered );
+    if ( ! $answered ) {
+        // Leave pending rows for the worker/reconciliation retry path.
+        return;
+    }
+
+    global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $nppp_f2b_updated = $wpdb->update(
+        nppp_f2b_table_name(),
+        array( 'rdap_json' => wp_json_encode( $rdap ) ),
+        array( 'id' => $event_id ),
+        array( '%s' ),
+        array( '%d' )
+    );
+
+    if ( false === $nppp_f2b_updated && nppp_f2b_log_gate( 'legacy_writeback_fail', 5 * MINUTE_IN_SECONDS, true ) > 0 ) {
+        nppp_f2b_log(
+            'ERROR',
+            sprintf(
+                /* translators: %s: database error message (not translated, comes from the DB driver). */
+                __( 'Legacy enrichment write-back failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $wpdb->last_error
+            )
+        );
+    }
+}
+
+/**
+ * Reuses cached RIPEstat enrichment data if we have it -- never makes a network call.
+ * Ban events try this first before falling back to a real lookup;
+ * unban events only ever use this path, they never trigger a fresh one.
+ *
+ * Returns true if it found and wrote cached data.
+ */
+function nppp_f2b_maybe_reuse_cached_rdap( int $event_id, string $ip ): bool {
+    $cached = get_transient( nppp_f2b_rdap_cache_key( $ip ) );
+
+    if ( ! is_array( $cached ) ) {
+        return false;
+    }
+
+    global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $nppp_f2b_updated = $wpdb->update(
+        nppp_f2b_table_name(),
+        array( 'rdap_json' => wp_json_encode( array_merge( $cached, array( 'country' => nppp_f2b_rdap_clean_country( $cached['country'] ?? '' ) ) ) ) ),
+        array( 'id' => $event_id ),
+        array( '%s' ),
+        array( '%d' )
+    );
+
+    if ( false === $nppp_f2b_updated && nppp_f2b_log_gate( 'cache_writeback_fail', 5 * MINUTE_IN_SECONDS, true ) > 0 ) {
+        nppp_f2b_log(
+            'ERROR',
+            sprintf(
+                /* translators: %s: database error message (not translated, comes from the DB driver). */
+                __( 'Write-back of a cached RIPEstat enrichment profile failed: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $wpdb->last_error
+            )
+        );
+    }
+
+    return false !== $nppp_f2b_updated;
+}
+
+/**
+ * Called from nppp_f2b_handle_event() for 'ban' events.
+ *
+ * Cache hit: one indexed UPDATE, done, no network call.
+ * Cache miss: leave rdap_json NULL (that's the queue) and make sure the
+ * detached worker is running -- costs a stat, a signal-0 check, a flock
+ * and maybe a backgrounded shell_exec.
+ *
+ * During a burst only the first cache-miss pays the spawn cost; the rest
+ * just find the worker already running and let it drain the backlog.
+ *
+ * $response_payload is unused now (fastcgi_finish_request tier was
+ * removed) but kept for signature compatibility.
+ */
+function nppp_f2b_maybe_enrich( int $event_id, string $ip, array $response_payload = array() ): void {
+    // Non-public address: nothing to look up. Store the blank profile right
+    // away, which clears its queue slot, and never spawn a worker for it.
+    if ( ! nppp_f2b_ip_is_public( $ip ) ) {
+        global $wpdb;
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+        $wpdb->update(
+            nppp_f2b_table_name(),
+            array( 'rdap_json' => wp_json_encode( nppp_f2b_rdap_blank_result() ) ),
+            array( 'id' => $event_id ),
+            array( '%s' ),
+            array( '%d' )
+        );
+        return;
+    }
+
+    if ( nppp_f2b_maybe_reuse_cached_rdap( $event_id, $ip ) ) {
+        return;
+    }
+
+    if ( function_exists( 'nppp_f2b_maybe_spawn_worker' ) ) {
+        nppp_f2b_maybe_spawn_worker();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// REST route: POST /wp-json/nppp_f2b/v1/event
+// EP10 (rest_api_init, priority 1) checks the token before the plugin
+// bootstrap loads; WordPress core has already booted by then.
+// ---------------------------------------------------------------------------
+
+function nppp_f2b_register_routes() {
+    register_rest_route(
+        'nppp_f2b/v1',
+        '/event',
+        array(
+            'methods'             => 'POST',
+            'callback'            => 'nppp_f2b_handle_event',
+            'permission_callback' => 'nppp_f2b_validate_request',
+        )
+    );
+}
+add_action( 'rest_api_init', 'nppp_f2b_register_routes' );
+
+function nppp_f2b_validate_request( WP_REST_Request $request ) {
+    // Read the stored token as-is -- don't generate one here.
+    $stored = get_option( NPPP_F2B_TOKEN_OPTION, '' );
+
+    $auth_header = $request->get_header( 'authorization' );
+    $token       = '';
+    if ( is_string( $auth_header ) && 0 === strpos( $auth_header, 'Bearer ' ) ) {
+        $token = substr( $auth_header, 7 );
+    }
+    $token = sanitize_text_field( (string) $token );
+
+    if ( ! is_string( $stored ) || '' === $stored || '' === $token || ! hash_equals( $stored, $token ) ) {
+        $nppp_f2b_bad_tokens = nppp_f2b_log_gate( 'bad_token', 5 * MINUTE_IN_SECONDS, true );
+        if ( $nppp_f2b_bad_tokens > 0 ) {
+            nppp_f2b_log(
+                'WARNING',
+                sprintf(
+                    /* translators: %d: number of rejected webhook auth attempts since the last report. */
+                    __( 'Webhook rejected %d request(s) with an invalid or missing token since the last report.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $nppp_f2b_bad_tokens
+                )
+            );
+        }
+
+        return new WP_Error(
+            'nppp_f2b_forbidden',
+            __( 'Invalid or missing token.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            array( 'status' => 403 )
+        );
+    }
+
+    return true;
+}
+
+/**
+ * The rate counter cannot be read or written, so nppp_f2b_rate_hit() fails open
+ * and the per-minute limit is NOT enforced. Aggregated, because every webhook
+ * event would otherwise repeat it.
+ */
+function nppp_f2b_log_rate_counter_fail( string $db_error ): void {
+    $seen = nppp_f2b_log_gate( 'rate_counter_fail', 10 * MINUTE_IN_SECONDS, true );
+    if ( $seen < 1 ) {
+        return;
+    }
+    $db_error = trim( $db_error );
+    nppp_f2b_log(
+        'WARNING',
+        sprintf(
+            'Webhook rate counter unavailable, the per-minute limit is not enforced (events are still accepted): occurrences=%d%s',
+            $seen,
+            '' !== $db_error ? ' db_error="' . substr( $db_error, 0, 80 ) . '"' : ''
+        )
+    );
+}
+
+/**
+ * Count one event in the given fixed 60 s window and return the new total.
+ *
+ * One row (window:count) in wp_options, rolled over and incremented by a
+ * single UPDATE, so concurrent requests cannot overwrite each other's count.
+ * LAST_INSERT_ID(expr) hands the new count back on the same connection.
+ * Returns 0 on a DB error (fail open: a broken counter must never drop ban events).
+ */
+function nppp_f2b_rate_hit( int $window, bool $retry = true ): int {
+    global $wpdb;
+
+    $name = 'nppp_f2b_rate_win';
+    $win  = (string) $window;
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- atomic counter on a single options row
+    $rows = $wpdb->query(
+        $wpdb->prepare(
+            "UPDATE {$wpdb->options}
+             SET option_value = CONCAT( %s, ':', LAST_INSERT_ID( IF( SUBSTRING_INDEX( option_value, ':', 1 ) = %s, CAST( SUBSTRING_INDEX( option_value, ':', -1 ) AS UNSIGNED ) + 1, 1 ) ) )
+             WHERE option_name = %s",
+            $win,
+            $win,
+            $name
+        )
+    );
+
+    if ( false === $rows ) {
+        nppp_f2b_log_rate_counter_fail( (string) $wpdb->last_error );
+        return 0;
+    }
+
+    if ( 0 === (int) $rows ) {
+        if ( ! $retry ) {
+            // The counter row is missing and could not be created.
+            nppp_f2b_log_rate_counter_fail( (string) $wpdb->last_error );
+            return 0;
+        }
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $wpdb->query(
+            $wpdb->prepare(
+                "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
+                $name,
+                $win . ':0'
+            )
+        );
+        return nppp_f2b_rate_hit( $window, false );
+    }
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    return (int) $wpdb->get_var( 'SELECT LAST_INSERT_ID()' );
+}
+
+// Fixed 60 s window (not rolling), counted atomically by nppp_f2b_rate_hit().
+function nppp_f2b_rate_exceeded(): bool {
+    $window = (int) floor( time() / 60 );
+    $hits   = nppp_f2b_rate_hit( $window );
+
+    if ( $hits <= NPPP_F2B_RATE_MAX_PER_MIN ) {
+        // First event of a new window: say what earlier windows dropped.
+        if ( 1 === $hits ) {
+            nppp_f2b_rate_report_rejected( $window );
+        }
+        return false;
+    }
+
+    // Count what is dropped; the total is logged once the window has closed.
+    nppp_f2b_rate_reject_hit( $window );
+
+    // The count is exact, so exactly one request per window gets MAX + 1:
+    // one log line per window, however many requests arrive at once.
+    if ( NPPP_F2B_RATE_MAX_PER_MIN + 1 === $hits ) {
+        nppp_f2b_log(
+            'ERROR',
+            sprintf(
+                /* translators: %d: number of webhook events allowed per minute. */
+                __( 'Webhook rate limit reached (%d events/min): every further event this minute is rejected with 429 and NOT recorded. The total dropped is logged when the window closes.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                NPPP_F2B_RATE_MAX_PER_MIN
+            )
+        );
+    }
+
+    return true;
+}
+
+// One row per window that rejected events, bumped by a single atomic upsert.
+// Best effort: a failure here must never change the 429 decision.
+function nppp_f2b_rate_reject_hit( int $window ): void {
+    global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- atomic counter on a single options row
+    $wpdb->query(
+        $wpdb->prepare(
+            "INSERT INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, '1', 'no')
+             ON DUPLICATE KEY UPDATE option_value = CAST( option_value AS UNSIGNED ) + 1",
+            'nppp_f2b_rate_rej_' . $window
+        )
+    );
+}
+
+/**
+ * Logs and clears the rejected-event counters of every CLOSED window.
+ *
+ * Called from the first event of a new window and from the 5 min reconcile
+ * cron, so the report arrives even when no further event follows a storm.
+ * The DELETE is the claim: only the request that deletes a row reports it.
+ */
+function nppp_f2b_rate_report_rejected( int $current_window = 0 ): void {
+    global $wpdb;
+
+    if ( $current_window < 1 ) {
+        $current_window = (int) floor( time() / 60 );
+    }
+
+    $prefix = 'nppp_f2b_rate_rej_';
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $wpdb->esc_like( $prefix ) . '%'
+        ),
+        ARRAY_A
+    );
+    if ( empty( $rows ) ) {
+        return;
+    }
+
+    $dropped = 0;
+    $windows = 0;
+    foreach ( $rows as $row ) {
+        $win = (int) substr( (string) $row['option_name'], strlen( $prefix ) );
+        if ( $win >= $current_window ) {
+            continue; // window still open
+        }
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        if ( 1 !== (int) $wpdb->delete( $wpdb->options, array( 'option_name' => $row['option_name'] ), array( '%s' ) ) ) {
+            continue; // another request already claimed it
+        }
+        $dropped += (int) $row['option_value'];
+        $windows++;
+    }
+
+    if ( $dropped > 0 ) {
+        nppp_f2b_log(
+            'ERROR',
+            sprintf(
+                'Webhook rate limit dropped %d event(s) in %d one-minute window(s) (limit %d/min): rejected with 429 and NOT recorded. The bans themselves are unaffected; only this event log is missing them.',
+                $dropped,
+                $windows,
+                NPPP_F2B_RATE_MAX_PER_MIN
+            )
+        );
+    }
+}
+
+// Releases the per-jail+ip event lock taken in nppp_f2b_handle_event(). No-op
+// when no lock is held (test events, or GET_LOCK was unavailable or timed out).
+function nppp_f2b_event_unlock( string $name ): void {
+    if ( '' === $name ) {
+        return;
+    }
+    global $wpdb;
+    // Every wpdb query resets last_error, and the caller reads last_error and
+    // insert_id of its INSERT after this runs. Put both back.
+    $last_error = $wpdb->last_error;
+    $insert_id  = $wpdb->insert_id;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK( %s )', $name ) );
+    $wpdb->last_error = $last_error;
+    $wpdb->insert_id  = $insert_id;
+}
+
+/**
+ * A request that passed the token check but is malformed: the caller is
+ * fail2ban (or its action file), not an attacker, so a silent 400 means a jail
+ * that looks healthy while every event is dropped (typically an unreplaced
+ * <name>/<ip> placeholder, or a body that is not JSON). Aggregated per reason.
+ * The value is reduced to a harmless alphabet: nppp_f2b_log() strips tags, which
+ * would erase a literal "<ip>".
+ *
+ * $reason: bad_json, bad_jail, bad_ip, bad_event.
+ */
+function nppp_f2b_log_bad_event( string $reason, string $value = '' ): void {
+    $seen = nppp_f2b_log_gate( 'bad_event_' . $reason, 10 * MINUTE_IN_SECONDS, true );
+    if ( $seen < 1 ) {
+        return;
+    }
+    $value = substr( (string) preg_replace( '/[^A-Za-z0-9._:@{}",-]/', '?', $value ), 0, 48 );
+    nppp_f2b_log(
+        'WARNING',
+        sprintf(
+            'Webhook rejected a request that has a valid token: reason=%s status=400 value=[%s] occurrences=%d',
+            $reason,
+            $value,
+            $seen
+        )
+    );
+}
+
+function nppp_f2b_handle_event( WP_REST_Request $request ) {
+    $body = $request->get_json_params();
+    if ( ! is_array( $body ) ) {
+        nppp_f2b_log_bad_event( 'bad_json', (string) $request->get_body() );
+        return new WP_Error(
+            'nppp_f2b_bad_request',
+            __( 'Invalid JSON body.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            array( 'status' => 400 )
+        );
+    }
+
+    $jail_raw = ( isset( $body['jail'] ) && is_scalar( $body['jail'] ) ) ? (string) $body['jail'] : '';
+    $ip_raw   = ( isset( $body['ip'] ) && is_scalar( $body['ip'] ) ) ? (string) $body['ip'] : '';
+    $ev_raw   = ( isset( $body['event'] ) && is_scalar( $body['event'] ) ) ? (string) $body['event'] : '';
+
+    // "test" event comes from the Security tab's connection check.
+    $is_test = ( 'test' === $ev_raw );
+
+    // fail2ban accepts dots in jail names (per-vhost jails such as
+    // "nppp.example.com" are common). Column is VARCHAR(64).
+    if ( ! preg_match( '/^[A-Za-z0-9_.\-]{1,64}$/', $jail_raw ) ) {
+        nppp_f2b_log_bad_event( 'bad_jail', $jail_raw );
+        return new WP_Error(
+            'nppp_f2b_bad_request',
+            __( 'Invalid jail name.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            array( 'status' => 400 )
+        );
+    }
+
+    $ip = nppp_f2b_canonical_ip( $ip_raw );
+    if ( false === $ip ) {
+        nppp_f2b_log_bad_event( 'bad_ip', $ip_raw );
+        return new WP_Error(
+            'nppp_f2b_bad_request',
+            __( 'Invalid IP address.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            array( 'status' => 400 )
+        );
+    }
+
+    // Test events go through the real INSERT, then delete their own row.
+    if ( ! $is_test && ! in_array( $ev_raw, array( 'ban', 'unban' ), true ) ) {
+        nppp_f2b_log_bad_event( 'bad_event', $ev_raw );
+        return new WP_Error(
+            'nppp_f2b_bad_request',
+            __( 'Invalid event type.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            array( 'status' => 400 )
+        );
+    }
+
+    // Rate limit only well-formed events. Malformed requests are rejected
+    // above for free (no DB, no transient write) and must not spend the
+    // shared per-minute budget that legitimate bans need.
+    if ( ! $is_test && nppp_f2b_rate_exceeded() ) {
+        return new WP_Error(
+            'nppp_f2b_rate_limited',
+            __( 'Too many events this minute.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            array( 'status' => 429 )
+        );
+    }
+
+    global $wpdb;
+
+    // curl --retry in the fail2ban action can replay an event whose first
+    // attempt already landed (timeout, or 5xx after the INSERT). Same event
+    // for the same jail+ip within 60 s is a replay, not a new ban.
+    $nppp_f2b_ev_lock = '';
+    if ( ! $is_test ) {
+        // Serialise check + insert per jail+ip so concurrent retries cannot
+        // both pass the check. Fail-open: if the lock is unavailable or times
+        // out, the event is still recorded (as before this lock existed).
+        $nppp_f2b_ev_lock = 'nppp_f2b_ev_' . md5( nppp_f2b_table_name() . '|' . $jail_raw . '|' . $ip );
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $nppp_f2b_lock_got = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK( %s, 2 )', $nppp_f2b_ev_lock ) );
+        if ( 1 !== (int) $nppp_f2b_lock_got ) {
+            // MySQL: 0 = timed out, NULL = error. A DB proxy or an engine without
+            // GET_LOCK() lands in the error case. Dedup protection is off for this
+            // event, so say so (aggregated, not per event).
+            $nppp_f2b_lock_err = trim( (string) $wpdb->last_error );
+            $nppp_f2b_ev_lock  = '';
+            $nppp_f2b_lock_seen = nppp_f2b_log_gate( 'event_lock_failed', 10 * MINUTE_IN_SECONDS, true );
+            if ( $nppp_f2b_lock_seen > 0 ) {
+                nppp_f2b_log(
+                    'WARNING',
+                    sprintf(
+                        'Event dedup lock unavailable, replay protection is off for these events: reason=%s wait=2s occurrences=%d%s',
+                        null === $nppp_f2b_lock_got ? 'error' : 'timeout',
+                        $nppp_f2b_lock_seen,
+                        '' !== $nppp_f2b_lock_err ? ' db_error="' . substr( $nppp_f2b_lock_err, 0, 80 ) . '"' : ''
+                    )
+                );
+            }
+        }
+
+        // Latest ban/unban of ANY type for this jail+ip: a replay only if it is
+        // the same type. ban -> unban -> ban inside the window is a real reban.
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $nppp_f2b_replay = $wpdb->get_row(
+            $wpdb->prepare(
+                'SELECT id, event_type, (rdap_json IS NULL) AS pending FROM %i WHERE event_type IN ( %s, %s ) AND created_at >= %s AND ip = %s AND jail = %s ORDER BY id DESC LIMIT 1',
+                nppp_f2b_table_name(),
+                'ban',
+                'unban',
+                gmdate( 'Y-m-d H:i:s', time() - 60 ),
+                $ip,
+                $jail_raw
+            ),
+            ARRAY_A
+        );
+        if ( $nppp_f2b_replay && $ev_raw === $nppp_f2b_replay['event_type'] ) {
+            nppp_f2b_event_unlock( $nppp_f2b_ev_lock );
+            // Aggregated: at most one INFO line per 10 minutes, with the count.
+            $nppp_f2b_dups = nppp_f2b_log_gate( 'replay_duplicate', 10 * MINUTE_IN_SECONDS, true );
+            if ( $nppp_f2b_dups > 0 ) {
+                nppp_f2b_log(
+                    'INFO',
+                    sprintf(
+                        /* translators: %d: number of replayed (duplicate) webhook events ignored since the last report. */
+                        __( 'Ignored %d replayed webhook event(s) since the last report (curl retry of an event that was already stored).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $nppp_f2b_dups
+                    )
+                );
+            }
+            // The first attempt may have died after its INSERT but before it
+            // queued enrichment. Cheap when the row is done or a worker is up.
+            if ( 'ban' === $ev_raw && ! empty( $nppp_f2b_replay['pending'] ) ) {
+                nppp_f2b_maybe_enrich( (int) $nppp_f2b_replay['id'], $ip );
+            }
+            return rest_ensure_response( array( 'ok' => true, 'duplicate' => true ) );
+        }
+    }
+
+    // Fast insert first, rdap_json stays NULL -- enrichment happens after.
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $inserted = $wpdb->insert(
+        nppp_f2b_table_name(),
+        array(
+            'jail'       => $jail_raw,
+            'ip'         => $ip,
+            'event_type' => $is_test ? 'test' : $ev_raw,
+            'created_at' => gmdate( 'Y-m-d H:i:s' ),
+            'rdap_json'  => null,
+        ),
+        array( '%s', '%s', '%s', '%s', '%s' )
+    );
+    nppp_f2b_event_unlock( $nppp_f2b_ev_lock );
+
+    if ( $is_test ) {
+        if ( $inserted && $wpdb->insert_id ) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+            $wpdb->delete( nppp_f2b_table_name(), array( 'id' => (int) $wpdb->insert_id ), array( '%d' ) );
+        }
+
+        return rest_ensure_response(
+            array(
+                'ok'    => true,
+                'test'  => true,
+                'write' => (bool) $inserted,
+            )
+        );
+    }
+
+    if ( false === $inserted ) {
+        // Read last_error first, the gate below may run queries of its own.
+        $nppp_f2b_db_error = $wpdb->last_error;
+        $nppp_f2b_fails    = nppp_f2b_log_gate( 'insert_fail', MINUTE_IN_SECONDS, true );
+        if ( $nppp_f2b_fails > 0 ) {
+            nppp_f2b_log(
+                'ERROR',
+                sprintf(
+                    /* translators: %1$d: number of insert failures since the last report; %2$s: database error message (not translated, comes from the DB driver). */
+                    __( 'Webhook event insert failed (%1$d since the last report): %2$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $nppp_f2b_fails,
+                    $nppp_f2b_db_error
+                )
+            );
+        }
+
+        return new WP_Error(
+            'nppp_f2b_db_error',
+            __( 'Event could not be stored.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            array( 'status' => 500 )
+        );
+    }
+
+    // Bans get full enrichment (cache first, else spawn the worker).
+    // Unbans never trigger a fresh RIPEstat lookup, but reuse cached data
+    // if we already have it -- costs nothing.
+    if ( $wpdb->insert_id ) {
+        if ( 'ban' === $ev_raw ) {
+            nppp_f2b_maybe_enrich( (int) $wpdb->insert_id, $ip, array( 'ok' => true ) );
+        } elseif ( 'unban' === $ev_raw ) {
+            nppp_f2b_maybe_reuse_cached_rdap( (int) $wpdb->insert_id, $ip );
+        }
+    }
+
+    return rest_ensure_response( array( 'ok' => true ) );
+}
+
+// ---------------------------------------------------------------------------
+// Data access. Aggregates use bounded time windows and composite indexes;
+// recent-events and existence checks use LIMIT-bounded PK lookups.
+// ---------------------------------------------------------------------------
+
+function nppp_f2b_window_cutoff(): string {
+    return gmdate( 'Y-m-d H:i:s', time() - ( NPPP_F2B_WINDOW_DAYS * DAY_IN_SECONDS ) );
+}
+
+// Uses the created_at/jail composite index.
+function nppp_f2b_get_jail_summaries( int $since_hours = 24 ): array {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+    $since = gmdate( 'Y-m-d H:i:s', time() - ( $since_hours * HOUR_IN_SECONDS ) );
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT jail,
+                    SUM(event_type = 'ban')   AS bans,
+                    SUM(event_type = 'unban') AS unbans,
+                    MAX(created_at)           AS last_event
+             FROM %i
+             WHERE created_at >= %s AND event_type IN ('ban','unban')
+             GROUP BY jail
+             ORDER BY bans DESC, jail ASC
+             LIMIT 50",
+            $table,
+            $since
+        ),
+        ARRAY_A
+    );
+
+    return is_array( $rows ) ? $rows : array();
+}
+
+// Same as nppp_f2b_get_jail_summaries() but for an explicit [since, until)
+// range -- used to get the prior period for the % change badges.
+function nppp_f2b_get_jail_summaries_between( string $since, string $until ): array {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT jail,
+                    SUM(event_type = 'ban')   AS bans,
+                    SUM(event_type = 'unban') AS unbans,
+                    MAX(created_at)           AS last_event
+             FROM %i
+             WHERE created_at >= %s AND created_at < %s AND event_type IN ('ban','unban')
+             GROUP BY jail
+             ORDER BY bans DESC, jail ASC
+             LIMIT 50",
+            $table,
+            $since,
+            $until
+        ),
+        ARRAY_A
+    );
+
+    return is_array( $rows ) ? $rows : array();
+}
+
+// Repeat-offender query, hits the event_type/ip composite index.
+function nppp_f2b_get_recidive_ips( int $min_count = 2, int $limit = 25 ): array {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT ip, COUNT(*) AS ban_count, MAX(created_at) AS last_ban
+             FROM %i
+             WHERE event_type = 'ban' AND created_at >= %s
+             GROUP BY ip
+             HAVING ban_count >= %d
+             ORDER BY ban_count DESC, last_ban DESC
+             LIMIT %d",
+            $table,
+            nppp_f2b_window_cutoff(),
+            $min_count,
+            $limit
+        ),
+        ARRAY_A
+    );
+
+    return is_array( $rows ) ? $rows : array();
+}
+
+// Distinct IP count with the same filters as above, just to detect
+// truncation for the UI.
+function nppp_f2b_get_recidive_total_count( int $min_count = 2 ): int {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    return (int) $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COUNT(*) FROM (
+                SELECT ip
+                FROM %i
+                WHERE event_type = 'ban' AND created_at >= %s
+                GROUP BY ip
+                HAVING COUNT(*) >= %d
+             ) AS nppp_recidive_ips",
+            $table,
+            nppp_f2b_window_cutoff(),
+            $min_count
+        )
+    );
+}
+
+// PK descending scan, always LIMIT-bounded. $limit = 0 means "all events",
+// but that's still capped by NPPP_F2B_FEED_HARD_CAP. Retention cleanup
+// already keeps the table small on most installs anyway.
+function nppp_f2b_get_recent_events( int $limit = 0 ): array {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    $hard_cap = (int) apply_filters( 'nppp_f2b_feed_hard_cap', NPPP_F2B_FEED_HARD_CAP );
+    if ( $hard_cap < 1 ) {
+        $hard_cap = 1;
+    }
+
+    $limit = ( $limit > 0 ) ? min( $limit, $hard_cap ) : $hard_cap;
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT jail, ip, event_type, created_at, rdap_json
+             FROM %i
+             WHERE event_type IN ('ban','unban')
+             ORDER BY id DESC
+             LIMIT %d",
+            $table,
+            $limit
+        ),
+        ARRAY_A
+    );
+
+    return is_array( $rows ) ? $rows : array();
+}
+
+// Total row count. Only ever runs once per Security tab load.
+function nppp_f2b_get_total_event_count(): int {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    return (int) $wpdb->get_var(
+        $wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE event_type IN ('ban','unban')", $table )
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Endpoint-gate attacks (EP3 / EP8 / EP10 rejections): a card of their own.
+// event_type = 'gate' rows are excluded from the Live Feed, the Jails card,
+// Repeat Offenders, Top Countries and the "configured" check.
+// ---------------------------------------------------------------------------
+
+// Unknown or future gate names fall back to their raw uppercased form.
+function nppp_f2b_gate_label( string $ep ): string {
+    $labels = array(
+        'ep3'  => __( 'REST API (EP3)', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'ep8'  => __( 'Watchdog AJAX (EP8)', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'ep10' => __( 'Fail2Ban Webhook (EP10)', 'fastcgi-cache-purge-and-preload-nginx' ),
+    );
+
+    return $labels[ $ep ] ?? strtoupper( $ep );
+}
+
+// Per-gate totals. Same window as nppp_f2b_get_gate_summary() so the two tables
+// on the card always describe the same period.
+function nppp_f2b_get_gate_totals( int $since_hours = 24 ): array {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+    $since = gmdate( 'Y-m-d H:i:s', time() - ( $since_hours * HOUR_IN_SECONDS ) );
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT jail, COUNT(*) AS hits, MAX(created_at) AS last_seen
+             FROM %i
+             WHERE event_type = 'gate' AND created_at >= %s
+             GROUP BY jail
+             ORDER BY hits DESC, jail ASC",
+            $table,
+            $since
+        ),
+        ARRAY_A
+    );
+
+    return is_array( $rows ) ? $rows : array();
+}
+
+// One row per gate + IP. Gate rows are never enriched via RIPEstat (the worker only
+// processes event_type = 'ban'): a flood of rejected requests must not trigger
+// any outbound lookups.
+function nppp_f2b_get_gate_summary( int $limit = 25, int $since_hours = 24 ): array {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+    $since = gmdate( 'Y-m-d H:i:s', time() - ( $since_hours * HOUR_IN_SECONDS ) );
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT jail, ip, COUNT(*) AS hits, MAX(created_at) AS last_seen
+             FROM %i
+             WHERE event_type = 'gate' AND created_at >= %s
+             GROUP BY jail, ip
+             ORDER BY hits DESC, last_seen DESC
+             LIMIT %d",
+            $table,
+            $since,
+            $limit
+        ),
+        ARRAY_A
+    );
+
+    return is_array( $rows ) ? $rows : array();
+}
+
+// Bounded COUNT over a time range, not the whole table.
+function nppp_f2b_get_window_event_count(): int {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    return (int) $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COUNT(*) FROM %i WHERE created_at >= %s AND event_type IN ('ban','unban')",
+            $table,
+            nppp_f2b_window_cutoff()
+        )
+    );
+}
+
+// Same as above but for an explicit [since, until) range -- used for the
+// "Events / Nd" card's % change badge.
+function nppp_f2b_get_window_event_count_between( string $since, string $until ): int {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    return (int) $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT COUNT(*) FROM %i WHERE created_at >= %s AND created_at < %s AND event_type IN ('ban','unban')",
+            $table,
+            $since,
+            $until
+        )
+    );
+}
+
+// Ban/unban split for the "Events / Nd" card's sub-line. One SUM() query
+// over the same window nppp_f2b_get_window_event_count() already counts --
+// test events (event_type = 'test') are excluded from both, same as the
+// total, since they're deleted immediately after the self-test anyway.
+function nppp_f2b_get_window_ban_unban_split(): array {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $row = $wpdb->get_row(
+        $wpdb->prepare(
+            "SELECT SUM(event_type = 'ban')   AS bans,
+                    SUM(event_type = 'unban') AS unbans
+             FROM %i
+             WHERE created_at >= %s",
+            $table,
+            nppp_f2b_window_cutoff()
+        ),
+        ARRAY_A
+    );
+
+    return array(
+        'bans'   => is_array( $row ) ? (int) ( $row['bans'] ?? 0 ) : 0,
+        'unbans' => is_array( $row ) ? (int) ( $row['unbans'] ?? 0 ) : 0,
+    );
+}
+
+// Check whether at least one event exists.
+function nppp_f2b_has_any_events(): bool {
+    global $wpdb;
+
+    $table = nppp_f2b_table_name();
+
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    return (bool) $wpdb->get_var(
+        $wpdb->prepare( "SELECT id FROM %i WHERE event_type IN ('ban','unban') LIMIT 1", $table )
+    );
+}
+
+// Turns current/previous counts into a change badge (direction, %, label).
+// Returns null if both periods are empty -- template just skips the badge then.
+function nppp_f2b_pct_change( int $current, int $previous ): ?array {
+    if ( $current <= 0 && $previous <= 0 ) {
+        return null;
+    }
+
+    if ( $previous <= 0 ) {
+        // Nothing in the prior period, so % is undefined -- show "New" instead.
+        return array(
+            'dir'   => 'up',
+            'pct'   => null,
+            'label' => __( 'New', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+
+    $delta = $current - $previous;
+    $pct   = ( $delta / $previous ) * 100;
+
+    if ( 0 === $delta ) {
+        $dir = 'flat';
+    } elseif ( $delta > 0 ) {
+        $dir = 'up';
+    } else {
+        $dir = 'down';
+    }
+
+    return array(
+        'dir'   => $dir,
+        'pct'   => $pct,
+        'label' => sprintf( '%s%d%%', $delta > 0 ? '+' : '', (int) round( $pct ) ),
+    );
+}
+
+// UTC column -> site timezone, for display only.
+function nppp_f2b_local_time( string $gmt_datetime ): string {
+    if ( '' === $gmt_datetime ) {
+        return '';
+    }
+    return get_date_from_gmt( $gmt_datetime, 'Y-m-d H:i:s' );
+}
+
+// ---------------------------------------------------------------------------
+// Config snippets shown in the UI for setting up fail2ban.
+// ---------------------------------------------------------------------------
+
+function nppp_f2b_get_endpoint_url(): string {
+    return esc_url_raw( rest_url( 'nppp_f2b/v1/event' ) );
+}
+
+function nppp_f2b_get_action_conf_snippet(): string {
+    $endpoint = nppp_f2b_get_endpoint_url();
+
+    // flock serializes only calls that go through THIS action file, so a
+    // fail2ban ban storm queues its own curl calls one at a time instead of
+    // firing them all concurrently at PHP-FPM. It does not protect the
+    // endpoint from anything else that hits it directly (a misconfigured
+    // client, a leaked token, a flood) -- that has to sit in front of PHP,
+    // in nginx; see the optional hardening snippet in this tab.
+    // nohup + & still detaches the whole pipeline from fail2ban's action
+    // queue so the jail doesn't wait on the network call before banning the
+    // next IP. Using flock's exec form (no -c) avoids re-quoting the -H/-d
+    // arguments through a second shell layer.
+    //
+    // norestored skips ban notifications for restored tickets.
+    // actionflush suppresses per-IP webhook unbans during bulk flush,
+    // including shutdown.
+    // actionreban suppresses notifications when an existing ban is
+    // reapplied. New bans still run actionban.
+    // The aim is to protect the WordPress webhook from excessive requests.
+    return "# Save as /etc/fail2ban/action.d/nppp-webhook.conf; copy and paste ready.\n" .
+        "# Sends ban/unban events to this site's webhook in the background.\n" .
+        "# Serializes requests and suppresses restore/reban and bulk-unban\n" .
+        "# notifications to reduce webhook load. Delivery is best-effort.\n" .
+        "# Enable per jail using the jail.local snippet below.\n" .
+        "\n" .
+        "[Definition]\n" .
+        "norestored  = 1\n" .
+        "actionflush = true\n" .
+        "actionreban = true\n" .
+        "\n" .
+        "actionban   = nohup flock -w 300 /run/nppp-f2b.lock curl -sS -o /dev/null --max-time 10 --connect-timeout 3 --retry 2 --retry-delay 1 --retry-connrefused -X POST {$endpoint} \\\n" .
+        "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
+        "                -H \"Content-Type: application/json\" \\\n" .
+        "                -d '{\"event\":\"ban\",\"jail\":\"<name>\",\"ip\":\"<ip>\"}' \\\n" .
+        "                >/dev/null 2>&1 &\n" .
+        "actionunban = nohup flock -w 300 /run/nppp-f2b.lock curl -sS -o /dev/null --max-time 10 --connect-timeout 3 --retry 2 --retry-delay 1 --retry-connrefused -X POST {$endpoint} \\\n" .
+        "                -H \"Authorization: Bearer %(nppp_token)s\" \\\n" .
+        "                -H \"Content-Type: application/json\" \\\n" .
+        "                -d '{\"event\":\"unban\",\"jail\":\"<name>\",\"ip\":\"<ip>\"}' \\\n" .
+        "                >/dev/null 2>&1 &\n" .
+        "\n" .
+        "[Init]\n" .
+        "nppp_token =\n";
+}
+
+function nppp_f2b_get_jail_local_snippet(): string {
+    $token = nppp_f2b_get_token();
+
+    $comment = __(
+        "Add this under each nginx-related [jail] section in jail.local.\nIf the jail already defines its own \"action = ...\" line, APPEND the\nnppp-webhook[...] line to it instead of replacing it — otherwise you\ndisable that jail's real ban action.",
+        'fastcgi-cache-purge-and-preload-nginx'
+    );
+    $comment = '# ' . str_replace( "\n", "\n# ", $comment );
+
+    return "action = %(action_)s\n" .
+        "         nppp-webhook[nppp_token=\"{$token}\"]\n" .
+        "\n" .
+        $comment . "\n";
+}
+
+// Optional server-side hardening shown in the tab. flock above only
+// serializes calls made through fail2ban itself; this caps the request rate
+// from any caller before PHP boots, with no separate FPM pool. Keyed on
+// $server_name so every virtual host receives an independent rate-limit
+// bucket, while distributed sources attacking the same site share one bucket.
+function nppp_f2b_get_nginx_rate_limit_snippet(): string {
+    $route = nppp_f2b_get_endpoint_url();
+    $path  = (string) wp_parse_url( $route, PHP_URL_PATH );
+    if ( '' === $path ) {
+        $path = '/wp-json/nppp_f2b/v1/event';
+    }
+
+    // Matches the plugin's 300-events-per-minute application safety valve.
+    $rate = (string) apply_filters( 'nppp_f2b_nginx_rl_rate', '5r/s' );
+
+    // At the default values, burst / rate gives an approximate maximum
+    // Nginx queueing delay of 6 seconds, below curl's 10-second timeout.
+    // flock only serializes producer calls; Nginx supplies the pacing.
+    $burst = (int) apply_filters( 'nppp_f2b_nginx_rl_burst', 30 );
+
+    return "# 1) Once, inside the http { } block (nginx.conf or a conf.d file):\n" .
+        "limit_req_zone \$server_name zone=nppp_f2b_rl:1m rate={$rate};\n" .
+        "\n" .
+        "# 2) Inside this site's server { } block. The exact-match location\n" .
+        "# takes precedence over prefix and regular-expression locations,\n" .
+        "# regardless of file order. try_files internally redirects the\n" .
+        "# request to index.php, which the existing PHP location handles.\n" .
+        "location = {$path} {\n" .
+        "    limit_except POST {\n" .
+        "        deny all;\n" .
+        "    }\n" .
+        "\n" .
+        "    client_max_body_size 1k;\n" .
+        "    client_body_timeout 10s;\n" .
+        "\n" .
+        "    limit_req zone=nppp_f2b_rl burst={$burst};\n" .
+        "    limit_req_status 429;\n" .
+        "    limit_req_log_level warn;\n" .
+        "\n" .
+        "    try_files \$uri \$uri/ /index.php\$is_args\$args;\n" .
+        "}\n" .
+        "\n" .
+        "# Only matches with pretty permalinks (Settings > Permalinks, not\n" .
+        "# \"Plain\"). With Plain permalinks, the REST route is reached as\n" .
+        "# /index.php?rest_route=/nppp_f2b/v1/event, which this path-only\n" .
+        "# exact location cannot select. Switch to pretty permalinks or add\n" .
+        "# an equivalent conditional limit to the existing PHP location.\n";
+}
+
+// ---------------------------------------------------------------------------
+// AJAX callbacks, registered centrally by the admin module.
+// ---------------------------------------------------------------------------
+
+function nppp_f2b_load_tab_content_callback() {
+    nppp_ajax_auth( 'nppp-security-tab' );
+
+    // Just a safety net -- covers admins hitting this before the update
+    // check runs, or on a multisite sub-site.
+    nppp_f2b_maybe_install();
+
+    $summaries      = nppp_f2b_get_jail_summaries( 24 );
+    $recidive       = nppp_f2b_get_recidive_ips( 2, (int) apply_filters( 'nppp_f2b_recidive_top_n', NPPP_F2B_RECIDIVE_TOP_N ) );
+    $recidive_total = nppp_f2b_get_recidive_total_count( 2 );
+    $recent         = nppp_f2b_get_recent_events();
+    $total_events   = nppp_f2b_get_total_event_count();
+    $feed_truncated = $total_events > count( $recent );
+    $configured     = nppp_f2b_has_any_events();
+
+    // Prior periods for the "% vs last period" badges -- the 24h and Nd
+    // windows right before the current ones. Two extra queries per tab load.
+    $nppp_prev_24h_since = gmdate( 'Y-m-d H:i:s', time() - ( 48 * HOUR_IN_SECONDS ) );
+    $nppp_prev_24h_until = gmdate( 'Y-m-d H:i:s', time() - ( 24 * HOUR_IN_SECONDS ) );
+    $summaries_prev      = nppp_f2b_get_jail_summaries_between( $nppp_prev_24h_since, $nppp_prev_24h_until );
+
+    $nppp_prev_window_since = gmdate( 'Y-m-d H:i:s', time() - ( 2 * NPPP_F2B_WINDOW_DAYS * DAY_IN_SECONDS ) );
+    $nppp_prev_window_until = gmdate( 'Y-m-d H:i:s', time() - ( NPPP_F2B_WINDOW_DAYS * DAY_IN_SECONDS ) );
+    $nppp_window_prev_count = nppp_f2b_get_window_event_count_between( $nppp_prev_window_since, $nppp_prev_window_until );
+
+    // Top Attack Countries uses the full retention window (90 days by
+    // default), separate from the 30-day Repeat Offenders window above.
+    $country_available   = nppp_f2b_country_feature_available();
+    $country_days        = nppp_f2b_retention_days();
+    $top_countries_n     = (int) apply_filters( 'nppp_f2b_top_countries_n', NPPP_F2B_TOP_COUNTRIES_N );
+    $top_countries       = $country_available ? nppp_f2b_get_top_countries( $top_countries_n ) : array();
+    $top_countries_total = $country_available ? nppp_f2b_get_top_countries_total_count() : 0;
+
+    // Bubble map shows every country in the window, not just the top N --
+    // same query, effectively no LIMIT (see NPPP_F2B_MAP_COUNTRIES_MAX).
+    $map_countries_max = (int) apply_filters( 'nppp_f2b_map_countries_n', NPPP_F2B_MAP_COUNTRIES_MAX );
+    $top_countries_map = $country_available ? nppp_f2b_get_top_countries( $map_countries_max ) : array();
+
+    // Ban/unban split for the "Events / Nd" card's sub-line ("↑ N bans · ↓ M unbans").
+    $nppp_window_split = nppp_f2b_get_window_ban_unban_split();
+
+    $stats = array(
+        'bans_24h'      => (int) array_sum( array_map( 'intval', array_column( $summaries, 'bans' ) ) ),
+        'unbans_24h'    => (int) array_sum( array_map( 'intval', array_column( $summaries, 'unbans' ) ) ),
+        'jails'         => count( $summaries ),
+        'window'        => nppp_f2b_get_window_event_count(),
+        'window_bans'   => $nppp_window_split['bans'],
+        'window_unbans' => $nppp_window_split['unbans'],
+    );
+
+    $stats_prev = array(
+        'bans_24h'   => (int) array_sum( array_map( 'intval', array_column( $summaries_prev, 'bans' ) ) ),
+        'unbans_24h' => (int) array_sum( array_map( 'intval', array_column( $summaries_prev, 'unbans' ) ) ),
+        'jails'      => count( $summaries_prev ),
+        'window'     => $nppp_window_prev_count,
+    );
+
+    // Percentage-change badges for the 4 Activity Overview cards.
+    $stats_change = array(
+        'bans_24h'   => nppp_f2b_pct_change( $stats['bans_24h'], $stats_prev['bans_24h'] ),
+        'unbans_24h' => nppp_f2b_pct_change( $stats['unbans_24h'], $stats_prev['unbans_24h'] ),
+        'jails'      => nppp_f2b_pct_change( $stats['jails'], $stats_prev['jails'] ),
+        'window'     => nppp_f2b_pct_change( $stats['window'], $stats_prev['window'] ),
+    );
+
+    // Per-jail change badge, bans only (unbans aren't tracked here).
+    // Indexed by jail name for quick lookup in the template.
+    $nppp_prev_bans_by_jail = array();
+    foreach ( $summaries_prev as $nppp_prev_row ) {
+        $nppp_prev_bans_by_jail[ $nppp_prev_row['jail'] ] = (int) $nppp_prev_row['bans'];
+    }
+
+    $jail_bans_change = array();
+    foreach ( $summaries as $nppp_cur_row ) {
+        $jail_bans_change[ $nppp_cur_row['jail'] ] = nppp_f2b_pct_change(
+            (int) $nppp_cur_row['bans'],
+            $nppp_prev_bans_by_jail[ $nppp_cur_row['jail'] ] ?? 0
+        );
+    }
+
+    // Abuse Reporter: one options read, plus one bounded IN() lookup
+    // for offender contacts, only if the reporter is actually enabled.
+    $abuse_settings   = nppp_f2b_get_abuse_settings();
+    $abuse_ready      = nppp_f2b_abuse_is_ready( $abuse_settings );
+    $abuse_report_log = $abuse_ready ? nppp_f2b_get_abuse_report_log() : array();
+    $abuse_contacts   = ( $abuse_ready && ! empty( $recidive ) )
+        ? nppp_f2b_get_abuse_map_for_ips( array_column( $recidive, 'ip' ) )
+        : array();
+
+    $gate_totals  = nppp_f2b_get_gate_totals( 24 );
+    $gate_summary = nppp_f2b_get_gate_summary( 25 );
+
+    $token            = nppp_f2b_get_token();
+    $endpoint         = nppp_f2b_get_endpoint_url();
+    $action_snippet   = nppp_f2b_get_action_conf_snippet();
+    $jail_snippet     = nppp_f2b_get_jail_local_snippet();
+    $nginx_rl_snippet = nppp_f2b_get_nginx_rate_limit_snippet();
+    $window_days      = NPPP_F2B_WINDOW_DAYS;
+    $retention_days   = nppp_f2b_retention_days();
+
+    ob_start();
+    include plugin_dir_path( __FILE__ ) . 'partials/fail2ban-tab.php';
+    $html = ob_get_clean();
+
+    // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $html is the captured output of partials/fail2ban-tab.php, which escapes every dynamic value itself (esc_html/esc_attr/esc_url) at the point of use. Re-escaping the whole buffer here would double-encode entities and break the rendered markup. Do not run wp_kses_post() here.
+    echo $html;
+    wp_die();
+}
+
+function nppp_f2b_regenerate_token_callback() {
+    nppp_ajax_auth( 'nppp-security-tab' );
+
+    $token = nppp_f2b_regenerate_token();
+
+    nppp_f2b_log(
+        'INFO',
+        sprintf(
+            /* translators: %d: WordPress user ID. */
+            __( 'Webhook token regenerated by user #%d; jails still sending the old token are rejected until jail.local is updated.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            get_current_user_id()
+        )
+    );
+
+    wp_send_json_success(
+        array(
+            'token'        => $token,
+            'jail_snippet' => nppp_f2b_get_jail_local_snippet(),
+        )
+    );
+}
+
+function nppp_f2b_clear_events_callback() {
+    nppp_ajax_auth( 'nppp-security-tab' );
+
+    global $wpdb;
+    $table = nppp_f2b_table_name();
+
+    // Use DELETE so the action works without DROP privilege.
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- custom plugin table, not part of WP core schema
+    $nppp_f2b_deleted = $wpdb->query( $wpdb->prepare( 'DELETE FROM %i', $table ) );
+
+    if ( false === $nppp_f2b_deleted ) {
+        wp_send_json_error(
+            array( 'message' => __( 'Could not clear the event log. Check that the database user has DELETE privilege on this table.', 'fastcgi-cache-purge-and-preload-nginx' ) ),
+            500
+        );
+        return;
+    }
+
+    nppp_f2b_log(
+        'INFO',
+        sprintf(
+            /* translators: %1$d: WordPress user ID; %2$d: number of event rows deleted. */
+            __( 'Event log cleared by user #%1$d (%2$d row(s) removed).', 'fastcgi-cache-purge-and-preload-nginx' ),
+            get_current_user_id(),
+            (int) $nppp_f2b_deleted
+        )
+    );
+
+    wp_send_json_success(
+        array( 'message' => __( 'All events cleared.', 'fastcgi-cache-purge-and-preload-nginx' ) )
+    );
+}
+
+/**
+ * Failed self-test, for the log: the admin sees the message in the UI, but a
+ * support request later has nothing to go on. Gated so a repeatedly clicked
+ * button cannot flood the log. Untranslated key=value.
+ */
+function nppp_f2b_log_selftest_fail( string $reason, string $detail = '' ): void {
+    if ( nppp_f2b_log_gate( 'selftest_fail', 5 * MINUTE_IN_SECONDS ) < 1 ) {
+        return;
+    }
+    nppp_f2b_log(
+        'WARNING',
+        sprintf(
+            'Webhook self-test failed: reason=%s user=%d%s',
+            $reason,
+            get_current_user_id(),
+            '' !== $detail ? ' detail="' . substr( $detail, 0, 100 ) . '"' : ''
+        )
+    );
+}
+
+/**
+ * Runs a self-test through the same HTTP path fail2ban uses.
+ *
+ * Pure logic: no capability check and no output, so the AJAX button and
+ * WP-CLI (`wp npp f2b test`) share one implementation. Callers authorise.
+ *
+ * @return array{ok:bool,message:string}
+ */
+function nppp_f2b_run_selftest(): array {
+    $endpoint = nppp_f2b_get_endpoint_url();
+    $token    = nppp_f2b_get_token();
+
+    $response = wp_remote_post(
+        $endpoint,
+        array(
+            'timeout'   => 8,
+            'sslverify' => apply_filters(
+                'nppp_f2b_selftest_sslverify',
+                // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Uses the WordPress core https_local_ssl_verify hook.
+                apply_filters( 'https_local_ssl_verify', false )
+            ),
+            'headers'   => array(
+                'Authorization' => 'Bearer ' . $token,
+                'Content-Type'  => 'application/json',
+            ),
+            'body'      => wp_json_encode(
+                array(
+                    'event' => 'test',
+                    'jail'  => 'nppp-selftest',
+                    // RFC 5737 TEST-NET-3 — never a routable address.
+                    'ip'    => '203.0.113.1',
+                )
+            ),
+        )
+    );
+
+    if ( is_wp_error( $response ) ) {
+        nppp_f2b_log_selftest_fail( 'transport', $response->get_error_message() );
+        return array(
+            'ok'      => false,
+            'message' => sprintf(
+                /* translators: %s: transport level error message */
+                __( 'Connection failed: %s. Check that this server can reach its own public URL over loopback and that no firewall rule blocks it.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $response->get_error_message()
+            ),
+        );
+    }
+
+    $code = (int) wp_remote_retrieve_response_code( $response );
+    $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+    if ( 200 === $code && is_array( $body ) && ! empty( $body['ok'] ) ) {
+        if ( empty( $body['write'] ) ) {
+            nppp_f2b_log_selftest_fail( 'write_failed', 'token accepted, test row not written' );
+            return array(
+                'ok'      => false,
+                'message' => __( 'The endpoint is reachable and the token was accepted, but the test row could not be written. Check that the database user can write to the event table, then reload this tab.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            );
+        }
+
+        $nppp_f2b_success_message = __( 'Success. The webhook endpoint is reachable, the token was accepted and a test event was written and removed. Fail2Ban will be able to reach it too.', 'fastcgi-cache-purge-and-preload-nginx' );
+
+        // This test request is sent by WordPress's own server. If fail2ban
+        // runs on that same server, that's a faithful stand-in for its real
+        // request. If fail2ban runs elsewhere (remote host, sidecar
+        // container) and the IP allow-list is turned on, this success does
+        // NOT guarantee fail2ban's own request will pass -- it will arrive
+        // from a different source IP than this test did.
+        if ( ! empty( apply_filters( 'nppp_f2b_trusted_ips', array() ) ) ) {
+            $nppp_f2b_success_message .= ' ' . __( 'Note: This test only confirms WordPress\'s own server can reach the endpoint. If Fail2Ban runs on a different host or container than WordPress, its real request may arrive from a different IP than this test did, and could still be blocked by your nppp_f2b_trusted_ips allow-list, even if it works for this test.', 'fastcgi-cache-purge-and-preload-nginx' );
+        }
+
+        return array(
+            'ok'      => true,
+            'message' => $nppp_f2b_success_message,
+        );
+    }
+
+    if ( 404 === $code ) {
+        return array(
+            'ok'      => false,
+            'message' => __( 'HTTP 404 — The route never registered, which almost always means your web server is not forwarding the Authorization header to PHP. On Nginx + PHP-FPM, add fastcgi_param HTTP_AUTHORIZATION $http_authorization; inside the PHP location block, reload Nginx, then test again.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+
+    if ( 403 === $code ) {
+        // wp_send_json_error() on the EP10 gate wraps the payload in
+        // "data". A "nppp_f2b_ip_not_trusted" code means the token was
+        // already accepted and only the allow-list rejected it; every
+        // other 403 on this route (missing/malformed/mismatched token)
+        // still comes back as the generic "wp_die" body.
+        $nppp_f2b_gate_code = is_array( $body ) && isset( $body['data']['code'] )
+            ? (string) $body['data']['code']
+            : '';
+
+        if ( 'nppp_f2b_ip_not_trusted' === $nppp_f2b_gate_code ) {
+            $nppp_observed_ip = isset( $body['data']['observed_ip'] ) ? (string) $body['data']['observed_ip'] : '';
+            return array(
+                'ok'      => false,
+                'message' => sprintf(
+                    /* translators: %s: the IP address this server observed for its own request */
+                    __( 'HTTP 403 — The token was accepted, but the source IP is not in your nppp_f2b_trusted_ips allow-list. This server\'s own request was seen coming from %s. Add that IP to your nppp_f2b_trusted_ips filter.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    '' !== $nppp_observed_ip ? $nppp_observed_ip : __( '(unknown — check your Nginx access log for this request)', 'fastcgi-cache-purge-and-preload-nginx' )
+                ),
+            );
+        }
+
+        return array(
+            'ok'      => false,
+            'message' => __( 'HTTP 403 — The token was rejected. Use Regenerate, re-copy the jail.local snippet and reload Fail2Ban.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+
+    if ( 429 === $code ) {
+        return array(
+            'ok'      => false,
+            'message' => __( 'HTTP 429 — Rejected by a rate limit before the test event was recorded. The webhook locks an IP out for up to an hour after 20 rejected tokens (an old token still in jail.local is the usual cause); a web server, WAF or CDN rate limit can return 429 as well.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+
+    nppp_f2b_log_selftest_fail( 'unexpected_http', 'HTTP ' . $code );
+    return array(
+        'ok'      => false,
+        'message' => sprintf(
+            /* translators: %d: HTTP status code */
+            __( 'Unexpected response (HTTP %d). Check your PHP and Nginx error logs.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $code
+        ),
+    );
+}
+
+/**
+ * AJAX wrapper for the "Test" button in the Fail2Ban tab.
+ */
+function nppp_f2b_test_connection_callback() {
+    nppp_ajax_auth( 'nppp-security-tab' );
+    wp_send_json_success( nppp_f2b_run_selftest() );
+}

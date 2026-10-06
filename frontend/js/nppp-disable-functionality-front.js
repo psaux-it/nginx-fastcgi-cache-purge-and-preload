@@ -1,7 +1,7 @@
 /**
  * Frontend action-guard scripts for Nginx Cache Purge Preload
  * Description: Disables frontend admin-bar cache actions when functionality is unavailable.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -16,6 +16,7 @@
         // Select the buttons
         var npppAllButtonsfront = {
             npppPreload: $('#wp-admin-bar-preload-cache'),
+            npppStopPreload: $('#wp-admin-bar-stop-preload-cache'),
             npppPurge: $('#wp-admin-bar-purge-cache'),
             npppStatus: $('#wp-admin-bar-fastcgi-cache-status'),
             npppAdvanced: $('#wp-admin-bar-fastcgi-cache-advanced'),

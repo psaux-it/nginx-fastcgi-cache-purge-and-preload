@@ -1,7 +1,7 @@
 /**
  * Unsupported-environment guards for Nginx Cache Purge Preload
  * Description: Disables plugin actions in admin when required runtime conditions are not met.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -16,6 +16,7 @@
         // Select the buttons in the admin bar with unique names
         var npppAllButtons = {
             npppPreload: $('#wp-admin-bar-preload-cache'),
+            npppStopPreload: $('#wp-admin-bar-stop-preload-cache'),
             npppPurge: $('#wp-admin-bar-purge-cache'),
             npppStatus: $('#wp-admin-bar-fastcgi-cache-status'),
             npppAdvanced: $('#wp-admin-bar-fastcgi-cache-advanced')
@@ -98,31 +99,60 @@
             // disable reset cache key regex button
             $('#nginx-key-regex-reset-defaults').prop('disabled', true);
 
+            // disable reset mobile user agent button
+            $('#nginx-mobile-ua-reset-defaults').prop('disabled', true);
+
             // disable clear logs button
             $('#clear-logs-button').prop('disabled', true);
 
             // disable generate API key button
             $('#api-key-button').prop('disabled', true);
 
+            // disable Test Regex probe button
+            $('#nppp-test-regex-btn').prop('disabled', true);
+
+            // Lock free-text/number settings to read-only.
+            $(
+                '#nginx_cache_api_key, '              +
+                '#nginx_cache_key_custom_regex, '     +
+                '#nginx_cache_email, '                +
+                '#nginx_cache_read_timeout, '         +
+                '#nginx_cache_wait_request, '         +
+                '#nginx_cache_limit_rate, '           +
+                '#nginx_cache_reject_extension, '     +
+                '#nginx_cache_reject_regex, '         +
+                '#nginx_cache_cpu_limit, '            +
+                '#nginx_cache_preload_proxy_port, '   +
+                '#nginx_cache_preload_proxy_host, '   +
+                '#nginx_cache_mobile_user_agent'
+            )
+                .attr('readonly', 'readonly')
+                .css({ cursor: 'not-allowed' });
+
             // Related purge checkboxes (lock + detach)
             function npppLockCheckbox(name){
                 const $cb = $(`input[type="checkbox"][name="${name}"]`);
                 if (!$cb.length) return;
 
-                // force on, grey out, make non-interactive
-                $cb.prop('checked', true)
-                    .prop('disabled', true)
+                // Preserve the real current state — these options are already
+                // forced to 'no' by nppp_disable_features() before this page
+                // renders.
+                const currentVal = $cb.is(':checked') ? 'yes' : 'no';
+
+                $cb.prop('disabled', true)
                     .attr({'aria-disabled':'true', 'title':'Locked in unsupported environment'})
                     .off('click change')
                     .on('click.npppLock change.npppLock', function(e){ e.preventDefault(); return false; });
 
-                // grey the label/row too (optional)
-                $cb.closest('label, .form-table tr, p').css({ cursor:'not-allowed' });
+                $cb.closest('label, .form-table tr, p').css({
+                    cursor: 'not-allowed',
+                    pointerEvents: 'none',
+                    userSelect: 'none'
+                });
 
-                // disabled inputs don't submit; ensure "yes" still posts
                 const $form = $cb.closest('form');
                 if ($form.length && !$form.find(`input[type="hidden"][name="${name}"]`).length){
-                    $('<input>', {type:'hidden', name, value:'yes'}).appendTo($form);
+                    $('<input>', {type:'hidden', name, value: currentVal}).appendTo($form);
                 }
             }
 
@@ -239,36 +269,18 @@
                 // Disable Test Connection button
                 $('#nppp-test-http-purge').prop('disabled', true).css({ cursor:'not-allowed' });
 
-                // Disable sub-fields
-                $('#nppp_http_purge_suffix, #nppp_http_purge_custom_url')
-                    .prop('disabled', true)
+                // Lock sub-fields visually only — `disabled` strips a field from
+                // the POST body entirely, which made settings-sanitize.php see them
+                // as empty and fire the "cannot be empty" reset errors on every save.
+                // `readonly` keeps them non-editable while still submitting their value.
+                $('#nppp_http_purge_suffix, #nppp_http_purge_custom_url, #nppp_http_purge_all_path')
                     .attr('readonly', 'readonly')
                     .css({ cursor:'not-allowed' });
             })();
 
-            // Disable Bypass Path Restriction toggle
-            (function disableBypassPr(){
-                const $toggle = $('#nginx_cache_bypass_path_restriction');
-                if (!$toggle.length) return;
-
-                const $fs       = $('#nppp-bypass-pr-fieldset');
-                const $form     = $toggle.closest('form');
-                const name      = $toggle.attr('name');
-                const currentVal = $toggle.is(':checked') ? 'yes' : 'no';
-
-                $toggle
-                    .prop('disabled', true)
-                    .attr({'aria-disabled':'true', 'tabindex':'-1'})
-                    .off('.nppp')
-                    .on('click.nppp change.nppp', function(e){ e.preventDefault(); return false; });
-
-                if ($fs.length) {
-                    $fs.css({ cursor:'not-allowed' })
-                       .find('label').css({ 'pointer-events':'none', 'cursor':'not-allowed' });
-                }
-
-                ensureHiddenMirror($form, name, currentVal);
-            })();
+            // Bypass Path Restriction is intentionally left live: it has no
+            // shell_exec/exec dependency and is the only control that lets the
+            // admin clear an open_basedir / unconfigured-path GLOBAL ERROR.
 
             // Disable Ripgrep Purge toggle
             (function disableRgPurge(){
@@ -380,8 +392,10 @@
                 var csFontFam   = cs.fontFamily;
                 var csBoxSizing = cs.boxSizing;
 
-                // 2. Remove original submit from .submit flex layout.
-                $submit.hide();
+                // 2. Keep the real submit live — it's the only way back from an
+                // open_basedir/unconfigured-path GLOBAL ERROR,
+                // Status tab is unreachable here, so we still
+                // add a Clear Cache button next to it rather than instead of it.
 
                 // 3. Build pixel-perfect replacement input.
                 var btnLabel = window.nppp_admin_data.clear_cache_btn_label
@@ -403,7 +417,8 @@
                     'font-size':     csFontSize,
                     'font-weight':   csFontWt,
                     'font-family':   csFontFam,
-                    'width':             '100%',
+                    'width':             'auto',
+                    'margin-left':       '8px',
                     'background-color':  '#0073aa',
                     'color':             '#fff',
                     'border':            'none',

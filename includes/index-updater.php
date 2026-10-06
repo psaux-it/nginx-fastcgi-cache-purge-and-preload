@@ -3,7 +3,7 @@
  * Background URL index updater for Nginx Cache Purge Preload
  * Description: WP-Cron job that refreshes the persistent URL→filepath index
  *              by scanning the live cache directory every 3 Hour.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -24,6 +24,20 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return void
  */
 function nppp_schedule_index_updater(): void {
+    // Activation hook already schedules this once; admin_init is only
+    // self-healing for real page loads. admin-ajax.php fires
+    // admin_init too — skip the cron-option DB round-trip on every XHR.
+    if (wp_doing_ajax()) {
+        return;
+    }
+
+    // admin-post.php fires admin_init too — both NPP admin_post_ handlers
+    // redirect straight back to a real page load, where this self-heals anyway.
+    global $pagenow;
+    if ( isset( $pagenow ) && $pagenow === 'admin-post.php' ) {
+        return;
+    }
+
     if ( wp_next_scheduled( 'nppp_index_updater_event' )
         && wp_get_schedule( 'nppp_index_updater_event' ) !== 'every_3hours_npp'
     ) {

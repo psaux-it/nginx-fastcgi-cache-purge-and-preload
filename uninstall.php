@@ -2,7 +2,7 @@
 /**
  * Uninstall cleanup routines for Nginx Cache Purge Preload
  * Description: Removes plugin options, transients, runtime artifacts, and scheduled events during uninstall.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -41,11 +41,13 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_safexec_version_' . md5($static_key_base),
         'nppp_wget_urls_cache_' . md5($static_key_base),
         'nppp_wget_compatibility_' . md5($static_key_base),
+        'nppp_cron_reliability_' . md5($static_key_base),
         'nppp_missing_commands_' . md5($static_key_base),
         'nppp_preload_phase_' . md5($static_key_base),
         'nppp_preload_cycle_start_' . md5($static_key_base),
         'nppp_ping_token_' . md5($static_key_base),
         'nppp_preload_trigger_' . md5($static_key_base),
+        'nppp_mail_health_' . md5($static_key_base),
         'nppp_http_purge_endpoint_broken',
         'nppp_wget_urls_cache_prev_key',
         'nppp_safexec_ok',
@@ -57,6 +59,14 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_obd_warned_' . md5($static_key_base),
         'nppp_vary_issue_' . md5($static_key_base),
         'nppp_cache_key_regex_probe',
+        'nppp_f2b_rl',
+        'nppp_f2b_abuse_rl',
+        'nppp_f2b_worker_env',
+        'nppp_f2b_abuse_test_rl',
+        'nppp_f2b_ripe_reg_rl',
+        'nppp_http_probe_' . md5($static_key_base),
+        'nppp_setup_strict_detect_' . md5($static_key_base),
+        'nppp_requirements_met_' . md5($static_key_base),
     );
 
     // Delete each transient
@@ -77,12 +87,20 @@ function nppp_clear_plugin_cache_on_uninstall() {
     $like_ep8_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep8_fail_') . '%';
     $like_ep3_fail              = $wpdb->esc_like('_transient_nppp_ep3_fail_') . '%';
     $like_ep3_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep3_fail_') . '%';
+    $like_ep10_fail             = $wpdb->esc_like('_transient_nppp_ep10_fail_') . '%';
+    $like_ep10_fail_timeout     = $wpdb->esc_like('_transient_timeout_nppp_ep10_fail_') . '%';
+    $like_f2b_rdap              = $wpdb->esc_like('_transient_nppp_f2b_rdap_') . '%';
+    $like_f2b_rdap_timeout      = $wpdb->esc_like('_transient_timeout_nppp_f2b_rdap_') . '%';
 
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->query(
         $wpdb->prepare(
             "DELETE FROM {$wpdb->options}
             WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
@@ -105,9 +123,23 @@ function nppp_clear_plugin_cache_on_uninstall() {
             $like_ep8_fail,
             $like_ep8_fail_timeout,
             $like_ep3_fail,
-            $like_ep3_fail_timeout
+            $like_ep3_fail_timeout,
+            $like_ep10_fail,
+            $like_ep10_fail_timeout,
+            $like_f2b_rdap,
+            $like_f2b_rdap_timeout
         )
     );
+}
+
+/**
+ * Drop the fail2ban event-log table created by includes/fail2ban.php.
+ */
+function nppp_drop_f2b_table_on_uninstall() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'nppp_f2b_events';
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- uninstall-time cleanup of a custom plugin table, not part of WP core schema
+    $wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $table ) );
 }
 
 /**
@@ -127,12 +159,29 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_url_filepath_index',                // URL→filepath index for single/related purge fast-path
         'nppp_ping_token_db',                     // Watchdog token DB fallback (nppp_watcher_generate_token)
         'nppp_cache_purge.lock',                  // Purge operation lock (WP_Upgrader)
+        'nppp_preload_completion.lock',           // Post-preload completion lock (WP_Upgrader)
         'nppp_vary_notice_dismissed',             // Vary: Accept-Encoding probe dismiss flag
+        'nppp_cron_notice_dismissed',             // DISABLE_WP_CRON notice dismiss flag
+        'nppp_f2b_token',                         // Fail2ban webhook bearer token
+        'nppp_f2b_db_version',                    // Fail2ban event table schema stamp
+        'nppp_f2b_spawn_tick',                    // Fail2ban worker spawn-throttle timestamp
+        'nppp_f2b_log_gate',                      // Fail2ban log-line throttle timestamps
+        'nppp_f2b_rate_win',                      // Fail2ban webhook rate-limit window counter
+        'nppp_f2b_country_col_ok',                // Fail2ban generated country_code column flag
+        'nppp_f2b_abuse_settings',                // Fail2ban Abuse Reporter configuration
+        'nppp_f2b_abuse_reports',                 // Fail2ban Abuse Reporter cooldown map
+        'nppp_f2b_sourceapp_suffix',              // Fail2ban RIPEstat sourceapp suffix
+        'nppp_f2b_ripe_registration',             // Fail2ban RIPEstat registration mail record
     );
 
     foreach ($option_keys as $option_key) {
         delete_option($option_key);
     }
+
+    // Per-window dropped-event counters (nppp_f2b_rate_rej_<window>).
+    global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('nppp_f2b_rate_rej_') . '%'));
 }
 
 /**
@@ -142,6 +191,9 @@ function nppp_clear_scheduled_events_on_uninstall() {
     wp_clear_scheduled_hook('npp_cache_preload_event');
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
     wp_clear_scheduled_hook('nppp_index_updater_event');
+    wp_clear_scheduled_hook('nppp_f2b_cleanup_event');
+    wp_clear_scheduled_hook('nppp_f2b_enrich_event');
+    wp_clear_scheduled_hook('nppp_f2b_worker_event');
 
     // Remove tracking cron hooks left by 2.0.1–2.1.4 in case migration never ran
     wp_clear_scheduled_hook('npp_plugin_tracking_event', array('active'));
@@ -225,6 +277,7 @@ function nppp_run_uninstall_cleanup_for_current_site() {
     nppp_clear_scheduled_events_on_uninstall();
     nppp_delete_runtime_artifacts_on_uninstall();
     nppp_delete_plugin_options_on_uninstall();
+    nppp_drop_f2b_table_on_uninstall();
 
     // Remove the custom purge capability from every role that holds it.
     foreach ( wp_roles()->role_objects as $role ) {

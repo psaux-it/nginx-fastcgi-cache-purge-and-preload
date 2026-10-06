@@ -1,7 +1,7 @@
 <?php
 /**
  * NPP frontend bootstrap
- * Version:           2.1.7
+ * Version:           2.1.8
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
  * License:           GPL-2.0+
@@ -95,8 +95,9 @@ function nppp_render_mobile_fab(): void {
     }
 
     // Determine whether initial setup is still pending.
-    $needs_setup = class_exists('\\NPPP\\Setup') && \NPPP\Setup::nppp_needs_setup();
-    $setup_url   = admin_url('admin.php?page=' . ( defined('\\NPPP\\Setup::PAGE_SLUG') ? \NPPP\Setup::PAGE_SLUG : 'nppp-setup' ));
+    $nppp_setup_loaded = class_exists('\\NPPP\\Setup');
+    $needs_setup = $nppp_setup_loaded && \NPPP\Setup::nppp_needs_setup();
+    $setup_url   = admin_url('admin.php?page=' . ( $nppp_setup_loaded ? \NPPP\Setup::PAGE_SLUG : 'nppp-setup' ));
 
     // Build the current front-end URL (helper defined in includes/admin-bar.php).
     $from_url = function_exists('nppp_get_current_front_url')
@@ -129,8 +130,9 @@ function nppp_render_mobile_fab(): void {
 
     ?>
     <div id="nppp-mobile-fab"
-         role="navigation"
-         aria-label="<?php esc_attr_e('Nginx Cache', 'fastcgi-cache-purge-and-preload-nginx'); ?>">
+        hidden
+        role="navigation"
+        aria-label="<?php esc_attr_e('Nginx Cache', 'fastcgi-cache-purge-and-preload-nginx'); ?>">
 
         <div id="nppp-mobile-fab-menu" role="menu" aria-hidden="true">
 

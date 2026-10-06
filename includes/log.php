@@ -2,7 +2,7 @@
 /**
  * Logging and admin notice helpers for Nginx Cache Purge Preload
  * Description: Centralizes plugin log writes and standardized WordPress admin notice rendering.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -144,6 +144,19 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_clear_url_index'                         => 'nppp-clear-url-index',
             'nppp_test_cache_key_regex'                    => 'nppp_test_regex_nonce',
             'nppp_preload_miss_batch'                      => 'nppp_preload_miss_batch_nonce',
+            'nppp_check_vary_issue'                        => 'nppp-check-vary-issue',
+            'nppp_dismiss_cron_notice'                     => 'nppp-dismiss-cron-notice',
+            'nppp_check_cron_issue'                        => 'nppp-check-cron-issue',
+            'nppp_load_security_content'                   => 'nppp-security-tab',
+            'nppp_f2b_regenerate_token'                    => 'nppp-security-tab',
+            'nppp_f2b_clear_events'                        => 'nppp-security-tab',
+            'nppp_f2b_test_connection'                     => 'nppp-security-tab',
+            'nppp_f2b_save_abuse_settings'                 => 'nppp-security-tab',
+            'nppp_f2b_save_sourceapp'                      => 'nppp-security-tab',
+            'nppp_f2b_ripe_reg_preview'                    => 'nppp-security-tab',
+            'nppp_f2b_ripe_reg_send'                       => 'nppp-security-tab',
+            'nppp_f2b_abuse_preview'                       => 'nppp-security-tab',
+            'nppp_f2b_abuse_send'                          => 'nppp-security-tab',
         ];
 
         // Get the current AJAX action
@@ -190,7 +203,8 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             ? (int) $GLOBALS['nppp_cli_ob_level'] + 1
             : -1;
         if ( ob_get_level() === $our_level && $display_notice ) {
-            echo esc_html( $sanitized_message ) . "\n";
+            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- WP-CLI terminal output, not HTML; $sanitized_message already went through sanitize_text_field() above, and esc_html() would incorrectly HTML-entity-encode the string for a plain-text terminal.
+            echo $sanitized_message . "\n";
         }
         return;
     }

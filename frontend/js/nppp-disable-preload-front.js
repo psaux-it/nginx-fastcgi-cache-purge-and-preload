@@ -1,7 +1,7 @@
 /**
  * Frontend preload-guard scripts for Nginx Cache Purge Preload
  * Description: Prevents restricted frontend preload actions from being executed.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -16,6 +16,7 @@
         // Select the buttons
         var npppAllButtonsfront = {
             npppPreload: $('#wp-admin-bar-preload-cache'),
+            npppStopPreload: $('#wp-admin-bar-stop-preload-cache'),
             preloadButtonSinglefront: $('#wp-admin-bar-preload-cache-single')
         };
 

@@ -2,7 +2,7 @@
 /**
  * Settings registration for Nginx Cache Purge Preload
  * Description: Registers the settings group, settings section, and all settings fields.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -16,6 +16,21 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Initializes the Nginx Cache settings by registering settings, adding settings section, and fields
 function nppp_nginx_cache_settings_init() {
+    // Settings API only matters for the Settings page's full-page POST to
+    // options.php — admin-ajax.php fires admin_init too.
+    if (wp_doing_ajax()) {
+        return;
+    }
+
+    // Settings API output here has zero consumers — no do_settings_sections(),
+    // no settings_fields(), form posts to admin-post.php not options.php.
+    // Restrict the 30+ field registrations to the one page that could ever use them.
+    // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only page detection; no state change.
+    $current_page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+    if ( $current_page !== 'nginx_cache_settings' ) {
+        return;
+    }
+
     // Register settings
     register_setting('nppp_nginx_cache_settings_group', 'nginx_cache_settings', 'nppp_nginx_cache_settings_sanitize');
 
@@ -50,8 +65,9 @@ function nppp_nginx_cache_settings_init() {
     add_settings_field('nginx_cache_preload_proxy_port', 'Proxy Port', 'nppp_nginx_cache_proxy_port_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nginx_cache_pctnorm_mode', 'Percent-encoding Case', 'nppp_nginx_cache_pctnorm_mode_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nppp_http_purge_enabled', 'HTTP Purge', 'nppp_http_purge_enabled_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
-    add_settings_field('nppp_http_purge_suffix', 'Purge URL Suffix', 'nppp_http_purge_suffix_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nppp_http_purge_suffix', 'Purge Single Path', 'nppp_http_purge_suffix_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nppp_http_purge_custom_url', 'Purge Custom Base URL', 'nppp_http_purge_custom_url_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
+    add_settings_field('nppp_http_purge_all_path', 'Purge All Path', 'nppp_http_purge_all_path_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
     add_settings_field('nppp_rg_purge_enabled', 'RG Purge', 'nppp_rg_purge_enabled_callback', 'nppp_nginx_cache_settings_group', 'nppp_nginx_cache_settings_section');
 }
 
@@ -80,6 +96,169 @@ function nppp_is_assume_nginx_mode(): bool {
     }
 
     return false;
+}
+
+/**
+ * Finds the byte offsets of the top-level "|" separators of a reject regex.
+ *
+ * Skips escaped characters, bracket expressions (incl. POSIX classes such as
+ * [:alpha:]) and anything inside (...) groups. Returns null when the string is
+ * not balanced.
+ *
+ * $bs_in_bracket selects how a backslash inside [...] is read: PCRE treats it
+ * as an escape, POSIX ERE (wget's default --regex-type) as a literal.
+ *
+ * @param string $rx
+ * @param bool   $bs_in_bracket
+ * @return int[]|null
+ */
+function nppp_scan_top_level_pipes( string $rx, bool $bs_in_bracket ): ?array {
+    $len   = strlen( $rx );
+    $depth = 0;
+    $pipes = [];
+
+    for ( $i = 0; $i < $len; $i++ ) {
+        $c = $rx[ $i ];
+
+        if ( '\\' === $c ) {
+            $i++;
+            continue;
+        }
+
+        if ( '[' === $c ) {
+            $j = $i + 1;
+            if ( $j < $len && '^' === $rx[ $j ] ) {
+                $j++;
+            }
+            if ( $j < $len && ']' === $rx[ $j ] ) {
+                $j++;
+            }
+            while ( $j < $len && ']' !== $rx[ $j ] ) {
+                if ( $bs_in_bracket && '\\' === $rx[ $j ] ) {
+                    $j += 2;
+                    continue;
+                }
+                if ( '[' === $rx[ $j ] && $j + 1 < $len && false !== strpos( ':.=', $rx[ $j + 1 ] ) ) {
+                    $end = strpos( $rx, $rx[ $j + 1 ] . ']', $j + 2 );
+                    if ( false === $end ) {
+                        return null;
+                    }
+                    $j = $end + 2;
+                    continue;
+                }
+                $j++;
+            }
+            if ( $j >= $len ) {
+                return null;
+            }
+            $i = $j;
+            continue;
+        }
+
+        if ( '(' === $c ) {
+            $depth++;
+        } elseif ( ')' === $c ) {
+            if ( --$depth < 0 ) {
+                return null;
+            }
+        } elseif ( '|' === $c && 0 === $depth ) {
+            $pipes[] = $i;
+        }
+    }
+
+    return 0 === $depth ? $pipes : null;
+}
+
+/**
+ * Splits a reject regex into its top-level alternatives.
+ *
+ * Returns null when the split is not certain: unbalanced input, constructs that
+ * change how "|" is read (\Q..\E, (?#..)), or a POSIX ERE reading (wget default)
+ * and a PCRE reading that disagree.
+ *
+ * @param string $rx
+ * @return string[]|null
+ */
+function nppp_reject_regex_alternatives( string $rx ): ?array {
+    if ( false !== strpos( $rx, '\\Q' ) || false !== strpos( $rx, '(?#' ) ) {
+        return null;
+    }
+
+    $posix = nppp_scan_top_level_pipes( $rx, false );
+    $pcre  = nppp_scan_top_level_pipes( $rx, true );
+    if ( null === $posix || $posix !== $pcre ) {
+        return null;
+    }
+
+    $alts = [];
+    $prev = 0;
+    foreach ( $posix as $pipe ) {
+        $alts[] = substr( $rx, $prev, $pipe - $prev );
+        $prev   = $pipe + 1;
+    }
+    $alts[] = substr( $rx, $prev );
+
+    return $alts;
+}
+
+/**
+ * Removes the plugin-generated feed exclusions ("/feed/" and "[?&]feed=").
+ *
+ * A token is removed only when it is a complete top-level alternative. Text the
+ * user wrote (e.g. "^/feed/private/", "(a|/feed/)", "a\|") is kept byte for
+ * byte. If the regex cannot be split with certainty it is returned unchanged.
+ *
+ * @param string $rx Reject regex.
+ * @return string
+ */
+function nppp_strip_generated_feed_tokens( string $rx ): string {
+    $alts = nppp_reject_regex_alternatives( $rx );
+    if ( null === $alts ) {
+        return $rx;
+    }
+
+    $kept = array_values( array_diff( $alts, [ '/feed/', '[?&]feed=' ] ) );
+
+    return count( $kept ) === count( $alts ) ? $rx : implode( '|', $kept );
+}
+
+/**
+ * Appends the plugin-generated feed exclusions when they are not already
+ * present as complete top-level alternatives. Existing text is never modified.
+ *
+ * A pattern that merely contains "feed" (e.g. "/podcast/feed/", "feedburner")
+ * does not count as the generated token. If the regex cannot be split with
+ * certainty, the historical substring check is used instead.
+ *
+ * @param string $rx Reject regex.
+ * @return string
+ */
+function nppp_add_generated_feed_tokens( string $rx ): string {
+    $alts = nppp_reject_regex_alternatives( $rx );
+
+    if ( null === $alts ) {
+        if ( strpos( $rx, '/feed/' ) === false ) {
+            $rx .= '|/feed/';
+        }
+        if ( strpos( $rx, 'feed=' ) === false ) {
+            $rx .= '|[?&]feed=';
+        }
+        return $rx;
+    }
+
+    foreach ( [ '/feed/', '[?&]feed=' ] as $token ) {
+        if ( in_array( $token, $alts, true ) ) {
+            continue;
+        }
+        $candidate = ( '' === $rx ) ? $token : $rx . '|' . $token;
+        $check     = nppp_reject_regex_alternatives( $candidate );
+        if ( null !== $check && in_array( $token, $check, true ) ) {
+            $rx   = $candidate;
+            $alts = $check;
+        }
+    }
+
+    return $rx;
 }
 
 /**
@@ -146,20 +325,13 @@ function nppp_before_settings_option_update( $new_value, $old_value ) {
         $feeds_enabled = ( $new_value['nginx_cache_preload_feeds'] ?? 'no' ) === 'yes';
 
         if ( $feeds_enabled ) {
-            // Remove both feed tokens in every possible position
-            foreach ( [ '|/feed/', '/feed/|', '/feed/', '|[?&]feed=', '[?&]feed=|', '[?&]feed=' ] as $token ) {
-                $reject_regex = str_replace( $token, '', $reject_regex );
-            }
-            // Collapse any double or orphan pipes left behind
-            $reject_regex = preg_replace( '/\|{2,}/', '|', $reject_regex );
-            $reject_regex = trim( $reject_regex, '|' );
+            // Remove only the generated feed exclusions (complete top-level
+            // alternatives). User-written patterns are never modified.
+            $reject_regex = nppp_strip_generated_feed_tokens( $reject_regex );
         } else {
-            if ( strpos( $reject_regex, '/feed/' ) === false ) {
-                $reject_regex .= '|/feed/';
-            }
-            if ( strpos( $reject_regex, 'feed=' ) === false ) {
-                $reject_regex .= '|[?&]feed=';
-            }
+            // Add the generated feed exclusions unless already present as
+            // complete alternatives. Existing text is left untouched.
+            $reject_regex = nppp_add_generated_feed_tokens( $reject_regex );
         }
 
         $new_value['nginx_cache_reject_regex'] = $reject_regex;

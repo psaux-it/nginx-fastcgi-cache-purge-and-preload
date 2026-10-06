@@ -2,7 +2,7 @@
 /**
  * Status page renderer for Nginx Cache Purge Preload
  * Description: Collects and displays runtime diagnostics, cache details, and health information.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -80,8 +80,10 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_safexec_version_' . md5($static_key_base),
         'nppp_wget_urls_cache_' . md5($static_key_base),
         'nppp_wget_compatibility_' . md5($static_key_base),
+        'nppp_cron_reliability_' . md5($static_key_base),
         'nppp_missing_commands_' . md5($static_key_base),
         'nppp_preload_trigger_' . md5($static_key_base),
+        'nppp_mail_health_' . md5($static_key_base),
         'nppp_http_purge_endpoint_broken',
         'nppp_wget_urls_cache_prev_key',
         'nppp_safexec_ok',
@@ -93,6 +95,11 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_obd_warned_' . md5($static_key_base),
         'nppp_vary_issue_' . md5($static_key_base),
         'nppp_cache_key_regex_probe',
+        'nppp_http_probe_' . md5($static_key_base),
+        'nppp_setup_strict_detect_' . md5($static_key_base),
+        'nppp_requirements_met_' . md5($static_key_base),
+        'nppp_f2b_rl',
+        'nppp_f2b_worker_env',
     );
 
     // Delete each known transient
@@ -103,6 +110,9 @@ function nppp_clear_plugin_cache($silent = false) {
     // Re-arm the Vary: Accept-Encoding probe and its notice row so the
     // detection runs fresh on the next settings page load.
     delete_option( 'nppp_vary_notice_dismissed' );
+
+    // Re-arm the DISABLE_WP_CRON notice row the same way.
+    delete_option( 'nppp_cron_notice_dismissed' );
 
     // Transients that must not be cleared while a preload is running:
     //   nppp_preload_phase_        — tick monitor reads this every 5s to track desktop/mobile phase
@@ -134,6 +144,8 @@ function nppp_clear_plugin_cache($silent = false) {
     $like_ep8_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep8_fail_') . '%';
     $like_ep3_fail              = $wpdb->esc_like('_transient_nppp_ep3_fail_') . '%';
     $like_ep3_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep3_fail_') . '%';
+    $like_ep10_fail             = $wpdb->esc_like('_transient_nppp_ep10_fail_') . '%';
+    $like_ep10_fail_timeout     = $wpdb->esc_like('_transient_timeout_nppp_ep10_fail_') . '%';
 
     // Safe clean up transients directly in DB
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
@@ -141,6 +153,8 @@ function nppp_clear_plugin_cache($silent = false) {
         $wpdb->prepare(
             "DELETE FROM {$wpdb->options}
             WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
@@ -163,7 +177,9 @@ function nppp_clear_plugin_cache($silent = false) {
             $like_ep8_fail,
             $like_ep8_fail_timeout,
             $like_ep3_fail,
-            $like_ep3_fail_timeout
+            $like_ep3_fail_timeout,
+            $like_ep10_fail,
+            $like_ep10_fail_timeout
         )
     );
 
@@ -550,14 +566,8 @@ function nppp_get_in_cache_page_count() {
     $default_cache_path   = '/dev/shm/change-me-now';
     $nginx_cache_path     = isset($nginx_cache_settings['nginx_cache_path']) ? $nginx_cache_settings['nginx_cache_path'] : $default_cache_path;
 
-    // Retrieve and decode user-defined cache key regex from the database, with a hardcoded fallback
-    $decoded = isset($nginx_cache_settings['nginx_cache_key_custom_regex'])
-             ? base64_decode($nginx_cache_settings['nginx_cache_key_custom_regex'], true)
-             : false;
-
-    $regex   = ($decoded !== false && $decoded !== '')
-             ? $decoded
-             : nppp_fetch_default_regex_for_cache_key();
+    // Central getter
+    $regex = nppp_get_cache_key_regex();
 
     // Initialize WordPress filesystem
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -590,7 +600,7 @@ function nppp_get_in_cache_page_count() {
     $rg_cached = get_transient( 'nppp_rg_ok' );
     if ( $rg_cached === false ) {
         $rg_bin = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
-        $rg_ok  = $rg_bin !== '' && is_executable( $rg_bin );
+        $rg_ok  = $rg_bin !== '';
         set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_ok ], HOUR_IN_SECONDS );
     } else {
         $rg_bin = $rg_cached['path'];
@@ -687,6 +697,11 @@ function nppp_get_in_cache_page_count() {
         if ( $redirect_exit === 2 ) {
             return 'Undetermined';
         }
+        // Only 0/1 are completed rg scans; anything else (e.g. a safexec
+        // launch refusal) is not proof there are no redirect entries.
+        if ( $redirect_exit !== 0 && $redirect_exit !== 1 ) {
+            return 'Undetermined';
+        }
 
         $redirect_set = array_flip( array_filter( array_map( 'trim', $redirect_out ), 'strlen' ) );
         unset( $redirect_out );
@@ -706,6 +721,11 @@ function nppp_get_in_cache_page_count() {
         exec( $key_cmd, $key_out, $key_exit );
 
         if ( $key_exit === 2 ) {
+            return 'Undetermined';
+        }
+        // Only 0/1 are completed rg scans; anything else (e.g. a safexec
+        // launch refusal) is not proof the cache is empty.
+        if ( $key_exit !== 0 && $key_exit !== 1 ) {
             return 'Undetermined';
         }
         if ( $key_exit === 1 || empty( $key_out ) ) {
@@ -1131,6 +1151,17 @@ function nppp_my_status_html() {
                         <div id="wpt-status" class="nppp-progress-status">
                             <?php esc_html_e( 'Initializing...', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                         </div>
+                        <?php if ( nppp_is_preload_running( $wp_filesystem ) ) : ?>
+                        <!-- Stop Preload Button -->
+                        <div class="nppp-stop-preload-wrap">
+                            <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?action=nppp_stop_preload' ), 'stop_preload_nonce' ) ); ?>"
+                               class="nppp-button"
+                               id="nppp-stop-preload-button">
+                                <span class="dashicons dashicons-controls-pause" style="font-size: 18px;"></span>
+                                <?php esc_html_e( 'Stop Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </a>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </section>
 
@@ -1220,6 +1251,13 @@ function nppp_my_status_html() {
                                 <td class="status" id="npppcpulimitStatus">
                                     <span class="dashicons"></span>
                                     <span><?php echo esc_html(nppp_check_command_status('cpulimit')); ?></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="check"><?php esc_html_e('WP-Cron Status', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="status" id="npppCronReliability" title="<?php echo function_exists('nppp_get_cron_reliability_label') ? esc_attr(nppp_get_cron_reliability_label()) : ''; ?>">
+                                    <span class="dashicons"></span>
+                                    <span><?php echo esc_html( function_exists('nppp_get_cron_reliability_short_label') ? nppp_get_cron_reliability_short_label() : 'N/A' ); ?></span>
                                 </td>
                             </tr>
                         </tbody>

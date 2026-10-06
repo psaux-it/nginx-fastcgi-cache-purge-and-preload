@@ -2,7 +2,7 @@
 /**
  * Settings sanitization and validation for Nginx Cache Purge Preload
  * Description: Sanitizes and validates all settings inputs; validates the cache path.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -245,7 +245,7 @@ function nppp_nginx_cache_settings_sanitize($input) {
             // Handle different validation outcomes
             switch ($validation_result) {
                 case 'critical_path':
-                    $error_message = __('ERROR PATH: The specified Nginx Cache Directory is either a critical system directory or a top-level directory and cannot be used.', 'fastcgi-cache-purge-and-preload-nginx');
+                    $error_message = __('ERROR PATH: The specified Nginx Cache Directory is either a critical system directory or a top-level directory and cannot be used. To use this path, please enable the "Bypass Path Restriction" option below.', 'fastcgi-cache-purge-and-preload-nginx');
                     break;
                 case 'directory_not_exist_or_readable':
                     $error_message = __('ERROR PATH: The specified Nginx Cache Directory does not exist. Please verify the Nginx Cache Directory.', 'fastcgi-cache-purge-and-preload-nginx');
@@ -403,15 +403,10 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize & validate custom cache key regex
     if (!empty($input['nginx_cache_key_custom_regex'])) {
-        // Decode the base64-encoded regex if it's being passed encoded
-        $decoded_regex = base64_decode($input['nginx_cache_key_custom_regex'], true);
-        if ($decoded_regex !== false) {
-            // Retrieve the decoded regex
-            $regex = $decoded_regex;
-        } else {
-            // If decoding fails, use the input directly
-            $regex = $input['nginx_cache_key_custom_regex'];
-        }
+        // The textarea is always rendered with the decoded plaintext value
+        // (nppp_nginx_cache_key_custom_regex_callback() decodes for display),
+        // so $_POST here is always plaintext
+        $regex = $input['nginx_cache_key_custom_regex'];
 
         // ####################################################################
         // Validate & Sanitize the regex
@@ -544,7 +539,7 @@ function nppp_nginx_cache_settings_sanitize($input) {
         add_settings_error(
             'nppp_nginx_cache_settings_group',
             'nppp-http-purge-suffix',
-            __( 'ERROR OPTION: HTTP Purge Suffix cannot be empty. Reset to "purge".', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'ERROR OPTION: HTTP Purge Single Path cannot be empty. Reset to "purge".', 'fastcgi-cache-purge-and-preload-nginx' ),
             'error'
         );
     } elseif ( preg_match( '/^[a-zA-Z0-9_\-]+$/', $raw_suffix ) ) {
@@ -554,7 +549,7 @@ function nppp_nginx_cache_settings_sanitize($input) {
         add_settings_error(
             'nppp_nginx_cache_settings_group',
             'nppp-http-purge-suffix',
-            __( 'ERROR OPTION: HTTP Purge Suffix must contain only letters, numbers, hyphens, or underscores. Reset to "purge".', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'ERROR OPTION: HTTP Purge Single Path must contain only letters, numbers, hyphens, or underscores. Reset to "purge".', 'fastcgi-cache-purge-and-preload-nginx' ),
             'error'
         );
     }
@@ -583,6 +578,30 @@ function nppp_nginx_cache_settings_sanitize($input) {
         }
     } else {
         $sanitized_input['nppp_http_purge_custom_url'] = '';
+    }
+
+    // Purge All path
+    $raw_all_path = isset( $input['nppp_http_purge_all_path'] )
+                    ? trim( sanitize_text_field( $input['nppp_http_purge_all_path'] ), '/' )
+                    : '';
+    if ( $raw_all_path === '' ) {
+        $sanitized_input['nppp_http_purge_all_path'] = 'purge_all';
+        add_settings_error(
+            'nppp_nginx_cache_settings_group',
+            'nppp-http-purge-all-path',
+            __( 'ERROR OPTION: HTTP Purge All Path cannot be empty. Reset to "purge_all".', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'error'
+        );
+    } elseif ( preg_match( '/^[a-zA-Z0-9_\-]+$/', $raw_all_path ) ) {
+        $sanitized_input['nppp_http_purge_all_path'] = $raw_all_path;
+    } else {
+        $sanitized_input['nppp_http_purge_all_path'] = 'purge_all';
+        add_settings_error(
+            'nppp_nginx_cache_settings_group',
+            'nppp-http-purge-all-path',
+            __( 'ERROR OPTION: HTTP Purge All Path must contain only letters, numbers, hyphens, or underscores. Reset to "purge_all".', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'error'
+        );
     }
 
     // Sanitize bypass path restriction

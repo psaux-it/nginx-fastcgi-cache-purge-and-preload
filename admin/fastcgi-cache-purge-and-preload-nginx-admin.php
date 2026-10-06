@@ -1,7 +1,7 @@
 <?php
 /*
  * NPP admin bootstrap
- * Version:           2.1.7
+ * Version:           2.1.8
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
  * License:           GPL-2.0+
@@ -135,6 +135,9 @@ require_once dirname(__DIR__) . '/includes/preload-feeds.php';
 require_once dirname(__DIR__) . '/includes/help.php';
 require_once dirname(__DIR__) . '/includes/configuration-parser.php';
 require_once dirname(__DIR__) . '/includes/status.php';
+require_once dirname(__DIR__) . '/includes/fail2ban.php';
+require_once dirname(__DIR__) . '/includes/fail2ban-worker.php';
+require_once dirname(__DIR__) . '/includes/fail2ban-abuse.php';
 require_once dirname(__DIR__) . '/includes/advanced.php';
 require_once dirname(__DIR__) . '/includes/send-mail.php';
 require_once dirname(__DIR__) . '/includes/schedule.php';
@@ -210,6 +213,19 @@ add_action('admin_init', 'nppp_schedule_index_updater');
 add_action('wp_ajax_nppp_get_active_cron_events_ajax', 'nppp_get_active_cron_events_ajax');
 add_action('wp_ajax_nppp_clear_plugin_cache', 'nppp_clear_plugin_cache_callback');
 add_action('wp_ajax_nppp_clear_url_index', 'nppp_clear_url_index_callback');
+add_action('wp_ajax_nppp_load_security_content', 'nppp_f2b_load_tab_content_callback');
+add_action('wp_ajax_nppp_f2b_regenerate_token', 'nppp_f2b_regenerate_token_callback');
+add_action('wp_ajax_nppp_f2b_clear_events', 'nppp_f2b_clear_events_callback');
+add_action('wp_ajax_nppp_f2b_test_connection', 'nppp_f2b_test_connection_callback');
+add_action('wp_ajax_nppp_f2b_save_abuse_settings', 'nppp_f2b_save_abuse_settings_callback');
+add_action('wp_ajax_nppp_f2b_save_sourceapp', 'nppp_f2b_save_sourceapp_callback');
+add_action('wp_ajax_nppp_f2b_ripe_reg_preview', 'nppp_f2b_ripe_reg_preview_callback');
+add_action('wp_ajax_nppp_f2b_ripe_reg_send', 'nppp_f2b_ripe_reg_send_callback');
+add_action('wp_ajax_nppp_f2b_abuse_send_test', 'nppp_f2b_abuse_send_test_callback');
+add_action('wp_ajax_nppp_f2b_abuse_preview', 'nppp_f2b_abuse_preview_callback');
+add_action('wp_ajax_nppp_f2b_abuse_send', 'nppp_f2b_abuse_send_callback');
+add_action('admin_init', 'nppp_f2b_maybe_install');
+add_action('admin_init', 'nppp_f2b_schedule_cleanup');
 add_action('admin_post_save_nginx_cache_settings', 'nppp_handle_nginx_cache_settings_submission');
 add_filter('pre_update_option_nginx_cache_settings', 'nppp_before_settings_option_update', 10, 2);
 add_action('permalink_structure_changed', 'nppp_on_permalink_structure_changed', 10, 2);
@@ -264,6 +280,9 @@ add_action('wp_ajax_nppp_update_related_fields', 'nppp_update_related_fields');
 add_action('wp_ajax_nppp_update_pctnorm_mode', 'nppp_update_pctnorm_mode');
 add_action('wp_ajax_nppp_update_bypass_path_restriction', 'nppp_update_bypass_path_restriction');
 add_action('wp_ajax_nppp_dismiss_vary_notice', 'nppp_dismiss_vary_notice');
+add_action('wp_ajax_nppp_check_vary_issue', 'nppp_check_vary_issue_callback');
+add_action('wp_ajax_nppp_dismiss_cron_notice', 'nppp_dismiss_cron_notice');
+add_action('wp_ajax_nppp_check_cron_issue', 'nppp_check_cron_issue_callback');
 add_action('wp_ajax_nppp_refresh_cache_ratio', 'nppp_refresh_cache_ratio_callback');
 add_action('wp_ajax_nppp_test_cache_key_regex', 'nppp_ajax_test_cache_key_regex');
 add_action('nppp_plugin_admin_notices', function($type, $message, $log_message, $display_notice) {

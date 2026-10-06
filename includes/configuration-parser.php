@@ -2,7 +2,7 @@
 /**
  * Nginx configuration parser for Nginx Cache Purge Preload
  * Description: Reads server config fragments to detect cache paths, keys, and runtime settings.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -444,7 +444,7 @@ function nppp_is_cache_path_display_supported(string $directive, string $value):
 }
 
 // Function to generate HTML output
-function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths, $matched_keys = []) {
+function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths, $matched_keys = [], $conf_path = '') {
     ob_start();
     //img url's
     $image_url_ad = plugins_url('/admin/img/logo_ad.png', dirname(__FILE__));
@@ -459,6 +459,89 @@ function nppp_generate_html($cache_paths, $nginx_info, $cache_keys, $fuse_paths,
             <button id="nppp-clear-url-index-btn" class="button button-primary" style="margin-left: 10px; margin-bottom: 15px;">
                 <?php esc_html_e('Clear URL Index', 'fastcgi-cache-purge-and-preload-nginx'); ?>
             </button>
+        </section>
+        <section class="nginx-status">
+            <h2>
+                <?php esc_html_e('NGINX DETECTION', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                <?php if ( class_exists('\\NPPP\\Setup') ) : ?>
+                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=' . \NPPP\Setup::PAGE_SLUG ) ); ?>"
+                       class="button button-small"
+                       style="margin-left:12px; vertical-align:middle; font-size:12px; background-color: #f0fff0;">
+                        <?php esc_html_e('Check Status', 'fastcgi-cache-purge-and-preload-nginx'); ?>
+                    </a>
+                <?php endif; ?>
+            </h2>
+            <?php
+            if ( ! isset( $GLOBALS['NPPP__LAST_SIGNAL_HIT'] ) && function_exists('nppp_precheck_nginx_detected') ) {
+                nppp_precheck_nginx_detected(false);
+            }
+            $nppp_signal_ok = ! empty( $GLOBALS['NPPP__LAST_SIGNAL_HIT'] );
+            $nppp_assume_on = function_exists('nppp_is_assume_nginx_mode') ? nppp_is_assume_nginx_mode() : false;
+            if ( function_exists( 'nppp_is_open_basedir_active' ) ) {
+                $nppp_obd_on = nppp_is_open_basedir_active();
+            } else {
+                $nppp_obd_raw = trim( (string) ini_get( 'open_basedir' ) );
+                $nppp_obd_on  = ( $nppp_obd_raw !== '' && strtolower( $nppp_obd_raw ) !== 'none' );
+            }
+            ?>
+            <table>
+                <thead>
+                    <tr>
+                        <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e('Check', 'fastcgi-cache-purge-and-preload-nginx'); ?></th>
+                        <th class="status-header"><span class="dashicons dashicons-info"></span> <?php esc_html_e('Status', 'fastcgi-cache-purge-and-preload-nginx'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="action"><?php esc_html_e('nginx.conf (Strict)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="status" id="npppNginxConfDetected">
+                            <?php if ( ! empty($conf_path) && ! $nppp_assume_on ) : ?>
+                                <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span><?php echo esc_html($conf_path); ?></span>
+                            <?php else : ?>
+                                <span class="dashicons dashicons-no" style="color: red !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: red; font-size: 13px; font-weight: bold;"><?php esc_html_e('Not Found', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="action"><?php esc_html_e('Nginx Signature / Headers', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="status" id="npppNginxSignal">
+                            <?php if ( $nppp_signal_ok ) : ?>
+                                <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span><?php esc_html_e('Detected', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                            <?php else : ?>
+                                <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: orange; font-size: 14px; font-weight: bold;"><?php esc_html_e('None', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="action"><?php esc_html_e('PHP open_basedir', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="status" id="npppOpenBasedir">
+                            <?php if ( $nppp_obd_on ) : ?>
+                                <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: orange; font-size: 14px; font-weight: bold;"><?php esc_html_e('Active', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                            <?php else : ?>
+                                <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span><?php esc_html_e('Not Set', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="action"><?php esc_html_e('Bypass Detection', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                        <td class="status" id="npppAssumeNginx">
+                            <?php if ( $nppp_assume_on ) : ?>
+                                <span class="dashicons dashicons-arrow-right-alt" style="color: orange !important; font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span style="color: orange; font-size: 14px; font-weight: bold;"><?php esc_html_e('Enabled', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                            <?php else : ?>
+                                <span class="dashicons dashicons-yes" style="font-size: 20px !important; font-weight: normal !important;"></span>
+                                <span><?php esc_html_e('Off', 'fastcgi-cache-purge-and-preload-nginx'); ?></span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </section>
         <section class="nginx-status">
             <h2><?php esc_html_e('NGINX & FUSE STATUS', 'fastcgi-cache-purge-and-preload-nginx'); ?></h2>
@@ -854,5 +937,5 @@ function nppp_nginx_config_shortcode() {
     $fuse_paths = nppp_check_fuse_cache_paths($config_data['cache_paths']);
 
     // Generate HTML output based on parsed data and Nginx info
-    return nppp_generate_html($config_data['cache_paths'], $nginx_info, $cache_keys, $fuse_paths, $matched_keys ?? []);
+    return nppp_generate_html($config_data['cache_paths'], $nginx_info, $cache_keys, $fuse_paths, $matched_keys ?? [], $config_file);
 }

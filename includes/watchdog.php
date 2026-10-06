@@ -4,7 +4,7 @@
  * Description: Monitors the preload server process and executes post-preload completion work.
  *              Ensures post-preload tasks run immediately after cache preloading finishes.
  *              Designed for low-traffic sites where WP-Cron delays can prevent timely execution.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -20,11 +20,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants
 // ---------------------------------------------------------------------------
 
-define( 'NPPP_WATCHER_TOKEN_TTL',   12 * HOUR_IN_SECONDS );
-define( 'NPPP_WATCHER_TOKEN_KEY',   'nppp_ping_token_'   . md5( 'nppp' ) );
+define( 'NPPP_WATCHER_TOKEN_TTL',    12 * HOUR_IN_SECONDS );
+define( 'NPPP_WATCHER_TOKEN_KEY',    'nppp_ping_token_'   . md5( 'nppp' ) );
 define( 'NPPP_WATCHER_TOKEN_OPTION', 'nppp_ping_token_db' );
-define( 'NPPP_WATCHER_PID_FILE',    'preload_watcher.pid' );
-define( 'NPPP_WATCHER_AJAX_ACTION', 'nppp_cron_wake' );
+define( 'NPPP_WATCHER_PID_FILE',     'preload_watcher.pid' );
+define( 'NPPP_WATCHER_AJAX_ACTION',  'nppp_cron_wake' );
 
 // ---------------------------------------------------------------------------
 // Rate limiting
@@ -44,7 +44,7 @@ function nppp_watchdog_rate_limit_check(): array {
         $parts[3]  = '**';
         $masked_ip = implode( '.', $parts );
     } elseif ( filter_var( $raw_ip, FILTER_VALIDATE_IP ) ) {
-        $masked_ip = $raw_ip;
+        $masked_ip = nppp_mask_ip( $raw_ip );
     } else {
         $raw_ip    = 'unknown';
         $masked_ip = 'unknown';
@@ -376,4 +376,27 @@ function nppp_cron_wake_handler(): void {
 
     // Respond and exit cleanly.
     wp_die( 'ok', '', [ 'response' => 200 ] );
+}
+
+// ---------------------------------------------------------------------------
+// Preload termination & state cleanup helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Idempotent cleanup of watchdog and its token.
+ * Safe to call even if the watchdog is already dead.
+ */
+function nppp_stop_watchdog(): void {
+    nppp_kill_preload_watcher();
+    nppp_watcher_delete_token();
+}
+
+/**
+ * Clear the tick‑monitor cron hook and preload phase/cycle transients.
+ * Must only be called when the main preload process is definitely dead.
+ */
+function nppp_cleanup_preload_state(): void {
+    wp_clear_scheduled_hook( 'npp_cache_preload_status_event' );
+    delete_transient( 'nppp_preload_phase_' . md5( 'nppp' ) );
+    delete_transient( 'nppp_preload_cycle_start_' . md5( 'nppp' ) );
 }

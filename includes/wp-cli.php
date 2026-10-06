@@ -2,7 +2,7 @@
 /**
  * WP-CLI commands for Nginx Cache Purge Preload
  * Description: Exposes cache purge, preload, status, log, settings, and scheduler to WP-CLI.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -293,20 +293,28 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         // Human-readable label helpers for raw internal return values.
         $bool_label = static function ( ?string $v ): string {
-            return match ( $v ) {
-                'true'      => __( 'OK', 'fastcgi-cache-purge-and-preload-nginx' ),
-                'false'     => __( 'Not Available', 'fastcgi-cache-purge-and-preload-nginx' ),
-                'Not Found' => __( 'Cache Path Not Found', 'fastcgi-cache-purge-and-preload-nginx' ),
-                default     => $v ?? __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' ),
-            };
+            if ( 'true' === $v ) {
+                return __( 'OK', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+            if ( 'false' === $v ) {
+                return __( 'Not Available', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+            if ( 'Not Found' === $v ) {
+                return __( 'Cache Path Not Found', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+            return $v ?? __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
         };
         $preload_label = static function ( ?string $v ): string {
-            return match ( $v ) {
-                'progress' => __( 'Running', 'fastcgi-cache-purge-and-preload-nginx' ),
-                'true'     => __( 'Ready', 'fastcgi-cache-purge-and-preload-nginx' ),
-                'false'    => __( 'Not Available', 'fastcgi-cache-purge-and-preload-nginx' ),
-                default    => $v ?? __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' ),
-            };
+            if ( 'progress' === $v ) {
+                return __( 'Running', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+            if ( 'true' === $v ) {
+                return __( 'Ready', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+            if ( 'false' === $v ) {
+                return __( 'Not Available', 'fastcgi-cache-purge-and-preload-nginx' );
+            }
+            return $v ?? __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
         };
 
         // ── System checks ─────────────────────────────────────────────────
@@ -329,6 +337,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $cmd_safexec   = (string) nppp_check_command_status( 'safexec' );
         $cmd_rg        = (string) nppp_check_command_status( 'rg' );
         $cmd_cpulimit  = (string) nppp_check_command_status( 'cpulimit' );
+        $cron_reliability = function_exists( 'nppp_get_cron_reliability_label' ) ? (string) nppp_get_cron_reliability_label() : 'N/A';
 
         // ── Cache health ──────────────────────────────────────────────────
         $path_status   = nppp_check_path();
@@ -461,6 +470,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             [ 'Field' => __( 'safexec (Recommended)', 'fastcgi-cache-purge-and-preload-nginx' ),                                              'Value' => $cmd_safexec ],
             [ 'Field' => __( 'rg (Recommended)', 'fastcgi-cache-purge-and-preload-nginx' ),                                                   'Value' => $cmd_rg ],
             [ 'Field' => __( 'cpulimit (Optional)', 'fastcgi-cache-purge-and-preload-nginx' ),                                                'Value' => $cmd_cpulimit ],
+            [ 'Field' => __( 'WP-Cron Status', 'fastcgi-cache-purge-and-preload-nginx' ),                                                     'Value' => $cron_reliability ],
 
             $sep( _x( 'CACHE HEALTH', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ),
             [ 'Field' => __( 'Nginx Cache Path (Required)', 'fastcgi-cache-purge-and-preload-nginx' ),                                        'Value' => $cache_path ],
@@ -761,7 +771,6 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( $cancel ) {
             wp_clear_scheduled_hook( 'npp_cache_preload_event' );
-            wp_clear_scheduled_hook( 'npp_cache_preload_status_event' );
             wp_clear_scheduled_hook( 'nppp_index_updater_event' );
             WP_CLI::success( __( 'All NPP scheduled events cancelled.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
@@ -978,11 +987,13 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         ) );
 
         foreach ( $lines as $line ) {
-            match ( $type ) {
-                'error'   => WP_CLI::log( WP_CLI::colorize( '%rError:%n ' . $line ) ),
-                'warning' => WP_CLI::warning( $line ),
-                default   => WP_CLI::success( $line ),
-            };
+            if ( 'error' === $type ) {
+                WP_CLI::log( WP_CLI::colorize( '%rError:%n ' . $line ) );
+            } elseif ( 'warning' === $type ) {
+                WP_CLI::warning( $line );
+            } else {
+                WP_CLI::success( $line );
+            }
         }
 
         // Signal shell-level failure for error outcomes without mid-loop exit.
@@ -1003,10 +1014,15 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             return;
         }
 
+        // A Preload still inside its start sequence has no live PID yet.
+        // Wait (bounded) for it to finish so the PID file below is authoritative.
+        nppp_wait_for_preload_start_idle();
+
         if ( ! $wp_filesystem->exists( $pid_file ) ) {
+            nppp_cleanup_preload_state();
             $porcelain
                 ? WP_CLI::line( 'warning' )
-                : WP_CLI::warning( __( 'No active preload process found (PID file absent).', 'fastcgi-cache-purge-and-preload-nginx' ) );
+                : WP_CLI::warning( __( 'No active preload process found (PID absent).', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
 
@@ -1014,14 +1030,17 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         if ( $pid <= 0 ) {
             $wp_filesystem->delete( $pid_file );
+            nppp_cleanup_preload_state();
             $porcelain
                 ? WP_CLI::line( 'warning' )
-                : WP_CLI::warning( __( 'Invalid PID in lock file. Stale lock removed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+                : WP_CLI::warning( __( 'Invalid PID. Stale lock removed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
 
         if ( ! nppp_is_process_alive( $pid ) ) {
             $wp_filesystem->delete( $pid_file );
+            nppp_cleanup_preload_state();
+            nppp_watcher_delete_token();
             $porcelain
                 ? WP_CLI::line( 'warning' )
                 /* translators: %d: Process ID that is no longer alive */
@@ -1062,26 +1081,20 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 $sfx      = $detected !== '' ? $detected : '';
             }
 
-            if ( $sfx !== '' && function_exists( 'stat' ) ) {
-                $sfx_info = @stat( $sfx );
-                if ( $sfx_info
-                    && isset( $sfx_info['uid'], $sfx_info['mode'] )
-                    && $sfx_info['uid'] === 0
-                    && ( $sfx_info['mode'] & 04000 ) === 04000
-                ) {
-                    // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
-                    shell_exec( escapeshellarg( $sfx ) . ' --kill=' . (int) $pid . ' 2>&1' );
-                    usleep( 250000 );
-                    if ( ! nppp_is_process_alive( $pid ) ) {
-                        $killed = true;
-                    }
+            $sfx_ls = ( $sfx !== '' ) ? nppp_safexec_ls_check( $sfx ) : null;
+            if ( $sfx_ls && $sfx_ls['is_root'] && $sfx_ls['has_suid'] ) {
+                // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+                shell_exec( escapeshellarg( $sfx ) . ' --kill=' . (int) $pid . ' 2>&1' );
+                usleep( 250000 );
+                if ( ! nppp_is_process_alive( $pid ) ) {
+                    $killed = true;
                 }
             }
 
             if ( ! $killed ) {
                 // safexec is the ONLY valid kill path for a nobody process.
                 // posix_kill / kill -9 from PHP-FPM user will return EPERM — do NOT attempt them.
-                $wp_filesystem->delete( $pid_file );
+                nppp_watcher_delete_token();
                 $porcelain
                     ? WP_CLI::line( 'error' )
                     : WP_CLI::error( sprintf(
@@ -1114,6 +1127,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             }
 
             if ( ! $killed ) {
+                nppp_watcher_delete_token();
                 $porcelain
                     ? WP_CLI::line( 'error' )
                     : WP_CLI::error( sprintf(
@@ -1126,6 +1140,12 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         }
 
         $wp_filesystem->delete( $pid_file );
+
+        // Clear all preload runtime state.
+        // The watchdog process was already killed above before the main-kill attempt;
+        // invalidate its token and stop the tick monitor now that the kill is confirmed.
+        nppp_cleanup_preload_state();
+        nppp_watcher_delete_token();
 
         $porcelain
             ? WP_CLI::line( 'success' )
@@ -1150,14 +1170,10 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                     $key
                 ) );
             }
-            $val = (string) $settings[ $key ];
-            // nginx_cache_key_custom_regex is base64-encoded in the DB for safe storage.
-            if ( $key === 'nginx_cache_key_custom_regex' && $val !== '' ) {
-                $decoded = base64_decode( $val, true );
-                if ( $decoded !== false && $decoded !== '' ) {
-                    $val = $decoded;
-                }
-            }
+            // Use the central getter for the regex key so decode logic stays in one place.
+            $val = ( $key === 'nginx_cache_key_custom_regex' )
+                ? nppp_get_cache_key_regex()
+                : (string) $settings[ $key ];
             WP_CLI::line( $val );
             return;
         }
@@ -1166,12 +1182,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $labels = $this->get_pretty_labels();
 
         foreach ( $settings as $k => $v ) {
-            // nginx_cache_key_custom_regex is base64-encoded in the DB — decode for display.
-            if ( $k === 'nginx_cache_key_custom_regex' && $v !== '' ) {
-                $decoded_v = base64_decode( $v, true );
-                if ( $decoded_v !== false && $decoded_v !== '' ) {
-                    $v = $decoded_v;
-                }
+            // Use the central getter for the regex key so decode logic stays in one place.
+            if ( $k === 'nginx_cache_key_custom_regex' ) {
+                $v = nppp_get_cache_key_regex();
             }
             if ( $pretty ) {
                 $pretty_name = $labels[ $k ] ?? $k;
@@ -1436,7 +1449,6 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         if ( $key === 'nginx_cache_schedule' && $value === 'no' ) {
             wp_clear_scheduled_hook( 'npp_cache_preload_event' );
             wp_clear_scheduled_hook( 'nppp_index_updater_event' );
-            wp_clear_scheduled_hook( 'npp_cache_preload_status_event' );
             WP_CLI::line( __( 'Schedule disabled, all preload crons cleared.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         }
     }
@@ -1461,7 +1473,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             if ( ! function_exists( 'nppp_plugin_requirements_met' ) ) {
                 WP_CLI::error( __( 'NPP environment checker missing. Plugin incomplete.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
-            if ( ! nppp_plugin_requirements_met() ) {
+            if ( ! nppp_plugin_requirements_met( true ) ) {
                 WP_CLI::error( __( 'CRITICAL ENVIRONMENT ERROR: Linux, Nginx, shell_exec/exec, or posix_kill requirements not met. State‑changing actions blocked. Run "wp npp status" for diagnosis.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
         }
@@ -1571,3 +1583,6 @@ WP_CLI::add_command(
             . "  https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload",
     ]
 );
+
+// Fail2Ban sub-group
+require_once __DIR__ . '/wp-cli-f2b.php';

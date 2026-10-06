@@ -2,7 +2,7 @@
 /**
  * Cache purge handlers for Nginx Cache Purge Preload
  * Description: Executes full and targeted purge operations for supported Nginx cache backends.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -32,7 +32,26 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
 
     // Check if the cache path exists and is a directory
     if ($wp_filesystem->is_dir($nginx_cache_path)) {
-        // Recursively remove the cache directory contents.
+        // HTTP fast-path: delegate the cache walk to Nginx via the dedicated
+        // Purge All endpoint. Returns false (falls through below) when HTTP
+        // Purge is OFF, the endpoint is unavailable, or Nginx reported 202
+        // (background queue) — see nppp_http_purge_all() for why a 202 response
+        // is not architecturally suitable for NPP yet, forcing an immediate
+        // fallback to nppp_wp_purge.
+        // PR: https://github.com/nginx-modules/ngx_cache_purge/pull/67
+        if ( function_exists( 'nppp_http_purge_all' ) && nppp_http_purge_all() ) {
+            update_option( 'nppp_last_known_hits',      0,      false );
+            update_option( 'nppp_last_hits_scanned_at', time(), false );
+            nppp_display_admin_notice(
+                'info',
+                __( 'INFO HTTP PURGE ALL: Purge All handled by HTTP (nginx), filesystem purge skipped.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                true,
+                false
+            );
+            return 0;
+        }
+
+        // Fallback filesystem purge.
         $result = nppp_wp_purge($nginx_cache_path);
 
         // Check cache purge status
@@ -128,7 +147,7 @@ function nppp_purge_single_init( $nginx_cache_path, $current_page_url, $nppp_aut
         if ( $pid > 0 && nppp_is_process_alive( $pid ) ) {
             nppp_display_admin_notice( 'info', sprintf(
                 /* translators: %s: Current page URL */
-                __( 'INFO: Single-page purge for %s skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion or use "Purge All" to cancel.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'INFO: Single-page purge for %s skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion, use "Stop Preload" to cancel it, or "Purge All" to cancel it and purge the cache.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $decoded
             ) );
             return false;
@@ -144,14 +163,27 @@ function nppp_purge_single_init( $nginx_cache_path, $current_page_url, $nppp_aut
         return false;
     }
 
+    // Re-check for a preload now that the purge lock is held. The PID check above ran
+    // before the lock was taken, so a Preload All that started in between (or is still
+    // inside its start sequence and has not written its PID yet) was invisible to it.
+    // Once we hold the purge lock no new start can begin, which makes this check final:
+    // nppp_preload_cache_on_update() (called at the end of this purge, under this lock)
+    // may then spawn its short wget and write cache_preload.pid without clobbering the
+    // PID of a running Preload All crawler.
+    $nppp_recheck_pid = $wp_filesystem->exists( $PIDFILE ) ? intval( nppp_perform_file_operation( $PIDFILE, 'read' ) ) : 0;
+    if ( nppp_preload_start_in_flight() || ( $nppp_recheck_pid > 0 && nppp_is_process_alive( $nppp_recheck_pid ) ) ) {
+        nppp_release_purge_lock();
+        nppp_display_admin_notice( 'info', sprintf(
+            /* translators: %s: Current page URL */
+            __( 'INFO: Single-page purge for %s skipped — Nginx cache preloading is in progress. Check the Status tab to monitor; wait for completion, use "Stop Preload" to cancel it, or "Purge All" to cancel it and purge the cache.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $decoded
+        ) );
+        return false;
+    }
+
     $auto_preload = ! empty( $settings['nginx_cache_auto_preload'] ) && $settings['nginx_cache_auto_preload'] === 'yes';
     $chain_autopreload = $auto_preload;
-    $cache_key_regex_raw = ! empty( $settings['nginx_cache_key_custom_regex'] )
-        ? base64_decode( $settings['nginx_cache_key_custom_regex'], true )
-        : false;
-    $regex = ( $cache_key_regex_raw !== false && $cache_key_regex_raw !== '' )
-        ? $cache_key_regex_raw
-        : nppp_fetch_default_regex_for_cache_key();
+    $regex = nppp_get_cache_key_regex();
 
     $primary_key = preg_replace( '#^https?://#', '', $current_page_url );
     $targets     = [
@@ -552,6 +584,20 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
         return 'skip';
     }
 
+    // The rg prefilter below only mirrors the built-in Cache Key Regex. A custom
+    // regex may capture host/URI from layouts rg cannot pre-match (suffix/prefix
+    // tokens, split captures), so let the PHP scanner decide instead of rg
+    // reporting a false "not in cache".
+    if ( $ctx['regex'] !== nppp_fetch_default_regex_for_cache_key() ) {
+        nppp_display_admin_notice(
+            'info',
+            __( 'INFO RG SCAN: Custom Cache Key Regex detected, skipping ripgrep prefilter (falling back to PHP recursive scanner) to avoid false cache misses.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            true,
+            false
+        );
+        return 'skip';
+    }
+
     nppp_prepare_request_env();
     if ( ! function_exists( 'shell_exec' ) || ! function_exists( 'exec' ) ) {
         return 'skip';
@@ -602,7 +648,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
         $probe_exit = 0;
         exec(
             sprintf(
-                '%s -q \'.\' --text --no-ignore --no-config --no-mmap -m 1 %s 2>/dev/null',
+                '%s -q \'.\' --text --no-ignore --no-config -m 1 %s 2>/dev/null',
                 escapeshellarg( $rg_bin ),
                 escapeshellarg( $rg_scan_path )
             ),
@@ -610,7 +656,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
             $probe_exit
         );
 
-        if ( $probe_exit === 2 ) {
+        if ( ! in_array( $probe_exit, [ 0, 1 ], true ) ) {
             $rg_sfx_try = nppp_find_safexec_path();
             if ( $rg_sfx_try && nppp_is_safexec_usable( $rg_sfx_try, false ) ) {
                 $rg_use_safexec = true;
@@ -642,12 +688,12 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     }
 
     $url_alts = implode( '|', array_map(
-        fn( string $u ): string => preg_quote( $u, '/' ) . '$',
+        fn( string $u ): string => preg_quote( $u, '/' ) . '(?:[[:space:]]|$)',
         array_keys( $ctx['pending'] )
     ) );
 
     $cmd = sprintf(
-        '%s%s -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config --no-mmap --no-heading %s %s',
+        '%s%s -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config --no-heading %s %s',
         $rg_cmd_prefix,
         escapeshellarg( $rg_bin ),
         escapeshellarg( '^KEY: .*(' . $url_alts . ')' ),
@@ -658,6 +704,16 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     $exit = 0;
     exec( $cmd, $out, $exit );
 
+    // rg/wrapper could not be executed: nothing was scanned, so fall back to the PHP scanner.
+    if ( $exit === 126 || $exit === 127 ) {
+        nppp_display_admin_notice( 'info', sprintf(
+            /* translators: %d: Exit code returned by ripgrep or its wrapper. */
+            __( 'WARNING RG SCAN: ripgrep could not be executed (exit code %d). Falling back to PHP recursive scanner.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $exit
+        ), true, false );
+        return 'skip';
+    }
+
     if ( $exit === 2 ) {
         nppp_display_admin_notice( 'error', sprintf(
             /* translators: %s: Page URL */
@@ -665,6 +721,18 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
             $primary_decoded
         ) );
         nppp_purge_post_purge( $ctx );
+        return 'error';
+    }
+
+    // Only 0 (match) and 1 (no match) are completed scans. Anything else
+    // (killed, timed out, wrapper failure) is not proof the page is uncached.
+    if ( $exit !== 0 && $exit !== 1 ) {
+        nppp_display_admin_notice( 'error', sprintf(
+            /* translators: 1: Page URL 2: Exit code returned by ripgrep or its wrapper. */
+            __( 'ERROR RG SCAN: Nginx cache purge for page %1$s was aborted because the ripgrep scan failed (exit code %2$d).', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $primary_decoded,
+            $exit
+        ) );
         return 'error';
     }
 
@@ -1305,11 +1373,19 @@ function nppp_purge_cache_on_theme_plugin_update($upgrader, $hook_extra) {
         // Check for the theme update — respects themes sub-trigger
         if ( isset( $hook_extra['type'] ) && $hook_extra['type'] === 'theme' ) {
             if ( ( $nginx_cache_settings['nppp_autopurge_themes'] ?? 'no' ) === 'yes' ) {
-                $active_theme   = wp_get_theme()->get_stylesheet();
+                // Cover both the active stylesheet (child theme, if any) and the
+                // active template (parent theme). With an active child theme these
+                // differ, and the parent still supplies active rendering code
+                // (templates, functions.php), so a parent-only update must purge too.
+                $active_theme_obj   = wp_get_theme();
+                $active_theme_slugs = array_unique( array_filter( [
+                    $active_theme_obj->get_stylesheet(),
+                    $active_theme_obj->get_template(),
+                ] ) );
                 $updated_themes = $hook_extra['themes']                                        // bulk
                     ?? ( isset( $hook_extra['theme'] ) ? [ $hook_extra['theme'] ] : [] );      // single
 
-                if ( ! empty( $updated_themes ) && in_array( $active_theme, $updated_themes, true ) ) {
+                if ( ! empty( $updated_themes ) && array_intersect( $active_theme_slugs, $updated_themes ) ) {
                     nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, false, true, true);
                 }
             }
@@ -1583,8 +1659,98 @@ function nppp_purge_cache_on_term_delete( $term_id, $tt_id, $taxonomy ) {
     nppp_purge_single( $nginx_cache_path, $term_link, true );
 }
 
+// Flush the deferred automatic full-purge queue.
+//
+// Registered on 'shutdown' (priority -1) by nppp_purge() itself; see the
+// coalescing block at the top of that function for the full rationale.
+function nppp_flush_auto_purge_queue() {
+    $nppp_jobs = ( isset( $GLOBALS['NPPP_AUTO_PURGE_QUEUE'] ) && is_array( $GLOBALS['NPPP_AUTO_PURGE_QUEUE'] ) )
+        ? $GLOBALS['NPPP_AUTO_PURGE_QUEUE']
+        : array();
+
+    // Clear the queue before running anything so a nested call can never
+    // replay these jobs.
+    $GLOBALS['NPPP_AUTO_PURGE_QUEUE']           = array();
+    $GLOBALS['NPPP_AUTO_PURGE_SHUTDOWN_HOOKED'] = false;
+
+    if ( empty( $nppp_jobs ) ) {
+        return;
+    }
+
+    if ( ! function_exists( 'is_plugin_active' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/plugin.php';
+    }
+
+    // Purge the cache even if NPP was deactivated, but suppress preload.
+    // Checked at shutdown because deactivate_plugins() updates the 'active_plugins'
+    // option in DB only after its loop completes, making is_plugin_active() accurate here.
+    $nppp_npp_active = is_plugin_active( plugin_basename( NPPP_PLUGIN_FILE ) );
+
+    $nppp_preload_guard = static function ( $enabled ) {
+        return false;
+    };
+
+    if ( ! $nppp_npp_active ) {
+        add_filter( 'nppp_purge_auto_preload', $nppp_preload_guard, PHP_INT_MAX );
+    }
+
+    try {
+        foreach ( $nppp_jobs as $nppp_job_args ) {
+            nppp_purge(
+                $nppp_job_args[0],
+                $nppp_job_args[1],
+                $nppp_job_args[2],
+                $nppp_job_args[3],
+                $nppp_job_args[4],
+                true
+            );
+        }
+    } finally {
+        if ( ! $nppp_npp_active ) {
+            remove_filter( 'nppp_purge_auto_preload', $nppp_preload_guard, PHP_INT_MAX );
+        }
+    }
+}
+
 // Purge cache operation
 function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = false, $nppp_is_admin_bar = false, $nppp_is_auto_purge = false) {
+    // --- BEGIN: coalesce redundant automatic full purges within one request ---
+    //
+    // Batch multiple auto-purges triggered in a single PHP request (e.g., bulk plugin
+    // (de)activations or Elementor template saves) into a single execution at shutdown.
+    // This prevents redundant cache clearing and sequential preload process restarts.
+    //
+    // Scope & Safety:
+    // - Only defers auto-purges. Manual triggers (Admin Bar, REST, CLI) run synchronously.
+    // - Ignored if 'shutdown' has already started (runs immediately instead).
+    // - Priority -1 ensures execution BEFORE Cloudflare APO queue and core buffer flushes.
+    // - Excludes Multisite to avoid context issues with switch_to_blog().
+    if ( $nppp_is_auto_purge && ! is_multisite() && ! did_action( 'shutdown' ) ) {
+
+        // Key the queue by cache path to handle potential multi-path scenarios safely.
+        // The last set of arguments for a given path overrides previous ones.
+        if ( empty( $GLOBALS['NPPP_AUTO_PURGE_QUEUE'] ) || ! is_array( $GLOBALS['NPPP_AUTO_PURGE_QUEUE'] ) ) {
+            $GLOBALS['NPPP_AUTO_PURGE_QUEUE'] = array();
+        }
+
+        $GLOBALS['NPPP_AUTO_PURGE_QUEUE'][ rtrim( (string) $nginx_cache_path, '/\\' ) ] = array(
+            $nginx_cache_path,
+            $PIDFILE,
+            $tmp_path,
+            $nppp_is_rest_api,
+            $nppp_is_admin_bar,
+        );
+
+        if ( empty( $GLOBALS['NPPP_AUTO_PURGE_SHUTDOWN_HOOKED'] ) ) {
+            $GLOBALS['NPPP_AUTO_PURGE_SHUTDOWN_HOOKED'] = true;
+            add_action( 'shutdown', 'nppp_flush_auto_purge_queue', -1 );
+        }
+
+        return;
+    }
+
+    // --- END: coalesce redundant automatic full purges within one request ---
+
     if (function_exists('set_time_limit')) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
@@ -1608,6 +1774,9 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
     nppp_prepare_request_env(true);
 
     $auto_preload = isset($options['nginx_cache_auto_preload']) && $options['nginx_cache_auto_preload'] === 'yes';
+    // Allows dynamic suppression of auto-preload per purge 
+    // (e.g., during queue flush if NPP was deactivated) without modifying saved options.
+    $auto_preload = (bool) apply_filters( 'nppp_purge_auto_preload', $auto_preload, $nppp_is_auto_purge );
 
     // Prevent concurrent Purge All or single-page purge from another admin
     // session racing against this operation. Released via finally on all exits.
@@ -1617,6 +1786,17 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         );
         return;
     }
+
+    // A Preload All that is still inside its start sequence (PID check -> purge ->
+    // spawn -> PID write) has no live PID yet, so the PID check below cannot see it:
+    // Purge All would purge underneath a crawler that is about to spawn, or leave a
+    // freshly started crawl (and its watchdog) running after the purge. We already
+    // hold the purge lock, so no NEW start can begin (nppp_preload_locked() probes
+    // the purge lock right after it takes its start lock). Wait for one that is
+    // already in flight to finish; the PID file is then authoritative and the normal
+    // kill path below stops the crawl. Bounded and fail-open: on timeout Purge All
+    // proceeds exactly as it did before this guard existed.
+    nppp_wait_for_preload_start_idle();
 
     // Tracks whether the lock has been released inside the try block on
     // the success path. Prevents the finally block from double-releasing.
@@ -1642,6 +1822,15 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             $process_user = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( "ps -o user= -p " . escapeshellarg( $pid ) ) ) : '';
             $killed_by_safexec = false;
 
+            // Kill the watchdog FIRST, before any attempt to kill the main preload process.
+            // The watchdog polls /proc/$pid via a shell loop; if the main process dies while
+            // the watchdog is still alive, there is a brief window in which it wakes up,
+            // detects the dead PID, and fires the post-preload completion HTTP POST —
+            // running index rebuild, mail, and hit-count updates for a run the user
+            // explicitly interrupted. Killing the watchdog and invalidating its token before
+            // the main-process kill closes this race window entirely.
+            nppp_stop_watchdog();
+
             if ($process_user === 'nobody') {
                 $safexec_path = '/usr/bin/safexec';
 
@@ -1656,15 +1845,10 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 }
 
                 // Check for safexec binary and SUID
-                if ($safexec_path && function_exists('stat')) {
-                    $is_root_owner = false;
-                    $has_suid      = false;
-
-                    $info = @stat($safexec_path);
-                    if ($info && isset($info['uid'], $info['mode'])) {
-                        $is_root_owner = ($info['uid'] === 0);
-                        $has_suid      = ($info['mode'] & 04000) === 04000;
-                    }
+                if ($safexec_path) {
+                    $sfx_ls        = nppp_safexec_ls_check($safexec_path);
+                    $is_root_owner = $sfx_ls && $sfx_ls['is_root'];
+                    $has_suid      = $sfx_ls && $sfx_ls['has_suid'];
 
                     if ($is_root_owner && $has_suid) {
                         $output = shell_exec(escapeshellarg($safexec_path) . ' --kill=' . (int) $pid . ' 2>&1');
@@ -1725,17 +1909,12 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                 }
             }
 
-            // Kill confirmed — now safe to clear the tick monitor hook and phase state.
-            // This is intentionally placed here and NOT at the top of the function,
-            // because the two early-return paths above (SIGKILL failed, kill not found)
-            // leave the process running. In those cases we must NOT destroy monitoring.
-            wp_clear_scheduled_hook('npp_cache_preload_status_event');
-            delete_transient($nppp_phase_key);
-            delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
-
-            // Kill the watchdog after purge has already killed the preload
-            nppp_kill_preload_watcher();
-            nppp_watcher_delete_token();
+            // Kill confirmed — clear the tick monitor hook and phase state.
+            // Intentionally placed here (not at function top): the two early-return paths
+            // above leave the main process running, so the tick monitor must stay active
+            // for natural-completion cleanup in those cases.
+            // The watchdog was already killed above, before the main-kill attempt race window.
+            nppp_cleanup_preload_state();
 
             // If on-going preload action halted via purge
             // that means user restrictly wants to purge cache

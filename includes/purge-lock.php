@@ -2,7 +2,7 @@
 /**
  * Purge operation locking for Nginx Cache Purge Preload
  * Description: Atomic WP_Upgrader-based lock helpers for concurrent purge serialization
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -64,7 +64,9 @@ function nppp_acquire_purge_lock( string $context = 'single' ): bool {
 
     switch ( $context ) {
         case 'all':
-            // Purge All: kernel-level recursive dir delete — fast even on huge caches.
+            // Purge All: HTTP fast path (if enabled) is near-instant (delegate nginx) or
+            // direct filesystem fallback is a kernel-level recursive dir delete
+            // fast even on huge caches.
             $ttl = (int) apply_filters( 'nppp_purge_all_lock_ttl', 60 );
             break;
 
@@ -100,13 +102,190 @@ function nppp_release_purge_lock(): void {
     WP_Upgrader::release_lock( NPPP_PURGE_LOCK_NAME );
 }
 
+// Lock for post-preload completion (watchdog AJAX vs. WP-Cron tick race).
+if ( ! defined( 'NPPP_COMPLETION_LOCK_NAME' ) ) {
+    define( 'NPPP_COMPLETION_LOCK_NAME', 'nppp_preload_completion' );
+}
+
+/**
+ * Acquire the post-preload completion lock.
+ *
+ * Same atomic mechanism as the purge lock (single INSERT IGNORE into wp_options),
+ * so exactly one of the racing callers (watchdog AJAX vs. WP-Cron tick) wins.
+ * get_transient()/set_transient() is a check-then-set and lets both through.
+ *
+ * TTL is crash-safety only: the caller always releases explicitly via
+ * nppp_release_completion_lock() on every exit path, so 120s is pure headroom
+ * for a crashed PHP process (index rebuild on a large cache can run close to
+ * the old 30s default).
+ *
+ * @param int $ttl Seconds before a crashed holder's lock may be taken over.
+ * @return bool true = acquired, false = another process holds it.
+ */
+function nppp_acquire_completion_lock( int $ttl = 120 ): bool {
+    if ( ! class_exists( 'WP_Upgrader' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    }
+
+    return WP_Upgrader::create_lock( NPPP_COMPLETION_LOCK_NAME, $ttl );
+}
+
+/**
+ * Release the post-preload completion lock (no-op if not held).
+ *
+ * @return void
+ */
+function nppp_release_completion_lock(): void {
+    if ( ! class_exists( 'WP_Upgrader' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    }
+
+    WP_Upgrader::release_lock( NPPP_COMPLETION_LOCK_NAME );
+}
+
+// Lock for the "Preload All" start sequence (PID check -> purge -> spawn -> PID write).
+if ( ! defined( 'NPPP_PRELOAD_START_LOCK_NAME' ) ) {
+    define( 'NPPP_PRELOAD_START_LOCK_NAME', 'nppp_preload_start' );
+}
+
+/**
+ * Acquire the preload start lock.
+ *
+ * Serializes the check-then-spawn window in nppp_preload() (PID check ->
+ * purge -> cpulimit probe -> premature-process test -> wget spawn -> PID
+ * write) so simultaneous starts from any entry point — CLI, REST, UI,
+ * admin bar, cron, auto-preload — cannot each pass the PID check before
+ * any of them has written a real PID, and each spawn its own untracked
+ * wget crawler. Same atomic mechanism as the purge lock: a single
+ * INSERT IGNORE into wp_options via WP_Upgrader::create_lock(), so it
+ * works across PHP-FPM and WP-CLI processes alike.
+ *
+ * TTL is crash-safety only — the caller always releases via a shutdown
+ * hook on every exit path (return, exception, or hard timeout). 300s
+ * mirrors the purge lock's 'single' context (180s) plus headroom for the
+ * proxy probe and premature-process test that sit inside this window.
+ *
+ * @param int $ttl Seconds before a crashed holder's lock may be taken over.
+ * @return bool true = acquired, false = another process is starting a preload.
+ */
+function nppp_acquire_preload_start_lock( int $ttl = 300 ): bool {
+    if ( ! class_exists( 'WP_Upgrader' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    }
+
+    $ttl = (int) apply_filters( 'nppp_preload_start_lock_ttl', $ttl );
+
+    return WP_Upgrader::create_lock( NPPP_PRELOAD_START_LOCK_NAME, $ttl );
+}
+
+/**
+ * Release the preload start lock (no-op if not held).
+ *
+ * @return void
+ */
+function nppp_release_preload_start_lock(): void {
+    if ( ! class_exists( 'WP_Upgrader' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    }
+
+    WP_Upgrader::release_lock( NPPP_PRELOAD_START_LOCK_NAME );
+}
+
+/**
+ * Non-destructive probe: true if the preload start lock is currently held.
+ *
+ * Same reconstruction approach as nppp_is_purge_lock_held() — reads the
+ * raw option with zero side-effects, treats a lock older than its TTL as
+ * stale. Wired into nppp_is_operation_active() below so the settings-change
+ * guard also blocks during the brief in-flight window before a starting
+ * preload has written its real PID — a window nppp_is_preload_running()
+ * cannot see, since it also only trusts the PID file.
+ *
+ * @return bool true = a preload start is in progress, false = idle.
+ */
+function nppp_is_preload_start_lock_held(): bool {
+    $lock_option = NPPP_PRELOAD_START_LOCK_NAME . '.lock';
+    $lock_time   = get_option( $lock_option );
+
+    if ( ! $lock_time ) {
+        return false;
+    }
+
+    $lock_time = (int) $lock_time;
+
+    if ( $lock_time <= 0 ) {
+        return false;
+    }
+
+    $ttl = (int) apply_filters( 'nppp_preload_start_lock_ttl', 300 );
+
+    if ( $lock_time > ( time() - $ttl ) ) {
+        return true;
+    }
+
+    delete_option( $lock_option );
+
+    return false;
+}
+
+/**
+ * Fresh (cache-bypassing) probe: true while a Preload start sequence is in flight.
+ *
+ * nppp_is_preload_start_lock_held() reads the lock through get_option(), which is
+ * answered from the object cache after the first read in a request. That is fine
+ * for a one-shot settings guard, but a caller that must observe another process
+ * releasing the lock (Purge All waiting for a start to finish) or that needs the
+ * lock state as of NOW (Single Purge re-check under the purge lock) has to see the
+ * database row, so the cached copies are dropped first.
+ *
+ * @return bool true = a Preload start is in flight, false = idle.
+ */
+function nppp_preload_start_in_flight(): bool {
+    wp_cache_delete( NPPP_PRELOAD_START_LOCK_NAME . '.lock', 'options' );
+    wp_cache_delete( 'notoptions', 'options' );
+
+    return nppp_is_preload_start_lock_held();
+}
+
+/**
+ * Wait (bounded) until no Preload start sequence is in flight.
+ *
+ * Used by Purge All right after it takes the purge lock. A Preload that is still
+ * inside its start sequence has no live PID yet, so Purge All's PID check cannot
+ * see it. Once the purge lock is held no new start can begin (nppp_preload_locked()
+ * probes the purge lock right after taking its start lock), so this only has to
+ * outwait a start that was already running. The wait ends as soon as that start
+ * releases its lock; a start that crashed is cleaned up by the stale-lock TTL.
+ *
+ * Fail-open: on timeout returns false and the caller carries on exactly as it did
+ * before this guard existed. It must stay well below the purge lock TTL (60s).
+ *
+ * @param int $max_wait Maximum seconds to wait.
+ * @return bool true = idle, false = timed out while a start was still in flight.
+ */
+function nppp_wait_for_preload_start_idle( int $max_wait = 20 ): bool {
+    $max_wait = max( 0, (int) apply_filters( 'nppp_preload_start_wait_timeout', $max_wait ) );
+    $deadline = microtime( true ) + $max_wait;
+
+    while ( nppp_preload_start_in_flight() ) {
+        if ( microtime( true ) >= $deadline ) {
+            return false;
+        }
+        usleep( 200000 );
+    }
+
+    return true;
+}
+
 /**
  * Returns true when any destructive cache operation is currently active.
  *
- * Combines both the purge lock (nppp_is_purge_lock_held) and the
- * preload PID check (nppp_is_preload_running) into one call so that
- * callers — settings form, AJAX handlers, WP-CLI — can gate option
- * writes without duplicating logic.
+ * Combines the purge lock (nppp_is_purge_lock_held), the preload start
+ * lock (nppp_is_preload_start_lock_held), and the preload PID check
+ * (nppp_is_preload_running) so that callers — settings form, AJAX
+ * handlers, WP-CLI — can gate option writes without duplicating logic.
+ * Both current callers (settings-page.php, wp-cli.php) only ever use this
+ * to block, never to allow, so widening it is safe by construction.
  *
  * Uses the Direct filesystem driver because bootstrap is always loaded
  * before this is called; nppp_initialize_wp_filesystem() is safe here.
@@ -115,6 +294,9 @@ function nppp_release_purge_lock(): void {
  */
 function nppp_is_operation_active(): bool {
     if ( nppp_is_purge_lock_held() ) {
+        return true;
+    }
+    if ( nppp_is_preload_start_lock_held() ) {
         return true;
     }
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -177,4 +359,45 @@ function nppp_is_purge_lock_held(): bool {
     delete_option( $lock_option );
 
     return false;
+}
+
+/**
+ * Structural check: true if the purge lock row is currently present,
+ * regardless of its TTL.
+ *
+ * Unlike nppp_is_purge_lock_held(), this never deletes the option as a
+ * side effect. It exists for callers that run WHILE they already hold the
+ * purge lock and only need to assert that fact structurally — e.g. a slow
+ * FP4 filesystem scan that legitimately runs past the TTL's crash-recovery
+ * window is still validly holding the lock, and nppp_is_purge_lock_held()
+ * would misfire there: it would report "not held" AND delete the still-
+ * owned lock row, opening a real window for a second process to acquire it
+ * before this process's own release. Use this instead anywhere the caller
+ * is asserting its own lock, not probing someone else's.
+ *
+ * @return bool true = the lock row is present, false = no lock row at all.
+ */
+function nppp_purge_lock_row_exists(): bool {
+    return (bool) get_option( NPPP_PURGE_LOCK_NAME . '.lock' );
+}
+
+/**
+ * Fresh (cache-bypassing) probe: true while a purge lock is currently held.
+ *
+ * Same reasoning as nppp_preload_start_in_flight(): nppp_is_purge_lock_held()
+ * reads through get_option(), which on a persistent object cache (Redis/
+ * Memcached) can answer from a request-local negative ('notoptions') cached
+ * before the lock existed. That's fine for a one-shot informational check,
+ * but the preload start sequence uses this result to decide whether it's
+ * safe to spawn wget into a cache tree that may be actively being deleted —
+ * a false negative there is the unsafe direction, so the cached copies are
+ * dropped first.
+ *
+ * @return bool true = a purge operation is in progress, false = idle.
+ */
+function nppp_purge_lock_in_flight(): bool {
+    wp_cache_delete( NPPP_PURGE_LOCK_NAME . '.lock', 'options' );
+    wp_cache_delete( 'notoptions', 'options' );
+
+    return nppp_is_purge_lock_held();
 }

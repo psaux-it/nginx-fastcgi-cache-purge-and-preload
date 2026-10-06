@@ -2,7 +2,7 @@
 /**
  * Gutenberg cache purge integration for Nginx Cache Purge Preload
  * Description: Purges related Nginx cache entries when block editor content is saved, updated, unpublished, or trashed via REST.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -35,7 +35,7 @@ if ( $nppp_auto_purge ) {
         }
     };
 
-    if ( did_action('init') ) {
+    if ( did_action('init') && ! doing_action('init') ) {
         // Bootstrap was loaded after init (e.g. via rest_pre_dispatch for
         // Application Password or WC consumer key requests). init has already
         // fired so add_action('init') would never run — register hooks directly.
@@ -43,7 +43,7 @@ if ( $nppp_auto_purge ) {
     } else {
         // Normal execution path — init has not fired yet.
         // Wait for init so get_post_types() returns all registered post types.
-        add_action('init', $nppp_register_rest_hooks, 20);
+        add_action('init', $nppp_register_rest_hooks, PHP_INT_MAX);
     }
 }
 
@@ -147,7 +147,15 @@ function nppp__rest_after_insert( $post, $request, $creating ) {
             ['draft', 'private', 'pending'],
             true
         );
-        if ( ! $being_unpublished ) return;
+        // Only invalidate an existing published page taken offline.
+        // Saving a new or existing draft is not an unpublish operation.
+        if (
+            ! $being_unpublished
+            || $creating
+            || nppp__gut_old_status( $post->ID ) !== 'publish'
+        ) {
+            return;
+        }
     }
 
     $cache_path = $opts['nginx_cache_path'] ?? '/dev/shm/change-me-now';

@@ -2,7 +2,7 @@
 /**
  * Cache preload handlers for Nginx Cache Purge Preload
  * Description: Builds URL queues and executes preload requests for Nginx cache warming.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -128,10 +128,6 @@ function nppp_find_safexec_path() {
 
 // Checks if the given safexec path is root-owned and SUID-enabled
 function nppp_is_safexec_usable($path, $notify = true) {
-    if (!function_exists('stat')) {
-        return false;
-    }
-
     // Prevent interference with REST, AJAX, and Cron responses.
     $notify = $notify && !(
         (function_exists('wp_is_serving_rest_request') && wp_is_serving_rest_request()) ||
@@ -151,19 +147,18 @@ function nppp_is_safexec_usable($path, $notify = true) {
         return false;
     }
 
-    $p = @realpath($path) ?: $path;
-    $info = @stat($p);
+    $ls = nppp_safexec_ls_check($path);
 
-    if ($info === false) {
+    if ($ls === null) {
         if ($notify) {
             /* translators: %s: Safexec binary filesystem path */
-            nppp_display_admin_notice('info', sprintf(__('INFO SAFEXEC: safexec at %s is not accessible. Starting preload as the PHP-FPM user.', 'fastcgi-cache-purge-and-preload-nginx'), $p), true, false);
+            nppp_display_admin_notice('info', sprintf(__('INFO SAFEXEC: safexec at %s is not accessible. Starting preload as the PHP-FPM user.', 'fastcgi-cache-purge-and-preload-nginx'), $path), true, false);
         }
         return false;
     }
 
-    $is_root_owner = ($info['uid'] === 0);
-    $has_suid      = ($info['mode'] & 04000) === 04000;
+    $is_root_owner = $ls['is_root'];
+    $has_suid      = $ls['has_suid'];
 
     if (!($is_root_owner && $has_suid)) {
         if ($notify) {
@@ -329,20 +324,36 @@ function nppp_detect_premature_process(
                 $test_process = false;
             }
         } else {
-            // Two strictly separate kill paths.
+            // Two kill paths.
             // safexec path: wget ran as nobody (SUID drop). Only safexec
             // itself has the privilege to kill its own nobody child.
+            // If safexec was in pass-through mode (nosuid mount / inherited
+            // no_new_privs) wget still runs as the PHP user, safexec --kill
+            // refuses it, so fall through to the direct kill path below.
+            $safexec_kill_pending = false;
             if ($use_safexec) {
                 $kill_cmd = escapeshellarg($safexec_path) . ' --kill=' . (int) $test_pid . ' 2>/dev/null';
                 shell_exec($kill_cmd);
-            } else {
+
+                // Wait up to ~1s for the process to actually exit.
+                for ($i = 0; $i < 10; $i++) {
+                    usleep(100000);
+                    $kill_status = proc_get_status($process);
+                    if (empty($kill_status['running'])) {
+                        break;
+                    }
+                }
+                $safexec_kill_pending = !empty($kill_status['running']);
+            }
+
+            if (!$use_safexec || $safexec_kill_pending) {
                 // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
                 if (!defined('SIGTERM')) {
                     define('SIGTERM', 15); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
                 }
 
                 // Fallback to hard SIGKILL
-                if (!@posix_kill($test_pid, SIGTERM)) {
+                if (!function_exists('posix_kill') || !@posix_kill($test_pid, SIGTERM)) {
                     $kill_path = trim((string) shell_exec('command -v kill 2>/dev/null'));
                     if ($kill_path !== '') {
                         shell_exec(escapeshellarg($kill_path) . ' -9 ' . (int) $test_pid . ' 2>/dev/null');
@@ -360,7 +371,44 @@ function nppp_detect_premature_process(
 }
 
 // Preload operation
+//
+// Public entry point. Serializes the start sequence with an atomic lock so
+// simultaneous callers — CLI, REST, UI, admin bar, cron, auto-preload —
+// cannot each pass the PID check before any of them has written a real PID,
+// and each spawn its own untracked wget crawler. Signature is unchanged;
+// every real caller (schedule.php x2, rest-api.php, wp-cli.php, purge.php,
+// admin-bar.php) treats this as void, so the wrap is transparent to them.
+// The original function body, unmodified, now lives in nppp_preload_locked().
 function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nppp_is_auto_preload = false, $nppp_is_rest_api = false, $nppp_is_wp_cron = false, $nppp_is_admin_bar = false, $preload_mobile = false) {
+    if ( ! nppp_acquire_preload_start_lock() ) {
+        nppp_display_admin_notice('info', __( 'INFO: Nginx cache preloading is already starting from another request. Please wait a few seconds and check the Status tab.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        return;
+    }
+
+    // register_shutdown_function covers exit()/fatal errors (e.g. a hard
+    // PHP timeout) that skip a plain try/finally, so the lock never sits
+    // idle until its 300s crash-safety TTL expires. The flag prevents a
+    // double-release when both the finally block and the shutdown
+    // callback would otherwise fire.
+    $nppp_start_lock_held    = true;
+    $nppp_release_start_lock = static function () use ( &$nppp_start_lock_held ): void {
+        if ( $nppp_start_lock_held ) {
+            $nppp_start_lock_held = false;
+            nppp_release_preload_start_lock();
+        }
+    };
+    register_shutdown_function( $nppp_release_start_lock );
+
+    try {
+        nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nppp_is_auto_preload, $nppp_is_rest_api, $nppp_is_wp_cron, $nppp_is_admin_bar, $preload_mobile);
+    } finally {
+        $nppp_release_start_lock();
+    }
+}
+
+// Original nppp_preload() body, unchanged and renamed. Do not call this
+// directly — call nppp_preload() above, which holds the start lock around it.
+function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $fdomain, $PIDFILE, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nppp_is_auto_preload = false, $nppp_is_rest_api = false, $nppp_is_wp_cron = false, $nppp_is_admin_bar = false, $preload_mobile = false) {
     if (function_exists('set_time_limit')) {
         @set_time_limit(0); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
@@ -383,7 +431,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            nppp_display_admin_notice('info', __( 'INFO: Nginx cache preloading is already running. If you want to stop it, please use Purge All!', 'fastcgi-cache-purge-and-preload-nginx' ));
+            nppp_display_admin_notice('info', __( 'INFO: Nginx cache preloading is already running. If you want to stop it, use "Stop Preload", or "Purge All" to also purge the cache.', 'fastcgi-cache-purge-and-preload-nginx' ));
             return;
         }
     }
@@ -392,7 +440,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
     // into a cache directory being concurrently deleted can produce partial
     // cache entries, stall on blocked I/O, or write files that are immediately
     // removed. The admin can retry once the purge finishes.
-    if ( function_exists('nppp_is_purge_lock_held') && nppp_is_purge_lock_held() ) {
+    if ( function_exists('nppp_purge_lock_in_flight') && nppp_purge_lock_in_flight() ) {
         nppp_display_admin_notice('info', __( 'INFO: Nginx cache preload skipped — a cache purge operation is currently in progress. Please try again after the purge completes.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
@@ -479,7 +527,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
             }
 
             // Test and detect premature process
-            if (function_exists('proc_open') && is_callable('proc_open')) {
+            if (function_exists('proc_open') && is_callable('proc_open') &&
+                function_exists('proc_get_status') && is_callable('proc_get_status') &&
+                function_exists('proc_close') && is_callable('proc_close')) {
                 $test_result = nppp_detect_premature_process(
                     $fdomain,
                     $tmp_path,
@@ -639,42 +689,51 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
             // Start cpulimit conditionally
             if ($cpulimit === 1 && (int) $nginx_cache_cpu_limit < 100) {
-                $command = sprintf(
-                    'cpulimit -p %d -l %d -zb >/dev/null 2>&1',
-                    (int) $pid,
-                    (int) $nginx_cache_cpu_limit
-                );
+                if ($use_safexec) {
+                    // safexec drops wget's credentials (to 'nobody'). A cpulimit process
+                    // started here would run as the PHP-FPM user and the kernel will refuse to
+                    // let it deliver SIGSTOP/SIGCONT to a process owned by a different UID, so
+                    // the configured CPU limit cannot be enforced while safexec is active.
+                    // Log it instead of silently spawning a no-op.
+                    nppp_display_admin_notice('info', __( 'INFO CPU LIMIT: CPU limit is not enforced while safexec is active, because cpulimit cannot signal a process running under a different UID.', 'fastcgi-cache-purge-and-preload-nginx' ), true, false);
+                } else {
+                    $command = sprintf(
+                        'cpulimit -p %d -l %d -zb >/dev/null 2>&1',
+                        (int) $pid,
+                        (int) $nginx_cache_cpu_limit
+                    );
 
-                shell_exec($command);
+                    shell_exec($command);
+                }
             }
 
             // Define a default success message
-            $default_success_message = __( 'SUCCESS: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' );
+            $default_success_message = __( 'SUCCESS: Nginx cache preloading has started in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' );
 
             // Check the status of $nppp_is_rest_api and display success message accordingly
             if (is_bool($nppp_is_rest_api) && $nppp_is_rest_api) {
                 if (!$preload_mobile) {
-                    nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache preloading has started in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 } else {
-                    nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache preloading has started for Mobile in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 }
             }
 
             // Check the status of $nppp_is_wp_cron and display success message accordingly
             if (is_bool($nppp_is_wp_cron) && $nppp_is_wp_cron) {
                 if (!$preload_mobile) {
-                    nppp_display_admin_notice('success', __( 'SUCCESS CRON: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS CRON: Nginx cache preloading has started in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 } else {
-                    nppp_display_admin_notice('success', __( 'SUCCESS CRON: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS CRON: Nginx cache preloading has started for Mobile in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 }
             }
 
             // Check the status of $nppp_is_admin_bar and display success message accordingly
             if (is_bool($nppp_is_admin_bar) && $nppp_is_admin_bar) {
                 if (!$preload_mobile) {
-                    nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache preloading has started in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache preloading has started in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 } else {
-                    nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache preloading has started for Mobile in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 }
             }
 
@@ -683,7 +742,7 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
                 if (!$preload_mobile) {
                     nppp_display_admin_notice('success', $default_success_message);
                 } else {
-                    nppp_display_admin_notice('success', __( 'SUCCESS: Nginx cache preloading has started for Mobile in the background. Please check the --Status-- tab for progress updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                    nppp_display_admin_notice('success', __( 'SUCCESS: Nginx cache preloading has started for Mobile in the background. Please check the --Preload Progress-- section below for live status.', 'fastcgi-cache-purge-and-preload-nginx' ));
                 }
             }
         } elseif ($status === 1) {
@@ -717,7 +776,9 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
         }
 
         // Test and detect premature process
-        if (function_exists('proc_open') && is_callable('proc_open')) {
+        if (function_exists('proc_open') && is_callable('proc_open') &&
+            function_exists('proc_get_status') && is_callable('proc_get_status') &&
+            function_exists('proc_close') && is_callable('proc_close')) {
             $test_result = nppp_detect_premature_process(
                 $fdomain,
                 $tmp_path,
@@ -871,13 +932,22 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 
         // Start cpulimit conditionally
         if ($cpulimit === 1 && (int) $nginx_cache_cpu_limit < 100) {
-            $command = sprintf(
-                'cpulimit -p %d -l %d -zb >/dev/null 2>&1',
-                (int) $pid,
-                (int) $nginx_cache_cpu_limit
-            );
+            if ($use_safexec) {
+                // safexec drops wget's credentials (e.g. to 'nobody'). A cpulimit process
+                // started here would run as the PHP-FPM user and the kernel will refuse to
+                // let it deliver SIGSTOP/SIGCONT to a process owned by a different UID, so
+                // the configured CPU limit cannot be enforced while safexec is active.
+                // Log it instead of silently spawning a no-op.
+                nppp_display_admin_notice('info', __( 'INFO CPU LIMIT: CPU limit is not enforced while safexec is active, because cpulimit cannot signal a process running under a different UID.', 'fastcgi-cache-purge-and-preload-nginx' ), true, false);
+            } else {
+                $command = sprintf(
+                    'cpulimit -p %d -l %d -zb >/dev/null 2>&1',
+                    (int) $pid,
+                    (int) $nginx_cache_cpu_limit
+                );
 
-            shell_exec($command);
+                shell_exec($command);
+            }
         }
 
         // Display the deferred message as admin notice
@@ -904,7 +974,41 @@ function nppp_preload($nginx_cache_path, $this_script_path, $tmp_path, $fdomain,
 }
 
 // Single page preload
+//
+// Public entry point. nppp_preload_single() writes its wget PID into the SAME
+// cache_preload.pid that Preload All uses, and its PID check -> spawn -> PID write
+// sequence was not atomic, so a single preload landing in Preload All's start window
+// could overwrite the PID of the recursive crawler (untracked crawler, same symptom
+// as the concurrent-start bug). It now takes the same start lock as nppp_preload().
+// Signature is unchanged; callers (admin bar, Advanced tab AJAX, WP-CLI) are untouched.
+// The original function body, unmodified, now lives in nppp_preload_single_locked().
 function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path) {
+    if ( ! nppp_acquire_preload_start_lock() ) {
+        nppp_display_admin_notice('info', __( 'INFO: Nginx cache preloading is already starting from another request. Please wait a few seconds and check the Status tab.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        return;
+    }
+
+    // Same release pattern as nppp_preload(): finally covers every return path,
+    // the shutdown hook covers exit()/fatals, the flag prevents a double release.
+    $nppp_start_lock_held    = true;
+    $nppp_release_start_lock = static function () use ( &$nppp_start_lock_held ): void {
+        if ( $nppp_start_lock_held ) {
+            $nppp_start_lock_held = false;
+            nppp_release_preload_start_lock();
+        }
+    };
+    register_shutdown_function( $nppp_release_start_lock );
+
+    try {
+        nppp_preload_single_locked($current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path);
+    } finally {
+        $nppp_release_start_lock();
+    }
+}
+
+// Original nppp_preload_single() body, unchanged and renamed. Do not call this
+// directly — call nppp_preload_single() above, which holds the start lock around it.
+function nppp_preload_single_locked($current_page_url, $PIDFILE, $tmp_path, $nginx_cache_reject_regex, $nginx_cache_limit_rate, $nginx_cache_cpu_limit, $nginx_cache_path) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
@@ -920,7 +1024,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
         $pid = intval(nppp_perform_file_operation($PIDFILE, 'read'));
 
         if ($pid > 0 && nppp_is_process_alive($pid)) {
-            nppp_display_admin_notice('info', __( 'INFO: Nginx cache preloading is already running. If you want to stop it, please use Purge All', 'fastcgi-cache-purge-and-preload-nginx' ));
+            nppp_display_admin_notice('info', __( 'INFO: Nginx cache preloading is already running. If you want to stop it, use "Stop Preload", or "Purge All" to also purge the cache.', 'fastcgi-cache-purge-and-preload-nginx' ));
             return;
         }
     } elseif (!nppp_perform_file_operation($PIDFILE, 'create')) {
@@ -929,7 +1033,7 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
     }
 
     // Abort if a purge is in progress — same race-condition guard as nppp_preload().
-    if ( function_exists('nppp_is_purge_lock_held') && nppp_is_purge_lock_held() ) {
+    if ( function_exists('nppp_purge_lock_in_flight') && nppp_purge_lock_in_flight() ) {
         nppp_display_admin_notice('info', __( 'INFO: Nginx cache preload skipped — a cache purge operation is currently in progress. Please try again after the purge completes.', 'fastcgi-cache-purge-and-preload-nginx' ));
         return;
     }
@@ -1211,6 +1315,28 @@ function nppp_preload_single($current_page_url, $PIDFILE, $tmp_path, $nginx_cach
 // Only preloads cache for single post/page if Auto Purge triggered before for this modified/updated post/page
 // This functions not trgiggers after On-Page purge actions
 function nppp_preload_cache_on_update($current_page_url, $found = false, $is_manual = false) {
+    // Defense-in-depth: this function writes cache_preload.pid and spawns wget
+    // directly (below), with no lock acquisition of its own. It is only safe
+    // to do so because its sole caller, nppp_purge_post_purge(), only ever runs
+    // from inside nppp_purge_single()'s try block — while that function's own
+    // purge lock is still held. That invariant currently holds by inheritance,
+    // not by anything in this function, so if a future call site ever reaches
+    // this function outside a held purge lock it would spawn an untracked wget
+    // crawler exactly like the race the start lock was built to close. Bail
+    // rather than silently do that.
+    //
+    // Uses the row-existence check, not nppp_is_purge_lock_held(): this call
+    // runs on our OWN still-held lock, and the TTL-aware probe would delete a
+    // lock that's simply running past its crash-recovery TTL on a slow scan —
+    // turning a false alarm into a real concurrent-operation race.
+    if ( ! nppp_purge_lock_row_exists() ) {
+        nppp_display_admin_notice(
+            'error',
+            __( 'ERROR: Auto-preload skipped — internal safeguard triggered (purge lock not held). Please file a bug on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
@@ -1514,4 +1640,164 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
             }
         }
     }
+}
+
+/**
+ * Stop a running preload process from the admin UI — cache contents preserved.
+ *
+ * Mirrors the WP-CLI "preload --stop" workflow for UI. CLI has own function.
+ * Result is captured by the admin-bar action buffer and shown as a redirect
+ * notice on the Status tab.
+ *
+ * @since v2.1.8
+ * @param string $pid_file Absolute path to the cache_preload.pid runtime file.
+ * @return void
+ */
+function nppp_stop_preload_ui( string $pid_file ): void {
+    $wp_filesystem = nppp_initialize_wp_filesystem();
+
+    if ( $wp_filesystem === false ) {
+        nppp_display_admin_notice(
+            'error',
+            __( 'ERROR STOP: Failed to initialize WP Filesystem.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
+    // A Preload that is still inside its start sequence has no live PID yet.
+    // Wait (bounded) for it to finish so the PID file below is authoritative.
+    nppp_wait_for_preload_start_idle();
+
+    // No PID file — no active preload to stop.
+    if ( ! $wp_filesystem->exists( $pid_file ) ) {
+        nppp_cleanup_preload_state();
+        nppp_display_admin_notice(
+            'warning',
+            __( 'INFO STOP: No active preload process found.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
+    $pid = (int) trim( (string) nppp_perform_file_operation( $pid_file, 'read' ) );
+
+    if ( $pid <= 0 ) {
+        $wp_filesystem->delete( $pid_file );
+        nppp_cleanup_preload_state();
+        nppp_display_admin_notice(
+            'warning',
+            __( 'INFO STOP: Invalid PID detected. Stale lock file removed.', 'fastcgi-cache-purge-and-preload-nginx' )
+        );
+        return;
+    }
+
+    if ( ! nppp_is_process_alive( $pid ) ) {
+        $wp_filesystem->delete( $pid_file );
+        nppp_cleanup_preload_state();
+        nppp_watcher_delete_token();
+        nppp_display_admin_notice(
+            'warning',
+            sprintf(
+                /* translators: %d: The process ID (PID) of the preload process that has already finished. */
+                __( 'INFO STOP: Preload process (PID %d) already finished.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $pid
+            )
+        );
+        return;
+    }
+
+    // Kill the watchdog monitor first — before the main preload process.
+    nppp_kill_preload_watcher();
+
+    // Kill the main preload process — safexec-aware.
+    // When safexec SUID drops wget to nobody, only safexec --kill can signal it;
+    // a plain kill/posix_kill from the PHP-FPM user returns EPERM silently.
+    $killed       = false;
+    $process_user = '';
+
+    if ( function_exists( 'shell_exec' ) ) {
+        $process_user = trim( (string) shell_exec(
+            'ps -o user= -p ' . escapeshellarg( (string) $pid ) . ' 2>/dev/null'
+        ) );
+    }
+
+    if ( $process_user === 'nobody' ) {
+        // Process dropped to nobody via safexec SUID — only safexec --kill works.
+        $sfx = '/usr/bin/safexec';
+        if ( ! file_exists( $sfx ) && function_exists( 'shell_exec' ) ) {
+            $detected = trim( (string) shell_exec( 'command -v safexec 2>/dev/null' ) );
+            $sfx      = ( $detected !== '' ) ? $detected : '';
+        }
+
+        $sfx_ls = ( $sfx !== '' ) ? nppp_safexec_ls_check( $sfx ) : null;
+        if ( $sfx_ls && $sfx_ls['is_root'] && $sfx_ls['has_suid'] ) {
+            // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+            shell_exec( escapeshellarg( $sfx ) . ' --kill=' . (int) $pid . ' 2>&1' );
+            usleep( 250000 );
+            if ( ! nppp_is_process_alive( $pid ) ) {
+                $killed = true;
+            }
+        }
+
+        if ( ! $killed ) {
+            // safexec is the only valid kill path for a nobody process.
+            nppp_watcher_delete_token();
+            nppp_display_admin_notice(
+                'error',
+                sprintf(
+                    /* translators: %1$d: The process ID (PID) of the preload process that could not be stopped. */
+                    __( 'ERROR STOP: Cannot stop preload PID %1$d (via safexec). Please contact support and report this issue.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $pid,
+                    $pid
+                )
+            );
+            return;
+        }
+    } else {
+        // Standard (non-safexec) process — SIGTERM → verify → SIGKILL → verify.
+        // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec
+        exec( sprintf( 'kill -TERM %d 2>/dev/null', $pid ) );
+        usleep( 300000 );
+
+        if ( nppp_is_process_alive( $pid ) ) {
+            $kill_bin = function_exists( 'shell_exec' )
+                ? trim( (string) shell_exec( 'command -v kill 2>/dev/null' ) )
+                : '';
+            if ( $kill_bin !== '' ) {
+                // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+                shell_exec( escapeshellarg( $kill_bin ) . ' -9 ' . (int) $pid . ' 2>/dev/null' );
+                usleep( 300000 );
+            }
+        }
+
+        if ( ! nppp_is_process_alive( $pid ) ) {
+            $killed = true;
+        }
+
+        if ( ! $killed ) {
+            nppp_watcher_delete_token();
+            nppp_display_admin_notice(
+                'error',
+                sprintf(
+                    /* translators: %d: The process ID (PID) of the preload process that could not be stopped. */
+                    __( 'ERROR STOP: Failed to stop preload process (PID %d). Please contact support and report this issue.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $pid
+                )
+            );
+            return;
+        }
+    }
+
+    // Confirmed kill — remove PID file and clear all preload runtime state.
+    $wp_filesystem->delete( $pid_file );
+    nppp_cleanup_preload_state();
+    nppp_watcher_delete_token();
+
+    nppp_display_admin_notice(
+        'success',
+        sprintf(
+            /* translators: %d: The process ID (PID) of the preload process that was stopped successfully. */
+            __( 'SUCCESS STOP: Preload process (%d) stopped successfully. The existing cache has been preserved.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $pid
+        )
+    );
 }

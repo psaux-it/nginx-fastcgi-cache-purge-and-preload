@@ -2,7 +2,7 @@
 /**
  * Settings field callbacks for Nginx Cache Purge Preload
  * Description: Renders all individual settings field HTML for the WordPress Settings API.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -250,11 +250,8 @@ function nppp_nginx_cache_reject_regex_callback() {
 
 // Callback function to display the custom Regex field for fastcgi_cache_key
 function nppp_nginx_cache_key_custom_regex_callback() {
-    $options = get_option('nginx_cache_settings', []);
-    $default_cache_key_regex = nppp_fetch_default_regex_for_cache_key();
-    $cache_key_regex = isset($options['nginx_cache_key_custom_regex']) ? base64_decode($options['nginx_cache_key_custom_regex']) : $default_cache_key_regex;
-    // Use wp_kses() with an empty array to allow raw text without HTML sanitization
-    echo "<textarea id='nginx_cache_key_custom_regex' name='nginx_cache_settings[nginx_cache_key_custom_regex]' rows='1' cols='50' class='large-text'>" . esc_textarea($cache_key_regex) . "</textarea>";
+    $cache_key_regex = nppp_get_cache_key_regex();
+    echo "<textarea id='nginx_cache_key_custom_regex' name='nginx_cache_settings[nginx_cache_key_custom_regex]' rows='1' cols='50' class='large-text'>" . esc_textarea( $cache_key_regex ) . "</textarea>";
 }
 
 // Callback function to display the Mobile User Agent field
@@ -377,6 +374,33 @@ function nppp_fetch_default_reject_regex(): string {
 // Get default regex for nginx cache key
 function nppp_fetch_default_regex_for_cache_key(): string {
     return nppp_get_preload_defaults()['cache_key_regex'] ?? '';
+}
+
+/**
+ * Central getter — always returns the active cache key regex as plaintext.
+ *
+ *   1. Properly base64-encoded value   (normal: saved via plugin UI or WP-CLI)
+ *   2. Raw regex stored directly in DB (legacy: wp option update / old version)
+ *   3. Missing / empty                 (fall back to plugin default)
+ */
+function nppp_get_cache_key_regex(): string {
+    $settings = get_option( 'nginx_cache_settings', [] );
+    $stored   = isset( $settings['nginx_cache_key_custom_regex'] )
+        ? (string) $settings['nginx_cache_key_custom_regex']
+        : '';
+
+    if ( $stored === '' ) {
+        return nppp_fetch_default_regex_for_cache_key();
+    }
+
+    // Strict decode: raw regex values (not valid base64) return false here.
+    $decoded = base64_decode( $stored, true );
+
+    // If strict decode fails the stored value is already the raw regex — use as-is.
+    // The next Settings save will re-encode it correctly.
+    return ( $decoded !== false && $decoded !== '' )
+        ? $decoded
+        : $stored;
 }
 
 // Get default mobile user agent string
@@ -650,16 +674,13 @@ function nppp_nginx_cache_pctnorm_mode_callback() {
     } elseif (!$safexec_path) {
         $status_note = esc_html__( 'Unavailable: safexec not found. Install it to enable URL Normalization (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
     } elseif (!$safexec_ok) {
-        // Distinguish: SUID failure vs SHA256 integrity failure
-        $p         = @realpath($safexec_path) ?: $safexec_path;
-        $stat_info = function_exists('stat') ? @stat($p) : false;
-        $suid_ok   = $stat_info
-                     && ($stat_info['uid'] === 0)
-                     && (($stat_info['mode'] & 04000) === 04000);
+        // Distinguish: SUID failure
+        $ls      = nppp_safexec_ls_check($safexec_path);
+        $suid_ok = $ls && $ls['is_root'] && $ls['has_suid'];
 
         if ($suid_ok) {
             $status_note = esc_html__( 'Unavailable: safexec status is cached. Permissions appear correct now — save settings again to refresh.', 'fastcgi-cache-purge-and-preload-nginx' );
-        } elseif (!$stat_info) {
+        } elseif ($ls === null) {
             $status_note = esc_html__( 'Unavailable: safexec is not accessible. Check file permissions (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
         } else {
             $status_note = esc_html__( 'Unavailable: safexec is not SUID/root-owned. Fix permissions (see Help tab).', 'fastcgi-cache-purge-and-preload-nginx' );
@@ -796,7 +817,13 @@ function nppp_http_purge_suffix_callback(): void {
 // Callback function for HTTP Purge Custom URL
 function nppp_http_purge_custom_url_callback(): void {
     $options = get_option( 'nginx_cache_settings', [] );
-    echo "<input type='text' id='nppp_http_purge_custom_url' name='nginx_cache_settings[nppp_http_purge_custom_url]' value='" . esc_attr( $options['nppp_http_purge_custom_url'] ?? '' ) . "' class='regular-text' placeholder='https://docker/purge' />";
+    echo "<input type='text' id='nppp_http_purge_custom_url' name='nginx_cache_settings[nppp_http_purge_custom_url]' value='" . esc_attr( $options['nppp_http_purge_custom_url'] ?? '' ) . "' class='regular-text' placeholder='https://nginx-internal:8080' />";
+}
+
+// Callback function for HTTP Purge All Path
+function nppp_http_purge_all_path_callback(): void {
+    $options = get_option( 'nginx_cache_settings', [] );
+    echo "<input type='text' id='nppp_http_purge_all_path' name='nginx_cache_settings[nppp_http_purge_all_path]' value='" . esc_attr( $options['nppp_http_purge_all_path'] ?? 'purge_all' ) . "' class='regular-text' placeholder='purge_all' />";
 }
 
 // Callback function for RG Purge
@@ -812,7 +839,7 @@ function nppp_rg_purge_enabled_callback(): void {
         } else {
             $rg_bin = '';
         }
-        $rg_ok  = $rg_bin !== '' && is_executable( $rg_bin );
+        $rg_ok  = $rg_bin !== '';
         set_transient( 'nppp_rg_ok', [ 'path' => $rg_bin, 'ok' => $rg_ok ], HOUR_IN_SECONDS );
     } else {
         $rg_bin = $cached['path'];

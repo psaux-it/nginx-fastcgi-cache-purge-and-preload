@@ -2,7 +2,7 @@
 /**
  * Help and FAQ renderer for Nginx Cache Purge Preload
  * Description: Outputs plugin documentation, onboarding guidance, and support information in admin.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -72,94 +72,82 @@ function nppp_my_faq_html() {
                     </div>
                 </div>
 
-                <h3 class="nppp-question">Preloading fails with "ERROR COMMAND" or NPP cannot read nginx.conf — could open_basedir be the cause?</h3>
+                <h3 class="nppp-question">I've checked everything, but preloading still doesn't work and Nginx cannot be detected — could open_basedir be the cause?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h3><strong>PHP <code>open_basedir</code> and NPP</strong></h3>
-                        <p>Yes. If <code>open_basedir</code> is active in your PHP configuration, it silently restricts every filesystem and binary access PHP makes — including the paths NPP must reach to preload pages, read <code>nginx.conf</code>, detect FUSE mounts, and locate system binaries. The error surface is misleading: instead of an <code>open_basedir</code> violation message, you typically see:</p>
-                        <pre>ERROR COMMAND: Preloading failed for https://example.com. Please check Exclude Endpoints and Exclude File Extensions settings syntax.</pre>
-                        <p>This message means NPP could not execute a required system command — most commonly because <code>open_basedir</code> is blocking access to the <code>wget</code> binary, <code>nginx.conf</code>, the cache directory, or <code>/proc</code> (which NPP reads to detect FUSE mounts).</p>
+                        <p>Yes. If <code>open_basedir</code> is active in your PHP configuration, it silently restricts every filesystem access PHP makes — including the paths NPP must reach.</p>
+                        <p><strong>NPP performs an automatic compatibility check</strong> when <code>open_basedir</code> is active. If required paths are missing, you will see a warning on the plugin <strong>Settings</strong> page that lists exactly which paths need to be added to your <code>open_basedir</code> configuration.</p>
 
-                        <h4><strong>What paths does NPP require access to?</strong></h4>
-                        <p>The following table lists every path category NPP needs and why. All of these must be reachable by the PHP-FPM process for NPP to work correctly:</p>
+                        <h4><strong>How does NPP determine required paths?</strong></h4>
+                        <p>The plugin dynamically builds the list of paths based on your actual WordPress installation and configuration. The categories below are checked:</p>
                         <table class="responsive-table">
                             <thead>
                                 <tr>
-                                    <th>Path</th>
-                                    <th>Why NPP needs it</th>
+                                    <th>Path category</th>
+                                    <th>Why NPP needs it?</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td><code>{ABSPATH}/</code></td>
-                                    <td>WordPress installation root — plugin files, runtime files (PID, log, snapshot)</td>
+                                    <td>WordPress root (<code>ABSPATH</code>) and its parent</td>
+                                    <td>Entire WordPress installation must be functional. Parent only needed on specific wp installations.</td>
                                 </tr>
                                 <tr>
-                                    <td><code>{ABSPATH}/../</code></td>
-                                    <td>Parent of WordPress root — required by WP Filesystem API for uploads and adjacent paths</td>
+                                    <td><code>WP_CONTENT_DIR</code> / uploads directory</td>
+                                    <td>NPP keeps runtime files and logs in uploads directory. Usually <code>ABSPATH</code> already covers.</td>
                                 </tr>
                                 <tr>
-                                    <td><code>/dev/shm/</code>, <code>/tmp/</code>, <code>/var/</code>, <code>/cache/</code></td>
-                                    <td>Nginx cache directory root — NPP reads, writes, and deletes cache files here</td>
+                                    <td>Your configured Nginx cache path</td>
+                                    <td>NPP reads, writes, and deletes nginx cache files.</td>
+                                </tr>
+                                <tr>
+                                    <td>FUSE source path (if bindfs is used)</td>
+                                    <td>NPP reads the real cache directory behind the FUSE mount when <code>rg</code> scans are executed through <code>safexec</code>.</td>
                                 </tr>
                                 <tr>
                                     <td><code>/proc/</code></td>
-                                    <td>FUSE mount detection — NPP reads <code>/proc/self/mountinfo</code> and <code>/proc/mounts</code> to determine if the cache path is a FUSE (bindfs) mount</td>
+                                    <td>FUSE detection, preload progress job and various system resource metric reads.</td>
                                 </tr>
                                 <tr>
                                     <td><code>/dev/null</code></td>
-                                    <td>Standard null device — used by shell command redirects</td>
+                                    <td>Preload premature process check — only required if <code>proc_open</code> is available.</td>
                                 </tr>
                                 <tr>
-                                    <td><code>/etc/nginx/</code></td>
-                                    <td>Default nginx.conf location — NPP reads it to extract cache key directives and verify cache zone configuration</td>
+                                    <td><code>/tmp/</code></td>
+                                    <td>Preload process — temporarily hold artifacts here during preloading.</td>
                                 </tr>
                                 <tr>
-                                    <td><code>/usr/bin/</code>, <code>/usr/sbin/</code></td>
-                                    <td>System binaries — <code>wget</code> (preload), <code>rg</code> (ripgrep scan), <code>safexec</code>, <code>nginx -V</code> (conf path detection), <code>ps</code> (PID checks)</td>
+                                    <td>Main nginx configuration directories (nginx.conf)</td>
+                                    <td>NPP parse Nginx configuration, paths, keys, users for Status tab metrics and also needed for strict‑mode Nginx detection.</td>
                                 </tr>
                                 <tr>
-                                    <td><code>/usr/local/bin/</code>, <code>/usr/local/sbin/</code></td>
-                                    <td>Alternative binary locations — same binaries as above when installed outside <code>/usr/bin</code></td>
-                                </tr>
-                                <tr>
-                                    <td><code>/bin/</code>, <code>/sbin/</code></td>
-                                    <td>Core system utilities — <code>echo</code>, shell builtins used in command probes</td>
+                                    <td>aaPanel‑specific directories <em>(only if detected)</em></td>
+                                    <td><code>/www/server/nginx/conf</code> and <code>/www/server/panel/vhost/nginx</code> — required on aaPanel environments.</td>
                                 </tr>
                             </tbody>
                         </table>
 
-                        <h4><strong>Recommended <code>open_basedir</code> configuration</strong></h4>
-                        <p>Add the following to your PHP-FPM pool configuration file (e.g., <code>/etc/php/8.x/fpm/pool.d/yoursite.conf</code>) or your server-wide <code>php.ini</code>. Adjust <code>{ABSPATH}</code> to your actual WordPress installation path and the cache root to match your <code>nginx_cache_path</code> setting:</p>
-                        <pre>php_admin_value[open_basedir] =
-    /var/www/yoursite.com/ :
-    /var/www/yoursite.com/../ :
-    /dev/shm/ :
-    /tmp/ :
-    /var/ :
-    /cache/ :
-    /proc/ :
-    /dev/null :
-    /etc/nginx/ :
-    /usr/bin/ :
-    /usr/sbin/ :
-    /usr/local/bin/ :
-    /usr/local/sbin/ :
-    /bin/ :
-    /sbin/</pre>
-                        <p>Reload PHP-FPM after saving: <code>systemctl reload php-fpm</code></p>
-
-                        <h4><strong>How to confirm <code>open_basedir</code> is the culprit</strong></h4>
+                        <h4><strong>What should I do when the <code>open_basedir</code> warning appears?</strong></h4>
                         <ol>
-                            <li>Check the <strong>Status tab</strong> — NPP emits a <code>GLOBAL WARNING OPEN_BASEDIR</code> notice when it detects an active restriction.</li>
-                            <li>Temporarily set <code>open_basedir =</code> (empty) in your pool config, reload PHP-FPM, and re-test. If the error disappears, <code>open_basedir</code> was the cause.</li>
-                            <li>Re-enable <code>open_basedir</code> with the full path list above and confirm NPP works correctly.</li>
+                            <li>Go to the <strong>Settings</strong> page of NPP. The warning will show an exact list of missing paths.</li>
+                            <li>Add those paths to your <code>open_basedir</code> configuration (in your PHP‑FPM pool config or server‑wide <code>php.ini</code>).</li>
+                            <li>Reload PHP‑FPM: <code>systemctl reload php-fpm</code> (or the equivalent for your environment).</li>
+                            <li>Return to the NPP Settings tab — the warning should disappear and full functionality will be restored.</li>
                         </ol>
 
+                        <h4><strong>Example: typical minimal <code>open_basedir</code> entry</strong></h4>
+                        <p>Every environment is different. The plugin warning will give you the exact list, but here is a typical baseline you can start from (adjust <code>ABSPATH</code> and cache path):</p>
+                        <pre>php_admin_value[open_basedir] =
+    /var/www/yoursite.com/ :
+    /tmp/ :
+    /var/cache/nginx/ :
+    /proc/ :
+    /dev/null :
+    /etc/nginx/nginx.conf :</pre>
+
                         <h4><strong>Important notes</strong></h4>
-                        <p>⚠️ Setting <code>open_basedir =</code> (completely empty) disables the restriction globally — do not leave it empty in production. Always re-enable it with the correct path list after testing.</p>
-                        <p>📌 On Docker-based deployments, binary paths may differ (e.g., <code>/usr/local/bin/wget</code> instead of <code>/usr/bin/wget</code>). Check actual binary locations with <code>which wget rg safexec nginx ps</code> inside the PHP-FPM container and add those directories to the list accordingly.</p>
-                        <p>📌 If your Nginx configuration is stored outside <code>/etc/nginx/</code> (e.g., <code>/usr/local/etc/nginx/</code> or <code>/opt/nginx/conf/</code>), add that directory as well. NPP probes all common nginx.conf locations — every directory in that probe list must be reachable.</p>
+                        <p>📌 On Docker‑based deployments, ensure the actual nginx.conf directory (e.g., <code>/usr/local/etc/nginx/</code>) is included, as the plugin probes multiple standard locations. The compatibility warning will tell you if one is missing.</p>
                     </div>
                 </div>
 
@@ -167,7 +155,7 @@ function nppp_my_faq_html() {
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h3><strong>NPP Purge Workflow</strong></h3>
-                        <p>NPP uses a layered purge strategy. For single-URL purges (manual, auto-purge on update, related URLs) it tries each path in order and stops as soon as one succeeds. Purge All always uses the filesystem directly.</p>
+                        <p>NPP uses a layered purge strategy for both single-URL and full-cache purges. For single-URL purges (manual, auto-purge on update, related URLs) it tries each path in order and stops as soon as one succeeds. Purge All tries the HTTP fast path first when HTTP Purge is enabled, and falls back to filesystem operations otherwise.</p>
 
                         <h4><strong>Fast-Path 1 — HTTP Purge (optional)</strong></h4>
                         <p>If <strong>HTTP Purge</strong> is enabled in settings and the <code>ngx_cache_purge</code> Nginx module is detected, NPP sends an HTTP request to the module's purge endpoint. The module removes the cache entry from shared memory and disk atomically. On HTTP 200 the filesystem is never touched — the purge is complete. On any other response NPP falls through to the next path automatically.</p>
@@ -179,7 +167,7 @@ function nppp_my_faq_html() {
                         <p>If neither fast-path succeeds, NPP walks the entire Nginx cache directory, reads each file's cache key header, and deletes the matching entry. This is the original workflow and remains the fallback for all environments.</p>
 
                         <h4><strong>Purge All</strong></h4>
-                        <p>Purge All always uses filesystem operations — it recursively removes the entire cache directory contents. HTTP Purge does not apply to Purge All. If Cloudflare APO Sync or Redis Object Cache Sync is enabled, those are triggered after the filesystem purge completes.</p>
+                        <p>If HTTP Purge is enabled and a dedicated Purge All location block is configured in Nginx (via the <code>ngx_cache_purge</code> module's <code>purge_all</code> directive, module version 3.0.2+), NPP first asks Nginx to purge the entire cache over HTTP. On HTTP 200 Nginx has already deleted all cache files and shared memory metadata atomically, and NPP's filesystem purge is skipped entirely. On any other response — including HTTP 202, which means Nginx queued the purge into a background worker — NPP falls back to its own filesystem-based full purge, recursively removing the entire cache directory contents. If Cloudflare APO Sync or Redis Object Cache Sync is enabled, those are triggered after the purge completes, regardless of which path handled it.</p>
 
                         <h4><strong>When HTTP Purge is not available</strong></h4>
                         <p>HTTP Purge is entirely optional. If the module is not present, not compiled, or the purge location block is not configured in Nginx, NPP falls back to the index and filesystem paths automatically. The existing workflow is fully preserved — nothing breaks.</p>
@@ -223,12 +211,12 @@ function nppp_my_faq_html() {
                         <p style="font-size: 14px;">
                             When PHP compresses output itself, it adds <code>Vary: Accept-Encoding</code> to the response
                             <strong>only when the client sends <code>Accept-Encoding: gzip</code> or <code>deflate</code></strong>.
-                            For requests without <code>Accept-Encoding</code> (such as NPP's preloader), PHP does not add it.
+                            For requests sending <code>Accept-Encoding: identity</code> — wget's hardcoded default — PHP treats this identically to no compression support and does not add <code>Vary: Accept-Encoding</code>.
                         </p>
                         <p style="font-size: 14px;">
                             This creates a <strong>cache thrashing</strong> scenario when a real browser reaches a URL before NPP does:
                             the browser's gzip request causes PHP to emit <code>Vary: Accept-Encoding</code>, which Nginx stores in the cache file
-                            along with a gzip variant hash. When NPP subsequently warms that URL, its request (no <code>Accept-Encoding</code>)
+                            along with a gzip variant hash. When NPP subsequently warms that URL, its request (<code>Accept-Encoding: identity</code> — wget's hardcoded default)
                             mismatches the stored variant hash, triggers a secondary cache lookup, fetches uncompressed content from PHP
                             (which now emits no <code>Vary</code>), and <strong>overwrites the primary cache file</strong> with
                             uncompressed, Vary-free content — destroying the browser-warmed cache unnecessarily.
@@ -249,8 +237,8 @@ function nppp_my_faq_html() {
                             this source adds it unconditionally — including for NPP's requests.
                         </p>
                         <p style="font-size: 14px;">
-                            Because NPP's preloader sends no <code>Accept-Encoding</code> header, the variant hash stored
-                            during the warm pass is computed from an empty value. When a real browser subsequently requests
+                            Because NPP's preloader sends <code>Accept-Encoding: identity</code> — the variant hash stored during the warm pass is computed from <code>"identity"</code>.
+                            When a real browser subsequently requests
                             the same URL with <code>Accept-Encoding: gzip, deflate, br</code>, Nginx computes a different
                             variant hash, finds no matching cache file, and creates a <strong>second independent cache file</strong>
                             for the same URL — going to PHP instead of serving the NPP-warmed cache.
@@ -326,6 +314,56 @@ zlib.output_compression = Off</pre>
                             Reload Nginx after saving: <code>nginx -t &amp;&amp; systemctl reload nginx</code>
                         </p>
 
+                        <h4><strong>📌 For <code>proxy_cache</code> users (Nginx → Apache / HTTP backend)</strong></h4>
+                        <p style="font-size: 14px;">
+                            If your Nginx configuration uses <code>proxy_pass</code> instead of <code>fastcgi_pass</code>,
+                            replace <strong>Step 2</strong> with the following equivalent configuration:
+                        </p>
+
+<pre>location / {
+    proxy_pass http://127.0.0.1:8288;  # Your Apache backend
+
+    # CACHE ZONE SETUP
+    proxy_cache YOUR_ZONE;
+    proxy_cache_key "$scheme$host$request_uri";
+    proxy_cache_valid 200 30d;
+    proxy_cache_bypass $skip_cache;
+    proxy_no_cache $skip_cache;
+
+    # ===========================================================
+    # THE CRITICAL FIX FOR proxy_cache (Variant Hash Prevention)
+    # ===========================================================
+
+    # 1. Strip the Accept-Encoding header before it reaches Apache.
+    #    (Prevents Apache/mod_deflate from emitting Vary in the first place)
+    proxy_set_header Accept-Encoding "";
+
+    # 2. Ignore the Vary header during cache operations.
+    #    Prevents Nginx from writing r->cache->vary and stops variant hashing.
+    proxy_ignore_headers Vary;
+
+    # 3. [OPTIONAL BUT RECOMMENDED] Hide Vary from the client/probe.
+    #    Nginx internally ignores Vary (due to #2), but it might still forward
+    #    the header to the browser or monitoring tools.
+    #    Adding this silences false-positive warnings in plugins like NPP
+    #    without affecting the cache engine.
+    proxy_hide_header Vary;
+
+    # ... rest of your proxy settings
+}</pre>
+
+                        <p style="font-size: 14px;">
+                            <strong>🛡️ Why <code>proxy_hide_header Vary;</code> is the "Final Polish" for proxy setups</strong><br>
+                            <code>proxy_ignore_headers Vary;</code> protects the cache (stops variant hashing).<br>
+                            <code>proxy_hide_header Vary;</code> protects your monitoring (stops the header from reaching the client).<br><br>
+                            Without <code>hide_header</code>, Nginx will still forward the backend's <code>Vary</code> header to the client.
+                            While this <strong>does not</strong> create a double cache (thanks to <code>ignore_headers</code>),
+                            it will trigger <strong>false-positive warnings</strong> in environment checkers (like NPP's pre‑flight probe)
+                            that simply look for the presence of the header.
+                            Adding <code>proxy_hide_header Vary;</code> is the safe, recommended way to silence these warnings
+                            without altering cache behavior.
+                        </p>
+
                         <h4><strong>Step 3 — Let Nginx handle gzip (nginx.conf http block)</strong></h4>
                         <p style="font-size: 14px;">With PHP compression disabled, Nginx becomes the sole compression layer — which is the correct architecture. Confirm these are present in your <code>http {}</code> block:</p>
 <pre>gzip on;
@@ -363,13 +401,13 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                             <tbody>
                                 <tr>
                                     <td><code>zlib.output_compression = On</code>, no fix</td>
-                                    <td>1 (thrashing — overwritten on encoding mismatch)</td>
+                                    <td>1 (thrashing — the no-<code>Vary</code> response from NPP's warm pass is written back to the primary cache key path, overwriting the browser-cached gzip variant)</td>
                                     <td>⚠️ Unstable — warmed cache overwritten when browser hits first</td>
                                     <td>Cache churn, unnecessary PHP hits, warm entries silently destroyed</td>
                                 </tr>
                                 <tr>
                                     <td>Plugin or upstream proxy emitting <code>Vary: Accept-Encoding</code> unconditionally, no fix</td>
-                                    <td>2 (secondary file created — NPP warm and browser request produce separate cache entries for the same URL)</td>
+                                    <td>2 (two variant files on disk — NPP's warm stored at <code>MD5("identity")</code> key, browser's response stored at <code>MD5("gzip, deflate, br")</code> key; neither overwrites the other)</td>
                                     <td>❌ Miss — browser request computes a different variant hash and bypasses the NPP-warmed cache entirely, going to PHP instead</td>
                                     <td>NPP preload permanently ineffective; real visitors always trigger a PHP backend hit regardless of warm order</td>
                                 </tr>
@@ -412,45 +450,81 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                         <p>⚠️ <strong>Important:</strong> HTTP Purge will <strong>not</strong> work if you use the inline <code>fastcgi_cache_purge on;</code> directive inside your PHP location block. This is because the module's access handler expects the <code>PURGE</code> method for inline setups, while NPP sends <code>GET</code>. For this reason, we strongly recommend the dedicated location configuration shown below.</p>
 
                         <h4><strong>Required Nginx config</strong></h4>
-                        <p>You need two things in your Nginx server block: a <code>fastcgi_cache_path</code> with a named zone, and a location block that handles purge requests using that zone. A minimal working example:</p>
+                        <p>You need two things in your Nginx server block: a <code>fastcgi_cache_path</code> with a named zone, and a location block that handles purge requests using that zone. NPP compatible example:</p>
 
 <pre>## In the http {} block:
-fastcgi_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m inactive=60m;
-fastcgi_cache_key "$scheme$request_method$host$request_uri";
+fastcgi_cache_path /var/cache/nginx levels=1:2 keys_zone=NPP:100m max_size=1g inactive=30d;
+</pre>
 
+<pre>
 ## In the server {} block:
-fastcgi_cache my_cache;
-fastcgi_cache_valid 200 301 302 60m;
+location ~ \.php$ {
+    fastcgi_cache_key "$scheme$request_method$host$request_uri";
 
-## Purge location — dedicated location required for NPP HTTP Purge
-location ~ /purge(/.*) {
-    allow 127.0.0.1;        # Only allow local requests
-    # allow 172.16.0.0/12;  # Docker network (adjust as needed)
-    deny all;               # Deny everyone else
+    try_files $uri =404;
+    fastcgi_split_path_info ^(.+\.php)(/.+)$;
+    fastcgi_index index.php;
+    fastcgi_pass wordpress-fpm:9001;
+    include /etc/nginx/fastcgi_params;
 
-    fastcgi_cache_purge my_cache "$scheme$request_method$host$1";
+    fastcgi_cache_bypass $skip_cache;
+    fastcgi_no_cache $skip_cache;
+    fastcgi_cache NPP;
+    fastcgi_cache_valid 200 30d;
+    fastcgi_cache_valid 404 1m;
+    fastcgi_cache_use_stale error timeout updating http_500 http_503;
+    fastcgi_cache_lock on;
+    fastcgi_cache_background_update on;
+    fastcgi_ignore_headers Vary;
+}
+
+## Purge Single location - (requires ngx_cache_purge module ≥ 2.3)
+location ~ ^/purge(/.*) {
+    allow 127.0.0.1;       # Only allow local requests
+    allow 172.16.0.0/12;   # Docker network (adjust as needed)
+    deny all;              # Deny everyone else
+
+    # IMPORTANT: $is_args$args handles query string compatibility
+    fastcgi_cache_purge NPP "$scheme$request_method$host$1$is_args$args";
+}
+
+## Purge All location — for full cache clear (requires ngx_cache_purge module ≥ 3.0.2)
+location = /purge_all {
+    allow 127.0.0.1;       # Only allow local requests
+    allow 172.16.0.0/12;   # Docker network (adjust as needed)
+    deny all;              # Deny everyone else
+
+    fastcgi_cache       NPP;
+    fastcgi_cache_key   "$scheme$request_method$host$request_uri";
+    fastcgi_cache_purge GET purge_all from all;
 }</pre>
+                        <p>🔒 <strong>Security Tip:</strong> Always restrict the <code>allow</code> directive to your server's internal IP addresses. Never expose the purge location to the public internet. Because NPP use <code>GET</code> not <code>PURGE</code></p>
 
-                        <p><strong>Explanation:</strong></p>
-                        <ul>
-                            <li>The <code>location ~ /purge(/.*)</code> block captures any URL path starting with <code>/purge/</code>.</li>
-                            <li>The <code>$1</code> variable captures everything after <code>/purge</code> (e.g., <code>/my-page/</code>).</li>
-                            <li>The <code>fastcgi_cache_purge</code> directive uses the <strong>exact same cache key format</strong> as <code>fastcgi_cache_key</code>, with <code>$1</code> replacing the full request URI.</li>
-                        </ul>
-                        <p>🔒 <strong>Security Tip:</strong> Always restrict the <code>allow</code> directive to your server's internal IP addresses. Never expose the purge location to the public internet.</p>
+                        <p>📌 For a complete, production‑ready Nginx configuration including cache exclusion rules, rate limiting, and security headers, see the <a href="https://github.com/psaux-it/wordpress-nginx-cache-docker" target="_blank" rel="noopener">NPP Docker Stack Repository</a>.</p>
 
-                        <h4><strong>How NPP builds the purge URL</strong></h4>
-                        <p>When NPP purges <code>https://example.com/my-page/</code>:</p>
+                        <h4><strong>How NPP builds the purge URL — Single‑URL Purge</strong></h4>
+                        <p>When NPP purges a single page such as <code>https://example.com/my-page/?color=blue</code>:</p>
                         <ol>
-                            <li>It constructs the purge URL: <code>https://example.com/purge/my-page/</code></li>
+                            <li>It constructs the purge URL: <code>https://example.com/purge/my-page/?color=blue</code><br>
+                                — using the <strong>Purge Custom Base URL</strong> (if set) or the site’s home URL, then appending the <strong>Purge Single Path</strong> (default <code>purge</code>) and the page’s path + query string.</li>
                             <li>It sends a <code>GET</code> request to that URL.</li>
-                            <li>Nginx matches the <code>/purge/</code> location, extracts <code>/my-page/</code> as <code>$1</code>, and deletes the corresponding cache file.</li>
+                            <li>Nginx matches the <code>location ~ ^/purge(/.*)</code> block, captures the path after <code>/purge</code> in <code>$1</code>, and <code>$is_args$args</code> restores the original query string — so the cache key matches the stored entry exactly, even for URLs with filters, search, or pagination.</li>
                             <li>Nginx returns <code>200</code> (purge successful) or another status code (see fallback behavior below).</li>
                         </ol>
-                        <p>If the purge endpoint returns anything other than <code>200</code>, NPP automatically falls back to its filesystem-based purge, so your cache is still cleared – just a bit slower.</p>
+
+                        <h4><strong>How NPP builds the purge URL — Purge All</strong></h4>
+                        <p>When NPP purges the entire cache (Purge All):</p>
+                        <ol>
+                            <li>It constructs the purge URL: <code>https://example.com/purge_all</code><br>
+                                — using the <strong>Purge Custom Base URL</strong> (if set) or the site’s home URL, then appending the <strong>Purge All Path</strong> (default <code>purge_all</code>).</li>
+                            <li>It sends a <code>GET</code> request to that URL.</li>
+                            <li>Nginx’s <code>location = /purge_all</code> block — configured with <code>fastcgi_cache_purge GET purge_all from all;</code> — deletes every file in the cache zone atomically.</li>
+                            <li>Nginx returns <code>200</code> when the purge completes (or <code>202</code> if the module queued the work to a background worker).</li>
+                        </ol>
+                        <p>If a purge endpoint returns anything other than <code>200</code>, NPP automatically falls back to its filesystem‑based purge — your cache is still cleared, just a bit slower.</p>
 
                         <h4><strong>NPP settings for HTTP Purge</strong></h4>
-                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and enable <strong>HTTP Purge</strong>. Three additional options let you customize the purge URL:</p>
+                        <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and enable <strong>HTTP Purge</strong>. The following options let you customise both purge endpoints:</p>
 
                         <table class="responsive-table">
                             <thead>
@@ -462,18 +536,20 @@ location ~ /purge(/.*) {
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td><strong>HTTP Purge URL Suffix</strong></td>
-                                    <td><code>purge</code></td>
-                                    <td>The path prefix prepended to the URL. Change this if your Nginx location uses a different prefix — for example if your location is <code>~ /cache-purge(/.*)</code> set this to <code>cache-purge</code>.</td>
+                                    <td><strong>Purge Custom Base URL</strong></td>
+                                    <td>(empty)</td>
+                                    <td>Overrides the base URL for both single and purge‑all requests. Enter only the scheme and host, e.g. <code>http://nginx-internal:8080</code>. The <strong>Single</strong> and <strong>All</strong> paths defined below are appended automatically.<br>
+                                        Leave empty to auto‑build URLs from your site URL. Set this when the purge endpoint differs from your public site URL — Dockerized environments, separate Nginx server, non-standard port, or panel environments with a custom Nginx layer</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>HTTP Purge Custom Base URL</strong></td>
-                                    <td>(empty)</td>
-                                    <td>Overrides the entire base URL. Essential for Docker or reverse‑proxy setups where the purge endpoint is not reachable via the public site URL. Examples:<br>
-                                        • <code>http://nginx/purge</code> — Docker service name<br>
-                                        • <code>http://127.0.0.1:8080/purge</code> — non‑standard port<br>
-                                        When a Custom Base URL is set, the <strong>URL Suffix</strong> field is ignored.
-                                    </td>
+                                    <td><strong>Purge Single Path</strong></td>
+                                    <td><code>purge</code></td>
+                                    <td>The URI path prefix for single‑URL purges. Must match the regex location in nginx (e.g. <code>location ~ ^/purge(/.*)</code>). Change this only if your purge location uses a different prefix.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Purge All Path</strong></td>
+                                    <td><code>purge_all</code></td>
+                                    <td>The exact URI path for full cache purge. Must match the exact location in nginx (e.g. <code>location = /purge_all</code>). This is used for the Purge All HTTP fast‑path and is independent of the single‑purge path.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -540,7 +616,7 @@ location ~ /purge(/.*) {
                         A: Check the <strong>Status</strong> tab to confirm <code>rg</code> is detected. If you are using a FUSE mount, ensure safexec is installed and SUID‑root (see the safexec FAQ). If neither is available, RG Purge will fall back to the PHP scan.</p>
 
                         <p><strong>Q: Does RG Purge work with Purge All?</strong><br>
-                        A: No. Purge All always uses filesystem operations (recursive directory deletion). RG Purge applies only to single‑URL and related‑URL purges.</p>
+                        A: No. Purge All either completes via the HTTP fast path (when HTTP Purge is enabled and Nginx confirms completion) or falls back to a recursive filesystem deletion — RG Purge applies only to single‑URL and related‑URL purges, never to Purge All.</p>
                     </div>
                 </div>
 
@@ -707,6 +783,43 @@ curl -v -X POST \
                             Apache config paths will differ per panel — consult your panel's vhost editor for the
                             correct files to edit.
                         </p>
+                    </div>
+                </div>
+
+                <h3 class="nppp-question">How do I protect the NPP runtime directory from direct web access?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <?php
+                        // Public URL path of the runtime dir, derived from the real uploads URL so the
+                        // Nginx rule matches custom uploads locations, multisite and subdirectory installs.
+                        $nppp_rt_base = wp_parse_url( (string) ( wp_upload_dir()['baseurl'] ?? '' ), PHP_URL_PATH );
+                        $nppp_rt_loc  = '/' . trim( trim( (string) $nppp_rt_base, '/' ) . '/' . NPPP_RUNTIME_SUBDIR, '/' ) . '/';
+                        ?>
+                        <h3><strong>Protecting the NPP Runtime Directory</strong></h3>
+                        <p>NPP keeps its operational files (plugin log, preload PID and lock files, wget logs, Fail2Ban worker files) in a runtime directory inside your uploads directory. Uploads is used because it is the one location WordPress guarantees the PHP-FPM user can write to. These files are for NPP only and must never be downloadable over HTTP, because logs can reveal internal paths and error details.</p>
+
+                        <h4><strong>What NPP does automatically</strong></h4>
+                        <p>NPP creates an <code>index.php</code> and an Apache <code>.htaccess</code> (deny all) in the runtime directory. This covers Apache and prevents directory listing.</p>
+
+                        <h4><strong>What you must do on Nginx</strong></h4>
+                        <p>⚠️ <strong>Important:</strong> Nginx ignores <code>.htaccess</code> files completely. On Nginx, files in the runtime directory stay directly downloadable unless you add a <code>location</code> rule. Add this to your <code>server {}</code> block:</p>
+<pre>location ^~ <?php echo esc_html( $nppp_rt_loc ); ?> {
+    return 404;
+}</pre>
+                        <p>The <code>^~</code> modifier makes this prefix location win over regex locations such as your static file or PHP locations, so it does not matter where you place it. Then test and reload Nginx:</p>
+<pre>nginx -t &amp;&amp; systemctl reload nginx</pre>
+
+                        <h4><strong>Verification</strong></h4>
+                        <p>Request any existing file from the runtime directory, for example the plugin log (it exists once NPP has written its first log entry):</p>
+<pre>curl -I https://yourdomain.com<?php echo esc_html( $nppp_rt_loc ); ?>fastcgi_ops.log</pre>
+                        <p><strong>404</strong> (or 403) means the directory is protected. <strong>200</strong> means the file is publicly downloadable, so the rule is missing or another location block is taking precedence.</p>
+
+                        <h4><strong>Notes</strong></h4>
+                        <ul>
+                            <li><strong>Multisite:</strong> each site has its own uploads path (e.g. <code>/wp-content/uploads/sites/2/</code>) and therefore its own runtime directory. Use one rule that covers all of them, placed before your other regex locations: <code>location ~* /<?php echo esc_html( NPPP_RUNTIME_SUBDIR ); ?>/ { return 404; }</code></li>
+                            <li><strong>Permissions:</strong> the directory must be writable by the PHP-FPM user. Run WP-CLI as that same user (for example <code>sudo -u www-data wp npp status</code>), otherwise files created as root cannot be written by the web process later.</li>
+                            <li><strong>Nginx does not need access:</strong> NPP runs preload and other processes as the PHP-FPM user, so blocking the directory in Nginx does not affect any NPP feature.</li>
+                        </ul>
                     </div>
                 </div>
 

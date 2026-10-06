@@ -2,21 +2,26 @@
  * Mobile Floating Action Button (FAB) for Nginx Cache Purge Preload
  * Description: Provides "Purge This Page" and "Preload This Page" on mobile
  *              where WordPress hides the admin bar (max-width: 600px).
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
  */
 
-/* Hidden on desktop — only rendered on mobile where WP hides the admin bar */
-#nppp-mobile-fab {
+/* Hidden on desktop — only rendered on mobile where WP hides the admin bar.
+ * The container also carries the HTML `hidden` attribute, so it stays hidden
+ * even if this stylesheet is blocked, delayed or stripped by a theme or
+ * optimization plugin. The media query below reveals it on mobile. */
+#nppp-mobile-fab,
+#nppp-mobile-fab[hidden] {
     display: none;
 }
 
 @media screen and (max-width: 600px) {
 
-    #nppp-mobile-fab {
+    #nppp-mobile-fab,
+    #nppp-mobile-fab[hidden] {
         display: block;
         position: fixed;
         bottom: 20px;

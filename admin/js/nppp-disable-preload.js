@@ -1,7 +1,7 @@
 /**
  * Preload feature guards for Nginx Cache Purge Preload
  * Description: Disables preload-specific controls when required environment checks fail.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -62,6 +62,19 @@
                 });
         }
 
+        // Disable the Stop Preload button in the WP admin bar
+        var $stopPreloadButton = $('#wp-admin-bar-stop-preload-cache');
+        if ($stopPreloadButton.length) {
+            $stopPreloadButton.off('click');
+
+            $stopPreloadButton.find('a')
+                .removeAttr('href')
+                .css({
+                    'opacity': '0.5',
+                    'cursor': 'not-allowed'
+                });
+        }
+
         // Disable the Preload button on the Dashboard Widget
         $('.nppp-action-button[data-action="nppp-widget-preload"]')
             .addClass('disabled')
@@ -74,7 +87,7 @@
         // Check if we're on the plugin settings page to disable Preload-related features
         if ($('#nppp-nginx-tabs').length > 0) {
             // Disable the Preload button on the Settings page
-            $('#nppp-preload-button').addClass('disabled').removeAttr('href');
+            $('#nppp-preload-button, #nppp-stop-preload-button').addClass('disabled').removeAttr('href');
 
             // Disable auto preload
             $('#nginx_cache_auto_preload').prop('disabled', true);
@@ -96,6 +109,17 @@
             // disable preload proxy checkbox
             $('#nginx_cache_preload_enable_proxy').prop('disabled', true);
 
+            // disable preload related pages checkbox
+            $('input[type="checkbox"][name="nginx_cache_settings[nppp_related_preload_after_manual]"]')
+                .prop('disabled', true)
+                .attr({'aria-disabled': 'true'})
+                .off('.nppp')
+                .on('click.nppp change.nppp', function(e) {
+                    e.preventDefault();
+                    return false;
+                })
+                .closest('label, .form-table tr, p').css({ cursor: 'not-allowed' });
+
             // Disable proxy host/port fields
             $('#nginx_cache_preload_proxy_host').prop('disabled', true);
             $('#nginx_cache_preload_proxy_port').prop('disabled', true);
@@ -108,6 +132,7 @@
             // Disable preload exclude reset actions
             $('#nginx-regex-reset-defaults').prop('disabled', true);
             $('#nginx-extension-reset-defaults').prop('disabled', true);
+            $('#nginx-mobile-ua-reset-defaults').prop('disabled', true);
 
             // Disable preload exclude fields (not editable/clickable)
             $('#nginx_cache_reject_regex').prop('disabled', true).attr('readonly', 'readonly');
@@ -149,7 +174,7 @@
                     });
 
                 $toggle.closest('.nppp-onoffswitch-preload-feeds')
-                    .css({ opacity: '0.5', cursor: 'not-allowed' })
+                    .css({ cursor: 'not-allowed' })
                     .find('.nppp-onoffswitch-label-preload-feeds')
                     .css({ 'pointer-events': 'none', 'cursor': 'not-allowed' });
             })();
@@ -179,12 +204,15 @@
 
         // Hard-disable click routes for preload-only actions.
         npppHardDisableClick('#nppp-preload-button');
+        npppHardDisableClick('#nppp-stop-preload-button');
         npppHardDisableClick('#nppp-preload-url');
         npppHardDisableClick('#nppp-preload-url .nppp-tooltip');
         npppHardDisableClick('.nppp-preload-btn');
         npppHardDisableClick('#nginx-regex-reset-defaults');
         npppHardDisableClick('#nginx-extension-reset-defaults');
+        npppHardDisableClick('#nginx-mobile-ua-reset-defaults');
         npppHardDisableClick('#nginx-cache-schedule-set');
+        npppHardDisableClick('[name="nginx_cache_settings[nppp_related_preload_after_manual]"]');
     });
 
     // Disable the Preload button on the Advanced Tab

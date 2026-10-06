@@ -1,7 +1,7 @@
 /**
  * Admin styles for Nginx Cache Purge Preload
  * Description: Defines styling for plugin admin pages, tabs, tables, and controls.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -396,6 +396,59 @@ td.action, td.check {
     background-color: #2e8b57;
 }
 
+/* Refresh (Advanced tab) — manual table reload; own row, always in the same
+   place above the table, independent of DataTables' responsive search/length DOM */
+.nppp-premium-refresh-wrap {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+}
+
+.nppp-premium-refresh-btn {
+    background-color: #337AB7;
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0,0,0,.1);
+    font-weight: 500;
+    font-size: 13px;
+    transition: background-color 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.nppp-premium-refresh-btn:hover {
+    background-color: #2c699e;
+}
+
+.nppp-premium-refresh-btn[disabled] {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.nppp-premium-refresh-btn.nppp-premium-refresh-spinning .dashicons-update {
+    animation: nppp-spin 0.9s linear infinite;
+}
+
+/* Desktop: pin Refresh to the same width as the search field below it
+   (same 201px as the Preload All MISS button), right-aligned */
+@media screen and (min-width: 768px) {
+    .nppp-premium-refresh-btn {
+        width: 201px;
+        box-sizing: border-box;
+        justify-content: center;
+    }
+}
+
+@media screen and (max-width: 767px) {
+    .nppp-premium-refresh-wrap {
+        justify-content: center;
+    }
+}
+
 /* Preload All MISS — bulk action button and progress line */
 .nppp-preload-miss-wrap {
     display: flex;
@@ -724,7 +777,7 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
     display: flex;
     justify-content: flex-start;
     gap: 10px;
-    margin-top: 9px;
+    margin-top: 5px;
 }
 
 /* Very cool button style */
@@ -876,8 +929,34 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
         margin-top: 15px;
     }
 
+    /* Keep all tab icons on ONE line; shrink to fit the available width */
+    #nppp-nginx-tabs .tab-header-container ul {
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: center;
+        gap: 4px;
+        width: 100%;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    #nppp-nginx-tabs .tab-header-container ul li {
+        float: none;
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: 76px;
+        margin: 0;
+    }
+
     #nppp-nginx-tabs li a {
-        padding: 10px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        float: none;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px 4px;
     }
 
     #nppp-nginx-tabs li a:hover {
@@ -897,7 +976,11 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
     /* Increase the size of the SVG icons to 48px */
     #nppp-nginx-tabs li a .nppp-svg-icon-container {
         width: 36px !important;
-        height: 36px !important;
+        max-width: 100% !important;
+        min-width: 0;
+        height: auto !important;
+        aspect-ratio: 1 / 1;
+        flex: 0 1 36px;
     }
 
     .ui-state-active, .ui-widget-content .ui-state-active, .ui-widget-header .ui-state-active, a.ui-button:active, .ui-button:active, .ui-button.ui-state-active:hover {
@@ -1942,6 +2025,13 @@ button.nppp-preload-btn[disabled] {
     font-weight: bold;
 }
 
+#npppNginxConfDetected,
+#npppNginxSignal,
+#npppOpenBasedir,
+#npppAssumeNginx {
+    font-weight: bold;
+}
+
 /* Responsive layout for mobile */
 @media (max-width: 768px) {
     .status-and-nginx-info-container {
@@ -2193,16 +2283,110 @@ button.nppp-preload-btn[disabled] {
     }
 }
 
-/* Style for header cache button notification */
+/* ── NPP version + motto badge ───────────────────────────── */
 .nppp-cache-tip {
-    font-size: 13px;
-    color: #666;
-    line-height: 1.4;
-    background-color: #337AB7;
-    color: white;
-    font-weight: 500;
-    padding: 2px;
+    display: inline-flex;
     align-items: center;
+    align-self: flex-start;
+    gap: 7px;
+    padding: 4px 13px 4px 4px;
+    border-radius: 20px;
+    background: rgba(6, 3, 18, 0.87);
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+    line-height: 1.4;
+    margin-top: 10px;
+    margin-bottom: 4px;
+    position: relative;
+    animation: nppp-badge-ring 5s linear infinite;
+    will-change: box-shadow;
+}
+
+@keyframes nppp-badge-ring {
+    0%   { box-shadow: 0 0 0 1.5px hsla(270,80%,68%,.55), 0 0 13px hsla(270,80%,60%,.20); }
+    20%  { box-shadow: 0 0 0 1.5px hsla(210,85%,65%,.55), 0 0 15px hsla(210,85%,58%,.22); }
+    40%  { box-shadow: 0 0 0 1.5px hsla(165,80%,55%,.55), 0 0 15px hsla(165,80%,50%,.22); }
+    60%  { box-shadow: 0 0 0 1.5px hsla( 95,75%,55%,.55), 0 0 13px hsla( 95,75%,50%,.20); }
+    80%  { box-shadow: 0 0 0 1.5px hsla( 45,85%,60%,.55), 0 0 13px hsla( 45,85%,55%,.20); }
+    100% { box-shadow: 0 0 0 1.5px hsla(270,80%,68%,.55), 0 0 13px hsla(270,80%,60%,.20); }
+}
+
+/* Version pill */
+.nppp-tip-version {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    background: linear-gradient(135deg, hsla(270,85%,62%,.62), hsla(210,90%,58%,.62));
+    border-radius: 12px;
+    padding: 2px 8px 2px 6px;
+    white-space: nowrap;
+    animation: nppp-ver-pulse 2.8s ease-in-out infinite;
+    will-change: box-shadow;
+}
+
+@keyframes nppp-ver-pulse {
+    0%,100% { box-shadow: 0 0 6px  hsla(270,80%,65%,.50); }
+    50%     { box-shadow: 0 0 14px hsla(210,90%,62%,.75), 0 0 24px hsla(270,80%,60%,.30); }
+}
+
+.nppp-version-v {
+    font-size: 9px;
+    font-weight: 700;
+    opacity: .75;
+    line-height: 1;
+    text-shadow: 0 0 6px hsla(210,100%,80%,.8);
+}
+
+.nppp-version-num {
+    font-size: 12px;
+    letter-spacing: .5px;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 8px hsla(210,100%,80%,.9);
+}
+
+/* Divider */
+.nppp-tip-divider {
+    width: 1px;
+    height: 13px;
+    background: linear-gradient(to bottom, transparent, hsla(210,80%,75%,.45), transparent);
+    border-radius: 1px;
+    flex-shrink: 0;
+}
+
+/* Motto words */
+.nppp-tip-motto {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .50px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.nppp-motto-word {
+    display: inline;
+    opacity: 0;
+    animation: nppp-word-in .55s cubic-bezier(.22,.61,.36,1) forwards;
+    background: linear-gradient(90deg, #e8d5ff 0%, #a8d8ff 50%, #c8f0e8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+
+.nppp-w1 { animation-delay: 1.0s; }
+.nppp-w2 { animation-delay: 1.55s; }
+.nppp-w3 { animation-delay: 2.1s; }
+
+@keyframes nppp-word-in {
+    from { opacity: 0; transform: translateY(5px); filter: blur(4px); }
+    to   { opacity: 1; transform: translateY(0);   filter: blur(0);   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nppp-cache-tip   { animation: none; box-shadow: 0 0 0 1.5px hsla(210,80%,65%,.5); }
+    .nppp-tip-version { animation: none; }
+    .nppp-motto-word  { animation: none; opacity: 1; }
 }
 
 .nppp-buttons-wrapper {
@@ -2211,12 +2395,9 @@ button.nppp-preload-btn[disabled] {
 }
 
 @media (max-width: 767px) {
-    .nppp-cache-tip {
-        /*margin-left: 15px;*/
-        font-weight: 500;
-        font-size: 13px;
-        margin-top: 6px;
-    }
+    .nppp-cache-tip   { font-size: 12px; padding: 2px 9px 2px 3px; gap: 5px; align-self: stretch; justify-content: flex-start; border-radius: 12px; }
+    .nppp-version-num { font-size: 11px; }
+    .nppp-tip-motto   { font-size: 11px; letter-spacing: 1.3px; }
 }
 
 /* Loader Overlay */
@@ -5200,4 +5381,1581 @@ div.updated.notice-nppp p,
     0%   { box-shadow: 0 0 0 0 rgba(34, 113, 177, 0.4); }
     50%  { box-shadow: 0 0 0 6px rgba(34, 113, 177, 0); }
     100% { box-shadow: 0 0 0 0 rgba(34, 113, 177, 0); }
+}
+
+/* Stop Preload button — amber/orange, distinct from purge (red) and preload (green) */
+#nppp-stop-preload-button.nppp-button {
+    background-color: #F4A460;
+    color: white;
+}
+
+#nppp-stop-preload-button.nppp-button:hover {
+    background-color: #d35400;
+    color: white;
+}
+
+/* Wrapper for the Stop Preload button inside the Preload Progress section */
+.nppp-stop-preload-wrap {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Tip text beneath the Stop Preload button */
+.nppp-stop-preload-tip {
+    font-size: 13px;
+    color: #646970;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    line-height: 1.4;
+}
+
+.nppp-stop-preload-tip .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+/* Mobile: keep Stop Preload button full-row if needed */
+@media screen and (max-width: 768px) {
+    .nppp-stop-preload-wrap {
+        margin-top: 12px;
+    }
+}
+
+/* =========================================================================
+   Fail2Ban tab — Nginx jail monitor
+   ========================================================================= */
+
+#nppp-f2b-tab {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    box-sizing: border-box;
+    margin-left: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-stats {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-activity-row {
+    display: grid;
+    grid-template-columns: minmax(360px, 480px) 1fr;
+    gap: 16px;
+    align-items: stretch;
+}
+
+#nppp-f2b-tab .nppp-f2b-jails {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    min-width: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-wrap {
+    min-width: 0;
+}
+
+/* --- Status pill (now lives in the Connection card titlebar) --- */
+#nppp-f2b-tab .nppp-f2b-pill {
+    display: inline-block;
+    padding: 3px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #fff;
+}
+
+#nppp-f2b-tab .nppp-f2b-pill-ok   { background: #66b317; }
+#nppp-f2b-tab .nppp-f2b-pill-wait { background: #f8b334; color: #4a3200; }
+#nppp-f2b-tab .nppp-f2b-pill-idle { background: #8c8f94; }
+
+#nppp-f2b-tab .nppp-f2b-toolbar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+/* --- Buttons --- */
+#nppp-f2b-tab .nppp-f2b-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px;
+    padding: 0 14px;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    background: #f6f7f7;
+    color: #2c3338;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn:hover:not([disabled]) {
+    background: #eef0f1;
+    border-color: #8c8f94;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn:focus-visible {
+    outline: 2px solid #337AB7;
+    outline-offset: 1px;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn[disabled] {
+    opacity: .55;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn-primary {
+    background: #337AB7;
+    border-color: #2c6698;
+    color: #fff;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn-primary:hover:not([disabled]) {
+    background: #2c6698;
+    border-color: #245582;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn-danger {
+    background: #fff;
+    border-color: #ea1919;
+    color: #ea1919;
+}
+
+#nppp-f2b-tab .nppp-f2b-btn-danger:hover:not([disabled]) {
+    background: #ea1919;
+    border-color: #ea1919;
+    color: #fff;
+}
+
+/* Info badge + tooltip, e.g. next to "Send Test Email" in Abuse Reporter */
+#nppp-f2b-tab .nppp-f2b-info-badge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #337ab7;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: help;
+    user-select: none;
+}
+
+#nppp-f2b-tab .nppp-f2b-info-badge:hover,
+#nppp-f2b-tab .nppp-f2b-info-badge:focus-visible {
+    background: #2c6698;
+    outline: none;
+}
+
+#nppp-f2b-tab .nppp-f2b-info-badge .nppp-tooltiptext {
+    visibility: hidden;
+    opacity: 0;
+    width: 280px;
+    background-color: #0f172a;
+    color: #e2e8f0;
+    text-align: left;
+    line-height: 1.6;
+    font-size: 12.5px;
+    font-weight: 400;
+    border-radius: 8px;
+    padding: 12px 14px;
+    position: absolute;
+    z-index: 20;
+    top: 135%;
+    right: -8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+    transition: opacity .15s ease;
+}
+
+#nppp-f2b-tab .nppp-f2b-info-badge .nppp-tooltiptext::after {
+    content: "";
+    position: absolute;
+    bottom: 100%;
+    right: 12px;
+    border-width: 6px;
+    border-style: solid;
+    border-color: transparent transparent #0f172a transparent;
+}
+
+#nppp-f2b-tab .nppp-f2b-info-badge:hover .nppp-tooltiptext,
+#nppp-f2b-tab .nppp-f2b-info-badge:focus-visible .nppp-tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+@media screen and (max-width: 480px) {
+    #nppp-f2b-tab .nppp-f2b-info-badge .nppp-tooltiptext {
+        width: 220px;
+        right: -60px;
+    }
+}
+
+/* --- Test result banner --- */
+#nppp-f2b-tab .nppp-f2b-result {
+    position: relative;
+    margin: 0 0 20px;
+    padding: 12px 36px 12px 16px;
+    border-radius: 4px;
+    border-left-width: 5px;
+    border-left-style: solid;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+#nppp-f2b-tab .nppp-f2b-result-ok {
+    background: #f1f8e8;
+    border: 1px solid #cbe39f;
+    border-left: 5px solid #66b317;
+    color: #1d2327;
+}
+
+#nppp-f2b-tab .nppp-f2b-result-fail {
+    background: #fdf1f1;
+    border: 1px solid #f2b6b6;
+    border-left: 5px solid #ea1919;
+    color: #1d2327;
+}
+
+/* Dismiss (x) button rendered inside every dismissible .nppp-f2b-result banner */
+#nppp-f2b-tab .nppp-f2b-result-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    width: 20px;
+    height: 20px;
+    line-height: 18px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 16px;
+    text-align: center;
+    color: #6b7280;
+    opacity: 0.8;
+}
+
+#nppp-f2b-tab .nppp-f2b-result-close:hover,
+#nppp-f2b-tab .nppp-f2b-result-close:focus {
+    color: #1d2327;
+    opacity: 1;
+}
+
+/* The confirmation dialog closes as a whole, so its inline result banner
+   (blockers list) has no separate close button and needs its default padding. */
+#nppp-f2b-tab .nppp-f2b-modal .nppp-f2b-result {
+    padding: 12px 16px;
+}
+
+/* --- Stat cards --- */
+#nppp-f2b-tab .nppp-f2b-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    margin: 0 0 22px;
+}
+
+#nppp-f2b-tab .nppp-f2b-stat {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-top: 4px solid #337AB7;
+    border-radius: 6px;
+    padding: 16px 12px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .08);
+}
+
+#nppp-f2b-tab .nppp-f2b-stat-ban   { border-top-color: #ea1919; }
+#nppp-f2b-tab .nppp-f2b-stat-unban { border-top-color: #66b317; }
+#nppp-f2b-tab .nppp-f2b-stat-jail  { border-top-color: #f8b334; }
+
+#nppp-f2b-tab .nppp-f2b-stat-num {
+    display: block;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #1d2327;
+    font-variant-numeric: tabular-nums;
+}
+
+#nppp-f2b-tab .nppp-f2b-stat-ban   .nppp-f2b-stat-num { color: #ea1919; }
+#nppp-f2b-tab .nppp-f2b-stat-unban .nppp-f2b-stat-num { color: #4d8a10; }
+
+#nppp-f2b-tab .nppp-f2b-stat-label {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #646970;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+/* --- Stat card change badge: % vs the previous 24h/window --- */
+#nppp-f2b-tab .nppp-f2b-stat-change {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+}
+
+#nppp-f2b-tab .nppp-f2b-stat-change-up   { background: #eaf6db; color: #3f7d0f; }
+#nppp-f2b-tab .nppp-f2b-stat-change-down { background: #fdeaea; color: #c81e1e; }
+#nppp-f2b-tab .nppp-f2b-stat-change-flat { background: #f0f0f1; color: #646970; }
+
+#nppp-f2b-tab .nppp-f2b-stat-change-up::before   { content: "\25B2\a0"; }
+#nppp-f2b-tab .nppp-f2b-stat-change-down::before { content: "\25BC\a0"; }
+#nppp-f2b-tab .nppp-f2b-stat-change-flat::before { content: "\25AC\a0"; }
+
+#nppp-f2b-tab .nppp-f2b-stat-sub {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #646970;
+    font-variant-numeric: tabular-nums;
+}
+
+#nppp-f2b-tab .nppp-f2b-stat-sub-ban   { color: #c81e1e; }
+#nppp-f2b-tab .nppp-f2b-stat-sub-unban { color: #3f7d0f; }
+
+/* --- Connection card (now the first element in the tab) --- */
+#nppp-f2b-tab .nppp-f2b-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    margin: 10px 0 24px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
+    overflow: hidden;
+}
+
+#nppp-f2b-tab .nppp-f2b-card-title {
+    margin: 0;
+    padding: 10px 16px;
+    background: #337AB7;
+    border-bottom: 1px solid #dcdcde;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #fff;
+}
+
+#nppp-f2b-tab .nppp-f2b-card-body { padding: 18px 16px; }
+
+/* Titlebar: card title + status pill + Test Connection button, all in one row */
+#nppp-f2b-tab .nppp-f2b-card-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    padding: 10px 16px;
+    background: #337AB7;
+    border-bottom: 1px solid #dcdcde;
+}
+
+/* Nested inside the titlebar the title text no longer owns its own bar chrome */
+#nppp-f2b-tab .nppp-f2b-card-titlebar .nppp-f2b-card-title {
+    margin: 0;
+    padding: 0;
+    background: none;
+    border-bottom: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-card-title-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Primary action button sits on the dark titlebar, needs a visible border */
+#nppp-f2b-tab .nppp-f2b-card-titlebar .nppp-f2b-btn-primary {
+    background: #fff;
+    border-color: #fff;
+    color: #337AB7;
+}
+
+#nppp-f2b-tab .nppp-f2b-card-titlebar .nppp-f2b-btn-primary:hover:not([disabled]) {
+    background: #eef4fa;
+    border-color: #eef4fa;
+    color: #2c6698;
+}
+
+/* --- Activity toolbar: Refresh / Clear All Events, above the stat cards --- */
+#nppp-f2b-tab .nppp-f2b-activity-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    margin: 0 0 20px;
+    padding: 10px 16px;
+    background: #337AB7;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
+}
+
+#nppp-f2b-tab .nppp-f2b-activity-toolbar-title {
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+/* Non-destructive button on the blue bar gets the same light treatment
+   as the Test Connection button in the Connection card titlebar. */
+#nppp-f2b-tab .nppp-f2b-activity-toolbar .nppp-f2b-btn:not(.nppp-f2b-btn-danger) {
+    background: #fff;
+    border-color: #fff;
+    color: #337AB7;
+}
+
+#nppp-f2b-tab .nppp-f2b-activity-toolbar .nppp-f2b-btn:not(.nppp-f2b-btn-danger):hover:not([disabled]) {
+    background: #eef4fa;
+    border-color: #eef4fa;
+    color: #2c6698;
+}
+
+#nppp-f2b-tab .nppp-f2b-row { margin-bottom: 18px; }
+#nppp-f2b-tab .nppp-f2b-row:last-child { margin-bottom: 0; }
+
+#nppp-f2b-tab .nppp-f2b-row > label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1d2327;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+
+#nppp-f2b-tab .nppp-f2b-copy {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#nppp-f2b-tab .nppp-f2b-copy input[type="text"] {
+    flex: 1 1 280px;
+    min-width: 200px;
+    height: 32px;
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    background: #f6f7f7;
+    color: #1d2327;
+}
+
+#nppp-f2b-tab .nppp-f2b-copy-block {
+    align-items: flex-start;
+    flex-wrap: nowrap;
+}
+
+#nppp-f2b-tab .nppp-f2b-code {
+    flex: 1 1 auto;
+    width: 100%;
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    background: #f6f7f7;
+    color: #1d2327;
+    white-space: pre;
+    resize: vertical;
+}
+
+#nppp-f2b-tab .nppp-f2b-hint-text {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #646970;
+}
+
+/* --- Setup disclosure --- */
+#nppp-f2b-tab .nppp-f2b-setup {
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px solid #f0f0f1;
+}
+
+#nppp-f2b-tab .nppp-f2b-setup > summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    color: #337AB7;
+    padding: 4px 0;
+    list-style: revert;
+}
+
+#nppp-f2b-tab .nppp-f2b-setup > summary:hover { color: #2c6698; }
+
+#nppp-f2b-tab .nppp-f2b-step {
+    margin: 18px 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+#nppp-f2b-tab .nppp-f2b-step-n {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: #337AB7;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+#nppp-f2b-tab .nppp-f2b-note {
+    margin: 18px 0 0;
+    padding: 10px 14px;
+    background: #fdf6e7;
+    border-left: 4px solid #f8b334;
+    border-radius: 0 4px 4px 0;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #4a3200;
+}
+
+#nppp-f2b-tab code {
+    background: #f0f0f1;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+#nppp-f2b-tab .nppp-f2b-note code { background: #fff; }
+
+/* --- Setup scope selector (Connection card). Uses its own classes instead of
+   .nppp-f2b-setup because the token-regenerate handler force-opens every
+   .nppp-f2b-setup block. Visuals mirror the setup disclosure and option tabs. --- */
+#nppp-f2b-tab .nppp-f2b-scope {
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px solid #f0f0f1;
+}
+
+#nppp-f2b-tab .nppp-f2b-scope > summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    color: #337AB7;
+    padding: 4px 0;
+    list-style: revert;
+}
+
+#nppp-f2b-tab .nppp-f2b-scope > summary:hover { color: #2c6698; }
+
+#nppp-f2b-tab .nppp-f2b-scope-opts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0 14px;
+}
+
+#nppp-f2b-tab .nppp-f2b-scope-opt {
+    flex: 1 1 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 14px;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-top: 4px solid #337AB7;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .08);
+    text-align: left;
+    cursor: pointer;
+    transition: box-shadow .15s ease, transform .15s ease, background .15s ease;
+}
+
+#nppp-f2b-tab .nppp-f2b-scope-opt:nth-of-type(2) { border-top-color: #66b317; }
+
+#nppp-f2b-tab .nppp-f2b-scope-opt:hover {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .12);
+    transform: translateY(-1px);
+}
+
+#nppp-f2b-tab .nppp-f2b-scope-opt.is-active {
+    background: #f3f7fb;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .12);
+}
+
+#nppp-f2b-tab .nppp-f2b-scope-opt-title {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #1d2327;
+}
+
+#nppp-f2b-tab .nppp-f2b-scope-opt-desc {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #646970;
+}
+
+#nppp-f2b-tab .nppp-f2b-scope-panel {
+    display: none;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    padding: 16px;
+}
+
+#nppp-f2b-tab .nppp-f2b-scope-panel.is-active { display: block; }
+
+#nppp-f2b-tab .nppp-f2b-scope-panel > .nppp-f2b-hint-text:first-child {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+/* Register-now setup gate: same amber palette as the "Waiting" pill and notes, but louder. */
+#nppp-f2b-tab .nppp-f2b-gate {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 12px 0 0;
+    padding: 12px 14px;
+    background: #fdf6e7;
+    border: 1px solid #f2d08a;
+    border-left: 5px solid #f8b334;
+    border-radius: 0 4px 4px 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #4a3200;
+}
+
+#nppp-f2b-tab .nppp-f2b-gate-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #f8b334;
+    color: #4a3200;
+}
+
+#nppp-f2b-tab .nppp-f2b-gate-icon .dashicons {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+}
+
+#nppp-f2b-tab .nppp-f2b-gate-text strong {
+    display: block;
+    font-size: 13px;
+    letter-spacing: .02em;
+}
+
+/* --- Options card: a fixed row of category tabs that never reposition
+   on click, plus one shared content panel below that always spans the
+   full card width. Scoped to .nppp-f2b-card-options so the Connection
+   card's plain disclosure list (setup steps, hardening) is unaffected. --- */
+#nppp-f2b-tab .nppp-f2b-card-options .nppp-f2b-hint-text {
+    margin: 0 0 14px;
+    font-size: 13px;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-tab {
+    flex: 1 1 180px;
+    padding: 10px 14px;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-top: 4px solid #337AB7;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .08);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #1d2327;
+    text-align: left;
+    cursor: pointer;
+    transition: box-shadow .15s ease, transform .15s ease, background .15s ease;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-tab:hover {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .12);
+    transform: translateY(-1px);
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-tab.is-active {
+    background: #f3f7fb;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .12);
+}
+
+/* Same accent palette as the Activity Overview stat cards
+   (.nppp-f2b-stat-ban / -unban / -jail), one color per category so the
+   five tabs are easy to tell apart at a glance. */
+#nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(1) { border-top-color: #337AB7; }
+#nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(2) { border-top-color: #5bc0de; }
+#nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(3) { border-top-color: #f8b334; }
+#nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(4) { border-top-color: #66b317; }
+#nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(5) { border-top-color: #ea1919; }
+#nppp-f2b-tab .nppp-f2b-opt-tab:nth-of-type(6) { border-top-color: #6b5ecd; }
+
+#nppp-f2b-tab .nppp-f2b-opt-panels {
+    display: none;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    padding: 16px;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-panels.is-open {
+    display: block;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-panel {
+    display: none;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-panel.is-active {
+    display: block;
+}
+
+#nppp-f2b-tab .nppp-f2b-opt-panel .nppp-f2b-note {
+    margin-top: 0;
+}
+
+/* --- Empty-state banner --- */
+#nppp-f2b-tab .nppp-f2b-banner {
+    margin: 0 0 24px;
+    padding: 12px 16px;
+    background: #eef4fa;
+    border: 1px solid #c3d8ea;
+    border-left: 5px solid #337AB7;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #1d2327;
+}
+
+/* --- Section headings --- */
+#nppp-f2b-tab .nppp-f2b-section {
+    margin: 28px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #337AB7;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #337AB7;
+}
+
+#nppp-f2b-tab .nppp-f2b-empty {
+    margin: 0 0 8px;
+    padding: 14px;
+    background: #f6f7f7;
+    border-radius: 4px;
+    color: #646970;
+    font-size: 13px;
+}
+
+/* --- Jail cards --- */
+#nppp-f2b-tab .nppp-f2b-jails {
+    display: grid;
+    gap: 14px;
+    align-items: start;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-left: 4px solid #337AB7;
+    border-radius: 6px;
+    padding: 14px 16px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .06);
+}
+
+#nppp-f2b-tab .nppp-f2b-jail h4 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1d2327;
+    word-break: break-all;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-nums {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+#nppp-f2b-tab .nppp-f2b-badge {
+    display: inline-block;
+    min-width: 24px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+#nppp-f2b-tab .nppp-f2b-badge-ban   { background: #ea1919; }
+#nppp-f2b-tab .nppp-f2b-badge-unban { background: #66b317; }
+
+#nppp-f2b-tab .nppp-f2b-badge-cap {
+    font-size: 11px;
+    color: #646970;
+}
+
+/* Per-jail bans-only change badge (bans vs previous 24h). */
+#nppp-f2b-tab .nppp-f2b-jail-change {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-last {
+    margin: 0;
+    font-size: 11px;
+    color: #646970;
+}
+
+/* --- Jail activity chart: ranked bans-by-jail bar list --- */
+#nppp-f2b-tab .nppp-f2b-jail-chart-panel {
+    height: 100%;
+    box-sizing: border-box;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .06);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-title {
+    margin: -14px -16px 12px;
+    padding: 10px 16px;
+    background: #337AB7;
+    border-radius: 6px 6px 0 0;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #fff;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+    justify-content: space-between;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-row-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1d2327;
+    word-break: break-all;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-value {
+    font-size: 12px;
+    font-weight: 700;
+    color: #ea1919;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-track {
+    height: 10px;
+    background: #f0f0f1;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+#nppp-f2b-tab .nppp-f2b-jail-chart-fill {
+    height: 100%;
+    background: #ea1919;
+    border-radius: 3px;
+    transition: width .25s ease;
+}
+
+/* --- Repeat offenders table --- */
+#nppp-f2b-tab .nppp-f2b-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .06);
+}
+
+#nppp-f2b-tab .nppp-f2b-table th {
+    background: #337AB7;
+    color: #fff;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    border: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-table td {
+    padding: 10px 14px;
+    border-top: 1px solid #f0f0f1;
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+#nppp-f2b-tab .nppp-f2b-table tbody tr:nth-child(even) { background: #fafafa; }
+#nppp-f2b-tab .nppp-f2b-table tbody tr:hover { background: #f0f6fb; }
+
+/* --- Endpoint Attacks (EP gate rejections): reuses the Jail Activity and table styles --- */
+#nppp-f2b-tab .nppp-f2b-gate-hint {
+    margin: 0 0 12px;
+    line-height: 1.5;
+    font-size: 13px;
+}
+
+#nppp-f2b-tab .nppp-f2b-empty-cell {
+    color: #646970;
+}
+
+/* --- Repeat Offenders: ranked table + row-aligned bar list --- */
+#nppp-f2b-tab .nppp-f2b-repeat {
+    display: grid;
+    grid-template-columns: minmax(360px, 480px) 1fr;
+    gap: 16px;
+    align-items: start;
+}
+
+#nppp-f2b-tab .nppp-f2b-repeat-list {
+    min-width: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-repeat-chart-wrap {
+    min-width: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-offenders-chart {
+    width: 100%;
+    box-sizing: border-box;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .06);
+    overflow: hidden;
+}
+
+#nppp-f2b-tab .nppp-obar-head {
+    box-sizing: border-box;
+    padding: 10px 14px;
+    font-size: 11px;
+    line-height: 1.2;
+    background: #337AB7;
+    color: transparent;
+}
+
+#nppp-f2b-tab .nppp-obar-row {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-top: 1px solid #f0f0f1;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+#nppp-f2b-tab .nppp-obar-row:nth-child(even) { background: #fafafa; }
+#nppp-f2b-tab .nppp-obar-row:hover { background: #f0f6fb; }
+
+#nppp-f2b-tab .nppp-obar-ip {
+    flex: 0 0 118px;
+    min-width: 0;
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    color: #1d2327;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#nppp-f2b-tab .nppp-obar-track {
+    flex: 1 1 auto;
+    min-width: 40px;
+    height: 14px;
+    background: #f0f0f1;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+#nppp-f2b-tab .nppp-obar-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: filter .12s ease;
+}
+
+#nppp-f2b-tab .nppp-obar-row:hover .nppp-obar-bar {
+    filter: brightness(1.08);
+}
+
+#nppp-f2b-tab .nppp-obar-count {
+    flex: 0 0 26px;
+    text-align: right;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1d2327;
+    font-variant-numeric: tabular-nums;
+}
+
+#nppp-f2b-tab .nppp-obar-empty {
+    margin: 0;
+    padding: 14px;
+    color: #646970;
+    font-size: 13px;
+}
+
+/* --- Live feed (DataTables, dark "terminal" theme matching .logs-container) --- */
+#nppp-f2b-tab .nppp-f2b-feed {
+    background: #000;
+    border-radius: 5px;
+    padding: 12px;
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+#nppp-f2b-tab .nppp-f2b-feed-empty { color: #bdbdbd; }
+
+/* Base table (DataTables clones this for the scrollY header/body split,
+   so target by class, not just #id) */
+#nppp-f2b-tab table.nppp-f2b-feed-table {
+    width: 100% !important;
+    border-collapse: collapse;
+    background: transparent;
+    color: #e0e0e0;
+}
+
+#nppp-f2b-tab table.nppp-f2b-feed-table thead th {
+    background: #111;
+    color: #9a9a9a;
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    border-bottom: 1px solid #262626;
+    white-space: nowrap;
+}
+
+#nppp-f2b-tab table.nppp-f2b-feed-table tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #1a1a1a;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+#nppp-f2b-tab table.nppp-f2b-feed-table tbody tr:hover { background: #111; }
+
+/* DataTables Responsive control icon + expanded child row: library
+   defaults */
+#nppp-f2b-tab table.nppp-f2b-feed-table {
+    --dtr-control-triangle_color: #e0e0e0;
+}
+
+#nppp-f2b-tab table.nppp-f2b-feed-table > tbody > tr.child {
+    background: #0a0a0a;
+}
+
+#nppp-f2b-tab table.nppp-f2b-feed-table > tbody > tr.child ul.dtr-details,
+#nppp-f2b-tab table.nppp-f2b-feed-table > tbody > tr.child span.dtr-data {
+    color: #e0e0e0;
+}
+
+#nppp-f2b-tab table.nppp-f2b-feed-table > tbody > tr.child span.dtr-title {
+    color: #9a9a9a;
+}
+
+#nppp-f2b-tab .nppp-f2b-ts       { color: #7a7a7a; font-variant-numeric: tabular-nums; }
+#nppp-f2b-tab .nppp-f2b-ev       { font-weight: 700; letter-spacing: .04em; }
+#nppp-f2b-tab .nppp-f2b-is-ban   .nppp-f2b-ev { color: #ff5252; }
+#nppp-f2b-tab .nppp-f2b-is-unban .nppp-f2b-ev { color: #7ed321; }
+#nppp-f2b-tab .nppp-f2b-jailname { color: #9cdcfe; }
+#nppp-f2b-tab .nppp-f2b-ip       { color: #e0e0e0; }
+
+/* --- DataTables chrome, dark variant, scoped to the Live Feed only --- */
+#nppp-f2b-feed-table_wrapper .dt-search label,
+#nppp-f2b-feed-table_wrapper .dt-info {
+    color: #9a9a9a;
+    font-size: 12px;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-search input.dt-input {
+    background: #111;
+    color: #e0e0e0;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-search input.dt-input:focus {
+    outline: none;
+    border-color: #337AB7;
+    box-shadow: 0 0 4px rgba(51, 122, 183, .6);
+}
+
+#nppp-f2b-tab .nppp-f2b-foot {
+    margin: 16px 0 0;
+    font-size: 12px;
+    color: #646970;
+}
+
+/* --- Top Attack Countries: ranked list + jsVectorMap bubble map --- */
+#nppp-f2b-tab .nppp-f2b-geo {
+    display: grid;
+    grid-template-columns: minmax(220px, 320px) 1fr;
+    gap: 16px;
+    align-items: start;
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-list {
+    min-width: 0;
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-table th:last-child,
+#nppp-f2b-tab .nppp-f2b-geo-table td:last-child {
+    text-align: right;
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-table .nppp-flag {
+    margin-right: 6px;
+    vertical-align: middle;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .08);
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-map-wrap {
+    min-width: 0;
+}
+
+/* Dark "threat radar" background */
+#nppp-f2b-tab .nppp-f2b-world-map {
+    width: 100%;
+    height: 380px;
+    position: relative;
+    background-color: #0b1420;
+    background-image:
+        radial-gradient(ellipse at 30% 20%, rgba(51, 122, 183, .18), transparent 60%),
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, .035) 0, rgba(255, 255, 255, .035) 1px, transparent 1px, transparent 40px),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, .035) 0, rgba(255, 255, 255, .035) 1px, transparent 1px, transparent 40px);
+    border: 1px solid #10202f;
+    border-radius: 6px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .35), inset 0 0 40px rgba(0, 0, 0, .4);
+    overflow: hidden;
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-hint {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #646970;
+}
+
+/* jsVectorMap chrome */
+#nppp-f2b-tab .nppp-f2b-world-map .jvm-zoom-btn {
+    background: rgba(51, 122, 183, .85);
+    color: #fff;
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+}
+
+#nppp-f2b-tab .nppp-f2b-world-map .jvm-zoom-btn:hover {
+    background: #337AB7;
+}
+
+#nppp-f2b-tab .nppp-f2b-world-map .jvm-tooltip {
+    background: #1d2327;
+    color: #fff;
+    font-size: 12px;
+    padding: 4px 9px;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+}
+
+/* Radar-ping ring drawn behind the top offenders' bubbles */
+#nppp-f2b-tab .nppp-f2b-world-map .nppp-f2b-pulse-ring {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: nppp-f2b-pulse 2.2s ease-out infinite;
+}
+
+@keyframes nppp-f2b-pulse {
+    0%   { transform: scale(1);    opacity: .55; }
+    70%  { transform: scale(2.6);  opacity: 0; }
+    100% { transform: scale(2.6);  opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #nppp-f2b-tab .nppp-f2b-world-map .nppp-f2b-pulse-ring {
+        animation: none;
+        opacity: 0;
+    }
+}
+
+/* Severity legend rendered under the map by nppp_f2b_render_legend(). */
+#nppp-f2b-tab .nppp-f2b-geo-legend-inner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-legend-bar {
+    flex: 1 1 auto;
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #f8b334, #ea1919);
+}
+
+#nppp-f2b-tab .nppp-f2b-geo-legend-label {
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: #646970;
+    white-space: nowrap;
+}
+
+/* --- Narrow screens --- */
+@media screen and (max-width: 782px) {
+    #nppp-f2b-tab .nppp-f2b-toolbar { width: 100%; }
+    #nppp-f2b-tab .nppp-f2b-toolbar .nppp-f2b-btn { flex: 1 1 auto; }
+    #nppp-f2b-tab .nppp-f2b-card-titlebar { flex-direction: column; align-items: stretch; }
+    #nppp-f2b-tab .nppp-f2b-card-title-actions { justify-content: space-between; }
+    #nppp-f2b-tab .nppp-f2b-card-title-actions .nppp-f2b-btn { flex: 1 1 auto; }
+    #nppp-f2b-tab .nppp-f2b-activity-toolbar { flex-direction: column; align-items: stretch; }
+    #nppp-f2b-tab .nppp-f2b-copy-block { flex-wrap: wrap; }
+    #nppp-f2b-tab .nppp-f2b-copy-block .nppp-f2b-btn { width: 100%; }
+    #nppp-f2b-tab .nppp-f2b-feed { overflow-x: auto; }
+    #nppp-f2b-tab .nppp-f2b-geo { grid-template-columns: 1fr; }
+    #nppp-f2b-tab .nppp-f2b-world-map { height: 300px; }
+    #nppp-f2b-tab .nppp-f2b-repeat { grid-template-columns: 1fr; }
+    #nppp-f2b-tab .nppp-obar-head { display: none; }
+}
+
+/* --- DataTables pagination, dark variant --- */
+#nppp-f2b-feed-table_wrapper .dt-paging {
+    margin-top: 8px;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-paging .dt-paging-button {
+    background: #111 !important;
+    color: #bdbdbd !important;
+    border: 1px solid #333 !important;
+    border-radius: 4px;
+    margin-left: 3px;
+    padding: 4px 9px;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-paging .dt-paging-button:hover {
+    background: #1a1a1a !important;
+    color: #fff !important;
+    border-color: #444 !important;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-paging .dt-paging-button.current {
+    background: #337AB7 !important;
+    color: #fff !important;
+    border-color: #337AB7 !important;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-paging .dt-paging-button.disabled,
+#nppp-f2b-feed-table_wrapper .dt-paging .dt-paging-button.disabled:hover {
+    background: #090909 !important;
+    color: #555 !important;
+    border-color: #222 !important;
+    cursor: default;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-length,
+#nppp-f2b-feed-table_wrapper .dt-length label {
+    color: #9a9a9a;
+    font-size: 12px;
+}
+
+#nppp-f2b-feed-table_wrapper .dt-length select.dt-input {
+    background: #111;
+    color: #e0e0e0;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+
+/* =========================================================================
+   Fail2Ban tab — Abuse Reporter
+   ========================================================================= */
+
+/* Shared intro paragraph at the top of the Options, Abuse Reporter and
+   RIPEstat Lookups cards. Selector specificity is deliberately higher than
+   the per-card .nppp-f2b-hint-text rules so all three render identically. */
+#nppp-f2b-tab .nppp-f2b-card-body > .nppp-f2b-hint-text.nppp-f2b-card-intro {
+    margin: 0 0 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f0f0f1;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #646970;
+}
+
+#nppp-f2b-tab .nppp-f2b-abuse-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 4px 20px;
+    align-items: start;
+}
+
+#nppp-f2b-tab .nppp-f2b-abuse-field { margin-bottom: 16px; }
+
+#nppp-f2b-tab .nppp-f2b-abuse-field-wide { grid-column: 1 / -1; }
+
+#nppp-f2b-tab .nppp-f2b-abuse-field input[type="text"],
+#nppp-f2b-tab .nppp-f2b-abuse-field input[type="email"],
+#nppp-f2b-tab .nppp-f2b-abuse-field input[type="number"],
+#nppp-f2b-tab .nppp-f2b-abuse-field select {
+    width: 100%;
+    max-width: 100%;
+    height: 32px;
+    font-size: 13px;
+    background: #f6f7f7;
+    color: #1d2327;
+}
+
+#nppp-f2b-tab .nppp-f2b-abuse-field-wide select { max-width: 280px; }
+
+#nppp-f2b-tab .nppp-f2b-abuse-field .nppp-f2b-hint-text {
+    margin-top: 5px;
+    line-height: 1.5;
+}
+
+/* --- RIPEstat Lookups card --- */
+#nppp-f2b-tab .nppp-f2b-card-sourceapp .nppp-f2b-copy input[type="text"] {
+    flex: 0 1 520px;
+}
+
+#nppp-f2b-tab #nppp-f2b-sourceapp-suffix { background: #fff; }
+
+#nppp-f2b-tab .nppp-f2b-card-sourceapp .nppp-f2b-hint-text { line-height: 1.5; }
+
+/* --- Report cells, shared by Repeat Offenders and the Live Feed --- */
+#nppp-f2b-tab .nppp-f2b-report-col { white-space: nowrap; }
+
+#nppp-f2b-tab .nppp-f2b-report-btn {
+    height: 26px;
+    padding: 0 11px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    background: #fff;
+    border-color: #ea1919;
+    color: #ea1919;
+}
+
+#nppp-f2b-tab .nppp-f2b-report-btn:hover:not([disabled]) {
+    background: #ea1919;
+    border-color: #ea1919;
+    color: #fff;
+}
+
+#nppp-f2b-tab .nppp-f2b-report-done {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: #66b317;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    cursor: default;
+}
+
+#nppp-f2b-tab .nppp-f2b-report-na {
+    font-size: 11px;
+    color: #8c8f94;
+    cursor: help;
+}
+
+/* The Live Feed is the dark terminal panel — soften the muted states there */
+#nppp-f2b-tab table.nppp-f2b-feed-table .nppp-f2b-report-na { color: #555; }
+
+/* --- Confirmation dialog --- */
+body.nppp-f2b-modal-open { overflow: hidden; }
+
+#nppp-f2b-tab .nppp-f2b-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100050;
+}
+
+#nppp-f2b-tab .nppp-f2b-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, .62);
+}
+
+#nppp-f2b-tab .nppp-f2b-modal-box {
+    position: relative;
+    width: min(720px, calc(100vw - 32px));
+    max-height: calc(100vh - 80px);
+    max-height: calc(100dvh - 80px);
+    margin: 48px auto 0;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, .35);
+    overflow: hidden;
+}
+
+#nppp-f2b-tab .nppp-f2b-modal-body {
+    padding: 18px 16px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+#nppp-f2b-tab .nppp-f2b-modal-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    padding: 12px 16px;
+    background: #f6f7f7;
+    border-top: 1px solid #dcdcde;
+}
+
+#nppp-f2b-tab .nppp-f2b-modal-foot .nppp-f2b-hint-text {
+    margin: 0;
+    flex: 1 1 300px;
+}
+
+#nppp-f2b-tab .nppp-f2b-modal .nppp-f2b-result { margin-bottom: 16px; }
+#nppp-f2b-tab .nppp-f2b-modal .nppp-f2b-note   { margin: 0 0 16px; }
+
+/* --- Preview body --- */
+#nppp-f2b-tab .nppp-f2b-abuse-preview-table th {
+    width: 150px;
+    background: #337AB7;
+    color: #fff;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, .18);
+    vertical-align: top;
+}
+
+#nppp-f2b-tab .nppp-f2b-abuse-preview-table tbody tr:first-child th { border-top: 0; }
+#nppp-f2b-tab .nppp-f2b-abuse-preview-table tbody tr:nth-child(even) { background: transparent; }
+#nppp-f2b-tab .nppp-f2b-abuse-preview-table tbody tr:hover { background: transparent; }
+
+#nppp-f2b-tab .nppp-f2b-abuse-preview-table td { word-break: break-word; }
+
+#nppp-f2b-tab .nppp-f2b-abuse-muted {
+    color: #646970;
+    font-size: 12px;
+}
+
+#nppp-f2b-tab .nppp-f2b-abuse-preview-label {
+    margin: 18px 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #646970;
+}
+
+#nppp-f2b-tab .nppp-f2b-abuse-evidence {
+    margin: 0;
+    padding: 12px 14px;
+    max-height: 220px;
+    overflow: auto;
+    background: #000;
+    border-radius: 5px;
+    color: #e0e0e0;
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre;
+}
+
+/* --- Narrow screens --- */
+@media screen and (max-width: 782px) {
+    #nppp-f2b-tab .nppp-f2b-abuse-grid { grid-template-columns: 1fr; }
+    #nppp-f2b-tab .nppp-f2b-abuse-field-wide select { max-width: 100%; }
+    #nppp-f2b-tab .nppp-f2b-jail-activity-row { grid-template-columns: 1fr; }
+    #nppp-f2b-tab .nppp-f2b-jail-chart-panel { margin-top: 4px; }
+    #nppp-f2b-tab .nppp-f2b-modal-box { margin-top: 16px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); }
+    #nppp-f2b-tab .nppp-f2b-modal-foot { flex-direction: column; align-items: stretch; }
+    #nppp-f2b-tab .nppp-f2b-modal-foot .nppp-f2b-hint-text { flex: 0 1 auto; }
+    #nppp-f2b-tab .nppp-f2b-modal-foot .nppp-f2b-btn { width: 100%; }
+    #nppp-f2b-tab .nppp-f2b-abuse-preview-table th { width: auto; }
 }

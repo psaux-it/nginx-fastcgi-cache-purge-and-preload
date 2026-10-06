@@ -7,11 +7,15 @@
 admin/js/dataTables.min.js           linguist-vendored linguist-generated -diff
 admin/js/popper.min.js               linguist-vendored linguist-generated -diff
 admin/js/tempus-dominus.min.js       linguist-vendored linguist-generated -diff
+admin/js/jsvectormap.min.js          linguist-vendored linguist-generated -diff
+admin/js/world.js                    linguist-vendored linguist-generated -diff
+
 admin/css/dataTables.min.css         linguist-vendored linguist-generated -diff
 admin/css/jquery-ui.min.css          linguist-vendored linguist-generated -diff
-admin/css/jquery-ui.theme.min.css    linguist-vendored linguist-generated -diff
 admin/css/tempus-dominus.min.css     linguist-vendored linguist-generated -diff
 admin/css/flag-icons.css             linguist-vendored linguist-generated -diff
+admin/css/jsvectormap.min.css        linguist-vendored linguist-generated -diff
+admin/css/flags/**                   linguist-vendored linguist-generated -diff
 
 *.min.js            linguist-generated -diff
 *.min.css           linguist-generated -diff
@@ -50,11 +54,31 @@ safexec/bin/safexec-*-linux-musl   binary
 *.deb               binary
 *.rpm               binary
 
-safexec/**          linguist-vendored
-
 *.woff binary
 *.woff2 binary
 *.ttf binary
 *.otf binary
 *.eot binary
 *.zip binary
+
+# WordPress plugin distribution archive allowlist.
+# Exclude every top-level path by default.
+/* export-ignore
+
+# Runtime directories.
+/admin !export-ignore
+/admin/** !export-ignore
+/frontend !export-ignore
+/frontend/** !export-ignore
+/includes !export-ignore
+/includes/** !export-ignore
+/languages !export-ignore
+/languages/** !export-ignore
+
+# Runtime and distribution files.
+/changelog.txt !export-ignore
+/dummy-nginx.conf !export-ignore
+/fastcgi-cache-purge-and-preload-nginx.php !export-ignore
+/index.php !export-ignore
+/readme.txt !export-ignore
+/uninstall.php !export-ignore

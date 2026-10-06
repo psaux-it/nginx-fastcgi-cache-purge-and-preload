@@ -2,7 +2,7 @@
 /**
  * AJAX option handlers for Nginx Cache Purge Preload
  * Description: Handles all wp_ajax_* callbacks for toggle switches and live option updates.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -362,7 +362,7 @@ function nppp_update_rg_purge_option(): void {
     // If rg is not available or version is too low, refuse to enable.
     if ( $rg_purge === 'yes' ) {
         $rg_bin = function_exists( 'shell_exec' ) ? trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ) : '';
-        if ( $rg_bin === '' || ! is_executable( $rg_bin ) ) {
+        if ( $rg_bin === '' ) {
             wp_send_json_error( __( 'ripgrep (rg) binary not found. Install it to enable RG Purge.', 'fastcgi-cache-purge-and-preload-nginx' ), 400 );
         }
         // Enforce minimum rg version requirement.
@@ -593,5 +593,44 @@ function nppp_ajax_test_cache_key_regex() {
     wp_send_json_success( array(
         'status'  => $result,
         'message' => $messages[ $result ] ?? __( 'Unknown result.', 'fastcgi-cache-purge-and-preload-nginx' ),
+    ) );
+}
+
+// AJAX handler — lazy-loads the Vary: Accept-Encoding check after page paint so the
+// two blocking wp_remote_head() probes (timeout=3s each, worst-case ~6s on a cold
+// transient) never delay the settings page's initial PHP render.
+function nppp_check_vary_issue_callback(): void {
+    nppp_ajax_auth( 'nppp-check-vary-issue' );
+
+    $nppp_vary = function_exists( 'nppp_detect_vary_issue' ) ? nppp_detect_vary_issue() : null;
+
+    wp_send_json_success( array(
+        'html' => function_exists( 'nppp_render_vary_notice_html' )
+            ? nppp_render_vary_notice_html( $nppp_vary )
+            : '',
+    ) );
+}
+
+// Permanently dismiss the DISABLE_WP_CRON row.
+// Stores a simple boolean option; pre-checks and settings-page both gate on it.
+function nppp_dismiss_cron_notice(): void {
+    nppp_ajax_auth( 'nppp-dismiss-cron-notice' );
+
+    update_option( 'nppp_cron_notice_dismissed', 1, false );
+
+    wp_send_json_success();
+}
+
+// AJAX handler — lazy-loads the DISABLE_WP_CRON check after page paint, mirroring
+// the Vary: Accept-Encoding structer.
+function nppp_check_cron_issue_callback(): void {
+    nppp_ajax_auth( 'nppp-check-cron-issue' );
+
+    $nppp_cron = function_exists( 'nppp_detect_cron_issue' ) ? nppp_detect_cron_issue() : null;
+
+    wp_send_json_success( array(
+        'html' => function_exists( 'nppp_render_cron_notice_html' )
+            ? nppp_render_cron_notice_html( $nppp_cron )
+            : '',
     ) );
 }

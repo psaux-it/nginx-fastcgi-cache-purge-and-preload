@@ -1,0 +1,1915 @@
+.nppp-flagb, .nppp-flag {
+  background-size: contain;
+  background-position: 50%;
+  background-repeat: no-repeat;
+}
+
+.nppp-flag {
+  position: relative;
+  display: inline-block;
+  width: 1.333333em;
+  line-height: 1em;
+}
+.nppp-flag:before {
+  content: " ";
+}
+.nppp-flag.nppp-flags {
+  width: 1em;
+}
+
+.nppp-flag-xx {
+  background-image: url(./flags/4x3/xx.svg);
+}
+.nppp-flag-xx.nppp-flags {
+  background-image: url(./flags/1x1/xx.svg);
+}
+
+.nppp-flag-ad {
+  background-image: url(./flags/4x3/ad.svg);
+}
+.nppp-flag-ad.nppp-flags {
+  background-image: url(./flags/1x1/ad.svg);
+}
+
+.nppp-flag-ae {
+  background-image: url(./flags/4x3/ae.svg);
+}
+.nppp-flag-ae.nppp-flags {
+  background-image: url(./flags/1x1/ae.svg);
+}
+
+.nppp-flag-af {
+  background-image: url(./flags/4x3/af.svg);
+}
+.nppp-flag-af.nppp-flags {
+  background-image: url(./flags/1x1/af.svg);
+}
+
+.nppp-flag-ag {
+  background-image: url(./flags/4x3/ag.svg);
+}
+.nppp-flag-ag.nppp-flags {
+  background-image: url(./flags/1x1/ag.svg);
+}
+
+.nppp-flag-ai {
+  background-image: url(./flags/4x3/ai.svg);
+}
+.nppp-flag-ai.nppp-flags {
+  background-image: url(./flags/1x1/ai.svg);
+}
+
+.nppp-flag-al {
+  background-image: url(./flags/4x3/al.svg);
+}
+.nppp-flag-al.nppp-flags {
+  background-image: url(./flags/1x1/al.svg);
+}
+
+.nppp-flag-am {
+  background-image: url(./flags/4x3/am.svg);
+}
+.nppp-flag-am.nppp-flags {
+  background-image: url(./flags/1x1/am.svg);
+}
+
+.nppp-flag-ao {
+  background-image: url(./flags/4x3/ao.svg);
+}
+.nppp-flag-ao.nppp-flags {
+  background-image: url(./flags/1x1/ao.svg);
+}
+
+.nppp-flag-aq {
+  background-image: url(./flags/4x3/aq.svg);
+}
+.nppp-flag-aq.nppp-flags {
+  background-image: url(./flags/1x1/aq.svg);
+}
+
+.nppp-flag-ar {
+  background-image: url(./flags/4x3/ar.svg);
+}
+.nppp-flag-ar.nppp-flags {
+  background-image: url(./flags/1x1/ar.svg);
+}
+
+.nppp-flag-as {
+  background-image: url(./flags/4x3/as.svg);
+}
+.nppp-flag-as.nppp-flags {
+  background-image: url(./flags/1x1/as.svg);
+}
+
+.nppp-flag-at {
+  background-image: url(./flags/4x3/at.svg);
+}
+.nppp-flag-at.nppp-flags {
+  background-image: url(./flags/1x1/at.svg);
+}
+
+.nppp-flag-au {
+  background-image: url(./flags/4x3/au.svg);
+}
+.nppp-flag-au.nppp-flags {
+  background-image: url(./flags/1x1/au.svg);
+}
+
+.nppp-flag-aw {
+  background-image: url(./flags/4x3/aw.svg);
+}
+.nppp-flag-aw.nppp-flags {
+  background-image: url(./flags/1x1/aw.svg);
+}
+
+.nppp-flag-ax {
+  background-image: url(./flags/4x3/ax.svg);
+}
+.nppp-flag-ax.nppp-flags {
+  background-image: url(./flags/1x1/ax.svg);
+}
+
+.nppp-flag-az {
+  background-image: url(./flags/4x3/az.svg);
+}
+.nppp-flag-az.nppp-flags {
+  background-image: url(./flags/1x1/az.svg);
+}
+
+.nppp-flag-ba {
+  background-image: url(./flags/4x3/ba.svg);
+}
+.nppp-flag-ba.nppp-flags {
+  background-image: url(./flags/1x1/ba.svg);
+}
+
+.nppp-flag-bb {
+  background-image: url(./flags/4x3/bb.svg);
+}
+.nppp-flag-bb.nppp-flags {
+  background-image: url(./flags/1x1/bb.svg);
+}
+
+.nppp-flag-bd {
+  background-image: url(./flags/4x3/bd.svg);
+}
+.nppp-flag-bd.nppp-flags {
+  background-image: url(./flags/1x1/bd.svg);
+}
+
+.nppp-flag-be {
+  background-image: url(./flags/4x3/be.svg);
+}
+.nppp-flag-be.nppp-flags {
+  background-image: url(./flags/1x1/be.svg);
+}
+
+.nppp-flag-bf {
+  background-image: url(./flags/4x3/bf.svg);
+}
+.nppp-flag-bf.nppp-flags {
+  background-image: url(./flags/1x1/bf.svg);
+}
+
+.nppp-flag-bg {
+  background-image: url(./flags/4x3/bg.svg);
+}
+.nppp-flag-bg.nppp-flags {
+  background-image: url(./flags/1x1/bg.svg);
+}
+
+.nppp-flag-bh {
+  background-image: url(./flags/4x3/bh.svg);
+}
+.nppp-flag-bh.nppp-flags {
+  background-image: url(./flags/1x1/bh.svg);
+}
+
+.nppp-flag-bi {
+  background-image: url(./flags/4x3/bi.svg);
+}
+.nppp-flag-bi.nppp-flags {
+  background-image: url(./flags/1x1/bi.svg);
+}
+
+.nppp-flag-bj {
+  background-image: url(./flags/4x3/bj.svg);
+}
+.nppp-flag-bj.nppp-flags {
+  background-image: url(./flags/1x1/bj.svg);
+}
+
+.nppp-flag-bl {
+  background-image: url(./flags/4x3/bl.svg);
+}
+.nppp-flag-bl.nppp-flags {
+  background-image: url(./flags/1x1/bl.svg);
+}
+
+.nppp-flag-bm {
+  background-image: url(./flags/4x3/bm.svg);
+}
+.nppp-flag-bm.nppp-flags {
+  background-image: url(./flags/1x1/bm.svg);
+}
+
+.nppp-flag-bn {
+  background-image: url(./flags/4x3/bn.svg);
+}
+.nppp-flag-bn.nppp-flags {
+  background-image: url(./flags/1x1/bn.svg);
+}
+
+.nppp-flag-bo {
+  background-image: url(./flags/4x3/bo.svg);
+}
+.nppp-flag-bo.nppp-flags {
+  background-image: url(./flags/1x1/bo.svg);
+}
+
+.nppp-flag-bq {
+  background-image: url(./flags/4x3/bq.svg);
+}
+.nppp-flag-bq.nppp-flags {
+  background-image: url(./flags/1x1/bq.svg);
+}
+
+.nppp-flag-br {
+  background-image: url(./flags/4x3/br.svg);
+}
+.nppp-flag-br.nppp-flags {
+  background-image: url(./flags/1x1/br.svg);
+}
+
+.nppp-flag-bs {
+  background-image: url(./flags/4x3/bs.svg);
+}
+.nppp-flag-bs.nppp-flags {
+  background-image: url(./flags/1x1/bs.svg);
+}
+
+.nppp-flag-bt {
+  background-image: url(./flags/4x3/bt.svg);
+}
+.nppp-flag-bt.nppp-flags {
+  background-image: url(./flags/1x1/bt.svg);
+}
+
+.nppp-flag-bv {
+  background-image: url(./flags/4x3/bv.svg);
+}
+.nppp-flag-bv.nppp-flags {
+  background-image: url(./flags/1x1/bv.svg);
+}
+
+.nppp-flag-bw {
+  background-image: url(./flags/4x3/bw.svg);
+}
+.nppp-flag-bw.nppp-flags {
+  background-image: url(./flags/1x1/bw.svg);
+}
+
+.nppp-flag-by {
+  background-image: url(./flags/4x3/by.svg);
+}
+.nppp-flag-by.nppp-flags {
+  background-image: url(./flags/1x1/by.svg);
+}
+
+.nppp-flag-bz {
+  background-image: url(./flags/4x3/bz.svg);
+}
+.nppp-flag-bz.nppp-flags {
+  background-image: url(./flags/1x1/bz.svg);
+}
+
+.nppp-flag-ca {
+  background-image: url(./flags/4x3/ca.svg);
+}
+.nppp-flag-ca.nppp-flags {
+  background-image: url(./flags/1x1/ca.svg);
+}
+
+.nppp-flag-cc {
+  background-image: url(./flags/4x3/cc.svg);
+}
+.nppp-flag-cc.nppp-flags {
+  background-image: url(./flags/1x1/cc.svg);
+}
+
+.nppp-flag-cd {
+  background-image: url(./flags/4x3/cd.svg);
+}
+.nppp-flag-cd.nppp-flags {
+  background-image: url(./flags/1x1/cd.svg);
+}
+
+.nppp-flag-cf {
+  background-image: url(./flags/4x3/cf.svg);
+}
+.nppp-flag-cf.nppp-flags {
+  background-image: url(./flags/1x1/cf.svg);
+}
+
+.nppp-flag-cg {
+  background-image: url(./flags/4x3/cg.svg);
+}
+.nppp-flag-cg.nppp-flags {
+  background-image: url(./flags/1x1/cg.svg);
+}
+
+.nppp-flag-ch {
+  background-image: url(./flags/4x3/ch.svg);
+}
+.nppp-flag-ch.nppp-flags {
+  background-image: url(./flags/1x1/ch.svg);
+}
+
+.nppp-flag-ci {
+  background-image: url(./flags/4x3/ci.svg);
+}
+.nppp-flag-ci.nppp-flags {
+  background-image: url(./flags/1x1/ci.svg);
+}
+
+.nppp-flag-ck {
+  background-image: url(./flags/4x3/ck.svg);
+}
+.nppp-flag-ck.nppp-flags {
+  background-image: url(./flags/1x1/ck.svg);
+}
+
+.nppp-flag-cl {
+  background-image: url(./flags/4x3/cl.svg);
+}
+.nppp-flag-cl.nppp-flags {
+  background-image: url(./flags/1x1/cl.svg);
+}
+
+.nppp-flag-cm {
+  background-image: url(./flags/4x3/cm.svg);
+}
+.nppp-flag-cm.nppp-flags {
+  background-image: url(./flags/1x1/cm.svg);
+}
+
+.nppp-flag-cn {
+  background-image: url(./flags/4x3/cn.svg);
+}
+.nppp-flag-cn.nppp-flags {
+  background-image: url(./flags/1x1/cn.svg);
+}
+
+.nppp-flag-co {
+  background-image: url(./flags/4x3/co.svg);
+}
+.nppp-flag-co.nppp-flags {
+  background-image: url(./flags/1x1/co.svg);
+}
+
+.nppp-flag-cr {
+  background-image: url(./flags/4x3/cr.svg);
+}
+.nppp-flag-cr.nppp-flags {
+  background-image: url(./flags/1x1/cr.svg);
+}
+
+.nppp-flag-cu {
+  background-image: url(./flags/4x3/cu.svg);
+}
+.nppp-flag-cu.nppp-flags {
+  background-image: url(./flags/1x1/cu.svg);
+}
+
+.nppp-flag-cv {
+  background-image: url(./flags/4x3/cv.svg);
+}
+.nppp-flag-cv.nppp-flags {
+  background-image: url(./flags/1x1/cv.svg);
+}
+
+.nppp-flag-cw {
+  background-image: url(./flags/4x3/cw.svg);
+}
+.nppp-flag-cw.nppp-flags {
+  background-image: url(./flags/1x1/cw.svg);
+}
+
+.nppp-flag-cx {
+  background-image: url(./flags/4x3/cx.svg);
+}
+.nppp-flag-cx.nppp-flags {
+  background-image: url(./flags/1x1/cx.svg);
+}
+
+.nppp-flag-cy {
+  background-image: url(./flags/4x3/cy.svg);
+}
+.nppp-flag-cy.nppp-flags {
+  background-image: url(./flags/1x1/cy.svg);
+}
+
+.nppp-flag-cz {
+  background-image: url(./flags/4x3/cz.svg);
+}
+.nppp-flag-cz.nppp-flags {
+  background-image: url(./flags/1x1/cz.svg);
+}
+
+.nppp-flag-de {
+  background-image: url(./flags/4x3/de.svg);
+}
+.nppp-flag-de.nppp-flags {
+  background-image: url(./flags/1x1/de.svg);
+}
+
+.nppp-flag-dj {
+  background-image: url(./flags/4x3/dj.svg);
+}
+.nppp-flag-dj.nppp-flags {
+  background-image: url(./flags/1x1/dj.svg);
+}
+
+.nppp-flag-dk {
+  background-image: url(./flags/4x3/dk.svg);
+}
+.nppp-flag-dk.nppp-flags {
+  background-image: url(./flags/1x1/dk.svg);
+}
+
+.nppp-flag-dm {
+  background-image: url(./flags/4x3/dm.svg);
+}
+.nppp-flag-dm.nppp-flags {
+  background-image: url(./flags/1x1/dm.svg);
+}
+
+.nppp-flag-do {
+  background-image: url(./flags/4x3/do.svg);
+}
+.nppp-flag-do.nppp-flags {
+  background-image: url(./flags/1x1/do.svg);
+}
+
+.nppp-flag-dz {
+  background-image: url(./flags/4x3/dz.svg);
+}
+.nppp-flag-dz.nppp-flags {
+  background-image: url(./flags/1x1/dz.svg);
+}
+
+.nppp-flag-ec {
+  background-image: url(./flags/4x3/ec.svg);
+}
+.nppp-flag-ec.nppp-flags {
+  background-image: url(./flags/1x1/ec.svg);
+}
+
+.nppp-flag-ee {
+  background-image: url(./flags/4x3/ee.svg);
+}
+.nppp-flag-ee.nppp-flags {
+  background-image: url(./flags/1x1/ee.svg);
+}
+
+.nppp-flag-eg {
+  background-image: url(./flags/4x3/eg.svg);
+}
+.nppp-flag-eg.nppp-flags {
+  background-image: url(./flags/1x1/eg.svg);
+}
+
+.nppp-flag-eh {
+  background-image: url(./flags/4x3/eh.svg);
+}
+.nppp-flag-eh.nppp-flags {
+  background-image: url(./flags/1x1/eh.svg);
+}
+
+.nppp-flag-er {
+  background-image: url(./flags/4x3/er.svg);
+}
+.nppp-flag-er.nppp-flags {
+  background-image: url(./flags/1x1/er.svg);
+}
+
+.nppp-flag-es {
+  background-image: url(./flags/4x3/es.svg);
+}
+.nppp-flag-es.nppp-flags {
+  background-image: url(./flags/1x1/es.svg);
+}
+
+.nppp-flag-et {
+  background-image: url(./flags/4x3/et.svg);
+}
+.nppp-flag-et.nppp-flags {
+  background-image: url(./flags/1x1/et.svg);
+}
+
+.nppp-flag-fi {
+  background-image: url(./flags/4x3/fi.svg);
+}
+.nppp-flag-fi.nppp-flags {
+  background-image: url(./flags/1x1/fi.svg);
+}
+
+.nppp-flag-fj {
+  background-image: url(./flags/4x3/fj.svg);
+}
+.nppp-flag-fj.nppp-flags {
+  background-image: url(./flags/1x1/fj.svg);
+}
+
+.nppp-flag-fk {
+  background-image: url(./flags/4x3/fk.svg);
+}
+.nppp-flag-fk.nppp-flags {
+  background-image: url(./flags/1x1/fk.svg);
+}
+
+.nppp-flag-fm {
+  background-image: url(./flags/4x3/fm.svg);
+}
+.nppp-flag-fm.nppp-flags {
+  background-image: url(./flags/1x1/fm.svg);
+}
+
+.nppp-flag-fo {
+  background-image: url(./flags/4x3/fo.svg);
+}
+.nppp-flag-fo.nppp-flags {
+  background-image: url(./flags/1x1/fo.svg);
+}
+
+.nppp-flag-fr {
+  background-image: url(./flags/4x3/fr.svg);
+}
+.nppp-flag-fr.nppp-flags {
+  background-image: url(./flags/1x1/fr.svg);
+}
+
+.nppp-flag-ga {
+  background-image: url(./flags/4x3/ga.svg);
+}
+.nppp-flag-ga.nppp-flags {
+  background-image: url(./flags/1x1/ga.svg);
+}
+
+.nppp-flag-gb {
+  background-image: url(./flags/4x3/gb.svg);
+}
+.nppp-flag-gb.nppp-flags {
+  background-image: url(./flags/1x1/gb.svg);
+}
+
+.nppp-flag-gd {
+  background-image: url(./flags/4x3/gd.svg);
+}
+.nppp-flag-gd.nppp-flags {
+  background-image: url(./flags/1x1/gd.svg);
+}
+
+.nppp-flag-ge {
+  background-image: url(./flags/4x3/ge.svg);
+}
+.nppp-flag-ge.nppp-flags {
+  background-image: url(./flags/1x1/ge.svg);
+}
+
+.nppp-flag-gf {
+  background-image: url(./flags/4x3/gf.svg);
+}
+.nppp-flag-gf.nppp-flags {
+  background-image: url(./flags/1x1/gf.svg);
+}
+
+.nppp-flag-gg {
+  background-image: url(./flags/4x3/gg.svg);
+}
+.nppp-flag-gg.nppp-flags {
+  background-image: url(./flags/1x1/gg.svg);
+}
+
+.nppp-flag-gh {
+  background-image: url(./flags/4x3/gh.svg);
+}
+.nppp-flag-gh.nppp-flags {
+  background-image: url(./flags/1x1/gh.svg);
+}
+
+.nppp-flag-gi {
+  background-image: url(./flags/4x3/gi.svg);
+}
+.nppp-flag-gi.nppp-flags {
+  background-image: url(./flags/1x1/gi.svg);
+}
+
+.nppp-flag-gl {
+  background-image: url(./flags/4x3/gl.svg);
+}
+.nppp-flag-gl.nppp-flags {
+  background-image: url(./flags/1x1/gl.svg);
+}
+
+.nppp-flag-gm {
+  background-image: url(./flags/4x3/gm.svg);
+}
+.nppp-flag-gm.nppp-flags {
+  background-image: url(./flags/1x1/gm.svg);
+}
+
+.nppp-flag-gn {
+  background-image: url(./flags/4x3/gn.svg);
+}
+.nppp-flag-gn.nppp-flags {
+  background-image: url(./flags/1x1/gn.svg);
+}
+
+.nppp-flag-gp {
+  background-image: url(./flags/4x3/gp.svg);
+}
+.nppp-flag-gp.nppp-flags {
+  background-image: url(./flags/1x1/gp.svg);
+}
+
+.nppp-flag-gq {
+  background-image: url(./flags/4x3/gq.svg);
+}
+.nppp-flag-gq.nppp-flags {
+  background-image: url(./flags/1x1/gq.svg);
+}
+
+.nppp-flag-gr {
+  background-image: url(./flags/4x3/gr.svg);
+}
+.nppp-flag-gr.nppp-flags {
+  background-image: url(./flags/1x1/gr.svg);
+}
+
+.nppp-flag-gs {
+  background-image: url(./flags/4x3/gs.svg);
+}
+.nppp-flag-gs.nppp-flags {
+  background-image: url(./flags/1x1/gs.svg);
+}
+
+.nppp-flag-gt {
+  background-image: url(./flags/4x3/gt.svg);
+}
+.nppp-flag-gt.nppp-flags {
+  background-image: url(./flags/1x1/gt.svg);
+}
+
+.nppp-flag-gu {
+  background-image: url(./flags/4x3/gu.svg);
+}
+.nppp-flag-gu.nppp-flags {
+  background-image: url(./flags/1x1/gu.svg);
+}
+
+.nppp-flag-gw {
+  background-image: url(./flags/4x3/gw.svg);
+}
+.nppp-flag-gw.nppp-flags {
+  background-image: url(./flags/1x1/gw.svg);
+}
+
+.nppp-flag-gy {
+  background-image: url(./flags/4x3/gy.svg);
+}
+.nppp-flag-gy.nppp-flags {
+  background-image: url(./flags/1x1/gy.svg);
+}
+
+.nppp-flag-hk {
+  background-image: url(./flags/4x3/hk.svg);
+}
+.nppp-flag-hk.nppp-flags {
+  background-image: url(./flags/1x1/hk.svg);
+}
+
+.nppp-flag-hm {
+  background-image: url(./flags/4x3/hm.svg);
+}
+.nppp-flag-hm.nppp-flags {
+  background-image: url(./flags/1x1/hm.svg);
+}
+
+.nppp-flag-hn {
+  background-image: url(./flags/4x3/hn.svg);
+}
+.nppp-flag-hn.nppp-flags {
+  background-image: url(./flags/1x1/hn.svg);
+}
+
+.nppp-flag-hr {
+  background-image: url(./flags/4x3/hr.svg);
+}
+.nppp-flag-hr.nppp-flags {
+  background-image: url(./flags/1x1/hr.svg);
+}
+
+.nppp-flag-ht {
+  background-image: url(./flags/4x3/ht.svg);
+}
+.nppp-flag-ht.nppp-flags {
+  background-image: url(./flags/1x1/ht.svg);
+}
+
+.nppp-flag-hu {
+  background-image: url(./flags/4x3/hu.svg);
+}
+.nppp-flag-hu.nppp-flags {
+  background-image: url(./flags/1x1/hu.svg);
+}
+
+.nppp-flag-id {
+  background-image: url(./flags/4x3/id.svg);
+}
+.nppp-flag-id.nppp-flags {
+  background-image: url(./flags/1x1/id.svg);
+}
+
+.nppp-flag-ie {
+  background-image: url(./flags/4x3/ie.svg);
+}
+.nppp-flag-ie.nppp-flags {
+  background-image: url(./flags/1x1/ie.svg);
+}
+
+.nppp-flag-il {
+  background-image: url(./flags/4x3/il.svg);
+}
+.nppp-flag-il.nppp-flags {
+  background-image: url(./flags/1x1/il.svg);
+}
+
+.nppp-flag-im {
+  background-image: url(./flags/4x3/im.svg);
+}
+.nppp-flag-im.nppp-flags {
+  background-image: url(./flags/1x1/im.svg);
+}
+
+.nppp-flag-in {
+  background-image: url(./flags/4x3/in.svg);
+}
+.nppp-flag-in.nppp-flags {
+  background-image: url(./flags/1x1/in.svg);
+}
+
+.nppp-flag-io {
+  background-image: url(./flags/4x3/io.svg);
+}
+.nppp-flag-io.nppp-flags {
+  background-image: url(./flags/1x1/io.svg);
+}
+
+.nppp-flag-iq {
+  background-image: url(./flags/4x3/iq.svg);
+}
+.nppp-flag-iq.nppp-flags {
+  background-image: url(./flags/1x1/iq.svg);
+}
+
+.nppp-flag-ir {
+  background-image: url(./flags/4x3/ir.svg);
+}
+.nppp-flag-ir.nppp-flags {
+  background-image: url(./flags/1x1/ir.svg);
+}
+
+.nppp-flag-is {
+  background-image: url(./flags/4x3/is.svg);
+}
+.nppp-flag-is.nppp-flags {
+  background-image: url(./flags/1x1/is.svg);
+}
+
+.nppp-flag-it {
+  background-image: url(./flags/4x3/it.svg);
+}
+.nppp-flag-it.nppp-flags {
+  background-image: url(./flags/1x1/it.svg);
+}
+
+.nppp-flag-je {
+  background-image: url(./flags/4x3/je.svg);
+}
+.nppp-flag-je.nppp-flags {
+  background-image: url(./flags/1x1/je.svg);
+}
+
+.nppp-flag-jm {
+  background-image: url(./flags/4x3/jm.svg);
+}
+.nppp-flag-jm.nppp-flags {
+  background-image: url(./flags/1x1/jm.svg);
+}
+
+.nppp-flag-jo {
+  background-image: url(./flags/4x3/jo.svg);
+}
+.nppp-flag-jo.nppp-flags {
+  background-image: url(./flags/1x1/jo.svg);
+}
+
+.nppp-flag-jp {
+  background-image: url(./flags/4x3/jp.svg);
+}
+.nppp-flag-jp.nppp-flags {
+  background-image: url(./flags/1x1/jp.svg);
+}
+
+.nppp-flag-ke {
+  background-image: url(./flags/4x3/ke.svg);
+}
+.nppp-flag-ke.nppp-flags {
+  background-image: url(./flags/1x1/ke.svg);
+}
+
+.nppp-flag-kg {
+  background-image: url(./flags/4x3/kg.svg);
+}
+.nppp-flag-kg.nppp-flags {
+  background-image: url(./flags/1x1/kg.svg);
+}
+
+.nppp-flag-kh {
+  background-image: url(./flags/4x3/kh.svg);
+}
+.nppp-flag-kh.nppp-flags {
+  background-image: url(./flags/1x1/kh.svg);
+}
+
+.nppp-flag-ki {
+  background-image: url(./flags/4x3/ki.svg);
+}
+.nppp-flag-ki.nppp-flags {
+  background-image: url(./flags/1x1/ki.svg);
+}
+
+.nppp-flag-km {
+  background-image: url(./flags/4x3/km.svg);
+}
+.nppp-flag-km.nppp-flags {
+  background-image: url(./flags/1x1/km.svg);
+}
+
+.nppp-flag-kn {
+  background-image: url(./flags/4x3/kn.svg);
+}
+.nppp-flag-kn.nppp-flags {
+  background-image: url(./flags/1x1/kn.svg);
+}
+
+.nppp-flag-kp {
+  background-image: url(./flags/4x3/kp.svg);
+}
+.nppp-flag-kp.nppp-flags {
+  background-image: url(./flags/1x1/kp.svg);
+}
+
+.nppp-flag-kr {
+  background-image: url(./flags/4x3/kr.svg);
+}
+.nppp-flag-kr.nppp-flags {
+  background-image: url(./flags/1x1/kr.svg);
+}
+
+.nppp-flag-kw {
+  background-image: url(./flags/4x3/kw.svg);
+}
+.nppp-flag-kw.nppp-flags {
+  background-image: url(./flags/1x1/kw.svg);
+}
+
+.nppp-flag-ky {
+  background-image: url(./flags/4x3/ky.svg);
+}
+.nppp-flag-ky.nppp-flags {
+  background-image: url(./flags/1x1/ky.svg);
+}
+
+.nppp-flag-kz {
+  background-image: url(./flags/4x3/kz.svg);
+}
+.nppp-flag-kz.nppp-flags {
+  background-image: url(./flags/1x1/kz.svg);
+}
+
+.nppp-flag-la {
+  background-image: url(./flags/4x3/la.svg);
+}
+.nppp-flag-la.nppp-flags {
+  background-image: url(./flags/1x1/la.svg);
+}
+
+.nppp-flag-lb {
+  background-image: url(./flags/4x3/lb.svg);
+}
+.nppp-flag-lb.nppp-flags {
+  background-image: url(./flags/1x1/lb.svg);
+}
+
+.nppp-flag-lc {
+  background-image: url(./flags/4x3/lc.svg);
+}
+.nppp-flag-lc.nppp-flags {
+  background-image: url(./flags/1x1/lc.svg);
+}
+
+.nppp-flag-li {
+  background-image: url(./flags/4x3/li.svg);
+}
+.nppp-flag-li.nppp-flags {
+  background-image: url(./flags/1x1/li.svg);
+}
+
+.nppp-flag-lk {
+  background-image: url(./flags/4x3/lk.svg);
+}
+.nppp-flag-lk.nppp-flags {
+  background-image: url(./flags/1x1/lk.svg);
+}
+
+.nppp-flag-lr {
+  background-image: url(./flags/4x3/lr.svg);
+}
+.nppp-flag-lr.nppp-flags {
+  background-image: url(./flags/1x1/lr.svg);
+}
+
+.nppp-flag-ls {
+  background-image: url(./flags/4x3/ls.svg);
+}
+.nppp-flag-ls.nppp-flags {
+  background-image: url(./flags/1x1/ls.svg);
+}
+
+.nppp-flag-lt {
+  background-image: url(./flags/4x3/lt.svg);
+}
+.nppp-flag-lt.nppp-flags {
+  background-image: url(./flags/1x1/lt.svg);
+}
+
+.nppp-flag-lu {
+  background-image: url(./flags/4x3/lu.svg);
+}
+.nppp-flag-lu.nppp-flags {
+  background-image: url(./flags/1x1/lu.svg);
+}
+
+.nppp-flag-lv {
+  background-image: url(./flags/4x3/lv.svg);
+}
+.nppp-flag-lv.nppp-flags {
+  background-image: url(./flags/1x1/lv.svg);
+}
+
+.nppp-flag-ly {
+  background-image: url(./flags/4x3/ly.svg);
+}
+.nppp-flag-ly.nppp-flags {
+  background-image: url(./flags/1x1/ly.svg);
+}
+
+.nppp-flag-ma {
+  background-image: url(./flags/4x3/ma.svg);
+}
+.nppp-flag-ma.nppp-flags {
+  background-image: url(./flags/1x1/ma.svg);
+}
+
+.nppp-flag-mc {
+  background-image: url(./flags/4x3/mc.svg);
+}
+.nppp-flag-mc.nppp-flags {
+  background-image: url(./flags/1x1/mc.svg);
+}
+
+.nppp-flag-md {
+  background-image: url(./flags/4x3/md.svg);
+}
+.nppp-flag-md.nppp-flags {
+  background-image: url(./flags/1x1/md.svg);
+}
+
+.nppp-flag-me {
+  background-image: url(./flags/4x3/me.svg);
+}
+.nppp-flag-me.nppp-flags {
+  background-image: url(./flags/1x1/me.svg);
+}
+
+.nppp-flag-mf {
+  background-image: url(./flags/4x3/mf.svg);
+}
+.nppp-flag-mf.nppp-flags {
+  background-image: url(./flags/1x1/mf.svg);
+}
+
+.nppp-flag-mg {
+  background-image: url(./flags/4x3/mg.svg);
+}
+.nppp-flag-mg.nppp-flags {
+  background-image: url(./flags/1x1/mg.svg);
+}
+
+.nppp-flag-mh {
+  background-image: url(./flags/4x3/mh.svg);
+}
+.nppp-flag-mh.nppp-flags {
+  background-image: url(./flags/1x1/mh.svg);
+}
+
+.nppp-flag-mk {
+  background-image: url(./flags/4x3/mk.svg);
+}
+.nppp-flag-mk.nppp-flags {
+  background-image: url(./flags/1x1/mk.svg);
+}
+
+.nppp-flag-ml {
+  background-image: url(./flags/4x3/ml.svg);
+}
+.nppp-flag-ml.nppp-flags {
+  background-image: url(./flags/1x1/ml.svg);
+}
+
+.nppp-flag-mm {
+  background-image: url(./flags/4x3/mm.svg);
+}
+.nppp-flag-mm.nppp-flags {
+  background-image: url(./flags/1x1/mm.svg);
+}
+
+.nppp-flag-mn {
+  background-image: url(./flags/4x3/mn.svg);
+}
+.nppp-flag-mn.nppp-flags {
+  background-image: url(./flags/1x1/mn.svg);
+}
+
+.nppp-flag-mo {
+  background-image: url(./flags/4x3/mo.svg);
+}
+.nppp-flag-mo.nppp-flags {
+  background-image: url(./flags/1x1/mo.svg);
+}
+
+.nppp-flag-mp {
+  background-image: url(./flags/4x3/mp.svg);
+}
+.nppp-flag-mp.nppp-flags {
+  background-image: url(./flags/1x1/mp.svg);
+}
+
+.nppp-flag-mq {
+  background-image: url(./flags/4x3/mq.svg);
+}
+.nppp-flag-mq.nppp-flags {
+  background-image: url(./flags/1x1/mq.svg);
+}
+
+.nppp-flag-mr {
+  background-image: url(./flags/4x3/mr.svg);
+}
+.nppp-flag-mr.nppp-flags {
+  background-image: url(./flags/1x1/mr.svg);
+}
+
+.nppp-flag-ms {
+  background-image: url(./flags/4x3/ms.svg);
+}
+.nppp-flag-ms.nppp-flags {
+  background-image: url(./flags/1x1/ms.svg);
+}
+
+.nppp-flag-mt {
+  background-image: url(./flags/4x3/mt.svg);
+}
+.nppp-flag-mt.nppp-flags {
+  background-image: url(./flags/1x1/mt.svg);
+}
+
+.nppp-flag-mu {
+  background-image: url(./flags/4x3/mu.svg);
+}
+.nppp-flag-mu.nppp-flags {
+  background-image: url(./flags/1x1/mu.svg);
+}
+
+.nppp-flag-mv {
+  background-image: url(./flags/4x3/mv.svg);
+}
+.nppp-flag-mv.nppp-flags {
+  background-image: url(./flags/1x1/mv.svg);
+}
+
+.nppp-flag-mw {
+  background-image: url(./flags/4x3/mw.svg);
+}
+.nppp-flag-mw.nppp-flags {
+  background-image: url(./flags/1x1/mw.svg);
+}
+
+.nppp-flag-mx {
+  background-image: url(./flags/4x3/mx.svg);
+}
+.nppp-flag-mx.nppp-flags {
+  background-image: url(./flags/1x1/mx.svg);
+}
+
+.nppp-flag-my {
+  background-image: url(./flags/4x3/my.svg);
+}
+.nppp-flag-my.nppp-flags {
+  background-image: url(./flags/1x1/my.svg);
+}
+
+.nppp-flag-mz {
+  background-image: url(./flags/4x3/mz.svg);
+}
+.nppp-flag-mz.nppp-flags {
+  background-image: url(./flags/1x1/mz.svg);
+}
+
+.nppp-flag-na {
+  background-image: url(./flags/4x3/na.svg);
+}
+.nppp-flag-na.nppp-flags {
+  background-image: url(./flags/1x1/na.svg);
+}
+
+.nppp-flag-nc {
+  background-image: url(./flags/4x3/nc.svg);
+}
+.nppp-flag-nc.nppp-flags {
+  background-image: url(./flags/1x1/nc.svg);
+}
+
+.nppp-flag-ne {
+  background-image: url(./flags/4x3/ne.svg);
+}
+.nppp-flag-ne.nppp-flags {
+  background-image: url(./flags/1x1/ne.svg);
+}
+
+.nppp-flag-nf {
+  background-image: url(./flags/4x3/nf.svg);
+}
+.nppp-flag-nf.nppp-flags {
+  background-image: url(./flags/1x1/nf.svg);
+}
+
+.nppp-flag-ng {
+  background-image: url(./flags/4x3/ng.svg);
+}
+.nppp-flag-ng.nppp-flags {
+  background-image: url(./flags/1x1/ng.svg);
+}
+
+.nppp-flag-ni {
+  background-image: url(./flags/4x3/ni.svg);
+}
+.nppp-flag-ni.nppp-flags {
+  background-image: url(./flags/1x1/ni.svg);
+}
+
+.nppp-flag-nl {
+  background-image: url(./flags/4x3/nl.svg);
+}
+.nppp-flag-nl.nppp-flags {
+  background-image: url(./flags/1x1/nl.svg);
+}
+
+.nppp-flag-no {
+  background-image: url(./flags/4x3/no.svg);
+}
+.nppp-flag-no.nppp-flags {
+  background-image: url(./flags/1x1/no.svg);
+}
+
+.nppp-flag-np {
+  background-image: url(./flags/4x3/np.svg);
+}
+.nppp-flag-np.nppp-flags {
+  background-image: url(./flags/1x1/np.svg);
+}
+
+.nppp-flag-nr {
+  background-image: url(./flags/4x3/nr.svg);
+}
+.nppp-flag-nr.nppp-flags {
+  background-image: url(./flags/1x1/nr.svg);
+}
+
+.nppp-flag-nu {
+  background-image: url(./flags/4x3/nu.svg);
+}
+.nppp-flag-nu.nppp-flags {
+  background-image: url(./flags/1x1/nu.svg);
+}
+
+.nppp-flag-nz {
+  background-image: url(./flags/4x3/nz.svg);
+}
+.nppp-flag-nz.nppp-flags {
+  background-image: url(./flags/1x1/nz.svg);
+}
+
+.nppp-flag-om {
+  background-image: url(./flags/4x3/om.svg);
+}
+.nppp-flag-om.nppp-flags {
+  background-image: url(./flags/1x1/om.svg);
+}
+
+.nppp-flag-pa {
+  background-image: url(./flags/4x3/pa.svg);
+}
+.nppp-flag-pa.nppp-flags {
+  background-image: url(./flags/1x1/pa.svg);
+}
+
+.nppp-flag-pe {
+  background-image: url(./flags/4x3/pe.svg);
+}
+.nppp-flag-pe.nppp-flags {
+  background-image: url(./flags/1x1/pe.svg);
+}
+
+.nppp-flag-pf {
+  background-image: url(./flags/4x3/pf.svg);
+}
+.nppp-flag-pf.nppp-flags {
+  background-image: url(./flags/1x1/pf.svg);
+}
+
+.nppp-flag-pg {
+  background-image: url(./flags/4x3/pg.svg);
+}
+.nppp-flag-pg.nppp-flags {
+  background-image: url(./flags/1x1/pg.svg);
+}
+
+.nppp-flag-ph {
+  background-image: url(./flags/4x3/ph.svg);
+}
+.nppp-flag-ph.nppp-flags {
+  background-image: url(./flags/1x1/ph.svg);
+}
+
+.nppp-flag-pk {
+  background-image: url(./flags/4x3/pk.svg);
+}
+.nppp-flag-pk.nppp-flags {
+  background-image: url(./flags/1x1/pk.svg);
+}
+
+.nppp-flag-pl {
+  background-image: url(./flags/4x3/pl.svg);
+}
+.nppp-flag-pl.nppp-flags {
+  background-image: url(./flags/1x1/pl.svg);
+}
+
+.nppp-flag-pm {
+  background-image: url(./flags/4x3/pm.svg);
+}
+.nppp-flag-pm.nppp-flags {
+  background-image: url(./flags/1x1/pm.svg);
+}
+
+.nppp-flag-pn {
+  background-image: url(./flags/4x3/pn.svg);
+}
+.nppp-flag-pn.nppp-flags {
+  background-image: url(./flags/1x1/pn.svg);
+}
+
+.nppp-flag-pr {
+  background-image: url(./flags/4x3/pr.svg);
+}
+.nppp-flag-pr.nppp-flags {
+  background-image: url(./flags/1x1/pr.svg);
+}
+
+.nppp-flag-ps {
+  background-image: url(./flags/4x3/ps.svg);
+}
+.nppp-flag-ps.nppp-flags {
+  background-image: url(./flags/1x1/ps.svg);
+}
+
+.nppp-flag-pt {
+  background-image: url(./flags/4x3/pt.svg);
+}
+.nppp-flag-pt.nppp-flags {
+  background-image: url(./flags/1x1/pt.svg);
+}
+
+.nppp-flag-pw {
+  background-image: url(./flags/4x3/pw.svg);
+}
+.nppp-flag-pw.nppp-flags {
+  background-image: url(./flags/1x1/pw.svg);
+}
+
+.nppp-flag-py {
+  background-image: url(./flags/4x3/py.svg);
+}
+.nppp-flag-py.nppp-flags {
+  background-image: url(./flags/1x1/py.svg);
+}
+
+.nppp-flag-qa {
+  background-image: url(./flags/4x3/qa.svg);
+}
+.nppp-flag-qa.nppp-flags {
+  background-image: url(./flags/1x1/qa.svg);
+}
+
+.nppp-flag-re {
+  background-image: url(./flags/4x3/re.svg);
+}
+.nppp-flag-re.nppp-flags {
+  background-image: url(./flags/1x1/re.svg);
+}
+
+.nppp-flag-ro {
+  background-image: url(./flags/4x3/ro.svg);
+}
+.nppp-flag-ro.nppp-flags {
+  background-image: url(./flags/1x1/ro.svg);
+}
+
+.nppp-flag-rs {
+  background-image: url(./flags/4x3/rs.svg);
+}
+.nppp-flag-rs.nppp-flags {
+  background-image: url(./flags/1x1/rs.svg);
+}
+
+.nppp-flag-ru {
+  background-image: url(./flags/4x3/ru.svg);
+}
+.nppp-flag-ru.nppp-flags {
+  background-image: url(./flags/1x1/ru.svg);
+}
+
+.nppp-flag-rw {
+  background-image: url(./flags/4x3/rw.svg);
+}
+.nppp-flag-rw.nppp-flags {
+  background-image: url(./flags/1x1/rw.svg);
+}
+
+.nppp-flag-sa {
+  background-image: url(./flags/4x3/sa.svg);
+}
+.nppp-flag-sa.nppp-flags {
+  background-image: url(./flags/1x1/sa.svg);
+}
+
+.nppp-flag-sb {
+  background-image: url(./flags/4x3/sb.svg);
+}
+.nppp-flag-sb.nppp-flags {
+  background-image: url(./flags/1x1/sb.svg);
+}
+
+.nppp-flag-sc {
+  background-image: url(./flags/4x3/sc.svg);
+}
+.nppp-flag-sc.nppp-flags {
+  background-image: url(./flags/1x1/sc.svg);
+}
+
+.nppp-flag-sd {
+  background-image: url(./flags/4x3/sd.svg);
+}
+.nppp-flag-sd.nppp-flags {
+  background-image: url(./flags/1x1/sd.svg);
+}
+
+.nppp-flag-se {
+  background-image: url(./flags/4x3/se.svg);
+}
+.nppp-flag-se.nppp-flags {
+  background-image: url(./flags/1x1/se.svg);
+}
+
+.nppp-flag-sg {
+  background-image: url(./flags/4x3/sg.svg);
+}
+.nppp-flag-sg.nppp-flags {
+  background-image: url(./flags/1x1/sg.svg);
+}
+
+.nppp-flag-sh {
+  background-image: url(./flags/4x3/sh.svg);
+}
+.nppp-flag-sh.nppp-flags {
+  background-image: url(./flags/1x1/sh.svg);
+}
+
+.nppp-flag-si {
+  background-image: url(./flags/4x3/si.svg);
+}
+.nppp-flag-si.nppp-flags {
+  background-image: url(./flags/1x1/si.svg);
+}
+
+.nppp-flag-sj {
+  background-image: url(./flags/4x3/sj.svg);
+}
+.nppp-flag-sj.nppp-flags {
+  background-image: url(./flags/1x1/sj.svg);
+}
+
+.nppp-flag-sk {
+  background-image: url(./flags/4x3/sk.svg);
+}
+.nppp-flag-sk.nppp-flags {
+  background-image: url(./flags/1x1/sk.svg);
+}
+
+.nppp-flag-sl {
+  background-image: url(./flags/4x3/sl.svg);
+}
+.nppp-flag-sl.nppp-flags {
+  background-image: url(./flags/1x1/sl.svg);
+}
+
+.nppp-flag-sm {
+  background-image: url(./flags/4x3/sm.svg);
+}
+.nppp-flag-sm.nppp-flags {
+  background-image: url(./flags/1x1/sm.svg);
+}
+
+.nppp-flag-sn {
+  background-image: url(./flags/4x3/sn.svg);
+}
+.nppp-flag-sn.nppp-flags {
+  background-image: url(./flags/1x1/sn.svg);
+}
+
+.nppp-flag-so {
+  background-image: url(./flags/4x3/so.svg);
+}
+.nppp-flag-so.nppp-flags {
+  background-image: url(./flags/1x1/so.svg);
+}
+
+.nppp-flag-sr {
+  background-image: url(./flags/4x3/sr.svg);
+}
+.nppp-flag-sr.nppp-flags {
+  background-image: url(./flags/1x1/sr.svg);
+}
+
+.nppp-flag-ss {
+  background-image: url(./flags/4x3/ss.svg);
+}
+.nppp-flag-ss.nppp-flags {
+  background-image: url(./flags/1x1/ss.svg);
+}
+
+.nppp-flag-st {
+  background-image: url(./flags/4x3/st.svg);
+}
+.nppp-flag-st.nppp-flags {
+  background-image: url(./flags/1x1/st.svg);
+}
+
+.nppp-flag-sv {
+  background-image: url(./flags/4x3/sv.svg);
+}
+.nppp-flag-sv.nppp-flags {
+  background-image: url(./flags/1x1/sv.svg);
+}
+
+.nppp-flag-sx {
+  background-image: url(./flags/4x3/sx.svg);
+}
+.nppp-flag-sx.nppp-flags {
+  background-image: url(./flags/1x1/sx.svg);
+}
+
+.nppp-flag-sy {
+  background-image: url(./flags/4x3/sy.svg);
+}
+.nppp-flag-sy.nppp-flags {
+  background-image: url(./flags/1x1/sy.svg);
+}
+
+.nppp-flag-sz {
+  background-image: url(./flags/4x3/sz.svg);
+}
+.nppp-flag-sz.nppp-flags {
+  background-image: url(./flags/1x1/sz.svg);
+}
+
+.nppp-flag-tc {
+  background-image: url(./flags/4x3/tc.svg);
+}
+.nppp-flag-tc.nppp-flags {
+  background-image: url(./flags/1x1/tc.svg);
+}
+
+.nppp-flag-td {
+  background-image: url(./flags/4x3/td.svg);
+}
+.nppp-flag-td.nppp-flags {
+  background-image: url(./flags/1x1/td.svg);
+}
+
+.nppp-flag-tf {
+  background-image: url(./flags/4x3/tf.svg);
+}
+.nppp-flag-tf.nppp-flags {
+  background-image: url(./flags/1x1/tf.svg);
+}
+
+.nppp-flag-tg {
+  background-image: url(./flags/4x3/tg.svg);
+}
+.nppp-flag-tg.nppp-flags {
+  background-image: url(./flags/1x1/tg.svg);
+}
+
+.nppp-flag-th {
+  background-image: url(./flags/4x3/th.svg);
+}
+.nppp-flag-th.nppp-flags {
+  background-image: url(./flags/1x1/th.svg);
+}
+
+.nppp-flag-tj {
+  background-image: url(./flags/4x3/tj.svg);
+}
+.nppp-flag-tj.nppp-flags {
+  background-image: url(./flags/1x1/tj.svg);
+}
+
+.nppp-flag-tk {
+  background-image: url(./flags/4x3/tk.svg);
+}
+.nppp-flag-tk.nppp-flags {
+  background-image: url(./flags/1x1/tk.svg);
+}
+
+.nppp-flag-tl {
+  background-image: url(./flags/4x3/tl.svg);
+}
+.nppp-flag-tl.nppp-flags {
+  background-image: url(./flags/1x1/tl.svg);
+}
+
+.nppp-flag-tm {
+  background-image: url(./flags/4x3/tm.svg);
+}
+.nppp-flag-tm.nppp-flags {
+  background-image: url(./flags/1x1/tm.svg);
+}
+
+.nppp-flag-tn {
+  background-image: url(./flags/4x3/tn.svg);
+}
+.nppp-flag-tn.nppp-flags {
+  background-image: url(./flags/1x1/tn.svg);
+}
+
+.nppp-flag-to {
+  background-image: url(./flags/4x3/to.svg);
+}
+.nppp-flag-to.nppp-flags {
+  background-image: url(./flags/1x1/to.svg);
+}
+
+.nppp-flag-tr {
+  background-image: url(./flags/4x3/tr.svg);
+}
+.nppp-flag-tr.nppp-flags {
+  background-image: url(./flags/1x1/tr.svg);
+}
+
+.nppp-flag-tt {
+  background-image: url(./flags/4x3/tt.svg);
+}
+.nppp-flag-tt.nppp-flags {
+  background-image: url(./flags/1x1/tt.svg);
+}
+
+.nppp-flag-tv {
+  background-image: url(./flags/4x3/tv.svg);
+}
+.nppp-flag-tv.nppp-flags {
+  background-image: url(./flags/1x1/tv.svg);
+}
+
+.nppp-flag-tw {
+  background-image: url(./flags/4x3/tw.svg);
+}
+.nppp-flag-tw.nppp-flags {
+  background-image: url(./flags/1x1/tw.svg);
+}
+
+.nppp-flag-tz {
+  background-image: url(./flags/4x3/tz.svg);
+}
+.nppp-flag-tz.nppp-flags {
+  background-image: url(./flags/1x1/tz.svg);
+}
+
+.nppp-flag-ua {
+  background-image: url(./flags/4x3/ua.svg);
+}
+.nppp-flag-ua.nppp-flags {
+  background-image: url(./flags/1x1/ua.svg);
+}
+
+.nppp-flag-ug {
+  background-image: url(./flags/4x3/ug.svg);
+}
+.nppp-flag-ug.nppp-flags {
+  background-image: url(./flags/1x1/ug.svg);
+}
+
+.nppp-flag-um {
+  background-image: url(./flags/4x3/um.svg);
+}
+.nppp-flag-um.nppp-flags {
+  background-image: url(./flags/1x1/um.svg);
+}
+
+.nppp-flag-us {
+  background-image: url(./flags/4x3/us.svg);
+}
+.nppp-flag-us.nppp-flags {
+  background-image: url(./flags/1x1/us.svg);
+}
+
+.nppp-flag-uy {
+  background-image: url(./flags/4x3/uy.svg);
+}
+.nppp-flag-uy.nppp-flags {
+  background-image: url(./flags/1x1/uy.svg);
+}
+
+.nppp-flag-uz {
+  background-image: url(./flags/4x3/uz.svg);
+}
+.nppp-flag-uz.nppp-flags {
+  background-image: url(./flags/1x1/uz.svg);
+}
+
+.nppp-flag-va {
+  background-image: url(./flags/4x3/va.svg);
+}
+.nppp-flag-va.nppp-flags {
+  background-image: url(./flags/1x1/va.svg);
+}
+
+.nppp-flag-vc {
+  background-image: url(./flags/4x3/vc.svg);
+}
+.nppp-flag-vc.nppp-flags {
+  background-image: url(./flags/1x1/vc.svg);
+}
+
+.nppp-flag-ve {
+  background-image: url(./flags/4x3/ve.svg);
+}
+.nppp-flag-ve.nppp-flags {
+  background-image: url(./flags/1x1/ve.svg);
+}
+
+.nppp-flag-vg {
+  background-image: url(./flags/4x3/vg.svg);
+}
+.nppp-flag-vg.nppp-flags {
+  background-image: url(./flags/1x1/vg.svg);
+}
+
+.nppp-flag-vi {
+  background-image: url(./flags/4x3/vi.svg);
+}
+.nppp-flag-vi.nppp-flags {
+  background-image: url(./flags/1x1/vi.svg);
+}
+
+.nppp-flag-vn {
+  background-image: url(./flags/4x3/vn.svg);
+}
+.nppp-flag-vn.nppp-flags {
+  background-image: url(./flags/1x1/vn.svg);
+}
+
+.nppp-flag-vu {
+  background-image: url(./flags/4x3/vu.svg);
+}
+.nppp-flag-vu.nppp-flags {
+  background-image: url(./flags/1x1/vu.svg);
+}
+
+.nppp-flag-wf {
+  background-image: url(./flags/4x3/wf.svg);
+}
+.nppp-flag-wf.nppp-flags {
+  background-image: url(./flags/1x1/wf.svg);
+}
+
+.nppp-flag-ws {
+  background-image: url(./flags/4x3/ws.svg);
+}
+.nppp-flag-ws.nppp-flags {
+  background-image: url(./flags/1x1/ws.svg);
+}
+
+.nppp-flag-ye {
+  background-image: url(./flags/4x3/ye.svg);
+}
+.nppp-flag-ye.nppp-flags {
+  background-image: url(./flags/1x1/ye.svg);
+}
+
+.nppp-flag-yt {
+  background-image: url(./flags/4x3/yt.svg);
+}
+.nppp-flag-yt.nppp-flags {
+  background-image: url(./flags/1x1/yt.svg);
+}
+
+.nppp-flag-za {
+  background-image: url(./flags/4x3/za.svg);
+}
+.nppp-flag-za.nppp-flags {
+  background-image: url(./flags/1x1/za.svg);
+}
+
+.nppp-flag-zm {
+  background-image: url(./flags/4x3/zm.svg);
+}
+.nppp-flag-zm.nppp-flags {
+  background-image: url(./flags/1x1/zm.svg);
+}
+
+.nppp-flag-zw {
+  background-image: url(./flags/4x3/zw.svg);
+}
+.nppp-flag-zw.nppp-flags {
+  background-image: url(./flags/1x1/zw.svg);
+}
+
+.nppp-flag-arab {
+  background-image: url(./flags/4x3/arab.svg);
+}
+.nppp-flag-arab.nppp-flags {
+  background-image: url(./flags/1x1/arab.svg);
+}
+
+.nppp-flag-asean {
+  background-image: url(./flags/4x3/asean.svg);
+}
+.nppp-flag-asean.nppp-flags {
+  background-image: url(./flags/1x1/asean.svg);
+}
+
+.nppp-flag-cefta {
+  background-image: url(./flags/4x3/cefta.svg);
+}
+.nppp-flag-cefta.nppp-flags {
+  background-image: url(./flags/1x1/cefta.svg);
+}
+
+.nppp-flag-cp {
+  background-image: url(./flags/4x3/cp.svg);
+}
+.nppp-flag-cp.nppp-flags {
+  background-image: url(./flags/1x1/cp.svg);
+}
+
+.nppp-flag-dg {
+  background-image: url(./flags/4x3/dg.svg);
+}
+.nppp-flag-dg.nppp-flags {
+  background-image: url(./flags/1x1/dg.svg);
+}
+
+.nppp-flag-eac {
+  background-image: url(./flags/4x3/eac.svg);
+}
+.nppp-flag-eac.nppp-flags {
+  background-image: url(./flags/1x1/eac.svg);
+}
+
+.nppp-flag-es-ct {
+  background-image: url(./flags/4x3/es-ct.svg);
+}
+.nppp-flag-es-ct.nppp-flags {
+  background-image: url(./flags/1x1/es-ct.svg);
+}
+
+.nppp-flag-es-ga {
+  background-image: url(./flags/4x3/es-ga.svg);
+}
+.nppp-flag-es-ga.nppp-flags {
+  background-image: url(./flags/1x1/es-ga.svg);
+}
+
+.nppp-flag-es-pv {
+  background-image: url(./flags/4x3/es-pv.svg);
+}
+.nppp-flag-es-pv.nppp-flags {
+  background-image: url(./flags/1x1/es-pv.svg);
+}
+
+.nppp-flag-eu {
+  background-image: url(./flags/4x3/eu.svg);
+}
+.nppp-flag-eu.nppp-flags {
+  background-image: url(./flags/1x1/eu.svg);
+}
+
+.nppp-flag-gb-eng {
+  background-image: url(./flags/4x3/gb-eng.svg);
+}
+.nppp-flag-gb-eng.nppp-flags {
+  background-image: url(./flags/1x1/gb-eng.svg);
+}
+
+.nppp-flag-gb-nir {
+  background-image: url(./flags/4x3/gb-nir.svg);
+}
+.nppp-flag-gb-nir.nppp-flags {
+  background-image: url(./flags/1x1/gb-nir.svg);
+}
+
+.nppp-flag-gb-sct {
+  background-image: url(./flags/4x3/gb-sct.svg);
+}
+.nppp-flag-gb-sct.nppp-flags {
+  background-image: url(./flags/1x1/gb-sct.svg);
+}
+
+.nppp-flag-gb-wls {
+  background-image: url(./flags/4x3/gb-wls.svg);
+}
+.nppp-flag-gb-wls.nppp-flags {
+  background-image: url(./flags/1x1/gb-wls.svg);
+}
+
+.nppp-flag-ic {
+  background-image: url(./flags/4x3/ic.svg);
+}
+.nppp-flag-ic.nppp-flags {
+  background-image: url(./flags/1x1/ic.svg);
+}
+
+.nppp-flag-pc {
+  background-image: url(./flags/4x3/pc.svg);
+}
+.nppp-flag-pc.nppp-flags {
+  background-image: url(./flags/1x1/pc.svg);
+}
+
+.nppp-flag-sh-ac {
+  background-image: url(./flags/4x3/sh-ac.svg);
+}
+.nppp-flag-sh-ac.nppp-flags {
+  background-image: url(./flags/1x1/sh-ac.svg);
+}
+
+.nppp-flag-sh-hl {
+  background-image: url(./flags/4x3/sh-hl.svg);
+}
+.nppp-flag-sh-hl.nppp-flags {
+  background-image: url(./flags/1x1/sh-hl.svg);
+}
+
+.nppp-flag-sh-ta {
+  background-image: url(./flags/4x3/sh-ta.svg);
+}
+.nppp-flag-sh-ta.nppp-flags {
+  background-image: url(./flags/1x1/sh-ta.svg);
+}
+
+.nppp-flag-un {
+  background-image: url(./flags/4x3/un.svg);
+}
+.nppp-flag-un.nppp-flags {
+  background-image: url(./flags/1x1/un.svg);
+}
+
+.nppp-flag-xk {
+  background-image: url(./flags/4x3/xk.svg);
+}
+.nppp-flag-xk.nppp-flags {
+  background-image: url(./flags/1x1/xk.svg);
+}

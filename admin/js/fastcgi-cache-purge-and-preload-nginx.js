@@ -1,7 +1,7 @@
 /**
  * Admin interface scripts for Nginx Cache Purge Preload
  * Description: Handles interactive behavior for plugin settings, tabs, and admin actions.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
@@ -19,6 +19,7 @@ $(document).ready(function() {
     const $settingsPlaceholder = $('#settings-content-placeholder');
     const $statusPlaceholder = $('#status-content-placeholder');
     const $premiumPlaceholder = $('#premium-content-placeholder');
+    const $securityPlaceholder = $('#security-content-placeholder');
     const $helpPlaceholder = $('.nppp-premium-container');
 
     // UI tabs container and links
@@ -120,6 +121,7 @@ $(document).ready(function() {
         $settingsPlaceholder.hide();
         $statusPlaceholder.hide();
         $premiumPlaceholder.hide();
+        $securityPlaceholder.hide();
         $helpPlaceholder.hide();
 
         // Badge bar: settings tab only
@@ -154,6 +156,12 @@ $(document).ready(function() {
                 showPreloader();
                 nppdisconnectObserver();
                 loadPremiumTabContent();
+                npppFabSet(true);
+                break;
+            case 'security':
+                showPreloader();
+                nppdisconnectObserver();
+                loadSecurityTabContent();
                 npppFabSet(true);
                 break;
             case 'help':
@@ -347,7 +355,7 @@ $(document).ready(function() {
                 if (!target) return;
 
                 // Skip if it's a tab link (let your tabs code handle it)
-                var tabIds = ['settings','status','premium','help'];
+                var tabIds = ['settings','status','premium','security','help'];
                 if (tabIds.indexOf(id) !== -1) return;
 
                 e.preventDefault();
@@ -434,6 +442,7 @@ $(document).ready(function() {
     let npppPollActive       = false;
     let npppPollTimer        = null;
     let npppPollRetries      = 0;
+    let npppPollGeneration   = 0;
     const NPPP_MAX_RETRIES   = 4;
     let snapshotMissingCount = 0;
 
@@ -459,6 +468,8 @@ $(document).ready(function() {
             return;
         }
 
+        const pollGeneration = npppPollGeneration;
+
         fetch(nppp_admin_data.wget_progress_api, {
             method: 'GET',
             credentials: 'same-origin',
@@ -471,6 +482,7 @@ $(document).ready(function() {
             return res.json();
         })
         .then(data => {
+            if (!npppPollActive || pollGeneration !== npppPollGeneration) return;
             npppPollRetries = 0;
             if (!data.log_found) {
                 const preloadSection = document.getElementById("nppp-preload-progress-section");
@@ -816,6 +828,16 @@ $(document).ready(function() {
             // mobile preload invisible in the Status tab.
             const mobileTransitioning = data.status === "done" && data.preload_phase === "mobile";
 
+            // The Stop Preload button lives outside #wpt-status (sibling in
+            // .nppp-progress-wrap), so status.innerHTML above never touches it —
+            // without this it stays visible forever once preload finishes,
+            // until the page is fully reloaded. Toggle it off the same
+            // liveness signal that drives polling itself.
+            const stopPreloadWrap = document.querySelector(".nppp-stop-preload-wrap");
+            if (stopPreloadWrap) {
+                stopPreloadWrap.style.display = (data.status === "running" || mobileTransitioning) ? "" : "none";
+            }
+
             if (data.status === "running" || mobileTransitioning) {
                 // Polling is driven ONLY by process liveness — never by the estimated pct.
                 // The estimate can overshoot 100 before wget actually finishes.
@@ -826,6 +848,7 @@ $(document).ready(function() {
             }
         })
         .catch(err => {
+            if (!npppPollActive || pollGeneration !== npppPollGeneration) return;
             console.error('Fetch preload progress failed:', err);
             if (npppPollRetries < NPPP_MAX_RETRIES) {
                 // Transient error — back off and retry rather than killing the poll.
@@ -849,6 +872,7 @@ $(document).ready(function() {
     }
 
     function npppStopWgetPolling(){
+        npppPollGeneration++;
         npppPollActive = false;
         if (npppPollTimer) clearTimeout(npppPollTimer);
         npppPollTimer = null;
@@ -984,6 +1008,934 @@ $(document).ready(function() {
                     <p class="nppp-advanced-error-message">Failed to initialize the Advanced TAB.</p>
                 `);
                 $premiumPlaceholder.show();
+            }
+        });
+    }
+
+    // ---------------------------------------------------------------------
+    // Fail2Ban tab (fail2ban monitor)
+    // ---------------------------------------------------------------------
+
+    // Clipboard helper with fallback.
+    function npppF2bCopy(text) {
+        function fallback() {
+            const $tmp = $('<textarea>')
+                .val(text)
+                .css({ position: 'fixed', top: '-9999px', opacity: 0 })
+                .appendTo('body');
+            $tmp[0].select();
+            try { document.execCommand('copy'); } catch (e) { /* no-op */ }
+            $tmp.remove();
+        }
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).catch(fallback);
+        } else {
+            fallback();
+        }
+    }
+
+    function npppF2bToast(message, type) {
+        if (typeof npppToast === 'function') {
+            npppToast(message, type || 'info');
+        }
+    }
+
+    // Initialize DataTables.js for the Fail2Ban Live Feed table.
+    function initializeF2bFeedTable() {
+        var $tbl = $('#nppp-f2b-feed-table');
+        if (!$tbl.length) return;
+
+        // Already initialised?
+        if ($.fn.dataTable.isDataTable($tbl)) {
+            var f2bDtExisting = $tbl.DataTable();
+            f2bDtExisting.columns.adjust();
+
+            if (f2bDtExisting.responsive) f2bDtExisting.responsive.recalc();
+            return;
+        }
+
+        // Rows loaded in the DOM vs. total stored (the feed is capped server-side).
+        var f2bLoaded = $tbl.find('tbody tr').length;
+        var f2bTotal  = parseInt($tbl.attr('data-total'), 10) || 0;
+        var f2bHidden = f2bTotal > f2bLoaded ? f2bTotal - f2bLoaded : 0;
+
+        $tbl.DataTable({
+            autoWidth: false,
+            responsive: true,
+            orderClasses: false,
+            paging: true,
+            deferRender: true,
+            ordering: true,
+            order: [],
+            searching: true,
+            language: {
+                infoPostFix:  f2bHidden > 0
+                    ? ' ' + sprintf(
+                        /* translators: %s: number of older events not loaded into the table */
+                        __('(+%s older events not loaded, feed cap)', 'fastcgi-cache-purge-and-preload-nginx'),
+                        f2bHidden.toLocaleString()
+                    )
+                    : '',
+                search:       __('Search:', 'fastcgi-cache-purge-and-preload-nginx'),
+                info:         __('Showing _START_ to _END_ of _TOTAL_ events', 'fastcgi-cache-purge-and-preload-nginx'),
+                infoEmpty:    __('No events yet.', 'fastcgi-cache-purge-and-preload-nginx'),
+                infoFiltered: __('(filtered from _MAX_ total events)', 'fastcgi-cache-purge-and-preload-nginx'),
+                zeroRecords:  __('No matching events found.', 'fastcgi-cache-purge-and-preload-nginx')
+            },
+            columnDefs: npppF2bFeedColumnDefs($tbl)
+        });
+    }
+
+    // The Abuse Reporter adds a trailing Report column, but only when it is
+    // fully configured. Reading the flag the partial renders keeps the
+    // column indices below correct in both shapes instead of hard-coding a
+    // count that silently drifts.
+    function npppF2bFeedColumnDefs($tbl) {
+        var defs = [
+            { responsivePriority: 1,     targets: [0, 1, 2, 3] },       // Time/Event/Jail/IP always visible
+            { responsivePriority: 10000, targets: [4, 5, 6, 7, 8] },    // RIPEstat enrichment columns collapse first on mobile
+            { defaultContent: '', targets: '_all' }                     // renders even if a cell is empty (not yet enriched)
+        ];
+
+        if ($tbl.data('report-col') == 1) {
+            // Kept reachable on mobile: it is the only actionable cell in the row.
+            defs.push({ responsivePriority: 2, orderable: false, searchable: false, targets: 9 });
+        }
+
+        return defs;
+    }
+
+    // Init the Top Attack Countries bubble map from the data-countries JSON
+    // attribute rendered server-side into the freshly injected partial.
+    // No separate AJAX round trip: the same nppp_load_security_content
+    // response already carries this data, computed once per tab load.
+    function initializeF2bCountryMap() {
+        var $mapEl = $('#nppp-f2b-world-map');
+        if (!$mapEl.length || typeof window.nppp_f2b_init_country_map !== 'function') {
+            return;
+        }
+
+        var countries = [];
+        try {
+            var raw = $mapEl.attr('data-countries');
+            countries = raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            console.error('Failed to parse Top Attack Countries data.', e);
+            countries = [];
+        }
+
+        window.nppp_f2b_init_country_map('#nppp-f2b-world-map', countries);
+    }
+
+    function initializeF2bOffendersChart() {
+        var $chartEl = $('#nppp-f2b-offenders-chart');
+        if (!$chartEl.length || typeof window.nppp_f2b_render_offenders_chart !== 'function') {
+            return;
+        }
+
+        var offenders = [];
+        try {
+            var rawOffenders = $chartEl.attr('data-offenders');
+            offenders = rawOffenders ? JSON.parse(rawOffenders) : [];
+        } catch (e) {
+            console.error('Failed to parse Repeat Offenders chart data.', e);
+            offenders = [];
+        }
+
+        window.nppp_f2b_render_offenders_chart('#nppp-f2b-offenders-chart', offenders);
+    }
+
+    // Load Fail2Ban tab content.
+    function loadSecurityTabContent() {
+        $.ajax({
+            url: nppp_admin_data.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'nppp_load_security_content',
+                _wpnonce: nppp_admin_data.security_tab_nonce
+            },
+            success: function(response) {
+                if (response !== '') {
+                    // Clean teardown if a previous DT instance exists.
+                    var f2bTblSel = '#nppp-f2b-feed-table';
+                    if ($.fn.dataTable.isDataTable(f2bTblSel)) {
+                        $(f2bTblSel).DataTable().destroy(true);
+                    }
+
+                    // Clean teardown of a previous map instance before its
+                    // container is wiped out by the .html(response) below.
+                    if (typeof window.nppp_f2b_destroy_country_map === 'function') {
+                        window.nppp_f2b_destroy_country_map();
+                    }
+
+                    if (typeof window.nppp_f2b_destroy_offenders_chart === 'function') {
+                        window.nppp_f2b_destroy_offenders_chart();
+                    }
+
+                    $securityPlaceholder
+                        .stop(true, true)
+                        .css('opacity', 0)
+                        .html(response)
+                        .show();
+
+                    // Init DT for the freshly injected Live Feed table.
+                    initializeF2bFeedTable();
+
+                    // Init the bubble map for the freshly injected
+                    // Top Attack Countries panel.
+                    initializeF2bCountryMap();
+
+                    initializeF2bOffendersChart();
+
+                    hidePreloader();
+                    $securityPlaceholder.animate({ opacity: 1 }, 100, function () {
+                        if ($.fn.dataTable.isDataTable(f2bTblSel)) {
+                            var f2bDtLater = $(f2bTblSel).DataTable();
+                            f2bDtLater.columns.adjust();
+                            if (f2bDtLater.responsive) f2bDtLater.responsive.recalc();
+                        }
+                    });
+                    npppBindSecurityTabEvents();
+                } else {
+                    console.error('Empty response received for Security tab.');
+                    hidePreloader();
+                    $securityPlaceholder.html(`
+                        <h2>Error Displaying Tab Content</h2>
+                        <p class="nppp-advanced-error-message">Failed to initialize the Security TAB.</p>
+                    `);
+                    $securityPlaceholder.show();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error(status + ': ' + error);
+                hidePreloader();
+                $securityPlaceholder.html(`
+                    <h2>Error Displaying Tab Content</h2>
+                    <p class="nppp-advanced-error-message">Failed to initialize the Security TAB.</p>
+                `);
+                $securityPlaceholder.show();
+            }
+        });
+    }
+
+    // Delegated handlers for the AJAX-loaded panel.
+    function npppBindSecurityTabEvents() {
+        const nonce = nppp_admin_data.security_tab_nonce;
+
+        // Reveal / hide the bearer token
+        $securityPlaceholder.off('click', '#nppp-f2b-reveal-token')
+            .on('click', '#nppp-f2b-reveal-token', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const $field = $('#nppp-f2b-token-field');
+                const revealed = $field.val() === $field.data('full');
+                $field.val(revealed ? $field.data('masked') : $field.data('full'));
+                $btn.text(revealed
+                    ? __('Show', 'fastcgi-cache-purge-and-preload-nginx')
+                    : __('Hide', 'fastcgi-cache-purge-and-preload-nginx'));
+            });
+
+        // Copy buttons — endpoint URL, token, both config snippets
+        $securityPlaceholder.off('click', '.nppp-f2b-copy-btn')
+            .on('click', '.nppp-f2b-copy-btn', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const $target = $('#' + $btn.data('copy-target'));
+                if (!$target.length) { return; }
+                // Token field copies the real value, never the masked display.
+                const text = $btn.data('copy-full') ? $target.data('full') : $target.val();
+                npppF2bCopy(text);
+                npppF2bToast(__('Copied to clipboard.', 'fastcgi-cache-purge-and-preload-nginx'), 'success');
+            });
+
+        // Options card tabs
+        $securityPlaceholder.off('click', '.nppp-f2b-opt-tab')
+            .on('click', '.nppp-f2b-opt-tab', function(e) {
+                e.preventDefault();
+                const $tab = $(this);
+                const $tabs = $tab.closest('.nppp-f2b-opt-tabs').find('.nppp-f2b-opt-tab');
+                const $panelsWrap = $tab.closest('.nppp-f2b-card-body').find('.nppp-f2b-opt-panels');
+                const $panels = $panelsWrap.find('.nppp-f2b-opt-panel');
+                const wasActive = $tab.hasClass('is-active');
+
+                $tabs.removeClass('is-active').attr('aria-selected', 'false');
+                $panels.removeClass('is-active');
+
+                if (wasActive) {
+                    $panelsWrap.removeClass('is-open');
+                    return;
+                }
+
+                $tab.addClass('is-active').attr('aria-selected', 'true');
+                $('#' + $tab.data('opt-panel')).addClass('is-active');
+                $panelsWrap.addClass('is-open');
+            });
+
+        // Setup scope selector (Connection card)
+        $securityPlaceholder.off('click', '.nppp-f2b-scope-opt')
+            .on('click', '.nppp-f2b-scope-opt', function(e) {
+                e.preventDefault();
+                const $opt = $(this);
+                const $wrap = $opt.closest('.nppp-f2b-scope');
+                $wrap.find('.nppp-f2b-scope-opt').removeClass('is-active').attr('aria-selected', 'false');
+                $wrap.find('.nppp-f2b-scope-panel').removeClass('is-active');
+                $opt.addClass('is-active').attr('aria-selected', 'true');
+                $('#' + $opt.data('scope-panel')).addClass('is-active');
+                // One set of instructions at a time: per-domain closes the generic server-side setup, centralized shows it.
+                $('#nppp-f2b-setup-server').prop('open', 'nppp-f2b-scope-panel-central' === $opt.data('scope-panel'));
+            });
+
+        // Refresh the whole panel
+        $securityPlaceholder.off('click', '#nppp-f2b-refresh')
+            .on('click', '#nppp-f2b-refresh', function(e) {
+                e.preventDefault();
+                showPreloader();
+                loadSecurityTabContent();
+            });
+
+        // Regenerate token — destructive, confirmed
+        $securityPlaceholder.off('click', '#nppp-f2b-regenerate-token')
+            .on('click', '#nppp-f2b-regenerate-token', function(e) {
+                e.preventDefault();
+                if (!window.confirm(__('This invalidates the current token immediately. fail2ban will stop delivering events until you update jail.local and reload it. Continue?', 'fastcgi-cache-purge-and-preload-nginx'))) {
+                    return;
+                }
+                const $btn = $(this);
+                $btn.prop('disabled', true);
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: { action: 'nppp_f2b_regenerate_token', _wpnonce: nonce },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            const $tokenField = $('#nppp-f2b-token-field');
+                            const masked = resp.data.token.substring(0, 8) + '\u2022'.repeat(24);
+                            $tokenField.data('full', resp.data.token);
+                            $tokenField.data('masked', masked);
+                            $tokenField.val(masked);
+                            $('#nppp-f2b-reveal-token').text(__('Show', 'fastcgi-cache-purge-and-preload-nginx'));
+                            $('#nppp-f2b-jail-snippet').val(resp.data.jail_snippet);
+                            // Keep the per-domain jail example in sync with the new token.
+                            $('#nppp-f2b-scope-jail').val(function(i, v) {
+                                return v.replace(/nppp_token="[^"]*"/, function() { return 'nppp_token="' + resp.data.token + '"'; });
+                            });
+                            $('#nppp-f2b-tab').find('.nppp-f2b-setup').prop('open', true);
+                            // Per-domain mode has its own instructions; keep the generic setup closed.
+                            if ($('#nppp-f2b-scope-panel-domain').hasClass('is-active')) {
+                                $('#nppp-f2b-setup-server').prop('open', false);
+                            }
+                            npppF2bToast(__('Token regenerated. Update jail.local and reload fail2ban.', 'fastcgi-cache-purge-and-preload-nginx'), 'success');
+                        } else {
+                            npppF2bToast(__('Failed to regenerate token.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                        }
+                    },
+                    error: function() {
+                        npppF2bToast(__('AJAX error while regenerating the token.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                    },
+                    complete: function() { $btn.prop('disabled', false); }
+                });
+            });
+
+        // Clear the event log — destructive, confirmed
+        $securityPlaceholder.off('click', '#nppp-f2b-clear-log')
+            .on('click', '#nppp-f2b-clear-log', function(e) {
+                e.preventDefault();
+                if (!window.confirm(__('Permanently delete every logged ban and unban event? This cannot be undone.', 'fastcgi-cache-purge-and-preload-nginx'))) {
+                    return;
+                }
+                const $btn = $(this);
+                $btn.prop('disabled', true);
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: { action: 'nppp_f2b_clear_events', _wpnonce: nonce },
+                    success: function(resp) {
+                        if (resp && resp.success) {
+                            npppF2bToast(__('All events cleared.', 'fastcgi-cache-purge-and-preload-nginx'), 'success');
+                            showPreloader();
+                            loadSecurityTabContent();
+                        } else {
+                            npppF2bToast(__('Failed to clear the event log.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                        }
+                    },
+                    error: function() {
+                        npppF2bToast(__('AJAX error while clearing the event log.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                    },
+                    complete: function() { $btn.prop('disabled', false); }
+                });
+            });
+
+        // Run the webhook connection test.
+        $securityPlaceholder.off('click', '#nppp-f2b-test-connection')
+            .on('click', '#nppp-f2b-test-connection', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const $result = $('#nppp-f2b-test-result');
+                const label = $btn.text();
+                $btn.prop('disabled', true).text(__('Testing\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
+                $result.hide().removeClass('nppp-f2b-result-ok nppp-f2b-result-fail').find('.nppp-f2b-result-msg').text('');
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: { action: 'nppp_f2b_test_connection', _wpnonce: nonce },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            $result
+                                .addClass(resp.data.ok ? 'nppp-f2b-result-ok' : 'nppp-f2b-result-fail')
+                                .find('.nppp-f2b-result-msg').text(resp.data.message)
+                                .end()
+                                .slideDown(120);
+                        } else {
+                            $result
+                                .addClass('nppp-f2b-result-fail')
+                                .find('.nppp-f2b-result-msg').text(__('The test did not complete. Check your PHP error log.', 'fastcgi-cache-purge-and-preload-nginx'))
+                                .end()
+                                .slideDown(120);
+                        }
+                    },
+                    error: function() {
+                        $result
+                            .addClass('nppp-f2b-result-fail')
+                            .find('.nppp-f2b-result-msg').text(__('AJAX error while running the connection test.', 'fastcgi-cache-purge-and-preload-nginx'))
+                            .end()
+                            .slideDown(120);
+                    },
+                    complete: function() {
+                        $btn.prop('disabled', false).text(label);
+                    }
+                });
+            });
+
+        // Dismiss (x) button on any inline .nppp-f2b-result banner
+        $securityPlaceholder.off('click', '.nppp-f2b-result-close')
+            .on('click', '.nppp-f2b-result-close', function(e) {
+                e.preventDefault();
+                $(this).closest('.nppp-f2b-result').slideUp(120);
+            });
+
+        // -----------------------------------------------------------------
+        // Abuse Reporter
+        // -----------------------------------------------------------------
+
+        // Save the reporter card. One round trip, whole card at once.
+        $securityPlaceholder.off('click', '#nppp-f2b-abuse-save')
+            .on('click', '#nppp-f2b-abuse-save', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const $result = $('#nppp-f2b-abuse-save-result');
+                const label = $btn.text();
+
+                // Report buttons, the Report columns and the confirmation
+                // dialog only exist in the DOM when the tab was rendered
+                // with $abuse_ready true. Capture the state before the
+                // request so a flip in either direction can be detected
+                // once the response comes back.
+                const wasReady = $('#nppp-f2b-abuse-pill').hasClass('nppp-f2b-pill-ok');
+
+                $btn.prop('disabled', true).text(__('Saving\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
+                $result.hide().removeClass('nppp-f2b-result-ok nppp-f2b-result-fail').find('.nppp-f2b-result-msg').text('');
+
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action:        'nppp_f2b_save_abuse_settings',
+                        _wpnonce:      nonce,
+                        enabled:       $('#nppp-f2b-abuse-enabled').val(),
+                        from_name:     $('#nppp-f2b-abuse-from-name').val(),
+                        from_email:    $('#nppp-f2b-abuse-from-email').val(),
+                        reply_to:      $('#nppp-f2b-abuse-reply-to').val(),
+                        cc_self:       $('#nppp-f2b-abuse-cc-self').val(),
+                        org_name:      $('#nppp-f2b-abuse-org-name').val(),
+                        contact_name:  $('#nppp-f2b-abuse-contact-name').val(),
+                        contact_phone: $('#nppp-f2b-abuse-contact-phone').val(),
+                        min_bans:      $('#nppp-f2b-abuse-min-bans').val(),
+                        cooldown_days: $('#nppp-f2b-abuse-cooldown').val(),
+                        dry_run:       $('#nppp-f2b-abuse-dry-run').val()
+                    },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            const isReady = !!resp.data.ready;
+
+                            npppF2bToast(resp.data.message, 'success');
+
+                            // Readiness flipped: the Report columns, the
+                            // per-row buttons and the confirmation dialog
+                            // markup itself need to be re-rendered from PHP.
+                            // Reuse the exact reload path "Clear All Events"
+                            // already uses, so behaviour stays consistent.
+                            if (isReady !== wasReady) {
+                                showPreloader();
+                                loadSecurityTabContent();
+                                return;
+                            }
+
+                            // Readiness unchanged — a lighter, in-place
+                            // update is enough, and avoids tearing down the
+                            // Live Feed DataTable for a cooldown/text tweak.
+                            const $pill = $('#nppp-f2b-abuse-pill');
+                            $pill
+                                .removeClass('nppp-f2b-pill-ok nppp-f2b-pill-wait')
+                                .addClass(isReady ? 'nppp-f2b-pill-ok' : 'nppp-f2b-pill-wait')
+                                .text(isReady
+                                    ? __('Armed', 'fastcgi-cache-purge-and-preload-nginx')
+                                    : __('Not configured', 'fastcgi-cache-purge-and-preload-nginx'));
+
+                            // Reflect the server-normalised values so clamped
+                            // numbers never sit in the form looking accepted.
+                            if (resp.data.settings) {
+                                $('#nppp-f2b-abuse-min-bans').val(resp.data.settings.min_bans);
+                                $('#nppp-f2b-abuse-cooldown').val(resp.data.settings.cooldown_days);
+                                $('#nppp-f2b-abuse-from-email').val(resp.data.settings.from_email);
+                                $('#nppp-f2b-abuse-reply-to').val(resp.data.settings.reply_to);
+                            }
+
+                            $result
+                                .addClass(isReady ? 'nppp-f2b-result-ok' : 'nppp-f2b-result-fail')
+                                .find('.nppp-f2b-result-msg').text(resp.data.message)
+                                .end()
+                                .slideDown(120);
+                        } else {
+                            npppF2bToast(__('Failed to save the Abuse Reporter.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                        }
+                    },
+                    error: function() {
+                        npppF2bToast(__('AJAX error while saving the Abuse Reporter.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                    },
+                    complete: function() { $btn.prop('disabled', false).text(label); }
+                });
+            });
+
+        // -----------------------------------------------------------------
+        // RIPEstat Lookups -- optional sourceapp suffix
+        // -----------------------------------------------------------------
+
+        // Mirrors nppp_f2b_sanitize_sourceapp_suffix() in fail2ban.php so the
+        // preview matches what the server will actually store. Keep in sync.
+        const npppF2bSourceappSuffix = function(raw) {
+            return String(raw || '')
+                .replace(/[^A-Za-z0-9_-]+/g, '_')
+                .replace(/_{2,}/g, '_')
+                .replace(/^[_-]+|[_-]+$/g, '')
+                .slice(0, 40)
+                .replace(/[_-]+$/, '');
+        };
+
+        // Live preview while typing. Skipped when a PHP filter overrides the
+        // value, because the preview then shows the filtered identifier.
+        $securityPlaceholder.off('input', '#nppp-f2b-sourceapp-suffix')
+            .on('input', '#nppp-f2b-sourceapp-suffix', function() {
+                const $preview = $('#nppp-f2b-sourceapp-preview');
+                if ($preview.attr('data-filtered') === '1') {
+                    return;
+                }
+                const suffix = npppF2bSourceappSuffix($(this).val());
+                $preview.val($preview.attr('data-prefix') + (suffix ? '-' + suffix : ''));
+
+                // Registration always uses the saved suffix, so block it while edits are unsaved.
+                const $reg = $('#nppp-f2b-ripe-register');
+                const dirty = suffix !== String($reg.attr('data-saved') || '');
+                const locked = String($reg.attr('data-locked') || '0') === '1';
+                $reg.prop('disabled', dirty || locked)
+                    .attr('title', dirty
+                        ? __('Save the new suffix first.', 'fastcgi-cache-purge-and-preload-nginx')
+                        : (locked ? String($reg.attr('data-lock-title') || '') : ''));
+            });
+
+        // Enter saves, like pressing the Save button.
+        $securityPlaceholder.off('keydown', '#nppp-f2b-sourceapp-suffix')
+            .on('keydown', '#nppp-f2b-sourceapp-suffix', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    $('#nppp-f2b-sourceapp-save').trigger('click');
+                }
+            });
+
+        $securityPlaceholder.off('click', '#nppp-f2b-sourceapp-save')
+            .on('click', '#nppp-f2b-sourceapp-save', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const label = $btn.text();
+
+                $btn.prop('disabled', true).text(__('Saving\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
+
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action:   'nppp_f2b_save_sourceapp',
+                        _wpnonce: nonce,
+                        suffix:   $('#nppp-f2b-sourceapp-suffix').val()
+                    },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            const d = resp.data;
+
+                            // Reflect the server-normalised value.
+                            $('#nppp-f2b-sourceapp-suffix').val(d.suffix);
+                            $('#nppp-f2b-sourceapp-preview')
+                                .val(d.sourceapp)
+                                .attr('data-filtered', d.filtered ? '1' : '0');
+                            $('#nppp-f2b-sourceapp-filtered').toggle(!!d.filtered);
+                            // Register button: only for a saved custom suffix not overridden by a filter.
+                            const showRegister = !!d.custom && !d.filtered;
+                            const $regBtn = $('#nppp-f2b-ripe-register');
+                            const regLocked = String($regBtn.attr('data-locked') || '0') === '1';
+                            $regBtn
+                                .attr('data-saved', d.suffix || '')
+                                .prop('disabled', regLocked)
+                                .attr('title', regLocked ? String($regBtn.attr('data-lock-title') || '') : '')
+                                .toggle(showRegister);
+                            $('#nppp-f2b-ripe-register-hint').toggle(showRegister);
+                            $('#nppp-f2b-ripe-gate').toggle(showRegister && regLocked);
+                            $('#nppp-f2b-ripe-date').text(d.reg_date || '');
+                            $('#nppp-f2b-ripe-pill').toggle(!!d.reg_date);
+                            $('#nppp-f2b-sourceapp-pill')
+                                .removeClass('nppp-f2b-pill-ok nppp-f2b-pill-idle')
+                                .addClass(d.custom ? 'nppp-f2b-pill-ok' : 'nppp-f2b-pill-idle')
+                                .text(d.custom
+                                    ? __('Custom suffix', 'fastcgi-cache-purge-and-preload-nginx')
+                                    : __('Default', 'fastcgi-cache-purge-and-preload-nginx'));
+
+                            npppF2bToast(d.message, 'success');
+                        } else {
+                            npppF2bToast(__('Failed to save the RIPEstat identifier.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                        }
+                    },
+                    error: function() {
+                        npppF2bToast(__('AJAX error while saving the RIPEstat identifier.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                    },
+                    complete: function() { $btn.prop('disabled', false).text(label); }
+                });
+            });
+
+        // RIPEstat registration email: preview first, nothing is sent from here.
+        $securityPlaceholder.off('click', '#nppp-f2b-ripe-register')
+            .on('click', '#nppp-f2b-ripe-register', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const label = $btn.text();
+
+                $btn.prop('disabled', true).text(__('\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
+
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: { action: 'nppp_f2b_ripe_reg_preview', _wpnonce: nonce },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            npppF2bOpenRipeModal(resp.data);
+                        } else {
+                            npppF2bToast(__('Could not build the registration preview.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                        }
+                    },
+                    error: function() {
+                        npppF2bToast(__('AJAX error while building the registration preview.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                    },
+                    complete: function() { $btn.prop('disabled', false).text(label); }
+                });
+            });
+
+        // Close the registration dialog: button, backdrop click, Escape key.
+        $securityPlaceholder.off('click', '#nppp-f2b-ripe-modal .nppp-f2b-modal-close, #nppp-f2b-ripe-modal .nppp-f2b-modal-backdrop')
+            .on('click', '#nppp-f2b-ripe-modal .nppp-f2b-modal-close, #nppp-f2b-ripe-modal .nppp-f2b-modal-backdrop', function(e) {
+                e.preventDefault();
+                npppF2bCloseRipeModal();
+            });
+
+        $(document).off('keydown.npppF2bRipe')
+            .on('keydown.npppF2bRipe', function(e) {
+                if (e.key === 'Escape' && $('#nppp-f2b-ripe-modal').is(':visible')) {
+                    npppF2bCloseRipeModal();
+                }
+            });
+
+        // Confirmed send.
+        $securityPlaceholder.off('click', '#nppp-f2b-ripe-send')
+            .on('click', '#nppp-f2b-ripe-send', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const label = $btn.text();
+
+                $btn.prop('disabled', true).text(__('Sending\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
+
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: { action: 'nppp_f2b_ripe_reg_send', _wpnonce: nonce },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            npppF2bToast(resp.data.message, 'success');
+                            if (resp.data.reg_date) {
+                                $('#nppp-f2b-ripe-date').text(resp.data.reg_date);
+                                $('#nppp-f2b-ripe-pill').show();
+                            }
+                            npppF2bCloseRipeModal();
+                        } else {
+                            npppF2bToast(
+                                (resp && resp.data && resp.data.message)
+                                    ? resp.data.message
+                                    : __('The registration email could not be sent.', 'fastcgi-cache-purge-and-preload-nginx'),
+                                'error'
+                            );
+                            $btn.prop('disabled', false).text(label);
+                        }
+                    },
+                    error: function() {
+                        npppF2bToast(__('AJAX error while sending the registration email.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                        $btn.prop('disabled', false).text(label);
+                    }
+                });
+            });
+
+        // Send a real test email built from dummy ban data to the operator's
+        // own Reply-To/Sender address, using whatever is currently typed in
+        // the form (no need to Save first).
+        $securityPlaceholder.off('click', '#nppp-f2b-abuse-test')
+            .on('click', '#nppp-f2b-abuse-test', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const $result = $('#nppp-f2b-abuse-test-result');
+                const label = $btn.text();
+
+                $btn.prop('disabled', true).text(__('Sending\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
+                $result.hide().removeClass('nppp-f2b-result-ok nppp-f2b-result-fail').find('.nppp-f2b-result-msg').text('');
+
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    timeout: 25000,
+                    data: {
+                        action:        'nppp_f2b_abuse_send_test',
+                        _wpnonce:      nonce,
+                        enabled:       $('#nppp-f2b-abuse-enabled').val(),
+                        from_name:     $('#nppp-f2b-abuse-from-name').val(),
+                        from_email:    $('#nppp-f2b-abuse-from-email').val(),
+                        reply_to:      $('#nppp-f2b-abuse-reply-to').val(),
+                        cc_self:       $('#nppp-f2b-abuse-cc-self').val(),
+                        org_name:      $('#nppp-f2b-abuse-org-name').val(),
+                        contact_name:  $('#nppp-f2b-abuse-contact-name').val(),
+                        contact_phone: $('#nppp-f2b-abuse-contact-phone').val(),
+                        min_bans:      $('#nppp-f2b-abuse-min-bans').val(),
+                        cooldown_days: $('#nppp-f2b-abuse-cooldown').val(),
+                        dry_run:       $('#nppp-f2b-abuse-dry-run').val()
+                    },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            $result
+                                .addClass('nppp-f2b-result-ok')
+                                .find('.nppp-f2b-result-msg').text(resp.data.message)
+                                .end()
+                                .slideDown(120);
+                            npppF2bToast(__('Test email sent.', 'fastcgi-cache-purge-and-preload-nginx'), 'success');
+                        } else {
+                            $result
+                                .addClass('nppp-f2b-result-fail')
+                                .find('.nppp-f2b-result-msg').text((resp && resp.data && resp.data.message)
+                                    ? resp.data.message
+                                    : __('The test email could not be sent.', 'fastcgi-cache-purge-and-preload-nginx'))
+                                .end()
+                                .slideDown(120);
+                        }
+                    },
+                    error: function(jqXHR, textStatus) {
+                        var msg;
+                        if (textStatus === 'timeout') {
+                            msg = __('The request timed out — the mail server did not respond in time. Check your SMTP host and port.', 'fastcgi-cache-purge-and-preload-nginx');
+                        } else if (textStatus === 'parsererror') {
+                            msg = __('The server returned an unexpected (non-JSON) response. Check your PHP error log for a fatal error or stray warning from the mail transport.', 'fastcgi-cache-purge-and-preload-nginx');
+                        } else if (jqXHR.status >= 500) {
+                            msg = __('The server returned an error (HTTP ' + jqXHR.status + ') while sending the test email. Check your PHP error log.', 'fastcgi-cache-purge-and-preload-nginx');
+                        } else {
+                            msg = __('AJAX error while sending the test email.', 'fastcgi-cache-purge-and-preload-nginx');
+                        }
+                        $result
+                            .addClass('nppp-f2b-result-fail')
+                            .text(msg)
+                            .slideDown(120);
+                    },
+                    complete: function() { $btn.prop('disabled', false).text(label); }
+                });
+            });
+
+        // Report button -> confirmation dialog. Nothing is sent from here.
+        $securityPlaceholder.off('click', '.nppp-f2b-report-btn')
+            .on('click', '.nppp-f2b-report-btn', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const ip = String($btn.data('ip') || '');
+                if (!ip) { return; }
+
+                const label = $btn.text();
+                $btn.prop('disabled', true).text(__('\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
+
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: { action: 'nppp_f2b_abuse_preview', _wpnonce: nonce, ip: ip },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            npppF2bOpenAbuseModal(resp.data);
+                        } else {
+                            npppF2bToast(
+                                (resp && resp.data && resp.data.message)
+                                    ? resp.data.message
+                                    : __('Could not build the report preview.', 'fastcgi-cache-purge-and-preload-nginx'),
+                                'error'
+                            );
+                        }
+                    },
+                    error: function() {
+                        npppF2bToast(__('AJAX error while building the report preview.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                    },
+                    complete: function() { $btn.prop('disabled', false).text(label); }
+                });
+            });
+
+        // Close the dialog: button, backdrop click, Escape key.
+        $securityPlaceholder.off('click', '.nppp-f2b-modal-close, .nppp-f2b-modal-backdrop')
+            .on('click', '.nppp-f2b-modal-close, .nppp-f2b-modal-backdrop', function(e) {
+                e.preventDefault();
+                npppF2bCloseAbuseModal();
+            });
+
+        $(document).off('keydown.npppF2bAbuse')
+            .on('keydown.npppF2bAbuse', function(e) {
+                if (e.key === 'Escape' && $('#nppp-f2b-abuse-modal').is(':visible')) {
+                    npppF2bCloseAbuseModal();
+                }
+            });
+
+        // Confirmed send.
+        $securityPlaceholder.off('click', '#nppp-f2b-abuse-send')
+            .on('click', '#nppp-f2b-abuse-send', function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const ip = String($btn.data('ip') || '');
+                if (!ip) { return; }
+
+                const label = $btn.text();
+                $btn.prop('disabled', true).text(__('Sending\u2026', 'fastcgi-cache-purge-and-preload-nginx'));
+
+                $.ajax({
+                    url: nppp_admin_data.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: { action: 'nppp_f2b_abuse_send', _wpnonce: nonce, ip: ip },
+                    success: function(resp) {
+                        if (resp && resp.success && resp.data) {
+                            npppF2bToast(resp.data.message, 'success');
+                            npppF2bCloseAbuseModal();
+                            npppF2bMarkReported(ip);
+                        } else {
+                            npppF2bToast(
+                                (resp && resp.data && resp.data.message)
+                                    ? resp.data.message
+                                    : __('The report could not be sent.', 'fastcgi-cache-purge-and-preload-nginx'),
+                                'error'
+                            );
+                        }
+                    },
+                    error: function() {
+                        npppF2bToast(__('AJAX error while sending the report.', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+                    },
+                    complete: function() { $btn.prop('disabled', false).text(label); }
+                });
+            });
+    }
+
+    // Dialog body is server-rendered and already escaped by the preview partial.
+    function npppF2bOpenAbuseModal(payload) {
+        const $modal = $('#nppp-f2b-abuse-modal');
+        if (!$modal.length) { return; }
+
+        const $send = $('#nppp-f2b-abuse-send');
+
+        $('#nppp-f2b-abuse-modal-body').html(payload.html || '');
+        $send
+            .attr('data-ip', payload.ip || '')
+            .data('ip', payload.ip || '')
+            .prop('disabled', !payload.can_send)
+            .text(payload.dry_run
+                ? __('Send Report (dry run)', 'fastcgi-cache-purge-and-preload-nginx')
+                : __('Send Report', 'fastcgi-cache-purge-and-preload-nginx'));
+
+        $modal.css('display', 'block');
+        $('body').addClass('nppp-f2b-modal-open');
+
+        if (payload.can_send) {
+            $send.trigger('focus');
+        }
+    }
+
+    function npppF2bCloseAbuseModal() {
+        $('#nppp-f2b-abuse-modal').hide();
+        $('#nppp-f2b-abuse-modal-body').empty();
+        $('#nppp-f2b-abuse-send').attr('data-ip', '').data('ip', '').prop('disabled', true);
+        $('body').removeClass('nppp-f2b-modal-open');
+    }
+
+    // RIPEstat registration dialog. Body is server-rendered and already escaped.
+    function npppF2bOpenRipeModal(payload) {
+        const $modal = $('#nppp-f2b-ripe-modal');
+        if (!$modal.length) { return; }
+
+        const $send = $('#nppp-f2b-ripe-send');
+
+        $('#nppp-f2b-ripe-modal-body').html(payload.html || '');
+        $send
+            .prop('disabled', !payload.can_send)
+            .text(payload.dry_run
+                ? __('Send Email (dry run)', 'fastcgi-cache-purge-and-preload-nginx')
+                : __('Send Email', 'fastcgi-cache-purge-and-preload-nginx'));
+
+        $modal.css('display', 'block');
+        $('body').addClass('nppp-f2b-modal-open');
+
+        if (payload.can_send) {
+            $send.trigger('focus');
+        }
+    }
+
+    function npppF2bCloseRipeModal() {
+        $('#nppp-f2b-ripe-modal').hide();
+        $('#nppp-f2b-ripe-modal-body').empty();
+        $('#nppp-f2b-ripe-send').prop('disabled', true);
+        $('body').removeClass('nppp-f2b-modal-open');
+    }
+
+    // Swap every Report button for this IP to its cooled-down state, in both
+    // panels at once, without a full tab reload.
+    function npppF2bMarkReported(ip) {
+        const done = $('<span>')
+            .addClass('nppp-f2b-report-done')
+            .attr('title', __('Reported just now — inside the cooldown window.', 'fastcgi-cache-purge-and-preload-nginx'))
+            .text(__('Reported', 'fastcgi-cache-purge-and-preload-nginx'));
+
+        // Rows on other DataTables pages are detached from the document, so a
+        // plain container search would silently miss them and leave a stale
+        // Report button behind. Collect the table's own row nodes as well.
+        let $scope = $securityPlaceholder.find('.nppp-f2b-report-btn');
+
+        const feedSel = '#nppp-f2b-feed-table';
+        if ($.fn.dataTable.isDataTable(feedSel)) {
+            const nodes = $(feedSel).DataTable().rows().nodes().to$();
+            $scope = $scope.add(nodes.find('.nppp-f2b-report-btn'));
+        }
+
+        $scope.each(function() {
+            const $b = $(this);
+            if (String($b.data('ip') || '') === ip) {
+                $b.replaceWith(done.clone());
             }
         });
     }
@@ -1405,6 +2357,18 @@ $(document).ready(function() {
                 spin.remove();
             }
         });
+    });
+
+    // Refresh (Advanced tab) — manual reload of the premium table without switching tabs
+    $(document).on('click', '#nppp-premium-refresh-btn', function (e) {
+        e.preventDefault();
+
+        var $btn = $(this);
+        if ($btn.prop('disabled')) return;
+
+        $btn.prop('disabled', true).addClass('nppp-premium-refresh-spinning');
+        showPreloader();
+        loadPremiumTabContent();
     });
 
     // Preload All MISS (Advanced tab)
@@ -1961,6 +2925,98 @@ $(document).ready(function() {
             $btn.prop('disabled', false);
         });
     });
+
+    // Vary: Accept-Encoding async check.
+    // Runs inside document.ready so the DOM is available and #nppp-vary-result
+    // is guaranteed to exist when the selector fires.
+    // The blocking wp_remote_head() probes are deferred to this background
+    // request so they never delay the initial settings page render.
+    // The existing $(document).on('click','#nppp-dismiss-vary',...) delegation
+    // above handles the AJAX-injected button automatically — no rebinding needed.
+    (function () {
+        var $varyContainer = $('#nppp-vary-result');
+        if ( ! $varyContainer.length || typeof nppp_admin_data === 'undefined' || ! nppp_admin_data.check_vary_nonce ) {
+            return;
+        }
+
+        $.ajax({
+            url:    nppp_admin_data.ajaxurl,
+            method: 'POST',
+            data: {
+                action:   'nppp_check_vary_issue',
+                _wpnonce: nppp_admin_data.check_vary_nonce
+            },
+            success: function ( response ) {
+                if ( response && response.success && response.data && response.data.html ) {
+                    $varyContainer.html( response.data.html );
+                } else {
+                    // Server responded but returned no HTML — remove the spinner
+                    $varyContainer.find('.spinner').removeClass('is-active');
+                }
+            },
+            error: function () {
+                // Network/server error — remove the spinner so it doesn't spin forever
+                $varyContainer.find('.spinner').removeClass('is-active');
+            }
+        });
+    }());
+
+    // Permanently dismiss the DISABLE_WP_CRON row
+    $(document).on('click', '#nppp-dismiss-cron', function () {
+        var $btn = $(this);
+        $btn.prop('disabled', true);
+
+        $.post(nppp_admin_data.ajaxurl, {
+            action:   'nppp_dismiss_cron_notice',
+            _wpnonce: nppp_admin_data.dismiss_cron_nonce
+        })
+        .done(function (response) {
+            if (response && response.success) {
+                $('#nppp-cron-row').fadeOut(300, function () {
+                    $(this).remove();
+                });
+            } else {
+                $btn.prop('disabled', false);
+            }
+        })
+        .fail(function () {
+            $btn.prop('disabled', false);
+        });
+    });
+
+    // DISABLE_WP_CRON async check.
+    // Mirrors the Vary: Accept-Encoding lazy-load.
+    // The existing delegation above handles the AJAX-injected button automatically 
+    // so no rebinding needed.
+    (function () {
+        var $cronContainer = $('#nppp-cron-result');
+        if ( ! $cronContainer.length || typeof nppp_admin_data === 'undefined' || ! nppp_admin_data.check_cron_nonce ) {
+            return;
+        }
+
+        $.ajax({
+            url:    nppp_admin_data.ajaxurl,
+            method: 'POST',
+            data: {
+                action:   'nppp_check_cron_issue',
+                _wpnonce: nppp_admin_data.check_cron_nonce
+            },
+            success: function ( response ) {
+                if ( response && response.success && response.data && response.data.html ) {
+                    $cronContainer.html( response.data.html );
+                } else {
+                    // No issue detected — nothing to show, remove the whole row
+                    $('#nppp-cron-row').fadeOut(300, function () {
+                        $(this).remove();
+                    });
+                }
+            },
+            error: function () {
+                // Network/server error — remove the spinner so it doesn't spin forever
+                $cronContainer.find('.spinner').removeClass('is-active');
+            }
+        });
+    }());
 
     // Bypass Path Restriction single toggle card
     (function npppSetupBypassPr() {
@@ -3523,7 +4579,7 @@ $(document).ready(function() {
 
     // Toggle switch rules for HTTP purge fast-path
     function npppHttpPurgeSubOptions(isChecked) {
-        $('#nppp-http-purge-suffix-row, #nppp-http-purge-custom-url-row').toggle(isChecked);
+        $('#nppp-http-purge-suffix-row, #nppp-http-purge-custom-url-row, #nppp-http-purge-all-path-row').toggle(isChecked);
     }
     var isHttpPurgeChecked = $('#nppp_http_purge_enabled').prop('checked');
     npppHttpPurgeSubOptions(isHttpPurgeChecked);
@@ -3941,7 +4997,7 @@ $(document).ready(function() {
     });
 
     // Set cache button behaviours
-    $('#nppp-purge-button, #nppp-preload-button').on('click', function(event) {
+    $('#nppp-purge-button, #nppp-preload-button, #nppp-stop-preload-button').on('click', function(event) {
         // Prevent the default click behavior
         event.preventDefault();
 
@@ -4074,7 +5130,8 @@ $(document).ready(function() {
         '#nginx_cache_preload_proxy_port',
         '#nginx_cache_preload_proxy_host',
         '#nppp_http_purge_suffix',
-        '#nppp_http_purge_custom_url'
+        '#nppp_http_purge_custom_url',
+        '#nppp_http_purge_all_path'
     ];
 
     // Initialize originalValues with current field values
@@ -4894,6 +5951,30 @@ function npppupdateStatus() {
     npppsafexecStatusSpan.appendChild(iconSpanSafexec);
     npppsafexecStatusSpan.append(safexecStatusText);
 
+    // Fetch and update WP-Cron reliability status
+    var npppCronReliabilitySpan = document.getElementById("npppCronReliability");
+    if (npppCronReliabilitySpan) {
+        var npppCronReliability = npppCronReliabilitySpan.textContent.trim();
+        npppCronReliabilitySpan.textContent = '';
+        npppCronReliabilitySpan.style.fontSize = "14px";
+
+        let iconSpanCronReliability = document.createElement('span');
+        let cronReliabilityStatusText = '';
+
+        if (npppCronReliability === "Enabled") {
+            npppCronReliabilitySpan.style.color = "green";
+            iconSpanCronReliability.classList.add("dashicons", "dashicons-yes");
+            cronReliabilityStatusText = ' ' + __('Enabled', 'fastcgi-cache-purge-and-preload-nginx');
+        } else if (npppCronReliability === "Disabled") {
+            npppCronReliabilitySpan.style.color = "#e6a817";
+            iconSpanCronReliability.classList.add("dashicons", "dashicons-warning");
+            cronReliabilityStatusText = ' ' + __('Disabled', 'fastcgi-cache-purge-and-preload-nginx');
+        }
+
+        npppCronReliabilitySpan.appendChild(iconSpanCronReliability);
+        npppCronReliabilitySpan.append(cronReliabilityStatusText);
+    }
+
     var npppSafexecVersionSpan = document.getElementById("npppSafexecVersion");
     var npppSafexecVersion = npppSafexecVersionSpan.textContent.trim();
 
@@ -4965,6 +6046,94 @@ function npppupdateStatus() {
 
     nppprgStatusSpan.appendChild(iconSpanRg);
     nppprgStatusSpan.append(rgStatusText);
+
+    // Fetch and update nginx.conf strict detection status
+    var npppNginxConfDetectedSpan = document.getElementById("npppNginxConfDetected");
+    var npppNginxConfDetected = npppNginxConfDetectedSpan.textContent.trim();
+    npppNginxConfDetectedSpan.textContent = '';
+    npppNginxConfDetectedSpan.style.fontSize = "14px";
+
+    let iconSpanNginxConf = document.createElement('span');
+    let nginxConfStatusText = '';
+
+    if (npppNginxConfDetected === "Not Found") {
+        npppNginxConfDetectedSpan.style.color = "red";
+        iconSpanNginxConf.classList.add("dashicons", "dashicons-no");
+        nginxConfStatusText = ' ' + __('Not Found', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        npppNginxConfDetectedSpan.style.color = "green";
+        iconSpanNginxConf.classList.add("dashicons", "dashicons-yes");
+        nginxConfStatusText = ' ' + npppNginxConfDetected;
+    }
+
+    npppNginxConfDetectedSpan.appendChild(iconSpanNginxConf);
+    npppNginxConfDetectedSpan.append(nginxConfStatusText);
+
+    // Fetch and update nginx signature / headers signal status
+    var npppNginxSignalSpan = document.getElementById("npppNginxSignal");
+    var npppNginxSignal = npppNginxSignalSpan.textContent.trim();
+    npppNginxSignalSpan.textContent = '';
+    npppNginxSignalSpan.style.fontSize = "14px";
+
+    let iconSpanNginxSignal = document.createElement('span');
+    let nginxSignalStatusText = '';
+
+    if (npppNginxSignal === "Detected") {
+        npppNginxSignalSpan.style.color = "green";
+        iconSpanNginxSignal.classList.add("dashicons", "dashicons-yes");
+        nginxSignalStatusText = ' ' + __('Detected', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        npppNginxSignalSpan.style.color = "orange";
+        iconSpanNginxSignal.classList.add("dashicons", "dashicons-clock");
+        nginxSignalStatusText = ' ' + __('None', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    npppNginxSignalSpan.appendChild(iconSpanNginxSignal);
+    npppNginxSignalSpan.append(nginxSignalStatusText);
+
+    // Fetch and update PHP open_basedir restriction status
+    var npppOpenBasedirSpan = document.getElementById("npppOpenBasedir");
+    var npppOpenBasedir = npppOpenBasedirSpan.textContent.trim();
+    npppOpenBasedirSpan.textContent = '';
+    npppOpenBasedirSpan.style.fontSize = "14px";
+
+    let iconSpanOpenBasedir = document.createElement('span');
+    let openBasedirStatusText = '';
+
+    if (npppOpenBasedir === "Active") {
+        npppOpenBasedirSpan.style.color = "orange";
+        iconSpanOpenBasedir.classList.add("dashicons", "dashicons-warning");
+        openBasedirStatusText = ' ' + __('Active', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        npppOpenBasedirSpan.style.color = "green";
+        iconSpanOpenBasedir.classList.add("dashicons", "dashicons-yes");
+        openBasedirStatusText = ' ' + __('Not Set', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    npppOpenBasedirSpan.appendChild(iconSpanOpenBasedir);
+    npppOpenBasedirSpan.append(openBasedirStatusText);
+
+    // Fetch and update assume-nginx mode status
+    var npppAssumeNginxSpan = document.getElementById("npppAssumeNginx");
+    var npppAssumeNginx = npppAssumeNginxSpan.textContent.trim();
+    npppAssumeNginxSpan.textContent = '';
+    npppAssumeNginxSpan.style.fontSize = "14px";
+
+    let iconSpanAssumeNginx = document.createElement('span');
+    let assumeNginxStatusText = '';
+
+    if (npppAssumeNginx === "Enabled") {
+        npppAssumeNginxSpan.style.color = "orange";
+        iconSpanAssumeNginx.classList.add("dashicons", "dashicons-clock");
+        assumeNginxStatusText = ' ' + __('Enabled', 'fastcgi-cache-purge-and-preload-nginx');
+    } else {
+        npppAssumeNginxSpan.style.color = "green";
+        iconSpanAssumeNginx.classList.add("dashicons", "dashicons-yes");
+        assumeNginxStatusText = ' ' + __('Off', 'fastcgi-cache-purge-and-preload-nginx');
+    }
+
+    npppAssumeNginxSpan.appendChild(iconSpanAssumeNginx);
+    npppAssumeNginxSpan.append(assumeNginxStatusText);
 
     // Add spin effect to icons
     document.querySelectorAll('.status').forEach(status => {
