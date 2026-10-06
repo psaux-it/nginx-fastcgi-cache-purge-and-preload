@@ -17,12 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Retrieve the client's IP address, considering trusted proxies.
 function nppp_get_client_ip($mask_for_log = false) {
     $mask_ip = function($ip) {
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-            $parts = explode('.', $ip);
-            $parts[3] = '**';
-            return implode('.', $parts);
-        }
-        return $ip;
+        return filter_var($ip, FILTER_VALIDATE_IP) ? nppp_mask_ip($ip) : $ip;
     };
 
     $remote_addr = '';
