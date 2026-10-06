@@ -929,8 +929,34 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
         margin-top: 15px;
     }
 
+    /* Keep all tab icons on ONE line; shrink to fit the available width */
+    #nppp-nginx-tabs .tab-header-container ul {
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: center;
+        gap: 4px;
+        width: 100%;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    #nppp-nginx-tabs .tab-header-container ul li {
+        float: none;
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: 76px;
+        margin: 0;
+    }
+
     #nppp-nginx-tabs li a {
-        padding: 10px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        float: none;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px 4px;
     }
 
     #nppp-nginx-tabs li a:hover {
@@ -950,7 +976,11 @@ div.nppp-premium-wrap div.dt-length select[id^="dt-length-"] {
     /* Increase the size of the SVG icons to 48px */
     #nppp-nginx-tabs li a .nppp-svg-icon-container {
         width: 36px !important;
-        height: 36px !important;
+        max-width: 100% !important;
+        min-width: 0;
+        height: auto !important;
+        aspect-ratio: 1 / 1;
+        flex: 0 1 36px;
     }
 
     .ui-state-active, .ui-widget-content .ui-state-active, .ui-widget-header .ui-state-active, a.ui-button:active, .ui-button:active, .ui-button.ui-state-active:hover {
