@@ -2,7 +2,7 @@
  * Repeat Offenders — row-aligned bar chart for Nginx Cache Purge Preload
  * Description: Renders a dependency-free bar list, next to the Repeat
  *              Offenders table. Fail2Ban Jail Monitoring Tab.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com

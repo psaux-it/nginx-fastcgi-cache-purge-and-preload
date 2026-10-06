@@ -6,7 +6,7 @@
  *              via dedicated nginx location blocks.
  *              Attempts to purge via HTTP before falling back to the
  *              filesystem workflow.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com

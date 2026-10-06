@@ -1,7 +1,7 @@
 <?php
 /**
  * NPP frontend bootstrap
- * Version:           2.1.7
+ * Version:           2.1.8
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
  * License:           GPL-2.0+

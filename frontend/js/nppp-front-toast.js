@@ -1,7 +1,7 @@
 /**
  * Frontend toast scripts for Nginx Cache Purge Preload
  * Description: Displays frontend purge/preload result messages in isolated toast notifications.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com

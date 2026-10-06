@@ -7,7 +7,7 @@
  *              whois + abuse contacts in parallel (via WordPress's bundled
  *              WpOrg\Requests library), writes results back, and exits when
  *              idle.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com

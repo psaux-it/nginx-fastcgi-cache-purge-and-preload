@@ -3,7 +3,7 @@
  * Plugin Name:       Nginx Cache Purge Preload
  * Plugin URI:        https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload
  * Description:       The most comprehensive free solution for managing Nginx (FastCGI, Proxy, SCGI, UWSGI) cache operations directly from your WordPress dashboard.
- * Version:           2.1.7
+ * Version:           2.1.8
  * Author:            Hasan CALISIR
  * Author URI:        https://www.psauxit.com/
  * License:           GPL-2.0+
@@ -128,12 +128,12 @@ if (!defined('NPPP_RUNTIME_SUBDIR')) {
 
 // Single source of truth for the plugin version
 if (!defined('NPPP_PLUGIN_VERSION')) {
-    define('NPPP_PLUGIN_VERSION', '2.1.7');
+    define('NPPP_PLUGIN_VERSION', '2.1.8');
 }
 
 // Single source of truth for the safexec version
 if (!defined('NPPP_SAFEXEC_VERSION')) {
-    define('NPPP_SAFEXEC_VERSION', '1.9.6');
+    define('NPPP_SAFEXEC_VERSION', '1.9.7');
 }
 
 // Loads runtime paths → SPL class autoloader → full admin bootstrap.

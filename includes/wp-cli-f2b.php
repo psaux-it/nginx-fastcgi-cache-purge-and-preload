@@ -3,7 +3,7 @@
  * WP-CLI Fail2ban commands for Nginx Cache Purge Preload
  * Description: Exposes the Fail2ban webhook, jail monitor, RIPEstat enrichment
  *              worker, and Abuse Reporter to WP-CLI as `wp npp f2b`.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com

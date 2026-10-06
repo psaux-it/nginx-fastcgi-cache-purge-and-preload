@@ -4,7 +4,7 @@
  *              and colored by ban count, for the Fail2Ban Security tab. Dark
  *              "threat radar" theme, pulsing rings on the hottest countries,
  *              and a severity legend to match the console-style Live Feed.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com

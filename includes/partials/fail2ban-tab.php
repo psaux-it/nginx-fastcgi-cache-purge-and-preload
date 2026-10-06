@@ -5,7 +5,7 @@
  *              including webhook setup, token management, diagnostics,
  *              jail activity, repeat offenders, and recent events.
  * Drop-in Version: 1.0.0
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com

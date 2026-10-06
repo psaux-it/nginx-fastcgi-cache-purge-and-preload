@@ -2,7 +2,7 @@
 /**
  * Class autoloader for Nginx Cache Purge Preload
  * Description: Resolves plugin classes via classmap, WordPress-style paths, and PSR-4 fallback with caching.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com

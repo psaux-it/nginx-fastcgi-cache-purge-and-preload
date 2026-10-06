@@ -4,7 +4,7 @@
  * Description: Webhook-based, read-only monitor for nginx-related fail2ban jails.
  *              fail2ban pushes ban/unban events to a token-authenticated REST endpoint.
  * Drop-in Version: 1.0.0
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com

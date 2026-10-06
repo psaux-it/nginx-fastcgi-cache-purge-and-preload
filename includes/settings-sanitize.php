@@ -2,7 +2,7 @@
 /**
  * Settings sanitization and validation for Nginx Cache Purge Preload
  * Description: Sanitizes and validates all settings inputs; validates the cache path.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com

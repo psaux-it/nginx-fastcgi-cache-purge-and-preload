@@ -6,7 +6,7 @@
  *              webhook monitor and the abuse contacts already resolved by the
  *              RIPEstat enrichment pipeline.
  * Drop-in Version: 1.0.0
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
