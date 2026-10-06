@@ -433,6 +433,16 @@ td.action, td.check {
     animation: nppp-spin 0.9s linear infinite;
 }
 
+/* Desktop: pin Refresh to the same width as the search field below it
+   (same 201px as the Preload All MISS button), right-aligned */
+@media screen and (min-width: 768px) {
+    .nppp-premium-refresh-btn {
+        width: 201px;
+        box-sizing: border-box;
+        justify-content: center;
+    }
+}
+
 @media screen and (max-width: 767px) {
     .nppp-premium-refresh-wrap {
         justify-content: center;
