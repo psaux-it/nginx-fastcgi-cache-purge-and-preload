@@ -130,8 +130,9 @@ function nppp_render_mobile_fab(): void {
 
     ?>
     <div id="nppp-mobile-fab"
-         role="navigation"
-         aria-label="<?php esc_attr_e('Nginx Cache', 'fastcgi-cache-purge-and-preload-nginx'); ?>">
+        hidden
+        role="navigation"
+        aria-label="<?php esc_attr_e('Nginx Cache', 'fastcgi-cache-purge-and-preload-nginx'); ?>">
 
         <div id="nppp-mobile-fab-menu" role="menu" aria-hidden="true">
 
