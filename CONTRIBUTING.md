@@ -46,6 +46,14 @@ If you would like to contribute code to this project, please follow these steps:
 - You may be asked to make changes or clarifications. Please respond to feedback in a timely manner.
 - Once the PR is approved, it will be merged into the main branch.
 
+### 🤖 AI-Assisted Contributions
+
+AI-generated and AI-assisted contributions are fully welcome in this project.
+
+While some communities treat "this looks like AI" as an immediate rejection, we do not. There are no interrogations or gatekeeping based on the tools you used to write your code. We evaluate every contribution purely on its merit: is it correct, readable, and useful?
+
+Our expectations for AI-assisted code are the same as human-written code. Review it, test it, be ready to explain it. If it's good, it gets merged.
+
 ### Community and Behavioral Expectations
 
 By contributing to this project, you agree to follow our community guidelines:
