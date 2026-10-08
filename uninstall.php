@@ -89,6 +89,8 @@ function nppp_clear_plugin_cache_on_uninstall() {
     $like_ep3_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep3_fail_') . '%';
     $like_ep10_fail             = $wpdb->esc_like('_transient_nppp_ep10_fail_') . '%';
     $like_ep10_fail_timeout     = $wpdb->esc_like('_transient_timeout_nppp_ep10_fail_') . '%';
+    $like_ep10_cfg              = $wpdb->esc_like('_transient_nppp_ep10_cfg_') . '%';
+    $like_ep10_cfg_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep10_cfg_') . '%';
     $like_f2b_rdap              = $wpdb->esc_like('_transient_nppp_f2b_rdap_') . '%';
     $like_f2b_rdap_timeout      = $wpdb->esc_like('_transient_timeout_nppp_f2b_rdap_') . '%';
 
@@ -97,6 +99,8 @@ function nppp_clear_plugin_cache_on_uninstall() {
         $wpdb->prepare(
             "DELETE FROM {$wpdb->options}
             WHERE option_name LIKE %s
+               OR option_name LIKE %s
+               OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
                OR option_name LIKE %s
@@ -126,6 +130,8 @@ function nppp_clear_plugin_cache_on_uninstall() {
             $like_ep3_fail_timeout,
             $like_ep10_fail,
             $like_ep10_fail_timeout,
+            $like_ep10_cfg,
+            $like_ep10_cfg_timeout,
             $like_f2b_rdap,
             $like_f2b_rdap_timeout
         )
@@ -188,16 +194,22 @@ function nppp_delete_plugin_options_on_uninstall() {
  * Clear plugin cron hooks.
  */
 function nppp_clear_scheduled_events_on_uninstall() {
-    wp_clear_scheduled_hook('npp_cache_preload_event');
-    wp_clear_scheduled_hook('npp_cache_preload_status_event');
-    wp_clear_scheduled_hook('nppp_index_updater_event');
-    wp_clear_scheduled_hook('nppp_f2b_cleanup_event');
-    wp_clear_scheduled_hook('nppp_f2b_enrich_event');
-    wp_clear_scheduled_hook('nppp_f2b_worker_event');
+    // wp_unschedule_hook() removes every scheduled instance of a hook
+    // regardless of its arguments.
+    $hooks = array(
+        'npp_cache_preload_event',
+        'npp_cache_preload_status_event',
+        'nppp_index_updater_event',
+        'nppp_f2b_cleanup_event',
+        'nppp_f2b_enrich_event',
+        'nppp_f2b_worker_event',
+        // Tracking hook left by 2.0.1-2.1.4
+        'npp_plugin_tracking_event',
+    );
 
-    // Remove tracking cron hooks left by 2.0.1–2.1.4 in case migration never ran
-    wp_clear_scheduled_hook('npp_plugin_tracking_event', array('active'));
-    wp_clear_scheduled_hook('npp_plugin_tracking_event');
+    foreach ($hooks as $hook) {
+        wp_unschedule_hook($hook);
+    }
 }
 
 /**
@@ -209,7 +221,7 @@ function nppp_get_runtime_dir_on_uninstall() {
 
     $uploads_base = '';
     if (function_exists('wp_upload_dir')) {
-        $uploads = wp_upload_dir();
+        $uploads = wp_upload_dir(null, false);
         if (is_array($uploads) && !empty($uploads['basedir'])) {
             $uploads_base = (string) $uploads['basedir'];
         }
@@ -231,7 +243,7 @@ function nppp_delete_runtime_artifacts_on_uninstall() {
         return;
     }
 
-    $uploads = wp_upload_dir();
+    $uploads = wp_upload_dir(null, false);
     $uploads_base = isset($uploads['basedir']) ? realpath($uploads['basedir']) : false;
     $runtime_real = realpath($runtime_dir);
 
@@ -247,6 +259,25 @@ function nppp_delete_runtime_artifacts_on_uninstall() {
         return;
     }
 
+    // Fail2ban worker liveness. The worker holds an exclusive flock on its
+    // run-lock file for its whole life , and flock() belongs to the inode, 
+    // so unlinking that file under a live worker lets a second worker start beside it.
+    $worker_running = false;
+    $worker_lock_fh = null;
+    $run_lock_path  = $runtime_real . DIRECTORY_SEPARATOR . 'f2b_rdap_worker.run.lock';
+
+    if (is_file($run_lock_path)) {
+        $worker_lock_fh = @fopen($run_lock_path, 'c');
+        if ($worker_lock_fh === false || !@flock($worker_lock_fh, LOCK_EX | LOCK_NB)) {
+            $worker_running = true;
+            if (is_resource($worker_lock_fh)) {
+                fclose($worker_lock_fh);
+            }
+            $worker_lock_fh = null;
+        }
+    }
+
+    // Always safe to remove.
     $runtime_files = array(
         'fastcgi_ops.log',
         'cache_preload.pid',
@@ -255,6 +286,21 @@ function nppp_delete_runtime_artifacts_on_uninstall() {
         'nppp-wget-snapshot.log',
     );
 
+    // Owned by the Fail2ban worker, or protecting the directory the worker
+    // writes into: only removed when no worker is running. The lock file goes
+    // last, while we still hold its flock.
+    if (!$worker_running) {
+        $runtime_files = array_merge($runtime_files, array(
+            'f2b_rdap_worker.pid',
+            'f2b_rdap_worker.hb',
+            'f2b_rdap_worker.lock',
+            'f2b_worker.out',
+            'index.php',   // written by nppp_get_runtime_dir()
+            '.htaccess',   // written by nppp_get_runtime_dir()
+            'f2b_rdap_worker.run.lock',
+        ));
+    }
+
     foreach ($runtime_files as $runtime_file) {
         $file_path = $runtime_real . DIRECTORY_SEPARATOR . $runtime_file;
         if (is_file($file_path)) {
@@ -262,8 +308,18 @@ function nppp_delete_runtime_artifacts_on_uninstall() {
         }
     }
 
-    $remaining = glob($runtime_real . DIRECTORY_SEPARATOR . '*');
-    if (is_array($remaining) && empty($remaining)) {
+    if (is_resource($worker_lock_fh)) {
+        @flock($worker_lock_fh, LOCK_UN);
+        fclose($worker_lock_fh);
+    }
+
+    if ($worker_running) {
+        return;
+    }
+
+    // scandir() (unlike glob('*')) also sees dotfiles; only rmdir a truly empty dir.
+    $remaining = @scandir($runtime_real);
+    if (is_array($remaining) && count(array_diff($remaining, array('.', '..'))) === 0) {
         // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- WP_Filesystem unavailable in uninstall context; directory is confirmed empty above.
         rmdir($runtime_real);
     }
@@ -288,7 +344,7 @@ function nppp_run_uninstall_cleanup_for_current_site() {
 }
 
 if (is_multisite()) {
-    $nppp_site_ids = get_sites(array('fields' => 'ids'));
+    $nppp_site_ids = get_sites(array('fields' => 'ids', 'number' => 0));
     foreach ($nppp_site_ids as $nppp_site_id) {
         switch_to_blog((int) $nppp_site_id);
         nppp_run_uninstall_cleanup_for_current_site();
