@@ -960,14 +960,17 @@ function nppp_f2b_kill_worker(): bool {
     }
 
     $dead = ! nppp_f2b_pid_alive( $pid );
-    nppp_f2b_worker_reset_state();
 
-    // Safe to remove the lock file here -- deactivation is the only moment
-    // nothing else could be spawning. Left alone otherwise, see
-    // nppp_f2b_worker_reset_state().
-    wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE ) );
-    wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE ) );
-    delete_option( NPPP_F2B_SPAWN_TICK_KEY );
+    // Only tear down state once the worker is confirmed dead. If it survived
+    // SIGTERM+SIGKILL, keep the PID file (ownership evidence) and the lock
+    // inodes: unlinking them under a live worker lets a second worker start
+    // beside it after reactivation.
+    if ( $dead ) {
+        nppp_f2b_worker_reset_state();
+        wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE ) );
+        wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE ) );
+        delete_option( NPPP_F2B_SPAWN_TICK_KEY );
+    }
 
     if ( $dead ) {
         nppp_f2b_log(
