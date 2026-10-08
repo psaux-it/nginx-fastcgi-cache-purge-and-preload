@@ -877,6 +877,11 @@ function nppp_on_activation() {
         nppp_defaults_on_plugin_activation();
     }
 
+    // Deactivation clears the preload cron but keeps the saved schedule.
+    if (function_exists('nppp_rearm_preload_schedule_on_activation')) {
+        nppp_rearm_preload_schedule_on_activation();
+    }
+
     if (function_exists('nppp_schedule_index_updater')) {
         nppp_schedule_index_updater();
     }
