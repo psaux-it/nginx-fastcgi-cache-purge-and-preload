@@ -128,6 +128,34 @@ function nppp_reset_plugin_settings_on_deactivation() {
     }
 }
 
+// Re-arm the scheduled preload on (re)activation.
+//
+// Deactivation clears the npp_cache_preload_event cron, but the
+// nginx_cache_schedule flag and the saved nginx_cache_schedule_value are kept.
+// Without this, "WP Schedule Cache" would still read as enabled after a
+// deactivate/activate cycle while no cron event exists.
+function nppp_rearm_preload_schedule_on_activation() {
+    $options = get_option('nginx_cache_settings', array());
+    if (!is_array($options) || ($options['nginx_cache_schedule'] ?? 'no') !== 'yes') {
+        return;
+    }
+
+    // An event that is already queued keeps its next run time.
+    if (wp_next_scheduled('npp_cache_preload_event')) {
+        return;
+    }
+
+    // Same format the settings handler saves: <daily|weekly|monthly>|HH:MM.
+    $expression = get_option('nginx_cache_schedule_value', '');
+    if (!is_string($expression) || !preg_match('/^(daily|weekly|monthly)\|([01]\d|2[0-3]):([0-5]\d)$/', $expression)) {
+        return;
+    }
+
+    if (function_exists('nppp_create_scheduled_events')) {
+        nppp_create_scheduled_events($expression);
+    }
+}
+
 // Automatically update the default options when the plugin is activated or reactivated
 function nppp_defaults_on_plugin_activation() {
     // Clear all plugin transients on activation/reactivation.
