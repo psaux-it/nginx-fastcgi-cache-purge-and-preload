@@ -48,6 +48,34 @@ wp npp schedule
 
 **NPP** includes **[safexec](https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/tree/main/safexec)** - a hardened command execution wrapper written in C for NPP. It safely executes system utilities used by NPP while enforcing strict security controls. An optional library can also normalize percent-encoded HTTP request lines during cache preloading, preventing cache key inconsistencies in Nginx.
 
+### 🚨 Fail2ban Dashboard & Abuse Reporter
+
+**NPP** can turn your server's **Fail2ban** activity into a live dashboard inside WordPress. A token-authenticated REST webhook receives ban/unban events from a small Fail2ban action, stores them in a dedicated table, and enriches public IPs with network owner, country and abuse-contact data from **[RIPEstat](https://stat.ripe.net/)** using a background worker.
+
+> NPP does **not** ban or unban anything. It only records what Fail2ban reports.
+
+- 📊 **Jail activity** with ban/unban counts, **Repeat Offenders** and **Top Attack Countries**
+- 🔎 **Enrichment** (netname, country, abuse email), cached and retried in the background
+- 📧 **Abuse Reporter** (optional, **disabled by default**): emails the network's abuse desk after you review a preview and send it manually. Thresholds, per-IP cooldown and hourly cap are configurable
+- 🛡️ **Endpoint hardening**: Bearer token checked before the plugin loads, strike lockout for bad tokens, optional trusted-IP allow-list, per-minute event rate limit
+- 🗓️ **Retention**: 90 days by default, cleaned up automatically
+
+Setup (copy-paste snippets are generated in **Settings → Fail2Ban**):
+
+```bash
+wp npp f2b token              # show webhook token
+wp npp f2b snippet action     # Fail2ban action file for /etc/fail2ban/action.d/
+wp npp f2b snippet jail       # jail.local example
+wp npp f2b test               # send a test event through the webhook
+wp npp f2b status
+```
+
+More commands: `wp npp f2b jails|offenders|countries|events|worker|abuse`.
+
+> ⚠️ **Nginx:** the plugin's runtime directory (`wp-content/uploads/nginx-cache-purge-preload-runtime/`) holds logs and worker files. Nginx ignores `.htaccess`, so add a deny rule, e.g. `location ~* /nginx-cache-purge-preload-runtime/ { return 404; }`.
+>
+> ℹ️ Public IPs of ban events are sent to RIPEstat for lookup. Abuse reports are only sent when you enable and trigger them.
+
 ### 🐳 Dockerized Full Stack Deploy
 
 **[Dockerized](https://github.com/psaux-it/wordpress-nginx-cache-docker)** repository that provides a complete full-stack deployment for **NPP**. It includes pre-configured Dockerfiles, a Docker Compose setup, and detailed instructions to get your site running in minutes. Maintained alongside the main **NPP** plugin. It’s ideal for production, development, and testing environments, offering a streamlined way to simplify your deployment workflow with containerized solutions.
@@ -159,6 +187,8 @@ NPP evaluates multiple optimized purge strategies in order:
 🔴 **Redis Object Cache Sync**: Bidirectional sync between NPP and Redis Object Cache. NPP Purge All flushes the Redis object cache, and a Redis flush triggers a full Nginx cache purge via NPP (when auto-purge is enabled).
 
 🛒 **WooCommerce Auto-Purge**: Automatically purges Nginx cache when WooCommerce product stock quantity changes, stock status changes (in stock / out of stock / on backorder), or when an order is cancelled and stock is restored.
+
+🚨 **Fail2ban Dashboard & Abuse Reporter**: Receive Fail2ban ban/unban events via a token-authenticated webhook, view jail activity, Repeat Offenders and Top Attack Countries, and optionally email the offending network's abuse desk (RIPEstat-resolved contacts, manual send, disabled by default).
 
 🖲️ **WP-CLI Integration**: Manage Nginx cache directly from the command line. Purge and preload cache, view status reports, inspect logs, update settings, flush cache, and manage scheduled tasks without accessing the WordPress admin dashboard.
 
