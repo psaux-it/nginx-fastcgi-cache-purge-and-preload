@@ -261,8 +261,7 @@ function nppp_f2b_worker_write_pid( int $pid ): void {
  *
  * Doesn't touch the lock file on purpose -- flock() locks an inode, so
  * deleting it would let two processes lock two different inodes and break
- * the single-flight guard. Only removed on deactivation, see
- * nppp_f2b_kill_worker().
+ * the single-flight guard. Deactivation keeps these files too.
  */
 function nppp_f2b_worker_reset_state(): void {
     wp_delete_file( nppp_f2b_worker_pid_path() );
@@ -917,14 +916,88 @@ function nppp_f2b_spawn_worker_process(): bool {
  * own once the queue's been empty for a while.
  */
 function nppp_f2b_kill_worker(): bool {
+    // Use the same stable inode as the spawner and worker startup. A busy
+    // startup must finish before a later stop attempt can inspect its PID.
+    $lock_path = nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE );
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+    $lock = @fopen( $lock_path, 'r+' );
+    if ( ! $lock ) {
+        clearstatcache();
+        // A never-started worker needs no cleanup. Do not create root-owned
+        // locks from WP-CLI, and do not clear state without serialization:
+        // the first spawner could start immediately after these checks.
+        if ( ! file_exists( $lock_path )
+            && ! file_exists( nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE ) )
+            && ! file_exists( nppp_f2b_worker_pid_path() )
+            && ! file_exists( nppp_f2b_worker_hb_path() ) ) {
+            return true;
+        }
+        nppp_f2b_log( 'ERROR', 'Deactivation: cannot open the worker startup lock; worker state was kept.' );
+        return false;
+    }
+    if ( ! @flock( $lock, LOCK_EX | LOCK_NB ) ) {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+        @fclose( $lock );
+        nppp_f2b_log( 'ERROR', 'Deactivation: worker startup is busy; worker state was kept. Retry stopping the worker.' );
+        return false;
+    }
+
+    try {
+        return nppp_f2b_kill_worker_locked();
+    } finally {
+        @flock( $lock, LOCK_UN );
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+        @fclose( $lock );
+    }
+}
+
+/**
+ * Clear stopped-worker state under startup and, when present, lifetime locks.
+ * Internal: caller must hold the spawn lock until this function returns.
+ * Never unlink either lock file: even an unlocked inode may already have
+ * been opened by a caller paused immediately before flock().
+ */
+function nppp_f2b_worker_clear_stopped_state(): bool {
+    $lock_path = nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE );
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+    $lock = @fopen( $lock_path, 'r+' );
+    if ( ! $lock ) {
+        clearstatcache( true, $lock_path );
+        if ( ! file_exists( $lock_path ) ) {
+            // Caller holds the spawn lock: a worker cannot create/acquire
+            // its run lock or publish new state until cleanup is finished.
+            nppp_f2b_worker_reset_state();
+            delete_option( NPPP_F2B_SPAWN_TICK_KEY );
+            return true;
+        }
+        nppp_f2b_log( 'ERROR', 'Deactivation: cannot verify the worker run lock; worker state was kept.' );
+        return false;
+    }
+    if ( ! @flock( $lock, LOCK_EX | LOCK_NB ) ) {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+        @fclose( $lock );
+        nppp_f2b_log( 'ERROR', 'Deactivation: a worker still owns the run lock; worker state was kept.' );
+        return false;
+    }
+
+    try {
+        nppp_f2b_worker_reset_state();
+        delete_option( NPPP_F2B_SPAWN_TICK_KEY );
+        return true;
+    } finally {
+        @flock( $lock, LOCK_UN );
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+        @fclose( $lock );
+    }
+}
+
+/** Internal stop implementation; caller must hold the spawn lock. */
+function nppp_f2b_kill_worker_locked(): bool {
     $pid = nppp_f2b_worker_read_pid();
 
     if ( $pid <= 0 || ! nppp_f2b_pid_alive( $pid ) ) {
-        nppp_f2b_worker_reset_state();
-        wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE ) );
-        wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE ) );
-        delete_option( NPPP_F2B_SPAWN_TICK_KEY );
-        return true;
+        // Missing/dead PID is not evidence that the lifetime lock is free.
+        return nppp_f2b_worker_clear_stopped_state();
     }
 
     // The PID file is untrusted (stale file / PID reuse, and it sits in a
@@ -936,12 +1009,8 @@ function nppp_f2b_kill_worker(): bool {
     }
     if ( false === strpos( $nppp_f2b_cmd, 'nppp_f2b_worker_run' ) ) {
         // The worker is gone and its PID was reused by a stranger: clean up only.
-        nppp_f2b_worker_reset_state();
-        wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE ) );
-        wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE ) );
-        delete_option( NPPP_F2B_SPAWN_TICK_KEY );
         nppp_f2b_log( 'INFO', sprintf( 'Deactivation: PID %d from the PID file is not an NPP worker; nothing was signalled.', $pid ) );
-        return true;
+        return nppp_f2b_worker_clear_stopped_state();
     }
 
     if ( function_exists( 'posix_kill' ) && defined( 'SIGTERM' ) ) {
@@ -966,10 +1035,9 @@ function nppp_f2b_kill_worker(): bool {
     // inodes: unlinking them under a live worker lets a second worker start
     // beside it after reactivation.
     if ( $dead ) {
-        nppp_f2b_worker_reset_state();
-        wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_LOCK_FILE ) );
-        wp_delete_file( nppp_get_runtime_file( NPPP_F2B_WORKER_RUN_LOCK_FILE ) );
-        delete_option( NPPP_F2B_SPAWN_TICK_KEY );
+        if ( ! nppp_f2b_worker_clear_stopped_state() ) {
+            return false;
+        }
     }
 
     if ( $dead ) {
