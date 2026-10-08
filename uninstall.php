@@ -74,66 +74,14 @@ function nppp_clear_plugin_cache_on_uninstall() {
         delete_transient($transient);
     }
 
-    // Safe clean up transients directly in DB
-    $like_category              = $wpdb->esc_like('_transient_nppp_category_') . '%';
-    $like_category_timeout      = $wpdb->esc_like('_transient_timeout_nppp_category_') . '%';
-    $like_rate_limit            = $wpdb->esc_like('_transient_nppp_rate_limit_') . '%';
-    $like_rate_limit_timeout    = $wpdb->esc_like('_transient_timeout_nppp_rate_limit_') . '%';
-    $like_front_message         = $wpdb->esc_like('_transient_nppp_front_message_') . '%';
-    $like_front_message_timeout = $wpdb->esc_like('_transient_timeout_nppp_front_message_') . '%';
-    $like_wget_cache            = $wpdb->esc_like('_transient_nppp_wget_urls_cache_') . '%';
-    $like_wget_cache_timeout    = $wpdb->esc_like('_transient_timeout_nppp_wget_urls_cache_') . '%';
-    $like_ep8_fail              = $wpdb->esc_like('_transient_nppp_ep8_fail_') . '%';
-    $like_ep8_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep8_fail_') . '%';
-    $like_ep3_fail              = $wpdb->esc_like('_transient_nppp_ep3_fail_') . '%';
-    $like_ep3_fail_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep3_fail_') . '%';
-    $like_ep10_fail             = $wpdb->esc_like('_transient_nppp_ep10_fail_') . '%';
-    $like_ep10_fail_timeout     = $wpdb->esc_like('_transient_timeout_nppp_ep10_fail_') . '%';
-    $like_ep10_cfg              = $wpdb->esc_like('_transient_nppp_ep10_cfg_') . '%';
-    $like_ep10_cfg_timeout      = $wpdb->esc_like('_transient_timeout_nppp_ep10_cfg_') . '%';
-    $like_f2b_rdap              = $wpdb->esc_like('_transient_nppp_f2b_rdap_') . '%';
-    $like_f2b_rdap_timeout      = $wpdb->esc_like('_transient_timeout_nppp_f2b_rdap_') . '%';
-
+    // Every NPP transient lives under the nppp_ prefix: two prefix scans cover
+    // values and timeouts, including keys added after the list above.
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->query(
         $wpdb->prepare(
-            "DELETE FROM {$wpdb->options}
-            WHERE option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s
-               OR option_name LIKE %s",
-            $like_category,
-            $like_category_timeout,
-            $like_rate_limit,
-            $like_rate_limit_timeout,
-            $like_front_message,
-            $like_front_message_timeout,
-            $like_wget_cache,
-            $like_wget_cache_timeout,
-            $like_ep8_fail,
-            $like_ep8_fail_timeout,
-            $like_ep3_fail,
-            $like_ep3_fail_timeout,
-            $like_ep10_fail,
-            $like_ep10_fail_timeout,
-            $like_ep10_cfg,
-            $like_ep10_cfg_timeout,
-            $like_f2b_rdap,
-            $like_f2b_rdap_timeout
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+            $wpdb->esc_like('_transient_nppp_') . '%',
+            $wpdb->esc_like('_transient_timeout_nppp_') . '%'
         )
     );
 }
