@@ -20,62 +20,80 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
 function nppp_clear_plugin_cache_on_uninstall() {
     global $wpdb;
 
-    // Transients to clear
+    // Transients to clear.
+    //
+    // delete_transient() targets one backend at a time: the external object
+    // cache entry when Redis/Memcached is active, the wp_options rows
+    // otherwise. The LIKE query below already removes every nppp_* transient
+    // from the DB, so this list exists mainly to purge object-cache entries.
+    // Keys are split into two groups: plain names and names suffixed with
+    // '_' . md5('nppp').
     $static_key_base = 'nppp';
-    $transients = array(
+    $suffix          = '_' . md5($static_key_base);
+
+    $plain_transients = array(
         'nppp_cache_keys_wpfilesystem_error',
         'nppp_nginx_conf_not_found',
         'nppp_cache_keys_not_found',
         'nppp_cache_path_not_found',
         'nppp_fuse_path_not_found',
         'nppp_assume_recently_enabled',
-        'nppp_cache_keys_' . md5($static_key_base),
-        'nppp_bindfs_version_' . md5($static_key_base),
-        'nppp_libfuse_version_' . md5($static_key_base),
-        'nppp_permissions_check_' . md5($static_key_base),
-        'nppp_cache_paths_' . md5($static_key_base),
-        'nppp_fuse_paths_' . md5($static_key_base),
-        'nppp_webserver_user_' . md5($static_key_base),
-        'nppp_est_url_counts_' . md5($static_key_base),
-        'nppp_last_preload_time_' . md5($static_key_base),
-        'nppp_safexec_version_' . md5($static_key_base),
-        'nppp_wget_urls_cache_' . md5($static_key_base),
-        'nppp_wget_compatibility_' . md5($static_key_base),
-        'nppp_cron_reliability_' . md5($static_key_base),
-        'nppp_missing_commands_' . md5($static_key_base),
-        'nppp_preload_phase_' . md5($static_key_base),
-        'nppp_preload_cycle_start_' . md5($static_key_base),
-        'nppp_ping_token_' . md5($static_key_base),
-        'nppp_preload_trigger_' . md5($static_key_base),
-        'nppp_mail_health_' . md5($static_key_base),
         'nppp_http_purge_endpoint_broken',
         'nppp_wget_urls_cache_prev_key',
         'nppp_safexec_ok',
         'nppp_category_map',
         'nppp_rg_ok',
-        'nppp_wget_version_' . md5($static_key_base),
-        'nppp_rg_version_' . md5($static_key_base),
-        'nppp_pages_in_cache_' . md5($static_key_base),
-        'nppp_obd_warned_' . md5($static_key_base),
-        'nppp_vary_issue_' . md5($static_key_base),
         'nppp_cache_key_regex_probe',
         'nppp_f2b_rl',
         'nppp_f2b_abuse_rl',
         'nppp_f2b_worker_env',
         'nppp_f2b_abuse_test_rl',
         'nppp_f2b_ripe_reg_rl',
-        'nppp_http_probe_' . md5($static_key_base),
-        'nppp_setup_strict_detect_' . md5($static_key_base),
-        'nppp_requirements_met_' . md5($static_key_base),
     );
 
-    // Delete each transient
-    foreach ($transients as $transient) {
+    $suffixed_transients = array(
+        'nppp_cache_keys',
+        'nppp_bindfs_version',
+        'nppp_libfuse_version',
+        'nppp_permissions_check',
+        'nppp_cache_paths',
+        'nppp_fuse_paths',
+        'nppp_webserver_user',
+        'nppp_est_url_counts',
+        'nppp_last_preload_time',
+        'nppp_safexec_version',
+        'nppp_wget_urls_cache',
+        'nppp_wget_compatibility',
+        'nppp_cron_reliability',
+        'nppp_missing_commands',
+        'nppp_preload_phase',
+        'nppp_preload_cycle_start',
+        'nppp_ping_token',
+        'nppp_preload_trigger',
+        'nppp_mail_health',
+        'nppp_wget_version',
+        'nppp_rg_version',
+        'nppp_pages_in_cache',
+        'nppp_obd_warned',
+        'nppp_vary_issue',
+        'nppp_http_probe',
+        'nppp_setup_strict_detect',
+        'nppp_requirements_met',
+    );
+
+    foreach ($plain_transients as $transient) {
         delete_transient($transient);
     }
+    foreach ($suffixed_transients as $transient) {
+        delete_transient($transient . $suffix);
+    }
 
+    // DB sweep, complementary to the delete_transient() calls above.
+    // delete_transient() only touches the object cache when an external one
+    // (Redis/Memcached) is active, so it never reaches wp_options rows left
+    // from before the cache was enabled, nor keys missing from the lists.
     // Every NPP transient lives under the nppp_ prefix: two prefix scans cover
-    // values and timeouts, including keys added after the list above.
+    // values and timeouts, including keys added after the lists above.
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->query(
         $wpdb->prepare(
