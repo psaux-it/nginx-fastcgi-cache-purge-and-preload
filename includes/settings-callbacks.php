@@ -499,7 +499,7 @@ function nppp_nginx_cache_related_pages_callback() {
                 <span class="nppp-text">
                     <span class="title"><?php esc_html_e( 'Preload Related Pages', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
                     <span class="desc">
-                        <?php esc_html_e( 'After the related pages above are purged, also Preload them. Always fires for manual single purges (Admin Bar or Advanced Tab). For Auto Purge events, requires Auto Preload to also be ON.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        <?php esc_html_e( 'After the related pages above are purged, also Preload them. Fires for manual single purges (Admin Bar or Advanced Tab) and for Auto Purge events. Does not require Auto Preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     </span>
                 </span>
             </label>
