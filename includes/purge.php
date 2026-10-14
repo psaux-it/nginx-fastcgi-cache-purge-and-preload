@@ -262,14 +262,15 @@ function nppp_purge_flush_write_back( array &$ctx ): void {
 /**
  * Post-purge side-effects: auto-preload and action hook.
  *
- * $chain_autopreload is the sole authoritative condition for preload — the cache
- * entry may have been a hit or a miss; either way the page needs warming.
- * Primary is preloaded via nppp_preload_cache_on_update; related URLs are
- * dispatched fire-and-forget. Both use $ctx['targets'] (the full set from init).
+ * $chain_autopreload (Auto Preload) is the sole authoritative condition for
+ * preloading the PRIMARY URL — the cache entry may have been a hit or a miss;
+ * either way the page needs warming. Related URLs are governed only by
+ * "Preload Related Pages" and are independent of Auto Preload, for manual and
+ * auto purges alike. Primary is preloaded via nppp_preload_cache_on_update;
+ * related URLs are dispatched fire-and-forget. Both use $ctx['targets'] (the
+ * full set from init).
  */
 function nppp_purge_post_purge( array &$ctx ): void {
-    $is_manual = ! $ctx['nppp_auto_purge'];
-
     // Full set of relateds
     $related_urls = [];
     foreach ( $ctx['targets'] as $target ) {
@@ -284,12 +285,12 @@ function nppp_purge_post_purge( array &$ctx ): void {
     }
 
     // Determine whether to also preload related URLs.
+    // Deliberately NOT tied to Auto Preload: that toggle also arms the full-site
+    // preload after every Purge All, which a user who only wants related pages
+    // warmed on single purges may not want.
     $should_preload_related =
         ! empty( $ctx['settings']['nppp_related_preload_after_manual'] )
-        && $ctx['settings']['nppp_related_preload_after_manual'] === 'yes'
-        && ( $is_manual
-            || ( ! empty( $ctx['settings']['nginx_cache_auto_preload'] )
-                && $ctx['settings']['nginx_cache_auto_preload'] === 'yes' ) );
+        && $ctx['settings']['nppp_related_preload_after_manual'] === 'yes';
 
     // Trigger Preload related
     if ( $should_preload_related ) {
