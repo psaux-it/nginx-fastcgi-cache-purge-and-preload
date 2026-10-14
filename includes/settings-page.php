@@ -537,7 +537,7 @@ function nppp_nginx_cache_settings_page() {
                                     <p class="description"><?php echo esc_html__( 'When enabled, feeds are preloaded during full-site preload operations (Preload All via UI, CRON, REST and CLI).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'When enabled, manual single preload actions (Admin Bar/Advanced Tab) also preload associated feeds.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
 									<p class="description"><?php echo esc_html__( 'Feeds are preloaded during manual purge actions when "Preload Related Pages" (Purge Scope) is enabled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'For auto purge actions, feeds are only preloaded when "Auto Preload", "Preload Related Pages" (Purge Scope), and "Preload Feeds" are all enabled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'For auto purge actions, feeds are preloaded when both "Preload Related Pages" (Purge Scope) and "Preload Feeds" are enabled. Auto Preload is not required.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'Important: Ensure your Nginx configuration allows caching for feeds. If your server contains rules that bypass the cache for feed endpoints, caching will not work.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 </div>
                                 <div class="cache-paths-info">
