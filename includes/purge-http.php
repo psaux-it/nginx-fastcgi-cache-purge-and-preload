@@ -113,6 +113,7 @@
  *   nppp_http_purge_url                ( string $purge_url, string $original_url )
  *   nppp_http_purge_all_url            ( string $url )
  *   nppp_http_purge_connect_timeout    ( float $seconds )              default 3.0
+ *   nppp_http_purge_host_header        ( string $host )                default home host[:non-default port]
  *   nppp_http_purge_trust_miss         ( bool $trust, string $url, string $reason )
  *   nppp_http_purge_trust_purged       ( bool $trust, string $url, string $reason )
  *   nppp_http_purge_lock_ttl           ( int $ttl, string $outcome, string $scope )
@@ -429,6 +430,25 @@ function nppp_http_purge_remember_method( string $scope, string $method ): void 
  * ========================================================================= */
 
 /**
+ * host[:port] of $url the way a browser sends it in the Host header: the port is kept
+ * only when it is not the default of the scheme. nginx's $host drops the port while
+ * $http_host keeps it, so a cache key built from $http_host only matches when the
+ * plugin sends the port as well.
+ */
+function nppp_http_purge_authority( string $url ): string {
+    $p    = wp_parse_url( $url );
+    $host = strtolower( (string) ( $p['host'] ?? '' ) );
+    if ( $host === '' ) {
+        return '';
+    }
+
+    $port    = isset( $p['port'] ) ? (int) $p['port'] : 0;
+    $default = strtolower( (string) ( $p['scheme'] ?? '' ) ) === 'https' ? 443 : 80;
+
+    return ( $port > 0 && $port !== $default ) ? $host . ':' . $port : $host;
+}
+
+/**
  * http_api_curl callback: applies the short connection timeout to our own
  * requests only (WordPress sets CONNECTTIMEOUT = overall timeout).
  *
@@ -466,7 +486,7 @@ function nppp_http_purge_fetch( string $method, string $url, int $timeout ): arr
             'limit_response_size'        => NPPP_HTTP_PURGE_BODY_LIMIT,
             'nppp_http_purge_connect_ms' => nppp_http_purge_connect_timeout_ms( $timeout ),
             'headers'                    => [
-                'Host' => (string) wp_parse_url( home_url(), PHP_URL_HOST ),
+                'Host' => (string) apply_filters( 'nppp_http_purge_host_header', nppp_http_purge_authority( home_url() ) ),
             ],
         ] );
     } catch ( \Throwable $e ) {
@@ -1147,6 +1167,13 @@ function nppp_http_purge_try_first( string $url ) {
     // cached. Leave it to the filesystem layers, which work from the real URL.
     $home_host = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
     if ( $home_host !== '' && strtolower( (string) $parse['host'] ) !== $home_host ) {
+        return false;
+    }
+
+    // Same host, other port (https://example.com:8443 on a site served on 443): the Host
+    // header carries the home port, so the key nginx builds is not this page's key.
+    $home_authority = nppp_http_purge_authority( home_url() );
+    if ( $home_authority !== '' && nppp_http_purge_authority( $url ) !== $home_authority ) {
         return false;
     }
 
