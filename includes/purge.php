@@ -331,6 +331,31 @@ function nppp_purge_post_purge( array &$ctx ): void {
 }
 
 /**
+ * True when the plugin's URL->filepath index holds a cache file of the current cache
+ * directory for $key that still exists on disk.
+ *
+ * Used to double-check an HTTP "miss": nginx only says that the key IT built is not
+ * cached. If the page's own file is there, the purge endpoint builds a different key
+ * than the page's real one and the miss says nothing about the page.
+ */
+function nppp_purge_fp1_index_file_exists( array $ctx, array $index, string $key, string $cache_path_prefix ): bool {
+    if ( empty( $index[ $key ] ) || ! is_array( $index[ $key ] ) ) {
+        return false;
+    }
+
+    foreach ( $index[ $key ] as $path ) {
+        if ( is_string( $path )
+            && strpos( $path, $cache_path_prefix ) === 0
+            && $ctx['wp_filesystem']->exists( $path )
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * FP1: HTTP purge endpoint.
  *
  * Skips URLs that have multiple index variants (delegated to FP2 to handle all
@@ -398,6 +423,17 @@ function nppp_purge_fp1_http( array &$ctx ): bool {
             unset( $ctx['pending'][ $key ] );
 
         } elseif ( $result === 'miss' ) {
+            // nginx says "not cached" but the index points at a file that exists: the
+            // endpoint built another key than the page's own. Leave it pending for FP2.
+            if ( nppp_purge_fp1_index_file_exists( $ctx, $index, $key, $cache_path_prefix ) ) {
+                nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: %s: Page URL */
+                    __( 'INFO HTTP PURGE: Nginx reported a miss for %s, but its cache file exists in the index. Delegating to index-based purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $target['decoded']
+                ), true, false );
+                continue;
+            }
+
             if ( $target['is_primary'] ) {
                 if ( ! $ctx['chain_autopreload'] ) {
                     nppp_display_admin_notice( 'info', sprintf(
