@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run-purge-tests.sh - run the purge-http.php harness.
+# run-purge-tests.sh - run the purge-http.php harness (the counterpart of fail2ban-test/run-e2e.sh).
 #
 #   ./run-purge-tests.sh                          mock harness + real-nginx matrix (v4 build)
 #   ./run-purge-tests.sh --only mock              mock harness only (php CLI, no nginx)
