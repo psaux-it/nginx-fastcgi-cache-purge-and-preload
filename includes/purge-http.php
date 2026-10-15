@@ -309,7 +309,7 @@ function nppp_http_purge_extend_time_limit( int $seconds ): void {
  * @return array{locks: array<string,array{reason:string,until:int}>, methods: array<string,string>}
  */
 function nppp_http_purge_state(): array {
-    $state = [ 'locks' => [], 'methods' => [], 'ns' => [] ];
+    $state = [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [] ];
     $raw   = get_transient( NPPP_HTTP_PURGE_BROKEN_KEY );
 
     if ( ! $raw ) {
@@ -345,6 +345,12 @@ function nppp_http_purge_state(): array {
         }
     }
 
+    foreach ( (array) ( $raw['probe'] ?? [] ) as $scope => $until ) {
+        if ( (int) $until > $now ) {
+            $state['probe'][ (string) $scope ] = (int) $until;
+        }
+    }
+
     return $state;
 }
 
@@ -362,6 +368,10 @@ function nppp_http_purge_state_save( array $state ): void {
     }
     if ( ! empty( $state['methods'] ) || ! empty( $state['ns'] ) ) {
         $ttl = max( $ttl, DAY_IN_SECONDS );
+    }
+
+    foreach ( (array) ( $state['probe'] ?? [] ) as $until ) {
+        $ttl = max( $ttl, (int) $until - $now );
     }
 
     if ( $ttl <= 0 ) {
@@ -409,7 +419,13 @@ function nppp_http_purge_method_pool(): array {
  */
 function nppp_http_purge_method_for( string $scope ): string {
     $learned = nppp_http_purge_state()['methods'][ $scope ] ?? 'GET';
-    return in_array( $learned, nppp_http_purge_method_pool(), true ) ? $learned : 'GET';
+    if ( in_array( $learned, nppp_http_purge_method_pool(), true ) ) {
+        return $learned;
+    }
+
+    // A method the module itself advertised (v4 405 Allow) is not in the pool; keep it.
+    // PURGE stays pool-gated so the nppp_http_purge_retry_methods filter can still drop it.
+    return ( $learned !== 'PURGE' && nppp_http_purge_is_custom_method( $learned ) ) ? $learned : 'GET';
 }
 
 /**
@@ -456,6 +472,45 @@ function nppp_http_purge_remember_generation( string $scope, bool $on ): void {
     } else {
         unset( $state['ns'][ $scope ] );
     }
+    nppp_http_purge_state_save( $state );
+}
+
+/**
+ * True for a method token that is neither GET nor a standard HTTP verb: the module's
+ * own purge method (PURGE, or whatever "xxx_cache_purge <method>" names).
+ */
+function nppp_http_purge_is_custom_method( string $m ): bool {
+    return (bool) preg_match( '/^[A-Z]{3,10}$/', $m )
+        && ! in_array( $m, [ 'GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'TRACE', 'CONNECT' ], true );
+}
+
+/**
+ * Should a GET answer that proves nothing (404 or a redirect) be followed by one probe
+ * with the module's purge method? Not while a probe ran recently or GET is known to work.
+ */
+function nppp_http_purge_probe_due( string $scope, string $outcome, int $status ): bool {
+    if ( $outcome !== 'not_found'
+        && ! ( $outcome === 'unexpected' && $status >= 300 && $status < 400 )
+    ) {
+        return false;
+    }
+
+    return empty( nppp_http_purge_state()['probe'][ $scope ] );
+}
+
+/**
+ * Suppresses PURGE probes for $scope for $ttl seconds. Rewrites the state at most once
+ * per $ttl / 2, so a working endpoint costs no write on the hot path.
+ */
+function nppp_http_purge_probe_mark( string $scope, int $ttl ): void {
+    $state = nppp_http_purge_state();
+    $now   = time();
+
+    if ( (int) ( $state['probe'][ $scope ] ?? 0 ) >= $now + intdiv( $ttl, 2 ) ) {
+        return;
+    }
+
+    $state['probe'][ $scope ] = $now + $ttl;
     nppp_http_purge_state_save( $state );
 }
 
@@ -824,11 +879,38 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout ): a
         $next    = '';
 
         if ( $outcome === 'method' || $outcome === 'foreign' ) {
-            $allowed = $outcome === 'method'
+            $allowed    = $outcome === 'method'
                 ? array_map( 'trim', explode( ',', strtoupper( $res['allow'] ) ) )
                 : $pool;
-            foreach ( $pool as $candidate ) {
+            $candidates = $pool;
+
+            // A 405 written by the module itself (Cache-Purge-Code) lists the configured
+            // purge method in Allow, possibly a custom name ("xxx_cache_purge MYPURGE").
+            // The Allow list of a foreign 405 is arbitrary and never trusted beyond the pool.
+            if ( $outcome === 'method' && $res['code'] === 'method_not_allowed' ) {
+                foreach ( $allowed as $m ) {
+                    if ( nppp_http_purge_is_custom_method( $m ) && ! in_array( $m, $candidates, true ) ) {
+                        $candidates[] = $m;
+                    }
+                }
+            }
+
+            foreach ( $candidates as $candidate ) {
                 if ( ! in_array( $candidate, $tried, true ) && in_array( $candidate, $allowed, true ) ) {
+                    $next = $candidate;
+                    break;
+                }
+            }
+        } elseif ( $method === 'GET' && count( $tried ) === 1
+            && nppp_http_purge_probe_due( $scope, $outcome, (int) $res['status'] )
+        ) {
+            // A GET answer that proves nothing (404, redirect) can come from an inline
+            // "xxx_cache_purge PURGE" location: the module only reacts to its own method and
+            // hands every GET to the origin (v3 purge-only: bare 404). Try the pool's purge
+            // method once, then stay quiet for 6 hours.
+            nppp_http_purge_probe_mark( $scope, 6 * HOUR_IN_SECONDS );
+            foreach ( $pool as $candidate ) {
+                if ( $candidate !== 'GET' ) {
                     $next = $candidate;
                     break;
                 }
@@ -853,6 +935,9 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout ): a
 
     if ( in_array( $outcome, [ 'purged', 'invalidated', 'no_match', 'legacy_miss', 'accepted' ], true ) ) {
         nppp_http_purge_remember_method( $scope, $method );
+        if ( $method === 'GET' ) {
+            nppp_http_purge_probe_mark( $scope, DAY_IN_SECONDS ); // GET works: no probe needed for a while
+        }
         if ( $outcome === 'invalidated' ) {
             nppp_http_purge_remember_generation( $scope, true );
         } elseif ( $outcome !== 'accepted' ) {
