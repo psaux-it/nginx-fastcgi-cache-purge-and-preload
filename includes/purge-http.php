@@ -555,7 +555,7 @@ function nppp_http_purge_legacy_body_ok( string $body ): bool {
         return true;
     }
     if ( trim( $body ) === '' ) {
-        return true; // nothing to contradict (HEAD-like or stripped by a proxy)
+        return false; // An empty unrelated 200 is not evidence of a purge.
     }
 
     return (bool) preg_match( '/"Key"\s*:\s*"|<Key>|(?:^|>)Key\s?:/m', $body );
