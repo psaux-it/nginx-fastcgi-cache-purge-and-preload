@@ -309,7 +309,7 @@ function nppp_http_purge_extend_time_limit( int $seconds ): void {
  * @return array{locks: array<string,array{reason:string,until:int}>, methods: array<string,string>}
  */
 function nppp_http_purge_state(): array {
-    $state = [ 'locks' => [], 'methods' => [] ];
+    $state = [ 'locks' => [], 'methods' => [], 'ns' => [] ];
     $raw   = get_transient( NPPP_HTTP_PURGE_BROKEN_KEY );
 
     if ( ! $raw ) {
@@ -339,6 +339,12 @@ function nppp_http_purge_state(): array {
         }
     }
 
+    foreach ( (array) ( $raw['ns'] ?? [] ) as $scope => $flag ) {
+        if ( $flag && in_array( (string) $scope, [ 'single', 'all' ], true ) ) {
+            $state['ns'][ (string) $scope ] = true;
+        }
+    }
+
     return $state;
 }
 
@@ -354,7 +360,7 @@ function nppp_http_purge_state_save( array $state ): void {
         $state['locks'][ $scope ]['until'] = min( (int) $lock['until'], $now + HOUR_IN_SECONDS );
         $ttl = max( $ttl, $state['locks'][ $scope ]['until'] - $now );
     }
-    if ( ! empty( $state['methods'] ) ) {
+    if ( ! empty( $state['methods'] ) || ! empty( $state['ns'] ) ) {
         $ttl = max( $ttl, DAY_IN_SECONDS );
     }
 
@@ -421,6 +427,34 @@ function nppp_http_purge_remember_method( string $scope, string $method ): void 
         unset( $state['methods'][ $scope ] );
     } else {
         $state['methods'][ $scope ] = $method;
+    }
+    nppp_http_purge_state_save( $state );
+}
+
+/**
+ * True when $scope ('single' | 'all') answered "invalidated" the last time it was used:
+ * ngx_cache_purge v4 generation mode (cache_purge_key). The cache files carry
+ * module-generated keys there, so the index / ripgrep / PHP scan layers cannot find
+ * them and cannot finish a purge that HTTP did not complete.
+ */
+function nppp_http_purge_generation_mode( string $scope ): bool {
+    return ! empty( nppp_http_purge_state()['ns'][ $scope ] );
+}
+
+/**
+ * Remembers (or forgets) generation mode for $scope. Writes only on change.
+ */
+function nppp_http_purge_remember_generation( string $scope, bool $on ): void {
+    $state = nppp_http_purge_state();
+
+    if ( ! empty( $state['ns'][ $scope ] ) === $on ) {
+        return; // nothing changed, no write on the hot path
+    }
+
+    if ( $on ) {
+        $state['ns'][ $scope ] = true;
+    } else {
+        unset( $state['ns'][ $scope ] );
     }
     nppp_http_purge_state_save( $state );
 }
@@ -819,6 +853,11 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout ): a
 
     if ( in_array( $outcome, [ 'purged', 'invalidated', 'no_match', 'legacy_miss', 'accepted' ], true ) ) {
         nppp_http_purge_remember_method( $scope, $method );
+        if ( $outcome === 'invalidated' ) {
+            nppp_http_purge_remember_generation( $scope, true );
+        } elseif ( $outcome !== 'accepted' ) {
+            nppp_http_purge_remember_generation( $scope, false );
+        }
     } else {
         nppp_http_purge_report_failure( $scope, $url, $timeout, $result );
     }
@@ -1145,6 +1184,28 @@ function nppp_http_purge_await_background( int $since, string $status_url, ?arra
  * @return true|false|'miss'  See the file header.
  */
 function nppp_http_purge_try_first( string $url ) {
+    $result = nppp_http_purge_try_first_core( $url );
+
+    // Generation mode: the filesystem layers cannot see the generated cache keys, so a
+    // single purge that HTTP did not finish stays unfinished. Say so.
+    if ( $result === false
+        && nppp_http_purge_enabled()
+        && nppp_http_purge_generation_mode( 'single' )
+    ) {
+        nppp_display_admin_notice( 'error', sprintf(
+            /* translators: %s: page URL */
+            __( 'ERROR HTTP PURGE SINGLE: %s could not be invalidated over HTTP, and ngx_cache_purge generation mode is active, so the filesystem purge cannot remove its cache entry (it does not see generated cache keys). The page can keep being served from cache until a Purge All is run.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            esc_url( $url )
+        ) );
+    }
+
+    return $result;
+}
+
+/**
+ * The single purge itself; see nppp_http_purge_try_first() for the contract.
+ */
+function nppp_http_purge_try_first_core( string $url ) {
     static $ns_logged = false;
 
     if ( ! nppp_http_purge_enabled() ) {
@@ -1200,6 +1261,12 @@ function nppp_http_purge_try_first( string $url ) {
 
     // Default 8 seconds
     $timeout = nppp_http_purge_timeout( 'single' );
+    // Generation mode: nginx answers after the task is ADMITTED and holds the request
+    // while its queue is full. Giving up cancels the admission, and no filesystem layer
+    // could finish the purge, so wait as long as for Purge All.
+    if ( nppp_http_purge_generation_mode( 'single' ) ) {
+        $timeout = max( $timeout, nppp_http_purge_timeout( 'all' ) );
+    }
     nppp_http_purge_extend_time_limit( $timeout + 5 );
 
     $r = nppp_http_purge_exchange( 'single', $purge_url, $timeout );
