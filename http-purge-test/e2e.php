@@ -29,7 +29,7 @@ function wp_remote_request( $url, $a ) {
 }
 function wp_remote_retrieve_response_code( $r ) { return $r['c']; } function wp_remote_retrieve_body( $r ) { return $r['b']; }
 function wp_remote_retrieve_header( $r, $n ) { return $r['h'][ strtolower( $n ) ] ?? ''; }
-require $argv[2] ?? '/home/claude/work/v3/purge-http.php';
+require $argv[2] ?? dirname( __DIR__ ) . '/includes/purge-http.php';
 
 function cnt() { return (int) trim( shell_exec( "find /tmp/npp-cache -type f -regextype posix-extended -regex '.*/[0-9a-f]{32}' | wc -l" ) ); }
 function warm( $prefix, $n ) { shell_exec( "seq 1 $n | xargs -P 8 -I{} curl -s -o /dev/null -H 'Host: example.com' http://127.0.0.1:8081/$prefix/{}/" ); }
