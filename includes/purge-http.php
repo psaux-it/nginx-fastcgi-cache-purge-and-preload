@@ -711,6 +711,21 @@ function nppp_http_purge_untrusted_miss_reason( string $url, string $purge_url =
 }
 
 /**
+ * Why a "purged" / "invalidated" answer cannot be trusted for $url ('' = it can).
+ *
+ * The cache key normally holds $scheme of the PURGE request, and the plugin takes the
+ * scheme from the purge origin, not from $url. With a Custom Base URL on another
+ * scheme (http://127.0.0.1 for an https site) nginx deleted the OTHER scheme's entry
+ * and the page's own entry stays cached.
+ */
+function nppp_http_purge_scheme_reason( string $url, string $purge_url ): string {
+    $from = strtolower( (string) wp_parse_url( $url, PHP_URL_SCHEME ) );
+    $to   = strtolower( (string) wp_parse_url( $purge_url, PHP_URL_SCHEME ) );
+
+    return ( $from !== '' && $to !== '' && $from !== $to ) ? 'scheme differs from the purge request' : '';
+}
+
+/**
  * The module turns any key ending in "*" into a wildcard purge, and nginx
  * decodes "%2A" before the key is built. Such a URL must never be sent.
  */
@@ -1169,6 +1184,9 @@ function nppp_http_purge_try_first( string $url ) {
             // belong to a DIFFERENT entry (/p/%41/ -> /p/A/) while the real one stays
             // cached. Claim success only when both sides build the same key.
             $reason = nppp_http_purge_key_ambiguity_reason( $url );
+            if ( $reason === '' ) {
+                $reason = nppp_http_purge_scheme_reason( $url, $purge_url );
+            }
             if ( ! (bool) apply_filters( 'nppp_http_purge_trust_purged', $reason === '', $url, $reason ) ) {
                 return false;
             }
