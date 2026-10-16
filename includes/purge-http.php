@@ -489,7 +489,7 @@ function nppp_http_purge_remember_generation( string $scope, bool $on ): void {
  */
 function nppp_http_purge_is_custom_method( string $m ): bool {
     return (bool) preg_match( '/^[A-Z]{3,10}$/', $m )
-        && ! in_array( $m, [ 'GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'TRACE', 'CONNECT' ], true );
+        && ! in_array( $m, [ 'GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'TRACE', 'CONNECT', 'REFRESH' ], true );
 }
 
 /**
