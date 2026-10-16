@@ -27,8 +27,8 @@ export BUILD="${BUILD:-$HERE/build}"
 export XDEBUG_MODE=off                       # the wordpress image ships xdebug; it only slows the run
 
 DEPLOYED=/var/www/html/wp-content/plugins/fastcgi-cache-purge-and-preload-nginx/includes/purge-http.php
-if [ -z "${PLUGIN_FILE:-}" ]; then
-    if   [ -f "$DEPLOYED" ];                  then PLUGIN_FILE="$DEPLOYED"
+if [ -z "${PLUGIN_FILE:-}" ];                       then
+    if   [ -f "$DEPLOYED" ];                        then PLUGIN_FILE="$DEPLOYED"
     elif [ -f "$HERE/../includes/purge-http.php" ]; then PLUGIN_FILE="$HERE/../includes/purge-http.php"
     else echo "purge-http.php not found - set PLUGIN_FILE=/path/to/purge-http.php" >&2; exit 2; fi
 fi
