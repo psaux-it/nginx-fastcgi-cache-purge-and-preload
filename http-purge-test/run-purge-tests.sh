@@ -49,13 +49,14 @@ done
 case "$ONLY" in all|mock|matrix) ;; *) echo "--only must be mock or matrix" >&2; exit 2 ;; esac
 
 case "$NGV" in
-    v4)  BRANCH=dev/development-4.0; PFX="$NGROOT/nginx-run";    E2E_EXTRA="" ;;
+    v4)  BRANCH=releases/stable-4.0; PFX="$NGROOT/nginx-run";    E2E_EXTRA="" ;;
     v30) BRANCH=releases/stable-3.0; PFX="$NGROOT/nginx-run303"; E2E_EXTRA="v30" ;;
     v25) BRANCH=releases/stable-2.5; PFX="$NGROOT/nginx-run256"; E2E_EXTRA="" ;;
     *)   echo "--ng must be v4, v30 or v25" >&2; exit 2 ;;
 esac
 # Scenarios other than the v4 ones depend on module features; pick them explicitly for v30 / v25.
-[ ${#SC[@]} -eq 0 ] && [ "$NGV" != v4 ] && SC=(sync ambig)
+[ ${#SC[@]} -eq 0 ] && [ "$NGV" = v30 ] && SC=(sync ambig)
+[ ${#SC[@]} -eq 0 ] && [ "$NGV" = v25 ] && SC=(v25)
 
 echo "purge-http.php : $PLUGIN_FILE"
 RC=0
