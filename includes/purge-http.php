@@ -122,8 +122,9 @@
  *   nppp_http_purge_verify_queue       ( bool $enabled )               default true (false = old behaviour:
  *                                                                      202 / timeout -> immediate filesystem
  *                                                                      fallback)
- *   nppp_http_purge_queue_status_url   ( string $url )                 default origin + "/" + option
- *                                                                      nppp_http_purge_queue_status_path
+ *   nppp_http_purge_queue_status_url   ( string $url )                 default origin + "/" + setting
+ *                                                                      nginx_cache_settings
+ *                                                                      [nppp_http_purge_queue_status_path]
  *                                                                      ('' = no status endpoint)
  *   nppp_http_purge_queue_wait         ( int $seconds )                default 15, capped by the Purge All lock TTL
  *   nppp_http_purge_async_settle_ms    ( int $ms )                     default 1500 (best effort mode only)
@@ -228,12 +229,19 @@ function nppp_http_purge_all_url(): string {
 /**
  * URL of the ngx_cache_purge v4 "cache_purge_queue_status" location ('' = none).
  *
- * Path source: option nppp_http_purge_queue_status_path (the settings form has no
- * field for it, set it with: wp option update nppp_http_purge_queue_status_path purge_status).
+ * Path source: nginx_cache_settings[nppp_http_purge_queue_status_path] (Settings > HTTP
+ * Purge > Purge Queue Status Path). The legacy standalone option of the same name is
+ * still honoured while the setting is empty.
  * With it the plugin can PROVE that a 202 background purge has finished.
  */
 function nppp_http_purge_queue_status_url(): string {
-    $path = trim( (string) get_option( 'nppp_http_purge_queue_status_path', '' ), " \t\n\r/" );
+    $s   = get_option( 'nginx_cache_settings', [] );
+    $raw = ( is_array( $s ) && isset( $s['nppp_http_purge_queue_status_path'] ) && is_string( $s['nppp_http_purge_queue_status_path'] ) )
+           ? $s['nppp_http_purge_queue_status_path'] : '';
+    if ( trim( $raw, " \t\n\r/" ) === '' ) {
+        $raw = (string) get_option( 'nppp_http_purge_queue_status_path', '' );
+    }
+    $path = trim( $raw, " \t\n\r/" );
     $path = preg_match( '#^[A-Za-z0-9_\-/]+$#', $path ) ? $path : '';
 
     return (string) apply_filters(
