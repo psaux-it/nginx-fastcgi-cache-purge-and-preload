@@ -16,7 +16,7 @@ for s in "${SC[@]}"; do
   NG=$NG "$HERE/nginx.sh" "${MODE[$s]}" >/dev/null 2>&1
   out=$(timeout 240 php "$HERE/e2e.php" "$s" "$PLUGIN" $E2E_EXTRA 2>&1); rc=$?
   if [ $rc -eq 0 ]; then if echo "$out" | grep -q '^SKIP'; then printf "%-14s SKIP\n" "$s"; else printf "%-14s PASS\n" "$s"; fi; else printf "%-14s FAIL\n" "$s"; echo "$out" | grep FAIL | head -5; FAILED=$((FAILED+1)); fi
-  if [ $rc -eq 0 ]; then printf "%-14s PASS\n" "$s"; else printf "%-14s FAIL\n" "$s"; echo "$out" | grep FAIL | head -5; FAILED=$((FAILED+1)); fi
+  # (removed) if [ $rc -eq 0 ]; then printf "%-14s PASS\n" "$s"; else printf "%-14s FAIL\n" "$s"; echo "$out" | grep FAIL | head -5; FAILED=$((FAILED+1)); fi
 done
 echo "failed scenarios: $FAILED"
 exit $FAILED
