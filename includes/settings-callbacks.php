@@ -826,6 +826,17 @@ function nppp_http_purge_all_path_callback(): void {
     echo "<input type='text' id='nppp_http_purge_all_path' name='nginx_cache_settings[nppp_http_purge_all_path]' value='" . esc_attr( $options['nppp_http_purge_all_path'] ?? 'purge_all' ) . "' class='regular-text' placeholder='purge_all' />";
 }
 
+// Callback function for HTTP Purge Queue Status Path
+function nppp_http_purge_queue_status_path_callback(): void {
+    $options = get_option( 'nginx_cache_settings', [] );
+    $value   = ( is_array( $options ) && isset( $options['nppp_http_purge_queue_status_path'] ) ) ? (string) $options['nppp_http_purge_queue_status_path'] : '';
+    if ( $value === '' ) {
+        // Pre-fill from the legacy standalone option; the next save moves it into nginx_cache_settings.
+        $value = (string) get_option( 'nppp_http_purge_queue_status_path', '' );
+    }
+    echo "<input type='text' id='nppp_http_purge_queue_status_path' name='nginx_cache_settings[nppp_http_purge_queue_status_path]' value='" . esc_attr( $value ) . "' class='regular-text' placeholder='purge_status' />";
+}
+
 // Callback function for RG Purge
 function nppp_rg_purge_enabled_callback(): void {
     $options    = get_option( 'nginx_cache_settings', [] );
