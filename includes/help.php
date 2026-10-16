@@ -575,7 +575,7 @@ location = /purge_status {
                     </div>
                 </div>
 
-                <h3 class="nppp-question">What is RG Purge
+                <h3 class="nppp-question">What is RG Purge and how does it accelerate single‑URL purges?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h3><strong>RG Purge – Turbocharged Cache Purging</strong></h3>
