@@ -22,7 +22,30 @@ installs it outside the web root and runs it.
   module, one scenario per module mode.
 
 Matrix scenarios: `sync`, `ambig`, `ns`, `none`, `wrongzone`, `single202`, `legacy_off`,
-`race_timeout`, `race_invalidated`, `race_invalidated_single`.
+`race_timeout`, `race_invalidated`, `race_invalidated_single`, `race`, `race_nostatus`, `race_off`,
+and the v4 error-code / Vary scenarios below.
+
+### v4 error-code and Vary scenarios
+
+Each one makes a real `ngx_cache_purge` v4 produce one catalog code, so the mock fixtures in `run.php`
+are checked against what the module really answers (they were written from the module source).
+
+| Scenario | nginx mode | Module answer | Plugin must |
+| --- | --- | --- | --- |
+| `denied` | `denied` | single: bare nginx `403`; purge_all: `403 access_denied` | return false, lock that endpoint only |
+| `method405` | `method405` | `405 method_not_allowed`, `Allow: PURGE` | retry once with PURGE, remember it, no lock |
+| `nocache` | `nocache` | `500 cache_unavailable` (purge_all without a cache zone) | return false, lock purge_all; single keeps working |
+| `keymismatch` | `keymismatch` | `500 key_mismatch` (namespace key contract broken) | return false, lock purge_all |
+| `wrongep` | `wrongep` | `200 status` (single bound to `cache_purge_queue_status`) | not treat it as a purge, lock single |
+| `deletefail` | `sync` | `500 delete_failed` (one file made immutable with `chattr +i`) | return false, no lock; skipped where `chattr` is unsupported |
+| `scanfail` | `scanfail` | `500 scan_failed` (workers run as `nobody`, one cache dir is mode 000) | return false, no lock |
+| `badsel` | `vary` | `400 invalid_selector` (exact key over 511 bytes with Vary-aware purge) | return false, no lock; next URL still works |
+| `vary` | `vary` | `200 purged` for variants when the requested variant is not cached | return true; all variants gone |
+| `vary_off` | `vary_off` | `200 no_match` while Vary variants are still cached | pin the documented limitation: `miss`, variants stay; `nppp_http_purge_trust_miss` => false is the workaround |
+
+`/v/...` on the stand-in site (`site/index.php`) answers `Vary: Accept-Encoding`, which is what produces the variants.
+Not reproducible without extra modules or builds: `invalid_cursor` (needs a proxy REFRESH location) and
+`internal_error`. A full queue is not an error in v4 (the request is deferred), and no ngx_cache_purge version answers 429.
 
 ## Run it in the Docker stack
 
@@ -51,7 +74,8 @@ http-purge-test/run-purge-tests.sh --ng v30 --only matrix sync ambig
 scenarios are `sync` and `ambig`; name others explicitly.
 
 Requirements for the real-nginx matrix: `git`, `build-essential`, `libpcre2-dev`, `zlib1g-dev`,
-`libssl-dev`, `php-fpm` (8.3 preferred), PHP CLI, `curl` and `python3`.
+`libssl-dev`, `php-fpm` (8.3 preferred), PHP CLI, `curl` and `python3`. The `scanfail` scenario runs the nginx
+workers as `nobody` (the container runs it as root), and `deletefail` needs a filesystem that supports `chattr +i`.
 
 ### Environment variables
 
