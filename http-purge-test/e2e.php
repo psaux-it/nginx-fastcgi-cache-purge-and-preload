@@ -104,7 +104,7 @@ if ( $sc === 'v25' ) {   /* ngx_cache_purge 2.5.6: single purge only, no purge_a
 /* The race the user asked about: 202 background purge, then (what purge.php does) FS fallback if false, then preload. */
 if ( strpos( $sc, 'race' ) === 0 && strpos( $sc, 'race_timeout' ) !== 0 && strpos( $sc, 'race_invalidated' ) !== 0 ) {
     if ( $sc === 'race_nostatus' ) { /* no status path option */ }
-    else { $T['options']['nppp_http_purge_queue_status_path'] = 'purge_status'; }
+    else { $T['options']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = 'purge_status'; }
     if ( $sc === 'race_off' ) { $T['filters']['nppp_http_purge_verify_queue'] = fn() => false; }
     $T['filters']['nppp_http_purge_async_settle_ms'] = fn() => 1500;
     warm( 'p', 3000 ); sleep( 2 );
