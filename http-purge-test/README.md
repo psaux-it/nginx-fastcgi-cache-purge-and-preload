@@ -1,6 +1,6 @@
 # Test suite for HTTP Purge
 
-Test suite for HTTP Purge via [ngx_cache_purge](https://github.com/nginx-modules/ngx_cache_purge).
+Test suite for NPP HTTP Purge via [ngx_cache_purge](https://github.com/nginx-modules/ngx_cache_purge).
 
 It lives in the plugin repository, outside the WordPress distribution. The Docker stack
 ([`psaux-it/wordpress-nginx-cache-docker`](https://github.com/psaux-it/wordpress-nginx-cache-docker))
