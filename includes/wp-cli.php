@@ -1220,7 +1220,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         }
 
         $settings = get_option( 'nginx_cache_settings', [] );
-        if ( ! array_key_exists( $key, $settings ) ) {
+        // The queue status key is allowed before it exists: defaults are only merged on activation.
+        if ( ! array_key_exists( $key, $settings ) && $key !== 'nppp_http_purge_queue_status_path' ) {
             WP_CLI::error( sprintf(
                 /* translators: %s: The unknown settings key name */
                 __( 'Unknown setting key: "%s". Run `wp npp settings get` to list valid keys.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -1408,6 +1409,12 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             if ( strlen( $sanitized ) > 512 ) {
                 WP_CLI::error( __( 'ERROR: Mobile User Agent exceeds the maximum allowed length of 512 characters.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
+        } elseif ( $key === 'nppp_http_purge_queue_status_path' ) {
+            // Mirror settings-sanitize.php: letters, digits, hyphens, underscores, slashes.
+            $sanitized = trim( sanitize_text_field( $value ), " \t\n\r/" );
+            if ( $sanitized === '' || ! preg_match( '/^[a-zA-Z0-9_\-\/]+$/', $sanitized ) ) {
+                WP_CLI::error( __( 'ERROR OPTION: HTTP Purge Queue Status Path must contain only letters, digits, hyphens, underscores, and slashes (e.g. "purge_status").', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
         } elseif ( $key === 'nppp_http_purge_suffix' ) {
             // Mirror settings-sanitize.php: alphanumeric + hyphens/underscores only, non-empty.
             $sanitized = trim( sanitize_text_field( $value ), '/' );
@@ -1558,6 +1565,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_http_purge_suffix'              => __( 'HTTP Purge URL Suffix', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_rg_purge_enabled'               => __( 'RG Purge', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_http_purge_custom_url'          => __( 'HTTP Purge Custom Base URL', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_http_purge_queue_status_path'   => __( 'HTTP Purge Queue Status Path', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_bypass_path_restriction' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_pctnorm_mode'            => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_limit_rate'              => __( 'Limit Rate', 'fastcgi-cache-purge-and-preload-nginx' ),
