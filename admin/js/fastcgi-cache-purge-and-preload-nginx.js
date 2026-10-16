@@ -4579,7 +4579,7 @@ $(document).ready(function() {
 
     // Toggle switch rules for HTTP purge fast-path
     function npppHttpPurgeSubOptions(isChecked) {
-        $('#nppp-http-purge-suffix-row, #nppp-http-purge-custom-url-row, #nppp-http-purge-all-path-row').toggle(isChecked);
+        $('#nppp-http-purge-suffix-row, #nppp-http-purge-custom-url-row, #nppp-http-purge-all-path-row, #nppp-http-purge-queue-status-row').toggle(isChecked);
     }
     var isHttpPurgeChecked = $('#nppp_http_purge_enabled').prop('checked');
     npppHttpPurgeSubOptions(isHttpPurgeChecked);
@@ -5131,7 +5131,8 @@ $(document).ready(function() {
         '#nginx_cache_preload_proxy_host',
         '#nppp_http_purge_suffix',
         '#nppp_http_purge_custom_url',
-        '#nppp_http_purge_all_path'
+        '#nppp_http_purge_all_path',
+        '#nppp_http_purge_queue_status_path'
     ];
 
     // Initialize originalValues with current field values
