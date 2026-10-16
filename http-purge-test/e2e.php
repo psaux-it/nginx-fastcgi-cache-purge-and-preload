@@ -199,6 +199,28 @@ if ( $sc === 'ns_keys' ) {
         }
         return $o;
     };
+    /* What the Advanced tab / Status counter do with these files: the plugin's real default cache_key_regex (preload-defaults.php)
+     * and the real generation helpers (advanced.php; pure functions, loaded by extraction because advanced.php needs WordPress). */
+    foreach ( [ 'nppp_key_generation_info', 'nppp_drop_stale_generations', 'nppp_annotate_variant_counts' ] as $fn ) {
+        if ( ! function_exists( $fn ) ) {
+            preg_match( '/^function ' . $fn . '\(.*?^}\n/ms', (string) file_get_contents( dirname( __DIR__ ) . '/includes/advanced.php' ), $fm ) or die( "missing $fn\n" );
+            eval( $fm[0] );
+        }
+    }
+    $rx   = ( include dirname( __DIR__ ) . '/includes/preload-defaults.php' )['cache_key_regex'];
+    $scan = function () use ( $rx ) {            // returns [ rows after drop+annotate, raw row count, rows that failed regex/URL validation ]
+        $urls = []; $bad = 0;
+        foreach ( explode( "\n", trim( (string) shell_exec( "grep -a -r -m1 '^KEY:' /tmp/npp-cache" ) ) ) as $raw ) {
+            $sep = strpos( $raw, ':' ); if ( $raw === '' || $sep === false ) { continue; }
+            $kl = substr( $raw, $sep + 1 );
+            if ( ! preg_match( $rx, $kl, $m ) || ! isset( $m[1], $m[2] ) || filter_var( 'http://' . trim( $m[1] ) . trim( $m[2] ), FILTER_VALIDATE_URL ) === false ) { $bad++; continue; }
+            $gi = nppp_key_generation_info( $kl );
+            $urls[] = [ 'file_path' => substr( $raw, 0, $sep ), 'url_encoded' => 'http://' . trim( $m[1] ) . trim( $m[2] ), 'gen_group' => $gi['group'] ?? null, 'gen' => $gi['gen'] ?? null ];
+        }
+        $n = count( $urls ); nppp_drop_stale_generations( $urls ); nppp_annotate_variant_counts( $urls );
+        $by = []; foreach ( $urls as $u ) { $by[ parse_url( $u['url_encoded'], PHP_URL_PATH ) ][] = $u['variant_count']; }
+        return [ $by, $n, $bad ];
+    };
     $q    = function () { $j = json_decode( (string) shell_exec( 'curl -s http://127.0.0.1:8081/purge_status' ), true ); return $j['cache'] ?? null; };
     $idle = function () use ( $q ) {
         $n = 0;
@@ -214,6 +236,8 @@ if ( $sc === 'ns_keys' ) {
     $k0 = $kl();
     chk( count( $k0 ) === 30, 'every warmed page has a KEY line in the p4:<ns>:<epoch>:<generation>:<key> format', 'parsed=' . count( $k0 ) );
     $g0 = $k0['/p/1/'][0] ?? -1;
+    [ $s0, $n0, $b0 ] = $scan();
+    chk( $b0 === 0 && $n0 === 30 && count( $s0 ) === 30, 'the plugin DEFAULT cache_key_regex parses every real p4 KEY line into a valid URL (Advanced/Status would not raise ERROR REGEX)', "raw=$n0 bad=$b0 urls=" . count( $s0 ) );
 
     $r = nppp_http_purge_all();
     chk( $r === true, 'purge_all: invalidated -> true', notes() );
@@ -221,10 +245,14 @@ if ( $sc === 'ns_keys' ) {
     $k1 = $kl(); $c = $q();
     chk( count( $k1['/p/1/'] ?? [] ) === 2 && min( $k1['/p/1/'] ) === $g0 && max( $k1['/p/1/'] ) > $g0, 'while the cleanup is pending one logical key has a stale AND a live file', json_encode( $k1['/p/1/'] ?? null ) );
     chk( $c !== null && $c['pending']['total'] + $c['active'] > 0, 'the cleanup queue is busy while the stale file exists' );
+    [ $s1, $n1 ] = $scan();
+    chk( $n1 > 30 && ( $s1['/p/1/'] ?? null ) === [ 1 ], 'pending cleanup: raw scan sees the stale+live pair, the plugin view keeps ONE live file (Variants = Single, not Multiple)', "raw=$n1 p1=" . json_encode( $s1['/p/1/'] ?? null ) );
     chk( $idle(), 'the cleanup queue goes idle' );
     $k2   = $kl();
     $gens = array_values( array_unique( array_merge( ...array_values( $k2 ) ) ) );
     chk( count( $k2 ) === 3 && count( $gens ) === 1 && $gens[0] > $g0, 'queue idle: only the live generation is left', json_encode( $k2 ) );
+    [ $s2, $n2 ] = $scan();
+    chk( $n2 === 3 && count( $s2 ) === 3 && $s2['/p/1/'] === [ 1 ], 'queue idle: dropping stale generations changes nothing', "raw=$n2" );
 
     $gb = $k2['/p/3/'][0] ?? -1;
     $r  = nppp_http_purge_try_first( 'http://example.com/p/2/' );
@@ -232,6 +260,8 @@ if ( $sc === 'ns_keys' ) {
     $k3 = $kl();
     chk( $r === true && count( $k3['/p/2/'] ?? [] ) === 1 && $k3['/p/2/'][0] > $gb && ( $k3['/p/3/'][0] ?? -1 ) === $gb && xcache( '/p/3/' ) === 'HIT',
          'single purge raises the generation of that key only; a higher generation elsewhere does NOT make /p/3/ stale', json_encode( $k3 ) );
+    [ $s3, $n3 ] = $scan();
+    chk( $n3 === 3 && count( $s3 ) === 3 && $s3['/p/3/'] === [ 1 ], 'after the single purge the plugin view still lists all 3 pages once (nothing live is dropped)', "raw=$n3" );
 }
 
 /* ---------------------------------------------------------------------------------------------
