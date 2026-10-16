@@ -185,5 +185,119 @@ if ( $sc === 'race_invalidated_single' ) {
     chk( $r === true, 'single invalidated -> true', notes() );
     chk( $x === 'MISS' && $x2 === 'HIT' && $x3 === 'HIT', 'same URL re-warmed in the new generation survives the cleanup of the old one' );
 }
+
+/* ---------------------------------------------------------------------------------------------
+ * v4 error-code scenarios: the module's own error answers (not the mock's idea of them) fed to
+ * the real plugin. Each scenario reproduces ONE catalog code in a real nginx.
+ * ------------------------------------------------------------------------------------------- */
+function locks() { return array_keys( nppp_http_purge_state()['locks'] ); }
+function nreqs() { global $T; return count( $T['reqs'] ); }
+function warmv( $path, array $encodings ) { foreach ( $encodings as $ae ) { shell_exec( "curl -s -o /dev/null -H 'Host: example.com' -H 'Accept-Encoding: $ae' http://127.0.0.1:8081$path" ); } }
+
+/* 403: nginx allow/deny answers a bare 403 (no Cache-Purge-Code); the module's own "from" ACL answers 403 access_denied. */
+if ( $sc === 'denied' ) {
+    warm( 'p', 5 );
+    $r = nppp_http_purge_try_first( 'http://example.com/p/1/' );
+    chk( $r === false && locks() === [ 'single' ], 'single: bare nginx 403 -> false, locks single only', var_export( $r, true ) . ' ' . implode( ',', locks() ) );
+    $n = nreqs(); nppp_http_purge_try_first( 'http://example.com/p/2/' );
+    chk( nreqs() === $n, 'single: locked endpoint is not hit again' );
+    $r = nppp_http_purge_all();
+    chk( $r === false && locks() === [ 'single', 'all' ], 'purge_all: module 403 access_denied -> false, locks all (separate allow list)', var_export( $r, true ) . ' ' . implode( ',', locks() ) );
+    chk( cnt() === 5, 'nothing was purged over HTTP (the filesystem purge has to do it)', 'files=' . cnt() );
+}
+
+/* 405: the purge locations only accept PURGE. The module answers 405 + Allow: PURGE; the plugin retries once with that method. */
+if ( $sc === 'method405' ) {
+    warm( 'p', 5 );
+    $r = nppp_http_purge_try_first( 'http://example.com/p/1/' );
+    chk( $r === true && xcache( '/p/1/' ) === 'MISS', 'single: GET -> 405 Allow PURGE -> retry PURGE -> purged', var_export( $r, true ) . ' ' . notes() );
+    chk( array_slice( $T['reqs'], 0, 2 ) === [ 'GET http://127.0.0.1:8081/purge/p/1/', 'PURGE http://127.0.0.1:8081/purge/p/1/' ], 'single: exactly GET then PURGE', implode( ' | ', $T['reqs'] ) );
+    chk( nppp_http_purge_state()['methods'] === [ 'single' => 'PURGE' ], 'single: PURGE remembered', json_encode( nppp_http_purge_state()['methods'] ) );
+    $n = nreqs(); nppp_http_purge_try_first( 'http://example.com/p/2/' );
+    chk( nreqs() === $n + 1 && substr( $T['reqs'][ $n ], 0, 5 ) === 'PURGE', 'single: the learned method is used straight away' );
+    $r = nppp_http_purge_try_first( 'http://example.com/never/' );
+    chk( $r === false, 'single: a miss answered to a PURGE request is NOT trusted (key may carry the method) -> false', var_export( $r, true ) );
+    $r = nppp_http_purge_all();
+    chk( $r === true && cnt() === 0, 'purge_all: GET -> 405 -> retry PURGE -> purged, cache empty', var_export( $r, true ) . ' files=' . cnt() . ' ' . notes() );
+    chk( locks() === [], 'no lock was set by a recoverable 405', implode( ',', locks() ) );
+}
+
+/* 500 cache_unavailable: the Purge All location has no cache zone. A configuration fault: lock, fall back, single keeps working. */
+if ( $sc === 'nocache' ) {
+    warm( 'p', 5 );
+    $r = nppp_http_purge_all();
+    chk( $r === false && locks() === [ 'all' ], 'purge_all: 500 cache_unavailable -> false + lock all', var_export( $r, true ) . ' ' . implode( ',', locks() ) );
+    $n = nreqs(); nppp_http_purge_all();
+    chk( nreqs() === $n, 'purge_all: not retried while locked' );
+    chk( nppp_http_purge_try_first( 'http://example.com/p/1/' ) === true, 'single purge is unaffected by the all lock' );
+}
+
+/* 500 key_mismatch: v4 namespace mode, but the Purge All location builds a different native key than $cache_purge_key. */
+if ( $sc === 'keymismatch' ) {
+    warm( 'p', 5 );
+    $r = nppp_http_purge_all();
+    chk( $r === false && locks() === [ 'all' ], 'purge_all: 500 key_mismatch -> false + lock all', var_export( $r, true ) . ' ' . implode( ',', locks() ) );
+    chk( nppp_http_purge_try_first( 'http://example.com/p/1/' ) === true && xcache( '/p/1/' ) === 'MISS', 'namespace single purge still works (invalidated)' );
+}
+
+/* 200 status: the single endpoint is bound to cache_purge_queue_status. It answers 200 + code "status", not a purge. */
+if ( $sc === 'wrongep' ) {
+    warm( 'p', 5 );
+    $r = nppp_http_purge_try_first( 'http://example.com/p/1/' );
+    chk( $r === false && locks() === [ 'single' ], 'single bound to the status handler: 200 "status" is NOT a purge -> false + lock', var_export( $r, true ) . ' ' . implode( ',', locks() ) );
+    chk( xcache( '/p/1/' ) === 'HIT', 'the page is still cached (nothing was purged)' );
+}
+
+/* 500 delete_failed: one cache file cannot be unlinked (chattr +i). The module deletes the rest and reports the failure. */
+if ( $sc === 'deletefail' ) {
+    warm( 'p', 30 );
+    $f = trim( shell_exec( "find /tmp/npp-cache -type f -regextype posix-extended -regex '.*/[0-9a-f]{32}' | head -1" ) );
+    shell_exec( 'chattr +i ' . escapeshellarg( $f ) . ' 2>&1' );
+    if ( strpos( (string) shell_exec( 'lsattr ' . escapeshellarg( $f ) . ' 2>&1' ), 'i' ) === false ) { echo "SKIP deletefail: chattr +i is not supported here\n"; exit( 0 ); }
+    $r = nppp_http_purge_all();
+    shell_exec( 'chattr -i ' . escapeshellarg( $f ) );
+    chk( $r === false, 'purge_all: 500 delete_failed -> false (the filesystem purge must finish the job)', var_export( $r, true ) . ' ' . notes() );
+    chk( cnt() === 1, 'the module deleted everything it could; only the undeletable file is left', 'files=' . cnt() );
+    chk( locks() === [], 'delete_failed is transient: no lock', implode( ',', locks() ) );
+}
+
+/* 500 scan_failed: a cache directory cannot be read (mode 000, nginx worker is not root: nginx.sh mode scanfail). */
+if ( $sc === 'scanfail' ) {
+    warm( 'p', 40 );
+    $d = trim( shell_exec( "find /tmp/npp-cache -mindepth 1 -maxdepth 1 -type d | head -1" ) );
+    shell_exec( 'chmod 000 ' . escapeshellarg( $d ) );
+    $r = nppp_http_purge_all();
+    shell_exec( 'chmod 700 ' . escapeshellarg( $d ) );
+    chk( $r === false, 'purge_all: 500 scan_failed -> false (the filesystem purge must finish the job)', var_export( $r, true ) . ' ' . notes() );
+    chk( cnt() > 0, 'the unreadable directory kept its files', 'files=' . cnt() );
+    chk( locks() === [], 'scan_failed is transient: no lock', implode( ',', locks() ) );
+}
+
+/* Vary: the same URL is cached once per Accept-Encoding. The purge request has none, so the "primary" entry does not exist. */
+if ( $sc === 'vary' ) {
+    warmv( '/v/1/', [ 'gzip', 'br' ] );
+    chk( cnt() === 2, 'two Vary variants of /v/1/ are cached', 'files=' . cnt() );
+    $r = nppp_http_purge_try_first( 'http://example.com/v/1/' );
+    chk( $r === true && cnt() === 0, 'cache_purge_vary_aware on: primary absent, variants removed -> purged -> true (v4 does not 412 here)', var_export( $r, true ) . ' files=' . cnt() . ' ' . notes() );
+    $r = nppp_http_purge_try_first( 'http://example.com/v/never/' );
+    chk( $r === 'miss', 'nothing cached under that key at all -> no_match -> miss', var_export( $r, true ) );
+}
+if ( $sc === 'vary_off' ) {
+    warmv( '/v/1/', [ 'gzip', 'br' ] );
+    $r = nppp_http_purge_try_first( 'http://example.com/v/1/' );
+    echo "  KNOWN LIMITATION (Vary honoured, cache_purge_vary_aware off): purge answered -> " . var_export( $r, true ) . ", variants left: " . cnt() . "\n";
+    chk( $r === 'miss' && cnt() === 2, 'vary_aware off: module answers no_match, the plugin reports a miss and BOTH variants stay cached (documented)', var_export( $r, true ) . ' files=' . cnt() );
+    $T['filters']['nppp_http_purge_trust_miss'] = fn() => false;
+    $r = nppp_http_purge_try_first( 'http://example.com/v/1/' );
+    chk( $r === false, 'workaround: nppp_http_purge_trust_miss => false makes the plugin fall through to the disk layers', var_export( $r, true ) );
+}
+/* 400 invalid_selector: with vary_aware on an exact key is limited to 511 bytes. Per-URL fault: no lock, the next URL still works. */
+if ( $sc === 'badsel' ) {
+    warm( 'p', 3 );
+    $long = 'http://example.com/' . str_repeat( 'a', 600 ) . '/';
+    $r = nppp_http_purge_try_first( $long );
+    chk( $r === false && locks() === [], 'key over 511 bytes: 400 invalid_selector -> false, NO lock', var_export( $r, true ) . ' ' . implode( ',', locks() ) );
+    chk( nppp_http_purge_try_first( 'http://example.com/p/1/' ) === true, 'the next (short) URL is still purged over HTTP' );
+}
 echo $F ? "== $sc: $F FAILED\n" : "== $sc: all passed\n";
 exit( $F ? 1 : 0 );
