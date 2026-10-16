@@ -24,7 +24,7 @@ case $MODE in
   ns_slow) NS="cache_purge_namespace objects 1m $NG/conf/state;"; BG="cache_purge_background_queue on; cache_purge_throttle_ms 800ms; cache_purge_batch_size 1;";;
   none) RT="none";;
   legacy_off) EXTRA="cache_purge_legacy_status off;";;
-  scanfail) USERLINE="user nobody nogroup;";;
+  scanfail) USERLINE="user nobody nogroup;"; EXTRA="fastcgi_temp_path /tmp/npp-temp;";;
   vary) EXTRA="cache_purge_vary_aware on;";;
   keymismatch) NS="cache_purge_namespace objects 1m $NG/conf/state;";;
 esac
@@ -98,7 +98,7 @@ $NG/sbin/nginx -t -c $NG/conf/nginx.conf 2>&1 | tail -1
 [ -f /tmp/fpm.pid ] && kill -0 $(cat /tmp/fpm.pid) 2>/dev/null || $PHP_FPM -y $HERE/fpm.conf --allow-to-run-as-root
 for pf in $V4/logs/nginx.pid ${V4}303/logs/nginx.pid ${V4}256/logs/nginx.pid; do
   [ -f $pf ] && kill -0 $(cat $pf) 2>/dev/null && kill $(cat $pf) 2>/dev/null; done; sleep 1
-rm -rf /tmp/npp-cache/* /tmp/npp-other/*; rm -f $NG/conf/state/*
+rm -rf /tmp/npp-cache/* /tmp/npp-other/* /tmp/npp-temp; rm -f $NG/conf/state/*
 # scanfail runs the workers as nobody: its temp dirs (left over from root runs) must be writable
 # ... and so must the cache dirs, or the worker cannot even write the cache (warm() then caches nothing)
 if [ "$MODE" = scanfail ]; then chown -R nobody:nogroup $NG/*_temp /tmp/npp-cache /tmp/npp-other 2>/dev/null; else chown -R root:root $NG/*_temp /tmp/npp-cache /tmp/npp-other 2>/dev/null; fi
