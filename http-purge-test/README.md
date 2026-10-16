@@ -1,69 +1,118 @@
-# http-purge-test
+# Test suite for HTTP Purge
 
-Test suit for HTTP Purge via ngx_cache_purge.
-Lives in the plugin repo, outside the WordPress distribution, and the
-Docker stack (`psaux-it/wordpress-nginx-cache-docker`) installs it outside the web root and runs it.
+Test suite for HTTP Purge via [ngx_cache_purge](https://github.com/nginx-modules/ngx_cache_purge).
+
+It lives in the plugin repository, outside the WordPress distribution. The Docker stack
+([`psaux-it/wordpress-nginx-cache-docker`](https://github.com/psaux-it/wordpress-nginx-cache-docker))
+installs it outside the web root and runs it.
 
 | File | Role |
 | --- | --- |
-| `run-purge-tests.sh` | Entry point: mock harness + real-nginx matrix, build-if-missing, exit code 1 on any failure. |
-| `run.php` | Mock-WordPress harness, every HTTP exchange scripted (PHP CLI only). |
-| `e2e.php` | Real-nginx scenarios (needs the nginx builds below). |
+| `run-purge-tests.sh` | Entry point: mock harness + real-nginx matrix, builds nginx if missing, exits with code 1 on any failure. |
+| `run.php` | Mock-WordPress harness. Every HTTP exchange is scripted (PHP CLI only). |
+| `e2e.php` | Real-nginx scenarios (requires the nginx builds described below). |
 | `matrix.sh`, `nginx.sh`, `build-nginx.sh`, `delayproxy.py`, `fpm.conf`, `site/` | Real-nginx plumbing: nginx config per mode, module build, delay proxy, WordPress stand-in. |
+
+## What is tested
+
+- **Mock harness (`run.php`)**: response classification branches, locks, timeouts, the cache-directory
+  proof, ambiguous URLs (a miss *and* a purge in the same response) and the Purge All response timeout.
+  Requires only PHP CLI.
+- **Real nginx (`e2e.php`)**: the same purge logic against a real nginx with a real `ngx_cache_purge`
+  module, one scenario per module mode.
+
+Matrix scenarios: `sync`, `ambig`, `ns`, `none`, `wrongzone`, `single202`, `legacy_off`,
+`race_timeout`, `race_invalidated`, `race_invalidated_single`.
 
 ## Run it in the Docker stack
 
-From the `wordpress-nginx-cache-docker` checkout (see its `actionstart-purge.sh --help`):
+From the `wordpress-nginx-cache-docker` checkout (see `actionstart-purge.sh --help`):
 
-    ./actionstart-purge.sh                       # mock harness + real-nginx matrix (v4 build, compiled once)
-    ./actionstart-purge.sh --only mock           # seconds, no nginx build
-    ./actionstart-purge.sh --only matrix sync ambig
-    ./actionstart-purge.sh --file ./includes/purge-http.php    # test a candidate file instead of the deployed one
+```bash
+./actionstart-purge.sh                                    # mock harness + real-nginx matrix (v4 build, compiled once)
+./actionstart-purge.sh --only mock                        # seconds, no nginx build
+./actionstart-purge.sh --only matrix sync ambig           # selected scenarios only
+./actionstart-purge.sh --file ./includes/purge-http.php   # test a candidate file instead of the deployed one
+```
 
-It runs inside `wordpress-fpm` against the plugin deployed there, on 127.0.0.1:8081 of that container
-(separate from the stack's own nginx). Nginx builds and state live in the `npp_purge_lab` volume.
+The tests run inside the `wordpress-fpm` container against the plugin deployed there, on
+`127.0.0.1:8081` of that container (separate from the stack's own nginx). Nginx builds and state live in
+the `npp_purge_lab` volume.
 
 ## Run it directly (host or container)
 
-    http-purge-test/run-purge-tests.sh --only mock                     # PLUGIN_FILE defaults to ../includes/purge-http.php
-    http-purge-test/run-purge-tests.sh --build --only matrix           # builds nginx + ngx_cache_purge v4 into ./ng on first use
-    http-purge-test/run-purge-tests.sh --ng v30 --only matrix sync ambig
+```bash
+http-purge-test/run-purge-tests.sh --only mock                      # PLUGIN_FILE defaults to ../includes/purge-http.php
+http-purge-test/run-purge-tests.sh --build --only matrix            # builds nginx + ngx_cache_purge v4 into ./ng on first use
+http-purge-test/run-purge-tests.sh --ng v30 --only matrix sync ambig
+```
 
-Path variables: `NGROOT` (nginx builds, default `http-purge-test/ng`, i.e. `./ng` next to the scripts),
-`BUILD` (sources), `PLUGIN_FILE`, `PHP_FPM` (default `php-fpm8.3`, else `php-fpm`), `E2E_EXTRA` (extra e2e.php
-argument, e.g. `v30`).
+`--ng` selects the module build: `v4` (default), `v30` or `v25`. For `v30` and `v25` the default
+scenarios are `sync` and `ambig`; name others explicitly.
 
----
+Requirements for the real-nginx matrix: `git`, `build-essential`, `libpcre2-dev`, `zlib1g-dev`,
+`libssl-dev`, `php-fpm` (8.3 preferred), PHP CLI, `curl` and `python3`.
 
-## Original usage (any host)
+### Environment variables
 
-## 1. Mock harness (no nginx needed, ~1 min)
+| Variable | Meaning | Default |
+| --- | --- | --- |
+| `NGROOT` | Where the nginx builds live | `http-purge-test/ng` (next to the scripts) |
+| `BUILD` | Source/build cache used by `build-nginx.sh` | `http-purge-test/build` (wrapper), `$NGROOT/build` (raw script) |
+| `PLUGIN_FILE` | `purge-http.php` under test | deployed plugin in the Docker stack, else `../includes/purge-http.php` |
+| `PHP_FPM` | php-fpm binary | `php-fpm8.3`, else `php-fpm` |
+| `E2E_EXTRA` | Extra argument passed to `e2e.php` (e.g. `v30`) | none |
+| `DELAY` | Seconds the delay proxy holds answers in `race_timeout` | `3` |
 
-    php http-purge-test/run.php includes/purge-http.php        # 500 passed, 0 failed
+## Run the pieces manually
 
-Every HTTP exchange is scripted: classification branches, locks, timeouts, the
-cache-directory proof, ambiguous URLs (miss AND purged), Purge All response timeout.
-Needs only PHP CLI. The same file run against the older h8 purge-http.php fails 38 of the new checks.
+Mock harness:
 
-## 2. Real nginx + real ngx_cache_purge
+```bash
+php http-purge-test/run.php includes/purge-http.php
+```
 
-Build (needs git build-essential libpcre2-dev zlib1g-dev libssl-dev, php-fpm8.3, curl, python3):
+Build the nginx variants (the nginx version is pinned in `build-nginx.sh`):
 
-    http-purge-test/build-nginx.sh dev/development-4.0  http-purge-test/ng/nginx-run      # v4 (with --with-threads)
-    http-purge-test/build-nginx.sh releases/stable-3.0  http-purge-test/ng/nginx-run303   # v3.0
-    http-purge-test/build-nginx.sh releases/stable-2.5  http-purge-test/ng/nginx-run256   # v2.5
+```bash
+http-purge-test/build-nginx.sh dev/development-4.0 http-purge-test/ng/nginx-run      # v4 (with --with-threads)
+http-purge-test/build-nginx.sh releases/stable-3.0 http-purge-test/ng/nginx-run303   # v3.0
+http-purge-test/build-nginx.sh releases/stable-2.5 http-purge-test/ng/nginx-run256   # v2.5
+```
 
-Bring a mode up, run a scenario:
+Bring a mode up and run a scenario:
 
-    NG=http-purge-test/ng/nginx-run http-purge-test/nginx.sh sync        # also: async async_slow ns none wrongzone single202 legacy_off ...
-    php http-purge-test/e2e.php ambig includes/purge-http.php      # purged on /p/%41/ is not a success
-    php http-purge-test/e2e.php sync includes/purge-http.php
+```bash
+NG="$PWD/http-purge-test/ng/nginx-run" http-purge-test/nginx.sh sync    # also: async async_slow ns none wrongzone single202 legacy_off ...
+php http-purge-test/e2e.php ambig includes/purge-http.php               # a purge on /p/%41/ is not a success
+php http-purge-test/e2e.php sync  includes/purge-http.php
+```
 
-Purge All timeout race (nginx in `async` mode, delay proxy holds the answer for 3 s, plugin timeout 1 s):
+Run the whole matrix against one build:
 
-    NG=http-purge-test/ng/nginx-run http-purge-test/nginx.sh async
-    DELAY=3 python3 http-purge-test/delayproxy.py &
-    php http-purge-test/e2e.php race_timeout includes/purge-http.php
+```bash
+NG="$PWD/http-purge-test/ng/nginx-run" http-purge-test/matrix.sh includes/purge-http.php
+```
 
-Fixed locations: /tmp/npp-cache, /tmp/fpm.sock, nginx on 127.0.0.1:8081, delay proxy on 8090.
-http-purge-test/site/index.php stands in for WordPress; http-purge-test/fpm.conf runs it.
+### Purge All timeout race
+
+nginx in `async` mode, the delay proxy holds the answer for 3 s, the plugin timeout is 1 s:
+
+```bash
+NG="$PWD/http-purge-test/ng/nginx-run" http-purge-test/nginx.sh async
+DELAY=3 python3 http-purge-test/delayproxy.py &
+php http-purge-test/e2e.php race_timeout includes/purge-http.php
+```
+
+## Fixed locations
+
+The real-nginx tests use fixed paths and ports, so run only one instance at a time:
+
+| Resource | Location |
+| --- | --- |
+| Page cache | `/tmp/npp-cache` |
+| php-fpm socket | `/tmp/fpm.sock` |
+| nginx | `127.0.0.1:8081` |
+| Delay proxy | `127.0.0.1:8090` |
+
+`http-purge-test/site/index.php` stands in for WordPress, and `http-purge-test/fpm.conf` runs it.
