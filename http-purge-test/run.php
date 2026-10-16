@@ -115,7 +115,10 @@ ok( isset( $rq['hooked']['http_api_curl|nppp_http_purge_curl_connect_timeout'] )
 ok( ! isset( $GLOBALS['T']['hooks']['http_api_curl|nppp_http_purge_curl_connect_timeout'] ), 'curl hook removed after request' );
 is_( last_result()[0] . ':' . last_result()[1], 'single:purged', 'result action payload' );
 is_( locks_keys(), [], 'success arms no lock' );
-is_( $GLOBALS['T']['transients'], [], 'success writes nothing to transient' );
+is_( nppp_http_purge_state()['locks'], [], 'success writes no lock' );
+is_( nppp_http_purge_state()['methods'], [], 'success learns no method' );
+is_( nppp_http_purge_state()['ns'], [], 'a "purged" answer records no generation mode' );
+ok( isset( nppp_http_purge_state()['probe']['single'] ), 'a working GET is remembered, so no PURGE probe is due' );
 
 t_reset( [ 'nppp_http_purge_custom_url' => 'http://127.0.0.1:8080/ignored/path', 'nppp_http_purge_suffix' => '/zap/', 'nppp_http_purge_all_path' => '/everything/' ] );
 is_( nppp_http_purge_base_url(), 'http://127.0.0.1:8080/zap', 'custom base URL + suffix' );
@@ -136,13 +139,22 @@ foreach ( [
     'v3 xml'   => '<?xml version="1.0" encoding="UTF-8"?><status><Key><![CDATA[k]]></Key><Status>Purged</Status></status>',
     'v3 text'  => "Key: httpsGETexample.com/a/\nStatus: Purged\n",
     'v2 html'  => '<html><head><title>Successful purge</title></head><body><center><h1>Successful purge</h1><p>Key : httpsGETexample.com/a/</p></center></body></html>',
-    'empty'    => '',
-] as $label => $body ) {
+    ] as $label => $body ) {
     t_reset();
     Q( R( 200, '', $body ) );
     is_( nppp_http_purge_try_first( $U ), true, "legacy 200 ($label) -> true" );
     is_( nreq(), 1, "legacy 200 ($label) no retry" );
 }
+
+/* an empty 200 carries no Key: v2/v3 always answer with it, so it is some other page, not a purge */
+t_reset();
+Q( R( 200, '', '' ), R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( $U ), true, 'legacy 200 (empty) is foreign, PURGE retry works -> true' );
+is_( nppp_http_purge_state()['methods'], [ 'single' => 'PURGE' ], 'legacy 200 (empty): PURGE remembered' );
+t_reset();
+Q( R( 200, '', '' ), R( 200, '', '' ) );
+is_( nppp_http_purge_try_first( $U ), false, 'legacy 200 (empty) twice -> false' );
+is_( locks_keys(), [ 'single' ], 'legacy 200 (empty) twice locks single (foreign)' );
 
 /* ----------------------------------------- 3. foreign 200 (site page), PURGE retry */
 t_reset();
@@ -219,11 +231,21 @@ t_filter( 'nppp_http_purge_trust_miss', fn( $trust, $url, $why ) => true );
 Q( R( 412 ) );
 is_( nppp_http_purge_try_first( 'https://example.com/caf%C3%A9/' ), 'miss', 'trust_miss filter can force trust' );
 
+/* 404 on GET proves nothing (a v3 purge-only location answers a bare 404 to any other method): one PURGE probe follows */
 t_reset();
-Q( R( 404 ) );
-is_( nppp_http_purge_try_first( $U ), false, '404 -> false (ambiguous)' );
+Q( R( 404 ), R( 404 ) );
+is_( nppp_http_purge_try_first( $U ), false, '404 (also on the PURGE probe) -> false (ambiguous)' );
+is_( nreq(), 2, '404 is followed by exactly one PURGE probe' );
 is_( locks_keys(), [], '404 no lock' );
 is_( $GLOBALS['T']['notices'], [], '404 silent' );
+Q( R( 404 ) );
+is_( nppp_http_purge_try_first( $U ), false, 'second 404 -> false' );
+is_( nreq(), 3, 'a recent probe is not repeated' );
+t_reset();
+Q( R( 404 ), R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( $U ), true, '404 then PURGE answers purged -> true (inline method location)' );
+is_( $GLOBALS['T']['requests'][1]['args']['method'], 'PURGE', '404 probe uses the module method' );
+is_( nppp_http_purge_state()['methods'], [ 'single' => 'PURGE' ], '404 probe: PURGE remembered' );
 
 /* --------------------------------------------------------------- 5. single: locks */
 t_reset();
@@ -310,11 +332,15 @@ t_reset(); Q( R( 200, 'status' ) );
 is_( nppp_http_purge_try_first( $U ), false, 'single bound to status handler -> false' );
 is_( locks_keys(), [ 'single' ], 'status-bound single locks single' );
 
-t_reset(); Q( R( 301 ) );
-is_( nppp_http_purge_try_first( $U ), false, '301 -> false' );
+t_reset(); Q( R( 301 ), R( 301 ) );
+is_( nppp_http_purge_try_first( $U ), false, '301 (also on the PURGE probe) -> false' );
+is_( nreq(), 2, '301 is followed by one PURGE probe' );
 is_( locks_keys(), [ '*' ], '301 locks everything (scheme/host problem)' );
 is_( nppp_http_purge_all(), false, 'purge all blocked by * lock' );
-is_( nreq(), 1, 'no request while * lock' );
+is_( nreq(), 2, 'no request while * lock' );
+t_reset(); Q( R( 301 ), R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( $U ), true, '301 then PURGE answers purged -> true' );
+is_( locks_keys(), [], '301 then purged: no lock' );
 t_reset(); Q( R( 401 ) );
 nppp_http_purge_try_first( $U );
 is_( locks_keys(), [ '*' ], '401 locks everything' );
@@ -415,7 +441,7 @@ is_( locks_keys(), [ 'all', 'single' ], 'two scopes coexist' );
 is_( last_ttl(), 3600, 'transient lives as long as the longest lock' );
 nppp_http_purge_remember_method( 'single', 'PURGE' );
 delete_transient( NPPP_HTTP_PURGE_BROKEN_KEY );
-is_( nppp_http_purge_state(), [ 'locks' => [], 'methods' => [] ], 'one delete_transient clears locks and learned methods' );
+is_( nppp_http_purge_state(), [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [] ], 'one delete_transient clears locks, learned methods, generation mode and probe state' );
 
 t_reset();
 set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'locks' => [ 'single' => [ 'reason' => 'x', 'until' => time() - 5 ], 'all' => [ 'reason' => 'y', 'until' => time() + 100 ] ], 'methods' => [ 'single' => 'rm -rf', 'all' => 'PURGE' ] ], 3600 );
@@ -507,8 +533,9 @@ is_( nppp_http_purge_all(), false, 'all: site page answering 200 is not a purge'
 is_( locks_keys(), [ 'all' ], 'all: foreign locks all' );
 t_reset(); Q( R( 200, '', $SITE ), R( 200, 'purged' ) );
 is_( nppp_http_purge_all(), true, 'all: inline PURGE location reached through the PURGE retry' );
-t_reset(); Q( R( 404 ) );
-is_( nppp_http_purge_all(), false, 'all: 404 -> false' );
+t_reset(); Q( R( 404 ), R( 404 ) );
+is_( nppp_http_purge_all(), false, 'all: 404 (also on the PURGE probe) -> false' );
+is_( nreq(), 2, 'all: 404 is followed by exactly one PURGE probe' );
 is_( locks_keys(), [], 'all: 404 no lock, silent' );
 is_( $GLOBALS['T']['notices'], [], 'all: 404 silent' );
 t_reset(); Q( R( 403, 'access_denied' ) );
@@ -764,7 +791,14 @@ foreach ( [
         Q( R( $st, $cd, $cd === '' ? $V3_HTML : '' ) );
         is_( nppp_http_purge_try_first( $url ), false, "purged on ambiguous url ($label, $st $cd) -> false so the real entry is purged on disk" );
         is_( locks_keys(), [], "ambiguous purged ($label, $st $cd) no lock" );
-        is_( $GLOBALS['T']['notices'], [], "ambiguous purged ($label, $st $cd) silent" );
+        if ( $cd === 'invalidated' ) {
+            // generation mode: the disk purge cannot see generated keys, so the plugin says so instead of staying silent
+            ok( notice_has( 'generation mode is active' ), "ambiguous invalidated ($label) reports that the disk purge cannot help" );
+            is_( count( $GLOBALS['T']['notices'] ), 1, "ambiguous invalidated ($label) exactly one notice" );
+            is_( nppp_http_purge_state()['ns'], [ 'single' => true ], "ambiguous invalidated ($label) generation mode remembered" );
+        } else {
+            is_( $GLOBALS['T']['notices'], [], "ambiguous purged ($label, $st $cd) silent" );
+        }
     }
 }
 t_reset(); Q( R( 200, 'purged' ) );
