@@ -273,7 +273,7 @@
                 // the POST body entirely, which made settings-sanitize.php see them
                 // as empty and fire the "cannot be empty" reset errors on every save.
                 // `readonly` keeps them non-editable while still submitting their value.
-                $('#nppp_http_purge_suffix, #nppp_http_purge_custom_url, #nppp_http_purge_all_path')
+                $('#nppp_http_purge_suffix, #nppp_http_purge_custom_url, #nppp_http_purge_all_path, #nppp_http_purge_queue_status_path')
                     .attr('readonly', 'readonly')
                     .css({ cursor:'not-allowed' });
             })();
