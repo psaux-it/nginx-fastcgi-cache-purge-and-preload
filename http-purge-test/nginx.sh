@@ -100,5 +100,6 @@ for pf in $V4/logs/nginx.pid ${V4}303/logs/nginx.pid ${V4}256/logs/nginx.pid; do
   [ -f $pf ] && kill -0 $(cat $pf) 2>/dev/null && kill $(cat $pf) 2>/dev/null; done; sleep 1
 rm -rf /tmp/npp-cache/* /tmp/npp-other/*; rm -f $NG/conf/state/*
 # scanfail runs the workers as nobody: its temp dirs (left over from root runs) must be writable
-if [ "$MODE" = scanfail ]; then chown -R nobody:nogroup $NG/*_temp 2>/dev/null; else chown -R root:root $NG/*_temp 2>/dev/null; fi
+# ... and so must the cache dirs, or the worker cannot even write the cache (warm() then caches nothing)
+if [ "$MODE" = scanfail ]; then chown -R nobody:nogroup $NG/*_temp /tmp/npp-cache /tmp/npp-other 2>/dev/null; else chown -R root:root $NG/*_temp /tmp/npp-cache /tmp/npp-other 2>/dev/null; fi
 $NG/sbin/nginx -c $NG/conf/nginx.conf && sleep 1 && echo "nginx up: $MODE ($NG)"
