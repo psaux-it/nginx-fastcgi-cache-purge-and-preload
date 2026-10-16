@@ -659,15 +659,23 @@ function nppp_http_purge_known_codes(): array {
  * {"Key": ...} (v3 json) or <Key> (v3 xml). A 200 without Cache-Purge-Code and
  * without that marker is some other page, not a purge.
  */
-function nppp_http_purge_legacy_body_ok( string $body ): bool {
+function nppp_http_purge_legacy_body_ok( string $body, string $expect = '' ): bool {
     if ( ! apply_filters( 'nppp_http_purge_verify_legacy_body', true ) ) {
         return true;
     }
     if ( trim( $body ) === '' ) {
         return false; // An empty unrelated 200 is not evidence of a purge.
     }
+    if ( ! preg_match( '/"Key"\s*:\s*"|<Key>|(?:^|>)Key\s?:/m', $body ) ) {
+        return false;
+    }
 
-    return (bool) preg_match( '/"Key"\s*:\s*"|<Key>|(?:^|>)Key\s?:/m', $body );
+    // The marker alone also matches ordinary pages ("<li>Key: ...", inline JSON with a
+    // "Key" property). v2/v3 echo the cache key they built, and that key contains the
+    // path of the page, so a genuine module answer for this URL contains the path too.
+    // $expect is '' when the key is decode-ambiguous (nginx echoes the decoded form) or
+    // when there is no single page path (Purge All).
+    return $expect === '' || strpos( $body, $expect ) !== false;
 }
 
 /**
@@ -678,7 +686,8 @@ function nppp_http_purge_legacy_body_ok( string $body ): bool {
  *           wrong_endpoint, config, internal, unexpected (lock).
  *
  * @param string $scope 'single' | 'all'
- * @param array  $res   status:int, code:string (Cache-Purge-Code or ''), body:string
+ * @param array  $res   status:int, code:string (Cache-Purge-Code or ''), body:string,
+ *                      expect:string (optional, page path a v2/v3 body must echo; '' = no check)
  */
 function nppp_http_purge_classify( string $scope, array $res ): string {
     $status = (int) $res['status'];
@@ -702,6 +711,7 @@ function nppp_http_purge_classify( string $scope, array $res ): string {
         case 'status':
         case 'refresh_complete':
         case 'refresh_incomplete':
+        case 'invalid_cursor':
             return 'wrong_endpoint'; // the location is bound to the status or REFRESH handler
         case 'invalid_selector':
             return 'bad_selector';
@@ -727,7 +737,7 @@ function nppp_http_purge_classify( string $scope, array $res ): string {
     // v2 / v3 (and anything that is not the module): HTTP status table.
     switch ( true ) {
         case $status === 200:
-            return nppp_http_purge_legacy_body_ok( (string) $res['body'] ) ? 'purged' : 'foreign';
+            return nppp_http_purge_legacy_body_ok( (string) $res['body'], (string) ( $res['expect'] ?? '' ) ) ? 'purged' : 'foreign';
         case $status === 202:
             return $scope === 'single' ? 'wrong_endpoint' : 'accepted';   // v3 background queue
         case $status === 204:
@@ -861,7 +871,7 @@ function nppp_http_purge_is_wildcard_url( string $url ): bool {
  *
  * @return array{outcome:string,status:int,code:string,message:string,allow:string,method:string}
  */
-function nppp_http_purge_exchange( string $scope, string $url, int $timeout ): array {
+function nppp_http_purge_exchange( string $scope, string $url, int $timeout, string $expect = '' ): array {
     $pool   = nppp_http_purge_method_pool();
     $method = nppp_http_purge_method_for( $scope );
     $tried  = [];
@@ -875,6 +885,7 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout ): a
             break;
         }
 
+        $res['expect'] = $expect;
         $outcome = nppp_http_purge_classify( $scope, $res );
         $next    = '';
 
@@ -1354,7 +1365,11 @@ function nppp_http_purge_try_first_core( string $url ) {
     }
     nppp_http_purge_extend_time_limit( $timeout + 5 );
 
-    $r = nppp_http_purge_exchange( 'single', $purge_url, $timeout );
+    // v2/v3 answer with the key they built; for an unambiguous URL it contains the page
+    // path, which separates a genuine module answer from a page that merely says "Key:".
+    $expect = nppp_http_purge_key_ambiguity_reason( $url ) === '' ? $path : '';
+
+    $r = nppp_http_purge_exchange( 'single', $purge_url, $timeout, $expect );
 
     switch ( $r['outcome'] ) {
         case 'purged':
