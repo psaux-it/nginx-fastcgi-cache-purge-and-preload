@@ -89,7 +89,7 @@ function last_result() { $a = array_values( array_filter( $GLOBALS['T']['actions
 
 require $argv[1];
 
-$V3_HTML = '<html><head><title>Cache Purge</title></head><body bgcolor="white"><center><h1>Cache Purge</h1><p>Key: httpsGETexample.com/a/</p><p>Status: Purged</p></center></body></html>';
+$V3_HTML = '<html><head><title>Cache Purge</title></head><body bgcolor="white"><center><h1>Cache Purge</h1><p>Key: httpsGETexample.com/blog/post/</p><p>Status: purged</p></center></body></html>';
 $SITE    = '<!doctype html><html><head><title>My blog</title></head><body>' . str_repeat( '<p>Hello world</p>', 50 ) . '</body></html>';
 $U       = 'https://example.com/blog/post/';
 
@@ -135,10 +135,14 @@ is_( nppp_http_purge_timeout( 'all' ), 77, 'timeout filter' );
 /* ------------------------------------------------------- 2. legacy 200 bodies */
 foreach ( [
     'v3 html'  => $V3_HTML,
-    'v3 json'  => '{"Key": "httpsGETexample.com/a/", "Status": "Purged"}',
-    'v3 xml'   => '<?xml version="1.0" encoding="UTF-8"?><status><Key><![CDATA[k]]></Key><Status>Purged</Status></status>',
-    'v3 text'  => "Key: httpsGETexample.com/a/\nStatus: Purged\n",
-    'v2 html'  => '<html><head><title>Successful purge</title></head><body><center><h1>Successful purge</h1><p>Key : httpsGETexample.com/a/</p></center></body></html>',
+    'v3 json'  => '{"Key": "httpsGETexample.com/blog/post/", "Status": "purged"}',
+    'v3 xml'   => '<?xml version="1.0" encoding="UTF-8"?><status><Key><![CDATA[httpsGETexample.com/blog/post/]]></Key><Status>purged</Status></status>',
+    'v3 text'  => "Key: httpsGETexample.com/blog/post/\nStatus: purged\n",
+    'v2.5 text (no space after colon)' => "Key:httpsGETexample.com/blog/post/\n",
+    'v2.5 json (no Status)' => '{"Key": "httpsGETexample.com/blog/post/"}',
+    'v2.5 xml (no Status)'  => '<?xml version="1.0" encoding="UTF-8"?><status><Key><![CDATA[httpsGETexample.com/blog/post/]]></Key></status>',
+    'v4 html, header stripped' => '<!doctype html><html><head><title>Cache Purge</title></head><body><h1>Cache Purge</h1><p>Key: /blog/post/</p><p>Code: purged</p><p>Key encoding: utf-8</p></body></html>',
+    'v2 html'  => '<html><head><title>Successful purge</title></head><body><center><h1>Successful purge</h1><p>Key : httpsGETexample.com/blog/post/</p></center></body></html>',
     ] as $label => $body ) {
     t_reset();
     Q( R( 200, '', $body ) );
@@ -155,6 +159,22 @@ t_reset();
 Q( R( 200, '', '' ), R( 200, '', '' ) );
 is_( nppp_http_purge_try_first( $U ), false, 'legacy 200 (empty) twice -> false' );
 is_( locks_keys(), [ 'single' ], 'legacy 200 (empty) twice locks single (foreign)' );
+
+/* a page that merely contains the "Key" marker is not a purge: a genuine v2/v3 body echoes the page path */
+foreach ( [
+    'li Key:'          => '<html><body><ul><li>Key: value</li></ul></body></html>',
+    'line Key:'        => "<html><body>\nKey: shortcut Ctrl+K\n</body></html>",
+    'inline JSON Key'  => '<script>var cfg={"Key": "abc"};</script>',
+    'other URL echoed' => '<html><body><p>Key: httpsGETexample.com/other/page/</p></body></html>',
+] as $label => $body ) {
+    t_reset();
+    Q( R( 200, '', $body ), R( 200, '', $body ) );
+    is_( nppp_http_purge_try_first( $U ), false, "foreign 200 with Key marker ($label) is NOT a purge" );
+    is_( locks_keys(), [ 'single' ], "foreign 200 with Key marker ($label) locks single" );
+}
+t_reset();
+Q( R( 200, '', '<html><body><ul><li>Key: value</li></ul></body></html>' ), R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( $U ), true, 'foreign 200 with Key marker, then PURGE works -> true via the retry' );
 
 /* ----------------------------------------- 3. foreign 200 (site page), PURGE retry */
 t_reset();
@@ -332,6 +352,10 @@ t_reset(); Q( R( 200, 'status' ) );
 is_( nppp_http_purge_try_first( $U ), false, 'single bound to status handler -> false' );
 is_( locks_keys(), [ 'single' ], 'status-bound single locks single' );
 
+t_reset(); Q( R( 400, 'invalid_cursor' ) );
+is_( nppp_http_purge_try_first( $U ), false, '400 invalid_cursor (single bound to a REFRESH location) -> false' );
+is_( locks_keys(), [ 'single' ], 'invalid_cursor = wrong endpoint: locks single' );
+is_( nreq(), 1, 'invalid_cursor not retried' );
 t_reset(); Q( R( 301 ), R( 301 ) );
 is_( nppp_http_purge_try_first( $U ), false, '301 (also on the PURGE probe) -> false' );
 is_( nreq(), 2, '301 is followed by one PURGE probe' );
