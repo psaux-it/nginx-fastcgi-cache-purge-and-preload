@@ -8,6 +8,8 @@
 #   ./run-purge-tests.sh --ng v30 --only matrix sync ambig     other ngx_cache_purge build (v4 | v30 | v25)
 #
 # Scenarios (matrix): sync ambig ns none wrongzone single202 legacy_off race_timeout race_invalidated race_invalidated_single
+#                     race race_nostatus race_off
+#                     v4 error codes / Vary: denied method405 nocache keymismatch wrongep deletefail scanfail vary vary_off badsel
 #
 # Environment:
 #   PLUGIN_FILE  purge-http.php under test
