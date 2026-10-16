@@ -305,6 +305,11 @@ t_reset();
 Q( R( 405, 'method_not_allowed', '', [ 'allow' => 'POST, DELETE' ] ) );
 nppp_http_purge_try_first( $U );
 is_( nreq(), 1, 'never retries with unrelated methods (POST/DELETE)' );
+t_reset();
+Q( R( 405, 'method_not_allowed', '', [ 'allow' => 'REFRESH' ] ), R( 200, 'refresh_complete' ) );
+nppp_http_purge_try_first( $U );
+is_( nreq(), 1, '405 Allow: REFRESH (module refresh endpoint) is never retried with REFRESH' );
+is_( locks_keys(), [ 'single' ], '405 Allow: REFRESH locks the endpoint without probing the origin' );
 
 t_reset();
 nppp_http_purge_remember_method( 'single', 'PURGE' );
