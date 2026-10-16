@@ -952,7 +952,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description"><?php echo esc_html__( 'The URI path used to clear the entire cache. This must match the exact URI in your Nginx purge all location block (e.g., location = /purge_all). Default: purge_all.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
-	                    <tr valign="top" id="nppp-http-purge-queue-status-row">
+                        <tr valign="top" id="nppp-http-purge-queue-status-row">
                             <th scope="row">
                                 <span class="dashicons dashicons-admin-links"></span>
                                 <?php echo esc_html__( 'Purge Queue Status Path', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
