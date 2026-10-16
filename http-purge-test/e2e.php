@@ -186,6 +186,54 @@ if ( $sc === 'race_invalidated_single' ) {
     chk( $x === 'MISS' && $x2 === 'HIT' && $x3 === 'HIT', 'same URL re-warmed in the new generation survives the cleanup of the old one' );
 }
 
+
+/* Generation mode on disk (mode ns_slow): cache files carry "KEY: p4:<namespace>:<epoch>:<generation>:<logical key>".
+ * Pins what a file scanner can and cannot know: a stale and a live file of the SAME logical key coexist while the cleanup
+ * queue is busy, only live files remain once it is idle, and a higher generation elsewhere does not make a file stale
+ * (the generation is one namespace-wide counter, not a per-URL one). */
+if ( $sc === 'ns_keys' ) {
+    $kl = function () {
+        $o = [];
+        foreach ( explode( "\n", trim( (string) shell_exec( "grep -a -rh '^KEY:' /tmp/npp-cache" ) ) ) as $l ) {
+            if ( preg_match( '#^KEY: p4:objects:\d{10}:([0-9a-f]{16}):httpGETexample\.com(/p/\d+/)$#', $l, $m ) ) { $o[ $m[2] ][] = hexdec( $m[1] ); }
+        }
+        return $o;
+    };
+    $q    = function () { $j = json_decode( (string) shell_exec( 'curl -s http://127.0.0.1:8081/purge_status' ), true ); return $j['cache'] ?? null; };
+    $idle = function () use ( $q ) {
+        $n = 0;
+        for ( $i = 0; $i < 200; $i++ ) {
+            $c = $q(); $n = ( $c && $c['pending']['total'] === 0 && $c['active'] === 0 ) ? $n + 1 : 0;
+            if ( $n >= 2 ) { return true; }
+            usleep( 200000 );
+        }
+        return false;
+    };
+
+    warm( 'p', 30 ); sleep( 1 );
+    $k0 = $kl();
+    chk( count( $k0 ) === 30, 'every warmed page has a KEY line in the p4:<ns>:<epoch>:<generation>:<key> format', 'parsed=' . count( $k0 ) );
+    $g0 = $k0['/p/1/'][0] ?? -1;
+
+    $r = nppp_http_purge_all();
+    chk( $r === true, 'purge_all: invalidated -> true', notes() );
+    foreach ( [ 1, 2, 3 ] as $i ) { xcache( "/p/$i/" ); }          // new generation, written while the old files are still on disk
+    $k1 = $kl(); $c = $q();
+    chk( count( $k1['/p/1/'] ?? [] ) === 2 && min( $k1['/p/1/'] ) === $g0 && max( $k1['/p/1/'] ) > $g0, 'while the cleanup is pending one logical key has a stale AND a live file', json_encode( $k1['/p/1/'] ?? null ) );
+    chk( $c !== null && $c['pending']['total'] + $c['active'] > 0, 'the cleanup queue is busy while the stale file exists' );
+    chk( $idle(), 'the cleanup queue goes idle' );
+    $k2   = $kl();
+    $gens = array_values( array_unique( array_merge( ...array_values( $k2 ) ) ) );
+    chk( count( $k2 ) === 3 && count( $gens ) === 1 && $gens[0] > $g0, 'queue idle: only the live generation is left', json_encode( $k2 ) );
+
+    $gb = $k2['/p/3/'][0] ?? -1;
+    $r  = nppp_http_purge_try_first( 'http://example.com/p/2/' );
+    xcache( '/p/2/' ); $idle();
+    $k3 = $kl();
+    chk( $r === true && count( $k3['/p/2/'] ?? [] ) === 1 && $k3['/p/2/'][0] > $gb && ( $k3['/p/3/'][0] ?? -1 ) === $gb && xcache( '/p/3/' ) === 'HIT',
+         'single purge raises the generation of that key only; a higher generation elsewhere does NOT make /p/3/ stale', json_encode( $k3 ) );
+}
+
 /* ---------------------------------------------------------------------------------------------
  * v4 error-code scenarios: the module's own error answers (not the mock's idea of them) fed to
  * the real plugin. Each scenario reproduces ONE catalog code in a real nginx.
