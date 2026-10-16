@@ -264,6 +264,7 @@ if ( $sc === 'deletefail' ) {
 /* 500 scan_failed: a cache directory cannot be read (mode 000, nginx worker is not root: nginx.sh mode scanfail). */
 if ( $sc === 'scanfail' ) {
     warm( 'p', 40 );
+    chk( cnt() > 0, 'precondition: the nobody worker can write the cache (/tmp/npp-cache must be owned by nobody)', 'files=' . cnt() );
     $d = trim( shell_exec( "find /tmp/npp-cache -mindepth 1 -maxdepth 1 -type d | head -1" ) );
     shell_exec( 'chmod 000 ' . escapeshellarg( $d ) );
     $r = nppp_http_purge_all();
