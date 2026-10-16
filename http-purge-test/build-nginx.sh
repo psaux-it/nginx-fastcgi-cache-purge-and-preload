@@ -9,8 +9,8 @@ set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 BR=$1; PFX=$2; TAG=${BR//\//_}; NGROOT=${NGROOT:-$HERE/ng}; B=${BUILD:-$NGROOT/build}
 mkdir -p "$B"; cd "$B"
-[ -d nginx-src ] || git clone -q --depth 1 --branch release-1.31.6 https://github.com/nginx/nginx.git nginx-src
-[ -d mod-$TAG ] || git clone -q --depth 1 --branch "$BR" https://github.com/nginx-modules/ngx_cache_purge.git mod-$TAG
+[ -d nginx-src ] || git -c advice.detachedHead=false clone -q --depth 1 --branch release-1.31.6 https://github.com/nginx/nginx.git nginx-src
+[ -d mod-$TAG ] || git -c advice.detachedHead=false clone -q --depth 1 --branch "$BR" https://github.com/nginx-modules/ngx_cache_purge.git mod-$TAG
 cd nginx-src
 THREADS=""; [ "$BR" = releases/stable-4.0 ] && THREADS="--with-threads"
 make clean >/dev/null 2>&1 || true
