@@ -22,7 +22,7 @@ installs it outside the web root and runs it.
   module, one scenario per module mode.
 
 Matrix scenarios: `sync`, `ambig`, `ns`, `none`, `wrongzone`, `single202`, `legacy_off`,
-`race_timeout`, `race_invalidated`, `race_invalidated_single`, `race`, `race_nostatus`, `race_off`,
+`race_timeout`, `race_invalidated`, `race_invalidated_single`, `ns_keys`, `race`, `race_nostatus`, `race_off`,
 and the v4 error-code / Vary scenarios below.
 
 ### v4 error-code and Vary scenarios
