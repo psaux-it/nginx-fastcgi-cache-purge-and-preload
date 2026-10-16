@@ -691,6 +691,17 @@ is_( nppp_http_purge_queue_status_url(), '', 'status url: invalid path rejected'
 t_reset();
 is_( nppp_http_purge_queue_status_url(), '', 'status url: unset -> none' );
 
+/* status url: the Settings field (nginx_cache_settings[...]) is the primary source, the standalone option is a legacy fallback */
+t_reset( [ 'nppp_http_purge_custom_url' => 'http://nginx-internal:8080', 'nppp_http_purge_queue_status_path' => '/purge_status/' ] );
+is_( nppp_http_purge_queue_status_url(), 'http://nginx-internal:8080/purge_status', 'status url: Settings field path (primary source)' );
+$GLOBALS['T']['options']['nppp_http_purge_queue_status_path'] = 'legacy_status';
+is_( nppp_http_purge_queue_status_url(), 'http://nginx-internal:8080/purge_status', 'status url: Settings field wins over the legacy option' );
+t_reset( [ 'nppp_http_purge_custom_url' => 'http://nginx-internal:8080', 'nppp_http_purge_queue_status_path' => '' ] );
+$GLOBALS['T']['options']['nppp_http_purge_queue_status_path'] = 'legacy_status';
+is_( nppp_http_purge_queue_status_url(), 'http://nginx-internal:8080/legacy_status', 'status url: empty Settings field falls back to the legacy option' );
+t_reset( [ 'nppp_http_purge_custom_url' => 'http://nginx-internal:8080', 'nppp_http_purge_queue_status_path' => 'a b;c' ] );
+is_( nppp_http_purge_queue_status_url(), '', 'status url: invalid Settings field path rejected' );
+
 /* 200 cross-check (needs files that are older than the request second) */
 $D = mkcache( 3 ); sleep( 2 );
 foreach ( [ 'purged', 'no_match' ] as $cd ) {
