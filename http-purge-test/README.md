@@ -75,7 +75,7 @@ php http-purge-test/run.php includes/purge-http.php
 Build the nginx variants (the nginx version is pinned in `build-nginx.sh`):
 
 ```bash
-http-purge-test/build-nginx.sh dev/development-4.0 http-purge-test/ng/nginx-run      # v4 (with --with-threads)
+http-purge-test/build-nginx.sh releases/stable-4.0 http-purge-test/ng/nginx-run      # v4 (with --with-threads)
 http-purge-test/build-nginx.sh releases/stable-3.0 http-purge-test/ng/nginx-run303   # v3.0
 http-purge-test/build-nginx.sh releases/stable-2.5 http-purge-test/ng/nginx-run256   # v2.5
 ```
