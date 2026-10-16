@@ -604,6 +604,33 @@ function nppp_nginx_cache_settings_sanitize($input) {
         );
     }
 
+    // Purge Queue Status path (optional): location of ngx_cache_purge v4
+    // "cache_purge_queue_status". Empty is valid and means "no status endpoint".
+    // Same charset as the reader in purge-http.php (slash allowed for nested
+    // locations). An invalid value is cleared, never reset to a non-empty default.
+    if ( isset( $input['nppp_http_purge_queue_status_path'] ) && is_string( $input['nppp_http_purge_queue_status_path'] ) ) {
+        $raw_status_path = trim( sanitize_text_field( $input['nppp_http_purge_queue_status_path'] ), " \t\n\r/" );
+        if ( $raw_status_path === '' || preg_match( '/^[a-zA-Z0-9_\-\/]+$/', $raw_status_path ) ) {
+            $sanitized_input['nppp_http_purge_queue_status_path'] = $raw_status_path;
+        } else {
+            $sanitized_input['nppp_http_purge_queue_status_path'] = '';
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'nppp-http-purge-queue-status-path',
+                __( 'ERROR OPTION: HTTP Purge Queue Status Path must contain only letters, numbers, hyphens, underscores, or slashes. It has been cleared.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'error'
+            );
+        }
+        // One-time migration: the value now lives in nginx_cache_settings.
+        delete_option( 'nppp_http_purge_queue_status_path' );
+    } else {
+        // Field not submitted: keep what is stored instead of wiping it.
+        $stored_settings = get_option( 'nginx_cache_settings', [] );
+        $sanitized_input['nppp_http_purge_queue_status_path'] =
+            ( is_array( $stored_settings ) && isset( $stored_settings['nppp_http_purge_queue_status_path'] ) && is_string( $stored_settings['nppp_http_purge_queue_status_path'] ) )
+            ? $stored_settings['nppp_http_purge_queue_status_path'] : '';
+    }
+
     // Sanitize bypass path restriction
     $sanitized_input['nginx_cache_bypass_path_restriction'] =
         ( isset( $input['nginx_cache_bypass_path_restriction'] ) && $input['nginx_cache_bypass_path_restriction'] === 'yes' )
