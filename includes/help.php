@@ -498,6 +498,20 @@ location = /purge_all {
     fastcgi_cache_key   "$scheme$request_method$host$request_uri";
     fastcgi_cache_purge GET purge_all from all;
 }</pre>
+
+                        <p><strong>Optional — ngx_cache_purge v4 only:</strong> if you use <code>cache_purge_background_queue on</code>, add a queue status location so NPP can confirm that a queued (<code>202</code>) Purge All has finished before preloading starts, then enter its path in <strong>Purge Queue Status Path</strong>. The directive does not exist in v2/v3 — <strong>do not add it on those versions, Nginx will refuse to load the configuration</strong> (<code>unknown directive "cache_purge_queue_status"</code>).</p>
+
+<pre>## Purge Queue Status location - (requires ngx_cache_purge ≥ 4.0)
+location = /purge_status {
+    allow 127.0.0.1;       # Only allow local requests
+    allow 172.16.0.0/12;   # Docker network (adjust as needed)
+    deny all;              # Deny everyone else
+
+    # Must be the exact cache path of your fastcgi_cache_path as Nginx sees it
+    # (inside Docker: the Nginx container path, not the path NPP reads via a mount).
+    # An unknown path makes "nginx -t" fail.
+    cache_purge_queue_status /var/cache/nginx;
+}</pre>
                         <p>🔒 <strong>Security Tip:</strong> Always restrict the <code>allow</code> directive to your server's internal IP addresses. Never expose the purge location to the public internet. Because NPP use <code>GET</code> not <code>PURGE</code></p>
 
                         <p>📌 For a complete, production‑ready Nginx configuration including cache exclusion rules, rate limiting, and security headers, see the <a href="https://github.com/psaux-it/wordpress-nginx-cache-docker" target="_blank" rel="noopener">NPP Docker Stack Repository</a>.</p>
