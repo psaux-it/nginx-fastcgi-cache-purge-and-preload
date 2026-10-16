@@ -6,7 +6,7 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 PLUGIN=$(readlink -f "${1:?usage: matrix.sh path/to/purge-http.php [scenarios]}"); shift
 NG=${NG:-${NGROOT:-$HERE/ng}/nginx-run}
-declare -A MODE=( [sync]=sync [ambig]=sync [ns]=ns [none]=none [wrongzone]=wrongzone [single202]=single202 [legacy_off]=legacy_off [race_timeout]=async [race_invalidated]=ns_slow [race_invalidated_single]=ns_slow )
+declare -A MODE=( [sync]=sync [ambig]=sync [ns]=ns [none]=none [wrongzone]=wrongzone [single202]=single202 [legacy_off]=legacy_off [race_timeout]=async [race_invalidated]=ns_slow [race_invalidated_single]=ns_slow [v25]=v25 )
 ORDER=(sync ambig ns none wrongzone single202 legacy_off race_timeout race_invalidated race_invalidated_single)
 SC=("$@"); [ ${#SC[@]} -eq 0 ] && SC=("${ORDER[@]}")
 for p in $(pgrep -f "python3 .*delayproxy"); do kill $p 2>/dev/null; done
