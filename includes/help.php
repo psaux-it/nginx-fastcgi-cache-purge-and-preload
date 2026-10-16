@@ -565,12 +565,17 @@ location = /purge_status {
                                     <td><code>purge_all</code></td>
                                     <td>The exact URI path for full cache purge. Must match the exact location in nginx (e.g. <code>location = /purge_all</code>). This is used for the Purge All HTTP fast‑path and is independent of the single‑purge path.</td>
                                 </tr>
+                                <tr>
+                                    <td><strong>Purge Queue Status Path</strong></td>
+                                    <td>(empty)</td>
+                                    <td>Optional. The exact URI path of your <code>cache_purge_queue_status</code> location (e.g. <code>location = /purge_status</code>), available in ngx_cache_purge ≥ 4.0. Only needed when Nginx uses <code>cache_purge_background_queue on</code>: NPP then reads the queue status to confirm that a queued (<code>202</code>) Purge All has finished before the filesystem fallback or the preload starts. Leave empty otherwise. Restrict the location with <code>allow</code>/<code>deny</code>; the same Purge Custom Base URL is used for it.</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                <h3 class="nppp-question">What is RG Purge and how does it accelerate single‑URL purges?</h3>
+                <h3 class="nppp-question">What is RG Purge
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h3><strong>RG Purge – Turbocharged Cache Purging</strong></h3>
