@@ -1,6 +1,6 @@
-# fail2ban-test
+# Test suite for Fail2Ban Integration
 
-end-to-end test lab for the NPP Fail2Ban webhook and RIPEstat IP enrichment chain.
+e2e test lab for the NPP Fail2Ban webhook and RIPEstat IP enrichment chain.
 It exercises the whole path without a real Fail2Ban, without real attackers and
 without any real RIPEstat traffic: `stat.ripe.net` is redirected to a local fake
 RIPEstat server that serves synthetic, deterministic data.
