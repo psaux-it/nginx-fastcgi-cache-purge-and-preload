@@ -42,6 +42,7 @@ function nppp_get_db_migrations() {
         '2.1.6' => array( 'nppp_migration_216' ),
         '2.1.7' => array( 'nppp_migration_217' ),
         '2.1.8' => array( 'nppp_migration_218' ),
+        '2.1.9' => array( 'nppp_migration_219' ),
     );
 }
 
@@ -103,6 +104,7 @@ function nppp_run_pending_migrations( $old_version, $new_version ) {
             '2.1.6' => __( 'Auto purge sub-triggers added. Your existing auto purge behaviour has been preserved automatically. Please Reset to Default the Cache Key Regex for the latest compatibility updates to take effect.', 'fastcgi-cache-purge-and-preload-nginx' ),
             '2.1.7' => __( 'Three things to review after this update: (1) Verify your Nginx skip-cache rules match the new preload regex approach and use "Reset Default" on the "Exclude Endpoints" setting. (2) Use "Reset Default" on "Cache Key Regex" to activate expanded cache key format support. (3) Confirm ripgrep >= 14.0.0 is installed and that both shell_exec and exec are enabled in your PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx' ),
             '2.1.8' => __( 'New: Fail2Ban tab added — a fail2ban Nginx jail monitor (bans, recidive, live feed). Open the Fail2Ban tab for one-time server-side integration setup instructions.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            '2.1.9' => __( 'If you run ngx_cache_purge v4 generation mode (fastcgi_cache_key $cache_purge_key), please use "Reset Default" on the "Cache Key Regex" setting so the Advanced tab and the Status counter can read the new p4: cache key format.', 'fastcgi-cache-purge-and-preload-nginx' ),
         );
 
         $lines = array();
@@ -221,4 +223,13 @@ function nppp_migration_218() {
     if ( function_exists( 'nppp_f2b_install_table' ) ) {
         nppp_f2b_install_table();
     }
+}
+
+// Migration 2.1.9:
+// No data change. The default Cache Key Regex now understands the p4: envelope of
+// ngx_cache_purge v4 generation mode. The installed default is stored in the DB, so
+// existing installs keep the old one until the user presses "Reset Default"; this
+// entry exists solely to surface that notice (same approach as 2.1.6 and 2.1.7).
+function nppp_migration_219() {
+    // Intentionally empty — notice is handled by nppp_run_pending_migrations().
 }
