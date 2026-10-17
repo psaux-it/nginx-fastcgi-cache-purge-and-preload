@@ -101,7 +101,7 @@ if ( $sc === 'v25' ) {   /* ngx_cache_purge 2.5.6: single purge only, no purge_a
     $r = nppp_http_purge_all();
     chk( $r === false, 'v2.5.6: no purge_all location -> false (filesystem purge runs), never a false success', var_export( $r, true ) . ' ' . notes() );
 }
-/* The race the user asked about: 202 background purge, then (what purge.php does) FS fallback if false, then preload. */
+/* Race: 202 background purge, then filesystem fallback if it returned false (as purge.php does), then preload. */
 if ( strpos( $sc, 'race' ) === 0 && strpos( $sc, 'race_timeout' ) !== 0 && strpos( $sc, 'race_invalidated' ) !== 0 ) {
     if ( $sc === 'race_nostatus' ) { /* no status path option */ }
     else { $T['options']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = 'purge_status'; }
@@ -113,7 +113,7 @@ if ( strpos( $sc, 'race' ) === 0 && strpos( $sc, 'race_timeout' ) !== 0 && strpo
     $left = cnt();
     if ( $r === false ) { shell_exec( 'find /tmp/npp-cache -mindepth 1 -delete' ); }   // what nppp_wp_purge() does
     echo "  cached=$before  purge_all()=" . var_export( $r, true ) . " waited={$waited}s files_after_return=$left  fs_fallback=" . ( $r === false ? 'yes' : 'no' ) . "\n";
-    warm( 'warm', 400 );                                                              // preload starts right away
+    warm( 'warm', 400 );                                                              // preload starts immediately
     $f0 = cnt(); sleep( 4 ); $f1 = cnt();
     $hits = 0; for ( $i = 1; $i <= 20; $i++ ) { if ( xcache( "/warm/$i/" ) === 'HIT' ) $hits++; }
     echo "  preload warmed: files=$f0 -> 4 s later files=$f1, HIT on first 20 pages: $hits/20\n";
@@ -129,7 +129,7 @@ if ( $sc === 'ambig' ) {
     chk( xcache( '/p/%41/' ) === 'HIT' && xcache( '/p/A/' ) === 'HIT', 'both /p/A/ and /p/%41/ are cached' );
     $r = nppp_http_purge_try_first( 'http://example.com/p/%41/' );
     chk( $r === false, 'ambiguous url: nginx answers 200 purged (it purged /p/A/) but the plugin does NOT claim success -> disk layers decide', var_export( $r, true ) . ' ' . notes() );
-    chk( xcache( '/p/%41/' ) === 'HIT', 'the real /p/%41/ entry is still cached (this is why false is right)' );
+    chk( xcache( '/p/%41/' ) === 'HIT', 'the real /p/%41/ entry is still cached, so false is correct' );
     $r = nppp_http_purge_try_first( 'http://example.com/p/1/' );
     chk( $r === true || $r === 'miss', 'plain url is still handled by HTTP (' . var_export( $r, true ) . ')' );
 }
@@ -154,15 +154,15 @@ if ( strpos( $sc, 'race_timeout' ) === 0 ) {
     chk( $r === true && $waited > 2, "$sc: timed-out request waited out (nginx finished) -> true", var_export( $r, true ) . " waited=$waited " . notes() );
 }
 
-/* v4 namespace (generation) invalidation with SLOW physical cleanup (mode ns_slow): "invalidated" = logically gone at once,
- * files removed later. Does the late cleanup delete what the preload warmed right after? */
+/* v4 namespace invalidation with slow physical cleanup (mode ns_slow): entries are logically gone at once, files are removed
+ * later. Checks that the late cleanup does not delete pages the preload warmed in the meantime. */
 if ( $sc === 'race_invalidated' ) {
     warm( 'p', 3000 ); sleep( 2 );
     $before = cnt();
     $t = microtime( true ); $r = nppp_http_purge_all(); $waited = round( microtime( true ) - $t, 2 );
     $c0 = cnt();
-    $gone = xcache( '/p/7/' );                       // logically gone at once (and refilled in the new generation)
-    warm( 'warm', 400 );                             // what the preload does right after purge_all() returned true
+    $gone = xcache( '/p/7/' );                       // logically gone; refilled in the new generation
+    warm( 'warm', 400 );                             // preload after purge_all() returned true
     $f0 = cnt(); sleep( 12 ); $f1 = cnt();
     $hits = 0; for ( $i = 1; $i <= 20; $i++ ) { if ( xcache( "/warm/$i/" ) === 'HIT' ) $hits++; }
     $old = 0; for ( $i = 1; $i <= 20; $i++ ) { if ( xcache( "/p/" . ( 100 + $i ) . "/" ) === 'HIT' ) $old++; }
@@ -178,7 +178,7 @@ if ( $sc === 'race_invalidated' ) {
 if ( $sc === 'race_invalidated_single' ) {
     warm( 'p', 3000 ); sleep( 2 );
     $r = nppp_http_purge_try_first( 'http://example.com/p/1/' );
-    $x = xcache( '/p/1/' ); $x2 = xcache( '/p/1/' );   // preload re-warms the same URL right away
+    $x = xcache( '/p/1/' ); $x2 = xcache( '/p/1/' );   // preload re-warms the same URL
     sleep( 3 );
     $x3 = xcache( '/p/1/' );
     echo "  single invalidated -> " . var_export( $r, true ) . "  next requests: $x, $x2, after 3 s: $x3\n";
@@ -186,11 +186,9 @@ if ( $sc === 'race_invalidated_single' ) {
     chk( $x === 'MISS' && $x2 === 'HIT' && $x3 === 'HIT', 'same URL re-warmed in the new generation survives the cleanup of the old one' );
 }
 
-
 /* Generation mode on disk (mode ns_slow): cache files carry "KEY: p4:<namespace>:<epoch>:<generation>:<logical key>".
- * Pins what a file scanner can and cannot know: a stale and a live file of the SAME logical key coexist while the cleanup
- * queue is busy, only live files remain once it is idle, and a higher generation elsewhere does not make a file stale
- * (the generation is one namespace-wide counter, not a per-URL one). */
+ * Covers: stale and live files of the same logical key coexist while cleanup is pending, only live files remain once
+ * the queue is idle, and a higher generation on another key does not make a file stale (the counter is per namespace). */
 if ( $sc === 'ns_keys' ) {
     $kl = function () {
         $o = [];
@@ -264,10 +262,7 @@ if ( $sc === 'ns_keys' ) {
     chk( $n3 === 3 && count( $s3 ) === 3 && $s3['/p/3/'] === [ 1 ], 'after the single purge the plugin view still lists all 3 pages once (nothing live is dropped)', "raw=$n3" );
 }
 
-/* ---------------------------------------------------------------------------------------------
- * v4 error-code scenarios: the module's own error answers (not the mock's idea of them) fed to
- * the real plugin. Each scenario reproduces ONE catalog code in a real nginx.
- * ------------------------------------------------------------------------------------------- */
+/* v4 error-code scenarios: real module error responses against the plugin, one error code per scenario. */
 function locks() { return array_keys( nppp_http_purge_state()['locks'] ); }
 function nreqs() { global $T; return count( $T['reqs'] ); }
 function warmv( $path, array $encodings ) { foreach ( $encodings as $ae ) { shell_exec( "curl -s -o /dev/null -H 'Host: example.com' -H 'Accept-Encoding: $ae' http://127.0.0.1:8081$path" ); } }
@@ -342,7 +337,7 @@ if ( $sc === 'deletefail' ) {
 /* 500 scan_failed: a cache directory cannot be read (mode 000, nginx worker is not root: nginx.sh mode scanfail). */
 if ( $sc === 'scanfail' ) {
     warm( 'p', 40 );
-    chk( cnt() > 0, 'precondition: the nobody worker can write the cache (/tmp/npp-cache must be owned by nobody)', 'files=' . cnt() );
+    chk( cnt() > 0, 'precondition: worker (nobody) can write to /tmp/npp-cache', 'files=' . cnt() );
     $d = trim( shell_exec( "find /tmp/npp-cache -mindepth 1 -maxdepth 1 -type d | head -1" ) );
     shell_exec( 'chmod 000 ' . escapeshellarg( $d ) );
     $r = nppp_http_purge_all();
