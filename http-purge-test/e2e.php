@@ -201,7 +201,7 @@ if ( $sc === 'ns_keys' ) {
      * and the real generation helpers (advanced.php; pure functions, loaded by extraction because advanced.php needs WordPress). */
     foreach ( [ 'nppp_key_generation_info', 'nppp_drop_stale_generations', 'nppp_annotate_variant_counts' ] as $fn ) {
         if ( ! function_exists( $fn ) ) {
-            preg_match( '/^function ' . $fn . '\(.*?^}\n/ms', (string) file_get_contents( dirname( __DIR__ ) . '/includes/advanced.php' ), $fm ) or die( "missing $fn\n" );
+            preg_match( '/^function ' . $fn . '\(.*?^}\n/ms', (string) file_get_contents( dirname( __DIR__ ) . '/includes/advanced.php' ), $fm ) or ( print( "FAIL missing $fn\n" ) and exit( 2 ) );
             eval( $fm[0] );
         }
     }
