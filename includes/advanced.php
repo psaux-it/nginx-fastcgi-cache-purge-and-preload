@@ -130,6 +130,69 @@ function nppp_annotate_variant_counts( array &$urls ): void {
     unset( $entry );
 }
 
+/**
+ * Read the generation envelope of a v4 "generation mode" cache key.
+ *
+ * ngx_cache_purge (v4) writes the KEY: line as
+ *   p4:<namespace>:<10-digit epoch>:<16-hex generation>:<logical key>
+ * A cache file is stale when its epoch differs from the live one, or when its
+ * generation is lower than the live generation of that logical key. The live
+ * values exist only in nginx shared memory, so from disk alone one fact is
+ * provable: two files with the SAME namespace, SAME epoch and the SAME logical
+ * key, where one carries a higher generation, are an old/new pair and the
+ * lower one is stale (a file is written with generation <= the live one, and
+ * the live one never decreases). Anything else is left alone: epochs are not
+ * ordered, and generations are per logical key (http/https, mobile and method
+ * variants of one URL are different logical keys).
+ *
+ * @param  string $key_text Text holding the KEY: line (whole file head or the rg KEY: line).
+ * @return array{group:string,gen:string}|null null when the key has no envelope (legacy / non-generation mode).
+ */
+function nppp_key_generation_info( string $key_text ): ?array {
+    if ( strpos( $key_text, 'p4:' ) === false ) {
+        return null;
+    }
+    if ( ! preg_match( '/^KEY:\s+p4:([A-Za-z0-9_-]{1,32}):(\d{10}):([0-9A-Fa-f]{16}):([^\r\n]+)/m', $key_text, $m ) ) {
+        return null;
+    }
+    return [
+        'group' => $m[1] . '|' . $m[2] . '|' . $m[4],
+        'gen'   => strtolower( $m[3] ),
+    ];
+}
+
+/**
+ * Drop files that are provably stale (see nppp_key_generation_info()) so a
+ * stale+live pair of one page is not shown as "Multiple" variants. Genuine Vary
+ * variants share the key and the generation, so they all stay.
+ *
+ * @param array<int,array<string,mixed>> &$urls Entries may carry 'gen_group' and 'gen'.
+ */
+function nppp_drop_stale_generations( array &$urls ): void {
+    $max = [];
+    foreach ( $urls as $entry ) {
+        if ( ! isset( $entry['gen_group'], $entry['gen'] ) ) {
+            continue;
+        }
+        $g = $entry['gen_group'];
+        if ( ! isset( $max[ $g ] ) || strcmp( $entry['gen'], $max[ $g ] ) > 0 ) {
+            $max[ $g ] = $entry['gen'];
+        }
+    }
+    if ( empty( $max ) ) {
+        return;
+    }
+    $kept = [];
+    foreach ( $urls as $entry ) {
+        if ( isset( $entry['gen_group'], $entry['gen'] ) && $entry['gen'] !== $max[ $entry['gen_group'] ] ) {
+            continue;
+        }
+        unset( $entry['gen_group'], $entry['gen'] );
+        $kept[] = $entry;
+    }
+    $urls = $kept;
+}
+
 /** Plugin root */
 function nppp_get_plugin_root_path() {
     return rtrim( dirname( plugin_dir_path( __FILE__ ) ), '/' );
@@ -1235,11 +1298,16 @@ function nppp_extract_cached_urls_rg(
             $fuse_filepath = $scan_filepath;
         }
 
+        // Generation-mode envelope (null for legacy keys)
+        $gen_info = nppp_key_generation_info( $key_line );
+
         // Calculating cache date is expensive with rg
         $urls[] = [
             'file_path'   => $fuse_filepath,
             'url'         => $url_decoded,
             'url_encoded' => $url_encoded,
+            'gen_group'   => $gen_info['group'] ?? null,
+            'gen'         => $gen_info['gen'] ?? null,
             'category'    => nppp_categorize_url( $url_decoded ),
         ];
     }
@@ -1248,7 +1316,8 @@ function nppp_extract_cached_urls_rg(
         return [ 'error' => 'NPPP_EMPTY_CACHE' ];
     }
 
-    // Calculate cache variants
+    // Drop provably stale generation-mode files first, then calculate cache variants
+    nppp_drop_stale_generations( $urls );
     nppp_annotate_variant_counts( $urls );
 
     return $urls;
@@ -1494,12 +1563,17 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                     // Categorize URLs
                     $category = nppp_categorize_url($final_url);
 
+                    // Generation-mode envelope (null for legacy keys)
+                    $gen_info = nppp_key_generation_info($content);
+
                     // Store URL data
                     $urls[] = array(
                         'file_path'   => $file->getPathname(),
                         'url'         => $final_url,
                         'url_encoded' => $final_url_encoded,
                         'category'    => $category,
+                        'gen_group'   => $gen_info['group'] ?? null,
+                        'gen'         => $gen_info['gen'] ?? null,
                     );
                 }
             }
@@ -1517,7 +1591,8 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
         ];
     }
 
-    // Calculate cache variants
+    // Drop provably stale generation-mode files first, then calculate cache variants
+    nppp_drop_stale_generations( $urls );
     nppp_annotate_variant_counts( $urls );
 
     return $urls;
