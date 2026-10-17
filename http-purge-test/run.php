@@ -350,8 +350,58 @@ foreach ( [ 'cache_unavailable', 'key_mismatch' ] as $c ) {
     t_reset(); Q( R( 500, $c ) );
     is_( nppp_http_purge_try_first( $U ), false, "500 $c -> false" );
     is_( locks_keys(), [ 'single' ], "500 $c locks single" );
-    is_( last_ttl(), 3600, "500 $c lock 1 h" );
+    // The transient now also carries the day-long config issue, so check the lock itself.
+    $until = lockstate()['single']['until'] - time();
+    ok( $until > 3590 && $until <= 3600, "500 $c lock 1 h", "-- got $until" );
 }
+
+/* key_mismatch / cache_unavailable: an actionable message, remembered beyond the lock. */
+t_reset(); Q( R( 500, 'key_mismatch' ) );
+nppp_http_purge_try_first( $U );
+ok( notice_has( 'key_mismatch' ) && notice_has( 'fastcgi_cache_key $cache_purge_key;' ) && notice_has( 'fastcgi_cache_purge ZONE_NAME $cache_purge_key;' ), 'key_mismatch single: log line names the fix' );
+ok( all_log_only(), 'key_mismatch notice stays log-only (the settings page shows it)' );
+is_( nppp_http_purge_state()['issue']['single']['code'] ?? '', 'key_mismatch', 'key_mismatch single: issue remembered' );
+ok( strpos( nppp_http_purge_config_notice(), '$cache_purge_key' ) !== false, 'settings-page notice explains key_mismatch' );
+t_reset(); Q( R( 500, 'key_mismatch' ) );
+nppp_http_purge_all();
+ok( notice_has( 'Purge All location' ) && notice_has( 'fastcgi_cache_key $cache_purge_key;' ), 'key_mismatch all: message names the Purge All location' );
+is_( array_keys( nppp_http_purge_state()['issue'] ), [ 'all' ], 'key_mismatch all: issue scoped to all' );
+t_reset(); Q( R( 500, 'cache_unavailable' ) );
+nppp_http_purge_try_first( $U );
+ok( notice_has( 'cache_unavailable' ) && notice_has( 'keys_zone' ), 'cache_unavailable: message names the zone fix' );
+ok( strpos( nppp_http_purge_config_notice(), 'cache_unavailable' ) !== false, 'settings-page notice explains cache_unavailable' );
+
+/* The issue outlives the 1 h lock, a good answer from that scope clears it, other scopes are untouched. */
+t_reset(); Q( R( 500, 'key_mismatch' ) );
+nppp_http_purge_try_first( $U );
+$st = $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ];
+is_( $GLOBALS['T']['ttl'][ NPPP_HTTP_PURGE_BROKEN_KEY ], 86400, 'issue keeps the state for a day' );
+$st['locks']['single']['until'] = time() - 5;                 // the lock expired ...
+$GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ] = $st;
+is_( nppp_http_purge_state()['locks'], [], 'lock expired' );
+ok( nppp_http_purge_config_notice() !== '', '... but the settings notice is still there' );
+Q( R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( $U ), true, 'endpoint fixed -> purged' );
+is_( nppp_http_purge_state()['issue'], [], 'a good answer clears the issue' );
+is_( nppp_http_purge_config_notice(), '', 'settings notice disappears' );
+t_reset(); Q( R( 500, 'key_mismatch' ) );
+nppp_http_purge_all();
+Q( R( 200, 'purged' ) );
+$st = $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ];
+$st['locks'] = []; $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ] = $st;
+nppp_http_purge_try_first( $U );
+is_( array_keys( nppp_http_purge_state()['issue'] ), [ 'all' ], 'single success does not clear the all issue' );
+
+/* An issue older than a day, or an unknown code, is ignored. HTTP Purge off -> no notice. */
+t_reset();
+$GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ] = [ 'issue' => [
+    'single' => [ 'code' => 'key_mismatch', 'at' => time() - 90000 ],
+    'all'    => [ 'code' => '<script>',      'at' => time() ],
+] ];
+is_( nppp_http_purge_state()['issue'], [], 'stale or unknown issue is dropped' );
+t_reset( [ 'nppp_http_purge_enabled' => 'no' ] );
+$GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ] = [ 'issue' => [ 'single' => [ 'code' => 'key_mismatch', 'at' => time() ] ] ];
+is_( nppp_http_purge_config_notice(), '', 'HTTP Purge disabled -> no config notice' );
 t_reset(); Q( R( 200, 'status' ) );
 is_( nppp_http_purge_try_first( $U ), false, 'single bound to status handler -> false' );
 is_( locks_keys(), [ 'single' ], 'status-bound single locks single' );
@@ -469,7 +519,7 @@ is_( locks_keys(), [ 'all', 'single' ], 'two scopes coexist' );
 is_( last_ttl(), 3600, 'transient lives as long as the longest lock' );
 nppp_http_purge_remember_method( 'single', 'PURGE' );
 delete_transient( NPPP_HTTP_PURGE_BROKEN_KEY );
-is_( nppp_http_purge_state(), [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [] ], 'one delete_transient clears locks, learned methods, generation mode and probe state' );
+is_( nppp_http_purge_state(), [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [], 'issue' => [] ], 'one delete_transient clears locks, learned methods, generation mode, probe state and config issues' );
 
 t_reset();
 set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'locks' => [ 'single' => [ 'reason' => 'x', 'until' => time() - 5 ], 'all' => [ 'reason' => 'y', 'until' => time() + 100 ] ], 'methods' => [ 'single' => 'rm -rf', 'all' => 'PURGE' ] ], 3600 );
