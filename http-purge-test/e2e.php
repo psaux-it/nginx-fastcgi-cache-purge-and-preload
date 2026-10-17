@@ -300,6 +300,7 @@ if ( $sc === 'nocache' ) {
     warm( 'p', 5 );
     $r = nppp_http_purge_all();
     chk( $r === false && locks() === [ 'all' ], 'purge_all: 500 cache_unavailable -> false + lock all', var_export( $r, true ) . ' ' . implode( ',', locks() ) );
+    chk( nppp_http_purge_state()['issue']['all']['code'] === 'cache_unavailable' && strpos( nppp_http_purge_config_notice(), 'keys_zone' ) !== false, 'cache_unavailable: the settings page gets an actionable message', nppp_http_purge_config_notice() );
     $n = nreqs(); nppp_http_purge_all();
     chk( nreqs() === $n, 'purge_all: not retried while locked' );
     chk( nppp_http_purge_try_first( 'http://example.com/p/1/' ) === true, 'single purge is unaffected by the all lock' );
@@ -310,6 +311,7 @@ if ( $sc === 'keymismatch' ) {
     warm( 'p', 5 );
     $r = nppp_http_purge_all();
     chk( $r === false && locks() === [ 'all' ], 'purge_all: 500 key_mismatch -> false + lock all', var_export( $r, true ) . ' ' . implode( ',', locks() ) );
+    chk( nppp_http_purge_state()['issue']['all']['code'] === 'key_mismatch' && strpos( nppp_http_purge_config_notice(), 'fastcgi_cache_key $cache_purge_key;' ) !== false, 'key_mismatch: the settings page names the exact fix', nppp_http_purge_config_notice() );
     chk( nppp_http_purge_try_first( 'http://example.com/p/1/' ) === true && xcache( '/p/1/' ) === 'MISS', 'namespace single purge still works (invalidated)' );
 }
 
