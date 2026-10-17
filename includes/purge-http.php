@@ -317,7 +317,7 @@ function nppp_http_purge_extend_time_limit( int $seconds ): void {
  * @return array{locks: array<string,array{reason:string,until:int}>, methods: array<string,string>}
  */
 function nppp_http_purge_state(): array {
-    $state = [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [] ];
+    $state = [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [], 'issue' => [] ];
     $raw   = get_transient( NPPP_HTTP_PURGE_BROKEN_KEY );
 
     if ( ! $raw ) {
@@ -359,6 +359,18 @@ function nppp_http_purge_state(): array {
         }
     }
 
+    // Configuration faults the administrator has to fix. Unlike a lock (1 hour) this is
+    // remembered for a day, so the settings page can still explain WHY HTTP Purge keeps
+    // falling back after the lock expired. A successful purge of that scope clears it.
+    foreach ( (array) ( $raw['issue'] ?? [] ) as $scope => $issue ) {
+        if ( is_array( $issue )
+            && in_array( (string) $scope, [ 'single', 'all' ], true )
+            && in_array( $issue['code'] ?? '', nppp_http_purge_config_codes(), true )
+            && (int) ( $issue['at'] ?? 0 ) > $now - DAY_IN_SECONDS ) {
+            $state['issue'][ (string) $scope ] = [ 'code' => (string) $issue['code'], 'at' => (int) $issue['at'] ];
+        }
+    }
+
     return $state;
 }
 
@@ -374,7 +386,7 @@ function nppp_http_purge_state_save( array $state ): void {
         $state['locks'][ $scope ]['until'] = min( (int) $lock['until'], $now + HOUR_IN_SECONDS );
         $ttl = max( $ttl, $state['locks'][ $scope ]['until'] - $now );
     }
-    if ( ! empty( $state['methods'] ) || ! empty( $state['ns'] ) ) {
+    if ( ! empty( $state['methods'] ) || ! empty( $state['ns'] ) || ! empty( $state['issue'] ) ) {
         $ttl = max( $ttl, DAY_IN_SECONDS );
     }
 
@@ -406,6 +418,84 @@ function nppp_http_purge_arm( string $scope, string $reason, int $ttl ): void {
     $state                    = nppp_http_purge_state();
     $state['locks'][ $scope ] = [ 'reason' => substr( $reason, 0, 32 ), 'until' => time() + max( 1, $ttl ) ];
     nppp_http_purge_state_save( $state );
+}
+
+/**
+ * Module codes that mean "the nginx configuration is wrong" (nothing the plugin can
+ * retry its way out of). They get a dedicated, actionable message.
+ */
+function nppp_http_purge_config_codes(): array {
+    return [ 'key_mismatch', 'cache_unavailable' ];
+}
+
+/**
+ * Remembers a configuration fault for $scope ('single' | 'all') for a day.
+ */
+function nppp_http_purge_issue_set( string $scope, string $code ): void {
+    if ( ! in_array( $scope, [ 'single', 'all' ], true ) || ! in_array( $code, nppp_http_purge_config_codes(), true ) ) {
+        return;
+    }
+    $state                    = nppp_http_purge_state();
+    $state['issue'][ $scope ] = [ 'code' => $code, 'at' => time() ];
+    nppp_http_purge_state_save( $state );
+}
+
+/**
+ * Forgets the configuration fault of $scope once the endpoint answered properly.
+ */
+function nppp_http_purge_issue_clear( string $scope ): void {
+    $state = nppp_http_purge_state();
+    if ( ! isset( $state['issue'][ $scope ] ) ) {
+        return;
+    }
+    unset( $state['issue'][ $scope ] );
+    nppp_http_purge_state_save( $state );
+}
+
+/**
+ * What to change in nginx for a configuration fault. Plain text on purpose: the notice
+ * pipeline runs sanitize_text_field(), which would drop anything in angle brackets.
+ *
+ * @param string $scope 'single' | 'all'
+ * @param string $code  'key_mismatch' | 'cache_unavailable'
+ */
+function nppp_http_purge_config_fix( string $scope, string $code ): string {
+    if ( $code === 'key_mismatch' ) {
+        if ( $scope === 'all' ) {
+            return __( 'ngx_cache_purge generation keys are active (cache_purge_namespace / cache_purge_key), but the cache key of the Purge All location is not $cache_purge_key (key_mismatch). Fix: in the Purge All location bind the same cache_purge_key as in the cached location and set fastcgi_cache_key $cache_purge_key; then reload nginx.', 'fastcgi-cache-purge-and-preload-nginx' );
+        }
+        return __( 'ngx_cache_purge generation keys are active (cache_purge_namespace / cache_purge_key), but the cache key of the single purge location is not $cache_purge_key (key_mismatch). Fix: use exactly $cache_purge_key as the cache key everywhere: fastcgi_cache_key $cache_purge_key; in the cached location and fastcgi_cache_purge ZONE_NAME $cache_purge_key; in the purge location (with the same cache_purge_key binding), then reload nginx.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+    if ( $scope === 'all' ) {
+        return __( 'ngx_cache_purge found no usable cache zone for the Purge All location (cache_unavailable). Fix: set fastcgi_cache ZONE_NAME; in that location, using the keys_zone name from fastcgi_cache_path, then reload nginx.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+    return __( 'ngx_cache_purge found no usable cache zone for the single purge location (cache_unavailable). Fix: name an existing zone (the keys_zone of fastcgi_cache_path) in the fastcgi_cache_purge directive and reload nginx. The nginx error log names the missing zone.', 'fastcgi-cache-purge-and-preload-nginx' );
+}
+
+/**
+ * Persistent explanation for the settings page: why HTTP Purge falls back although
+ * nobody saw an error. '' when there is nothing to fix.
+ */
+function nppp_http_purge_config_notice(): string {
+    if ( ! nppp_http_purge_enabled() ) {
+        return '';
+    }
+    $issues = nppp_http_purge_state()['issue'];
+    $parts  = [];
+    foreach ( [ 'single', 'all' ] as $scope ) {
+        if ( isset( $issues[ $scope ] ) ) {
+            $parts[] = sprintf(
+                /* translators: 1: Single or All, 2: what to fix in nginx */
+                __( 'HTTP PURGE %1$s: %2$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $scope === 'all' ? 'ALL' : 'SINGLE',
+                nppp_http_purge_config_fix( $scope, $issues[ $scope ]['code'] )
+            );
+        }
+    }
+    if ( ! $parts ) {
+        return '';
+    }
+    return implode( ' ', $parts ) . ' ' . __( 'Until fixed, NPP purges through the filesystem (slower).', 'fastcgi-cache-purge-and-preload-nginx' );
 }
 
 /**
@@ -953,6 +1043,7 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout, str
     ];
 
     if ( in_array( $outcome, [ 'purged', 'invalidated', 'no_match', 'legacy_miss', 'accepted' ], true ) ) {
+        nppp_http_purge_issue_clear( $scope );
         nppp_http_purge_remember_method( $scope, $method );
         if ( $method === 'GET' ) {
             nppp_http_purge_probe_mark( $scope, DAY_IN_SECONDS ); // GET works: no probe needed for a while
@@ -1080,10 +1171,11 @@ function nppp_http_purge_report_failure( string $scope, string $url, int $timeou
             break;
 
         case 'config':
+            nppp_http_purge_issue_set( $scope, (string) $r['code'] );
             nppp_display_admin_notice( 'error', sprintf(
-                /* translators: 1: Single or All, 2: purge URL, 3: module code, 4: minutes */
-                __( 'ERROR HTTP PURGE %1$s: ngx_cache_purge reported a configuration problem (%3$s) for %2$s: no usable cache zone, or the cache key does not match the namespace contract. HTTP Purge disabled for %4$d minute(s). Check the Nginx purge directives.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                $label, $shown, $r['code'], $minutes
+                /* translators: 1: Single or All, 2: purge URL, 3: what to fix in nginx (names the module code), 4: minutes */
+                __( 'ERROR HTTP PURGE %1$s: %2$s answered 500. %3$s HTTP Purge is retried in %4$d minute(s); until then the filesystem purge is used.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $label, $shown, nppp_http_purge_config_fix( $scope, (string) $r['code'] ), $minutes
             ), true, false );
             break;
 
