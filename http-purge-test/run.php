@@ -3,8 +3,7 @@
  * WordPress test harness for includes/purge-http.php
  * Usage: php tests/run.php path/to/purge-http.php
  *
- * Every HTTP exchange is scripted, so each classification branch, lock scope and
- * edge case is exercised deterministically. Real nginx runs are in tests/e2e.php.
+ * HTTP responses are scripted, so every branch is deterministic. Real nginx runs are in tests/e2e.php.
  */
 error_reporting( E_ALL );
 define( 'ABSPATH', '/tmp/' );
@@ -160,7 +159,7 @@ Q( R( 200, '', '' ), R( 200, '', '' ) );
 is_( nppp_http_purge_try_first( $U ), false, 'legacy 200 (empty) twice -> false' );
 is_( locks_keys(), [ 'single' ], 'legacy 200 (empty) twice locks single (foreign)' );
 
-/* a page that merely contains the "Key" marker is not a purge: a genuine v2/v3 body echoes the page path */
+/* a "Key" marker alone is not a purge; a real v2/v3 body echoes the page path */
 foreach ( [
     'li Key:'          => '<html><body><ul><li>Key: value</li></ul></body></html>',
     'line Key:'        => "<html><body>\nKey: shortcut Ctrl+K\n</body></html>",
@@ -221,7 +220,7 @@ is_( nppp_http_purge_try_first( $U ), 'miss', 'v4 204 no_match (response_type no
 t_reset();
 Q( R( 204, 'purged' ) );
 is_( nppp_http_purge_try_first( $U ), true, 'v4 204 purged (response_type none) -> true' );
-is_( locks_keys(), [], '204 does NOT lock (old code locked for 1 h)' );
+is_( locks_keys(), [], '204 does not lock' );
 
 foreach ( [
     'percent path'       => 'https://example.com/caf%C3%A9/',
@@ -251,7 +250,7 @@ t_filter( 'nppp_http_purge_trust_miss', fn( $trust, $url, $why ) => true );
 Q( R( 412 ) );
 is_( nppp_http_purge_try_first( 'https://example.com/caf%C3%A9/' ), 'miss', 'trust_miss filter can force trust' );
 
-/* 404 on GET proves nothing (a v3 purge-only location answers a bare 404 to any other method): one PURGE probe follows */
+/* 404 on GET is ambiguous (v3 purge-only locations 404 other methods), so one PURGE probe follows */
 t_reset();
 Q( R( 404 ), R( 404 ) );
 is_( nppp_http_purge_try_first( $U ), false, '404 (also on the PURGE probe) -> false (ambiguous)' );
@@ -546,11 +545,11 @@ is_( nppp_http_purge_all(), true, 'all: v4 invalidated -> true' );
 t_reset(); Q( R( 200, '', $V3_HTML ) );
 is_( nppp_http_purge_all(), true, 'all: v3 200 -> true' );
 t_reset(); Q( R( 204, 'purged' ) );
-is_( nppp_http_purge_all(), true, 'all: v4 204 purged -> true (old code: lock for 1 h)' );
+is_( nppp_http_purge_all(), true, 'all: v4 204 purged -> true' );
 is_( locks_keys(), [], 'all: 204 no lock' );
 
 t_reset(); Q( R( 200, 'status', '{"code":"status"}' ) );
-is_( nppp_http_purge_all(), false, 'all: purge_all pointed at queue status -> false (old code: true!)' );
+is_( nppp_http_purge_all(), false, 'all: purge_all pointed at queue status -> false' );
 is_( locks_keys(), [ 'all' ], 'all: status endpoint locks all' );
 Q( R( 200, 'purged' ) );
 is_( nppp_http_purge_try_first( $U ), true, 'all: wrong-endpoint lock does not block single' );
@@ -658,10 +657,7 @@ Q( R( 202, 'accepted' ) );
 is_( nppp_http_purge_all(), false, 'queue verify: enabled without URL -> inert' );
 is_( nreq(), 1, 'queue verify: inert without URL' );
 
-
-/* ============================================================================
- * v3: 202 completion proof, 200 cross-check, host/scheme miss trust
- * ========================================================================= */
+/* v3: 202 completion proof, 200 cross-check, host/scheme miss trust */
 function mkcache( int $n = 3 ): string {
     $d = sys_get_temp_dir() . '/npp-t-' . getmypid() . '-' . mt_rand();
     @mkdir( "$d/1/ab", 0777, true ); @mkdir( "$d/f/00", 0777, true ); @mkdir( "$d/tmp", 0777, true );
@@ -810,11 +806,8 @@ is_( nppp_http_purge_try_first( 'http://example.com/a/' ), false, 'scheme differ
 t_reset(); Q( R( 200, 'purged' ) );
 is_( nppp_http_purge_try_first( 'https://www.example.com/a/' ), false, 'www URL: a "purged" for the home host key is never claimed for the www page' );
 
-/* ============================================================================
- * v4: "purged" on a decode-ambiguous URL, Purge All response timeout
- * ========================================================================= */
-
-/* purged / invalidated on an ambiguous URL is not a success: nginx decoded $1 and may have purged another entry */
+/* v4: "purged" on decode-ambiguous URLs, Purge All response timeout */
+/* purged/invalidated on an ambiguous URL is not trusted: nginx decodes $1 and may have purged a different entry */
 foreach ( [
     'percent path'       => 'https://example.com/caf%C3%A9/',
     'lowercase percent'  => 'https://example.com/%d0%bc%d0%b8%d1%80/',
@@ -832,7 +825,7 @@ foreach ( [
         is_( nppp_http_purge_try_first( $url ), false, "purged on ambiguous url ($label, $st $cd) -> false so the real entry is purged on disk" );
         is_( locks_keys(), [], "ambiguous purged ($label, $st $cd) no lock" );
         if ( $cd === 'invalidated' ) {
-            // generation mode: the disk purge cannot see generated keys, so the plugin says so instead of staying silent
+            // generation mode: disk purge cannot match generated keys, so a notice is logged
             ok( notice_has( 'generation mode is active' ), "ambiguous invalidated ($label) reports that the disk purge cannot help" );
             is_( count( $GLOBALS['T']['notices'] ), 1, "ambiguous invalidated ($label) exactly one notice" );
             is_( nppp_http_purge_state()['ns'], [ 'single' => true ], "ambiguous invalidated ($label) generation mode remembered" );
