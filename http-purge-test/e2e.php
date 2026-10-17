@@ -31,6 +31,15 @@ function wp_remote_retrieve_response_code( $r ) { return $r['c']; } function wp_
 function wp_remote_retrieve_header( $r, $n ) { return $r['h'][ strtolower( $n ) ] ?? ''; }
 require $argv[2] ?? dirname( __DIR__ ) . '/includes/purge-http.php';
 
+/* Plugin includes/ dir for the helper files ns_keys loads (advanced.php, preload-defaults.php). Inside the plugin
+ * checkout it is ../includes; in the Docker lab the harness lives in /opt/npp-http-purge-test, so fall back to the
+ * deployed plugin under WP_PATH. NPP_INCLUDES_DIR overrides both. */
+function npp_includes_dir() {
+    $c = [ getenv( 'NPP_INCLUDES_DIR' ) ?: '', dirname( __DIR__ ) . '/includes', rtrim( getenv( 'WP_PATH' ) ?: '/var/www/html', '/' ) . '/wp-content/plugins/fastcgi-cache-purge-and-preload-nginx/includes' ];
+    foreach ( $c as $d ) { if ( $d !== '' && is_file( $d . '/advanced.php' ) && is_file( $d . '/preload-defaults.php' ) ) { return $d; } }
+    fwrite( STDERR, "FAIL cannot find plugin includes/ (tried: " . implode( ', ', array_filter( $c ) ) . "); set NPP_INCLUDES_DIR\n" ); exit( 2 );
+}
+
 function cnt() { return (int) trim( shell_exec( "find /tmp/npp-cache -type f -regextype posix-extended -regex '.*/[0-9a-f]{32}' | wc -l" ) ); }
 function warm( $prefix, $n ) { shell_exec( "seq 1 $n | xargs -P 8 -I{} curl -s -o /dev/null -H 'Host: example.com' http://127.0.0.1:8081/$prefix/{}/" ); }
 function xcache( $path ) { return trim( shell_exec( "curl -s -D- -o /dev/null -H 'Host: example.com' http://127.0.0.1:8081$path | grep -i '^x-cache' | cut -d' ' -f2" ) ); }
@@ -201,11 +210,11 @@ if ( $sc === 'ns_keys' ) {
      * and the real generation helpers (advanced.php; pure functions, loaded by extraction because advanced.php needs WordPress). */
     foreach ( [ 'nppp_key_generation_info', 'nppp_drop_stale_generations', 'nppp_annotate_variant_counts' ] as $fn ) {
         if ( ! function_exists( $fn ) ) {
-            preg_match( '/^function ' . $fn . '\(.*?^}\n/ms', (string) file_get_contents( dirname( __DIR__ ) . '/includes/advanced.php' ), $fm ) or ( print( "FAIL missing $fn\n" ) and exit( 2 ) );
+            preg_match( '/^function ' . $fn . '\(.*?^}\n/ms', (string) file_get_contents( npp_includes_dir() . '/advanced.php' ), $fm ) or ( print( "FAIL missing $fn\n" ) and exit( 2 ) );
             eval( $fm[0] );
         }
     }
-    $rx   = ( include dirname( __DIR__ ) . '/includes/preload-defaults.php' )['cache_key_regex'];
+    $rx   = ( include npp_includes_dir() . '/preload-defaults.php' )['cache_key_regex'];
     $scan = function () use ( $rx ) {            // returns [ rows after drop+annotate, raw row count, rows that failed regex/URL validation ]
         $urls = []; $bad = 0;
         foreach ( explode( "\n", trim( (string) shell_exec( "grep -a -r -m1 '^KEY:' /tmp/npp-cache" ) ) ) as $raw ) {
