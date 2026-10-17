@@ -132,6 +132,38 @@ if ( strpos( $sc, 'race' ) === 0 && strpos( $sc, 'race_timeout' ) !== 0 && strpo
     if ( $sc === 'race_nostatus' ) { chk( $r === true, 'best effort via directory -> true', notes() ); }
 }
 
+/* Slow background queue (mode async_slow, the walk takes ~35-40 s, far longer than the plugin's wait budget): purge_all() gives up
+ * waiting and returns false, purge.php runs the filesystem purge and the preload starts while nginx's queue is STILL running.
+ * The late sweep of that queue must not delete the preloaded pages. SLOWQ_WAIT = the plugin's wait budget in seconds (default 5,
+ * the plugin caps it at 40; a value above the walk time makes purge_all() prove completion and return true instead). */
+if ( $sc === 'slowq' ) {
+    $T['options']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = 'purge_status';
+    $T['filters']['nppp_http_purge_queue_wait'] = fn() => max( 1, (int) ( getenv( 'SLOWQ_WAIT' ) ?: 5 ) );
+    $q = function () { $j = json_decode( (string) shell_exec( 'curl -s http://127.0.0.1:8081/purge_status' ), true ); return $j['cache'] ?? null; };
+
+    warm( 'p', 600 ); sleep( 2 );
+    $before = cnt();
+    chk( $before === 600 && $q() !== null, 'slowq: 600 pages cached, queue status endpoint answers', "cached=$before" );
+    $t = microtime( true ); $r = nppp_http_purge_all(); $waited = round( microtime( true ) - $t, 1 );
+    $left = cnt();
+    echo "  cached=$before  purge_all()=" . var_export( $r, true ) . " waited={$waited}s files_after_return=$left  fs_fallback=" . ( $r === false ? 'yes' : 'no' ) . "\n";
+    chk( $r === false || $left === 0, 'slowq: purge_all() never claims success while old files are still cached', "r=" . var_export( $r, true ) . " left=$left" );
+    if ( $r === false ) { shell_exec( 'find /tmp/npp-cache -mindepth 1 -delete' ); }    // what nppp_wp_purge() does
+
+    warm( 'warm', 400 );                                                                // preload starts right away
+    $f0 = cnt(); $min = $f0; $trace = [ $f0 ]; $idle = 0; $t1 = microtime( true );
+    while ( microtime( true ) - $t1 < 90 && $idle < 2 ) {                               // until nginx's queue is really finished
+        $c = cnt(); if ( $c < $min ) { $min = $c; } if ( $c !== end( $trace ) ) { $trace[] = $c; }
+        $s = $q(); $idle = ( $s && $s['pending']['total'] === 0 && $s['active'] === 0 ) ? $idle + 1 : 0;
+        usleep( 200000 );
+    }
+    sleep( 2 ); $f1 = cnt(); if ( $f1 < $min ) { $min = $f1; }
+    $hits = 0; for ( $i = 1; $i <= 20; $i++ ) { if ( xcache( "/warm/$i/" ) === 'HIT' ) $hits++; }
+    echo "  preload warmed: files=$f0 -> queue idle after " . round( microtime( true ) - $t1, 1 ) . "s files=$f1 (min $min), HIT on first 20 pages: $hits/20  trace=" . implode( '>', array_slice( $trace, 0, 12 ) ) . "\n";
+    chk( $idle >= 2, 'slowq: nginx queue went idle within 90 s', "idle=$idle" );
+    chk( $min === 400 && $f1 === 400 && $hits === 20, 'slowq: after purge_all() returns the preload is NOT deleted by the still-running nginx queue (400/400 kept)', "files=$f1 min=$min hits=$hits notes=" . notes() );
+}
+
 /* nginx decodes $1: purging /p/%41/ deletes /p/A/ and answers 200 while the real /p/%41/ entry stays cached. */
 if ( $sc === 'ambig' ) {
     shell_exec( "curl -s -o /dev/null -H 'Host: example.com' http://127.0.0.1:8081/p/A/; curl -s -o /dev/null -H 'Host: example.com' http://127.0.0.1:8081/p/%41/" );
