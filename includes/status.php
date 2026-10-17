@@ -734,6 +734,7 @@ function nppp_get_in_cache_page_count() {
 
         $urls_count   = 0;
         $regex_tested = false;
+        $gen_seen     = []; // generation mode: group => [ highest generation, files at it ]
 
         foreach ( $key_out as $raw_line ) {
             $raw_line = trim( $raw_line );
@@ -760,7 +761,19 @@ function nppp_get_in_cache_page_count() {
                 if ( ! preg_match( $regex, $key_line ) ) { continue; }
             }
 
-            $urls_count++;
+            // Generation mode: only files at the highest generation of their key count.
+            $gen_info = nppp_key_generation_info( $key_line );
+            if ( $gen_info === null ) {
+                $urls_count++;
+            } elseif ( ! isset( $gen_seen[ $gen_info['group'] ] ) || strcmp( $gen_info['gen'], $gen_seen[ $gen_info['group'] ][0] ) > 0 ) {
+                $gen_seen[ $gen_info['group'] ] = [ $gen_info['gen'], 1 ];
+            } elseif ( $gen_info['gen'] === $gen_seen[ $gen_info['group'] ][0] ) {
+                $gen_seen[ $gen_info['group'] ][1]++;
+            }
+        }
+
+        foreach ( $gen_seen as $nppp_seen ) {
+            $urls_count += $nppp_seen[1];
         }
 
         return $urls_count;
@@ -770,6 +783,7 @@ function nppp_get_in_cache_page_count() {
     $head_bytes_primary  = (int) apply_filters( 'nppp_locate_head_bytes', 4096 );
     $head_bytes_fallback = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
     $urls_count          = 0;
+    $gen_seen            = []; // generation mode: group => [ highest generation, files at it ]
 
     try {
         $cache_iterator = new RecursiveIteratorIterator(
@@ -832,12 +846,24 @@ function nppp_get_in_cache_page_count() {
 
             // Extract URLs using regex
             if (preg_match($regex, $content, $matches)) {
-                $urls_count++;
+                // Generation mode: only files at the highest generation of their key count.
+                $gen_info = nppp_key_generation_info($content);
+                if ($gen_info === null) {
+                    $urls_count++;
+                } elseif (!isset($gen_seen[$gen_info['group']]) || strcmp($gen_info['gen'], $gen_seen[$gen_info['group']][0]) > 0) {
+                    $gen_seen[$gen_info['group']] = [$gen_info['gen'], 1];
+                } elseif ($gen_info['gen'] === $gen_seen[$gen_info['group']][0]) {
+                    $gen_seen[$gen_info['group']][1]++;
+                }
             }
         }
     } catch (Exception $e) {
         // Return 'Undetermined' if a permission issue occurs
         return 'Undetermined';
+    }
+
+    foreach ($gen_seen as $nppp_seen) {
+        $urls_count += $nppp_seen[1];
     }
 
     // Return the count of URLs, if no URLs found, return 0
