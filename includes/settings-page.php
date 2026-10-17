@@ -44,6 +44,15 @@ function nppp_nginx_cache_settings_page() {
         nppp_display_admin_notice($message_type, $status_message, false, true);
     }
 
+    // HTTP Purge falls back to the filesystem silently; a wrong nginx cache key or zone
+    // never fixes itself, so keep telling the administrator what to change.
+    if (function_exists('nppp_http_purge_config_notice')) {
+        $nppp_http_cfg_notice = nppp_http_purge_config_notice();
+        if ($nppp_http_cfg_notice !== '') {
+            nppp_display_admin_notice('error', $nppp_http_cfg_notice, false, true);
+        }
+    }
+
     ?>
     <div id="nppp-admin" class="wrap">
         <div id="nppp-loader-overlay" aria-live="assertive" aria-busy="true">
