@@ -178,13 +178,16 @@ function nppp_spawn_preload_watcher( int $wget_pid, string $token ): bool {
     }
 
     // Build the watchdog
+    // The wait loop also ends when the preload PID is a zombie (State: Z): wget is
+    // already dead but not reaped, and its /proc/<pid> directory would otherwise
+    // keep the loop alive forever.
     $watchdog = sprintf(
-        'echo $$ > %s; while [ -d /proc/%d ]; do sleep 3; done; '
+        'echo $$ > %1$s; while [ -d /proc/%2$d ] && ! grep -q "^State:[[:space:]]*Z" /proc/%2$d/status 2>/dev/null; do sleep 3; done; '
         . 'wget -q -O /dev/null --no-check-certificate '
         . '--no-config --no-cookies --prefer-family=IPv4 '
         . '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 '
         . '--tries=2 --max-redirect=2 '
-        . '--post-data %s %s',
+        . '--post-data %3$s %4$s',
         escapeshellarg( $watcher_pid_file ),
         $wget_pid,
         escapeshellarg( $post_data ),
