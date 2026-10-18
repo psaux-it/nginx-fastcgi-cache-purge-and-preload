@@ -687,6 +687,31 @@ for ( $i = 0; $i < 30; $i++ ) { Q( S( 3, 1 ) ); }
 $t0 = microtime( true );
 is_( nppp_http_purge_all(), false, 'queue verify: never drains -> false after budget' );
 ok( microtime( true ) - $t0 < 3.5, 'queue verify: bounded wait' );
+
+/* deferring caller ($pending passed): a queue that is verifiably still working is reported, not raced */
+t_reset(); verify_on( 1 );
+Q( S( 0, 0 ), R( 202, 'accepted' ) );
+for ( $i = 0; $i < 30; $i++ ) { Q( S( 3, 1 ) ); }
+$pend = [ 'untouched' ];
+is_( nppp_http_purge_all( $pend ), false, 'pending: still busy after budget -> false' );
+ok( is_array( $pend ) && $pend['status_url'] === 'http://127.0.0.1/purge_status' && $pend['host'] === 'example.com' && $pend['since'] > 0, 'pending: status url, Host and start time handed to the caller' );
+ok( notice_has( 'cannot race the queue' ) && ! notice_has( 'Falling back to direct filesystem purge' ), 'pending: notice says the filesystem purge is skipped' );
+is_( locks_keys(), [], 'pending: no lock armed' );
+t_reset(); verify_on();
+Q( S( 0, 0 ), R( 202, 'accepted' ), S( 1, 0 ), S( 0, 0 ), S( 0, 0 ) );
+$pend = [ 'untouched' ];
+is_( nppp_http_purge_all( $pend ), true, 'pending: queue drains inside the budget -> true' );
+is_( $pend, null, 'pending: nothing pending after a proven purge' );
+t_reset(); verify_on();
+Q( S( 0, 0 ), R( 202, 'accepted' ), S( 0, 0 ), S( 0, 0, 1 ) );
+$pend = [ 'untouched' ];
+is_( nppp_http_purge_all( $pend ), false, 'pending: cleanup errors -> false' );
+is_( $pend, null, 'pending: errors are NOT deferred (the filesystem purge finishes the job)' );
+t_reset(); verify_on();
+Q( S( 0, 0 ), R( 202, 'accepted' ), E( 'cURL error 7' ) );
+$pend = [ 'untouched' ];
+is_( nppp_http_purge_all( $pend ), false, 'pending: status endpoint dies -> false' );
+is_( $pend, null, 'pending: a dead status endpoint is NOT deferred (nothing to gate on)' );
 t_reset(); verify_on();
 Q( S( 0, 0 ), R( 202, 'accepted' ), E( 'cURL error 7' ) );
 is_( nppp_http_purge_all(), false, 'queue verify: status endpoint dies -> false' );
@@ -958,6 +983,34 @@ is_( nppp_http_purge_try_first( $U ), false, 'single timeout -> false, no direct
 ok( microtime( true ) - $t0 < 0.5, 'single timeout: no wait' );
 ok( notice_has( 'timed out after 8 second' ), 'single timeout notice unchanged' );
 rmcache( $D );
+
+/* ------------------------------------------------------------------ preload gate */
+t_reset(); nppp_http_purge_gate_state( 'clear' );
+$plain = "wget X > '/tmp/l.log' 2>&1 < /dev/null & echo \$!";
+is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'gate: no pending purge -> byte-identical to the command NPP always spawned' );
+is_( nppp_http_purge_gate_used(), false, 'gate: not used without a pending purge' );
+
+$pp = [ 'status_url' => 'http://127.0.0.1:8081/purge_status', 'host' => 'example.com:8081', 'armed_at' => time() ];
+nppp_http_purge_gate_arm( $pp );
+$g = nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' );
+ok( strpos( $g, "( trap '' HUP; " ) === 0 && substr( $g, -strlen( " exec wget X ) > '/tmp/l.log' 2>&1 < /dev/null & echo \$!" ) ) === " exec wget X ) > '/tmp/l.log' 2>&1 < /dev/null & echo \$!", 'gate: armed -> ( trap; <poll>; exec <crawl> ) with the same redirections and PID echo' );
+ok( strpos( $g, "'http://127.0.0.1:8081/purge_status'" ) !== false && strpos( $g, "'Host: example.com:8081'" ) !== false && strpos( $g, 'use_proxy=no' ) !== false, 'gate: polls the status URL with the Host header and no proxy' );
+is_( nppp_http_purge_gate_used(), true, 'gate: reports that it gated the crawl' );
+is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'gate: the hand-off is consumed once (the next spawn is not gated)' );
+
+nppp_http_purge_gate_arm( [ 'status_url' => 'http://127.0.0.1:8081/purge_status', 'host' => 'h', 'armed_at' => time() - 400 ] );
+is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'gate: a stale hand-off (> 300 s) never gates an unrelated crawl' );
+nppp_http_purge_gate_arm( [ 'status_url' => '', 'host' => 'h', 'armed_at' => time() ] );
+is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'gate: no status URL -> not gated' );
+
+t_reset(); t_filter( 'nppp_http_purge_gate_max_wait', fn() => 999999 );
+ok( strpos( nppp_http_purge_gate_snippet( $pp ), '+ 7200 ' ) !== false, 'gate: maximum wait is capped at 7200 s' );
+t_reset(); t_filter( 'nppp_http_purge_gate_max_wait', fn() => 1 );
+ok( strpos( nppp_http_purge_gate_snippet( $pp ), '+ 30 ' ) !== false, 'gate: maximum wait has a 30 s floor' );
+t_reset(); ok( strpos( nppp_http_purge_gate_snippet( $pp ), '+ 900 ' ) !== false, 'gate: default maximum wait is 900 s' );
+$sn = nppp_http_purge_gate_snippet( $pp ); $rc = -1; exec( 'sh -n -c ' . escapeshellarg( $sn ) . ' 2>&1', $o, $rc );
+is_( $rc, 0, 'gate: the generated shell snippet is valid POSIX sh' );
+nppp_http_purge_gate_state( 'clear' );
 
 /* ------------------------------------------------------------------ summary */
 echo "\n$PASS passed, $FAIL failed\n";
