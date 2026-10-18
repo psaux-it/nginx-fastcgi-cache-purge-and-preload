@@ -6,8 +6,8 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 PLUGIN=$(readlink -f "${1:?usage: matrix.sh path/to/purge-http.php [scenarios]}"); shift
 NG=${NG:-${NGROOT:-$HERE/ng}/nginx-run}
-declare -A MODE=( [sync]=sync [ambig]=sync [ns]=ns [none]=none [wrongzone]=wrongzone [single202]=single202 [legacy_off]=legacy_off [race_timeout]=async [race_invalidated]=ns_slow [race_invalidated_single]=ns_slow [ns_keys]=ns_slow [v25]=v25 [race]=async [race_nostatus]=async_nostatus [race_off]=async [slowq]=async_slow [denied]=denied [method405]=method405 [nocache]=nocache [keymismatch]=keymismatch [wrongep]=wrongep [deletefail]=sync [scanfail]=scanfail [vary]=vary [vary_off]=vary_off [badsel]=vary )
-ORDER=(sync ambig ns none wrongzone single202 legacy_off race_timeout race_invalidated race_invalidated_single ns_keys race race_nostatus race_off slowq denied method405 nocache keymismatch wrongep deletefail scanfail vary vary_off badsel)
+declare -A MODE=( [sync]=sync [ambig]=sync [ns]=ns [none]=none [wrongzone]=wrongzone [single202]=single202 [legacy_off]=legacy_off [race_timeout]=async [race_invalidated]=ns_slow [race_invalidated_single]=ns_slow [ns_keys]=ns_slow [v25]=v25 [race]=async [race_nostatus]=async_nostatus [race_off]=async [slowq]=async_slow [slowq_marker]=async_slow [denied]=denied [method405]=method405 [nocache]=nocache [keymismatch]=keymismatch [wrongep]=wrongep [deletefail]=sync [scanfail]=scanfail [vary]=vary [vary_off]=vary_off [badsel]=vary )
+ORDER=(sync ambig ns none wrongzone single202 legacy_off race_timeout race_invalidated race_invalidated_single ns_keys race race_nostatus race_off slowq slowq_marker denied method405 nocache keymismatch wrongep deletefail scanfail vary vary_off badsel)
 SC=("$@"); [ ${#SC[@]} -eq 0 ] && SC=("${ORDER[@]}")
 for p in $(pgrep -f "python3 .*delayproxy"); do kill $p 2>/dev/null; done
 (DELAY=${DELAY:-3} setsid nohup python3 "$HERE/delayproxy.py" >/dev/null 2>&1 < /dev/null &)
