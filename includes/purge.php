@@ -34,12 +34,13 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
     if ($wp_filesystem->is_dir($nginx_cache_path)) {
         // HTTP fast-path: delegate the cache walk to Nginx via the dedicated
         // Purge All endpoint. Returns false (falls through below) when HTTP
-        // Purge is OFF, the endpoint is unavailable, or Nginx reported 202
-        // (background queue) — see nppp_http_purge_all() for why a 202 response
-        // is not architecturally suitable for NPP yet, forcing an immediate
-        // fallback to nppp_wp_purge.
-        // PR: https://github.com/nginx-modules/ngx_cache_purge/pull/67
-        if ( function_exists( 'nppp_http_purge_all' ) && nppp_http_purge_all() ) {
+        // Purge is OFF, the endpoint is unavailable, or a 202 (background queue)
+        // could not be proven finished: nppp_http_purge_all() waits for the queue
+        // first. A queue that is verifiably still working returns status 7 below
+        // (no filesystem purge, preload gated) instead of falling through.
+       // PR: https://github.com/nginx-modules/ngx_cache_purge/pull/67
+        $nppp_http_pending = null;
+        if ( function_exists( 'nppp_http_purge_all' ) && nppp_http_purge_all( $nppp_http_pending ) ) {
             update_option( 'nppp_last_known_hits',      0,      false );
             update_option( 'nppp_last_hits_scanned_at', time(), false );
             nppp_display_admin_notice(
@@ -49,6 +50,14 @@ function nppp_purge_helper($nginx_cache_path, $tmp_path) {
                 false
             );
             return 0;
+        }
+
+        // 202 whose nginx queue is still working after the wait budget: no filesystem purge
+        // (it would only race the queue) and no immediate preload (the late walk would delete
+        // the fresh pages). The caller's preload spawn is gated on the queue status instead.
+        if ( is_array( $nppp_http_pending ) && function_exists( 'nppp_http_purge_gate_arm' ) ) {
+            nppp_http_purge_gate_arm( $nppp_http_pending );
+            return 7;
         }
 
         // Fallback filesystem purge.
@@ -1983,6 +1992,14 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                         $message_content = __( 'SUCCESS: The ongoing Nginx cache preloading process has been halted. All Nginx cache has been purged successfully.', 'fastcgi-cache-purge-and-preload-nginx' );
                     }
                     break;
+                case 7:
+                    // nginx's background queue is still deleting. Nothing is purged by us and no
+                    // preload starts yet; with auto preload on, the spawn notice explains the wait.
+                    if (!$auto_preload) {
+                        $message_type = 'info';
+                        $message_content = __( 'INFO: Purge All was accepted by nginx and its background queue is still deleting the cache. No filesystem purge was run, so it cannot race the queue. The cache is empty once the queue finishes.', 'fastcgi-cache-purge-and-preload-nginx' );
+                    }
+                    break;
                 case 1:
                     $message_type = 'error';
                     $message_content = __( 'ERROR PERMISSION: The ongoing Nginx cache preloading process was halted, but Nginx cache purge failed due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' );
@@ -2039,6 +2056,14 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                             $message_type = 'success';
                             $message_content = __( 'SUCCESS: All Nginx cache purged successfully.', 'fastcgi-cache-purge-and-preload-nginx' );
                         }
+                    }
+                    break;
+                case 7:
+                    // nginx's background queue is still deleting. Nothing is purged by us and no
+                    // preload starts yet; with auto preload on, the spawn notice explains the wait.
+                    if (!$auto_preload) {
+                        $message_type = 'info';
+                        $message_content = __( 'INFO: Purge All was accepted by nginx and its background queue is still deleting the cache. No filesystem purge was run, so it cannot race the queue. The cache is empty once the queue finishes.', 'fastcgi-cache-purge-and-preload-nginx' );
                     }
                     break;
                 case 1:
@@ -2105,6 +2130,14 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
                         $message_type = 'success';
                         $message_content = __( 'SUCCESS: All Nginx cache purged successfully.', 'fastcgi-cache-purge-and-preload-nginx' );
                     }
+                }
+                break;
+            case 7:
+                // nginx's background queue is still deleting. Nothing is purged by us and no
+                // preload starts yet; with auto preload on, the spawn notice explains the wait.
+                if (!$auto_preload) {
+                    $message_type = 'info';
+                    $message_content = __( 'INFO: Purge All was accepted by nginx and its background queue is still deleting the cache. No filesystem purge was run, so it cannot race the queue. The cache is empty once the queue finishes.', 'fastcgi-cache-purge-and-preload-nginx' );
                 }
                 break;
             case 1:
