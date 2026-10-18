@@ -508,7 +508,8 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
         }
 
         // Handle different status codes
-        if ($status === 0 || $status === 2) {
+        // 7 = nginx's background purge queue is still working; the crawl below is gated on it.
+        if ($status === 0 || $status === 2 || $status === 7) {
             // Create PID file
             if (!$wp_filesystem->exists($PIDFILE)) {
                 if (!nppp_perform_file_operation($PIDFILE, 'create')) {
@@ -646,8 +647,14 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
                 '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
                 '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
                 '-- ' .
-                escapeshellarg($fdomain) . ' ' .
-                '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
+                escapeshellarg($fdomain);
+
+            // Normally "<crawl> > log 2>&1 < /dev/null & echo $!". Behind a Purge All whose nginx
+            // queue is still deleting, the crawl waits in the same background process until the
+            // queue is idle (see nppp_http_purge_gate_command()), so it cannot be swept.
+            $command = function_exists('nppp_http_purge_gate_command')
+                ? nppp_http_purge_gate_command($command, $log_path)
+                : $command . ' > ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
 
             // Flush Redis cache right before the crawl starts.
             if ( ! $preload_mobile ) {
@@ -705,6 +712,11 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
 
                     shell_exec($command);
                 }
+            }
+
+            // Purge All is still finishing in nginx's background queue: say so, the crawl is gated.
+            if ( function_exists('nppp_http_purge_gate_used') && nppp_http_purge_gate_used() ) {
+                nppp_display_admin_notice('info', __( 'INFO: Nginx is still deleting the cache in its background purge queue. The preload is queued and starts automatically when the queue is idle, so it cannot be swept by the late purge.', 'fastcgi-cache-purge-and-preload-nginx' ));
             }
 
             // Define a default success message
@@ -894,8 +906,12 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
             '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
             '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
             '-- ' .
-            escapeshellarg($fdomain) . ' ' .
-            '> ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
+            escapeshellarg($fdomain);
+
+        // Same gate as above: held back behind a still-running nginx purge queue.
+        $command = function_exists('nppp_http_purge_gate_command')
+            ? nppp_http_purge_gate_command($command, $log_path)
+            : $command . ' > ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
 
         // We are ready to call main command
         $output = shell_exec($command);
@@ -951,7 +967,10 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
         }
 
         // Display the deferred message as admin notice
-        if (is_bool($nppp_is_rest_api) && $nppp_is_rest_api) {
+        if ( function_exists('nppp_http_purge_gate_used') && nppp_http_purge_gate_used() ) {
+            // Purge All is still finishing in nginx's background queue; the crawl is gated on it.
+            nppp_display_admin_notice('info', __( 'INFO: Purge All was accepted by nginx and its background queue is still deleting the cache. Auto Preload is queued and starts automatically when the queue is idle. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+        } elseif (is_bool($nppp_is_rest_api) && $nppp_is_rest_api) {
             if (!$preload_mobile) {
                 nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache purged successfully. Auto preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
             } else {
