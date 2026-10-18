@@ -49,6 +49,13 @@
  *            this is only returned AFTER waiting (see nppp_http_purge_all()), so the
  *            sweep and the preload that follow do not start while nginx is still
  *            deleting.
+ *            A caller that passes the optional by-reference $pending argument gets one
+ *            more outcome: a 202 whose queue is verifiably still working after the wait
+ *            budget returns false with $pending filled instead. The caller must then
+ *            NOT run the filesystem purge (nginx is already deleting; a second sweep
+ *            only races it) and must hold the preload back until the queue is idle:
+ *            nppp_http_purge_gate_command() does that inside the spawned shell, so the
+ *            user's request is never blocked for the long tail.
  *
  * -------------------------------------------------------------------------------
  * What changed versus the v3.0.3-era implementation
@@ -1316,12 +1323,14 @@ function nppp_http_purge_queue_snapshot( string $status_url ): ?array {
  * @param int        $since      unix second at which the purge request was sent
  * @param string     $status_url '' when none
  * @param array|null $baseline   snapshot taken before the purge request
- * @param float      $budget     seconds
- * @return string 'proven' | 'drained' | 'errors' | 'timeout' | 'blind'
+* @param float      $budget     seconds
+ * @return string 'proven' | 'drained' | 'errors' | 'queued' | 'timeout' | 'blind'
  *   proven  queue idle twice, no new cleanup errors
  *   drained best effort: no old file left and the grace period passed
  *   errors  queue idle but cleanup errors/exhausted retries rose
- *   timeout still busy / old files still there after the budget
+ *   queued  budget over, the status endpoint still answers and the queue is still
+ *           busy: nginx is verifiably working, completion can be awaited by status
+ *   timeout budget over, old files still there (directory mode)
  *   blind   no status endpoint and the cache directory cannot be inspected
  */
 function nppp_http_purge_await_background( int $since, string $status_url, ?array $baseline, float $budget ): string {
@@ -1364,9 +1373,126 @@ function nppp_http_purge_await_background( int $since, string $status_url, ?arra
         }
 
         if ( microtime( true ) >= $deadline ) {
-            return 'timeout';
+            return $use_status ? 'queued' : 'timeout';
         }
     }
+}
+
+/* ============================================================================
+ * 6b. Preload gate: hold the crawl back until nginx's queue is idle
+ * ========================================================================= */
+
+/**
+ * Request-scoped hand-off between a Purge All that left a live background queue
+ * behind and the preload spawn that follows it in the same request.
+ *
+ *   arm   remember the pending purge (nppp_http_purge_all() -> purge helper)
+ *   take  hand it to the spawn once (marks the gate as used)
+ *   used  did this request gate a crawl? (the success notices differ)
+ *   clear forget everything
+ *
+ * @param string     $op
+ * @param array|null $pending
+ * @return array|bool|null
+ */
+function nppp_http_purge_gate_state( string $op, ?array $pending = null ) {
+    static $armed = null;
+    static $used  = false;
+
+    switch ( $op ) {
+        case 'arm':
+            $armed = $pending;
+            $used  = false;
+            return null;
+        case 'take':
+            $p     = $armed;
+            $armed = null;
+            // A stale hand-off (long-running CLI process) must not gate an unrelated crawl.
+            if ( $p === null || ( time() - (int) ( $p['armed_at'] ?? 0 ) ) > 300 ) {
+                return null;
+            }
+            $used = true;
+            return $p;
+        case 'used':
+            return $used;
+        case 'clear':
+        default:
+            $armed = null;
+            $used  = false;
+            return null;
+    }
+}
+
+function nppp_http_purge_gate_arm( array $pending ): void {
+    nppp_http_purge_gate_state( 'arm', $pending );
+}
+
+/** True when the crawl spawned by this request was held back behind a still-running purge queue. */
+function nppp_http_purge_gate_used(): bool {
+    return (bool) nppp_http_purge_gate_state( 'used' );
+}
+
+/**
+ * Shell snippet that blocks until the nginx purge queue is idle twice in a row.
+ *
+ * Runs as the PHP user in front of the crawl (safexec only ever executes wget, so
+ * this cannot live inside it). Fail-open on purpose: an unreachable status endpoint
+ * (5 failed polls) or the maximum wait (default 900 s) lets the crawl start exactly
+ * as it did before this gate existed. Nothing is written to the crawl log, because
+ * the preload progress view parses it.
+ *
+ * @param array $pending ['status_url' => string, 'host' => string]
+ */
+function nppp_http_purge_gate_snippet( array $pending ): string {
+    $max = min( 7200, max( 30, (int) apply_filters( 'nppp_http_purge_gate_max_wait', 900 ) ) );
+
+    $poll = 'wget -q -O- --no-config --no-check-certificate -e use_proxy=no -T 3 -t 1'
+          . ' --header=' . escapeshellarg( 'Host: ' . (string) ( $pending['host'] ?? '' ) )
+          . ' ' . escapeshellarg( (string) $pending['status_url'] ) . ' 2>/dev/null';
+
+    $tpl = <<<'SH'
+g_end=$(( $(date +%s) + @MAX@ )); g_idle=0; g_fail=0;
+while :; do
+  g_j=$(@POLL@ | tr -d ' \t\r\n');
+  g_p=$(printf %s "$g_j" | sed -n 's/.*"pending":{[^}]*"total":\([0-9][0-9]*\).*/\1/p');
+  g_a=$(printf %s "$g_j" | sed -n 's/.*"active":\([0-9][0-9]*\).*/\1/p');
+  if [ -n "$g_p" ] && [ -n "$g_a" ]; then
+    g_fail=0;
+    if [ "$g_p" = 0 ] && [ "$g_a" = 0 ]; then g_idle=$((g_idle+1)); else g_idle=0; fi;
+    [ "$g_idle" -ge 2 ] && break;
+  else
+    g_fail=$((g_fail+1)); [ "$g_fail" -ge 5 ] && break;
+  fi;
+  [ "$(date +%s)" -ge "$g_end" ] && break;
+  sleep 1;
+done;
+SH;
+
+    return str_replace( [ '@MAX@', '@POLL@' ], [ (string) $max, $poll ], $tpl );
+}
+
+/**
+ * Builds the complete background command for a crawl: `<crawl> > log 2>&1 < /dev/null & echo $!`.
+ *
+ * Without a pending purge this is byte-for-byte the command NPP always spawned. With
+ * one, the crawl is wrapped as `( trap '' HUP; <gate>; exec <crawl> )`: the subshell
+ * keeps its PID across the exec, so the PID file, the kill paths (plain kill while the
+ * gate waits, safexec --kill once wget runs), the watchdog and cpulimit all keep
+ * working unchanged, and the user's request returns at once.
+ *
+ * @param string $crawl    the crawl command without redirections
+ * @param string $log_path wget log file
+ */
+function nppp_http_purge_gate_command( string $crawl, string $log_path ): string {
+    $tail    = ' > ' . escapeshellarg( $log_path ) . ' 2>&1 < /dev/null & echo $!';
+    $pending = nppp_http_purge_gate_state( 'take' );
+
+    if ( ! is_array( $pending ) || empty( $pending['status_url'] ) ) {
+        nppp_http_purge_gate_state( 'clear' );
+        return $crawl . $tail;
+    }
+
+    return "( trap '' HUP; " . nppp_http_purge_gate_snippet( $pending ) . ' exec ' . $crawl . ' )' . $tail;
 }
 
 /* ============================================================================
@@ -1547,7 +1673,10 @@ function nppp_http_purge_try_first_core( string $url ) {
  *
  * @return bool true when nginx completed the full purge.
  */
-function nppp_http_purge_all(): bool {
+function nppp_http_purge_all( ?array &$pending = null ): bool {
+    $can_defer = func_num_args() > 0; // the caller can hold a preload back
+    $pending   = null;
+
     if ( ! nppp_http_purge_enabled() ) {
         return false;
     }
@@ -1656,6 +1785,24 @@ function nppp_http_purge_all(): bool {
                     return false;
                 }
                 return true;
+            }
+
+            if ( $done === 'queued' && $can_defer ) {
+                // nginx is verifiably working through its queue. A filesystem purge now would only
+                // race it, and a preload started now would be swept by the late walk: report the
+                // pending purge and let the caller gate the crawl on the queue status instead.
+                $pending = [
+                    'status_url' => $status_url,
+                    'host'       => nppp_http_purge_authority( home_url() ),
+                    'since'      => $since,
+                    'armed_at'   => time(),
+                ];
+                nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: 1: Purge All endpoint URL, 2: seconds waited */
+                    __( 'INFO HTTP PURGE ALL: %1$s returned 202 and nginx is still deleting the cache in its background queue after %2$d second(s). The filesystem purge is skipped so it cannot race the queue; a following preload starts when the queue is idle.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $shown, (int) round( $budget )
+                ), true, false );
+                return false;
             }
 
             if ( $done === 'errors' ) {
