@@ -497,12 +497,14 @@ function nppp_f2b_pid_alive( int $pid ): bool {
     }
 
     if ( function_exists( 'posix_kill' ) ) {
+        // posix_kill() succeeds for zombies too (state Z): dead, just not reaped
+        // yet Treat them as gone.
         if ( @posix_kill( $pid, 0 ) ) {
-            return true;
+            return 'Z' !== nppp_f2b_worker_proc_state( $pid );
         }
         // EPERM (1) means the process exists but belongs to another user.
         if ( function_exists( 'posix_get_last_error' ) && 1 === posix_get_last_error() ) {
-            return true;
+            return 'Z' !== nppp_f2b_worker_proc_state( $pid );
         }
         return false;
     }
