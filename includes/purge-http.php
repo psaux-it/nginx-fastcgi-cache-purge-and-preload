@@ -1094,7 +1094,7 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout, str
 function nppp_http_purge_report_failure( string $scope, string $url, int $timeout, array $r ): void {
     $outcome = $r['outcome'];
     $label   = $scope === 'all' ? 'ALL' : 'SINGLE';
-    $shown   = esc_url( $url );
+    $shown   = nppp_http_purge_log_target( $scope === 'all' ? 'all' : 'single' );
     $status  = $r['status'];
 
     // Outcomes that are expected module behaviour: no lock, no noise.
@@ -1156,7 +1156,7 @@ function nppp_http_purge_report_failure( string $scope, string $url, int $timeou
             nppp_display_admin_notice( 'error', sprintf(
                 /* translators: 1: Single or All, 2: purge URL, 3: transport error, 4: minutes */
                 __( 'ERROR HTTP PURGE %1$s: Connection to %2$s failed (%3$s). HTTP Purge disabled for %4$d minute(s). Falling back to direct filesystem purge. Check that the purge endpoint is reachable (DNS, firewall, proxy).', 'fastcgi-cache-purge-and-preload-nginx' ),
-                $label, $shown, $r['message'], $minutes
+                $label, $shown, nppp_http_purge_log_reason( (string) $r['message'] ), $minutes
             ), true, false );
             break;
 
@@ -1593,6 +1593,63 @@ function nppp_http_purge_gate_command( string $crawl, string $log_path ): string
  * ========================================================================= */
 
 /**
+ * Log-safe label for a purge endpoint. The endpoint path, the Custom Base URL and the
+ * query string must never reach the log: the file is 0644 and, on Nginx, web-reachable
+ * unless a deny rule exists.
+ *
+ * @param string $kind 'single' or 'all'.
+ */
+function nppp_http_purge_log_target( string $kind ): string {
+    return $kind === 'all'
+        ? __( 'the Purge All endpoint', 'fastcgi-cache-purge-and-preload-nginx' )
+        : __( 'the Purge Single endpoint', 'fastcgi-cache-purge-and-preload-nginx' );
+}
+
+/**
+ * Log-safe page URL: scheme://host[:port]/path. The query string and fragment are dropped
+ * (order keys, tokens, search terms and e-mail addresses end up there).
+ */
+function nppp_http_purge_log_page( string $url ): string {
+    $p = wp_parse_url( $url );
+    if ( empty( $p['host'] ) ) {
+        return '';
+    }
+
+    $out = ( $p['scheme'] ?? 'https' ) . '://' . $p['host'];
+    if ( ! empty( $p['port'] ) ) {
+        $out .= ':' . (int) $p['port'];
+    }
+
+    return esc_url_raw( $out . ( $p['path'] ?? '/' ) );
+}
+
+/**
+ * Coarse, log-safe reason for a transport failure. The raw message (cURL text, exception
+ * text) can hold internal hosts, IPs, ports and file paths: it is never logged.
+ */
+function nppp_http_purge_log_reason( string $message ): string {
+    $m = strtolower( $message );
+
+    if ( strpos( $m, 'refused' ) !== false ) {
+        return 'connection refused';
+    }
+    if ( preg_match( '/resolv|name or service|getaddrinfo|dns/', $m ) ) {
+        return 'DNS failure';
+    }
+    if ( preg_match( '/ssl|tls|certificate/', $m ) ) {
+        return 'TLS failure';
+    }
+    if ( strpos( $m, 'timed out' ) !== false || strpos( $m, 'timeout' ) !== false ) {
+        return 'connection timed out';
+    }
+    if ( preg_match( '/no route|unreachable|network/', $m ) ) {
+        return 'network unreachable';
+    }
+
+    return 'transport error';
+}
+
+/**
  * Attempts to purge SINGLE $url via HTTP using the ngx_cache_purge module.
  *
  * @param string $url The canonical page URL to purge.
@@ -1610,7 +1667,7 @@ function nppp_http_purge_try_first( string $url ) {
         nppp_display_admin_notice( 'error', sprintf(
             /* translators: %s: page URL */
             __( 'ERROR HTTP PURGE SINGLE: %s could not be invalidated over HTTP, and ngx_cache_purge generation mode is active, so the filesystem purge cannot remove its cache entry (it does not see generated cache keys). The page can keep being served from cache until a Purge All is run.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            esc_url( $url )
+            nppp_http_purge_log_page( $url )
         ) );
     }
 
@@ -1664,7 +1721,7 @@ function nppp_http_purge_try_first_core( string $url ) {
         nppp_display_admin_notice( 'info', sprintf(
             /* translators: %s: page URL */
             __( 'INFO HTTP PURGE SINGLE: Skipped %s because it ends with a wildcard character, which ngx_cache_purge would turn into a prefix purge. Using the filesystem purge instead.', 'fastcgi-cache-purge-and-preload-nginx' ),
-            esc_url( $url )
+            nppp_http_purge_log_page( $url )
         ), true, false );
         return false;
     }
@@ -1797,7 +1854,7 @@ function nppp_http_purge_all( ?array &$pending = null ): bool {
     $started = microtime( true );
     $since   = (int) floor( $started );
     $r       = nppp_http_purge_exchange( 'all', $purge_url, $timeout );
-    $shown   = esc_url( $purge_url );
+    $shown   = nppp_http_purge_log_target( 'all' );
 
     switch ( $r['outcome'] ) {
         case 'purged':
