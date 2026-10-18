@@ -330,6 +330,8 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 * Fixed: Reactivating the plugin now re-arms the scheduled preload (deactivation cleared the cron event but kept the schedule setting).
 * Fixed: Deactivation no longer deletes the Fail2Ban worker's lock files, and clears worker state only once the worker is confirmed stopped, preventing a second worker after reactivation.
 * Fixed: Uninstall no longer touches a running Fail2Ban worker's files, sweeps all NPP transients and cron hook instances, and no longer creates the uploads directory.
+* Fixed: Process liveness checks no longer count zombie (defunct) processes as running. Where PID 1 does not reap orphans (e.g. Docker containers without an init).
+* Fixed: Process liveness detection now works on BusyBox/Alpine, where "ps -p" is not supported and a running preload was always reported as not running.
 * Changed: "Preload Related Pages" (Purge Scope) no longer requires Auto Preload to be ON for Auto Purge events. Enabling it alone now preloads the related pages after an auto-purge, without also arming the full-site preload that follows every Purge All. Existing sites with Preload Related Pages ON and Auto Preload OFF will start preloading related pages on auto-purge.
 
 = 2.1.8 (2026-09-25) =
