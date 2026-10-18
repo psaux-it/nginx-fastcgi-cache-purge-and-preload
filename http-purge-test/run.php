@@ -34,6 +34,9 @@ function t_reset( array $settings = [] ) {
 function t_filter( $tag, $fn ) { $GLOBALS['T']['filters'][ $tag ] = $fn; }
 
 function get_option( $k, $d = false ) { return $GLOBALS['T']['options'][ $k ] ?? $d; }
+function update_option( $k, $v, $autoload = null ) { $GLOBALS['T']['options'][ $k ] = $v; $GLOBALS['T']['autoload'][ $k ] = $autoload; return true; }
+function delete_option( $k ) { unset( $GLOBALS['T']['options'][ $k ], $GLOBALS['T']['autoload'][ $k ] ); return true; }
+function wp_cache_delete( $k, $g = '' ) { return true; }
 function home_url() { return 'https://example.com'; }
 function wp_parse_url( $u, $c = -1 ) { return parse_url( $u, $c ); }
 function absint( $n ) { return abs( (int) $n ); }
@@ -1011,6 +1014,149 @@ t_reset(); ok( strpos( nppp_http_purge_gate_snippet( $pp ), '+ 900 ' ) !== false
 $sn = nppp_http_purge_gate_snippet( $pp ); $rc = -1; exec( 'sh -n -c ' . escapeshellarg( $sn ) . ' 2>&1', $o, $rc );
 is_( $rc, 0, 'gate: the generated shell snippet is valid POSIX sh' );
 nppp_http_purge_gate_state( 'clear' );
+
+/* ------------------------------------------------------------------ gate marker (survives the request) */
+// A Purge All that left a live queue behind persists a marker; a crawl spawned by a LATER request
+// (manual Preload All, REST, WP-CLI, cron, Mobile phase) is gated on it, after the status endpoint
+// confirms the queue is still working. "Later request" = hand-off gone, transient kept.
+function gm_marker() { return $GLOBALS['T']['options'][ NPPP_HTTP_PURGE_PENDING_KEY ] ?? null; }
+function gm_set( array $over = [] ) {
+    update_option( NPPP_HTTP_PURGE_PENDING_KEY, array_merge( [ 'status_url' => 'http://127.0.0.1/purge_status', 'host' => 'example.com', 'since' => time(), 'armed_at' => time() ], $over ), false );
+}
+function gm_gated( string $cmd ): bool { return strpos( $cmd, "( trap '' HUP; " ) === 0; }
+function gm_new_request() { nppp_http_purge_gate_state( 'clear' ); $GLOBALS['T']['queue'] = []; $GLOBALS['T']['requests'] = []; }
+
+/* the deferring Purge All persists the pending queue; nothing else does */
+t_reset(); gm_new_request(); verify_on( 1 );
+Q( S( 0, 0 ), R( 202, 'accepted' ) );
+for ( $i = 0; $i < 30; $i++ ) { Q( S( 3, 1 ) ); }
+$pend = null;
+is_( nppp_http_purge_all( $pend ), false, 'marker: busy queue after the budget -> false + pending' );
+ok( gm_marker() === $pend && is_array( $pend ), 'marker: the pending hand-off is persisted as is' );
+is_( array_key_exists( NPPP_HTTP_PURGE_PENDING_KEY, $GLOBALS['T']['autoload'] ?? [] ) ? $GLOBALS['T']['autoload'][ NPPP_HTTP_PURGE_PENDING_KEY ] : 'unset', false, 'marker: a non-autoloaded option, so a persistent-cache flush cannot drop it' );
+t_reset(); gm_new_request(); verify_on( 1 );
+Q( S( 0, 0 ), R( 202, 'accepted' ) );
+for ( $i = 0; $i < 30; $i++ ) { Q( S( 3, 1 ) ); }
+nppp_http_purge_all();
+is_( gm_marker(), null, 'marker: a caller that cannot defer (no $pending) leaves no marker' );
+t_reset(); gm_new_request(); verify_on();
+Q( S( 0, 0 ), R( 202, 'accepted' ), S( 1, 0 ), S( 0, 0 ), S( 0, 0 ) );
+$pend = null;
+is_( nppp_http_purge_all( $pend ), true, 'marker: proven purge -> true' );
+is_( gm_marker(), null, 'marker: a proven purge leaves no marker' );
+t_reset(); gm_new_request(); verify_on();
+Q( S( 0, 0 ), R( 202, 'accepted' ), E( 'cURL error 7' ) );
+$pend = null; nppp_http_purge_all( $pend );
+is_( gm_marker(), null, 'marker: a dead status endpoint leaves no marker (nothing to gate on)' );
+
+/* later request, queue still busy: gated, marker kept, a restart is gated again */
+t_reset(); gm_new_request(); gm_set(); Q( S( 2, 0 ) );
+$g = nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' );
+ok( gm_gated( $g ) && substr( $g, -strlen( " exec wget X ) > '/tmp/l.log' 2>&1 < /dev/null & echo \$!" ) ) === " exec wget X ) > '/tmp/l.log' 2>&1 < /dev/null & echo \$!", 'marker: later request while the queue is busy -> gated, same redirections and PID echo' );
+ok( strpos( $g, "'http://127.0.0.1/purge_status'" ) !== false && strpos( $g, "'Host: example.com'" ) !== false, 'marker: the gate polls the persisted status URL with the persisted Host' );
+is_( $GLOBALS['T']['requests'][0]['url'] ?? '', 'http://127.0.0.1/purge_status', 'marker: the queue status was asked before gating' );
+is_( nppp_http_purge_gate_used(), true, 'marker: the gate reports it held the crawl back (notices)' );
+ok( gm_marker() !== null, 'marker: not consumed by a gated spawn' );
+gm_new_request(); Q( S( 0, 1 ) );
+ok( gm_gated( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ) ), 'marker: crawl stopped and restarted while the queue is busy -> gated again' );
+
+/* idle twice -> plain command, marker dropped; one busy sample among idle ones still gates */
+t_reset(); gm_new_request(); gm_set(); Q( S( 0, 0 ), S( 0, 0 ) );
+is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'marker: queue idle twice -> byte-identical plain command' );
+is_( nppp_http_purge_gate_used(), false, 'marker: idle queue -> no "still deleting" notice' );
+is_( gm_marker(), null, 'marker: dropped once the queue is idle' );
+is_( nreq(), 2, 'marker: two status samples, no more' );
+t_reset(); gm_new_request(); gm_set(); Q( S( 0, 0 ), S( 1, 0 ) );
+ok( gm_gated( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ) ), 'marker: idle then busy (queue blip) -> still gated' );
+ok( gm_marker() !== null, 'marker: kept after a blip' );
+
+/* fail open: dead endpoint, expired or malformed marker, no marker at all */
+t_reset(); gm_new_request(); gm_set(); Q( E( 'cURL error 7' ) );
+ok( gm_gated( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ) ), 'marker: unreadable status endpoint -> still gated (the shell gate applies its own fail-open)' );
+ok( gm_marker() !== null, 'marker: kept when the endpoint could not be read' );
+t_reset(); gm_new_request(); gm_set(); Q( S( 0, 0 ), E( 'cURL error 7' ) );
+ok( gm_gated( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ) ), 'marker: idle then unreadable -> gated (one idle sample is not proof)' );
+t_reset(); gm_new_request(); gm_set( [ 'armed_at' => time() - 901 ] );
+is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'marker: older than the gate maximum wait -> not gated' );
+is_( nreq(), 0, 'marker: an expired marker costs no HTTP request' );
+is_( gm_marker(), null, 'marker: expired marker dropped' );
+t_reset(); gm_new_request(); gm_set( [ 'status_url' => '' ] );
+is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'marker: no status URL -> not gated' );
+is_( nreq(), 0, 'marker: no status URL costs no HTTP request' );
+t_reset(); gm_new_request(); update_option( NPPP_HTTP_PURGE_PENDING_KEY, 'garbage', false );
+is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'marker: malformed marker -> not gated' );
+is_( gm_marker(), null, 'marker: malformed marker dropped' );
+t_reset(); gm_new_request();
+is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'marker: no marker -> byte-identical plain command' );
+is_( nreq(), 0, 'marker: no marker -> zero HTTP requests, zero delay (the normal case is untouched)' );
+is_( nppp_http_purge_gate_used(), false, 'marker: no marker -> not used' );
+
+/* the in-request hand-off still wins, without asking the queue; a stale one falls back to the marker */
+t_reset(); gm_new_request(); gm_set( [ 'status_url' => 'http://127.0.0.1/other' ] );
+nppp_http_purge_gate_arm( $pp );
+$g = nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' );
+ok( gm_gated( $g ) && strpos( $g, "'http://127.0.0.1:8081/purge_status'" ) !== false && strpos( $g, '/other' ) === false, 'marker: the hand-off of this request wins over the marker' );
+is_( nreq(), 0, 'marker: the hand-off is trusted without an extra status request (as before)' );
+t_reset(); gm_new_request(); gm_set(); Q( S( 1, 0 ) );
+nppp_http_purge_gate_arm( [ 'status_url' => 'http://127.0.0.1:8081/purge_status', 'host' => 'h', 'armed_at' => time() - 400 ] );
+$g = nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' );
+ok( gm_gated( $g ) && strpos( $g, "'http://127.0.0.1/purge_status'" ) !== false, 'marker: a stale hand-off is ignored, the live marker gates instead' );
+
+/* a persistent-cache flush (NPP's Redis sync, any plugin) must not drop the marker: it is an option, not a transient */
+t_reset(); gm_new_request(); nppp_http_purge_gate_remember( [ 'status_url' => 'http://127.0.0.1/purge_status', 'host' => 'example.com', 'since' => time(), 'armed_at' => time() ] );
+$GLOBALS['T']['transients'] = []; // what wp_cache_flush() does to transients when an object cache holds them
+Q( S( 2, 0 ) );
+ok( gm_gated( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ) ), 'marker: survives an object-cache flush (stop + restart is still gated)' );
+
+/* expiry follows the gate's own bounds (armed_at + max wait), enforced on read */
+t_reset(); gm_new_request(); t_filter( 'nppp_http_purge_gate_max_wait', fn() => 1800 ); gm_set( [ 'armed_at' => time() - 1000 ] ); Q( S( 1, 0 ) );
+ok( gm_gated( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ) ), 'marker: expiry follows the nppp_http_purge_gate_max_wait filter (1000 s old, limit 1800 s)' );
+t_reset(); gm_new_request(); t_filter( 'nppp_http_purge_gate_max_wait', fn() => 999999 ); gm_set( [ 'armed_at' => time() - 7201 ] );
+is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'marker: expiry capped at 7200 s like the gate' );
+t_reset(); gm_new_request(); t_filter( 'nppp_http_purge_gate_max_wait', fn() => 999999 ); gm_set( [ 'armed_at' => time() - 7000 ] ); Q( S( 1, 0 ) );
+ok( gm_gated( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ) ), 'marker: still live just under the 7200 s cap' );
+t_reset(); gm_new_request(); t_filter( 'nppp_http_purge_gate_max_wait', fn() => 1 ); gm_set( [ 'armed_at' => time() - 31 ] );
+is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'marker: expiry has the same 30 s floor' );
+t_reset(); nppp_http_purge_gate_remember( [ 'status_url' => '', 'host' => 'h', 'armed_at' => time() ] );
+is_( gm_marker(), null, 'marker: nothing is stored without a status URL' );
+gm_new_request();
+
+/* end to end: Purge All #1 leaves its queue behind (status 7), a LATER request spawns a crawl.
+   gm_helper() mirrors nppp_purge_helper(): 0 = proven, 7 = pending (hand-off armed), 'fs' = filesystem fallback. */
+function gm_helper() {
+    $p = null;
+    if ( nppp_http_purge_all( $p ) ) { return 0; }
+    if ( is_array( $p ) ) { nppp_http_purge_gate_arm( $p ); return 7; }
+    return 'fs';
+}
+function gm_busy( int $n = 30 ) { for ( $i = 0; $i < $n; $i++ ) { Q( S( 3, 1 ) ); } }
+$gm_to = 'cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received';
+
+t_reset(); gm_new_request(); verify_on( 1 );
+Q( S( 3, 1 ), R( 202, 'accepted' ) ); gm_busy();
+is_( gm_helper(), 7, 'flow: Purge All #1, queue still busy -> 7 (no filesystem purge, no crawl)' );
+ok( gm_marker() !== null, 'flow: the queue is remembered beyond this request' );
+
+gm_new_request(); Q( S( 3, 1 ), R( 202, 'accepted' ) ); gm_busy();
+is_( gm_helper(), 7, 'flow: later Preload All, its own Purge All is still 202 + busy -> 7 again' );
+ok( gm_gated( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ) ), 'flow: crawl gated by the re-armed hand-off' );
+
+gm_new_request(); Q( S( 3, 1 ), E( $gm_to ), S( 3, 1 ) );
+is_( gm_helper(), 'fs', 'flow: later Preload All, its Purge All times out -> filesystem fallback, nothing pending' );
+ok( gm_gated( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ) ), 'flow: crawl still gated (marker + busy queue)' );
+
+gm_new_request(); Q( S( 3, 1 ), R( 202, 'accepted' ), E( 'cURL error 7' ), S( 3, 1 ) );
+is_( gm_helper(), 'fs', 'flow: status endpoint blips during the 202 wait -> filesystem fallback, nothing pending' );
+ok( gm_gated( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ) ), 'flow: crawl still gated (marker + busy queue)' );
+
+gm_new_request(); Q( S( 2, 0 ) );
+ok( gm_gated( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ) ), 'flow: spawn without any purge in the request (Mobile phase, CLI mobile) while busy -> gated' );
+
+gm_new_request(); Q( S( 3, 1 ), R( 202, 'accepted' ), S( 0, 0 ), S( 0, 0 ), S( 0, 0 ), S( 0, 0 ) );
+is_( gm_helper(), 0, 'flow: later Preload All, queue drained inside the budget -> proven (0)' );
+is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'flow: idle queue -> plain crawl, no false gate' );
+is_( gm_marker(), null, 'flow: the marker is dropped once the queue is idle' );
+gm_new_request();
 
 /* ------------------------------------------------------------------ summary */
 echo "\n$PASS passed, $FAIL failed\n";
