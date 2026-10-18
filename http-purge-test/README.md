@@ -22,8 +22,15 @@ installs it outside the web root and runs it.
   module, one scenario per module mode.
 
 Matrix scenarios: `sync`, `ambig`, `ns`, `none`, `wrongzone`, `single202`, `legacy_off`,
-`race_timeout`, `race_invalidated`, `race_invalidated_single`, `ns_keys`, `race`, `race_nostatus`, `race_off`,
+`race_timeout`, `race_invalidated`, `race_invalidated_single`, `ns_keys`, `race`, `race_nostatus`, `race_off`, `slowq`,
 and the v4 error-code / Vary scenarios below.
+
+### Slow background queue (`slowq`)
+
+nginx in `async_slow` mode (the queue needs ~35-40 s) and a plugin wait budget of 5 s (`SLOWQ_WAIT`, default 5; the plugin
+caps it at 40). `purge_all()` gives up, the filesystem purge runs, the preload starts, and the test then watches the cache until
+nginx's queue is idle: the still-running queue must not delete the 400 preloaded pages, and `purge_all()` must never return
+`true` while old files are still cached. With `SLOWQ_WAIT=40` the plugin waits the queue out and returns `true` instead.
 
 ### v4 error-code and Vary scenarios
 
