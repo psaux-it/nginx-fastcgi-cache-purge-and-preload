@@ -11,7 +11,7 @@ function delete_option( $k ) { global $T; unset( $T['options'][ $k ], $T['autolo
 function wp_cache_delete( $k, $g = '' ) { return true; }
 function home_url() { return 'http://example.com'; }
 function wp_parse_url( $u, $c = -1 ) { return parse_url( $u, $c ); }
-function absint( $n ) { return abs( (int) $n ); } function esc_url( $u ) { return $u; } function __( $s, $d = '' ) { return $s; }
+function absint( $n ) { return abs( (int) $n ); } function esc_url( $u ) { return $u; } function esc_url_raw( $u ) { return $u; } function __( $s, $d = '' ) { return $s; }
 function apply_filters( $t, $v, ...$a ) { global $T; $f = $T['filters'][ $t ] ?? null; return $f ? $f( $v, ...$a ) : $v; }
 function do_action( ...$a ) {} function add_action( ...$a ) {} function remove_action( ...$a ) {}
 function get_transient( $k ) { global $T; return $T['tr'][ $k ] ?? false; }
