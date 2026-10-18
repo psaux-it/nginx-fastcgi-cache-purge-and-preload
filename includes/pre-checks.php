@@ -461,6 +461,22 @@ function nppp_is_process_alive($pid) {
         return false;
     }
 
+    // Fast path: /proc/<pid>/stat. Linux only, works the same with procps and
+    // BusyBox (Alpine) where `ps -p` does not exist, and tells us the process state.
+    // Z = zombie and X = dead are already gone, just not reaped yet (e.g. PID 1 in a
+    // container does not reap orphans). Unreadable (open_basedir, hidepid, no /proc)
+    // falls through to the ps probe below.
+    $proc_stat = @file_get_contents('/proc/' . (int) $pid . '/stat');
+    if (is_string($proc_stat)) {
+        $paren = strrpos($proc_stat, ')');
+        if ($paren !== false) {
+            $state = substr(ltrim(substr($proc_stat, $paren + 1)), 0, 1);
+            if ($state !== '') {
+                return $state !== 'Z' && $state !== 'X';
+            }
+        }
+    }
+
     // Guard: both shell_exec and exec must be available
     if (!function_exists('shell_exec') || !function_exists('exec')) {
         return false;
@@ -474,10 +490,11 @@ function nppp_is_process_alive($pid) {
     $escaped_ps_path = escapeshellarg($ps_path);
 
     // Check for the process by PID
-    exec($escaped_ps_path . ' -p ' . (int) $pid . ' -o pid=', $output, $return_var);
+    // stat= lets us ignore zombies (state Z): already dead, just not reaped.
+    exec($escaped_ps_path . ' -p ' . (int) $pid . ' -o stat=', $output, $return_var);
 
-    // Process running
-    return $return_var === 0 && !empty($output);
+    // Process running (and not a zombie)
+    return $return_var === 0 && !empty($output) && strpos(trim($output[0]), 'Z') !== 0;
 }
 
 // Tries to determine the nginx.conf path using 'nginx -V'.
