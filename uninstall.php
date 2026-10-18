@@ -145,6 +145,7 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_f2b_sourceapp_suffix',              // Fail2ban RIPEstat sourceapp suffix
         'nppp_f2b_ripe_registration',             // Fail2ban RIPEstat registration mail record
         'nppp_http_purge_queue_status_path',      // Legacy standalone HTTP Purge queue status path
+        'nppp_http_purge_pending',                // Purge All queue marker for the preload gate
     );
 
     foreach ($option_keys as $option_key) {
