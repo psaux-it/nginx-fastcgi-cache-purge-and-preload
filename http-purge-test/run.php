@@ -41,6 +41,7 @@ function home_url() { return 'https://example.com'; }
 function wp_parse_url( $u, $c = -1 ) { return parse_url( $u, $c ); }
 function absint( $n ) { return abs( (int) $n ); }
 function esc_url( $u ) { return $u; }
+function esc_url_raw( $u ) { return $u; }
 function __( $s, $d = '' ) { return $s; }
 function apply_filters( $tag, $v, ...$a ) {
     $f = $GLOBALS['T']['filters'][ $tag ] ?? null;
