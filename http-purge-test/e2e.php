@@ -132,36 +132,60 @@ if ( strpos( $sc, 'race' ) === 0 && strpos( $sc, 'race_timeout' ) !== 0 && strpo
     if ( $sc === 'race_nostatus' ) { chk( $r === true, 'best effort via directory -> true', notes() ); }
 }
 
-/* Slow background queue (mode async_slow, the walk takes ~35-40 s, far longer than the plugin's wait budget): purge_all() gives up
- * waiting and returns false, purge.php runs the filesystem purge and the preload starts while nginx's queue is STILL running.
- * The late sweep of that queue must not delete the preloaded pages. SLOWQ_WAIT = the plugin's wait budget in seconds (default 5,
- * the plugin caps it at 40; a value above the walk time makes purge_all() prove completion and return true instead). */
+/* Slow background queue (mode async_slow, the walk takes ~35-40 s, far longer than the plugin's wait budget).
+ * The caller of purge_all() (nppp_purge_helper) opts in to the pending outcome by passing $pending: after the wait budget
+ * a queue that is verifiably still working returns false + $pending, and the caller must NOT run the filesystem purge.
+ * The preload spawn is then wrapped by nppp_http_purge_gate_command(): the crawl starts only when nginx's queue is idle, so
+ * the late walk cannot delete the preloaded pages, and the user's request never blocks on the long tail.
+ * SLOWQ_WAIT = the plugin's wait budget in seconds (default 5, the plugin caps it at 40); a value above the walk time makes
+ * purge_all() prove completion and return true instead (nothing pending, no gate). */
 if ( $sc === 'slowq' ) {
     $T['options']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = 'purge_status';
-    $T['filters']['nppp_http_purge_queue_wait'] = fn() => max( 1, (int) ( getenv( 'SLOWQ_WAIT' ) ?: 5 ) );
+    $wait = max( 1, (int) ( getenv( 'SLOWQ_WAIT' ) ?: 5 ) );
+    $T['filters']['nppp_http_purge_queue_wait'] = fn() => $wait;
     $q = function () { $j = json_decode( (string) shell_exec( 'curl -s http://127.0.0.1:8081/purge_status' ), true ); return $j['cache'] ?? null; };
+    $idle_now = function () use ( $q ) { $s = $q(); return $s && $s['pending']['total'] === 0 && $s['active'] === 0; };
+    foreach ( [ '/tmp/npp-gate-files', '/tmp/npp-gate-done', '/tmp/npp-gate.log' ] as $f ) { @unlink( $f ); }
 
     warm( 'p', 600 ); sleep( 2 );
     $before = cnt();
     chk( $before === 600 && $q() !== null, 'slowq: 600 pages cached, queue status endpoint answers', "cached=$before" );
-    $t = microtime( true ); $r = nppp_http_purge_all(); $waited = round( microtime( true ) - $t, 1 );
+    $t = microtime( true ); $pending = null; $r = nppp_http_purge_all( $pending ); $waited = round( microtime( true ) - $t, 1 );
     $left = cnt();
-    echo "  cached=$before  purge_all()=" . var_export( $r, true ) . " waited={$waited}s files_after_return=$left  fs_fallback=" . ( $r === false ? 'yes' : 'no' ) . "\n";
-    chk( $r === false || $left === 0, 'slowq: purge_all() never claims success while old files are still cached', "r=" . var_export( $r, true ) . " left=$left" );
-    if ( $r === false ) { shell_exec( 'find /tmp/npp-cache -mindepth 1 -delete' ); }    // what nppp_wp_purge() does
+    echo "  cached=$before  purge_all()=" . var_export( $r, true ) . " pending=" . ( is_array( $pending ) ? 'yes' : 'no' ) . " waited={$waited}s files_after_return=$left\n";
 
-    warm( 'warm', 400 );                                                                // preload starts right away
-    $f0 = cnt(); $min = $f0; $trace = [ $f0 ]; $idle = 0; $t1 = microtime( true );
-    while ( microtime( true ) - $t1 < 90 && $idle < 2 ) {                               // until nginx's queue is really finished
-        $c = cnt(); if ( $c < $min ) { $min = $c; } if ( $c !== end( $trace ) ) { $trace[] = $c; }
-        $s = $q(); $idle = ( $s && $s['pending']['total'] === 0 && $s['active'] === 0 ) ? $idle + 1 : 0;
-        usleep( 200000 );
+    if ( $r === true ) {
+        chk( $left === 0 && $pending === null, 'slowq: wait budget covers the queue -> true, cache empty, nothing pending (no gate needed)', "left=$left" );
+    } else {
+        chk( is_array( $pending ) && $left > 0, 'slowq: queue still working after the budget -> false + $pending, old files still cached (the caller must not run the filesystem purge)', "pending=" . var_export( $pending, true ) . " left=$left" );
+        chk( $waited < $wait + 8, "slowq: the request waits only the budget ({$wait}s), not the ~35 s queue", "waited=$waited" );
+        chk( strpos( notes(), 'still deleting' ) !== false, 'slowq: admin notice explains the skipped filesystem purge and the queued preload', 'notes=' . notes() );
+
+        // The spawned preload: a stand-in crawl that records how many OLD files are left at its first instruction, then warms 400 pages.
+        $crawl = 'sh -c ' . escapeshellarg( 'find /tmp/npp-cache -type f | wc -l > /tmp/npp-gate-files; i=1; while [ $i -le 400 ]; do curl -s -o /dev/null -H "Host: example.com" http://127.0.0.1:8081/warm/$i/; i=$((i+1)); done; date +%s > /tmp/npp-gate-done' );
+        nppp_http_purge_gate_arm( is_array( $pending ) ? $pending : [] );
+        $busy = ! $idle_now();
+        $t2 = microtime( true ); $pid = (int) trim( (string) shell_exec( nppp_http_purge_gate_command( $crawl, '/tmp/npp-gate.log' ) ) ); $spawn = round( microtime( true ) - $t2, 2 );
+        chk( $pid > 1 && $spawn < 2 && nppp_http_purge_gate_used(), 'slowq: spawn returns a PID at once and reports the gate (the user is not blocked)', "pid=$pid spawn={$spawn}s" );
+        usleep( 1500000 );
+        $alive = (bool) trim( (string) shell_exec( "ps -p $pid -o pid=" ) );
+        chk( $busy && $alive && ! file_exists( '/tmp/npp-gate-files' ), 'slowq: while nginx is still deleting the process is alive but the crawl has NOT started', "busy=" . var_export( $busy, true ) . " alive=" . var_export( $alive, true ) );
+
+        $t1 = microtime( true ); $idle_at_start = null; $seen = false;
+        while ( microtime( true ) - $t1 < 150 && ! file_exists( '/tmp/npp-gate-done' ) ) {
+            if ( ! $seen && file_exists( '/tmp/npp-gate-files' ) ) { $seen = true; $idle_at_start = $idle_now(); }
+            usleep( 200000 );
+        }
+        $at_start = file_exists( '/tmp/npp-gate-files' ) ? (int) trim( (string) file_get_contents( '/tmp/npp-gate-files' ) ) : -1;
+        chk( file_exists( '/tmp/npp-gate-done' ), 'slowq: the gated crawl ran after the queue went idle (within 150 s)' );
+        chk( $at_start === 0 && ( $idle_at_start === true || ! $seen ), 'slowq: the crawl started only when nginx\'s queue was idle and no old file was left', "files_at_start=$at_start idle_at_start=" . var_export( $idle_at_start, true ) );
+        sleep( 2 ); $f1 = cnt();
+        $hits = 0; for ( $i = 1; $i <= 20; $i++ ) { if ( xcache( "/warm/$i/" ) === 'HIT' ) $hits++; }
+        $gone = ! trim( (string) shell_exec( "ps -p $pid -o pid=" ) );
+        echo "  gated crawl: waited " . round( microtime( true ) - $t2, 1 ) . "s, files=$f1 (expected 400), HIT on first 20 pages: $hits/20\n";
+        chk( $f1 === 400 && $hits === 20, 'slowq: all 400 preloaded pages survive (the late nginx walk did not delete them)', "files=$f1 hits=$hits" );
+        chk( $gone && $idle_now(), 'slowq: the gate process is gone and the queue is idle', "gone=" . var_export( $gone, true ) );
     }
-    sleep( 2 ); $f1 = cnt(); if ( $f1 < $min ) { $min = $f1; }
-    $hits = 0; for ( $i = 1; $i <= 20; $i++ ) { if ( xcache( "/warm/$i/" ) === 'HIT' ) $hits++; }
-    echo "  preload warmed: files=$f0 -> queue idle after " . round( microtime( true ) - $t1, 1 ) . "s files=$f1 (min $min), HIT on first 20 pages: $hits/20  trace=" . implode( '>', array_slice( $trace, 0, 12 ) ) . "\n";
-    chk( $idle >= 2, 'slowq: nginx queue went idle within 90 s', "idle=$idle" );
-    chk( $min === 400 && $f1 === 400 && $hits === 20, 'slowq: after purge_all() returns the preload is NOT deleted by the still-running nginx queue (400/400 kept)', "files=$f1 min=$min hits=$hits notes=" . notes() );
 }
 
 /* nginx decodes $1: purging /p/%41/ deletes /p/A/ and answers 200 while the real /p/%41/ entry stays cached. */
