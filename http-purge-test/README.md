@@ -28,9 +28,11 @@ and the v4 error-code / Vary scenarios below.
 ### Slow background queue (`slowq`)
 
 nginx in `async_slow` mode (the queue needs ~35-40 s) and a plugin wait budget of 5 s (`SLOWQ_WAIT`, default 5; the plugin
-caps it at 40). `purge_all()` gives up, the filesystem purge runs, the preload starts, and the test then watches the cache until
-nginx's queue is idle: the still-running queue must not delete the 400 preloaded pages, and `purge_all()` must never return
-`true` while old files are still cached. With `SLOWQ_WAIT=40` the plugin waits the queue out and returns `true` instead.
+caps it at 40). A caller that can defer its preload passes `$pending` to `nppp_http_purge_all()`: after the budget a queue that
+is verifiably still working returns `false` plus `$pending`, and the caller must not run the filesystem purge. The test then
+spawns a stand-in crawl through `nppp_http_purge_gate_command()` and checks that the spawn returns at once, that the crawl does
+not start while nginx is still deleting, that it starts only when the queue is idle with no old file left, and that all 400
+preloaded pages survive. With `SLOWQ_WAIT=40` the plugin waits the queue out and returns `true` (nothing pending, no gate).
 
 ### v4 error-code and Vary scenarios
 
