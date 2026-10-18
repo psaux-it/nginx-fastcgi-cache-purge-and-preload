@@ -163,6 +163,21 @@ if ( ! defined( 'NPPP_HTTP_PURGE_BODY_LIMIT' ) ) {
     define( 'NPPP_HTTP_PURGE_BODY_LIMIT', 16384 );
 }
 
+/**
+ * Marker that remembers a Purge All whose nginx queue was still working when NPP stopped
+ * waiting (nppp_http_purge_all() $pending). The in-request hand-off of the preload gate dies
+ * with the request; this marker lets a LATER request (manual Preload All, REST, WP-CLI, cron,
+ * the Mobile phase) learn that a crawl started now would still race the queue.
+ *
+ * It is only a hint: the queue status endpoint decides (nppp_http_purge_gate_pending()), and it
+ * expires with the gate's own maximum wait (armed_at + max wait).
+ *
+ * Value: array{ status_url:string, host:string, since:int, armed_at:int }
+ */
+if ( ! defined( 'NPPP_HTTP_PURGE_PENDING_KEY' ) ) {
+    define( 'NPPP_HTTP_PURGE_PENDING_KEY', 'nppp_http_purge_pending' );
+}
+
 /* ============================================================================
  * 1. Settings and URLs
  * ========================================================================= */
@@ -1409,7 +1424,13 @@ function nppp_http_purge_gate_state( string $op, ?array $pending = null ) {
             $armed = null;
             // A stale hand-off (long-running CLI process) must not gate an unrelated crawl.
             if ( $p === null || ( time() - (int) ( $p['armed_at'] ?? 0 ) ) > 300 ) {
-                return null;
+                // No hand-off in this request. A Purge All from an EARLIER request may still
+                // have a live queue (manual Preload All, REST, WP-CLI, cron, Mobile phase):
+                // the persisted marker is confirmed against the queue status first.
+                $p = nppp_http_purge_gate_pending();
+                if ( $p === null ) {
+                    return null;
+                }
             }
             $used = true;
             return $p;
@@ -1433,6 +1454,78 @@ function nppp_http_purge_gate_used(): bool {
 }
 
 /**
+ * Longest the spawned shell waits for the queue (filter nppp_http_purge_gate_max_wait, 30 s
+ * floor, 7200 s cap, default 900 s). It is also the lifetime of the persisted marker, so the
+ * two can never disagree.
+ */
+function nppp_http_purge_gate_max_wait(): int {
+    return min( 7200, max( 30, (int) apply_filters( 'nppp_http_purge_gate_max_wait', 900 ) ) );
+}
+
+/**
+ * Persists a pending Purge All for later requests (see NPPP_HTTP_PURGE_PENDING_KEY). Expiry is
+ * enforced on read from armed_at, so a leftover row is harmless.
+ *
+ * @param array $pending ['status_url' => string, 'host' => string, 'since' => int, 'armed_at' => int]
+ */
+function nppp_http_purge_gate_remember( array $pending ): void {
+    if ( empty( $pending['status_url'] ) ) {
+        return;
+    }
+    update_option( NPPP_HTTP_PURGE_PENDING_KEY, $pending, false );
+}
+
+/**
+ * The pending Purge All a crawl spawned NOW has to wait for, or null.
+ *
+ * No marker (the normal case) costs nothing: no HTTP request, no delay. With a marker the queue
+ * status decides, with the same proof the Purge All wait uses (idle twice in a row): one busy
+ * sample gates, two idle samples drop the marker. An unreadable status endpoint gates too: the
+ * shell gate then applies its own fail-open (5 failed polls), so a blip cannot unprotect a crawl.
+ *
+ * Not consumed on purpose: a crawl that was stopped and restarted while the queue is still
+ * working must be gated again.
+ *
+ * @return array|null ['status_url' => string, 'host' => string, 'since' => int, 'armed_at' => int]
+ */
+function nppp_http_purge_gate_pending(): ?array {
+    // Fresh read: a request-local negative ('notoptions') must not hide a marker written by an
+    // earlier request (same reasoning as nppp_purge_lock_in_flight()).
+    wp_cache_delete( NPPP_HTTP_PURGE_PENDING_KEY, 'options' );
+    wp_cache_delete( 'notoptions', 'options' );
+
+    $p = get_option( NPPP_HTTP_PURGE_PENDING_KEY, false );
+    if ( $p === false ) {
+        return null;
+    }
+
+    if ( ! is_array( $p )
+        || empty( $p['status_url'] )
+        || ( time() - (int) ( $p['armed_at'] ?? 0 ) ) > nppp_http_purge_gate_max_wait() ) {
+        delete_option( NPPP_HTTP_PURGE_PENDING_KEY );
+        return null;
+    }
+
+    for ( $i = 0; $i < 2; $i++ ) {
+        $snap = nppp_http_purge_queue_snapshot( (string) $p['status_url'] );
+        if ( $snap === null ) {
+            // Unknown, not idle: one failed sample proves nothing while the queue may be busy. Keep
+            // the marker and let the spawned shell decide, it fails open after 5 failed polls.
+            return $p;
+        }
+        if ( $snap['pending'] > 0 || $snap['active'] > 0 ) {
+            return $p;
+        }
+        if ( $i === 0 ) {
+            usleep( 300000 );
+        }
+    }
+
+    delete_option( NPPP_HTTP_PURGE_PENDING_KEY );
+    return null;
+}
+
+/**
  * Shell snippet that blocks until the nginx purge queue is idle twice in a row.
  *
  * Runs as the PHP user in front of the crawl (safexec only ever executes wget, so
@@ -1444,7 +1537,7 @@ function nppp_http_purge_gate_used(): bool {
  * @param array $pending ['status_url' => string, 'host' => string]
  */
 function nppp_http_purge_gate_snippet( array $pending ): string {
-    $max = min( 7200, max( 30, (int) apply_filters( 'nppp_http_purge_gate_max_wait', 900 ) ) );
+    $max = nppp_http_purge_gate_max_wait();
 
     $poll = 'wget -q -O- --no-config --no-check-certificate -e use_proxy=no -T 3 -t 1'
           . ' --header=' . escapeshellarg( 'Host: ' . (string) ( $pending['host'] ?? '' ) )
@@ -1797,6 +1890,9 @@ function nppp_http_purge_all( ?array &$pending = null ): bool {
                     'since'      => $since,
                     'armed_at'   => time(),
                 ];
+                // The hand-off above dies with this request; a crawl started by a later one
+                // (manual Preload All, REST, WP-CLI, cron) has to wait for the same queue.
+                nppp_http_purge_gate_remember( $pending );
                 nppp_display_admin_notice( 'info', sprintf(
                     /* translators: 1: Purge All endpoint URL, 2: seconds waited */
                     __( 'INFO HTTP PURGE ALL: %1$s returned 202 and nginx is still deleting the cache in its background queue after %2$d second(s). The filesystem purge is skipped so it cannot race the queue; a following preload starts when the queue is idle.', 'fastcgi-cache-purge-and-preload-nginx' ),
