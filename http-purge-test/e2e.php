@@ -6,6 +6,9 @@ class WP_Error { public $m; function __construct( $c = '', $m = '' ) { $this->m 
 $T = [ 'options' => [ 'nginx_cache_settings' => [ 'nppp_http_purge_enabled' => 'yes', 'nginx_cache_path' => '/tmp/npp-cache',
         'nppp_http_purge_custom_url' => 'http://127.0.0.1:8081' ] ], 'tr' => [], 'notices' => [], 'reqs' => [] ];
 function get_option( $k, $d = false ) { global $T; return $T['options'][ $k ] ?? $d; }
+function update_option( $k, $v, $autoload = null ) { global $T; $T['options'][ $k ] = $v; $T['autoload'][ $k ] = $autoload; return true; }
+function delete_option( $k ) { global $T; unset( $T['options'][ $k ], $T['autoload'][ $k ] ); return true; }
+function wp_cache_delete( $k, $g = '' ) { return true; }
 function home_url() { return 'http://example.com'; }
 function wp_parse_url( $u, $c = -1 ) { return parse_url( $u, $c ); }
 function absint( $n ) { return abs( (int) $n ); } function esc_url( $u ) { return $u; } function __( $s, $d = '' ) { return $s; }
@@ -185,6 +188,94 @@ if ( $sc === 'slowq' ) {
         echo "  gated crawl: waited " . round( microtime( true ) - $t2, 1 ) . "s, files=$f1 (expected 400), HIT on first 20 pages: $hits/20\n";
         chk( $f1 === 400 && $hits === 20, 'slowq: all 400 preloaded pages survive (the late nginx walk did not delete them)', "files=$f1 hits=$hits" );
         chk( $gone && $idle_now(), 'slowq: the gate process is gone and the queue is idle', "gone=" . var_export( $gone, true ) );
+    }
+}
+
+/* The Purge All request ends with nginx's queue still working ($pending). Its in-request hand-off dies with the request and a
+ * persistent-cache flush (NPP's Redis sync) wipes transients. A crawl spawned by a LATER request, with NO
+ * nppp_http_purge_gate_arm(), must still wait for the REAL queue (status endpoint of ngx_cache_purge), also after stop + restart,
+ * must start once the queue is idle, and must not be gated by a stale marker. Needs mode async_slow (queue ~35-40 s). */
+if ( $sc === 'slowq_marker' ) {
+    $T['options']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = 'purge_status';
+    $wait = max( 1, (int) ( getenv( 'SLOWQ_WAIT' ) ?: 5 ) );
+    $T['filters']['nppp_http_purge_queue_wait'] = fn() => $wait;
+    $q = function () { $j = json_decode( (string) shell_exec( 'curl -s http://127.0.0.1:8081/purge_status' ), true ); return $j['cache'] ?? null; };
+    $idle_now = function () use ( $q ) { $s = $q(); return $s && $s['pending']['total'] === 0 && $s['active'] === 0; };
+    $gate_files = [ '/tmp/npp-gate-files', '/tmp/npp-gate-done', '/tmp/npp-gate.log', '/tmp/npp-gate-failopen' ];
+    foreach ( $gate_files as $f ) { @unlink( $f ); }
+    $crawl = 'sh -c ' . escapeshellarg( 'find /tmp/npp-cache -type f | wc -l > /tmp/npp-gate-files; i=1; while [ $i -le 400 ]; do curl -s -o /dev/null -H "Host: example.com" http://127.0.0.1:8081/warm/$i/; i=$((i+1)); done; date +%s > /tmp/npp-gate-done' );
+    $spawn = function ( string $cmd ) { $t = microtime( true ); $pid = (int) trim( (string) shell_exec( $cmd ) ); return [ $pid, round( microtime( true ) - $t, 2 ) ]; };
+    $marker = fn() => $GLOBALS['T']['options'][ NPPP_HTTP_PURGE_PENDING_KEY ] ?? null;
+    // A killed process stays a defunct (Z) entry until the container's init reaps it: that is dead, not alive.
+    $alive_p = function ( int $p ) { $s = trim( (string) shell_exec( "ps -p $p -o stat= 2>/dev/null" ) ); return $s !== '' && $s[0] !== 'Z'; };
+
+    warm( 'p', 600 ); sleep( 2 );
+    $before = cnt();
+    chk( $before === 600 && $q() !== null, 'slowq_marker: 600 pages cached, queue status endpoint answers', "cached=$before" );
+    $pending = null; $r = nppp_http_purge_all( $pending ); $left = cnt();
+    echo "  purge_all()=" . var_export( $r, true ) . " pending=" . ( is_array( $pending ) ? 'yes' : 'no' ) . " files_after_return=$left\n";
+
+    if ( $r === true ) {
+        chk( $pending === null && $marker() === null, 'slowq_marker: wait budget covers the queue -> true, no marker (nothing to gate)', var_export( $marker(), true ) );
+    } else {
+        chk( is_array( $pending ) && $marker() === $pending, 'slowq_marker: pending Purge All is persisted as the marker, as handed off', 'marker=' . var_export( $marker(), true ) );
+        chk( ( $GLOBALS['T']['autoload'][ NPPP_HTTP_PURGE_PENDING_KEY ] ?? 'unset' ) === false, 'slowq_marker: marker is a NON-autoloaded option' );
+
+        // The request ends: hand-off gone, transients wiped (object-cache flush). Only the option survives.
+        nppp_http_purge_gate_state( 'clear' ); $T['tr'] = []; $T['notices'] = [];
+        chk( $marker() === $pending && ! $idle_now(), 'slowq_marker: marker survives the request end + cache flush while nginx is still deleting' );
+
+        // Control: without the marker a later spawn is the plain command (what happened before this patch).
+        $saved = $T['options'][ NPPP_HTTP_PURGE_PENDING_KEY ]; delete_option( NPPP_HTTP_PURGE_PENDING_KEY );
+        $plain = nppp_http_purge_gate_command( $crawl, '/tmp/npp-gate.log' );
+        chk( strpos( $plain, "( trap '' HUP; " ) !== 0 && ! nppp_http_purge_gate_used(), 'slowq_marker: control - no marker, no hand-off -> plain ungated command' );
+        update_option( NPPP_HTTP_PURGE_PENDING_KEY, $saved, false ); nppp_http_purge_gate_state( 'clear' );
+
+        // LATER request #1: spawn WITHOUT arm(): gated from the marker + the real queue status.
+        [ $pid, $spawn_s ] = $spawn( nppp_http_purge_gate_command( $crawl, '/tmp/npp-gate.log' ) );
+        chk( $pid > 1 && $spawn_s < 3 && nppp_http_purge_gate_used(), 'slowq_marker: later request spawn returns a PID at once and reports the gate', "pid=$pid spawn={$spawn_s}s" );
+        usleep( 1500000 );
+        $alive = $alive_p( $pid );
+        chk( $alive && ! file_exists( '/tmp/npp-gate-files' ) && ! $idle_now(), 'slowq_marker: while nginx is still deleting the crawl process waits and has NOT started' );
+        chk( $marker() !== null, 'slowq_marker: the gated spawn does not consume the marker' );
+
+        // The user stops the crawl and starts it again while the queue is still working.
+        shell_exec( "kill $pid" ); usleep( 500000 );
+        $dead = ! $alive_p( $pid );
+        nppp_http_purge_gate_state( 'clear' );
+        [ $pid2, $spawn_s2 ] = $spawn( nppp_http_purge_gate_command( $crawl, '/tmp/npp-gate.log' ) );
+        usleep( 1500000 );
+        $alive2 = $alive_p( $pid2 );
+        chk( $dead && $pid2 > 1 && $pid2 !== $pid && $alive2 && ! file_exists( '/tmp/npp-gate-files' ) && nppp_http_purge_gate_used(), 'slowq_marker: stop + restart while the queue is busy -> gated again, still not started', "dead=" . var_export( $dead, true ) . " pid2=$pid2" );
+
+        $t1 = microtime( true ); $idle_at_start = null; $seen = false;
+        while ( microtime( true ) - $t1 < 150 && ! file_exists( '/tmp/npp-gate-done' ) ) {
+            if ( ! $seen && file_exists( '/tmp/npp-gate-files' ) ) { $seen = true; $idle_at_start = $idle_now(); }
+            usleep( 200000 );
+        }
+        $at_start = file_exists( '/tmp/npp-gate-files' ) ? (int) trim( (string) file_get_contents( '/tmp/npp-gate-files' ) ) : -1;
+        chk( file_exists( '/tmp/npp-gate-done' ), 'slowq_marker: the marker-gated crawl ran after the queue went idle (within 150 s)' );
+        chk( $at_start === 0 && ( $idle_at_start === true || ! $seen ), 'slowq_marker: the crawl started only when the real queue was idle and no old file was left', "files_at_start=$at_start idle_at_start=" . var_export( $idle_at_start, true ) );
+        sleep( 2 ); $f1 = cnt();
+        $hits = 0; for ( $i = 1; $i <= 20; $i++ ) { if ( xcache( "/warm/$i/" ) === 'HIT' ) $hits++; }
+        chk( $f1 === 400 && $hits === 20, 'slowq_marker: all 400 preloaded pages survive (the late nginx walk did not delete them)', "files=$f1 hits=$hits" );
+
+        // Queue idle now: the stale marker must NOT gate (two idle samples from the real status JSON), and it is dropped.
+        nppp_http_purge_gate_state( 'clear' );
+        $cmd = nppp_http_purge_gate_command( $crawl, '/tmp/npp-gate.log' );
+        chk( $cmd === $crawl . " > '/tmp/npp-gate.log' 2>&1 < /dev/null & echo \$!" && ! nppp_http_purge_gate_used(), 'slowq_marker: queue idle -> byte-identical plain command, no false gate', substr( $cmd, 0, 80 ) );
+        chk( $marker() === null, 'slowq_marker: stale marker dropped once the real queue is idle' );
+
+        // Unreadable status endpoint: still gated by the marker, the SHELL gate fails open after 5 failed polls.
+        update_option( NPPP_HTTP_PURGE_PENDING_KEY, [ 'status_url' => 'http://127.0.0.1:9/purge_status', 'host' => 'example.com', 'since' => time(), 'armed_at' => time() ], false );
+        nppp_http_purge_gate_state( 'clear' );
+        $fo = 'sh -c ' . escapeshellarg( 'date +%s > /tmp/npp-gate-failopen' );
+        [ $pid3, $spawn_s3 ] = $spawn( nppp_http_purge_gate_command( $fo, '/tmp/npp-gate.log' ) );
+        chk( $pid3 > 1 && nppp_http_purge_gate_used() && $marker() !== null, 'slowq_marker: dead status endpoint -> still gated, marker kept (an idle verdict needs proof)' );
+        $t3 = microtime( true ); while ( microtime( true ) - $t3 < 30 && ! file_exists( '/tmp/npp-gate-failopen' ) ) { usleep( 200000 ); }
+        $fo_s = round( microtime( true ) - $t3, 1 );
+        chk( file_exists( '/tmp/npp-gate-failopen' ) && $fo_s >= 3 && $fo_s < 25, 'slowq_marker: the shell gate fails open after 5 failed polls (crawl runs, not blocked forever)', "failopen_after={$fo_s}s" );
+        delete_option( NPPP_HTTP_PURGE_PENDING_KEY );
     }
 }
 
