@@ -23,7 +23,7 @@ installs it outside the web root and runs it.
 
 Matrix scenarios: `sync`, `ambig`, `ns`, `none`, `wrongzone`, `single202`, `legacy_off`,
 `race_timeout`, `race_invalidated`, `race_invalidated_single`, `ns_keys`, `race`, `race_nostatus`, `race_off`, `slowq`,
-and the v4 error-code / Vary scenarios below.
+`slowq_marker`, and the v4 error-code / Vary scenarios below.
 
 ### Slow background queue (`slowq`)
 
@@ -33,6 +33,24 @@ is verifiably still working returns `false` plus `$pending`, and the caller must
 spawns a stand-in crawl through `nppp_http_purge_gate_command()` and checks that the spawn returns at once, that the crawl does
 not start while nginx is still deleting, that it starts only when the queue is idle with no old file left, and that all 400
 preloaded pages survive. With `SLOWQ_WAIT=40` the plugin waits the queue out and returns `true` (nothing pending, no gate).
+
+### Pending Purge All seen by a later request (`slowq_marker`)
+
+Same `async_slow` nginx and 5 s budget as `slowq`, but the crawl is spawned the way a *later* request does it: the Purge All
+request is over (the in-request hand-off is cleared, transients are wiped as an object-cache flush would), and
+`nppp_http_purge_gate_arm()` is **not** called. Only the persisted marker option (`nppp_http_purge_pending`) is left. The test
+checks against the real queue status of `ngx_cache_purge`:
+
+- the marker is stored as a non-autoloaded option, and without it the spawn is the plain, ungated command (control);
+- with the marker, while nginx is still deleting, the spawn returns a PID at once, the crawl does **not** start, and the marker
+  is not consumed: a stopped and restarted crawl is gated again;
+- the crawl starts only when the queue is idle with no old file left, and all 400 preloaded pages survive;
+- once the queue is idle the stale marker neither gates (byte-identical plain command) nor stays behind;
+- with an unreadable status endpoint the spawn is still gated and the marker kept, and the shell gate fails open after 5 failed
+  polls instead of blocking the crawl forever.
+
+Removing the marker fallback in `nppp_http_purge_gate_state( 'take' )` makes 8 of these checks fail, among them
+"the crawl started only when the real queue was idle" (it starts with ~900 old files still on disk).
 
 ### v4 error-code and Vary scenarios
 
