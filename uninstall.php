@@ -147,6 +147,7 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_f2b_ripe_registration',             // Fail2ban RIPEstat registration mail record
         'nppp_http_purge_queue_status_path',      // Legacy standalone HTTP Purge queue status path
         'nppp_http_purge_pending',                // Purge All queue marker for the preload gate
+        'nppp_purged_all_deferred',               // Deferred Purge All follow-up state (one-shot token)
     );
 
     foreach ($option_keys as $option_key) {
@@ -169,6 +170,7 @@ function nppp_clear_scheduled_events_on_uninstall() {
         'npp_cache_preload_event',
         'npp_cache_preload_status_event',
         'nppp_index_updater_event',
+        'nppp_purged_all_deferred_event',
         'nppp_f2b_cleanup_event',
         'nppp_f2b_enrich_event',
         'nppp_f2b_worker_event',
