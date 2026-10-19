@@ -355,7 +355,7 @@ if ( $sc === 'ns_keys' ) {
     };
     /* What the Advanced tab / Status counter do with these files: the plugin's real default cache_key_regex (preload-defaults.php)
      * and the real generation helpers (advanced.php; pure functions, loaded by extraction because advanced.php needs WordPress). */
-    foreach ( [ 'nppp_key_generation_info', 'nppp_drop_stale_generations', 'nppp_annotate_variant_counts' ] as $fn ) {
+    foreach ( [ 'nppp_key_generation_info', 'nppp_gen_mode_note_seen', 'nppp_generation_views', 'nppp_generation_stale_groups', 'nppp_drop_stale_generations', 'nppp_annotate_variant_counts' ] as $fn ) {
         if ( ! function_exists( $fn ) ) {
             preg_match( '/^function ' . $fn . '\(.*?^}\n/ms', (string) file_get_contents( npp_includes_dir() . '/advanced.php' ), $fm ) or ( print( "FAIL missing $fn\n" ) and exit( 2 ) );
             eval( $fm[0] );
@@ -416,6 +416,86 @@ if ( $sc === 'ns_keys' ) {
          'single purge raises the generation of that key only; a higher generation elsewhere does NOT make /p/3/ stale', json_encode( $k3 ) );
     [ $s3, $n3 ] = $scan();
     chk( $n3 === 3 && count( $s3 ) === 3 && $s3['/p/3/'] === [ 1 ], 'after the single purge the plugin view still lists all 3 pages once (nothing live is dropped)', "raw=$n3" );
+
+    /* Namespace state from the real status endpoint, applied by the REAL Status counter and Advanced scan (ripgrep and PHP
+     * paths) over the real cache directory. WordPress is stubbed just enough for those functions to run. */
+    if ( ! function_exists( 'wp_is_using_https' ) ) {
+        function wp_is_using_https() { return false; }
+        function get_site_url() { return 'http://example.com'; }
+        function nppp_prepare_request_env() {}
+        function nppp_categorize_url( $u ) { return 'POST'; }
+        function nppp_check_perm_in_cache( $a = false, $b = false, $c = false ) { return 'true'; }
+        function nppp_check_path() { return 'Found'; }
+        function nppp_check_rg_version() { return '14.1.0'; }
+        function nppp_fuse_source_path( $p ) { return null; }
+        function nppp_get_cache_key_regex(): string { return $GLOBALS['NPPP_RX']; }
+        class FakeFs { function is_dir( $p ) { return is_dir( $p ); } function get_contents( $p ) { return @file_get_contents( $p ); } }
+        function nppp_initialize_wp_filesystem() { return new FakeFs(); }
+    }
+    $GLOBALS['NPPP_RX'] = $rx;
+    foreach ( [ [ 'advanced.php', [ 'nppp_extract_cached_urls', 'nppp_extract_cached_urls_rg', 'nppp_generation_views', 'nppp_generation_stale_groups', 'nppp_generation_count_live' ] ],
+                [ 'wp-filesystem.php', [ 'nppp_head_fast', 'nppp_read_head' ] ], [ 'status.php', [ 'nppp_get_in_cache_page_count' ] ] ] as [ $file, $fns ] ) {
+        foreach ( $fns as $fn ) {
+            if ( function_exists( $fn ) ) { continue; }
+            preg_match( '/^function ' . $fn . '\(.*?^}\n/ms', (string) file_get_contents( npp_includes_dir() . '/' . $file ), $fm ) or ( print( "FAIL missing $fn\n" ) and exit( 2 ) );
+            eval( $fm[0] );
+        }
+    }
+    $rgbin = trim( (string) shell_exec( 'command -v rg 2>/dev/null' ) ); $path0 = getenv( 'PATH' );
+    $real  = function ( bool $with_status ) use ( $rgbin, $path0 ) {   // Status count and Advanced list size, ripgrep and PHP paths
+        global $T;
+        if ( $with_status ) { $T['options']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = 'purge_status'; }
+        else { unset( $T['options']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] ); }
+        $o = [];
+        foreach ( [ 'rg', 'php' ] as $m ) {
+            if ( $m === 'rg' && $rgbin === '' ) { continue; }
+            $T['tr']['nppp_rg_ok'] = [ 'path' => $m === 'rg' ? $rgbin : '', 'ok' => $m === 'rg' ];
+            $o[ "status-$m" ] = nppp_get_in_cache_page_count();
+            putenv( 'PATH=' . ( $m === 'rg' ? $path0 : '/nonexistent' ) );
+            $r = nppp_extract_cached_urls( new FakeFs(), '/tmp/npp-cache' );
+            putenv( 'PATH=' . $path0 );
+            $o[ "adv-$m" ] = isset( $r['error'] ) ? 0 : count( $r );
+        }
+        return $o;
+    };
+    $all = function ( array $o, int $n ) { return count( array_filter( $o, fn( $v ) => $v !== $n ) ) === 0 && count( $o ) >= 2; };
+    $ns  = function () { $j = json_decode( (string) shell_exec( 'curl -s http://127.0.0.1:8081/purge_status' ), true ); return $j['namespaces'][0] ?? null; };
+    $T['options']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = 'purge_status';
+
+    $v = nppp_generation_views();
+    chk( isset( $v['objects'] ) && preg_match( '/^\d{10}$/', $v['objects']['epoch'] ) && preg_match( '/^[0-9a-f]{16}$/', $v['objects']['baseline'] ) && $v['objects']['serial'] >= $v['objects']['baseline'],
+         'the real status endpoint lists the namespace and the plugin parses it (epoch, baseline, serial)', json_encode( $v ) );
+    $n = $ns();
+    chk( $n !== null && $n['rules'] === true, 'a single-page purge in this epoch leaves rules=true (files at/above baseline are then unknown to the plugin)', json_encode( $n ) );
+    $a = $real( true ); $b = $real( false );
+    chk( $all( $a, 3 ) && $all( $b, 3 ), 'idle cache, 3 live pages: Status and Advanced say 3 with and without the namespace state', json_encode( $a ) . json_encode( $b ) );
+
+    // Purge All with the cleanup still pending: every old file is stale by the baseline, although most are the only file of their key
+    warm( 'q', 20 ); $idle();
+    $r = nppp_http_purge_all();
+    chk( $r === true, 'purge_all: invalidated -> true (second round)', notes() );
+    foreach ( [ 1, 2 ] as $i ) { xcache( "/p/$i/" ); }
+    $raw = cnt(); $a = $real( true ); $b = $real( false ); $n = $ns();
+    chk( $n !== null && $n['rules'] === false && $n['baseline'] === $n['serial'], 'purge all: rules=false and baseline == serial (the module resets the rules)', json_encode( $n ) );
+    chk( $all( $a, 2 ), 'Purge All, cleanup pending: Status and Advanced (ripgrep and PHP) show only the 2 re-warmed pages', "raw=$raw " . json_encode( $a ) );
+    chk( $raw < 8 || min( $b ) > 2, 'without the namespace state the not-yet-deleted stale pages are still counted (what this fixes)', "raw=$raw " . json_encode( $b ) );
+    chk( $idle(), 'the cleanup queue goes idle (second round)' );
+    $a = $real( true ); $b = $real( false );
+    chk( $all( $a, 2 ) && $all( $b, 2 ), 'queue idle: both views agree on 2 pages', json_encode( $a ) . json_encode( $b ) );
+
+    // Full restart: a new epoch, files of the old epoch stay on disk and are stale
+    $ng  = getenv( 'NG' ) ?: ( getenv( 'NGROOT' ) ?: __DIR__ . '/ng' ) . '/nginx-run';
+    $pid = trim( (string) @file_get_contents( "$ng/logs/nginx.pid" ) );
+    chk( $pid !== '' && is_file( "$ng/conf/nginx.conf" ), 'restart prerequisites (pid file and conf found)', "ng=$ng" );
+    $e_old = ( $ns() )['epoch'] ?? '';
+    shell_exec( 'kill ' . (int) $pid ); for ( $i = 0; $i < 50 && is_dir( '/proc/' . (int) $pid ); $i++ ) { usleep( 100000 ); }
+    shell_exec( escapeshellarg( "$ng/sbin/nginx" ) . ' -c ' . escapeshellarg( "$ng/conf/nginx.conf" ) . ' 2>&1' ); sleep( 1 );
+    xcache( '/p/1/' );
+    $e_new = ( $ns() )['epoch'] ?? '';
+    $raw = cnt(); $a = $real( true ); $b = $real( false );
+    chk( $e_old !== '' && $e_new !== '' && $e_old !== $e_new, 'full restart starts a new epoch', "$e_old -> $e_new" );
+    chk( $all( $a, 1 ), 'after a full restart only the new-epoch page is counted (old epoch = stale)', "raw=$raw " . json_encode( $a ) );
+    chk( $raw < 3 || min( $b ) > 1, 'without the namespace state the old-epoch files are counted too (what this fixes)', "raw=$raw " . json_encode( $b ) );
 }
 
 /* v4 error-code scenarios: real module error responses against the plugin, one error code per scenario. */
