@@ -382,6 +382,59 @@ function nppp_cron_wake_handler(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Deferred Purge All follow-up handler (nopriv — one-shot token-gated)
+// ---------------------------------------------------------------------------
+
+// The action name must match NPPP_PURGED_ALL_WAKE_ACTION (purge-http.php) and the EP8 gate.
+add_action( 'wp_ajax_nopriv_nppp_purged_all_wake', 'nppp_purged_all_wake_handler' );
+add_action( 'wp_ajax_nppp_purged_all_wake',        'nppp_purged_all_wake_handler' );
+
+/**
+ * Handle the waiter's POST: nginx's purge queue is idle (or the waiter gave up waiting), so the
+ * deferred nppp_purged_all hook runs now. The token is single-use: the atomic claim consumes it,
+ * a retried or replayed request gets 403 and never fires the hook twice.
+ */
+function nppp_purged_all_wake_handler(): void {
+    $rate = nppp_watchdog_rate_limit_check();
+    if ( ! $rate['allowed'] ) {
+        wp_die( '', '', [ 'response' => 429 ] );
+    }
+
+    // phpcs:disable WordPress.Security.NonceVerification.Missing -- token IS the auth
+    $submitted = isset( $_POST['token'] )
+        ? sanitize_text_field( wp_unslash( $_POST['token'] ) )
+        : '';
+    // phpcs:enable WordPress.Security.NonceVerification.Missing
+    if ( ! preg_match( '/^[a-f0-9]{32}$/i', $submitted ) ) {
+        wp_die( '', '', [ 'response' => 403 ] );
+    }
+
+    $state = nppp_http_purge_deferred_claim( strtolower( $submitted ) );
+    if ( $state === null ) {
+        // Wrong token, superseded by a newer Purge All, or already consumed.
+        wp_die( '', '', [ 'response' => 403 ] );
+    }
+
+    // The cron fail-safe is no longer needed.
+    wp_unschedule_hook( NPPP_PURGED_ALL_DEFERRED_HOOK );
+
+    nppp_display_admin_notice(
+        'info',
+        sprintf(
+            /* translators: %d: seconds since the Purge All */
+            __( 'INFO HTTP PURGE ALL: nginx queue is idle. Running the deferred Purge All follow-up (Cloudflare purge-all, Redis flush and other integrations) %d second(s) after the purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            max( 0, time() - (int) $state['armed_at'] )
+        ),
+        true,
+        false
+    );
+
+    do_action( 'nppp_purged_all', (bool) $state['auto_preload'] );
+
+    wp_die( 'ok', '', [ 'response' => 200 ] );
+}
+
+// ---------------------------------------------------------------------------
 // Preload termination & state cleanup helpers
 // ---------------------------------------------------------------------------
 
