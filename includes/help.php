@@ -479,7 +479,7 @@ location ~ \.php$ {
 }
 
 ## Purge Single location - (requires ngx_cache_purge module ≥ 2.3)
-location ~ ^/purge(/.*) {
+location ~ ^/npp_purge_single(/.*) {
     allow 127.0.0.1;       # Only allow local requests
     allow 172.16.0.0/12;   # Docker network (adjust as needed)
     deny all;              # Deny everyone else
@@ -489,7 +489,7 @@ location ~ ^/purge(/.*) {
 }
 
 ## Purge All location — for full cache clear (requires ngx_cache_purge module ≥ 3.0.2)
-location = /purge_all {
+location = /npp_purge_all {
     allow 127.0.0.1;       # Only allow local requests
     allow 172.16.0.0/12;   # Docker network (adjust as needed)
     deny all;              # Deny everyone else
@@ -502,7 +502,7 @@ location = /purge_all {
                         <p><strong>Optional — ngx_cache_purge v4 only:</strong> if you use <code>cache_purge_background_queue on</code>, add a queue status location so NPP can confirm that a queued (<code>202</code>) Purge All has finished before preloading starts, then enter its path in <strong>Purge Queue Status Path</strong>. The directive does not exist in v2/v3 — <strong>do not add it on those versions, Nginx will refuse to load the configuration</strong> (<code>unknown directive "cache_purge_queue_status"</code>).</p>
 
 <pre>## Purge Queue Status location - (requires ngx_cache_purge ≥ 4.0)
-location = /purge_status {
+location = /npp_purge_status {
     allow 127.0.0.1;       # Only allow local requests
     allow 172.16.0.0/12;   # Docker network (adjust as needed)
     deny all;              # Deny everyone else
