@@ -365,6 +365,65 @@ function nppp_purge_fp1_index_file_exists( array $ctx, array $index, string $key
 }
 
 /**
+ * Index paths of one URL that still exist under the current cache directory, minus the
+ * files that are provably an older generation of another file in the same list.
+ *
+ * In generation mode every invalidation gives the URL a new file name, so an index that
+ * only ever grew holds dead paths and superseded generations. Counting those as "multiple
+ * variants" sent every purge down the filesystem layers. Genuine Vary variants share the
+ * logical key and the generation, so they all stay. Legacy keys carry no envelope and are
+ * never dropped; for them this is just "paths that exist".
+ *
+ * @param array              $ctx    Purge context (wp_filesystem, head_bytes, head_bytes_fb).
+ * @param array<int,string>  $paths  Index paths of the URL.
+ * @param string             $prefix Cache directory prefix with trailing slash.
+ * @return array<int,string>
+ */
+function nppp_purge_live_index_paths( array $ctx, array $paths, string $prefix ): array {
+    $fs    = $ctx['wp_filesystem'];
+    $found = [];
+
+    foreach ( $paths as $path ) {
+        if ( is_string( $path ) && strpos( $path, $prefix ) === 0 && $fs->exists( $path ) ) {
+            $found[] = $path;
+        }
+    }
+    if ( count( $found ) < 2 ) {
+        return $found;
+    }
+
+    $info = [];
+    $max  = [];
+    foreach ( $found as $i => $path ) {
+        $head = nppp_read_head( $fs, $path, $ctx['head_bytes'] );
+        $gi   = $head !== '' ? nppp_key_generation_info( $head ) : null;
+        if ( $gi === null && strlen( $head ) >= $ctx['head_bytes'] ) {
+            $gi = nppp_key_generation_info( nppp_read_head( $fs, $path, $ctx['head_bytes_fb'] ) );
+        }
+        if ( $gi === null ) {
+            continue;
+        }
+        $info[ $i ] = $gi;
+        if ( ! isset( $max[ $gi['group'] ] ) || strcmp( $gi['gen'], $max[ $gi['group'] ] ) > 0 ) {
+            $max[ $gi['group'] ] = $gi['gen'];
+        }
+    }
+    if ( ! $info ) {
+        return $found;
+    }
+
+    $live = [];
+    foreach ( $found as $i => $path ) {
+        if ( isset( $info[ $i ] ) && $info[ $i ]['gen'] !== $max[ $info[ $i ]['group'] ] ) {
+            continue;
+        }
+        $live[] = $path;
+    }
+
+    return $live;
+}
+
+/**
  * FP1: HTTP purge endpoint.
  *
  * Skips URLs that have multiple index variants (delegated to FP2 to handle all
@@ -380,16 +439,23 @@ function nppp_purge_fp1_http( array &$ctx ): bool {
 
     $index = $ctx['nppp_index'];
     $cache_path_prefix = rtrim( $ctx['nginx_cache_path'], '/' ) . '/';
+    $gen_active = nppp_gen_mode_active();
 
     foreach ( array_keys( $ctx['pending'] ) as $key ) {
         $target = $ctx['pending'][ $key ];
 
         // Multiple index variants under current prefix — delegate to FP2 for atomic removal.
         if ( isset( $index[ $key ] ) && is_array( $index[ $key ] ) ) {
-            $prefix_count = 0;
-            foreach ( $index[ $key ] as $path ) {
-                if ( strpos( $path, $cache_path_prefix ) === 0 ) {
-                    $prefix_count++;
+            if ( $gen_active ) {
+                // Generation mode: count only index paths that still exist and are not a
+                // superseded generation of another one (dead paths are not "variants").
+                $prefix_count = count( nppp_purge_live_index_paths( $ctx, $index[ $key ], $cache_path_prefix ) );
+            } else {
+                $prefix_count = 0;
+                foreach ( $index[ $key ] as $path ) {
+                    if ( strpos( $path, $cache_path_prefix ) === 0 ) {
+                        $prefix_count++;
+                    }
                 }
             }
             if ( $prefix_count > 1 ) {
@@ -482,8 +548,19 @@ function nppp_purge_fp2_index( array &$ctx ): bool {
     $index             = $ctx['nppp_index'];
     $cache_path_prefix = rtrim( $ctx['nginx_cache_path'], '/' ) . '/';
 
+    // Generation mode: the file name changes with every invalidation, so the index can
+    // neither prove a page is uncached ("path gone" would leave its newer, unindexed file
+    // behind and still report success) nor list every file to delete. Leave all targets to
+    // the scan layers, which match the KEY line. Only while HTTP Purge is ON and generation
+    // mode was observed (nppp_gen_mode_active). Filter: return false to restore index trust.
+    $gen_mode = nppp_gen_mode_active() && (bool) apply_filters( 'nppp_fp2_skip_generation_mode', true );
+
     foreach ( array_keys( $ctx['pending'] ) as $key ) {
         $target = $ctx['pending'][ $key ];
+
+        if ( $gen_mode ) {
+            continue;
+        }
 
         if ( ! isset( $index[ $key ] ) ) {
             if ( $target['is_primary'] ) {
