@@ -20,6 +20,11 @@ function nppp_reset_plugin_settings_on_deactivation() {
     wp_clear_scheduled_hook('npp_cache_preload_status_event');
     wp_clear_scheduled_hook('npp_cache_preload_event');
 
+    // Deferred Purge All follow-up: cron fail-safe and one-shot token (a running waiter then
+    // holds a dead token and its POST is refused).
+    wp_unschedule_hook('nppp_purged_all_deferred_event');
+    delete_option('nppp_purged_all_deferred');
+
     // Fail2ban retention cron. The recorded events themselves are kept — only
     // uninstall wipes data — but the scheduled job must not survive
     // deactivation.
