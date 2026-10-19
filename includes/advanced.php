@@ -162,13 +162,145 @@ function nppp_key_generation_info( string $key_text ): ?array {
 }
 
 /**
+ * Reads the generation state of every ngx_cache_purge v4 `cache_purge_namespace` from the
+ * `cache_purge_queue_status` location ("namespaces": name, epoch, baseline, serial, rules).
+ *
+ * Read-only and tolerant: HTTP Purge off, no Purge Queue Status Path, an older module without
+ * the list, an unreachable endpoint or a malformed reply all return null, and the callers keep
+ * their disk-only logic. A malformed or duplicated entry is left out, which callers treat as an
+ * unknown namespace (a namespace the module cut from a long list is absent the same way).
+ *
+ * @return array<string,array{epoch:string,baseline:string,serial:string}>|null Namespace name => state.
+ */
+function nppp_generation_views(): ?array {
+    if ( ! function_exists( 'nppp_http_purge_queue_status_url' ) || ! function_exists( 'nppp_http_purge_fetch' ) || ! nppp_http_purge_enabled() ) {
+        return null;
+    }
+
+    $url = nppp_http_purge_queue_status_url();
+    if ( $url === '' ) {
+        return null;
+    }
+
+    $res = nppp_http_purge_fetch( 'GET', $url, 2 );
+    if ( $res['error'] !== '' || $res['status'] !== 200 || $res['code'] !== 'status' ) {
+        return null;
+    }
+
+    $json = json_decode( $res['body'], true );
+    if ( ! is_array( $json ) || ! isset( $json['namespaces'] ) || ! is_array( $json['namespaces'] ) ) {
+        return null;
+    }
+
+    $views = [];
+    $dupes = [];
+    foreach ( $json['namespaces'] as $e ) {
+        if ( ! is_array( $e )
+            || ! isset( $e['name'], $e['epoch'], $e['baseline'], $e['serial'] )
+            || ! is_string( $e['name'] ) || ! is_string( $e['epoch'] )
+            || ! is_string( $e['baseline'] ) || ! is_string( $e['serial'] )
+            || ! preg_match( '/^[A-Za-z0-9_-]{1,32}$/D', $e['name'] )
+            || ! preg_match( '/^\d{10}$/D', $e['epoch'] )
+            || ! preg_match( '/^[0-9a-f]{16}$/D', $e['baseline'] )
+            || ! preg_match( '/^[0-9a-f]{16}$/D', $e['serial'] ) ) {
+            continue;
+        }
+        if ( isset( $views[ $e['name'] ] ) ) {
+            $dupes[ $e['name'] ] = true;
+            continue;
+        }
+        $views[ $e['name'] ] = [ 'epoch' => $e['epoch'], 'baseline' => $e['baseline'], 'serial' => $e['serial'] ];
+    }
+
+    return array_diff_key( $views, $dupes );
+}
+
+/**
+ * Groups whose files are provably stale by the live namespace state.
+ *
+ * Works per GROUP ("ns|epoch|logical key"), not per file: callers already track the highest
+ * generation of each group, and when that one is stale every lower one is too. A group is
+ * stale when its epoch differs from the live epoch, or its highest generation is below the
+ * live baseline. Both are permanent (an epoch is never reused, baseline never decreases), so
+ * dropping on them is always safe. Whether a namespace has exact/prefix rules is irrelevant
+ * here: such a file is "unknown" and is simply kept.
+ *
+ * The state is trusted only for a namespace present in BOTH the `$before` read (taken when the
+ * scan met its first generation key) and a fresh read now, with epoch, baseline and serial
+ * unchanged. Anything else leaves the group to the disk-only rule.
+ *
+ * @param array<string,string> $group_gen Group => highest generation seen (16 lowercase hex).
+ * @param mixed                $before    Result of nppp_generation_views() (false / null = none).
+ * @return array<string,true>  Stale groups; [] when there is no usable state (no request is made then).
+ */
+function nppp_generation_stale_groups( array $group_gen, $before ): array {
+    if ( empty( $group_gen ) || ! is_array( $before ) || empty( $before ) ) {
+        return [];
+    }
+
+    $after = nppp_generation_views();
+    if ( empty( $after ) ) {
+        return [];
+    }
+
+    $trusted = [];
+    $stale   = [];
+    foreach ( $group_gen as $group => $gen ) {
+        $part = explode( '|', (string) $group, 3 );
+        $ns   = $part[0];
+
+        if ( ! array_key_exists( $ns, $trusted ) ) {
+            $trusted[ $ns ] = ( isset( $before[ $ns ], $after[ $ns ] ) && $before[ $ns ] === $after[ $ns ] ) ? $after[ $ns ] : null;
+        }
+        if ( $trusted[ $ns ] === null || ! isset( $part[1] ) ) {
+            continue;
+        }
+        if ( $part[1] !== $trusted[ $ns ]['epoch'] || strcmp( (string) $gen, $trusted[ $ns ]['baseline'] ) < 0 ) {
+            $stale[ $group ] = true;
+        }
+    }
+
+    return $stale;
+}
+
+/**
+ * Number of files in the live generation groups: sum of the files at the highest generation
+ * of each group, leaving out groups proven stale by the namespace state.
+ *
+ * @param array<string,array{0:string,1:int}> $gen_seen Group => [ highest generation, files at it ].
+ * @param mixed                               $before    Result of nppp_generation_views() (false / null = none).
+ */
+function nppp_generation_count_live( array $gen_seen, $before ): int {
+    $stale = [];
+    if ( ! empty( $gen_seen ) && is_array( $before ) && ! empty( $before ) ) {
+        $gens = [];
+        foreach ( $gen_seen as $group => $seen ) {
+            $gens[ $group ] = $seen[0];
+        }
+        $stale = nppp_generation_stale_groups( $gens, $before );
+    }
+
+    $count = 0;
+    foreach ( $gen_seen as $group => $seen ) {
+        if ( ! isset( $stale[ $group ] ) ) {
+            $count += $seen[1];
+        }
+    }
+
+    return $count;
+}
+
+/**
  * Drop files that are provably stale (see nppp_key_generation_info()) so a
  * stale+live pair of one page is not shown as "Multiple" variants. Genuine Vary
  * variants share the key and the generation, so they all stay.
  *
- * @param array<int,array<string,mixed>> &$urls Entries may carry 'gen_group' and 'gen'.
+ * Optionally also drops groups proven stale by the namespace state (see nppp_generation_stale_groups()).
+ *
+ * @param array<int,array<string,mixed>> &$urls  Entries may carry 'gen_group' and 'gen'.
+ * @param mixed                          $before Result of nppp_generation_views() taken during the scan, if any.
  */
-function nppp_drop_stale_generations( array &$urls ): void {
+function nppp_drop_stale_generations( array &$urls, $before = null ): void {
     $max = [];
     foreach ( $urls as $entry ) {
         if ( ! isset( $entry['gen_group'], $entry['gen'] ) ) {
@@ -182,15 +314,100 @@ function nppp_drop_stale_generations( array &$urls ): void {
     if ( empty( $max ) ) {
         return;
     }
+    $stale = nppp_generation_stale_groups( $max, $before );
+    nppp_gen_mode_note_seen();
     $kept = [];
     foreach ( $urls as $entry ) {
-        if ( isset( $entry['gen_group'], $entry['gen'] ) && $entry['gen'] !== $max[ $entry['gen_group'] ] ) {
+        $is_gen = isset( $entry['gen_group'], $entry['gen'] );
+        if ( $is_gen && ( $entry['gen'] !== $max[ $entry['gen_group'] ] || isset( $stale[ $entry['gen_group'] ] ) ) ) {
             continue;
         }
         unset( $entry['gen_group'], $entry['gen'] );
+        if ( $is_gen ) {
+            $entry['gen_mode'] = true; // lets nppp_index_merge_hits() prune only generation files
+        }
         $kept[] = $entry;
     }
     $urls = $kept;
+}
+
+/**
+ * Remember that generation-mode keys were seen in the cache directory (24 h).
+ * One transient read per scan; written only when it is missing.
+ */
+function nppp_gen_mode_note_seen(): void {
+    if ( get_transient( 'nppp_gen_mode_seen' ) === false ) {
+        set_transient( 'nppp_gen_mode_seen', 1, DAY_IN_SECONDS );
+    }
+}
+
+/**
+ * True when ngx_cache_purge generation mode is (or recently was) in use: a scan saw
+ * p4 keys, or an HTTP purge answered "invalidated". In that mode the cache file path
+ * changes with every generation, so a path remembered in the URL index proves nothing
+ * about the page's current file.
+ */
+function nppp_gen_mode_seen(): bool {
+    if ( get_transient( 'nppp_gen_mode_seen' ) !== false ) {
+        return true;
+    }
+    return function_exists( 'nppp_http_purge_generation_mode' )
+        && ( nppp_http_purge_generation_mode( 'single' ) || nppp_http_purge_generation_mode( 'all' ) );
+}
+
+/**
+ * The single gate for every generation-mode behaviour in the index / purge layers:
+ * HTTP Purge is enabled in the settings AND generation mode has been observed.
+ * When false, every caller runs its original code path unchanged.
+ */
+function nppp_gen_mode_active(): bool {
+    return function_exists( 'nppp_http_purge_enabled' )
+        && nppp_http_purge_enabled()
+        && nppp_gen_mode_seen();
+}
+
+/**
+ * Merge scanned cache files into the URL->filepath index (shared by the Advanced tab,
+ * the post-preload rebuild and the cron updater).
+ *
+ * Nothing is ever truncated and a URL may hold several paths.
+ * One addition, only while nppp_gen_mode_active() and only for a generation file
+ * (entry flag 'gen_mode'): when a NEW path is appended to a URL that already has paths,
+ * the old paths that no longer exist on disk are dropped. In generation mode every
+ * invalidation gives the URL a new file name and the old name never comes back, so
+ * without this the index would grow by one dead path per generation. Legacy keys keep
+ * the deterministic-path model: their missing paths are kept, they come back on re-cache.
+ *
+ * @param array<string,array<int,string>> $index Index, modified in place.
+ * @param array<int,array<string,mixed>>  $hits  Scan result entries (url_encoded, file_path).
+ * @param object                          $wp_filesystem
+ * @return int Number of paths added.
+ */
+function nppp_index_merge_hits( array &$index, array $hits, $wp_filesystem ): int {
+    $added = 0;
+    $prune = nppp_gen_mode_active();
+
+    foreach ( $hits as $entry ) {
+        $key      = preg_replace( '#^https?://#', '', $entry['url_encoded'] );
+        $existing = $index[ $key ] ?? [];
+
+        if ( ! in_array( $entry['file_path'], $existing, true ) ) {
+            if ( $prune && $existing && ! empty( $entry['gen_mode'] ) ) {
+                $existing = array_values( array_filter(
+                    $existing,
+                    static function ( $p ) use ( $wp_filesystem ) {
+                        return is_string( $p ) && $wp_filesystem->exists( $p );
+                    }
+                ) );
+            }
+            $existing[] = $entry['file_path'];
+            ++$added;
+        }
+
+        $index[ $key ] = $existing;
+    }
+
+    return $added;
 }
 
 /** Plugin root */
@@ -508,16 +725,9 @@ function nppp_premium_html($nginx_cache_path) {
     if ( ! empty( $hits ) && is_array( $hits ) && ! $preload_running ) {
         $nppp_index = get_option( 'nppp_url_filepath_index' );
         $nppp_index = is_array( $nppp_index ) ? $nppp_index : [];
-        foreach ( $hits as $nppp_entry ) {
-            $nppp_key      = preg_replace( '#^https?://#', '', $nppp_entry['url_encoded'] );
-            $nppp_existing = $nppp_index[ $nppp_key ] ?? [];
-            if ( ! in_array( $nppp_entry['file_path'], $nppp_existing, true ) ) {
-                $nppp_existing[] = $nppp_entry['file_path'];
-            }
-            $nppp_index[ $nppp_key ] = $nppp_existing;
-        }
+        nppp_index_merge_hits( $nppp_index, $hits, $wp_filesystem );
         update_option( 'nppp_url_filepath_index', $nppp_index, false );
-        unset( $nppp_index, $nppp_entry, $nppp_key, $nppp_existing );
+        unset( $nppp_index );
     }
 
     // Merge HIT + MISS
@@ -1226,6 +1436,7 @@ function nppp_extract_cached_urls_rg(
     $scheme       = $https_enabled ? 'https' : 'http';
     $urls         = [];
     $regex_tested = false;
+    $gen_before   = false; // namespace state, read once at the first generation key
 
     foreach ( $per_file as $scan_filepath => $nppp_bucket ) {
         // Skip redirect files regardless of whether a KEY: line was also captured.
@@ -1300,6 +1511,9 @@ function nppp_extract_cached_urls_rg(
 
         // Generation-mode envelope (null for legacy keys)
         $gen_info = nppp_key_generation_info( $key_line );
+        if ( $gen_info !== null && $gen_before === false ) {
+            $gen_before = nppp_generation_views();
+        }
 
         // Calculating cache date is expensive with rg
         $urls[] = [
@@ -1317,7 +1531,7 @@ function nppp_extract_cached_urls_rg(
     }
 
     // Drop provably stale generation-mode files first, then calculate cache variants
-    nppp_drop_stale_generations( $urls );
+    nppp_drop_stale_generations( $urls, $gen_before );
     nppp_annotate_variant_counts( $urls );
 
     return $urls;
@@ -1481,6 +1695,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
         );
 
         $regex_tested = false;
+        $gen_before   = false; // namespace state, read once at the first generation key
         foreach ($cache_iterator as $file) {
             $path = $file->getPathname();
 
@@ -1565,6 +1780,9 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
 
                     // Generation-mode envelope (null for legacy keys)
                     $gen_info = nppp_key_generation_info($content);
+                    if ($gen_info !== null && $gen_before === false) {
+                        $gen_before = nppp_generation_views();
+                    }
 
                     // Store URL data
                     $urls[] = array(
@@ -1592,7 +1810,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
     }
 
     // Drop provably stale generation-mode files first, then calculate cache variants
-    nppp_drop_stale_generations( $urls );
+    nppp_drop_stale_generations( $urls, $gen_before );
     nppp_annotate_variant_counts( $urls );
 
     return $urls;
