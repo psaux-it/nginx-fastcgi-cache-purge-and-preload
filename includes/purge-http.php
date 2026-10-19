@@ -1770,7 +1770,7 @@ function nppp_http_purge_try_first_core( string $url ) {
             if ( ! $ns_logged ) {
                 $ns_logged = true;
                 nppp_display_admin_notice( 'info',
-                    __( 'INFO HTTP PURGE SINGLE: Generation invalidation is active. Entries are invalidated logically and removed by nginx later.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    __( 'INFO HTTP PURGE SINGLE: ngx_cache_purge v4 generation invalidation is active. Entries are invalidated logically and removed by nginx later.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     true, false
                 );
             }
