@@ -162,7 +162,7 @@ function nppp_migration_215() {
     $options = get_option( 'nginx_cache_settings' );
     if ( is_array( $options ) && array_key_exists( 'nginx_cache_tracking_opt_in', $options ) ) {
         unset( $options['nginx_cache_tracking_opt_in'] );
-        update_option( 'nginx_cache_settings', $options );
+        nppp_update_settings_without_sanitize( $options );
     }
 
     // Backfill: grant the custom purge capability to Administrators.
@@ -199,7 +199,7 @@ function nppp_migration_216() {
         $options['nppp_autopurge_plugins']  = 'yes';
         $options['nppp_autopurge_themes']   = 'yes';
         $options['nppp_autopurge_3rdparty'] = 'yes';
-        update_option( 'nginx_cache_settings', $options );
+        nppp_update_settings_without_sanitize( $options );
     }
 
     // Switch every 3 Hour cron for index updater
