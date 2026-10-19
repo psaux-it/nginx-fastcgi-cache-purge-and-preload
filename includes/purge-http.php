@@ -1605,8 +1605,10 @@ function nppp_http_purge_gate_command( string $crawl, string $log_path ): string
  *            max wait = gate_max_wait()) and then ONE token-gated POST to admin-ajax.php
  *            (action nppp_purged_all_wake, EP8). Independent of Auto Preload. Spawned only
  *            when the watchdog feature is on, the same opt-in as the preload watchdog.
- *   cron     one-shot WP-Cron event, FAIL-SAFE only: it polls the queue itself when the
- *            waiter could not be spawned, and otherwise fires at the waiter's deadline.
+ *   cron     one-shot WP-Cron event, FAIL-SAFE only. Always armed: it is the poller when no
+ *            waiter could be spawned, and a slow second wake-up path (60 s) while a waiter
+ *            runs, so a waiter that died silently cannot hold the follow-up until its deadline.
+ *            Both fire at the deadline (gate_max_wait() + 60 s) if the queue was never confirmed idle.
  *   claim    state lives in ONE option. Whoever deletes that row first (atomic DELETE) fires
  *            the hook, so the waiter and cron can never double-fire: at most once.
  *
@@ -1633,6 +1635,31 @@ if ( ! defined( 'NPPP_PURGED_ALL_WAKE_ACTION' ) ) {
 /** Seconds between two cron-side queue polls (WP-Cron itself runs at most about once a minute). */
 function nppp_http_purge_defer_interval(): int {
     return min( 120, max( 15, (int) apply_filters( 'nppp_purged_all_defer_interval', 15 ) ) );
+}
+
+/**
+ * Seconds until the next cron-side check. Without a waiter the cron is the poller (short interval).
+ * With a live waiter, which polls every second itself, the cron only covers a waiter that died
+ * silently (php-fpm restart killing its process, OOM, a shell_exec that spawned nothing), so it
+ * re-checks slowly. The atomic claim keeps both paths at-most-once.
+ */
+function nppp_http_purge_defer_poll_delay( bool $waiter ): int {
+    $interval = nppp_http_purge_defer_interval();
+    return $waiter ? max( 60, $interval ) : $interval;
+}
+
+/**
+ * The follow-up runs headless (WP-Cron or the waiter's admin-ajax POST), no longer inside
+ * nppp_purge(), which lifts both limits for the same listeners. The claim has already consumed
+ * the one-shot state, so a request killed half way would lose the follow-up for good.
+ */
+function nppp_http_purge_deferred_lift_limits(): void {
+    if ( function_exists( 'set_time_limit' ) ) {
+        @set_time_limit( 0 ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
+    }
+    if ( function_exists( 'ignore_user_abort' ) ) {
+        ignore_user_abort( true );
+    }
 }
 
 /** Fresh read of the deferred state (a request-local negative must not hide a row written elsewhere). */
@@ -1754,9 +1781,10 @@ function nppp_http_purge_defer_purged_all( bool $auto_preload ): bool {
         shell_exec( $cmd );
     }
 
-    // Waiter alive: cron is only the deadline fail-safe. No waiter: cron polls the queue itself.
+    // Cron is always armed. No waiter: it polls the queue itself. Waiter alive: it re-checks
+    // slowly as a second wake-up path in case the waiter died (the claim keeps it at-most-once).
     wp_unschedule_hook( NPPP_PURGED_ALL_DEFERRED_HOOK );
-    $delay     = $state['waiter'] ? nppp_http_purge_gate_max_wait() + 60 : nppp_http_purge_defer_interval();
+    $delay     = nppp_http_purge_defer_poll_delay( ! empty( $state['waiter'] ) );
     $scheduled = wp_schedule_single_event( $armed_at + $delay, NPPP_PURGED_ALL_DEFERRED_HOOK );
 
     if ( ! $state['waiter'] && $scheduled !== true ) {
@@ -1826,7 +1854,7 @@ function nppp_http_purge_run_deferred_purged_all(): void {
 
     // A live marker means the queue is working, or its status is unreadable (which gates too).
     if ( ! $timed_out && nppp_http_purge_gate_pending() !== null ) {
-        if ( wp_schedule_single_event( time() + nppp_http_purge_defer_interval(), NPPP_PURGED_ALL_DEFERRED_HOOK ) === true ) {
+        if ( wp_schedule_single_event( time() + nppp_http_purge_defer_poll_delay( ! empty( $state['waiter'] ) ), NPPP_PURGED_ALL_DEFERRED_HOOK ) === true ) {
             return;
         }
         // Could not re-arm: fail open below instead of losing the follow-up.
@@ -1854,6 +1882,8 @@ function nppp_http_purge_run_deferred_purged_all(): void {
             false
         );
     }
+
+    nppp_http_purge_deferred_lift_limits();
 
     do_action( 'nppp_purged_all', (bool) $claimed['auto_preload'] );
 }
