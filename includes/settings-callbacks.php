@@ -377,11 +377,30 @@ function nppp_fetch_default_regex_for_cache_key(): string {
 }
 
 /**
+ * Cache Key Regex values that shipped as the built-in default before: envelope
+ * (2.1.5, 2.1.6, 2.1.7 / 2.1.8). The default is written to the DB on activation, so an
+ * install that never pressed "Reset Default" still carries one of them. Exact matches only:
+ * a regex the user edited is never in this list.
+ */
+function nppp_legacy_default_cache_key_regexes(): array {
+    return [
+        '/^KEY:\s+https?(?:GET)?([^\/]+)(\/[^\s]*)/m',
+        '/^KEY:\s+https?(?:GET|HEAD)?([^\/]+)(\/[^\s]*)/m',
+        '/^KEY:\s+(?:https?:\/\/|https?(?:[A-Z]+)?)?([^\/\s]+)(\/[^\s]*)/m',
+    ];
+}
+
+/**
  * Central getter — always returns the active cache key regex as plaintext.
  *
  *   1. Properly base64-encoded value   (normal: saved via plugin UI or WP-CLI)
  *   2. Raw regex stored directly in DB (legacy: wp option update / old version)
  *   3. Missing / empty                 (fall back to plugin default)
+ *
+ * A stored value that is exactly one of the earlier built-in defaults is served as the
+ * current default.
+ * This holds for every consumer (purge FP3/FP4, Advanced, Status, probe) even when the
+ * 2.1.9 migration has not run yet: migrations only run when an admin opens the Settings page.
  */
 function nppp_get_cache_key_regex(): string {
     $settings = get_option( 'nginx_cache_settings', [] );
@@ -398,9 +417,18 @@ function nppp_get_cache_key_regex(): string {
 
     // If strict decode fails the stored value is already the raw regex — use as-is.
     // The next Settings save will re-encode it correctly.
-    return ( $decoded !== false && $decoded !== '' )
+    $active = ( $decoded !== false && $decoded !== '' )
         ? $decoded
         : $stored;
+
+    if ( in_array( $active, nppp_legacy_default_cache_key_regexes(), true ) ) {
+        $current = nppp_fetch_default_regex_for_cache_key();
+        if ( $current !== '' ) {
+            return $current;
+        }
+    }
+
+    return $active;
 }
 
 // Get default mobile user agent string
