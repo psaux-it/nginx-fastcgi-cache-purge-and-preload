@@ -49,8 +49,8 @@ if (!defined('ABSPATH')) {
 //
 //   Token/key-gated remote endpoints (credential verified pre-bootstrap):
 //     EP3  REST API (nppp_nginx_cache/v2)  API key, feature toggle required
-//     EP8  Watchdog AJAX (nppp_cron_wake,  ping token / one-shot token, feature
-//          nppp_purged_all_wake)           toggle required
+//     EP8  Watchdog AJAX (nppp_cron_wake,  ping token / one-shot token; the Watchdog
+//          nppp_purged_all_wake)           toggle gates nppp_cron_wake only
 //     EP10 Fail2Ban webhook (nppp_f2b/v1)  bearer token, POST only, optional
 //                                          IP allow-list checked AFTER the token
 //   Each of these is a two-layer gate: a lightweight pre-bootstrap check here,
