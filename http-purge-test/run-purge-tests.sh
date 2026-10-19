@@ -68,6 +68,8 @@ if [ "$ONLY" = all ] || [ "$ONLY" = mock ]; then
     php "$HERE/run.php" "$PLUGIN_FILE" | tail -n "${MOCK_TAIL:-25}" || RC=1   # pipefail: run.php's exit status counts
     echo; echo "== generation-mode scans (gen-scan.php)"
     php "$HERE/gen-scan.php" "$PLUGIN_FILE" | tail -n "${MOCK_TAIL:-25}" || RC=1
+    echo; echo "== generation-mode index, FP1 and FP2 (gen-index.php)"
+    php "$HERE/gen-index.php" "$PLUGIN_FILE" | tail -n "${MOCK_TAIL:-25}" || RC=1
 fi
 
 if [ "$ONLY" = all ] || [ "$ONLY" = matrix ]; then
