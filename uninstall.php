@@ -39,6 +39,7 @@ function nppp_clear_plugin_cache_on_uninstall() {
         'nppp_fuse_path_not_found',
         'nppp_assume_recently_enabled',
         'nppp_http_purge_endpoint_broken',
+        'nppp_gen_mode_seen',
         'nppp_wget_urls_cache_prev_key',
         'nppp_safexec_ok',
         'nppp_category_map',
