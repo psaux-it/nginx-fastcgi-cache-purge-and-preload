@@ -560,9 +560,12 @@ add_action('init', function(): void {
     // nppp_purged_all_wake: deferred Purge All follow-up (one-shot token, see purge-http.php 6c).
     if ($action !== 'nppp_cron_wake' && $action !== 'nppp_purged_all_wake') return;
 
-    // Watchdog feature disabled — endpoint intentionally unreachable.
+    // Watchdog feature disabled — the preload watchdog endpoint is intentionally unreachable.
+    // nppp_purged_all_wake is exempt: its credential is a one-shot token that exists only while
+    // a deferred Purge All follow-up is pending (layer 1b below), so it does not depend on the
+    // Watchdog toggle and the follow-up never has to fall back to WP-Cron on default installs.
     $opts = get_option('nginx_cache_settings', []);
-    if (($opts['nginx_cache_watchdog'] ?? 'no') !== 'yes') {
+    if ($action === 'nppp_cron_wake' && ($opts['nginx_cache_watchdog'] ?? 'no') !== 'yes') {
         wp_die('', '', ['response' => 403]);
     }
 
