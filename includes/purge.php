@@ -1052,7 +1052,9 @@ function nppp_purge_fp4_scan( array &$ctx ): string {
     $head_bytes      = $ctx['head_bytes'];
     $head_bytes_fb   = $ctx['head_bytes_fb'];
     $candidates      = [];
-    $regex_tested    = false;
+    // Validated once per key shape: a legacy key (scheme+method+host+uri) and a generation key
+    // (p4:<ns>:<epoch>:<gen>:<logical key>) can sit in the same cache dir.
+    $regex_tested    = [ 'legacy' => false, 'p4' => false ];
 
     try {
         $iterator = new RecursiveIteratorIterator(
@@ -1088,7 +1090,9 @@ function nppp_purge_fp4_scan( array &$ctx ): string {
                 continue;
             }
 
-            if ( ! $regex_tested ) {
+            $key_shape = ( strncmp( ltrim( (string) $match[1] ), 'p4:', 3 ) === 0 ) ? 'p4' : 'legacy';
+
+            if ( ! $regex_tested[ $key_shape ] ) {
                 if ( ! preg_match( $regex, $content, $matches ) || ! isset( $matches[1], $matches[2] ) ) {
                     nppp_display_admin_notice( 'error', sprintf(
                         /* translators: %s: Page URL */
@@ -1107,7 +1111,7 @@ function nppp_purge_fp4_scan( array &$ctx ): string {
                     nppp_purge_post_purge( $ctx );
                     return 'error';
                 }
-                $regex_tested = true;
+                $regex_tested[ $key_shape ] = true;
             } else {
                 $matches = [];
                 if ( ! preg_match( $regex, $content, $matches ) || ! isset( $matches[1], $matches[2] ) ) {
