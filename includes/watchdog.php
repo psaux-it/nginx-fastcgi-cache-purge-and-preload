@@ -429,6 +429,9 @@ function nppp_purged_all_wake_handler(): void {
         false
     );
 
+    // The one-shot state is consumed: lift the limits so the listeners cannot be cut off half way.
+    nppp_http_purge_deferred_lift_limits();
+
     do_action( 'nppp_purged_all', (bool) $state['auto_preload'] );
 
     wp_die( 'ok', '', [ 'response' => 200 ] );
