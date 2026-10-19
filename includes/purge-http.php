@@ -1610,10 +1610,13 @@ function nppp_http_purge_gate_command( string $crawl, string $log_path ): string
  *   claim    state lives in ONE option. Whoever deletes that row first (atomic DELETE) fires
  *            the hook, so the waiter and cron can never double-fire: at most once.
  *
- * A new Purge All, or any Purge All that really finished, cancels the pending follow-up.
+ * A Purge All that is again status 7 while a follow-up is pending RE-ARMS the same chain: the
+ * token stays, so the waiter already running stays valid (a replaced token would turn that
+ * waiter's POST into a bogus EP8 strike), and only armed_at / auto_preload / the cron deadline
+ * move. A Purge All that really finished fires the hook itself and cancels the pending chain.
  * Fail-open everywhere: if nothing can wake us the hook fires at once, as before.
  *
- * Option value: array{ token:string, auto_preload:bool, armed_at:int }
+ * Option value: array{ token:string, auto_preload:bool, armed_at:int, waiter:bool }
  * The cron hook name must stay in the EP2 whitelist and the action name in the EP8 gate of
  * the main plugin file (both run BEFORE the plugin bootstrap).
  */
@@ -1683,16 +1686,16 @@ function nppp_http_purge_deferred_claim( ?string $token = null ): ?array {
  * @param bool  $auto_preload Runtime auto-preload flag of this Purge All.
  */
 function nppp_http_purge_fire_purged_all( $status, bool $auto_preload ): void {
-    // Latest Purge All wins: this run covers whatever an earlier one still had pending.
-    nppp_http_purge_deferred_cancel();
-
     // Filter: return false to restore the immediate hook.
     if ( $status === 7
         && apply_filters( 'nppp_defer_purged_all_while_queue_busy', true )
         && nppp_http_purge_defer_purged_all( $auto_preload )
     ) {
-        return;
+        return; // armed, or re-armed on the chain that is already pending
     }
+
+    // Firing now covers whatever an earlier Purge All still had pending.
+    nppp_http_purge_deferred_cancel();
 
     do_action( 'nppp_purged_all', $auto_preload );
 }
@@ -1710,29 +1713,53 @@ function nppp_http_purge_defer_purged_all( bool $auto_preload ): bool {
         return false;
     }
 
-    try {
-        $token = bin2hex( random_bytes( 16 ) );
-    } catch ( \Throwable $e ) {
-        return false;
-    }
-
     $armed_at = time();
-    $state    = array(
-        'token'        => $token,
-        'auto_preload' => $auto_preload,
-        'armed_at'     => $armed_at,
-    );
-    if ( ! update_option( NPPP_PURGED_ALL_DEFERRED_KEY, $state, false ) ) {
-        return false;
+    $state    = nppp_http_purge_deferred_read();
+
+    if ( $state !== null && ( $armed_at - (int) $state['armed_at'] ) < nppp_http_purge_gate_max_wait() + 60 ) {
+        // A chain is still pending: keep its token so its waiter stays valid, move the clock and
+        // the flag. Latest Purge All wins; the same queue status serves both. A waiter that
+        // could not be spawned for the earlier Purge All is tried again now.
+        $cmd = empty( $state['waiter'] )
+            ? nppp_http_purge_purged_all_waiter_command( $marker, (string) $state['token'] )
+            : null;
+
+        $state['armed_at']     = $armed_at;
+        $state['auto_preload'] = $auto_preload;
+        $state['waiter']       = ! empty( $state['waiter'] ) || $cmd !== null;
+
+        // update_option() returns false for an unchanged value: that is not a failure here.
+        update_option( NPPP_PURGED_ALL_DEFERRED_KEY, $state, false );
+    } else {
+        try {
+            $token = bin2hex( random_bytes( 16 ) );
+        } catch ( \Throwable $e ) {
+            return false;
+        }
+
+        $cmd   = nppp_http_purge_purged_all_waiter_command( $marker, $token );
+        $state = array(
+            'token'        => $token,
+            'auto_preload' => $auto_preload,
+            'armed_at'     => $armed_at,
+            'waiter'       => $cmd !== null,
+        );
+        if ( ! update_option( NPPP_PURGED_ALL_DEFERRED_KEY, $state, false ) ) {
+            return false;
+        }
     }
 
-    $spawned = nppp_http_purge_spawn_purged_all_waiter( $marker, $token );
+    // The state row (and so the token) exists before the waiter can POST.
+    if ( $cmd !== null ) {
+        shell_exec( $cmd );
+    }
 
     // Waiter alive: cron is only the deadline fail-safe. No waiter: cron polls the queue itself.
-    $delay     = $spawned ? nppp_http_purge_gate_max_wait() + 60 : nppp_http_purge_defer_interval();
+    wp_unschedule_hook( NPPP_PURGED_ALL_DEFERRED_HOOK );
+    $delay     = $state['waiter'] ? nppp_http_purge_gate_max_wait() + 60 : nppp_http_purge_defer_interval();
     $scheduled = wp_schedule_single_event( $armed_at + $delay, NPPP_PURGED_ALL_DEFERRED_HOOK );
 
-    if ( ! $spawned && $scheduled !== true ) {
+    if ( ! $state['waiter'] && $scheduled !== true ) {
         // Nothing can wake us: do not swallow the follow-up.
         delete_option( NPPP_PURGED_ALL_DEFERRED_KEY );
         return false;
@@ -1749,20 +1776,22 @@ function nppp_http_purge_defer_purged_all( bool $auto_preload ): bool {
 }
 
 /**
- * Spawns the detached waiter: gate snippet, then one token-gated POST to admin-ajax.php.
+ * Builds the detached waiter command: gate snippet, then one token-gated POST to admin-ajax.php.
  * Runs as the PHP user, like the preload watchdog. Needs the watchdog feature (EP8 refuses
- * the action otherwise), shell_exec and a shell.
+ * the action otherwise), shell_exec and a shell. Has no side effect besides locating the shell:
+ * the caller runs the command once the state row holding the token is written.
  *
  * @param array  $pending ['status_url' => string, 'host' => string, ...] (the persisted marker)
  * @param string $token   One-shot token (32 hex).
+ * @return string|null Shell command line, or null when no waiter is possible here.
  */
-function nppp_http_purge_spawn_purged_all_waiter( array $pending, string $token ): bool {
+function nppp_http_purge_purged_all_waiter_command( array $pending, string $token ): ?string {
     $opts = get_option( 'nginx_cache_settings', array() );
     if ( ! is_array( $opts ) || ( $opts['nginx_cache_watchdog'] ?? 'no' ) !== 'yes' ) {
-        return false;
+        return null;
     }
     if ( ! function_exists( 'shell_exec' ) || ! preg_match( '/^[a-f0-9]{32}$/', $token ) ) {
-        return false;
+        return null;
     }
 
     $shell = trim( (string) shell_exec( 'command -v bash 2>/dev/null' ) );
@@ -1770,7 +1799,7 @@ function nppp_http_purge_spawn_purged_all_waiter( array $pending, string $token 
         $shell = trim( (string) shell_exec( 'command -v sh 2>/dev/null' ) );
     }
     if ( $shell === '' ) {
-        return false;
+        return null;
     }
 
     $post   = 'action=' . NPPP_PURGED_ALL_WAKE_ACTION . '&token=' . rawurlencode( $token );
@@ -1779,9 +1808,7 @@ function nppp_http_purge_spawn_purged_all_waiter( array $pending, string $token 
         . '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=3 --waitretry=5 --max-redirect=2 '
         . '--post-data ' . escapeshellarg( $post ) . ' ' . escapeshellarg( admin_url( 'admin-ajax.php' ) );
 
-    shell_exec( 'nohup ' . escapeshellarg( $shell ) . ' -c ' . escapeshellarg( $script ) . ' > /dev/null 2>&1 &' );
-
-    return true;
+    return 'nohup ' . escapeshellarg( $shell ) . ' -c ' . escapeshellarg( $script ) . ' > /dev/null 2>&1 &';
 }
 
 /**
