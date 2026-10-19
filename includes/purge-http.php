@@ -1603,8 +1603,8 @@ function nppp_http_purge_gate_command( string $crawl, string $log_path ): string
  *
  *   waiter   detached shell: the gate snippet (queue idle twice, 5 failed polls = fail-open,
  *            max wait = gate_max_wait()) and then ONE token-gated POST to admin-ajax.php
- *            (action nppp_purged_all_wake, EP8). Independent of Auto Preload. Spawned only
- *            when the watchdog feature is on, the same opt-in as the preload watchdog.
+ *            (action nppp_purged_all_wake, EP8). Independent of Auto Preload and of the
+ *            Watchdog toggle: its credential is the one-shot token of the pending state.
  *   cron     one-shot WP-Cron event, FAIL-SAFE only. Always armed: it is the poller when no
  *            waiter could be spawned, and a slow second wake-up path (60 s) while a waiter
  *            runs, so a waiter that died silently cannot hold the follow-up until its deadline.
@@ -1805,7 +1805,8 @@ function nppp_http_purge_defer_purged_all( bool $auto_preload ): bool {
 
 /**
  * Builds the detached waiter command: gate snippet, then one token-gated POST to admin-ajax.php.
- * Runs as the PHP user, like the preload watchdog. Needs the watchdog feature (EP8 refuses
+ * Runs as the PHP user, like the preload watchdog. Needs shell_exec and a shell (the
+ * Watchdog toggle is not required: EP8 exempts this action, the one-shot token is the credential).
  * the action otherwise), shell_exec and a shell. Has no side effect besides locating the shell:
  * the caller runs the command once the state row holding the token is written.
  *
@@ -1827,6 +1828,13 @@ function nppp_http_purge_purged_all_waiter_command( array $pending, string $toke
         $shell = trim( (string) shell_exec( 'command -v sh 2>/dev/null' ) );
     }
     if ( $shell === '' ) {
+        return null;
+    }
+
+    // The gate snippet (queue polling) and the final POST both use wget. Without it the waiter
+    // could never fire, yet a spawned waiter pushes the cron fail-safe to its slow interval:
+    // report "no waiter" so the cron keeps polling at the short interval instead.
+    if ( trim( (string) shell_exec( 'command -v wget 2>/dev/null' ) ) === '' ) {
         return null;
     }
 
