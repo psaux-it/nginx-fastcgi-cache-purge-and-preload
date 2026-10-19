@@ -1658,17 +1658,18 @@ function nppp_http_purge_log_reason( string $message ): string {
 function nppp_http_purge_try_first( string $url ) {
     $result = nppp_http_purge_try_first_core( $url );
 
-    // Generation mode: the filesystem layers cannot see the generated cache keys, so a
-    // single purge that HTTP did not finish stays unfinished. Say so.
+    // Generation mode: HTTP did not finish this purge. The scan layers that run next read
+    // the generation KEY line and can still remove the entry; each reports its own result,
+    // so this is a log line, not a failure notice.
     if ( $result === false
         && nppp_http_purge_enabled()
         && nppp_http_purge_generation_mode( 'single' )
     ) {
-        nppp_display_admin_notice( 'error', sprintf(
+        nppp_display_admin_notice( 'info', sprintf(
             /* translators: %s: page URL */
-            __( 'ERROR HTTP PURGE SINGLE: %s could not be invalidated over HTTP, and ngx_cache_purge generation mode is active, so the filesystem purge cannot remove its cache entry (it does not see generated cache keys). The page can keep being served from cache until a Purge All is run.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'INFO HTTP PURGE SINGLE: %s could not be invalidated over HTTP while ngx_cache_purge generation mode is active. Continuing with the filesystem layers.', 'fastcgi-cache-purge-and-preload-nginx' ),
             nppp_http_purge_log_page( $url )
-        ) );
+        ), true, false );
     }
 
     return $result;
@@ -1769,7 +1770,7 @@ function nppp_http_purge_try_first_core( string $url ) {
             if ( ! $ns_logged ) {
                 $ns_logged = true;
                 nppp_display_admin_notice( 'info',
-                    __( 'INFO HTTP PURGE SINGLE: ngx_cache_purge v4 generation invalidation is active. Entries are invalidated logically and removed by nginx later; the plugin index and filesystem scan do not see namespaced cache keys.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    __( 'INFO HTTP PURGE SINGLE: Generation invalidation is active. Entries are invalidated logically and removed by nginx later.', 'fastcgi-cache-purge-and-preload-nginx' ),
                     true, false
                 );
             }
