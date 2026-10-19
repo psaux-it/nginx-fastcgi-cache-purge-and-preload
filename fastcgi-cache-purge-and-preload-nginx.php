@@ -49,7 +49,8 @@ if (!defined('ABSPATH')) {
 //
 //   Token/key-gated remote endpoints (credential verified pre-bootstrap):
 //     EP3  REST API (nppp_nginx_cache/v2)  API key, feature toggle required
-//     EP8  Watchdog AJAX (nppp_cron_wake)  ping token, feature toggle required
+//     EP8  Watchdog AJAX (nppp_cron_wake,  ping token / one-shot token, feature
+//          nppp_purged_all_wake)           toggle required
 //     EP10 Fail2Ban webhook (nppp_f2b/v1)  bearer token, POST only, optional
 //                                          IP allow-list checked AFTER the token
 //   Each of these is a two-layer gate: a lightweight pre-bootstrap check here,
@@ -186,6 +187,7 @@ foreach ([
     'npp_cache_preload_event',
     'npp_cache_preload_status_event',
     'nppp_index_updater_event',
+    'nppp_purged_all_deferred_event',
     'publish_future_post',
     'nppp_f2b_cleanup_event',
     'nppp_f2b_enrich_event',
@@ -555,7 +557,8 @@ add_action('init', function(): void {
         ? sanitize_key(wp_unslash($_POST['action']))
         : '';
     // phpcs:enable WordPress.Security.NonceVerification.Missing -- EP8 watchdog
-    if ($action !== 'nppp_cron_wake') return;
+    // nppp_purged_all_wake: deferred Purge All follow-up (one-shot token, see purge-http.php 6c).
+    if ($action !== 'nppp_cron_wake' && $action !== 'nppp_purged_all_wake') return;
 
     // Watchdog feature disabled — endpoint intentionally unreachable.
     $opts = get_option('nginx_cache_settings', []);
@@ -582,17 +585,31 @@ add_action('init', function(): void {
         : '';
     // phpcs:enable WordPress.Security.NonceVerification.Missing
     if (empty($submitted) || !preg_match('/^[a-f0-9]{32}$/i', $submitted)) {
-        nppp_ep_gate_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ep8', 'nppp_cron_wake', 'ERROR 403 MALFORMED OR MISSING TOKEN');
+        nppp_ep_gate_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ep8', $action, 'ERROR 403 MALFORMED OR MISSING TOKEN');
         wp_die('', '', ['response' => 403]);
     }
 
     // Layer 1b
-    $stored = get_transient('nppp_ping_token_' . md5('nppp'));
-    if ( empty( $stored ) ) {
-        $stored = get_option( 'nppp_ping_token_db', '' );
+    if ($action === 'nppp_purged_all_wake') {
+        $nppp_ep8_deferred = get_option('nppp_purged_all_deferred', []);
+        $stored = (is_array($nppp_ep8_deferred) && isset($nppp_ep8_deferred['token']))
+            ? (string) $nppp_ep8_deferred['token']
+            : '';
+        unset($nppp_ep8_deferred);
+        // No follow-up pending (superseded by a newer Purge All, cancelled, or already fired by
+        // cron): a late waiter is not an attack, so no strike and no log. A forged request can
+        // not probe the token either, because it only exists while a follow-up is pending.
+        if ($stored === '') {
+            wp_die('', '', ['response' => 200]);
+        }
+    } else {
+        $stored = get_transient('nppp_ping_token_' . md5('nppp'));
+        if ( empty( $stored ) ) {
+            $stored = get_option( 'nppp_ping_token_db', '' );
+        }
     }
     if (empty($stored) || !hash_equals((string) $stored, $submitted)) {
-        nppp_ep_gate_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ep8', 'nppp_cron_wake', 'ERROR 403 TOKEN MISMATCH OR EXPIRED');
+        nppp_ep_gate_log($nppp_ep8_masked, $nppp_ep8_raw_ip, 'ep8', $action, 'ERROR 403 TOKEN MISMATCH OR EXPIRED');
         wp_die('', '', ['response' => 403]);
     }
 
