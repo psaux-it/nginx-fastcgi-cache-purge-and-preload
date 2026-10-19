@@ -129,17 +129,7 @@ function nppp_run_index_updater(): void {
     //   - A single URL may map to multiple paths (Vary variants, mobile).
     $nppp_index   = get_option( 'nppp_url_filepath_index' );
     $nppp_index   = is_array( $nppp_index ) ? $nppp_index : [];
-    $nppp_new_cnt = 0;
-
-    foreach ( $hits as $nppp_entry ) {
-        $nppp_key      = preg_replace( '#^https?://#', '', $nppp_entry['url_encoded'] );
-        $nppp_existing = $nppp_index[ $nppp_key ] ?? [];
-        if ( ! in_array( $nppp_entry['file_path'], $nppp_existing, true ) ) {
-            $nppp_existing[] = $nppp_entry['file_path'];
-            ++$nppp_new_cnt;
-        }
-        $nppp_index[ $nppp_key ] = $nppp_existing;
-    }
+    $nppp_new_cnt = nppp_index_merge_hits( $nppp_index, $hits, $wp_filesystem );
 
     update_option( 'nppp_url_filepath_index', $nppp_index, false );
 
@@ -155,5 +145,5 @@ function nppp_run_index_updater(): void {
         false
     );
 
-    unset( $nppp_index, $nppp_entry, $nppp_key, $nppp_existing, $hits, $nppp_new_cnt );
+    unset( $nppp_index, $hits, $nppp_new_cnt );
 }
