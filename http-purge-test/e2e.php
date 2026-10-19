@@ -498,6 +498,155 @@ if ( $sc === 'ns_keys' ) {
     chk( $raw < 3 || min( $b ) > 1, 'without the namespace state the old-epoch files are counted too (what this fixes)', "raw=$raw " . json_encode( $b ) );
 }
 
+/* Generation-mode INDEX on real nginx (mode ns_slow): the "silent empty purge".
+ * In generation mode every invalidation gives a URL a NEW cache file name, so the append-only URL->filepath index collects
+ * dead paths. Unpatched: FP1 counted them as "multiple variants" and skipped the HTTP purge, and FP2 took "all indexed paths
+ * gone" as a confirmed miss ("not currently found in the cache (INDEX)") while the page's live, unindexed file stayed on
+ * disk and kept being served (X-Cache: HIT). Mock-level twin of this scenario: gen-index.php.
+ *
+ * Chain: cache a page, index it (the plugin's scan -> nppp_index_merge_hits), purge it, re-cache, let the nginx sweep run,
+ * repeat; then purge it through the real FP1 -> FP2 -> FP4 layers (nppp_purge_single() minus locks and ripgrep):
+ *   A) HTTP reachable   -> must be answered by FP1 (HTTP) and the page is MISS afterwards, never an INDEX "miss".
+ *   B) HTTP unreachable -> FP2 steps aside, FP4 finds the live file by its KEY line and deletes it; the page is MISS.
+ * Unlike the other scenarios this one is meant to FAIL on an unpatched plugin (that is how it was validated). */
+if ( $sc === 'ns_index' ) {
+    $inc  = npp_includes_dir();
+    $load = function ( string $file, string $fn, bool $optional = false ) use ( $inc ): bool {
+        if ( function_exists( $fn ) ) { return true; }
+        if ( ! preg_match( '/^function ' . $fn . '\(.*?^}\n/ms', (string) file_get_contents( "$inc/$file" ), $fm ) ) {
+            if ( $optional ) { return false; }
+            echo "FAIL cannot find $fn in $file\n"; exit( 2 );
+        }
+        eval( $fm[0] );
+        return true;
+    };
+    foreach ( [ 'nppp_key_generation_info', 'nppp_drop_stale_generations', 'nppp_generation_stale_groups', 'nppp_generation_views' ] as $fn ) {
+        $load( 'advanced.php', $fn, $fn === 'nppp_generation_views' || $fn === 'nppp_generation_stale_groups' );
+    }
+    // Added by the Gen Index patch; absent on an unpatched plugin, which is reported once and then every behaviour check runs anyway.
+    $have = [];
+    foreach ( [ 'nppp_gen_mode_note_seen', 'nppp_gen_mode_seen', 'nppp_gen_mode_active', 'nppp_index_merge_hits' ] as $fn ) { $have[ $fn ] = $load( 'advanced.php', $fn, true ); }
+    $have['nppp_purge_live_index_paths'] = $load( 'purge.php', 'nppp_purge_live_index_paths', true );
+    foreach ( [ 'nppp_purge_fp1_index_file_exists', 'nppp_purge_fp1_http', 'nppp_purge_fp2_index', 'nppp_purge_fp4_scan', 'nppp_purge_flush_write_back', 'nppp_purge_post_purge' ] as $fn ) { $load( 'purge.php', $fn ); }
+    foreach ( [ 'nppp_head_fast', 'nppp_read_head' ] as $fn ) { $load( 'wp-filesystem.php', $fn ); }
+    if ( ! function_exists( 'url_to_postid' ) ) { function url_to_postid( $u ) { return 0; } }
+    if ( ! function_exists( '_n' ) ) { function _n( $a, $b, $n, $d = '' ) { return $n === 1 ? $a : $b; } }
+    if ( ! class_exists( 'NsIdxFs' ) ) {
+        class NsIdxFs {
+            function exists( $p ) { return file_exists( $p ); }
+            function is_dir( $p ) { return is_dir( $p ); }
+            function get_contents( $p ) { return @file_get_contents( $p ); }
+            function delete( $p, $r = false ) { return @unlink( $p ); }
+        }
+    }
+    $rx   = ( include $inc . '/preload-defaults.php' )['cache_key_regex'];
+    $fs   = new NsIdxFs();
+    $K1   = 'example.com/p/1/'; $K2 = 'example.com/p/2/';
+    $miss = [ 'nppp_gen_mode_active', 'nppp_index_merge_hits', 'nppp_purge_live_index_paths' ];
+    $miss = array_values( array_filter( $miss, fn( $f ) => empty( $have[ $f ] ) ) );
+    chk( ! $miss, 'patch applied: the Gen Index helpers exist', '(missing: ' . implode( ', ', $miss ) . ' - expected to FAIL on an unpatched plugin)' );
+
+    $idle = function () {
+        $n = 0;
+        for ( $i = 0; $i < 200; $i++ ) {
+            $j = json_decode( (string) shell_exec( 'curl -s http://127.0.0.1:8081/purge_status' ), true ); $c = $j['cache'] ?? null;
+            $n = ( $c && $c['pending']['total'] === 0 && $c['active'] === 0 ) ? $n + 1 : 0;
+            if ( $n >= 2 ) { return true; }
+            usleep( 200000 );
+        }
+        return false;
+    };
+    /** Files on disk whose KEY line is the logical key $path (e.g. /p/1/): every generation of it, stale or live. */
+    $files = function ( string $path ) {
+        $o = [];
+        foreach ( explode( "\n", trim( (string) shell_exec( "grep -a -r -m1 '^KEY:' /tmp/npp-cache" ) ) ) as $raw ) {
+            $sep = strpos( $raw, ':' );
+            if ( $raw !== '' && $sep !== false && preg_match( '#^KEY: p4:objects:\d{10}:[0-9a-f]{16}:httpGETexample\.com' . preg_quote( $path, '#' ) . '$#', substr( $raw, $sep + 1 ) ) ) { $o[] = substr( $raw, 0, $sep ); }
+        }
+        return $o;
+    };
+    /** The plugin's index update: scan the cache directory, drop superseded generations, merge into the URL->filepath index. */
+    $index = [];
+    $build = function () use ( &$index, $rx, $fs ) {
+        $urls = [];
+        foreach ( explode( "\n", trim( (string) shell_exec( "grep -a -r -m1 '^KEY:' /tmp/npp-cache" ) ) ) as $raw ) {
+            $sep = strpos( $raw, ':' ); if ( $raw === '' || $sep === false ) { continue; }
+            $kl = substr( $raw, $sep + 1 );
+            if ( ! preg_match( $rx, $kl, $m ) || ! isset( $m[1], $m[2] ) ) { continue; }
+            $gi = nppp_key_generation_info( $kl );
+            $urls[] = [ 'file_path' => substr( $raw, 0, $sep ), 'url_encoded' => 'http://' . trim( $m[1] ) . trim( $m[2] ), 'gen_group' => $gi['group'] ?? null, 'gen' => $gi['gen'] ?? null ];
+        }
+        nppp_drop_stale_generations( $urls );
+        if ( function_exists( 'nppp_index_merge_hits' ) ) { return nppp_index_merge_hits( $index, $urls, $fs ); }
+        foreach ( $urls as $e ) {   // unpatched: the original append-only merge
+            $k = preg_replace( '#^https?://#', '', $e['url_encoded'] );
+            if ( ! in_array( $e['file_path'], $index[ $k ] ?? [], true ) ) { $index[ $k ][] = $e['file_path']; }
+        }
+        return 0;
+    };
+    /** Purge context as nppp_purge_single_init() builds it for $K1 (primary). */
+    $mkctx = function () use ( &$index, $rx, $fs, $K1 ) {
+        global $T;
+        $t = [ $K1 => [ 'original' => 'http://example.com/p/1/', 'decoded' => 'http://example.com/p/1/', 'is_primary' => true ] ];
+        return [
+            'wp_filesystem' => $fs, 'nppp_index' => $index, 'nginx_cache_path' => '/tmp/npp-cache',
+            'primary_url' => 'http://example.com/p/1/', 'primary_decoded' => 'http://example.com/p/1/',
+            'chain_autopreload' => false, 'nppp_auto_purge' => false, 'regex' => $rx, 'head_bytes' => 4096, 'head_bytes_fb' => 32768,
+            'settings' => $T['options']['nginx_cache_settings'], 'targets' => $t, 'pending' => $t, 'write_back' => [], 'primary_purged' => false,
+        ];
+    };
+    $chain = function ( array &$ctx ): string {   // nppp_purge_single() minus locks and ripgrep: stop at the first layer that resolves everything
+        if ( nppp_purge_fp1_http( $ctx ) ) { return 'FP1'; }
+        if ( nppp_purge_fp2_index( $ctx ) ) { return 'FP2'; }
+        nppp_purge_fp4_scan( $ctx );
+        return 'FP4';
+    };
+
+    // Three rounds of: index the live file, purge it over HTTP (a new generation), re-cache, let nginx sweep the old file.
+    warm( 'p', 5 ); sleep( 1 );
+    $cycle_ok = true;
+    for ( $round = 1; $round <= 3; $round++ ) {
+        $build();
+        $r  = nppp_http_purge_try_first( 'http://example.com/p/1/' );
+        xcache( '/p/1/' );
+        $cycle_ok = $cycle_ok && $r === true && $idle();
+    }
+    chk( $cycle_ok, 'setup: 3 x (index, purge over HTTP, re-cache, sweep) finish; HTTP answered invalidated each time', notes() );
+    $live = $files( '/p/1/' ); $idx1 = $index[ $K1 ] ?? [];
+    $alive = array_values( array_filter( $idx1, 'file_exists' ) );
+    chk( count( $live ) === 1 && ! array_intersect( $live, $idx1 ), 'precondition: the page has ONE live file and it is NOT in the index (every indexed path is a swept generation)', 'live=' . json_encode( $live ) . ' index=' . json_encode( $idx1 ) );
+    chk( ! $alive, 'precondition: no indexed path exists on disk any more (the nginx sweep removed them)', json_encode( $alive ) );
+    chk( count( $idx1 ) <= 1, 'the index does not collect one dead path per invalidation (merge prunes dead generation paths)', 'paths=' . count( $idx1 ) . ' ' . json_encode( $idx1 ) );
+    chk( xcache( '/p/1/' ) === 'HIT' && xcache( '/p/2/' ) === 'HIT', 'precondition: both pages are served from the cache (HIT)' );
+    // A site upgraded from the append-only index: the stored index already holds several dead paths of this page (the merge above only prunes what it touches).
+    $index[ $K1 ] = array_merge( [ '/tmp/npp-cache/0/00/' . str_repeat( 'a', 32 ), '/tmp/npp-cache/0/01/' . str_repeat( 'b', 32 ) ], $idx1 );
+    chk( count( array_filter( $index[ $K1 ], 'file_exists' ) ) === 0 && count( $index[ $K1 ] ) >= 3, 'precondition: the stored index holds 3+ paths of this page and none exists any more', json_encode( $index[ $K1 ] ) );
+
+    // A) HTTP reachable. Unpatched: FP1 counts the dead paths as variants (bypass), FP2 reports the page "not in cache (INDEX)", the page stays HIT.
+    $T['notices'] = []; $q0 = count( $T['reqs'] );
+    $ctx = $mkctx(); $by = $chain( $ctx );
+    $after = xcache( '/p/1/' ); $other = xcache( '/p/2/' );
+    chk( $after === 'MISS', 'A: purge with only dead paths in the index -> the page is MISS afterwards (the silent empty purge is gone)', "x-cache=$after by=$by " . notes() );
+    chk( strpos( notes(), 'not currently found in the cache (INDEX)' ) === false, 'A: no false "not currently found in the cache (INDEX)" claim', notes() );
+    chk( $by === 'FP1' && count( $T['reqs'] ) - $q0 === 1 && $ctx['pending'] === [], 'A: FP1 (HTTP) answers it with exactly one request; dead index paths do not divert it', "by=$by reqs=" . ( count( $T['reqs'] ) - $q0 ) );
+    chk( $other === 'HIT' && file_exists( $files( '/p/2/' )[0] ?? '/nonexistent' ), 'A: an unrelated page is untouched', "x-cache=$other" );
+
+    // B) HTTP cannot finish (connection refused). The filesystem layers must remove the live, unindexed file.
+    $idle(); xcache( '/p/1/' );
+    $live = $files( '/p/1/' );
+    chk( count( $live ) === 1 && ! array_intersect( $live, $index[ $K1 ] ?? [] ) && xcache( '/p/1/' ) === 'HIT', 'B precondition: the page is cached again, its live file is not in the index', json_encode( $live ) );
+    $T['options']['nginx_cache_settings']['nppp_http_purge_custom_url'] = 'http://127.0.0.1:9';   // nothing listens here
+    $T['notices'] = []; $q0 = count( $T['reqs'] );
+    $ctx = $mkctx(); $by = $chain( $ctx );
+    $gone = ! file_exists( $live[0] ?? '/nonexistent' );
+    chk( $by === 'FP4' && $ctx['pending'] === [], 'B: HTTP unreachable -> FP2 does not close the target on dead index paths, FP4 (KEY scan) resolves it', "by=$by pending=" . json_encode( array_keys( $ctx['pending'] ) ) . ' ' . notes() );
+    chk( $gone, 'B: the live, unindexed generation file is DELETED (found by its KEY line)', json_encode( $live ) );
+    chk( strpos( notes(), '(SCAN)' ) !== false && strpos( notes(), 'not currently found in the cache (INDEX)' ) === false, 'B: success is reported by the scan layer, never as an INDEX miss', notes() );
+    chk( strpos( notes(), 'cannot remove its cache entry' ) === false && strpos( notes(), 'until a Purge All' ) === false, 'B: no false "cannot purge / run a Purge All" error', notes() );
+    chk( xcache( '/p/1/' ) === 'MISS', 'B: the page is MISS right after the filesystem purge' );
+    chk( xcache( '/p/2/' ) === 'HIT', 'B: an unrelated page is untouched' );
+}
+
 /* v4 error-code scenarios: real module error responses against the plugin, one error code per scenario. */
 function locks() { return array_keys( nppp_http_purge_state()['locks'] ); }
 function nreqs() { global $T; return count( $T['reqs'] ); }
