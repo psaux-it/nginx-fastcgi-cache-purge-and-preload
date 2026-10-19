@@ -225,11 +225,60 @@ function nppp_migration_218() {
     }
 }
 
+// Writes nginx_cache_settings without the Settings form sanitizer. Migrations run on the
+// Settings screen, where register_setting() has attached nppp_nginx_cache_settings_sanitize
+// to sanitize_option_nginx_cache_settings. That callback expects form POST data (plaintext
+// regex, no stored-only keys), not the stored array, so it must not see a migration write.
+function nppp_update_settings_without_sanitize( array $options ): bool {
+    $filter   = 'sanitize_option_nginx_cache_settings';
+    $callback = 'nppp_nginx_cache_settings_sanitize';
+    $priority = has_filter( $filter, $callback );
+
+    if ( $priority !== false ) {
+        remove_filter( $filter, $callback, $priority );
+    }
+
+    $updated = update_option( 'nginx_cache_settings', $options );
+
+    if ( $priority !== false ) {
+        add_filter( $filter, $callback, $priority );
+    }
+
+    return $updated;
+}
+
 // Migration 2.1.9:
-// No data change. The default Cache Key Regex now understands the p4: envelope of
-// ngx_cache_purge v4 generation mode. The installed default is stored in the DB, so
-// existing installs keep the old one until the user presses "Reset Default"; this
-// entry exists solely to surface that notice (same approach as 2.1.6 and 2.1.7).
+// The default Cache Key Regex now understands the p4: envelope of ngx_cache_purge v4
+// generation mode. The default is stored in the DB, so an install that still carries one
+// of the earlier built-in defaults is moved to the new one here (exact match only, same
+// capture groups, so nothing changes for non-p4 keys). A regex the user customised is never
+// touched; that case is covered by the notice. nppp_get_cache_key_regex() applies the same
+// rule at runtime, so sites that never open the Settings screen are covered too.
 function nppp_migration_219() {
-    // Intentionally empty — notice is handled by nppp_run_pending_migrations().
+    if ( ! function_exists( 'nppp_legacy_default_cache_key_regexes' )
+        || ! function_exists( 'nppp_fetch_default_regex_for_cache_key' )
+    ) {
+        return;
+    }
+
+    $options = get_option( 'nginx_cache_settings', array() );
+    if ( ! is_array( $options ) || empty( $options['nginx_cache_key_custom_regex'] ) ) {
+        return;
+    }
+
+    $stored  = (string) $options['nginx_cache_key_custom_regex'];
+    $decoded = base64_decode( $stored, true );
+    $active  = ( $decoded !== false && $decoded !== '' ) ? $decoded : $stored;
+
+    if ( ! in_array( $active, nppp_legacy_default_cache_key_regexes(), true ) ) {
+        return;
+    }
+
+    $current = nppp_fetch_default_regex_for_cache_key();
+    if ( $current === '' ) {
+        return;
+    }
+
+    $options['nginx_cache_key_custom_regex'] = base64_encode( $current );
+    nppp_update_settings_without_sanitize( $options );
 }
