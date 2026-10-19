@@ -969,7 +969,7 @@ function nppp_nginx_cache_settings_page() {
                             <td>
                                 <?php nppp_http_purge_queue_status_path_callback(); ?>
                                 <p class="description"><?php echo esc_html__( 'Optional. Leave blank unless your Nginx uses "cache_purge_background_queue on" with ngx_cache_purge v4 or newer.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'The URI path of your "cache_purge_queue_status" location (e.g., location = /purge_status). With it, NPP can confirm that a queued (202) Purge All has finished before preloading starts.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'The URI path of your "cache_purge_queue_status" location (e.g., location = /purge_status). With it, NPP can confirm that a queued Purge All has finished before preloading starts. With generation mode it also lets Status and Advanced hide cache files that Nginx has already invalidated but not yet deleted.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'Without it NPP falls back to inspecting the cache directory, which is less reliable. Restrict this location with allow/deny. Default: empty.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
