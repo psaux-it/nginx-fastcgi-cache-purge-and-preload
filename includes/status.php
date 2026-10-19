@@ -85,6 +85,7 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_preload_trigger_' . md5($static_key_base),
         'nppp_mail_health_' . md5($static_key_base),
         'nppp_http_purge_endpoint_broken',
+        'nppp_gen_mode_seen',
         'nppp_wget_urls_cache_prev_key',
         'nppp_safexec_ok',
         'nppp_category_map',
@@ -735,6 +736,7 @@ function nppp_get_in_cache_page_count() {
         $urls_count   = 0;
         $regex_tested = false;
         $gen_seen     = []; // generation mode: group => [ highest generation, files at it ]
+        $gen_before   = false; // namespace state, read once at the first generation key
 
         foreach ( $key_out as $raw_line ) {
             $raw_line = trim( $raw_line );
@@ -763,6 +765,9 @@ function nppp_get_in_cache_page_count() {
 
             // Generation mode: only files at the highest generation of their key count.
             $gen_info = nppp_key_generation_info( $key_line );
+            if ( $gen_info !== null && $gen_before === false ) {
+                $gen_before = nppp_generation_views();
+            }
             if ( $gen_info === null ) {
                 $urls_count++;
             } elseif ( ! isset( $gen_seen[ $gen_info['group'] ] ) || strcmp( $gen_info['gen'], $gen_seen[ $gen_info['group'] ][0] ) > 0 ) {
@@ -772,9 +777,8 @@ function nppp_get_in_cache_page_count() {
             }
         }
 
-        foreach ( $gen_seen as $nppp_seen ) {
-            $urls_count += $nppp_seen[1];
-        }
+        // Files at the highest generation of each key, minus groups the namespace state proves stale
+        $urls_count += nppp_generation_count_live( $gen_seen, $gen_before );
 
         return $urls_count;
     }
@@ -784,6 +788,7 @@ function nppp_get_in_cache_page_count() {
     $head_bytes_fallback = (int) apply_filters( 'nppp_locate_head_bytes_fallback', 32768 );
     $urls_count          = 0;
     $gen_seen            = []; // generation mode: group => [ highest generation, files at it ]
+    $gen_before          = false; // namespace state, read once at the first generation key
 
     try {
         $cache_iterator = new RecursiveIteratorIterator(
@@ -848,6 +853,9 @@ function nppp_get_in_cache_page_count() {
             if (preg_match($regex, $content, $matches)) {
                 // Generation mode: only files at the highest generation of their key count.
                 $gen_info = nppp_key_generation_info($content);
+                if ($gen_info !== null && $gen_before === false) {
+                    $gen_before = nppp_generation_views();
+                }
                 if ($gen_info === null) {
                     $urls_count++;
                 } elseif (!isset($gen_seen[$gen_info['group']]) || strcmp($gen_info['gen'], $gen_seen[$gen_info['group']][0]) > 0) {
@@ -862,9 +870,8 @@ function nppp_get_in_cache_page_count() {
         return 'Undetermined';
     }
 
-    foreach ($gen_seen as $nppp_seen) {
-        $urls_count += $nppp_seen[1];
-    }
+    // Files at the highest generation of each key, minus groups the namespace state proves stale
+    $urls_count += nppp_generation_count_live($gen_seen, $gen_before);
 
     // Return the count of URLs, if no URLs found, return 0
     return $urls_count > 0 ? $urls_count : 0;
