@@ -1589,6 +1589,249 @@ function nppp_http_purge_gate_command( string $crawl, string $log_path ): string
 }
 
 /* ============================================================================
+ * 6c. Deferred "Purge All finished" follow-up (nppp_purged_all)
+ * ========================================================================= */
+
+/**
+ * A Purge All that ends with status 7 (nginx's background queue is still deleting) has NOT
+ * finished: the origin keeps serving stale files. nppp_purged_all means "the origin cache is
+ * purged" and its listeners push that outwards (Cloudflare purge-all, Redis flush, third-party
+ * CDN hooks). Fired now, the edge re-fetches stale HTML from nginx and caches it again.
+ *
+ * Same wake-up design as the preload watchdog (watchdog.php), because WP-Cron is not reliable
+ * on low-traffic sites:
+ *
+ *   waiter   detached shell: the gate snippet (queue idle twice, 5 failed polls = fail-open,
+ *            max wait = gate_max_wait()) and then ONE token-gated POST to admin-ajax.php
+ *            (action nppp_purged_all_wake, EP8). Independent of Auto Preload. Spawned only
+ *            when the watchdog feature is on, the same opt-in as the preload watchdog.
+ *   cron     one-shot WP-Cron event, FAIL-SAFE only: it polls the queue itself when the
+ *            waiter could not be spawned, and otherwise fires at the waiter's deadline.
+ *   claim    state lives in ONE option. Whoever deletes that row first (atomic DELETE) fires
+ *            the hook, so the waiter and cron can never double-fire: at most once.
+ *
+ * A new Purge All, or any Purge All that really finished, cancels the pending follow-up.
+ * Fail-open everywhere: if nothing can wake us the hook fires at once, as before.
+ *
+ * Option value: array{ token:string, auto_preload:bool, armed_at:int }
+ * The cron hook name must stay in the EP2 whitelist and the action name in the EP8 gate of
+ * the main plugin file (both run BEFORE the plugin bootstrap).
+ */
+if ( ! defined( 'NPPP_PURGED_ALL_DEFERRED_KEY' ) ) {
+    define( 'NPPP_PURGED_ALL_DEFERRED_KEY', 'nppp_purged_all_deferred' );
+}
+if ( ! defined( 'NPPP_PURGED_ALL_DEFERRED_HOOK' ) ) {
+    define( 'NPPP_PURGED_ALL_DEFERRED_HOOK', 'nppp_purged_all_deferred_event' );
+}
+if ( ! defined( 'NPPP_PURGED_ALL_WAKE_ACTION' ) ) {
+    define( 'NPPP_PURGED_ALL_WAKE_ACTION', 'nppp_purged_all_wake' );
+}
+
+/** Seconds between two cron-side queue polls (WP-Cron itself runs at most about once a minute). */
+function nppp_http_purge_defer_interval(): int {
+    return min( 120, max( 15, (int) apply_filters( 'nppp_purged_all_defer_interval', 15 ) ) );
+}
+
+/** Fresh read of the deferred state (a request-local negative must not hide a row written elsewhere). */
+function nppp_http_purge_deferred_read(): ?array {
+    wp_cache_delete( NPPP_PURGED_ALL_DEFERRED_KEY, 'options' );
+    wp_cache_delete( 'notoptions', 'options' );
+
+    $s = get_option( NPPP_PURGED_ALL_DEFERRED_KEY, false );
+    if ( ! is_array( $s ) || empty( $s['token'] ) || ! isset( $s['armed_at'] ) ) {
+        return null;
+    }
+    return $s;
+}
+
+/** Drops a pending follow-up (state row + cron). A still-running waiter holds a dead token. */
+function nppp_http_purge_deferred_cancel(): void {
+    delete_option( NPPP_PURGED_ALL_DEFERRED_KEY );
+    wp_unschedule_hook( NPPP_PURGED_ALL_DEFERRED_HOOK );
+}
+
+/**
+ * Takes the follow-up for firing: exactly one caller gets the state, everybody else null.
+ * The DELETE is the lock: it affects one row for the winner and zero for the loser.
+ *
+ * @param string|null $token When given, it must match the stored one-shot token.
+ */
+function nppp_http_purge_deferred_claim( ?string $token = null ): ?array {
+    $state = nppp_http_purge_deferred_read();
+    if ( $state === null ) {
+        return null;
+    }
+    if ( $token !== null && ! hash_equals( (string) $state['token'], $token ) ) {
+        return null;
+    }
+
+    global $wpdb;
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- atomic single-use claim
+    $deleted = $wpdb->delete( $wpdb->options, array( 'option_name' => NPPP_PURGED_ALL_DEFERRED_KEY ), array( '%s' ) );
+
+    wp_cache_delete( NPPP_PURGED_ALL_DEFERRED_KEY, 'options' );
+    wp_cache_delete( 'notoptions', 'options' );
+
+    return ( (int) $deleted === 1 ) ? $state : null;
+}
+
+/**
+ * The single call site of nppp_purge(): fire nppp_purged_all now, or defer it while nginx's
+ * queue is still deleting.
+ *
+ * @param mixed $status       Result of nppp_purge_helper() (7 = queue still deleting).
+ * @param bool  $auto_preload Runtime auto-preload flag of this Purge All.
+ */
+function nppp_http_purge_fire_purged_all( $status, bool $auto_preload ): void {
+    // Latest Purge All wins: this run covers whatever an earlier one still had pending.
+    nppp_http_purge_deferred_cancel();
+
+    // Filter: return false to restore the immediate hook.
+    if ( $status === 7
+        && apply_filters( 'nppp_defer_purged_all_while_queue_busy', true )
+        && nppp_http_purge_defer_purged_all( $auto_preload )
+    ) {
+        return;
+    }
+
+    do_action( 'nppp_purged_all', $auto_preload );
+}
+
+/**
+ * Arms the follow-up: state row, waiter shell (when allowed) and the cron fail-safe.
+ *
+ * @return bool false when nothing could be armed (the caller then fires the hook at once).
+ */
+function nppp_http_purge_defer_purged_all( bool $auto_preload ): bool {
+    // gate_remember() wrote the marker before the helper returned 7. No status endpoint means
+    // nothing to wait on.
+    $marker = get_option( NPPP_HTTP_PURGE_PENDING_KEY, false );
+    if ( ! is_array( $marker ) || empty( $marker['status_url'] ) ) {
+        return false;
+    }
+
+    try {
+        $token = bin2hex( random_bytes( 16 ) );
+    } catch ( \Throwable $e ) {
+        return false;
+    }
+
+    $armed_at = time();
+    $state    = array(
+        'token'        => $token,
+        'auto_preload' => $auto_preload,
+        'armed_at'     => $armed_at,
+    );
+    if ( ! update_option( NPPP_PURGED_ALL_DEFERRED_KEY, $state, false ) ) {
+        return false;
+    }
+
+    $spawned = nppp_http_purge_spawn_purged_all_waiter( $marker, $token );
+
+    // Waiter alive: cron is only the deadline fail-safe. No waiter: cron polls the queue itself.
+    $delay     = $spawned ? nppp_http_purge_gate_max_wait() + 60 : nppp_http_purge_defer_interval();
+    $scheduled = wp_schedule_single_event( $armed_at + $delay, NPPP_PURGED_ALL_DEFERRED_HOOK );
+
+    if ( ! $spawned && $scheduled !== true ) {
+        // Nothing can wake us: do not swallow the follow-up.
+        delete_option( NPPP_PURGED_ALL_DEFERRED_KEY );
+        return false;
+    }
+
+    nppp_display_admin_notice(
+        'info',
+        __( 'INFO HTTP PURGE ALL: nginx is still deleting the cache in its background queue. The Purge All follow-up (Cloudflare purge-all, Redis flush and other integrations) is deferred until the queue is idle.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        true,
+        false
+    );
+
+    return true;
+}
+
+/**
+ * Spawns the detached waiter: gate snippet, then one token-gated POST to admin-ajax.php.
+ * Runs as the PHP user, like the preload watchdog. Needs the watchdog feature (EP8 refuses
+ * the action otherwise), shell_exec and a shell.
+ *
+ * @param array  $pending ['status_url' => string, 'host' => string, ...] (the persisted marker)
+ * @param string $token   One-shot token (32 hex).
+ */
+function nppp_http_purge_spawn_purged_all_waiter( array $pending, string $token ): bool {
+    $opts = get_option( 'nginx_cache_settings', array() );
+    if ( ! is_array( $opts ) || ( $opts['nginx_cache_watchdog'] ?? 'no' ) !== 'yes' ) {
+        return false;
+    }
+    if ( ! function_exists( 'shell_exec' ) || ! preg_match( '/^[a-f0-9]{32}$/', $token ) ) {
+        return false;
+    }
+
+    $shell = trim( (string) shell_exec( 'command -v bash 2>/dev/null' ) );
+    if ( $shell === '' ) {
+        $shell = trim( (string) shell_exec( 'command -v sh 2>/dev/null' ) );
+    }
+    if ( $shell === '' ) {
+        return false;
+    }
+
+    $post   = 'action=' . NPPP_PURGED_ALL_WAKE_ACTION . '&token=' . rawurlencode( $token );
+    $script = nppp_http_purge_gate_snippet( $pending ) . "\n"
+        . 'wget -q -O /dev/null --no-check-certificate --no-config --no-cookies --prefer-family=IPv4 '
+        . '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=3 --waitretry=5 --max-redirect=2 '
+        . '--post-data ' . escapeshellarg( $post ) . ' ' . escapeshellarg( admin_url( 'admin-ajax.php' ) );
+
+    shell_exec( 'nohup ' . escapeshellarg( $shell ) . ' -c ' . escapeshellarg( $script ) . ' > /dev/null 2>&1 &' );
+
+    return true;
+}
+
+/**
+ * WP-Cron callback of NPPP_PURGED_ALL_DEFERRED_HOOK (fail-safe). Re-arms itself while the queue
+ * is busy; fires the hook when the queue is idle or the waiter's deadline has passed.
+ */
+function nppp_http_purge_run_deferred_purged_all(): void {
+    $state = nppp_http_purge_deferred_read();
+    if ( $state === null ) {
+        return; // the waiter already fired it, or a newer Purge All cancelled it
+    }
+
+    $waited    = max( 0, time() - (int) $state['armed_at'] );
+    $timed_out = $waited >= nppp_http_purge_gate_max_wait() + 60;
+
+    // A live marker means the queue is working, or its status is unreadable (which gates too).
+    if ( ! $timed_out && nppp_http_purge_gate_pending() !== null ) {
+        if ( wp_schedule_single_event( time() + nppp_http_purge_defer_interval(), NPPP_PURGED_ALL_DEFERRED_HOOK ) === true ) {
+            return;
+        }
+        // Could not re-arm: fail open below instead of losing the follow-up.
+    }
+
+    $claimed = nppp_http_purge_deferred_claim( (string) $state['token'] );
+    if ( $claimed === null ) {
+        return; // lost the race against the waiter
+    }
+
+    if ( $timed_out ) {
+        nppp_display_admin_notice(
+            'warning',
+            /* translators: %d: seconds since the Purge All */
+            sprintf( __( 'WARNING HTTP PURGE ALL: the nginx queue was not confirmed idle after %d second(s). Running the deferred Purge All follow-up anyway.', 'fastcgi-cache-purge-and-preload-nginx' ), $waited ),
+            true,
+            false
+        );
+    } else {
+        nppp_display_admin_notice(
+            'info',
+            /* translators: %d: seconds since the Purge All */
+            sprintf( __( 'INFO HTTP PURGE ALL: nginx queue is idle. Running the deferred Purge All follow-up (Cloudflare purge-all, Redis flush and other integrations) %d second(s) after the purge.', 'fastcgi-cache-purge-and-preload-nginx' ), $waited ),
+            true,
+            false
+        );
+    }
+
+    do_action( 'nppp_purged_all', (bool) $claimed['auto_preload'] );
+}
+
+/* ============================================================================
  * 7. Public API
  * ========================================================================= */
 
