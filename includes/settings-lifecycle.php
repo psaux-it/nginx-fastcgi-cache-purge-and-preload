@@ -220,9 +220,9 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_pctnorm_mode'            => 'off',
         'nppp_http_purge_enabled'             => 'no',
         'nppp_rg_purge_enabled'               => 'no',
-        'nppp_http_purge_suffix'              => 'purge',
+        'nppp_http_purge_suffix'              => 'npp_purge_single',
         'nppp_http_purge_custom_url'          => '',
-        'nppp_http_purge_all_path'            => 'purge_all',
+        'nppp_http_purge_all_path'            => 'npp_purge_all',
         'nppp_http_purge_queue_status_path'   => '',
         'nginx_cache_bypass_path_restriction' => 'no',
     );
