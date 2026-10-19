@@ -2270,9 +2270,16 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         return;
     }
 
-    // Fire the 'nppp_purged' action, triggering any other plugin actions that are hooked into this event
+    // Fire the 'nppp_purged_all' action, triggering any other plugin actions that are hooked into this event
     // If auto preload is enabled this hook will create both NPP cache and compatible plugin cache at the same time
-    do_action('nppp_purged_all', $auto_preload);
+    // Status 7: nginx's background queue is still deleting, so the origin is NOT purged yet. The hook
+    // (Cloudflare purge-all, Redis flush, third-party CDN listeners) is deferred until the queue is idle,
+    // otherwise the edge re-caches stale HTML from nginx (see nppp_http_purge_fire_purged_all()).
+    if (function_exists('nppp_http_purge_fire_purged_all')) {
+        nppp_http_purge_fire_purged_all(isset($status) ? $status : null, (bool) $auto_preload);
+    } else {
+        do_action('nppp_purged_all', $auto_preload);
+    }
 
     // If set call preload immediately after purge
     if ($auto_preload) {
