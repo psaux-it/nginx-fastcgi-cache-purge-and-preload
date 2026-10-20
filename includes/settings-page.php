@@ -976,7 +976,7 @@ function nppp_nginx_cache_settings_page() {
                                 $nppp_qs_hint = function_exists( 'nppp_http_purge_queue_status_hint' ) ? nppp_http_purge_queue_status_hint() : null;
                                 if ( is_array( $nppp_qs_hint ) ) :
                                 ?>
-                                <div class="notice notice-<?php echo esc_attr( $nppp_qs_hint['level'] ); ?> inline"><p><?php echo esc_html( $nppp_qs_hint['text'] ); ?></p></div>
+                                <div class="notice notice-<?php echo esc_attr( $nppp_qs_hint['level'] ); ?> notice-nppp inline"><p><?php echo esc_html( $nppp_qs_hint['text'] ); ?></p></div>
                                 <?php endif; ?>
                             </td>
                         </tr>
