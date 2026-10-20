@@ -968,9 +968,16 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_http_purge_queue_status_path_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'Optional. Leave blank unless your Nginx uses "cache_purge_background_queue on" with ngx_cache_purge v4 or newer.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'The URI path of your "cache_purge_queue_status" location (e.g., location = /purge_status). With it, NPP can confirm that a queued Purge All has finished before preloading starts. With generation mode it also lets Status and Advanced hide cache files that Nginx has already invalidated but not yet deleted.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'Without it NPP falls back to inspecting the cache directory, which is less reliable. Restrict this location with allow/deny. Default: empty.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Set this when your Nginx runs ngx_cache_purge v4 or newer with "cache_purge_background_queue on", or with generation keys (cache_purge_key / cache_purge_namespace). Leave it blank on ngx_cache_purge v2/v3, or when neither is used.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'The URI path of your "cache_purge_queue_status" location (e.g., location = /npp_purge_status). With a background queue, NPP uses it to confirm that a queued Purge All has really finished and holds the preload back until then. With generation keys, Status and Advanced use it to hide cache files that Nginx has already invalidated but not yet deleted.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><strong><?php echo esc_html__( 'Important:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong> <?php echo esc_html__( 'with the background queue on and this field blank, NPP cannot see the queue. On a large cache the filesystem purge and the preload may start while Nginx is still deleting, and Nginx can then delete the freshly preloaded pages. NPP shows a warning here when it detects this.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Create the location in Nginx first (see Help > HTTP Purge) and restrict it with allow/deny. Default: empty.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <?php
+                                $nppp_qs_hint = function_exists( 'nppp_http_purge_queue_status_hint' ) ? nppp_http_purge_queue_status_hint() : null;
+                                if ( is_array( $nppp_qs_hint ) ) :
+                                ?>
+                                <div class="notice notice-<?php echo esc_attr( $nppp_qs_hint['level'] ); ?> inline"><p><?php echo esc_html( $nppp_qs_hint['text'] ); ?></p></div>
+                                <?php endif; ?>
                             </td>
                         </tr>
                         <!-- RG Purge -->
