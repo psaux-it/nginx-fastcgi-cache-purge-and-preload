@@ -13,7 +13,26 @@ function home_url() { return 'http://example.com'; }
 function wp_parse_url( $u, $c = -1 ) { return parse_url( $u, $c ); }
 function absint( $n ) { return abs( (int) $n ); } function esc_url( $u ) { return $u; } function esc_url_raw( $u ) { return $u; } function __( $s, $d = '' ) { return $s; }
 function apply_filters( $t, $v, ...$a ) { global $T; $f = $T['filters'][ $t ] ?? null; return $f ? $f( $v, ...$a ) : $v; }
-function do_action( ...$a ) {} function add_action( ...$a ) {} function remove_action( ...$a ) {}
+function do_action( $tag, ...$a ) { global $T; $T['actions'][] = [ $tag, $a ]; }   /* recorded: deferred_waiter counts nppp_purged_all */
+function add_action( ...$a ) {} function remove_action( ...$a ) {}
+/* deferred_waiter: the waiter POSTs to admin_url('admin-ajax.php'); point it at wakelistener.py (NPP_WAKE_BASE overrides) */
+function admin_url( $p = '' ) { return ( getenv( 'NPP_WAKE_BASE' ) ?: 'http://127.0.0.1:8092/wp-admin/' ) . $p; }
+function wp_schedule_single_event( $ts, $hook, $args = [] ) { global $T; $T['cron'][] = [ 'hook' => $hook, 'ts' => (int) $ts ]; return true; }
+function wp_unschedule_hook( $hook ) {
+    global $T; $n = 0;
+    foreach ( $T['cron'] ?? [] as $i => $e ) { if ( $e['hook'] === $hook ) { unset( $T['cron'][ $i ] ); $n++; } }
+    $T['cron'] = array_values( $T['cron'] ?? [] ); return $n;
+}
+/* $wpdb->delete(): the plugin's atomic claim of the deferred state row (same contract as the mock harness) */
+class E2eWpdb {
+    public $options = 'wp_options';
+    function delete( $table, $where, $fmt = null ) {
+        global $T; $k = $where['option_name'] ?? '';
+        if ( array_key_exists( $k, $T['options'] ) ) { unset( $T['options'][ $k ] ); return 1; }
+        return 0;
+    }
+}
+$wpdb = new E2eWpdb();
 function get_transient( $k ) { global $T; return $T['tr'][ $k ] ?? false; }
 function set_transient( $k, $v, $t ) { global $T; $T['tr'][ $k ] = $v; return true; }
 function delete_transient( $k ) { global $T; unset( $T['tr'][ $k ] ); return true; }
@@ -277,6 +296,100 @@ if ( $sc === 'slowq_marker' ) {
         chk( file_exists( '/tmp/npp-gate-failopen' ) && $fo_s >= 3 && $fo_s < 25, 'slowq_marker: the shell gate fails open after 5 failed polls (crawl runs, not blocked forever)', "failopen_after={$fo_s}s" );
         delete_option( NPPP_HTTP_PURGE_PENDING_KEY );
     }
+}
+
+/* Deferred Purge All follow-up (F-01) against the REAL queue. A Purge All ends with nginx's queue still deleting (status 7):
+ * nppp_purged_all must NOT fire yet. Part A: the real detached waiter (real bash/wget/date/sleep, real purge_status JSON) must
+ * stay silent while nginx deletes and then POST the one-shot token exactly once, to the wake endpoint (wakelistener.py stands in
+ * for admin-ajax.php), only after every old file is gone. Part B: the waiter is killed (php-fpm restart, OOM) and the WP-Cron
+ * fail-safe alone must fire the hook once the real queue is idle. Needs mode async_slow (queue ~35-40 s) and wget on PATH. */
+if ( $sc === 'deferred_waiter' ) {
+    if ( trim( (string) shell_exec( 'command -v wget 2>/dev/null' ) ) === '' ) { echo "SKIP deferred_waiter: no wget on PATH (the waiter needs it)\n"; exit( 0 ); }
+    $T['options']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = 'purge_status';
+    $wait = max( 1, (int) ( getenv( 'SLOWQ_WAIT' ) ?: 5 ) );
+    $T['filters']['nppp_http_purge_queue_wait'] = fn() => $wait;
+    $q = function () { $j = json_decode( (string) shell_exec( 'curl -s http://127.0.0.1:8081/purge_status' ), true ); return $j['cache'] ?? null; };
+    $idle_now = function () use ( $q ) { $s = $q(); return $s && $s['pending']['total'] === 0 && $s['active'] === 0; };
+    $fires    = fn() => count( array_filter( $GLOBALS['T']['actions'] ?? [], fn( $a ) => $a[0] === 'nppp_purged_all' ) );
+    $state    = fn() => $GLOBALS['T']['options'][ NPPP_PURGED_ALL_DEFERRED_KEY ] ?? null;
+    $marker   = fn() => $GLOBALS['T']['options'][ NPPP_HTTP_PURGE_PENDING_KEY ] ?? null;
+    $crons    = fn() => count( array_filter( $GLOBALS['T']['cron'] ?? [], fn( $e ) => $e['hook'] === NPPP_PURGED_ALL_DEFERRED_HOOK ) );
+    $posts    = function () { return is_file( '/tmp/npp-wake.log' ) ? file( '/tmp/npp-wake.log', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES ) : []; };
+    // pgrep -f on the waiter's script (it carries the token). [x]rest keeps pgrep from matching the shell that runs it.
+    $waiters  = function ( string $tok ) { $r = trim( (string) shell_exec( 'pgrep -f ' . escapeshellarg( '[' . $tok[0] . ']' . substr( $tok, 1 ) ) . ' 2>/dev/null' ) ); return $r === '' ? [] : array_map( 'intval', explode( "\n", $r ) ); };
+    $reset    = function () { global $T; $T['actions'] = []; $T['cron'] = []; $T['notices'] = []; delete_option( NPPP_PURGED_ALL_DEFERRED_KEY ); delete_option( NPPP_HTTP_PURGE_PENDING_KEY ); nppp_http_purge_gate_state( 'clear' ); };
+    $stop_listener = function () { shell_exec( "pkill -f '[w]akelistener.py' 2>/dev/null" ); };   /* [w]: do not match the shell running pkill */
+    register_shutdown_function( $stop_listener );
+
+    // The wake endpoint stand-in.
+    $stop_listener(); @unlink( '/tmp/npp-wake.log' );
+    shell_exec( 'setsid nohup python3 ' . escapeshellarg( __DIR__ . '/wakelistener.py' ) . ' >/dev/null 2>&1 < /dev/null &' );
+    $up = false; for ( $i = 0; $i < 30 && ! $up; $i++ ) { $up = trim( (string) shell_exec( 'curl -s -o /dev/null -w %{http_code} http://127.0.0.1:8092/ 2>/dev/null' ) ) === '200'; if ( ! $up ) usleep( 100000 ); }
+    chk( $up, 'deferred_waiter: wake listener answers on 127.0.0.1:8092' );
+
+    // Brings the world to "Purge All ended with nginx still deleting". Returns the marker, or null when the wait budget covered the queue.
+    $start_cycle = function ( string $label ) use ( $q, $reset, $marker ) {
+        $reset(); warm( 'p', 600 ); sleep( 2 );
+        $before = cnt();
+        chk( $before === 600 && $q() !== null, "deferred_waiter $label: 600 pages cached, queue status endpoint answers", "cached=$before" );
+        $pending = null; $r = nppp_http_purge_all( $pending );
+        echo "  $label: purge_all()=" . var_export( $r, true ) . ' pending=' . ( is_array( $pending ) ? 'yes' : 'no' ) . ' files_after_return=' . cnt() . "\n";
+        if ( $r === true ) { echo "  $label: wait budget covered the queue (SLOWQ_WAIT too high): nothing to defer\n"; return null; }
+        chk( is_array( $pending ) && $marker() === $pending, "deferred_waiter $label: Purge All ends with status 7 and the marker is persisted", 'marker=' . var_export( $marker(), true ) );
+        return $pending;
+    };
+
+    /* ---- Part A: the real waiter */
+    if ( $start_cycle( 'A' ) !== null ) {
+        nppp_http_purge_fire_purged_all( 7, true );
+        $s = $state(); $tok = (string) ( $s['token'] ?? '' );
+        chk( $fires() === 0, 'A: status 7: nppp_purged_all is NOT fired while nginx still deletes (the F-01 bug)' );
+        chk( preg_match( '/^[a-f0-9]{32}$/', $tok ) === 1 && ( $s['waiter'] ?? null ) === true && ( $s['auto_preload'] ?? null ) === true, 'A: state armed with a one-shot token, waiter spawned, auto_preload remembered', json_encode( $s ) );
+        chk( $crons() === 1 && ( $GLOBALS['T']['cron'][0]['ts'] ?? 0 ) - ( $s['armed_at'] ?? 0 ) === 60, 'A: cron fail-safe armed as the slow second path (+60 s) because a waiter is alive' );
+        usleep( 2500000 );
+        chk( count( $waiters( $tok ) ) >= 1, 'A: the detached waiter survived the spawn (nohup + & ) and is polling', 'pids=' . json_encode( $waiters( $tok ) ) );
+        chk( ! $idle_now() && $posts() === [] && cnt() > 0, 'A: while nginx is still deleting the waiter has NOT POSTed (real purge_status JSON parsed as busy)', 'posts=' . count( $posts() ) . ' files=' . cnt() );
+
+        $t1 = microtime( true ); while ( microtime( true ) - $t1 < 150 && $posts() === [] ) { usleep( 200000 ); }
+        $left = cnt(); $idle = $idle_now(); $p = $posts();
+        chk( count( $p ) === 1, 'A: the waiter POSTed after the real queue went idle (within 150 s)', 'posts=' . count( $p ) );
+        chk( $left === 0 && $idle, 'A: ... and only when every old file was deleted and the queue idle', "files_at_post=$left idle=" . var_export( $idle, true ) );
+        $parts = explode( "\t", (string) ( $p[0] ?? '' ), 3 ); parse_str( $parts[2] ?? '', $body );
+        chk( ( $parts[1] ?? '' ) === '/wp-admin/admin-ajax.php' && ( $body['action'] ?? '' ) === NPPP_PURGED_ALL_WAKE_ACTION, 'A: POST target and action are admin-ajax.php / ' . NPPP_PURGED_ALL_WAKE_ACTION, (string) ( $p[0] ?? '' ) );
+        chk( ( $body['token'] ?? '' ) === $tok, 'A: the POSTed token is the state\'s one-shot token' );
+        sleep( 3 );
+        chk( count( $posts() ) === 1 && $waiters( $tok ) === [], 'A: exactly one POST, and the waiter process is gone afterwards', 'posts=' . count( $posts() ) . ' pids=' . json_encode( $waiters( $tok ) ) );
+        // What the wake handler (watchdog.php, needs WordPress) does with the POSTed token: single-use claim.
+        $c1 = nppp_http_purge_deferred_claim( (string) ( $body['token'] ?? '' ) ); $c2 = nppp_http_purge_deferred_claim( (string) ( $body['token'] ?? '' ) );
+        chk( is_array( $c1 ) && $c2 === null, 'A: the real POSTed token claims the real state exactly once (a retried POST cannot double-fire)' );
+        $GLOBALS['T']['cron'] = []; nppp_http_purge_run_deferred_purged_all();
+        chk( $fires() === 0, 'A: a late cron tick after the waiter claimed fires nothing (hook firing itself is the handler\'s job, mock section F)' );
+    }
+
+    /* ---- Part B: no waiter, WP-Cron alone */
+    $t_idle = microtime( true ); while ( ! $idle_now() && microtime( true ) - $t_idle < 60 ) { usleep( 500000 ); }
+    if ( $start_cycle( 'B' ) !== null ) {
+        nppp_http_purge_fire_purged_all( 7, true );
+        $s = $state(); $tok = (string) ( $s['token'] ?? '' );
+        chk( $fires() === 0 && preg_match( '/^[a-f0-9]{32}$/', $tok ) === 1, 'B: deferred again (hook not fired)' );
+        shell_exec( 'pkill -f ' . escapeshellarg( '[' . $tok[0] . ']' . substr( $tok, 1 ) ) . ' 2>/dev/null' ); usleep( 500000 );
+        chk( $waiters( $tok ) === [], 'B: setup - the waiter is dead (php-fpm restart / OOM)' );
+        @unlink( '/tmp/npp-wake.log' );
+
+        $busy_ticks = 0; $t1 = microtime( true ); $fired_files = null;
+        while ( microtime( true ) - $t1 < 150 && $fires() === 0 ) {
+            wp_unschedule_hook( NPPP_PURGED_ALL_DEFERRED_HOOK );            // WP-Cron: the running event has left the schedule
+            nppp_http_purge_run_deferred_purged_all();
+            if ( $fires() === 0 ) { $busy_ticks++; usleep( 1000000 ); } else { $fired_files = cnt(); }
+        }
+        chk( $busy_ticks >= 1, 'B: cron ticks while the real queue is busy fire nothing and re-arm (it waited ' . $busy_ticks . ' tick(s))', "busy_ticks=$busy_ticks" );
+        chk( $fires() === 1 && $fired_files === 0, 'B: the cron fail-safe fired the hook once, only after the real queue deleted every file', 'fires=' . $fires() . ' files_at_fire=' . var_export( $fired_files, true ) );
+        chk( ( $GLOBALS['T']['actions'][0][1] ?? null ) === [ true ], 'B: with the auto_preload flag of the Purge All that armed it' );
+        chk( $state() === null && $marker() === null, 'B: state consumed and the stale gate marker dropped once the real queue proved idle' );
+        $pre = $fires(); nppp_http_purge_run_deferred_purged_all();
+        chk( $fires() === $pre && $posts() === [], 'B: one more tick fires nothing (at most once) and no wake POST happened' );
+    }
+    $stop_listener();
 }
 
 /* nginx decodes $1: purging /p/%41/ deletes /p/A/ and answers 200 while the real /p/%41/ entry stays cached. */
