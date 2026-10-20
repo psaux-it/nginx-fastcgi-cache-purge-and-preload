@@ -839,7 +839,7 @@ function nppp_http_purge_enabled_callback(): void {
 // Callback function for HTTP Purge Suffix
 function nppp_http_purge_suffix_callback(): void {
     $options = get_option( 'nginx_cache_settings', [] );
-    echo "<input type='text' id='nppp_http_purge_suffix' name='nginx_cache_settings[nppp_http_purge_suffix]' value='" . esc_attr( $options['nppp_http_purge_suffix'] ?? 'purge' ) . "' class='regular-text' placeholder='purge' />";
+    echo "<input type='text' id='nppp_http_purge_suffix' name='nginx_cache_settings[nppp_http_purge_suffix]' value='" . esc_attr( $options['nppp_http_purge_suffix'] ?? 'npp_purge_single' ) . "' class='regular-text' placeholder='npp_purge_single' />";
 }
 
 // Callback function for HTTP Purge Custom URL
@@ -851,7 +851,7 @@ function nppp_http_purge_custom_url_callback(): void {
 // Callback function for HTTP Purge All Path
 function nppp_http_purge_all_path_callback(): void {
     $options = get_option( 'nginx_cache_settings', [] );
-    echo "<input type='text' id='nppp_http_purge_all_path' name='nginx_cache_settings[nppp_http_purge_all_path]' value='" . esc_attr( $options['nppp_http_purge_all_path'] ?? 'purge_all' ) . "' class='regular-text' placeholder='purge_all' />";
+    echo "<input type='text' id='nppp_http_purge_all_path' name='nginx_cache_settings[nppp_http_purge_all_path]' value='" . esc_attr( $options['nppp_http_purge_all_path'] ?? 'npp_purge_all' ) . "' class='regular-text' placeholder='npp_purge_all' />";
 }
 
 // Callback function for HTTP Purge Queue Status Path
