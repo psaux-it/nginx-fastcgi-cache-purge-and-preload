@@ -433,7 +433,7 @@ gzip_types text/plain text/css application/javascript application/json text/xml 
                     </div>
                 </div>
 
-                <h3 class="nppp-question">How do I configure Nginx for HTTP Purge and what options does NPP provide?</h3>
+                                <h3 class="nppp-question">How do I configure Nginx for HTTP Purge and what options does NPP provide?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h3><strong>Nginx Configuration for HTTP Purge</strong></h3>
@@ -512,6 +512,41 @@ location = /npp_purge_status {
     # An unknown path makes "nginx -t" fail.
     cache_purge_queue_status /var/cache/nginx;
 }</pre>
+
+                        <h4><strong>Optional: ngx_cache_purge v4 modes — background queue and generation invalidation</strong></h4>
+                        <p>ngx_cache_purge v4 adds two opt-in modes. NPP recognises them from Nginx's answer, so the only NPP setting involved is the <strong>Purge Queue Status Path</strong> above. Both modes can be used together.</p>
+                        <ul>
+                            <li><strong>Background queue</strong> (<code>cache_purge_background_queue on</code>): Purge All answers <code>202</code> and Nginx deletes in the background. NPP waits (up to 15 seconds by default) until the queue is proven finished through the status location, then skips its own filesystem purge and starts the preload. If Nginx is still deleting after the wait, NPP does not start a second purge on top of it and holds the preload back until the queue is idle. If the queue reports errors or completion cannot be proven, NPP falls back to the filesystem purge.</li>
+                            <li><strong>Generation invalidation</strong> (<code>cache_purge_namespace</code> + <code>cache_purge_key</code>): Purge Single and Purge All answer <code>200 invalidated</code>. New requests can no longer reach the old entries while Nginx removes the files later; NPP counts this as success and does not delete the files itself. With the status location configured, Status and Advanced use the namespace state to hide files Nginx has already invalidated but not yet deleted. If a purge location does not use exactly <code>$cache_purge_key</code> as its cache key, NPP shows a fix hint and falls back to the filesystem purge.</li>
+                        </ul>
+
+<pre>## Background queue
+## Main context (top of nginx.conf) - optional, needs Nginx built with --with-threads
+thread_pool npp_purge_io threads=2 max_queue=128;
+
+## In the http {} block:
+cache_purge_background_queue on;
+cache_purge_thread_pool      npp_purge_io;   # optional, must match thread_pool above
+cache_purge_queue_size       2048;           # pending + running tasks, all cache paths
+cache_purge_batch_size       20;             # tasks per worker between throttle pauses
+cache_purge_throttle_ms      10ms;           # always use an explicit unit</pre>
+
+<pre>## Generation invalidation
+## In the http {} block:
+cache_purge_namespace npp 8m /var/lib/nginx/cache-purge;
+
+## In the cached PHP location (replaces the fastcgi_cache_key line):
+cache_purge_key npp "$scheme$request_method$host$request_uri";
+fastcgi_cache_key $cache_purge_key;
+
+## Purge Single location (replaces the fastcgi_cache_purge line):
+cache_purge_key npp "$scheme$request_method$host$1$is_args$args";
+fastcgi_cache_purge NPP $cache_purge_key;
+
+## Purge All location (replaces the fastcgi_cache_key line):
+cache_purge_key npp "$scheme$request_method$host$request_uri";
+fastcgi_cache_key $cache_purge_key;</pre>
+                        <p>Keep the namespace state directory outside the cache path and never delete it while cache files exist, otherwise stale entries can become reachable again. Changing the namespace size or path needs a full Nginx restart, a reload is not enough. Module reference: <a href="https://github.com/nginx-modules/ngx_cache_purge" target="_blank" rel="noopener">nginx-modules/ngx_cache_purge</a>. Ready-to-use examples with both modes commented in are in the NPP Docker Stack <code>nginx.conf</code> and <code>default.conf</code>.</p>
                         <p>🔒 <strong>Security Tip:</strong> Always restrict the <code>allow</code> directive to your server's internal IP addresses. Never expose the purge location to the public internet. Because NPP use <code>GET</code> not <code>PURGE</code></p>
 
                         <p>📌 For a complete, production‑ready Nginx configuration including cache exclusion rules, rate limiting, and security headers, see the <a href="https://github.com/psaux-it/wordpress-nginx-cache-docker" target="_blank" rel="noopener">NPP Docker Stack Repository</a>.</p>
@@ -533,9 +568,9 @@ location = /npp_purge_status {
                                 — using the <strong>Purge Custom Base URL</strong> (if set) or the site’s home URL, then appending the <strong>Purge All Path</strong> (default <code>npp_purge_all</code>).</li>
                             <li>It sends a <code>GET</code> request to that URL.</li>
                             <li>Nginx’s <code>location = /npp_purge_all</code> block — configured with <code>fastcgi_cache_purge GET purge_all from all;</code> — deletes every file in the cache zone atomically.</li>
-                            <li>Nginx returns <code>200</code> when the purge completes (or <code>202</code> if the module queued the work to a background worker).</li>
+                            <li>Nginx returns <code>200</code> when the purge completes, <code>200 invalidated</code> in generation mode (v4), or <code>202</code> if the module queued the work to a background worker (v4 background queue).</li>
                         </ol>
-                        <p>If a purge endpoint returns anything other than <code>200</code>, NPP automatically falls back to its filesystem‑based purge — your cache is still cleared, just a bit slower.</p>
+                        <p>If a purge endpoint cannot confirm the purge (an error status, a timeout, or a <code>202</code> that cannot be proven finished), NPP automatically falls back to its filesystem‑based purge — your cache is still cleared, just a bit slower.</p>
 
                         <h4><strong>NPP settings for HTTP Purge</strong></h4>
                         <p>Go to <strong>Settings → NPP Settings → Advanced</strong> and enable <strong>HTTP Purge</strong>. The following options let you customise both purge endpoints:</p>
@@ -568,7 +603,7 @@ location = /npp_purge_status {
                                 <tr>
                                     <td><strong>Purge Queue Status Path</strong></td>
                                     <td>(empty)</td>
-                                    <td>The exact URI path of your <code>cache_purge_queue_status</code> location (e.g. <code>location = /npp_purge_status</code>), available in ngx_cache_purge ≥ 4.0. Set it when Nginx uses <code>cache_purge_background_queue on</code>: NPP then reads the queue status to confirm that a queued (<code>202</code>) Purge All has finished before the filesystem fallback or the preload starts. Without it, on a large cache the preload can start while Nginx is still deleting and the freshly preloaded pages can be deleted; NPP shows a warning next to the field when it detects this. With generation keys (<code>cache_purge_key</code>) it lets Status and Advanced hide files Nginx has already invalidated but not yet deleted. Leave empty on ngx_cache_purge v2/v3 or when neither is used. Restrict the location with <code>allow</code>/<code>deny</code>; the same Purge Custom Base URL is used for it.</td>
+                                    <td>The exact URI path of your <code>cache_purge_queue_status</code> location (e.g. <code>location = /npp_purge_status</code>), available in ngx_cache_purge ≥ 4.0. Set it when Nginx uses <code>cache_purge_background_queue on</code>: NPP then reads the queue status to confirm that a queued (<code>202</code>) Purge All has finished; once it has, NPP skips its own filesystem purge and starts the preload. Without it, on a large cache the preload can start while Nginx is still deleting and the freshly preloaded pages can be deleted; NPP shows a warning next to the field when it detects this. With generation keys (<code>cache_purge_key</code>) it lets Status and Advanced hide files Nginx has already invalidated but not yet deleted. Leave empty on ngx_cache_purge v2/v3 or when neither is used. Restrict the location with <code>allow</code>/<code>deny</code>; the same Purge Custom Base URL is used for it.</td>
                                 </tr>
                             </tbody>
                         </table>
