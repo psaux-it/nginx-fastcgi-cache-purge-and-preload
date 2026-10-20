@@ -1805,20 +1805,17 @@ function nppp_http_purge_defer_purged_all( bool $auto_preload ): bool {
 
 /**
  * Builds the detached waiter command: gate snippet, then one token-gated POST to admin-ajax.php.
- * Runs as the PHP user, like the preload watchdog. Needs shell_exec and a shell (the
- * Watchdog toggle is not required: EP8 exempts this action, the one-shot token is the credential).
- * the action otherwise), shell_exec and a shell. Has no side effect besides locating the shell:
- * the caller runs the command once the state row holding the token is written.
+ * Runs as the PHP user, like the preload watchdog. Needs shell_exec, a shell and wget. The
+ * Watchdog toggle is NOT required: EP8 exempts this action from it, the one-shot token is the
+ * credential, so default installs (Watchdog off) get the waiter too instead of relying on
+ * WP-Cron alone. Has no side effect besides locating the shell: the caller runs the command
+ * once the state row holding the token is written.
  *
  * @param array  $pending ['status_url' => string, 'host' => string, ...] (the persisted marker)
  * @param string $token   One-shot token (32 hex).
  * @return string|null Shell command line, or null when no waiter is possible here.
  */
 function nppp_http_purge_purged_all_waiter_command( array $pending, string $token ): ?string {
-    $opts = get_option( 'nginx_cache_settings', array() );
-    if ( ! is_array( $opts ) || ( $opts['nginx_cache_watchdog'] ?? 'no' ) !== 'yes' ) {
-        return null;
-    }
     if ( ! function_exists( 'shell_exec' ) || ! preg_match( '/^[a-f0-9]{32}$/', $token ) ) {
         return null;
     }
