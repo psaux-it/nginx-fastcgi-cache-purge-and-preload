@@ -535,21 +535,21 @@ function nppp_nginx_cache_settings_sanitize($input) {
                   : '';
     if ( $raw_suffix === '' ) {
         // Empty = user cleared the field. Reset to default and tell them.
-        $sanitized_input['nppp_http_purge_suffix'] = 'purge';
+        $sanitized_input['nppp_http_purge_suffix'] = 'npp_purge_single';
         add_settings_error(
             'nppp_nginx_cache_settings_group',
             'nppp-http-purge-suffix',
-            __( 'ERROR OPTION: HTTP Purge Single Path cannot be empty. Reset to "purge".', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'ERROR OPTION: HTTP Purge Single Path cannot be empty. Reset to "npp_purge_single".', 'fastcgi-cache-purge-and-preload-nginx' ),
             'error'
         );
     } elseif ( preg_match( '/^[a-zA-Z0-9_\-]+$/', $raw_suffix ) ) {
         $sanitized_input['nppp_http_purge_suffix'] = $raw_suffix;
     } else {
-        $sanitized_input['nppp_http_purge_suffix'] = 'purge';
+        $sanitized_input['nppp_http_purge_suffix'] = 'npp_purge_single';
         add_settings_error(
             'nppp_nginx_cache_settings_group',
             'nppp-http-purge-suffix',
-            __( 'ERROR OPTION: HTTP Purge Single Path must contain only letters, numbers, hyphens, or underscores. Reset to "purge".', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'ERROR OPTION: HTTP Purge Single Path must contain only letters, numbers, hyphens, or underscores. Reset to "npp_purge_single".', 'fastcgi-cache-purge-and-preload-nginx' ),
             'error'
         );
     }
@@ -585,21 +585,21 @@ function nppp_nginx_cache_settings_sanitize($input) {
                     ? trim( sanitize_text_field( $input['nppp_http_purge_all_path'] ), '/' )
                     : '';
     if ( $raw_all_path === '' ) {
-        $sanitized_input['nppp_http_purge_all_path'] = 'purge_all';
+        $sanitized_input['nppp_http_purge_all_path'] = 'npp_purge_all';
         add_settings_error(
             'nppp_nginx_cache_settings_group',
             'nppp-http-purge-all-path',
-            __( 'ERROR OPTION: HTTP Purge All Path cannot be empty. Reset to "purge_all".', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'ERROR OPTION: HTTP Purge All Path cannot be empty. Reset to "npp_purge_all".', 'fastcgi-cache-purge-and-preload-nginx' ),
             'error'
         );
     } elseif ( preg_match( '/^[a-zA-Z0-9_\-]+$/', $raw_all_path ) ) {
         $sanitized_input['nppp_http_purge_all_path'] = $raw_all_path;
     } else {
-        $sanitized_input['nppp_http_purge_all_path'] = 'purge_all';
+        $sanitized_input['nppp_http_purge_all_path'] = 'npp_purge_all';
         add_settings_error(
             'nppp_nginx_cache_settings_group',
             'nppp-http-purge-all-path',
-            __( 'ERROR OPTION: HTTP Purge All Path must contain only letters, numbers, hyphens, or underscores. Reset to "purge_all".', 'fastcgi-cache-purge-and-preload-nginx' ),
+            __( 'ERROR OPTION: HTTP Purge All Path must contain only letters, numbers, hyphens, or underscores. Reset to "npp_purge_all".', 'fastcgi-cache-purge-and-preload-nginx' ),
             'error'
         );
     }
