@@ -1,6 +1,6 @@
 # Test suite for HTTP Purge
 
-Regression suite for the HTTP Purge fast path in [`includes/purge-http.php`](../includes/purge-http.php), which asks nginx to drop cache entries through [ngx_cache_purge](https://github.com/nginx-modules/ngx_cache_purge) before falling back to the filesystem.
+Regression suite for the **NPP** HTTP Purge (FP1) in [`includes/purge-http.php`](../includes/purge-http.php), which asks nginx to drop cache entries through denji's [ngx_cache_purge](https://github.com/nginx-modules/ngx_cache_purge) module before falling back to FP2 (INDEX Purge), FP3 (RG Purge) and FP4 (PHP Purge).
 
 It guards against two failure modes:
 
