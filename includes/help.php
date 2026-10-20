@@ -519,20 +519,20 @@ location = /npp_purge_status {
                         <h4><strong>How NPP builds the purge URL — Single‑URL Purge</strong></h4>
                         <p>When NPP purges a single page such as <code>https://example.com/my-page/?color=blue</code>:</p>
                         <ol>
-                            <li>It constructs the purge URL: <code>https://example.com/purge/my-page/?color=blue</code><br>
-                                — using the <strong>Purge Custom Base URL</strong> (if set) or the site’s home URL, then appending the <strong>Purge Single Path</strong> (default <code>purge</code>) and the page’s path + query string.</li>
+                            <li>It constructs the purge URL: <code>https://example.com/npp_purge_single/my-page/?color=blue</code><br>
+                                — using the <strong>Purge Custom Base URL</strong> (if set) or the site’s home URL, then appending the <strong>Purge Single Path</strong> (default <code>npp_purge_single</code>) and the page’s path + query string.</li>
                             <li>It sends a <code>GET</code> request to that URL.</li>
-                            <li>Nginx matches the <code>location ~ ^/purge(/.*)</code> block, captures the path after <code>/purge</code> in <code>$1</code>, and <code>$is_args$args</code> restores the original query string — so the cache key matches the stored entry exactly, even for URLs with filters, search, or pagination.</li>
+                            <li>Nginx matches the <code>location ~ ^/npp_purge_single(/.*)</code> block, captures the path after <code>/npp_purge_single</code> in <code>$1</code>, and <code>$is_args$args</code> restores the original query string — so the cache key matches the stored entry exactly, even for URLs with filters, search, or pagination.</li>
                             <li>Nginx returns <code>200</code> (purge successful) or another status code (see fallback behavior below).</li>
                         </ol>
 
                         <h4><strong>How NPP builds the purge URL — Purge All</strong></h4>
                         <p>When NPP purges the entire cache (Purge All):</p>
                         <ol>
-                            <li>It constructs the purge URL: <code>https://example.com/purge_all</code><br>
-                                — using the <strong>Purge Custom Base URL</strong> (if set) or the site’s home URL, then appending the <strong>Purge All Path</strong> (default <code>purge_all</code>).</li>
+                            <li>It constructs the purge URL: <code>https://example.com/npp_purge_all</code><br>
+                                — using the <strong>Purge Custom Base URL</strong> (if set) or the site’s home URL, then appending the <strong>Purge All Path</strong> (default <code>npp_purge_all</code>).</li>
                             <li>It sends a <code>GET</code> request to that URL.</li>
-                            <li>Nginx’s <code>location = /purge_all</code> block — configured with <code>fastcgi_cache_purge GET purge_all from all;</code> — deletes every file in the cache zone atomically.</li>
+                            <li>Nginx’s <code>location = /npp_purge_all</code> block — configured with <code>fastcgi_cache_purge GET purge_all from all;</code> — deletes every file in the cache zone atomically.</li>
                             <li>Nginx returns <code>200</code> when the purge completes (or <code>202</code> if the module queued the work to a background worker).</li>
                         </ol>
                         <p>If a purge endpoint returns anything other than <code>200</code>, NPP automatically falls back to its filesystem‑based purge — your cache is still cleared, just a bit slower.</p>
@@ -557,13 +557,13 @@ location = /npp_purge_status {
                                 </tr>
                                 <tr>
                                     <td><strong>Purge Single Path</strong></td>
-                                    <td><code>purge</code></td>
-                                    <td>The URI path prefix for single‑URL purges. Must match the regex location in nginx (e.g. <code>location ~ ^/purge(/.*)</code>). Change this only if your purge location uses a different prefix.</td>
+                                    <td><code>npp_purge_single</code></td>
+                                    <td>The URI path prefix for single‑URL purges. Must match the regex location in nginx (e.g. <code>location ~ ^/npp_purge_single(/.*)</code>). Change this only if your purge location uses a different prefix.</td>
                                 </tr>
                                 <tr>
                                     <td><strong>Purge All Path</strong></td>
-                                    <td><code>purge_all</code></td>
-                                    <td>The exact URI path for full cache purge. Must match the exact location in nginx (e.g. <code>location = /purge_all</code>). This is used for the Purge All HTTP fast‑path and is independent of the single‑purge path.</td>
+                                    <td><code>npp_purge_all</code></td>
+                                    <td>The exact URI path for full cache purge. Must match the exact location in nginx (e.g. <code>location = /npp_purge_all</code>). This is used for the Purge All HTTP fast‑path and is independent of the single‑purge path.</td>
                                 </tr>
                                 <tr>
                                     <td><strong>Purge Queue Status Path</strong></td>
