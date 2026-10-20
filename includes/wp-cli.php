@@ -1419,7 +1419,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             // Mirror settings-sanitize.php: alphanumeric + hyphens/underscores only, non-empty.
             $sanitized = trim( sanitize_text_field( $value ), '/' );
             if ( $sanitized === '' ) {
-                WP_CLI::error( __( 'ERROR OPTION: HTTP Purge Suffix cannot be empty. Use e.g. "purge".', 'fastcgi-cache-purge-and-preload-nginx' ) );
+                WP_CLI::error( __( 'ERROR OPTION: HTTP Purge Suffix cannot be empty. Use e.g. "npp_purge_single".', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
             if ( ! preg_match( '/^[a-zA-Z0-9_\-]+$/', $sanitized ) ) {
                 WP_CLI::error( __( 'ERROR OPTION: HTTP Purge Suffix must contain only letters, digits, hyphens, and underscores.', 'fastcgi-cache-purge-and-preload-nginx' ) );
