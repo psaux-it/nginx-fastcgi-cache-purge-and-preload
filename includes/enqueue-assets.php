@@ -619,7 +619,8 @@ function nppp_manage_admin_notices() {
 
         .notice.notice-nppp,
         .updated.notice-nppp,
-        .error.notice-nppp {
+        .error.notice-nppp,
+        .notice.notice-nppp.inline {
             display: block !important;
         }
     ');
